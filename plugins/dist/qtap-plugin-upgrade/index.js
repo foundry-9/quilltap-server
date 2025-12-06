@@ -506,7 +506,7 @@ var require_package = __commonJS({
   "package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "1.8.5-dev.36",
+      version: "1.8.5-dev.39",
       private: true,
       author: {
         name: "Charles Sebold",
@@ -69685,6 +69685,201 @@ var migrateFilesToS3Migration = {
   }
 };
 
+// plugins/dist/qtap-plugin-upgrade/migrations/ensure-user-usernames.ts
+init_logger();
+function isMongoDBBackendEnabled2() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase3() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible2() {
+  try {
+    const db = await getMongoDatabase3();
+    await db.admin().ping();
+    return true;
+  } catch (error2) {
+    logger.warn("MongoDB is not accessible for username migration", {
+      context: "migration.ensure-user-usernames",
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return false;
+  }
+}
+function generateUsernameFromEmail(email) {
+  const localPart = email.split("@")[0];
+  const sanitized = localPart.replace(/[^a-zA-Z0-9_-]/g, "");
+  if (sanitized.length < 3) {
+    return sanitized + "_user";
+  }
+  return sanitized;
+}
+function generateFallbackUsername(userId) {
+  const shortId = userId.replace(/-/g, "").substring(0, 8);
+  return `user_${shortId}`;
+}
+async function getUsersWithoutUsernames() {
+  try {
+    const db = await getMongoDatabase3();
+    const usersCollection = db.collection("users");
+    const users = await usersCollection.find({
+      $or: [
+        { username: { $exists: false } },
+        { username: null },
+        { username: "" }
+      ]
+    }).toArray();
+    return users.map((u4) => ({
+      id: u4.id,
+      email: u4.email
+    }));
+  } catch (error2) {
+    logger.error("Error checking for users without usernames", {
+      context: "migration.ensure-user-usernames",
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return [];
+  }
+}
+async function isUsernameTaken(username) {
+  try {
+    const db = await getMongoDatabase3();
+    const usersCollection = db.collection("users");
+    const existing = await usersCollection.findOne({ username });
+    return existing !== null;
+  } catch (error2) {
+    logger.error("Error checking if username is taken", {
+      context: "migration.ensure-user-usernames",
+      username,
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return false;
+  }
+}
+async function generateUniqueUsername(baseUsername) {
+  let username = baseUsername;
+  let suffix = 1;
+  while (await isUsernameTaken(username)) {
+    username = `${baseUsername}${suffix}`;
+    suffix++;
+    if (suffix > 1e3) {
+      throw new Error(`Could not generate unique username for base: ${baseUsername}`);
+    }
+  }
+  return username;
+}
+var ensureUserUsernamesMigration = {
+  id: "ensure-user-usernames-v1",
+  description: "Ensure all users have a username field populated",
+  introducedInVersion: "2.1.0",
+  dependsOn: ["migrate-json-to-mongodb-v1"],
+  // Run after data migration to MongoDB
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled2()) {
+      logger.debug("MongoDB not enabled, skipping username migration", {
+        context: "migration.ensure-user-usernames"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible2()) {
+      logger.debug("MongoDB not accessible, deferring username migration", {
+        context: "migration.ensure-user-usernames"
+      });
+      return false;
+    }
+    const usersWithoutUsernames = await getUsersWithoutUsernames();
+    logger.debug("Checked for users without usernames", {
+      context: "migration.ensure-user-usernames",
+      count: usersWithoutUsernames.length
+    });
+    return usersWithoutUsernames.length > 0;
+  },
+  async run() {
+    const startTime = Date.now();
+    const updatedUsers = [];
+    const errors = [];
+    logger.info("Starting user username migration", {
+      context: "migration.ensure-user-usernames"
+    });
+    try {
+      const db = await getMongoDatabase3();
+      const usersCollection = db.collection("users");
+      const usersWithoutUsernames = await getUsersWithoutUsernames();
+      logger.info("Found users without usernames", {
+        context: "migration.ensure-user-usernames",
+        count: usersWithoutUsernames.length
+      });
+      for (const user of usersWithoutUsernames) {
+        try {
+          let baseUsername;
+          if (user.email) {
+            baseUsername = generateUsernameFromEmail(user.email);
+          } else {
+            baseUsername = generateFallbackUsername(user.id);
+          }
+          const username = await generateUniqueUsername(baseUsername);
+          const result = await usersCollection.updateOne(
+            { id: user.id },
+            {
+              $set: {
+                username,
+                updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+              }
+            }
+          );
+          if (result.modifiedCount > 0) {
+            updatedUsers.push(user.id);
+            logger.info("Updated user with username", {
+              context: "migration.ensure-user-usernames",
+              userId: user.id,
+              username
+            });
+          }
+        } catch (error2) {
+          const errorMessage = error2 instanceof Error ? error2.message : String(error2);
+          errors.push({
+            userId: user.id,
+            error: errorMessage
+          });
+          logger.error("Failed to update user username", {
+            context: "migration.ensure-user-usernames",
+            userId: user.id,
+            error: errorMessage
+          });
+        }
+      }
+    } catch (error2) {
+      const errorMessage = error2 instanceof Error ? error2.message : String(error2);
+      logger.error("Username migration failed", {
+        context: "migration.ensure-user-usernames",
+        error: errorMessage
+      });
+      return {
+        id: "ensure-user-usernames-v1",
+        success: false,
+        itemsAffected: updatedUsers.length,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const success = errors.length === 0;
+    const durationMs = Date.now() - startTime;
+    return {
+      id: "ensure-user-usernames-v1",
+      success,
+      itemsAffected: updatedUsers.length,
+      message: success ? `Updated ${updatedUsers.length} users with usernames` : `Updated ${updatedUsers.length} users with ${errors.length} errors`,
+      error: errors.length > 0 ? `Failed users: ${errors.map((e4) => `${e4.userId}: ${e4.error}`).join("; ")}` : void 0,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
 // plugins/dist/qtap-plugin-upgrade/migrations/index.ts
 var migrations = [
   convertOpenRouterProfilesMigration,
@@ -69693,7 +69888,9 @@ var migrations = [
   validateMongoDBConfigMigration,
   validateS3ConfigMigration,
   migrateJsonToMongoDBMigration,
-  migrateFilesToS3Migration
+  migrateFilesToS3Migration,
+  // Data integrity migrations
+  ensureUserUsernamesMigration
 ];
 
 // plugins/dist/qtap-plugin-upgrade/index.ts

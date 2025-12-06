@@ -13,6 +13,8 @@ import { validateMongoDBConfigMigration } from './validate-mongodb-config';
 import { validateS3ConfigMigration } from './validate-s3-config';
 import { migrateJsonToMongoDBMigration } from './migrate-json-to-mongodb';
 import { migrateFilesToS3Migration } from './migrate-files-to-s3';
+// Data integrity migrations
+import { ensureUserUsernamesMigration } from './ensure-user-usernames';
 
 /**
  * All available migrations.
@@ -26,6 +28,8 @@ export const migrations: Migration[] = [
   validateS3ConfigMigration,
   migrateJsonToMongoDBMigration,
   migrateFilesToS3Migration,
+  // Data integrity migrations
+  ensureUserUsernamesMigration,
 ];
 
 export {
@@ -36,4 +40,6 @@ export {
   validateS3ConfigMigration,
   migrateJsonToMongoDBMigration,
   migrateFilesToS3Migration,
+  // Data integrity migrations
+  ensureUserUsernamesMigration,
 };
