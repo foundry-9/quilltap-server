@@ -32,9 +32,6 @@ export default async function Home() {
             Learn More
           </a>
         </div>
-        <p className="mt-8 text-sm text-slate-400">
-          Phase 0: Foundation - OAuth Authentication Complete
-        </p>
       </div>
     </main>
   );

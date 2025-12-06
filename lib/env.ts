@@ -113,10 +113,42 @@ const envSchema = z
 export type Env = z.infer<typeof envSchema>;
 
 /**
+ * Check if we're in a build-only phase (no runtime needed)
+ * During Next.js build, we skip env validation since runtime vars aren't available in CI
+ */
+const isBuildPhase =
+  process.env.SKIP_ENV_VALIDATION === 'true' ||
+  process.env.NEXT_PHASE === 'phase-production-build' ||
+  (process.env.NEXT_RUNTIME === undefined && process.argv.some(arg => arg.includes('next') && process.argv.includes('build')));
+
+/**
  * Validate and parse environment variables
  * Throws an error if validation fails
+ * Skips validation during build phase for CI compatibility
  */
 export function validateEnv(): Env {
+  // Skip validation during build phase - env vars may not be available in CI
+  if (isBuildPhase) {
+    // Return minimal defaults for build-time type checking
+    return {
+      NODE_ENV: process.env.NODE_ENV || 'production',
+      NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || 'build-time-placeholder-secret-value',
+      ENCRYPTION_MASTER_PEPPER: process.env.ENCRYPTION_MASTER_PEPPER || 'build-time-placeholder-pepper-value',
+      MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017',
+      MONGODB_DATABASE: 'quilltap',
+      MONGODB_MODE: 'external',
+      MONGODB_DATA_DIR: '/data/mongodb',
+      DATA_BACKEND: 'mongodb',
+      S3_MODE: 'embedded',
+      S3_REGION: 'us-east-1',
+      S3_BUCKET: 'quilltap-files',
+      LOG_LEVEL: 'info',
+      LOG_OUTPUT: 'console',
+      LOG_FILE_PATH: './logs',
+    } as Env;
+  }
+
   try {
     const env = envSchema.parse(process.env);
     return env;

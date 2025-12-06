@@ -56,13 +56,12 @@ jobs:
       - name: Build Next.js application
         run: npx next build
         env:
-          # Skip lint during build since we already ran it
-          SKIP_ENV_VALIDATION: true
+          # Skip env validation during build since runtime vars aren't needed
+          SKIP_ENV_VALIDATION: 'true'
           ENCRYPTION_MASTER_PEPPER: 'test-pepper-for-ci-environment-32chars!'
           NEXTAUTH_URL: 'http://localhost:3000'
           NEXTAUTH_SECRET: 'test-nextauth-secret-key-32-characters!!!'
-          GOOGLE_CLIENT_ID: 'test-google-client-id'
-          GOOGLE_CLIENT_SECRET: 'test-google-client-secret'
+          MONGODB_URI: 'mongodb://localhost:27017/quilltap-ci'
 
       - name: Verify build output
         id: verify-build
