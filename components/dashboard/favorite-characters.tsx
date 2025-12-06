@@ -58,6 +58,7 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
             className="flex flex-col items-center gap-4 p-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all"
           >
             {getAvatarSrc(character) ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={getAvatarSrc(character)!}
                 alt={character.name}

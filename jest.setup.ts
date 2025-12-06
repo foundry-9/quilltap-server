@@ -21,6 +21,7 @@ process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || 'test-secret-for-un
 process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-google-client-id'
 process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-google-client-secret'
 process.env.ENCRYPTION_MASTER_PEPPER = process.env.ENCRYPTION_MASTER_PEPPER || 'test-pepper-for-unit-tests-32-chars-long!'
+process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quilltap-test'
 
 // Set up globals required for Next.js
 // Note: We check if they're undefined to avoid conflicts with jsdom's implementation

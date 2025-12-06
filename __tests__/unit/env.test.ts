@@ -19,6 +19,7 @@ describe('Environment Validation', () => {
     process.env.GOOGLE_CLIENT_ID = 'test-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
     process.env.ENCRYPTION_MASTER_PEPPER = 'test-pepper-key-minimum-32-characters';
+    process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap-test';
   });
 
   afterEach(() => {

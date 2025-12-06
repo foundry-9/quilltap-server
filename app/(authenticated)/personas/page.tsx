@@ -217,6 +217,7 @@ export default function PersonasPage() {
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center flex-grow gap-4">
                   {getAvatarSrc(persona) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={getAvatarSrc(persona)!}
                       alt={persona.name}

@@ -79,6 +79,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-4 flex-grow">
                   {getAvatarSrc(chat) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={getAvatarSrc(chat)!}
                       alt={chat.character.name}

@@ -900,6 +900,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           }}
         >
           {avatarSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={avatarSrc}
               alt={avatar.name}
@@ -1055,6 +1056,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                               })}
                               className="relative group/thumb overflow-hidden rounded border border-gray-300 dark:border-slate-600 hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
                             >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
                                 alt={attachment.filename}
