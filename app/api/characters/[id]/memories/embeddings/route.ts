@@ -3,9 +3,8 @@
 // POST /api/characters/[id]/memories/embeddings/rebuild - Rebuild vector index
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getServerSession } from '@/lib/auth/session'
+import { getRepositories } from '@/lib/repositories/factory'
 import {
   generateMissingEmbeddings,
   rebuildVectorIndex,
@@ -32,13 +31,13 @@ export async function POST(
 ) {
   try {
     const { id: characterId } = await params
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    const session = await getServerSession()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const repos = getRepositories()
-    const user = await repos.users.findByEmail(session.user.email)
+    const user = await repos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -116,13 +115,13 @@ export async function PUT(
 ) {
   try {
     const { id: characterId } = await params
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    const session = await getServerSession()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const repos = getRepositories()
-    const user = await repos.users.findByEmail(session.user.email)
+    const user = await repos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -172,13 +171,13 @@ export async function GET(
 ) {
   try {
     const { id: characterId } = await params
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    const session = await getServerSession()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const repos = getRepositories()
-    const user = await repos.users.findByEmail(session.user.email)
+    const user = await repos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })

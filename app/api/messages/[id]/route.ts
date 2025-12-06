@@ -5,18 +5,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getServerSession } from '@/lib/auth/session'
+import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
-import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/json-store/schemas/types'
+import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types'
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -35,14 +34,14 @@ export async function PUT(
       )
     }
 
-    // Find the message across all chats
-    const allChats = await repos.chats.findAll()
+    // Find the message across user's chats only (security: filter by userId)
+    const userChats = await repos.chats.findByUserId(session.user.id)
     let foundChat: ChatMetadata | null = null
     let foundMessage: MessageEvent | null = null
     let allMessages: ChatEvent[] = []
     let messageIndex = -1
 
-    for (const chat of allChats) {
+    for (const chat of userChats) {
       const messages = await repos.chats.getMessages(chat.id)
       const idx = messages.findIndex(
         (m): m is MessageEvent => m.type === 'message' && m.id === id
@@ -94,7 +93,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -103,13 +102,13 @@ export async function DELETE(
     const { id } = await params
     const repos = getRepositories()
 
-    // Find the message across all chats
-    const allChats = await repos.chats.findAll()
+    // Find the message across user's chats only (security: filter by userId)
+    const userChats = await repos.chats.findByUserId(session.user.id)
     let foundChat: ChatMetadata | null = null
     let foundMessage: MessageEvent | null = null
     let allMessages: ChatEvent[] = []
 
-    for (const chat of allChats) {
+    for (const chat of userChats) {
       const messages = await repos.chats.getMessages(chat.id)
       const message = messages.find(
         (m): m is MessageEvent => m.type === 'message' && m.id === id

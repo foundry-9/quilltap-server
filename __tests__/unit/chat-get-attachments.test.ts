@@ -5,9 +5,9 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 
-jest.mock('@/lib/json-store/repositories')
+jest.mock('@/lib/repositories/factory')
 
 const mockGetRepositories = jest.mocked(getRepositories)
 

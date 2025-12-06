@@ -9,12 +9,12 @@ import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 
 // Mock the dependencies
 jest.mock('@/lib/llm/plugin-factory')
-jest.mock('@/lib/json-store/repositories')
+jest.mock('@/lib/repositories/factory')
 jest.mock('@/lib/encryption')
 
 // Import the mocked modules
 import { createLLMProvider } from '@/lib/llm'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 
 // Import the module under test AFTER mocking
@@ -45,10 +45,12 @@ const mockProvider = {
 // Mock repositories
 const mockFindById = jest.fn()
 const mockFindApiKeyById = jest.fn()
+const mockFindApiKeyByIdAndUserId = jest.fn()
 const mockRepos = {
   connections: {
     findById: mockFindById,
     findApiKeyById: mockFindApiKeyById,
+    findApiKeyByIdAndUserId: mockFindApiKeyByIdAndUserId,
   },
 }
 
@@ -85,6 +87,13 @@ describe('Cheap LLM Tasks Service', () => {
     })
 
     mockFindApiKeyById.mockResolvedValue({
+      id: 'test-api-key-id',
+      ciphertext: 'encrypted',
+      iv: 'iv',
+      authTag: 'tag',
+    })
+
+    mockFindApiKeyByIdAndUserId.mockResolvedValue({
       id: 'test-api-key-id',
       ciphertext: 'encrypted',
       iv: 'iv',

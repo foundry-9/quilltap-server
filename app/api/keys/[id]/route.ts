@@ -8,9 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getServerSession } from '@/lib/auth/session'
+import { getUserRepositories } from '@/lib/repositories/factory'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
 
@@ -24,7 +23,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -32,7 +31,7 @@ export async function GET(
       )
     }
 
-    const repos = getRepositories()
+    const repos = getUserRepositories(session.user.id)
     const apiKey = await repos.connections.findApiKeyById(id)
 
     if (!apiKey) {
@@ -78,7 +77,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -86,9 +85,9 @@ export async function PUT(
       )
     }
 
-    const repos = getRepositories()
+    const repos = getUserRepositories(session.user.id)
 
-    // Verify key exists
+    // Verify key exists and belongs to the current user (user-scoped repo handles ownership)
     const existingKey = await repos.connections.findApiKeyById(id)
 
     if (!existingKey) {
@@ -177,7 +176,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -185,9 +184,9 @@ export async function DELETE(
       )
     }
 
-    const repos = getRepositories()
+    const repos = getUserRepositories(session.user.id)
 
-    // Verify key exists
+    // Verify key exists and belongs to the current user (user-scoped repo handles ownership)
     const existingKey = await repos.connections.findApiKeyById(id)
 
     if (!existingKey) {

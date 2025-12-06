@@ -3,16 +3,14 @@
  * POST /api/images/:id/tags - Add tag to image
  * DELETE /api/images/:id/tags - Remove tag from image
  *
- * Uses only the file-manager system. Images must be stored as files with category 'IMAGE'.
+ * Uses the repository pattern for metadata management.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { getRepositories } from '@/lib/json-store/repositories';
+import { getServerSession } from '@/lib/auth/session';
+import { getRepositories } from '@/lib/repositories/factory';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { findFileById, addFileTag, removeFileTag } from '@/lib/file-manager';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -24,11 +22,12 @@ const tagSchema = z.object({
 });
 
 /**
- * Verify that the tagged entity exists
+ * Verify that the tagged entity exists and belongs to the user
  */
 async function verifyTaggedEntity(
   tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME',
-  tagId: string
+  tagId: string,
+  userId: string
 ): Promise<NextResponse | null> {
   const repos = getRepositories();
 
@@ -38,17 +37,32 @@ async function verifyTaggedEntity(
       logger.debug('Character not found', { characterId: tagId });
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
+    // Security: verify character belongs to user
+    if (character.userId !== userId) {
+      logger.warn('User tried to tag with character they do not own', { characterId: tagId, userId });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
   } else if (tagType === 'PERSONA') {
     const persona = await repos.personas.findById(tagId);
     if (!persona) {
       logger.debug('Persona not found', { personaId: tagId });
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 });
     }
+    // Security: verify persona belongs to user
+    if (persona.userId !== userId) {
+      logger.warn('User tried to tag with persona they do not own', { personaId: tagId, userId });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
   } else if (tagType === 'CHAT') {
     const chat = await repos.chats.findById(tagId);
     if (!chat) {
       logger.debug('Chat not found', { chatId: tagId });
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+    }
+    // Security: verify chat belongs to user
+    if (chat.userId !== userId) {
+      logger.warn('User tried to tag with chat they do not own', { chatId: tagId, userId });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
   }
 
@@ -57,11 +71,11 @@ async function verifyTaggedEntity(
 
 /**
  * POST /api/images/:id/tags
- * Add a tag to an image using the file-manager system
+ * Add a tag to an image using the repository pattern
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       logger.debug('POST /api/images/:id/tags - Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -70,6 +84,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const body = await request.json();
     const { tagType, tagId } = tagSchema.parse(body);
+    const repos = getRepositories();
 
     logger.debug('POST /api/images/:id/tags - Starting', {
       fileId: id,
@@ -78,11 +93,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       userId: session.user.id
     });
 
-    // Find the file in file-manager
-    const fileEntry = await findFileById(id);
+    // Find the file in repository
+    const fileEntry = await repos.files.findById(id);
 
     if (!fileEntry) {
-      logger.debug('File not found in file-manager', { fileId: id });
+      logger.debug('File not found in repository', { fileId: id });
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
@@ -105,8 +120,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'File is not an image' }, { status: 400 });
     }
 
-    // Verify the tagged entity exists
-    const entityError = await verifyTaggedEntity(tagType, tagId);
+    // Verify the tagged entity exists and belongs to user
+    const entityError = await verifyTaggedEntity(tagType, tagId, session.user.id);
     if (entityError) {
       return entityError;
     }
@@ -130,9 +145,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       });
     }
 
-    // Add tag to file
+    // Add tag to file using repository
     try {
-      await addFileTag(id, tagId);
+      await repos.files.addTag(id, tagId);
       logger.debug('Tag added to file', {
         fileId: id,
         tagId,
@@ -170,11 +185,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
 /**
  * DELETE /api/images/:id/tags
- * Remove a tag from an image using the file-manager system
+ * Remove a tag from an image using the repository pattern
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       logger.debug('DELETE /api/images/:id/tags - Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -184,6 +199,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const searchParams = request.nextUrl.searchParams;
     const tagType = searchParams.get('tagType') as 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME' | null;
     const tagId = searchParams.get('tagId');
+    const repos = getRepositories();
 
     if (!tagType || !tagId) {
       logger.debug('DELETE /api/images/:id/tags - Missing tagType or tagId');
@@ -197,11 +213,11 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       userId: session.user.id
     });
 
-    // Find the file in file-manager
-    const fileEntry = await findFileById(id);
+    // Find the file in repository
+    const fileEntry = await repos.files.findById(id);
 
     if (!fileEntry) {
-      logger.debug('File not found in file-manager', { fileId: id });
+      logger.debug('File not found in repository', { fileId: id });
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
@@ -215,9 +231,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Remove the tag
+    // Remove the tag using repository
     try {
-      await removeFileTag(id, tagId);
+      await repos.files.removeTag(id, tagId);
       logger.debug('Tag removed from file', {
         fileId: id,
         tagId,

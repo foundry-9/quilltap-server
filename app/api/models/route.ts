@@ -6,9 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getServerSession } from '@/lib/auth/session'
+import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
@@ -40,13 +39,13 @@ const getModelsSchema = z.object({
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    const session = await getServerSession()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const repos = getRepositories()
-    const user = await repos.users.findByEmail(session.user.email)
+    const user = await repos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -56,10 +55,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { provider, apiKeyId, baseUrl } = getModelsSchema.parse(body)
 
-    // Get API key if provided
+    // Get API key if provided (security: verify ownership)
     let decryptedKey = ''
     if (apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId)
+      const apiKey = await repos.connections.findApiKeyByIdAndUserId(apiKeyId, session.user.id)
 
       if (!apiKey) {
         return NextResponse.json(
@@ -147,9 +146,29 @@ export async function POST(req: NextRequest) {
     // Get available models
     const models = await llmProvider.getAvailableModels(decryptedKey)
 
+    // Get model metadata (warnings, recommendations) if the provider supports it
+    const modelMetadata = llmProvider.getModelsWithMetadata
+      ? await llmProvider.getModelsWithMetadata(decryptedKey)
+      : []
+
+    // Build response with model info including any warnings
+    const modelsWithInfo = models.map(modelId => {
+      const metadata = modelMetadata.find(m => m.id === modelId)
+        || (llmProvider.getModelMetadata ? llmProvider.getModelMetadata(modelId) : undefined)
+      return {
+        id: modelId,
+        displayName: metadata?.displayName,
+        warnings: metadata?.warnings,
+        deprecated: metadata?.deprecated,
+        experimental: metadata?.experimental,
+        missingCapabilities: metadata?.missingCapabilities,
+      }
+    })
+
     return NextResponse.json({
       provider,
       models,
+      modelsWithInfo,
       count: models.length,
     })
   } catch (error) {

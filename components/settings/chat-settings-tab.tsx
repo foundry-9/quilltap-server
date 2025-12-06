@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { useTagStyles } from '@/components/providers/tag-style-provider'
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles'
-import type { TagVisualStyle } from '@/lib/json-store/schemas/types'
+import type { TagVisualStyle } from '@/lib/schemas/types'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 
@@ -361,14 +361,14 @@ export default function ChatSettingsTab() {
           )
         )
         await refreshQuickHideTags()
-        await fetchTags()
       } catch (err) {
+        clientLogger.error('Error toggling quick-hide', { error: err instanceof Error ? err.message : String(err) })
         setError(err instanceof Error ? err.message : 'Failed to update quick-hide')
       } finally {
         setQuickHideSavingId(current => (current === tagId ? null : current))
       }
     },
-    [fetchTags, refreshQuickHideTags]
+    [refreshQuickHideTags]
   )
 
   const tagLabelLookup = useMemo(() => {

@@ -14,17 +14,14 @@ import {
   getCascadeDeletePreview,
   executeCascadeDelete,
 } from '@/lib/cascade-delete'
-import { getRepositories } from '@/lib/json-store/repositories'
-import { getVectorStoreManager } from '@/lib/embedding/vector-store'
-import type { ChatMetadata, FileEntry } from '@/lib/json-store/schemas/types'
+import { getRepositories } from '@/lib/repositories/factory'
+import type { ChatMetadata, FileEntry } from '@/lib/schemas/types'
 
-// Mock dependencies
-jest.mock('@/lib/file-manager')
-jest.mock('@/lib/json-store/repositories')
-jest.mock('@/lib/embedding/vector-store')
+// Mock dependencies - these are already set up in jest.setup.ts
+// We just need to get the mocked versions for setting return values
+jest.mock('@/lib/repositories/factory')
 
 const mockGetRepositories = jest.mocked(getRepositories)
-const mockGetVectorStoreManager = jest.mocked(getVectorStoreManager)
 
 describe('Cascade Delete Utilities', () => {
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
@@ -326,13 +323,15 @@ describe('Cascade Delete Utilities', () => {
         findAll: jest.fn().mockResolvedValue([]),
       }
 
+      const filesRepo = {
+        findById: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         personas: personasRepo as any,
+        files: filesRepo as any,
       } as any)
-
-      const mockFileManager = jest.requireMock('@/lib/file-manager')
-      mockFileManager.findFileById = jest.fn().mockResolvedValue(null)
 
       const result = await findExclusiveImagesForCharacter('char-1')
 
@@ -400,15 +399,17 @@ describe('Cascade Delete Utilities', () => {
         countByCharacterId: jest.fn().mockResolvedValue(0),
       }
 
+      const filesRepo = {
+        findById: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
+        files: filesRepo as any,
       } as any)
-
-      const mockFileManager = jest.requireMock('@/lib/file-manager')
-      mockFileManager.findFileById = jest.fn().mockResolvedValue(null)
 
       const result = await getCascadeDeletePreview('char-1')
 
@@ -441,15 +442,17 @@ describe('Cascade Delete Utilities', () => {
         countByCharacterId: jest.fn().mockResolvedValue(25),
       }
 
+      const filesRepo = {
+        findById: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
+        files: filesRepo as any,
       } as any)
-
-      const mockFileManager = jest.requireMock('@/lib/file-manager')
-      mockFileManager.findFileById = jest.fn().mockResolvedValue(null)
 
       const result = await getCascadeDeletePreview('char-1')
 
@@ -507,21 +510,20 @@ describe('Cascade Delete Utilities', () => {
         bulkDelete: jest.fn().mockResolvedValue(2),
       }
 
+      const filesRepo = {
+        findById: jest.fn().mockResolvedValue(null),
+        delete: jest.fn().mockResolvedValue(true),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
+        files: filesRepo as any,
       } as any)
 
-      const mockVectorStoreModule = jest.requireMock('@/lib/embedding/vector-store')
-      const mockVectorStore = {
-        deleteStore: jest.fn().mockResolvedValue(undefined),
-      }
-      mockVectorStoreModule.getVectorStoreManager = jest.fn(() => mockVectorStore)
-
-      const mockFileManager = jest.requireMock('@/lib/file-manager')
-      mockFileManager.findFileById = jest.fn().mockResolvedValue(null)
+      // getVectorStoreManager is already mocked in jest.setup.ts
 
       const result = await executeCascadeDelete('char-1', {
         deleteExclusiveChats: false,
@@ -560,21 +562,20 @@ describe('Cascade Delete Utilities', () => {
         bulkDelete: jest.fn().mockResolvedValue(0),
       }
 
+      const filesRepo = {
+        findById: jest.fn().mockResolvedValue(null),
+        delete: jest.fn().mockResolvedValue(true),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
+        files: filesRepo as any,
       } as any)
 
-      const mockVectorStoreModule = jest.requireMock('@/lib/embedding/vector-store')
-      const mockVectorStore = {
-        deleteStore: jest.fn().mockResolvedValue(undefined),
-      }
-      mockVectorStoreModule.getVectorStoreManager = jest.fn(() => mockVectorStore)
-
-      const mockFileManager = jest.requireMock('@/lib/file-manager')
-      mockFileManager.findFileById = jest.fn().mockResolvedValue(null)
+      // getVectorStoreManager is already mocked in jest.setup.ts
 
       await executeCascadeDelete('char-1', {
         deleteExclusiveChats: false,

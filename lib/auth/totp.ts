@@ -6,12 +6,9 @@
 import speakeasy from 'speakeasy'
 import qrcode from 'qrcode'
 import { encryptData, decryptData } from '@/lib/encryption'
-import { UsersRepository } from '@/lib/json-store/repositories/users.repository'
-import { getJsonStore } from '@/lib/json-store/core/json-store'
+import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import crypto from 'crypto'
-
-const usersRepo = new UsersRepository(getJsonStore())
 
 /**
  * Generate a TOTP secret for a user
@@ -48,7 +45,8 @@ export async function verifyTOTP(
   token: string,
   checkBackupCode: boolean = true
 ): Promise<boolean> {
-  const user = await usersRepo.findById(userId)
+  const repos = getRepositories()
+  const user = await repos.users.findById(userId)
 
   if (!user || !user.totp?.enabled) {
     return false
@@ -98,9 +96,23 @@ export async function verifyTOTP(
         // Remove used backup code
         backupCodes.splice(codeIndex, 1)
 
-        // TODO: Update user with remaining backup codes
-        // Note: Need to store encrypted backup codes in user object
-        // This will be handled in a future update to the User schema
+        // Update user with remaining backup codes
+        const encryptedRemainingCodes = encryptData(JSON.stringify(backupCodes), userId)
+
+        await repos.users.update(userId, {
+          backupCodes: {
+            ciphertext: encryptedRemainingCodes.encrypted,
+            iv: encryptedRemainingCodes.iv,
+            authTag: encryptedRemainingCodes.authTag,
+            createdAt: user.backupCodes?.createdAt || new Date().toISOString(),
+          },
+        })
+
+        logger.info('Backup code used successfully', {
+          context: 'verifyTOTP',
+          userId,
+          remainingCodes: backupCodes.length,
+        })
 
         return true
       }
@@ -137,8 +149,9 @@ export async function enableTOTP(
   encryptedAuthTag: string,
   verificationCode: string
 ): Promise<{ success: boolean; backupCodes?: string[] }> {
+  const repos = getRepositories()
   // First verify the code works
-  const user = await usersRepo.findById(userId)
+  const user = await repos.users.findById(userId)
 
   if (!user) {
     return { success: false }
@@ -167,14 +180,31 @@ export async function enableTOTP(
     // Generate backup codes
     const backupCodes = generateBackupCodes()
 
-    // Save to JSON store
-    await usersRepo.update(userId, {
+    // Encrypt backup codes for storage
+    const encryptedBackupCodes = encryptData(JSON.stringify(backupCodes), userId)
+    const now = new Date().toISOString()
+
+    // Save with both TOTP secret and encrypted backup codes
+    await repos.users.update(userId, {
       totp: {
         ciphertext: encryptedSecret,
         iv: encryptedIv,
         authTag: encryptedAuthTag,
         enabled: true,
+        verifiedAt: now,
       },
+      backupCodes: {
+        ciphertext: encryptedBackupCodes.encrypted,
+        iv: encryptedBackupCodes.iv,
+        authTag: encryptedBackupCodes.authTag,
+        createdAt: now,
+      },
+    })
+
+    logger.info('TOTP enabled with backup codes', {
+      context: 'enableTOTP',
+      userId,
+      backupCodeCount: backupCodes.length,
     })
 
     return { success: true, backupCodes }
@@ -186,15 +216,64 @@ export async function enableTOTP(
 
 /**
  * Disable TOTP for a user
+ * Also clears backup codes
  */
 export async function disableTOTP(userId: string): Promise<boolean> {
   try {
-    await usersRepo.update(userId, {
+    const repos = getRepositories()
+    await repos.users.update(userId, {
       totp: undefined,
+      backupCodes: undefined,
     })
+
+    logger.info('TOTP disabled', { context: 'disableTOTP', userId })
+
     return true
   } catch (error) {
     logger.error('Disable TOTP error', { context: 'disableTOTP', userId }, error instanceof Error ? error : undefined)
     return false
+  }
+}
+
+/**
+ * Regenerate backup codes for a user
+ * Used when user has lost their backup codes or wants new ones
+ */
+export async function regenerateBackupCodes(userId: string): Promise<{ success: boolean; backupCodes?: string[] }> {
+  try {
+    const repos = getRepositories()
+    const user = await repos.users.findById(userId)
+
+    if (!user?.totp?.enabled) {
+      logger.warn('Cannot regenerate backup codes - TOTP not enabled', { context: 'regenerateBackupCodes', userId })
+      return { success: false }
+    }
+
+    // Generate new backup codes
+    const backupCodes = generateBackupCodes()
+
+    // Encrypt and store
+    const encryptedBackupCodes = encryptData(JSON.stringify(backupCodes), userId)
+    const now = new Date().toISOString()
+
+    await repos.users.update(userId, {
+      backupCodes: {
+        ciphertext: encryptedBackupCodes.encrypted,
+        iv: encryptedBackupCodes.iv,
+        authTag: encryptedBackupCodes.authTag,
+        createdAt: now,
+      },
+    })
+
+    logger.info('Backup codes regenerated', {
+      context: 'regenerateBackupCodes',
+      userId,
+      backupCodeCount: backupCodes.length,
+    })
+
+    return { success: true, backupCodes }
+  } catch (error) {
+    logger.error('Regenerate backup codes error', { context: 'regenerateBackupCodes', userId }, error instanceof Error ? error : undefined)
+    return { success: false }
   }
 }

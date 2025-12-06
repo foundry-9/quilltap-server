@@ -7,8 +7,8 @@
  */
 
 import { logger } from '@/lib/logger'
-import { getRepositories } from '@/lib/json-store/repositories'
-import { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/json-store/schemas/types'
+import { getRepositories } from '@/lib/repositories/factory'
+import { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/schemas/types'
 
 /**
  * Result of an embedding operation
@@ -164,7 +164,7 @@ async function getApiKeyForProfile(
   if (!profile.apiKeyId) return null
 
   const repos = getRepositories()
-  const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId)
+  const apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId)
 
   if (!apiKey) return null
 

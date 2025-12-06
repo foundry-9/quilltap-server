@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
@@ -27,7 +26,9 @@ interface FavoriteCharactersProps {
 
 function getAvatarSrc(character: FavoriteCharacter): string | null {
   if (character.defaultImage) {
-    return character.defaultImage.url || `/${character.defaultImage.filepath}`
+    // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
+    const filepath = character.defaultImage.filepath
+    return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
   }
   return character.avatarUrl || null
 }
@@ -57,7 +58,8 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
             className="flex flex-col items-center gap-4 p-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all"
           >
             {getAvatarSrc(character) ? (
-              <Image
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
                 src={getAvatarSrc(character)!}
                 alt={character.name}
                 width={80}

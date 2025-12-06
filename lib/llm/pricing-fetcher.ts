@@ -7,8 +7,8 @@
  */
 
 import { OpenRouter } from '@openrouter/sdk'
-import { Provider, ConnectionProfile } from '@/lib/json-store/schemas/types'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { Provider, ConnectionProfile } from '@/lib/schemas/types'
+import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
 import {
@@ -130,7 +130,7 @@ async function getApiKeyForProvider(
   if (!profile) return null
 
   const repos = getRepositories()
-  const apiKeyRecord = await repos.connections.findApiKeyById(profile.apiKeyId!)
+  const apiKeyRecord = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId!, userId)
   if (!apiKeyRecord) return null
 
   try {

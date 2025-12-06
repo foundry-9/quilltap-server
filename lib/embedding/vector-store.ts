@@ -2,18 +2,19 @@
  * Vector Store
  * Sprint 4: Vector Database Integration
  *
- * In-memory vector store with JSONL persistence for semantic search.
+ * In-memory vector store with MongoDB persistence for semantic search.
  * Uses cosine similarity for nearest neighbor search.
  *
  * Design decisions:
  * - Per-character vector indices for isolation and efficient loading
- * - In-memory search with disk persistence (suitable for <1000 memories per character)
+ * - In-memory search with persistence (suitable for <1000 memories per character)
  * - Cosine similarity for text embedding comparison
+ * - MongoDB is the required backend
  */
 
 import { cosineSimilarity } from './embedding-service'
-import * as fs from 'fs/promises'
-import * as path from 'path'
+import { getMongoVectorIndicesRepository } from '@/lib/mongodb/repositories/vector-indices.repository'
+import { logger } from '@/lib/logger'
 
 /**
  * Metadata associated with a vector entry
@@ -56,86 +57,118 @@ export interface VectorSearchResult {
 }
 
 /**
- * Persisted vector index file structure
+ * Interface for vector store implementations
  */
-interface VectorIndexFile {
-  version: number
-  characterId: string
-  dimensions: number
-  entries: VectorEntry[]
-  createdAt: string
-  updatedAt: string
+export interface ICharacterVectorStore {
+  load(): Promise<void>
+  save(): Promise<void>
+  addVector(id: string, embedding: number[], metadata: VectorMetadata): Promise<void>
+  removeVector(id: string): Promise<boolean>
+  updateVector(id: string, embedding: number[]): Promise<boolean>
+  hasVector(id: string): boolean
+  readonly size: number
+  getDimensions(): number | null
+  search(queryEmbedding: number[], limit?: number, filter?: (metadata: VectorMetadata) => boolean): VectorSearchResult[]
+  getAllEntries(): VectorEntry[]
+  clear(): void
 }
 
 /**
- * In-memory vector store for a single character
+ * MongoDB-backed vector store for a single character
+ * Uses in-memory storage with MongoDB persistence
  */
-export class CharacterVectorStore {
+export class CharacterVectorStore implements ICharacterVectorStore {
   private entries: Map<string, VectorEntry> = new Map()
   private dimensions: number | null = null
   private dirty: boolean = false
+  private createdAt: string = new Date().toISOString()
 
-  constructor(
-    private readonly characterId: string,
-    private readonly storagePath: string
-  ) {}
+  constructor(private readonly characterId: string) {}
 
   /**
-   * Get the file path for this character's vector index
-   */
-  private getFilePath(): string {
-    return path.join(this.storagePath, `${this.characterId}.json`)
-  }
-
-  /**
-   * Load the vector index from disk
+   * Load the vector index from MongoDB
    */
   async load(): Promise<void> {
     try {
-      const content = await fs.readFile(this.getFilePath(), 'utf-8')
-      const data: VectorIndexFile = JSON.parse(content)
+      logger.debug('Loading vector index from MongoDB', {
+        context: 'CharacterVectorStore.load',
+        characterId: this.characterId,
+      })
+
+      const repo = getMongoVectorIndicesRepository()
+      const index = await repo.findByCharacterId(this.characterId)
 
       this.entries.clear()
-      for (const entry of data.entries) {
-        this.entries.set(entry.id, entry)
-      }
-      this.dimensions = data.dimensions
-      this.dirty = false
-    } catch (error) {
-      // File doesn't exist yet - start fresh
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        this.entries.clear()
+      if (index) {
+        for (const entry of index.entries) {
+          this.entries.set(entry.id, entry)
+        }
+        this.dimensions = index.dimensions
+        this.createdAt = index.createdAt
+      } else {
         this.dimensions = null
-        this.dirty = false
-        return
       }
-      throw error
+      this.dirty = false
+
+      logger.debug('Vector index loaded from MongoDB', {
+        context: 'CharacterVectorStore.load',
+        characterId: this.characterId,
+        entryCount: this.entries.size,
+      })
+    } catch (error) {
+      logger.error('Error loading vector index from MongoDB', {
+        context: 'CharacterVectorStore.load',
+        characterId: this.characterId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      // Start fresh on error
+      this.entries.clear()
+      this.dimensions = null
+      this.dirty = false
     }
   }
 
   /**
-   * Save the vector index to disk
+   * Save the vector index to MongoDB
    */
   async save(): Promise<void> {
     if (!this.dirty && this.entries.size === 0) {
       return // Nothing to save
     }
 
-    // Ensure directory exists
-    await fs.mkdir(path.dirname(this.getFilePath()), { recursive: true })
+    try {
+      logger.debug('Saving vector index to MongoDB', {
+        context: 'CharacterVectorStore.save',
+        characterId: this.characterId,
+        entryCount: this.entries.size,
+      })
 
-    const now = new Date().toISOString()
-    const data: VectorIndexFile = {
-      version: 1,
-      characterId: this.characterId,
-      dimensions: this.dimensions || 0,
-      entries: Array.from(this.entries.values()),
-      createdAt: now,
-      updatedAt: now,
+      const repo = getMongoVectorIndicesRepository()
+      const now = new Date().toISOString()
+
+      await repo.save(this.characterId, {
+        characterId: this.characterId,
+        version: 1,
+        dimensions: this.dimensions || 0,
+        entries: Array.from(this.entries.values()),
+        createdAt: this.createdAt,
+        updatedAt: now,
+      })
+
+      this.dirty = false
+
+      logger.debug('Vector index saved to MongoDB', {
+        context: 'CharacterVectorStore.save',
+        characterId: this.characterId,
+      })
+    } catch (error) {
+      logger.error('Error saving vector index to MongoDB', {
+        context: 'CharacterVectorStore.save',
+        characterId: this.characterId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
     }
-
-    await fs.writeFile(this.getFilePath(), JSON.stringify(data, null, 2))
-    this.dirty = false
   }
 
   /**
@@ -281,24 +314,26 @@ export class CharacterVectorStore {
 /**
  * Global vector store manager
  * Handles loading and caching of per-character vector stores
+ * Uses MongoDB backend exclusively
  */
 export class VectorStoreManager {
-  private stores: Map<string, CharacterVectorStore> = new Map()
-  private readonly storagePath: string
+  private stores: Map<string, ICharacterVectorStore> = new Map()
 
-  constructor(storagePath?: string) {
-    // Default to data/vector-indices/ in the project root
-    this.storagePath = storagePath || path.join(process.cwd(), 'data', 'vector-indices')
+  constructor() {
+    logger.debug('VectorStoreManager initialized', {
+      context: 'VectorStoreManager',
+      backend: 'mongodb',
+    })
   }
 
   /**
    * Get or create a vector store for a character
    */
-  async getStore(characterId: string): Promise<CharacterVectorStore> {
+  async getStore(characterId: string): Promise<ICharacterVectorStore> {
     let store = this.stores.get(characterId)
 
     if (!store) {
-      store = new CharacterVectorStore(characterId, this.storagePath)
+      store = new CharacterVectorStore(characterId)
       await store.load()
       this.stores.set(characterId, store)
     }
@@ -307,7 +342,7 @@ export class VectorStoreManager {
   }
 
   /**
-   * Save all dirty stores to disk
+   * Save all dirty stores
    */
   async saveAll(): Promise<void> {
     const savePromises: Promise<void>[] = []
@@ -330,7 +365,7 @@ export class VectorStoreManager {
   }
 
   /**
-   * Remove a character's store from cache (doesn't delete from disk)
+   * Remove a character's store from cache (doesn't delete from storage)
    */
   unloadStore(characterId: string): boolean {
     return this.stores.delete(characterId)
@@ -342,16 +377,8 @@ export class VectorStoreManager {
   async deleteStore(characterId: string): Promise<boolean> {
     this.stores.delete(characterId)
 
-    const filePath = path.join(this.storagePath, `${characterId}.json`)
-    try {
-      await fs.unlink(filePath)
-      return true
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return false
-      }
-      throw error
-    }
+    const repo = getMongoVectorIndicesRepository()
+    return repo.delete(characterId)
   }
 
   /**
@@ -388,7 +415,7 @@ export function getVectorStoreManager(): VectorStoreManager {
  */
 export async function getCharacterVectorStore(
   characterId: string
-): Promise<CharacterVectorStore> {
+): Promise<ICharacterVectorStore> {
   const manager = getVectorStoreManager()
   return manager.getStore(characterId)
 }

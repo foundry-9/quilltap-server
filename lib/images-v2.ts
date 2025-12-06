@@ -1,12 +1,16 @@
 /**
  * Image utility functions for handling uploads, URL imports, and image processing
- * Version 2: Uses centralized file manager
+ * Version 2: Uses repository pattern for metadata storage and S3 for file storage when enabled
  */
 
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
+import { extname } from 'node:path';
 import fetch from 'node-fetch';
-import { createFile, deleteFile, findFileById, readFile } from './file-manager';
-import type { FileEntry } from './json-store/schemas/types';
+import { getRepositories } from './repositories/factory';
+import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as downloadS3File } from './s3/operations';
+import { buildS3Key } from './s3/client';
+import type { FileEntry, FileSource, FileCategory } from './schemas/types';
+import { logger } from './logger';
 
 export interface ImageUploadResult {
   id: string;
@@ -41,11 +45,198 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 /**
  * Get image dimensions from buffer
  */
-async function getImageDimensions(buffer: Buffer, mimeType: string): Promise<{ width?: number; height?: number }> {
+async function getImageDimensions(_buffer: Buffer, _mimeType: string): Promise<{ width?: number; height?: number }> {
   // For now, we'll return undefined dimensions
   // In a production app, you'd use a library like 'sharp' or 'image-size'
   // to extract actual image dimensions
   return { width: undefined, height: undefined };
+}
+
+/**
+ * Get the file extension from an original filename
+ */
+function getExtension(filename: string): string {
+  const ext = extname(filename);
+  return ext || '.bin';
+}
+
+/**
+ * Get the filepath for a file - always returns the API path for S3-backed files
+ */
+function getFilePath(fileId: string): string {
+  return `/api/files/${fileId}`;
+}
+
+interface CreateFileParams {
+  buffer: Buffer;
+  originalFilename: string;
+  mimeType: string;
+  source: FileSource;
+  category: FileCategory;
+  userId: string;
+  linkedTo?: string[];
+  tags?: string[];
+  width?: number;
+  height?: number;
+  generationPrompt?: string;
+  generationModel?: string;
+  generationRevisedPrompt?: string;
+  description?: string;
+}
+
+/**
+ * Create a new file - stores bytes to S3 and metadata to repository
+ */
+async function createFile(params: CreateFileParams): Promise<FileEntry> {
+  const {
+    buffer,
+    originalFilename,
+    mimeType,
+    source,
+    category,
+    userId,
+    linkedTo = [],
+    tags = [],
+    width,
+    height,
+    generationPrompt,
+    generationModel,
+    generationRevisedPrompt,
+    description,
+  } = params;
+
+  const repos = getRepositories();
+  const sha256 = createHash('sha256').update(buffer).digest('hex');
+
+  // Check for duplicate by hash
+  const existingFiles = await repos.files.findBySha256(sha256);
+  if (existingFiles.length > 0) {
+    const existing = existingFiles[0];
+
+    // Verify the actual file bytes still exist in S3 before returning the cached entry
+    let fileExists = false;
+    if (existing.s3Key) {
+      try {
+        // Try to download from S3 to verify it exists
+        await downloadS3File(existing.s3Key);
+        fileExists = true;
+      } catch {
+        logger.debug('S3 file no longer exists, will re-upload', { fileId: existing.id, s3Key: existing.s3Key });
+      }
+    }
+
+    if (fileExists) {
+      // File already exists, just update the linkedTo array if needed
+      const updatedLinkedTo = Array.from(new Set([...existing.linkedTo, ...linkedTo]));
+      if (updatedLinkedTo.length > existing.linkedTo.length) {
+        const updated = await repos.files.update(existing.id, { linkedTo: updatedLinkedTo });
+        if (updated) {
+          logger.debug('Updated existing file with new links', { fileId: existing.id, newLinks: linkedTo });
+          return updated;
+        }
+      }
+      logger.debug('File with same hash already exists', { fileId: existing.id, sha256 });
+      return existing;
+    } else {
+      // File bytes are missing - delete the orphaned metadata and proceed with fresh upload
+      logger.info('Cleaning up orphaned file metadata before re-upload', { fileId: existing.id, sha256 });
+      await repos.files.delete(existing.id);
+    }
+  }
+
+  // Generate a new file ID
+  const fileId = crypto.randomUUID();
+
+  // Upload to S3
+  const s3Key = buildS3Key(userId, fileId, originalFilename, category);
+  await uploadS3File(s3Key, buffer, mimeType, {
+    userId,
+    fileId,
+    category,
+    filename: originalFilename,
+    sha256,
+  });
+  logger.debug('Uploaded file to S3', { fileId, s3Key, size: buffer.length });
+
+  // Create metadata in repository
+  const fileEntry = await repos.files.create({
+    userId,
+    sha256,
+    originalFilename,
+    mimeType,
+    size: buffer.length,
+    width: width || null,
+    height: height || null,
+    linkedTo,
+    source,
+    category,
+    generationPrompt: generationPrompt || null,
+    generationModel: generationModel || null,
+    generationRevisedPrompt: generationRevisedPrompt || null,
+    description: description || null,
+    tags,
+    s3Key,
+  });
+
+  logger.debug('Created file metadata in repository', { fileId: fileEntry.id, s3Key });
+  return fileEntry;
+}
+
+/**
+ * Delete a file - removes bytes from S3 and metadata from repository
+ */
+async function deleteFile(fileId: string): Promise<boolean> {
+  const repos = getRepositories();
+  const entry = await repos.files.findById(fileId);
+
+  if (!entry) {
+    logger.debug('File not found for deletion', { fileId });
+    return false;
+  }
+
+  // Delete the file bytes from S3
+  if (entry.s3Key) {
+    try {
+      await deleteS3File(entry.s3Key);
+      logger.debug('Deleted file from S3', { fileId, s3Key: entry.s3Key });
+    } catch (error) {
+      logger.error('Failed to delete file from S3', { fileId, s3Key: entry.s3Key }, error instanceof Error ? error : undefined);
+    }
+  }
+
+  // Delete metadata from repository
+  const deleted = await repos.files.delete(fileId);
+  logger.debug('Deleted file metadata from repository', { fileId, success: deleted });
+  return deleted;
+}
+
+/**
+ * Read a file as buffer from S3
+ */
+async function readFile(fileId: string): Promise<Buffer> {
+  const repos = getRepositories();
+  const entry = await repos.files.findById(fileId);
+
+  if (!entry) {
+    throw new Error(`File not found: ${fileId}`);
+  }
+
+  if (!entry.s3Key) {
+    throw new Error(`File ${fileId} has no S3 key - file may need migration`);
+  }
+
+  // Download from S3
+  const buffer = await downloadS3File(entry.s3Key);
+  logger.debug('Downloaded file from S3', { fileId, s3Key: entry.s3Key, size: buffer.length });
+  return buffer;
+}
+
+/**
+ * Find a file entry by ID
+ */
+async function findFileById(fileId: string): Promise<FileEntry | null> {
+  const repos = getRepositories();
+  return await repos.files.findById(fileId);
 }
 
 /**
@@ -73,7 +264,7 @@ export async function uploadImage(file: File, userId: string, linkedTo: string[]
   // Get image dimensions
   const dimensions = await getImageDimensions(buffer, file.type);
 
-  // Create file entry using file manager
+  // Create file entry
   const fileEntry = await createFile({
     buffer,
     originalFilename: file.name,
@@ -88,7 +279,7 @@ export async function uploadImage(file: File, userId: string, linkedTo: string[]
   return {
     id: fileEntry.id,
     filename: fileEntry.originalFilename,
-    filepath: `data/files/storage/${fileEntry.id}.${file.name.split('.').pop()}`,
+    filepath: getFilePath(fileEntry.id),
     mimeType: fileEntry.mimeType,
     size: fileEntry.size,
     width: fileEntry.width || undefined,
@@ -130,7 +321,7 @@ export async function importImageFromUrl(url: string, userId: string, linkedTo: 
   const ext = contentType.split('/')[1] || 'jpg';
   const originalFilename = urlFilename.includes('.') ? urlFilename : `${urlFilename}.${ext}`;
 
-  // Create file entry using file manager
+  // Create file entry
   const fileEntry = await createFile({
     buffer,
     originalFilename,
@@ -146,7 +337,7 @@ export async function importImageFromUrl(url: string, userId: string, linkedTo: 
   return {
     id: fileEntry.id,
     filename: fileEntry.originalFilename,
-    filepath: `data/files/storage/${fileEntry.id}.${ext}`,
+    filepath: getFilePath(fileEntry.id),
     mimeType: fileEntry.mimeType,
     size: fileEntry.size,
     width: fileEntry.width || undefined,

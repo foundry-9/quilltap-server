@@ -12,6 +12,9 @@ export type {
   LLMParams,
   LLMResponse,
   StreamChunk,
+  ModelWarningLevel,
+  ModelWarning,
+  ModelMetadata,
 } from '../../../lib/llm/base';
 
 export type { LLMProvider } from '../../../lib/llm/base';

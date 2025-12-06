@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.7.31-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -90,22 +90,23 @@ Configure dedicated connection profiles for each provider you want to use:
 - Per-user encryption keys
 - OAuth authentication (Google) plus local email/password login with optional TOTP 2FA
 - Rate limiting and security headers
-- All data stored in JSON files in your data directory (completely portable)
+- All data stored securely in MongoDB with files in S3-compatible storage
 
 ## How It Works
 
 Quilltap is built on a modern stack:
 
 - **Frontend & Backend**: Next.js 14+ with TypeScript
-- **Data Store**: JSON-based file storage with atomic writes and JSONL append-only support
-- **Authentication**: NextAuth.js with Google OAuth plus local email/password + optional TOTP 2FA
+- **Data Store**: MongoDB for all application data
+- **File Storage**: S3-compatible storage (embedded MinIO or external S3/MinIO)
+- **Authentication**: NextAuth.js with pluggable OAuth providers (Google, etc.) plus local email/password + optional TOTP 2FA
 - **Styling**: Tailwind CSS
-- **Deployment**: Docker + Docker Compose (single container, no database service needed)
+- **Deployment**: Docker + Docker Compose with MongoDB and MinIO services
 - **Production**: Nginx reverse proxy with Let's Encrypt SSL
 
-The architecture is straightforward: a Next.js application serves both the web UI and API endpoints, with all data persisted to JSON files in a `data/` directory. This approach eliminates the need for a separate database service, making deployment simpler and more portable. All chat processing happens server-side, with streaming responses sent to the client via Server-Sent Events.
+The architecture uses a Next.js application that serves both the web UI and API endpoints. Data is stored in MongoDB collections with files (images, attachments) stored in S3-compatible storage. For development, embedded MinIO provides local S3 compatibility. For production, you can use MongoDB Atlas and AWS S3, or self-host both services.
 
-Your API keys are encrypted with AES-256-GCM using a user-specific key derived from your user ID and a master pepper. This means your keys are secure at rest and can only be decrypted when you're authenticated. Session data is stored in append-only JSONL format for performance and auditability.
+Your API keys are encrypted with AES-256-GCM using a user-specific key derived from your user ID and a master pepper. This means your keys are secure at rest and can only be decrypted when you're authenticated.
 
 ## Getting Started
 
@@ -113,7 +114,9 @@ Your API keys are encrypted with AES-256-GCM using a user-specific key derived f
 
 - **Docker and Docker Compose** (recommended)
 - **Node.js 20+** (for local development)
-- **Google OAuth credentials** ([Get them here](https://console.cloud.google.com/))
+- **MongoDB** (local or MongoDB Atlas)
+- **S3-compatible storage** (embedded MinIO for development, or external S3/MinIO for production)
+- **Google OAuth credentials** (optional, for OAuth login - [Get them here](https://console.cloud.google.com/))
 
 ### Quick Start with Docker
 
@@ -139,13 +142,25 @@ Edit `.env.local` and set your values:
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="your-nextauth-secret-here"
 
-# Google OAuth (get from https://console.cloud.google.com/)
+# Google OAuth (optional - get from https://console.cloud.google.com/)
+# If not configured, only email/password login will be available
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
 
 # Encryption
 ENCRYPTION_MASTER_PEPPER="your-encryption-pepper-here"
+
+# MongoDB (required)
+MONGODB_URI="mongodb://localhost:27017"
+MONGODB_DATABASE="quilltap"
+
+# S3 Storage (embedded MinIO is default for development)
+S3_MODE="embedded"
 ```
+
+**Note:** OAuth providers are now optional. If you don't configure Google OAuth credentials, the sign-in page will show a warning and only email/password authentication will be available. You can still create accounts and log in using email and password.
+
+**Note:** MongoDB and S3-compatible storage are required. For development, you can use Docker Compose with embedded services (see below).
 
 #### 3. Generate secrets
 
@@ -159,7 +174,9 @@ openssl rand -base64 32
 
 Add these values to your `.env.local` file.
 
-#### 4. Set up Google OAuth
+#### 4. Set up Google OAuth (Optional)
+
+If you want to enable "Sign in with Google":
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select an existing one
@@ -168,32 +185,38 @@ Add these values to your `.env.local` file.
 5. Add authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
 6. Copy the Client ID and Client Secret to your `.env.local`
 
+**Skip this step** if you only want to use email/password authentication.
+
 #### 5. Start the application
 
+For development with MongoDB and MinIO services:
+
 ```bash
-# Start the development container
-docker-compose up
+# Start with MongoDB and MinIO (recommended for development)
+docker-compose -f docker-compose.dev-mongo.yml up
 
 # Or run in background
-docker-compose up -d
+docker-compose -f docker-compose.dev-mongo.yml up -d
 
 # View logs
-docker-compose logs -f app
+docker-compose -f docker-compose.dev-mongo.yml logs -f app
 
 # Stop services
-docker-compose down
+docker-compose -f docker-compose.dev-mongo.yml down
 ```
 
-The application will be available at [https://localhost:3000](https://localhost:3000)
-and any JSON data written while Docker is running in development mode will be
-persisted to your local `data/` directory via a bind mount, making it easy to
-switch between Docker and local `npm run dev` workflows. The dev container generates
-and uses a self-signed certificate stored in `certs/`, so your browser will prompt
-you to trust it the first time you connect.
+This starts:
+
+- **Quilltap app** on `https://localhost:3000`
+- **MongoDB** on `localhost:27017`
+- **MinIO** (S3-compatible storage) on `localhost:9000` (API) and `localhost:9001` (console)
+- **Mongo Express** (MongoDB admin UI) on `localhost:8081`
+
+The dev container generates and uses a self-signed certificate stored in `certs/`, so your browser will prompt you to trust it the first time you connect.
 
 ### Local Development
 
-For local development, you only need Node.js:
+For local development without Docker, you need Node.js plus MongoDB and MinIO running locally:
 
 #### 1. Install dependencies
 
@@ -201,23 +224,29 @@ For local development, you only need Node.js:
 npm install
 ```
 
-#### 2. Configure environment variables (local hosting)
+#### 2. Start MongoDB and MinIO
+
+You can either:
+
+- **Use Docker for services only**: `docker-compose -f docker-compose.dev-mongo.yml up mongo minio createbuckets`
+- **Install MongoDB locally**: Follow [MongoDB installation guide](https://www.mongodb.com/docs/manual/installation/)
+- **Install MinIO locally**: Follow [MinIO installation guide](https://min.io/docs/minio/linux/index.html)
+
+#### 3. Configure environment variables
 
 ```bash
 cp .env.example .env.local
 ```
 
-Edit `.env.local` with your values (see Quick Start section above).
+Edit `.env.local` with your values (see Quick Start section above). Make sure MongoDB and S3 settings are configured.
 
-#### 3. Start the development server
+#### 4. Start the development server
 
 ```bash
 npm run dev
 ```
 
 The application will be available at [https://localhost:3000](https://localhost:3000)
-
-All data will be stored in the `data/` directory in JSON files. The application will create this directory automatically on first run.
 
 ## Production Deployment
 
@@ -241,6 +270,8 @@ cp .env.example .env.production
 # - NEXTAUTH_URL=https://yourdomain.com
 # - Google OAuth redirect URI: https://yourdomain.com/api/auth/callback/google
 # - All encryption and auth secrets
+# - MongoDB connection (MONGODB_URI, MONGODB_DATABASE)
+# - S3 configuration (S3_MODE, S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET)
 
 # 3. Initialize SSL certificates
 chmod +x docker/init-letsencrypt.sh
@@ -255,37 +286,45 @@ docker-compose -f docker-compose.prod.yml logs -f
 
 Your application will be available at `https://yourdomain.com` with automatic SSL certificate renewal.
 
-The application automatically creates the `data/` directory for storing all data. Ensure this directory is backed up regularly. For detailed production deployment instructions, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+For cloud production deployment using MongoDB Atlas and AWS S3, use the `docker-compose.prod-cloud.yml` configuration. For detailed production deployment instructions, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Data Management
 
-Quilltap stores all data in JSON files in the `data/` directory:
+Quilltap stores all data in MongoDB and S3-compatible storage:
 
-```text
-data/
-├── auth/                 # NextAuth data (accounts.json, sessions.jsonl)
-├── binaries/             # Binary metadata index (image/file attachments)
-├── characters/           # Character JSON definitions (one file per character)
-├── chats/                # Conversation logs (per-chat JSONL + index)
-├── personas/             # Persona JSON definitions
-├── settings/             # App prefs (general.json, image-profiles.json, connection-profiles.json)
-└── tags/                 # tags.json lookup table
-```
+### MongoDB Collections
+
+- **users** - User accounts and authentication data
+- **characters** - Character definitions and metadata
+- **personas** - User persona definitions
+- **chats** - Chat metadata and message history
+- **files** - File metadata (actual files stored in S3)
+- **tags** - Tag definitions
+- **memories** - Character memory data
+- **connectionProfiles** - LLM connection configurations
+- **embeddingProfiles** - Embedding provider configurations
+- **imageProfiles** - Image generation configurations
+
+### S3 Storage
+
+All files (images, attachments, avatars) are stored in S3-compatible storage with the following structure:
+
+- `users/{userId}/files/` - User-uploaded files
+- `users/{userId}/images/` - Generated and uploaded images
 
 ### Backup & Restore
 
-To backup your data:
+For MongoDB backup:
 
 ```bash
-cp -r data/ data-backup-$(date +%Y%m%d).tar.gz
+# Using mongodump
+mongodump --uri="mongodb://localhost:27017/quilltap" --out=backup-$(date +%Y%m%d)
+
+# Restore
+mongorestore --uri="mongodb://localhost:27017/quilltap" backup-YYYYMMDD/quilltap
 ```
 
-To restore from backup:
-
-```bash
-tar -xzf data-backup-YYYYMMDD.tar.gz
-docker-compose restart app
-```
+For S3 backup, use your S3 provider's backup tools or sync to another bucket.
 
 For detailed backup and restore procedures, see [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md).
 
@@ -299,18 +338,31 @@ Required environment variables:
 |----------|-------------|---------|
 | `NEXTAUTH_URL` | Your app's URL | `http://localhost:3000` |
 | `NEXTAUTH_SECRET` | Secret for NextAuth.js | Generate with `openssl rand -base64 32` |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID | From Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | From Google Cloud Console |
 | `ENCRYPTION_MASTER_PEPPER` | Master encryption key | Generate with `openssl rand -base64 32` |
+| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
+| `MONGODB_DATABASE` | MongoDB database name | `quilltap` |
+
+S3 storage configuration:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `S3_MODE` | Storage mode (`embedded` or `external`) | `embedded` |
+| `S3_ENDPOINT` | S3 endpoint URL (for external mode) | - |
+| `S3_ACCESS_KEY` | S3 access key | - |
+| `S3_SECRET_KEY` | S3 secret key | - |
+| `S3_BUCKET` | S3 bucket name | `quilltap-files` |
+| `S3_REGION` | S3 region | `us-east-1` |
 
 Optional environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATA_BACKEND` | Data backend mode (json/prisma/dual) | `json` |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID (optional) | - |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret (optional) | - |
+| `AUTH_DISABLED` | Disable authentication entirely | `false` |
 | `LOG_LEVEL` | Logging level (error/warn/info/debug) | `info` |
 
-**Important**: Back up your `ENCRYPTION_MASTER_PEPPER` securely. If lost, all encrypted API keys become unrecoverable. Also ensure the `data/` directory is backed up regularly.
+**Important**: Back up your `ENCRYPTION_MASTER_PEPPER` securely. If lost, all encrypted API keys become unrecoverable. Also ensure MongoDB and S3 data are backed up regularly.
 
 ### Connection Profiles
 
@@ -327,7 +379,8 @@ Once logged in, you'll need to:
 
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript 5.6
-- **Data Storage**: JSON files with atomic writes and JSONL append-only support
+- **Data Storage**: MongoDB
+- **File Storage**: S3-compatible (embedded MinIO or external S3)
 - **Authentication**: NextAuth.js 4.24 with Google OAuth, email/password login, and TOTP 2FA
 - **Encryption**: AES-256-GCM for sensitive data
 - **Styling**: Tailwind CSS 4.1
@@ -344,6 +397,7 @@ Once logged in, you'll need to:
 - [Local User Authentication](features/LOCAL_USER_AUTH.md) - Original implementation plan for email/password + TOTP 2FA
 - [Plugin Developer Guide](plugins/README.md) - How to create plugins
 - [LLM Provider Guide](plugins/LLM-PROVIDER-GUIDE.md) - Creating new LLM provider plugins
+- [Auth Provider Guide](plugins/AUTH-PROVIDER-GUIDE.md) - Creating new OAuth provider plugins
 
 ## Troubleshooting
 
@@ -352,14 +406,15 @@ Once logged in, you'll need to:
 - Check that Docker is running: `docker ps`
 - Check logs: `docker-compose logs -f`
 - Ensure port 3000 isn't in use
-- Verify the `data/` directory is writable
+- Verify MongoDB is accessible: `mongosh --eval "db.runCommand('ping')"`
+- Verify S3/MinIO is accessible
 
 ### Data not persisting
 
-- Ensure the `data/` directory exists and is writable: `ls -la data/`
-- Check file permissions: `chmod 755 data/`
-- If running in Docker, verify volume mounts in docker-compose.yml
-- Check application logs for write errors
+- Check MongoDB connection: verify `MONGODB_URI` is correct
+- Check S3 configuration: verify S3 credentials and bucket exist
+- Check application logs for connection errors
+- For MinIO, verify the bucket was created: access MinIO console at `localhost:9001`
 
 ### Authentication issues
 
@@ -513,22 +568,62 @@ Copyright (c) 2025 Foundry-9
     - New routes
     - Moved LLM providers to plugins
   - Moved images to the file handling system so that they are no longer a separately maintained thing
+- **1.8:** Pluggable Authentication, no-auth, MongoDB/S3 migration complete
+  - Fix quick-hide persistence and update issue
+  - Convert Google OAuth to plugin (`qtap-plugin-auth-google`)
+  - Create auth provider plugin interface and registry
+  - Implement lazy initialization pattern for NextAuth
+  - Centralize session handling in `lib/auth/session.ts`
+  - Make a default no-auth option (`AUTH_DISABLED=true` env var)
+  - Show tool calls collapsed in chat UI before character response
+  - Only show "generating image" alert for generate_image tool (not all tools)
+  - Fix {{me}} placeholder to resolve to character (not persona) when character calls image generation tool
+  - Attach generated images to LLM response and tag for chat/character
+  - Use file-manager (addFileLink/addFileTag) instead of deprecated repos.images
+  - Enable Ollama plugin by default
+  - Add tool call capture and normalization in Ollama provider
+  - Add /api/providers endpoint for dynamic provider configurations
+  - Update connection profiles UI to fetch provider requirements dynamically
+  - Versioning change (dev commits no longer bump release versions)
+  - **MongoDB now required** - removed JSON file storage backend
+  - **S3 now required** - removed local filesystem storage for files
+  - Migration plugin (`qtap-plugin-upgrade`) available for migrating existing JSON/local data
+  - Fix S3-served avatar and image display across dashboard, chats, personas, and characters
+  - Switch from Next.js Image to native img tags for API-served images (compatibility with dynamic routes)
+  - Fix URL construction bugs (double-slash issues) in avatar/image paths
+  - Add graceful handling of orphaned file metadata entries
+  - Auto-cleanup orphaned file references (avatars, defaultImageId)
+  - Fix deduplication to verify file existence in S3/local storage
+  - Proxy files through API for HTTP S3 endpoints to avoid mixed content SSL errors
+  - Add MongoDB repositories for migrations and vector indices
+  - Update test mocks to use new repository factory pattern
+  - Add utility scripts: debug-files, fix-file-userids, fix-sha256-in-mongodb, reset-file-tags
+  - Improve S3 migration error handling (warnings vs blocking errors)
+  - Enhanced auth adapter with improved MongoDB integration
+  - Replace email with username for local authentication
+  - Add user-scoped repositories for data isolation between users
+  - Add migration to ensure all users have usernames
+  - Use session.user.id instead of email for user lookups
+  - Add model warnings system and fix Gemini thinking model issues
+  - Sort settings lists (API keys, profiles, etc.) alphabetically by name
+  - Clear error state on successful data fetch in settings tabs
+  - Hide navigation on auth pages and reduce MongoDB connection logging verbosity
+  - CI/build improvements: skip env validation during CI build, add MONGODB_URI test default
 
 ## Roadmap
 
-- [ ] Finish local email/password and TOTP/MFA login
-  - [ ] Convert Google OAuth to plugin
-  - [ ] Add Apple, Github OAuth
-- [ ] Add backends for files (S3 to start, for better hosting)
-- [ ] Complete database abstraction
-  - [ ] The abstraction should probably match a fairly ordinary NoSQL document storage API
-  - [ ] Convert JSON-Store (our local file-based database) to work behind the abstraction
-  - [ ] Add in MongoDB
-  - [ ] Create a utility that uses the abstraction to read one and convert it to another
-  - [ ] Add in DynamoDB
-  - [ ] Add in Postgres
-  - [ ] Add in MySQL
-- [X] [Plugin system](features/plugins.md) to extend functionality and allow updates for volatile things like LLM support, image support, etc.
+- [ ] Finish authentication changes
+  - [X] Convert Google OAuth to plugin (`qtap-plugin-auth-google`)
+  - [X] Create auth provider plugin interface and registry
+  - [X] Implement lazy initialization pattern for NextAuth
+  - [X] Centralize session handling in `lib/auth/session.ts`
+  - [X] Make a default no-auth option (`AUTH_DISABLED=true` env var)
+  - [ ] Retain site-installed plugins in `plugins/`, controlled by environment variables
+  - [ ] Move user-installed plugins to `plugins/users/[login-uuid]/`
+  - [ ] Finish local email/password and TOTP/MFA login
+  - [ ] Add Apple, GitHub OAuth plugins
+- [X] Add backends for files (S3) - **Completed: S3-compatible storage now required**
+- [X] Convert to MongoDB - **Completed: MongoDB now required (local JSON storage removed)**
 - [ ] Multiple themes and plugin downloadable themes
 - [ ] Enhanced roleplay options using more complex templates
 - [ ] "Visual Novel" options?
@@ -536,6 +631,7 @@ Copyright (c) 2025 Foundry-9
 - [ ] General SSE-based MCP support
 - [ ] Console logging in a front-end window with all log entries at various log levels showing and persisting there
 - [ ] Python script support
+- [ ] ComfyUI + LORA support for local installations (see [feature request](./features/comfy_ui_local_image.md))
 
 ## Acknowledgments
 

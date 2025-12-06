@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
@@ -57,7 +56,9 @@ export default function PersonasPage() {
 
   const getAvatarSrc = (persona: Persona): string | null => {
     if (persona.defaultImage) {
-      return persona.defaultImage.url || `/${persona.defaultImage.filepath}`
+      // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
+      const filepath = persona.defaultImage.filepath
+      return persona.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
     }
     return persona.avatarUrl || null
   }
@@ -216,13 +217,13 @@ export default function PersonasPage() {
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center flex-grow gap-4">
                   {getAvatarSrc(persona) ? (
-                    <Image
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
                       src={getAvatarSrc(persona)!}
                       alt={persona.name}
                       width={48}
                       height={60}
                       className={getAvatarClasses(style, 'md').imageClass}
-                      priority={false}
                     />
                   ) : (
                     <div className={getAvatarClasses(style, 'md').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>

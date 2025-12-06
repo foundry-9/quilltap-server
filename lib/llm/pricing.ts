@@ -6,7 +6,7 @@
  * to enable cost-aware model selection for background tasks.
  */
 
-import { Provider } from '@/lib/json-store/schemas/types'
+import { Provider } from '@/lib/schemas/types'
 
 /**
  * Pricing information for a model (costs per 1M tokens)
@@ -70,7 +70,7 @@ export const FALLBACK_PRICING: Record<Provider, ModelPricing[]> = {
       fetchedAt: '2025-11-01T00:00:00Z',
     },
     {
-      modelId: 'claude-haiku-4-5-20251015',
+      modelId: 'claude-haiku-4-5-20251001',
       provider: 'ANTHROPIC',
       name: 'Claude 4.5 Haiku',
       promptCostPer1M: 0.80,

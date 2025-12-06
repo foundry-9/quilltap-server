@@ -4,7 +4,7 @@
  * conditions surface clear metadata for the UI.
  */
 
-import type { ConnectionProfile } from '@/lib/json-store/schemas/types'
+import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { FileAttachment } from '@/lib/llm/base'
 
 jest.mock('@/lib/llm/connection-profile-utils', () => ({
@@ -63,6 +63,7 @@ const mockRepos = {
     findById: jest.fn(),
     findByUserId: jest.fn(),
     findApiKeyById: jest.fn(),
+    findApiKeyByIdAndUserId: jest.fn(),
   },
 }
 
@@ -81,6 +82,7 @@ describe('lib/chat/file-attachment-fallback', () => {
     mockRepos.connections.findById.mockReset()
     mockRepos.connections.findByUserId.mockReset()
     mockRepos.connections.findApiKeyById.mockReset()
+    mockRepos.connections.findApiKeyByIdAndUserId.mockReset()
     mockProfileSupportsMimeType.mockReset()
     mockCreateLLMProvider.mockReset()
     mockDecryptApiKey.mockReset()
@@ -155,7 +157,7 @@ describe('lib/chat/file-attachment-fallback', () => {
   it('requests an image description via the cheap LLM pipeline', async () => {
     mockRepos.users.getChatSettings.mockResolvedValue({ imageDescriptionProfileId: baseProfile.id })
     mockRepos.connections.findById.mockResolvedValue(baseProfile)
-    mockRepos.connections.findApiKeyById.mockResolvedValue({
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({
       ciphertext: 'cipher',
       iv: 'iv',
       authTag: 'tag',
@@ -187,7 +189,7 @@ describe('lib/chat/file-attachment-fallback', () => {
   it('flags suspicious LLM responses so the UI can warn the user', async () => {
     mockRepos.users.getChatSettings.mockResolvedValue({ imageDescriptionProfileId: baseProfile.id })
     mockRepos.connections.findById.mockResolvedValue(baseProfile)
-    mockRepos.connections.findApiKeyById.mockResolvedValue(null)
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue(null)
     mockProfileSupportsMimeType.mockReturnValue(true)
 
     const sendMessage = jest.fn().mockResolvedValue({

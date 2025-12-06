@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { pluginRegistry } from '@/lib/plugins/registry'
 import { refreshPluginRoutes, getPluginRouteRegistry } from '@/lib/plugins/route-loader'
+import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization'
 import { logger } from '@/lib/logger'
 
 /**
@@ -12,6 +13,14 @@ export async function PUT(
   { params }: { params: Promise<{ name: string }> }
 ) {
   try {
+    // Ensure plugins are initialized
+    if (!isPluginSystemInitialized()) {
+      logger.info('Plugin system not initialized, initializing now', {
+        context: 'plugins-[name]-PUT',
+      })
+      await initializePlugins()
+    }
+
     const { name } = await params
     const body = await request.json()
     const { enabled } = body

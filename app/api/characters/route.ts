@@ -3,12 +3,24 @@
 // POST /api/characters - Create a new character
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
-import { findFileById, getFileUrl } from '@/lib/file-manager'
+import { getServerSession } from '@/lib/auth/session'
+import { getRepositories } from '@/lib/repositories/factory'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
+import type { FileEntry } from '@/lib/schemas/types'
+
+/**
+ * Get the filepath for a file based on storage type
+ */
+function getFilePath(file: FileEntry): string {
+  if (file.s3Key) {
+    return `/api/files/${file.id}`
+  }
+  const ext = file.originalFilename.includes('.')
+    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
+    : ''
+  return `data/files/storage/${file.id}${ext}`
+}
 
 // Validation schema
 const createCharacterSchema = z.object({
@@ -27,13 +39,13 @@ const createCharacterSchema = z.object({
 // GET /api/characters - List all characters
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    const session = await getServerSession()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const repos = getRepositories()
-    const user = await repos.users.findByEmail(session.user.email)
+    const user = await repos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -47,14 +59,14 @@ export async function GET(req: NextRequest) {
     // Enrich characters with related data (defaultImage and chat count)
     const enrichedCharacters = await Promise.all(
       characters.map(async (character) => {
-        // Get default image from file-manager if present
+        // Get default image from repository if present
         let defaultImage = null
         if (character.defaultImageId) {
-          const fileEntry = await findFileById(character.defaultImageId)
+          const fileEntry = await repos.files.findById(character.defaultImageId)
           if (fileEntry) {
             defaultImage = {
               id: fileEntry.id,
-              filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+              filepath: getFilePath(fileEntry),
               url: null,
             }
           }
@@ -95,13 +107,13 @@ export async function GET(req: NextRequest) {
 // POST /api/characters - Create a new character
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    const session = await getServerSession()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const repos = getRepositories()
-    const user = await repos.users.findByEmail(session.user.email)
+    const user = await repos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })

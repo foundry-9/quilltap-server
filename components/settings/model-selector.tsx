@@ -2,8 +2,25 @@
 
 import { useState, useRef, useEffect } from 'react'
 
+// Model warning types (matching server-side types)
+export interface ModelWarning {
+  level: 'info' | 'warning' | 'error'
+  message: string
+  documentationUrl?: string
+}
+
+export interface ModelInfo {
+  id: string
+  displayName?: string
+  warnings?: ModelWarning[]
+  deprecated?: boolean
+  experimental?: boolean
+  missingCapabilities?: string[]
+}
+
 interface ModelSelectorProps {
   readonly models: string[]
+  readonly modelsWithInfo?: ModelInfo[]
   readonly value: string
   readonly onChange: (value: string) => void
   readonly placeholder?: string
@@ -14,6 +31,7 @@ interface ModelSelectorProps {
 
 export function ModelSelector({
   models,
+  modelsWithInfo,
   value,
   onChange,
   placeholder = 'Select or search a model',
@@ -27,6 +45,40 @@ export function ModelSelector({
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const sortedModels = [...models].sort((a, b) => a.localeCompare(b))
+
+  // Helper to get model info
+  const getModelInfo = (modelId: string): ModelInfo | undefined => {
+    return modelsWithInfo?.find(m => m.id === modelId)
+  }
+
+  // Get the currently selected model's info for displaying warnings
+  const selectedModelInfo = value ? getModelInfo(value) : undefined
+
+  // Helper to render warning icon based on level
+  const getWarningIcon = (level: 'info' | 'warning' | 'error') => {
+    switch (level) {
+      case 'error':
+        return '🚫'
+      case 'warning':
+        return '⚠️'
+      case 'info':
+      default:
+        return 'ℹ️'
+    }
+  }
+
+  // Helper to get warning color classes
+  const getWarningClasses = (level: 'info' | 'warning' | 'error') => {
+    switch (level) {
+      case 'error':
+        return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+      case 'warning':
+        return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300'
+      case 'info':
+      default:
+        return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+    }
+  }
   const useSearchMode = models.length > 10
 
   // Filter models based on search input
@@ -77,23 +129,82 @@ export function ModelSelector({
     }
   }
 
+  // Helper to get model suffix for dropdown options
+  const getModelSuffix = (info: ModelInfo | undefined): string => {
+    if (info?.experimental) return ' (experimental)'
+    if (info?.deprecated) return ' (deprecated)'
+    return ''
+  }
+
+  // Render warnings for selected model
+  const renderWarnings = () => {
+    if (!selectedModelInfo?.warnings || selectedModelInfo.warnings.length === 0) {
+      return null
+    }
+
+    return (
+      <div className="mt-2 space-y-1">
+        {selectedModelInfo.warnings.map((warning) => (
+          <div
+            key={`${warning.level}-${warning.message.substring(0, 20)}`}
+            className={`px-3 py-2 text-sm rounded-lg border ${getWarningClasses(warning.level)}`}
+          >
+            <span className="mr-2">{getWarningIcon(warning.level)}</span>
+            {warning.message}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // Render badges for model info in dropdown list
+  const renderModelBadges = (modelId: string) => {
+    const info = getModelInfo(modelId)
+    if (!info) return null
+
+    return (
+      <span className="ml-2 inline-flex gap-1">
+        {info.experimental && (
+          <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+            experimental
+          </span>
+        )}
+        {info.deprecated && (
+          <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+            deprecated
+          </span>
+        )}
+        {info.warnings && info.warnings.some(w => w.level === 'warning') && (
+          <span className="text-xs">⚠️</span>
+        )}
+      </span>
+    )
+  }
+
   if (!useSearchMode) {
     // Simple dropdown for <= 10 models
     return (
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        disabled={disabled}
-        required={required}
-        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-      >
-        <option value="">{placeholder}</option>
-        {sortedModels.map(model => (
-          <option key={model} value={model}>
-            {model}
-          </option>
-        ))}
-      </select>
+      <div>
+        <select
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          disabled={disabled}
+          required={required}
+          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+        >
+          <option value="">{placeholder}</option>
+          {sortedModels.map(model => {
+            const info = getModelInfo(model)
+            const suffix = getModelSuffix(info)
+            return (
+              <option key={model} value={model}>
+                {model}{suffix}
+              </option>
+            )
+          })}
+        </select>
+        {renderWarnings()}
+      </div>
     )
   }
 
@@ -150,7 +261,10 @@ export function ModelSelector({
                         : 'text-gray-900 dark:text-white'
                     }`}
                   >
-                    {model}
+                    <span className="flex items-center justify-between">
+                      <span>{model}</span>
+                      {renderModelBadges(model)}
+                    </span>
                   </button>
                 </li>
               ))}
@@ -168,6 +282,8 @@ export function ModelSelector({
           Showing {models.length} fetched models from provider
         </p>
       )}
+
+      {renderWarnings()}
     </div>
   )
 }

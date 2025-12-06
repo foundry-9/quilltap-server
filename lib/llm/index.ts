@@ -4,8 +4,9 @@
  * Central export point for LLM-related functionality
  */
 
-// Provider base class
-export { LLMProvider } from './base'
+// Provider interface and base class
+export type { LLMProvider } from './base'
+export { BaseLLMProvider } from './base'
 
 // Factory (now uses plugin registry)
 export { createLLMProvider, createImageProvider, getAllAvailableProviders, getAllAvailableImageProviders, isProviderFromPlugin } from './plugin-factory'
@@ -20,6 +21,9 @@ export type {
   LLMParams,
   LLMResponse,
   StreamChunk,
+  ModelWarningLevel,
+  ModelWarning,
+  ModelMetadata,
 } from './base'
 
 // Attachment support utilities

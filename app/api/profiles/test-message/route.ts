@@ -6,15 +6,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getServerSession } from '@/lib/auth/session'
+import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { validateProviderConfig } from '@/lib/plugins/provider-validation'
-import { ProviderEnum } from '@/lib/json-store/schemas/types'
+import { ProviderEnum } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
@@ -49,7 +48,7 @@ const testMessageSchema = z.object({
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },

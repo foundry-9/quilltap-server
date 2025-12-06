@@ -2,17 +2,22 @@
  * Character Avatar API Routes
  * PATCH /api/characters/:id/avatar - Set default avatar for character
  *
- * Simplified to use ONLY the file-manager system.
- * No legacy images repository logic.
+ * Uses the repository pattern for file metadata management.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { getRepositories } from '@/lib/json-store/repositories';
-import { findFileById, getFileUrl } from '@/lib/file-manager';
+import { getServerSession } from '@/lib/auth/session';
+import { getRepositories } from '@/lib/repositories/factory';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import type { FileEntry } from '@/lib/schemas/types';
+
+/**
+ * Get the filepath for a file - always returns API path for S3-backed files
+ */
+function getFilePath(file: FileEntry): string {
+  return `/api/files/${file.id}`;
+}
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -38,7 +43,7 @@ const avatarSchema = z.object({
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       logger.debug('Avatar update rejected: unauthorized', {
         context: 'PATCH /api/characters/[id]/avatar',
@@ -77,15 +82,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       characterName: character.name,
     });
 
-    // If imageId is provided, validate it from file-manager
+    // If imageId is provided, validate it from repository
     if (imageId) {
-      logger.debug('Validating avatar file from file-manager', {
+      logger.debug('Validating avatar file from repository', {
         context: 'PATCH /api/characters/[id]/avatar',
         imageId,
         characterId: id,
       });
 
-      const fileEntry = await findFileById(imageId);
+      const fileEntry = await repos.files.findById(imageId);
 
       // Verify file exists
       if (!fileEntry) {
@@ -152,11 +157,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     // Build response with file info if image is set
     let defaultImage = null;
     if (updatedCharacter?.defaultImageId) {
-      const fileEntry = await findFileById(updatedCharacter.defaultImageId);
+      const fileEntry = await repos.files.findById(updatedCharacter.defaultImageId);
       if (fileEntry) {
         defaultImage = {
           id: fileEntry.id,
-          filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+          filepath: getFilePath(fileEntry),
           url: null,
         };
       }

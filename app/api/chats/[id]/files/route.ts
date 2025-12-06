@@ -2,12 +2,24 @@
 // POST /api/chats/:id/files - Upload a file for a chat
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getServerSession } from '@/lib/auth/session'
+import { getRepositories } from '@/lib/repositories/factory'
 import { uploadChatFile } from '@/lib/chat-files-v2'
-import { findFilesLinkedTo, getFileUrl } from '@/lib/file-manager'
 import { logger } from '@/lib/logger'
+import type { FileEntry } from '@/lib/schemas/types'
+
+/**
+ * Get the filepath for a file based on storage type
+ */
+function getFilePath(file: FileEntry): string {
+  if (file.s3Key) {
+    return `/api/files/${file.id}`
+  }
+  const ext = file.originalFilename.includes('.')
+    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
+    : ''
+  return `data/files/storage/${file.id}${ext}`
+}
 
 // POST /api/chats/:id/files - Upload a file
 export async function POST(
@@ -16,13 +28,13 @@ export async function POST(
 ) {
   try {
     const { id: chatId } = await params
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    const session = await getServerSession()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const repos = getRepositories()
-    const user = await repos.users.findByEmail(session.user.email)
+    const user = await repos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -46,14 +58,18 @@ export async function POST(
     // Upload the file (creates file entry automatically)
     const uploadResult = await uploadChatFile(file, chatId, user.id)
 
+    // Get the file entry from repository to determine correct filepath
+    const fileEntry = await repos.files.findById(uploadResult.id)
+    const filepath = fileEntry ? getFilePath(fileEntry) : uploadResult.filepath
+
     return NextResponse.json({
       file: {
         id: uploadResult.id,
         filename: file.name, // Original filename for display
-        filepath: uploadResult.filepath,
+        filepath,
         mimeType: uploadResult.mimeType,
         size: uploadResult.size,
-        url: getFileUrl(uploadResult.id, file.name),
+        url: filepath,
       },
     })
   } catch (error) {
@@ -83,13 +99,13 @@ export async function GET(
 ) {
   try {
     const { id: chatId } = await params
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    const session = await getServerSession()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const repos = getRepositories()
-    const user = await repos.users.findByEmail(session.user.email)
+    const user = await repos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -102,17 +118,17 @@ export async function GET(
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
 
-    // Get all files linked to this chat
-    const chatFiles = await findFilesLinkedTo(chatId)
+    // Get all files linked to this chat from repository
+    const chatFiles = await repos.files.findByLinkedTo(chatId)
 
     // Format files for response
     const allFiles = chatFiles.map((f) => ({
       id: f.id,
       filename: f.originalFilename,
-      filepath: getFileUrl(f.id, f.originalFilename),
+      filepath: getFilePath(f),
       mimeType: f.mimeType,
       size: f.size,
-      url: getFileUrl(f.id, f.originalFilename),
+      url: getFilePath(f),
       createdAt: f.createdAt,
       type: f.source === 'GENERATED' ? 'generatedImage' as const : 'chatFile' as const,
     }))
