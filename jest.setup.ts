@@ -152,7 +152,9 @@ jest.mock('@/lib/llm/plugin-factory', () => ({
 // Mock Repositories
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
+  getUserRepositories: jest.fn(),
   resetRepositories: jest.fn(),
+  clearUserRepositoryCache: jest.fn(),
 }))
 
 // Mock S3 operations - used by cascade-delete and other modules

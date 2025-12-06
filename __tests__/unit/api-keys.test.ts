@@ -6,18 +6,17 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 import { getServerSession } from 'next-auth'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
-
-// Create the mock function before jest.mock
-const mockGetUserRepositories = jest.fn()
+import { getUserRepositories } from '@/lib/repositories/factory'
 
 // Mock dependencies
 jest.mock('next-auth')
-jest.mock('@/lib/repositories/factory', () => ({
-  getUserRepositories: mockGetUserRepositories,
-}))
+// Note: @/lib/repositories/factory is mocked globally in jest.setup.ts
 
 // Import after mock setup
 import { GET as getKeys, POST as createKey } from '@/app/api/keys/route'
+
+// Get the mocked getUserRepositories from the global mock
+const mockGetUserRepositories = jest.mocked(getUserRepositories)
 
 // Encryption is mocked globally in jest.setup.ts
 // Get the mocked versions for use in tests
