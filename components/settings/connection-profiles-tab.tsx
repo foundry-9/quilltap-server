@@ -627,26 +627,7 @@ export default function ConnectionProfilesTab() {
         ) : (
           <div className="space-y-3">
             {profiles
-              .toSorted((a, b) => {
-                // Default first
-                if (a.isDefault !== b.isDefault) {
-                  return a.isDefault ? -1 : 1
-                }
-                // Default cheap profile next
-                const aIsCheapDefault = a.id === cheapDefaultProfileId
-                const bIsCheapDefault = b.id === cheapDefaultProfileId
-                if (aIsCheapDefault !== bIsCheapDefault) {
-                  return aIsCheapDefault ? -1 : 1
-                }
-                // Messages per profile descending
-                const aMessages = a.messageCount ?? 0
-                const bMessages = b.messageCount ?? 0
-                if (aMessages !== bMessages) {
-                  return bMessages - aMessages
-                }
-                // Then by name
-                return a.name.localeCompare(b.name)
-              })
+              .toSorted((a, b) => a.name.localeCompare(b.name))
               .map(profile => (
               <div
                 key={profile.id}

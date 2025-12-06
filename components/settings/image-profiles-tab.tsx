@@ -152,7 +152,7 @@ export default function ImageProfilesTab() {
               </button>
             </div>
           ) : (
-            profiles.map(profile => (
+            profiles.toSorted((a, b) => a.name.localeCompare(b.name)).map(profile => (
               <div
                 key={profile.id}
                 className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-slate-600 transition bg-white dark:bg-slate-800"
