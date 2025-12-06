@@ -13,6 +13,11 @@ import {
   getRepositories as getMongoRepos,
   RepositoryContainer as MongoRepositoryContainer,
 } from '@/lib/mongodb/repositories';
+import {
+  getUserRepositories,
+  clearUserRepositoryCache,
+  type UserScopedRepositoryContainer,
+} from './user-scoped';
 
 /**
  * Type alias for repository container
@@ -73,5 +78,10 @@ export function getRepositories(): RepositoryContainer {
 export function resetRepositories(): void {
   logger.debug('Resetting repository caches');
   cachedRepositories = null;
+  clearUserRepositoryCache();
   logger.info('Repository caches cleared');
 }
+
+// Re-export user-scoped repository functions
+export { getUserRepositories, clearUserRepositoryCache };
+export type { UserScopedRepositoryContainer };

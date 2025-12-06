@@ -428,16 +428,16 @@ export class ConnectionProfilesRepository extends MongoBaseRepository<Connection
   }
 
   /**
-   * Get all API keys
+   * Get all API keys for a specific user
    */
-  async getAllApiKeys(): Promise<ApiKey[]> {
+  async getApiKeysByUserId(userId: string): Promise<ApiKey[]> {
     try {
-      logger.debug('Finding all API keys', { collection: 'api_keys' });
+      logger.debug('Finding API keys by user ID', { userId, collection: 'api_keys' });
 
       const collection = await this.getApiKeysCollection();
-      const docs = await collection.find({}).toArray();
+      const docs = await collection.find({ userId }).toArray();
 
-      logger.debug('Retrieved API keys from database', { count: docs.length });
+      logger.debug('Retrieved API keys from database for user', { userId, count: docs.length });
 
       const validated = docs
         .map((doc) => {
@@ -445,6 +445,7 @@ export class ConnectionProfilesRepository extends MongoBaseRepository<Connection
           if (!result.success) {
             logger.warn('API key validation failed', {
               keyId: (doc as any).id,
+              userId,
               error: result.error.message,
             });
             return null;
@@ -453,13 +454,15 @@ export class ConnectionProfilesRepository extends MongoBaseRepository<Connection
         })
         .filter((key) => key !== null) as ApiKey[];
 
-      logger.debug('All API keys validated', {
+      logger.debug('User API keys validated', {
+        userId,
         total: docs.length,
         validated: validated.length,
       });
       return validated;
     } catch (error) {
-      logger.error('Error finding all API keys', {
+      logger.error('Error finding API keys by user ID', {
+        userId,
         error: error instanceof Error ? error.message : String(error),
       });
       return [];
@@ -490,6 +493,38 @@ export class ConnectionProfilesRepository extends MongoBaseRepository<Connection
     } catch (error) {
       logger.error('Error finding API key by ID', {
         keyId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Find API key by ID and verify ownership
+   */
+  async findApiKeyByIdAndUserId(id: string, userId: string): Promise<ApiKey | null> {
+    try {
+      logger.debug('Finding API key by ID and user ID', {
+        keyId: id,
+        userId,
+        collection: 'api_keys',
+      });
+
+      const collection = await this.getApiKeysCollection();
+      const doc = await collection.findOne({ id, userId });
+
+      if (!doc) {
+        logger.debug('API key not found for user', { keyId: id, userId });
+        return null;
+      }
+
+      const validated = ApiKeySchema.parse(doc);
+      logger.debug('API key found and validated for user', { keyId: id, userId });
+      return validated;
+    } catch (error) {
+      logger.error('Error finding API key by ID and user ID', {
+        keyId: id,
+        userId,
         error: error instanceof Error ? error.message : String(error),
       });
       return null;

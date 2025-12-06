@@ -186,10 +186,10 @@ export async function generateImageDescription(
       }
     }
 
-    // Get API key for image description profile
+    // Get API key for image description profile (verify ownership)
     let apiKeyValue: string | null = null
     if (imageDescProfile.apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(imageDescProfile.apiKeyId)
+      const apiKey = await repos.connections.findApiKeyByIdAndUserId(imageDescProfile.apiKeyId, userId)
       if (apiKey) {
         apiKeyValue = decryptApiKey(
           apiKey.ciphertext,

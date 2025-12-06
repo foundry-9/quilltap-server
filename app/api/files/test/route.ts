@@ -4,13 +4,21 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 
 export async function GET() {
   try {
+    // Security: require authentication
+    const session = await getServerSession();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const repos = getRepositories();
-    const files = await repos.files.findAll();
+    // Security: only show user's own files
+    const files = await repos.files.findByUserId(session.user.id);
 
     // Calculate stats
     const stats = {

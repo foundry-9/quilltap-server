@@ -34,14 +34,14 @@ export async function PUT(
       )
     }
 
-    // Find the message across all chats
-    const allChats = await repos.chats.findAll()
+    // Find the message across user's chats only (security: filter by userId)
+    const userChats = await repos.chats.findByUserId(session.user.id)
     let foundChat: ChatMetadata | null = null
     let foundMessage: MessageEvent | null = null
     let allMessages: ChatEvent[] = []
     let messageIndex = -1
 
-    for (const chat of allChats) {
+    for (const chat of userChats) {
       const messages = await repos.chats.getMessages(chat.id)
       const idx = messages.findIndex(
         (m): m is MessageEvent => m.type === 'message' && m.id === id
@@ -102,13 +102,13 @@ export async function DELETE(
     const { id } = await params
     const repos = getRepositories()
 
-    // Find the message across all chats
-    const allChats = await repos.chats.findAll()
+    // Find the message across user's chats only (security: filter by userId)
+    const userChats = await repos.chats.findByUserId(session.user.id)
     let foundChat: ChatMetadata | null = null
     let foundMessage: MessageEvent | null = null
     let allMessages: ChatEvent[] = []
 
-    for (const chat of allChats) {
+    for (const chat of userChats) {
       const messages = await repos.chats.getMessages(chat.id)
       const message = messages.find(
         (m): m is MessageEvent => m.type === 'message' && m.id === id

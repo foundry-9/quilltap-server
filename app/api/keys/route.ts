@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { getUserRepositories } from '@/lib/repositories/factory'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
 import { Provider } from '@/lib/schemas/types'
 import { getAllAvailableProviders } from '@/lib/llm'
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const repos = getRepositories()
+    const repos = getUserRepositories(session.user.id)
     const apiKeys = await repos.connections.getAllApiKeys()
 
     // Sort by creation date
@@ -117,9 +117,9 @@ export async function POST(req: NextRequest) {
     // Encrypt the API key
     const encrypted = encryptApiKey(apiKey, session.user.id)
 
-    const repos = getRepositories()
+    const repos = getUserRepositories(session.user.id)
 
-    // Store in database
+    // Store in database - userId is automatically set by user-scoped repository
     const newKey = await repos.connections.createApiKey({
       provider: provider as Provider,
       label: label.trim(),

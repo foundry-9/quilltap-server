@@ -55,10 +55,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { provider, apiKeyId, baseUrl } = getModelsSchema.parse(body)
 
-    // Get API key if provided
+    // Get API key if provided (security: verify ownership)
     let decryptedKey = ''
     if (apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId)
+      const apiKey = await repos.connections.findApiKeyByIdAndUserId(apiKeyId, session.user.id)
 
       if (!apiKey) {
         return NextResponse.json(

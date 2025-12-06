@@ -209,6 +209,25 @@ var init_transports = __esm({
 
 // lib/env.ts
 function validateEnv() {
+  if (isBuildPhase) {
+    return {
+      NODE_ENV: process.env.NODE_ENV || "production",
+      NEXTAUTH_URL: process.env.NEXTAUTH_URL || "http://localhost:3000",
+      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || "build-time-placeholder-secret-value",
+      ENCRYPTION_MASTER_PEPPER: process.env.ENCRYPTION_MASTER_PEPPER || "build-time-placeholder-pepper-value",
+      MONGODB_URI: process.env.MONGODB_URI || "mongodb://localhost:27017",
+      MONGODB_DATABASE: "quilltap",
+      MONGODB_MODE: "external",
+      MONGODB_DATA_DIR: "/data/mongodb",
+      DATA_BACKEND: "mongodb",
+      S3_MODE: "embedded",
+      S3_REGION: "us-east-1",
+      S3_BUCKET: "quilltap-files",
+      LOG_LEVEL: "info",
+      LOG_OUTPUT: "console",
+      LOG_FILE_PATH: "./logs"
+    };
+  }
   try {
     const env2 = envSchema.parse(process.env);
     return env2;
@@ -229,7 +248,7 @@ function validateEnv() {
     throw error2;
   }
 }
-var import_zod, envSchema, env, isProduction, isDevelopment, isTest;
+var import_zod, envSchema, isBuildPhase, env, isProduction, isDevelopment, isTest;
 var init_env = __esm({
   "lib/env.ts"() {
     "use strict";
@@ -317,6 +336,7 @@ var init_env = __esm({
         path: ["S3_MODE"]
       }
     );
+    isBuildPhase = process.env.SKIP_ENV_VALIDATION === "true" || process.env.NEXT_PHASE === "phase-production-build" || process.env.NEXT_RUNTIME === void 0 && process.argv.some((arg) => arg.includes("next") && process.argv.includes("build"));
     env = validateEnv();
     isProduction = env.NODE_ENV === "production";
     isDevelopment = env.NODE_ENV === "development";
@@ -486,7 +506,7 @@ var require_package = __commonJS({
   "package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "1.8.5-dev.29",
+      version: "1.8.5-dev.36",
       private: true,
       author: {
         name: "Charles Sebold",

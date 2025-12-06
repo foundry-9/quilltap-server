@@ -8,12 +8,22 @@
 import { NextResponse } from 'next/server';
 import { isAuthDisabled } from '@/lib/auth/config';
 import { getConfiguredAuthProviders, getAllAuthProviders } from '@/lib/plugins/auth-provider-registry';
-import { isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
+import { isPluginSystemInitialized, initializePlugins } from '@/lib/startup/plugin-initialization';
 import { logger } from '@/lib/logger';
 
 export async function GET() {
   try {
     const authDisabled = isAuthDisabled();
+
+    // Ensure plugins are initialized before checking auth providers
+    // This handles cases where the API request arrives before instrumentation completes
+    if (!isPluginSystemInitialized()) {
+      logger.info('Plugin system not initialized, initializing now', {
+        context: 'auth/status',
+      });
+      await initializePlugins();
+    }
+
     const pluginsInitialized = isPluginSystemInitialized();
 
     // If auth is disabled, return minimal info

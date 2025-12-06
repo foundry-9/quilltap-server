@@ -202,6 +202,7 @@ export type VerificationToken = z.infer<typeof VerificationTokenSchema>;
 
 export const ApiKeySchema = z.object({
   id: UUIDSchema,
+  userId: UUIDSchema,
   label: z.string(),
   provider: ProviderEnum,
   ciphertext: z.string(),

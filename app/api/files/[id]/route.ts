@@ -233,6 +233,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
+    // Security: verify file belongs to user
+    if (fileEntry.userId !== session.user.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     // Remove the link using repository
     const updated = await repos.files.removeLink(fileId, entityId);
     if (!updated) {

@@ -193,10 +193,10 @@ async function loadAndValidateProfile(
       };
     }
 
-    // Get the API key if profile has one
+    // Get the API key if profile has one (verify ownership)
     let apiKey = null;
     if (imageProfile.apiKeyId) {
-      apiKey = await repos.connections.findApiKeyById(imageProfile.apiKeyId);
+      apiKey = await repos.connections.findApiKeyByIdAndUserId(imageProfile.apiKeyId, userId);
     }
 
     if (!apiKey?.ciphertext) {
@@ -553,10 +553,10 @@ export async function validateImageProfile(
       };
     }
 
-    // Get the API key if profile has one
+    // Get the API key if profile has one (verify ownership)
     let apiKey = null;
     if (profile.apiKeyId) {
-      apiKey = await repos.connections.findApiKeyById(profile.apiKeyId);
+      apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId);
     }
 
     if (!apiKey?.ciphertext) {
@@ -597,10 +597,10 @@ export async function getDefaultImageProfile(userId: string) {
       return null;
     }
 
-    // Enrich with API key info
+    // Enrich with API key info (verify ownership)
     let apiKey = null;
     if (profile.apiKeyId) {
-      const key = await repos.connections.findApiKeyById(profile.apiKeyId);
+      const key = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId);
       if (key) {
         apiKey = {
           id: key.id,

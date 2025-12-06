@@ -45,10 +45,12 @@ const mockProvider = {
 // Mock repositories
 const mockFindById = jest.fn()
 const mockFindApiKeyById = jest.fn()
+const mockFindApiKeyByIdAndUserId = jest.fn()
 const mockRepos = {
   connections: {
     findById: mockFindById,
     findApiKeyById: mockFindApiKeyById,
+    findApiKeyByIdAndUserId: mockFindApiKeyByIdAndUserId,
   },
 }
 
@@ -85,6 +87,13 @@ describe('Cheap LLM Tasks Service', () => {
     })
 
     mockFindApiKeyById.mockResolvedValue({
+      id: 'test-api-key-id',
+      ciphertext: 'encrypted',
+      iv: 'iv',
+      authTag: 'tag',
+    })
+
+    mockFindApiKeyByIdAndUserId.mockResolvedValue({
       id: 'test-api-key-id',
       ciphertext: 'encrypted',
       iv: 'iv',

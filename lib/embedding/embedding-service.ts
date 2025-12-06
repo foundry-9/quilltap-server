@@ -164,7 +164,7 @@ async function getApiKeyForProfile(
   if (!profile.apiKeyId) return null
 
   const repos = getRepositories()
-  const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId)
+  const apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId)
 
   if (!apiKey) return null
 

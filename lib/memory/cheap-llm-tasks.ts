@@ -90,7 +90,7 @@ async function getApiKeyForSelection(
     return null
   }
 
-  const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId)
+  const apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId)
   if (!apiKey) {
     return null
   }

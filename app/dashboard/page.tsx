@@ -1,5 +1,5 @@
 import { getServerSession } from "@/lib/auth/session";
-import { getRepositories } from "@/lib/repositories/factory";
+import { getUserRepositories, getRepositories } from "@/lib/repositories/factory";
 import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";
 import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
@@ -23,28 +23,32 @@ export const revalidate = 0;
 
 export default async function Dashboard() {
   const session = await getServerSession();
-  const repos = getRepositories();
+  const userId = session?.user?.id;
+
+  // Use user-scoped repositories for automatic userId filtering
+  const repos = userId ? getUserRepositories(userId) : null;
+  // Keep base repos for user lookup (users aren't scoped)
+  const baseRepos = getRepositories();
 
   // Get the user from the repository
-  const user = session?.user?.id
-    ? await repos.users.findById(session.user.id)
+  const user = userId
+    ? await baseRepos.users.findById(userId)
     : null;
-  const userId = user?.id;
 
-  // Get all characters, chats, and personas for counts
+  // Get all characters, chats, and personas for counts (automatically scoped to user)
   const [allCharacters, allChats, allPersonas] = await Promise.all([
-    userId ? repos.characters.findAll() : Promise.resolve([]),
-    userId ? repos.chats.findAll() : Promise.resolve([]),
-    userId ? repos.personas.findAll() : Promise.resolve([]),
+    repos ? repos.characters.findAll() : Promise.resolve([]),
+    repos ? repos.chats.findAll() : Promise.resolve([]),
+    repos ? repos.personas.findAll() : Promise.resolve([]),
   ]);
 
-  // Count items (single-user system, but filter by userId for consistency)
+  // Count items (now properly filtered by user)
   const charactersCount = allCharacters.length;
   const chatsCount = allChats.length;
   const personasCount = allPersonas.length;
 
   // Get favorite characters
-  const favoriteCharacters = userId
+  const favoriteCharacters = repos
     ? await Promise.all(
         allCharacters
           .filter((c) => c.isFavorite)
@@ -89,7 +93,7 @@ export default async function Dashboard() {
     }
     persona: { id: string; name: string } | null
     tags: Array<{ tag: { id: string; name: string } }>
-  } | null> = userId
+  } | null> = repos
     ? await Promise.all(
         [...allChats]
           .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())

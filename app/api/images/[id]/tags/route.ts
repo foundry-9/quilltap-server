@@ -22,11 +22,12 @@ const tagSchema = z.object({
 });
 
 /**
- * Verify that the tagged entity exists
+ * Verify that the tagged entity exists and belongs to the user
  */
 async function verifyTaggedEntity(
   tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME',
-  tagId: string
+  tagId: string,
+  userId: string
 ): Promise<NextResponse | null> {
   const repos = getRepositories();
 
@@ -36,17 +37,32 @@ async function verifyTaggedEntity(
       logger.debug('Character not found', { characterId: tagId });
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
+    // Security: verify character belongs to user
+    if (character.userId !== userId) {
+      logger.warn('User tried to tag with character they do not own', { characterId: tagId, userId });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
   } else if (tagType === 'PERSONA') {
     const persona = await repos.personas.findById(tagId);
     if (!persona) {
       logger.debug('Persona not found', { personaId: tagId });
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 });
     }
+    // Security: verify persona belongs to user
+    if (persona.userId !== userId) {
+      logger.warn('User tried to tag with persona they do not own', { personaId: tagId, userId });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
   } else if (tagType === 'CHAT') {
     const chat = await repos.chats.findById(tagId);
     if (!chat) {
       logger.debug('Chat not found', { chatId: tagId });
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+    }
+    // Security: verify chat belongs to user
+    if (chat.userId !== userId) {
+      logger.warn('User tried to tag with chat they do not own', { chatId: tagId, userId });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
   }
 
@@ -104,8 +120,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'File is not an image' }, { status: 400 });
     }
 
-    // Verify the tagged entity exists
-    const entityError = await verifyTaggedEntity(tagType, tagId);
+    // Verify the tagged entity exists and belongs to user
+    const entityError = await verifyTaggedEntity(tagType, tagId, session.user.id);
     if (entityError) {
       return entityError;
     }

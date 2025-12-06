@@ -69,8 +69,8 @@ export async function POST(
 
     const repos = getRepositories()
 
-    // Get the API key
-    const apiKey = await repos.connections.findApiKeyById(id)
+    // Get the API key (verify ownership)
+    const apiKey = await repos.connections.findApiKeyByIdAndUserId(id, session.user.id)
 
     if (!apiKey) {
       return NextResponse.json(

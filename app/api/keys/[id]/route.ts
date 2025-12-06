@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { getUserRepositories } from '@/lib/repositories/factory'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
 
@@ -31,7 +31,7 @@ export async function GET(
       )
     }
 
-    const repos = getRepositories()
+    const repos = getUserRepositories(session.user.id)
     const apiKey = await repos.connections.findApiKeyById(id)
 
     if (!apiKey) {
@@ -85,9 +85,9 @@ export async function PUT(
       )
     }
 
-    const repos = getRepositories()
+    const repos = getUserRepositories(session.user.id)
 
-    // Verify key exists
+    // Verify key exists and belongs to the current user (user-scoped repo handles ownership)
     const existingKey = await repos.connections.findApiKeyById(id)
 
     if (!existingKey) {
@@ -184,9 +184,9 @@ export async function DELETE(
       )
     }
 
-    const repos = getRepositories()
+    const repos = getUserRepositories(session.user.id)
 
-    // Verify key exists
+    // Verify key exists and belongs to the current user (user-scoped repo handles ownership)
     const existingKey = await repos.connections.findApiKeyById(id)
 
     if (!existingKey) {
