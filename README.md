@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.8.5--dev.40-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.0.0--dev.249-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -600,6 +600,15 @@ Copyright (c) 2025 Foundry-9
   - Add utility scripts: debug-files, fix-file-userids, fix-sha256-in-mongodb, reset-file-tags
   - Improve S3 migration error handling (warnings vs blocking errors)
   - Enhanced auth adapter with improved MongoDB integration
+  - Replace email with username for local authentication
+  - Add user-scoped repositories for data isolation between users
+  - Add migration to ensure all users have usernames
+  - Use session.user.id instead of email for user lookups
+  - Add model warnings system and fix Gemini thinking model issues
+  - Sort settings lists (API keys, profiles, etc.) alphabetically by name
+  - Clear error state on successful data fetch in settings tabs
+  - Hide navigation on auth pages and reduce MongoDB connection logging verbosity
+  - CI/build improvements: skip env validation during CI build, add MONGODB_URI test default
 
 ## Roadmap
 
@@ -609,7 +618,6 @@ Copyright (c) 2025 Foundry-9
   - [X] Implement lazy initialization pattern for NextAuth
   - [X] Centralize session handling in `lib/auth/session.ts`
   - [X] Make a default no-auth option (`AUTH_DISABLED=true` env var)
-  - [ ] Move authenticated data to `data/users/[login-uuid]/` (infrastructure ready, not yet active)
   - [ ] Retain site-installed plugins in `plugins/`, controlled by environment variables
   - [ ] Move user-installed plugins to `plugins/users/[login-uuid]/`
   - [ ] Finish local email/password and TOTP/MFA login
@@ -623,6 +631,7 @@ Copyright (c) 2025 Foundry-9
 - [ ] General SSE-based MCP support
 - [ ] Console logging in a front-end window with all log entries at various log levels showing and persisting there
 - [ ] Python script support
+- [ ] ComfyUI + LORA support for local installations (see [feature request](./features/comfy_ui_local_image.md))
 
 ## Acknowledgments
 
