@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0--dev.249-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.0.0--dev.2-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -568,7 +568,7 @@ Copyright (c) 2025 Foundry-9
     - New routes
     - Moved LLM providers to plugins
   - Moved images to the file handling system so that they are no longer a separately maintained thing
-- **1.8:** Pluggable Authentication, no-auth, MongoDB/S3 migration complete
+- **2.0:** Pluggable Authentication, no-auth, MongoDB/S3 migration complete
   - Fix quick-hide persistence and update issue
   - Convert Google OAuth to plugin (`qtap-plugin-auth-google`)
   - Create auth provider plugin interface and registry
