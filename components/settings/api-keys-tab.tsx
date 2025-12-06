@@ -43,6 +43,7 @@ export default function ApiKeysTab() {
       if (!res.ok) throw new Error('Failed to fetch API keys')
       const data = await res.json()
       setApiKeys(data)
+      setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {

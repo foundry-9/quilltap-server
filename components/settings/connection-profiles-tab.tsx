@@ -204,6 +204,7 @@ export default function ConnectionProfilesTab() {
       }))
 
       setProfiles(profilesWithCounts)
+      setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {

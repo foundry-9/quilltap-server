@@ -46,6 +46,7 @@ export default function ImageProfilesTab() {
       if (!res.ok) throw new Error('Failed to fetch profiles')
       const data = await res.json()
       setProfiles(data)
+      setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
