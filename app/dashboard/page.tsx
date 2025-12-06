@@ -26,8 +26,8 @@ export default async function Dashboard() {
   const repos = getRepositories();
 
   // Get the user from the repository
-  const user = session?.user?.email
-    ? await repos.users.findByEmail(session.user.email)
+  const user = session?.user?.id
+    ? await repos.users.findById(session.user.id)
     : null;
   const userId = user?.id;
 

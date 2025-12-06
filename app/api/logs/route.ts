@@ -80,9 +80,9 @@ function checkRateLimit(identifier: string, isAuthenticated: boolean): boolean {
 export async function POST(req: NextRequest) {
   // Check authentication (optional - anonymous logging is allowed)
   const session = await getServerSession()
-  const isAuthenticated = !!(session?.user?.id && session?.user?.email)
+  const isAuthenticated = !!(session?.user?.id && session?.user?.id)
   const userId = session?.user?.id
-  const userEmail = session?.user?.email
+  const userEmail = session?.user?.id
 
   try {
     // Get client identifier for rate limiting
