@@ -24,6 +24,8 @@ export interface ContextMessage {
     tokenCount?: number
     isInjected?: boolean
   }
+  /** Google Gemini thought signature for thinking models (e.g., gemini-3-pro) */
+  thoughtSignature?: string | null
 }
 
 /**
@@ -95,7 +97,7 @@ export interface BuildContextOptions {
   /** Chat metadata */
   chat: ChatMetadataBase
   /** Existing messages in the conversation */
-  existingMessages: Array<{ role: string; content: string; id?: string }>
+  existingMessages: Array<{ role: string; content: string; id?: string; thoughtSignature?: string | null }>
   /** New user message being sent */
   newUserMessage: string
   /** Custom system prompt override */
@@ -265,15 +267,15 @@ export function formatSummaryForContext(
  * Select recent messages to fit within token budget
  */
 export function selectRecentMessages(
-  messages: Array<{ role: string; content: string; id?: string }>,
+  messages: Array<{ role: string; content: string; id?: string; thoughtSignature?: string | null }>,
   maxTokens: number,
   provider: Provider
-): { messages: Array<{ role: string; content: string }>; tokenCount: number; truncated: boolean } {
+): { messages: Array<{ role: string; content: string; thoughtSignature?: string | null }>; tokenCount: number; truncated: boolean } {
   if (messages.length === 0) {
     return { messages: [], tokenCount: 0, truncated: false }
   }
 
-  const selectedMessages: Array<{ role: string; content: string }> = []
+  const selectedMessages: Array<{ role: string; content: string; thoughtSignature?: string | null }> = []
   let totalTokens = 0
   let truncated = false
 
@@ -287,14 +289,15 @@ export function selectRecentMessages(
       break
     }
 
-    selectedMessages.unshift({ role: msg.role, content: msg.content })
+    // Preserve thoughtSignature for Gemini 3 thinking models
+    selectedMessages.unshift({ role: msg.role, content: msg.content, thoughtSignature: msg.thoughtSignature })
     totalTokens += msgTokens
   }
 
   // Ensure we have at least the last message if possible
   if (selectedMessages.length === 0 && messages.length > 0) {
     const lastMsg = messages[messages.length - 1]
-    selectedMessages.push({ role: lastMsg.role, content: lastMsg.content })
+    selectedMessages.push({ role: lastMsg.role, content: lastMsg.content, thoughtSignature: lastMsg.thoughtSignature })
     totalTokens = estimateTokens(lastMsg.content, provider) + 4
     truncated = true
   }
@@ -436,11 +439,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     metadata: { isInjected: true },
   })
 
-  // Add selected conversation messages
+  // Add selected conversation messages (preserve thoughtSignature for Gemini 3 thinking models)
   for (const msg of selectedMessages) {
     contextMessages.push({
       role: msg.role.toLowerCase() as 'user' | 'assistant',
       content: msg.content,
+      thoughtSignature: msg.thoughtSignature,
     })
   }
 

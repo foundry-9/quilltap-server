@@ -330,6 +330,9 @@ export const MessageEventSchema = z.object({
   createdAt: TimestampSchema,
   // Debug: Memory extraction logs (Sprint 6)
   debugMemoryLogs: z.array(z.string()).optional(),
+  // Google Gemini thought signature for thinking models (e.g., gemini-3-pro)
+  // Must be preserved and passed back for multi-turn conversations with function calling
+  thoughtSignature: z.string().nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;

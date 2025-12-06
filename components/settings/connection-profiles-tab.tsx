@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { TagBadge } from '@/components/tags/tag-badge'
-import { ModelSelector } from './model-selector'
+import { ModelSelector, type ModelInfo } from './model-selector'
 import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
 
 interface ApiKey {
@@ -83,6 +83,7 @@ export default function ConnectionProfilesTab() {
 
   // Fetch models states
   const [fetchedModels, setFetchedModels] = useState<string[]>([])
+  const [fetchedModelsWithInfo, setFetchedModelsWithInfo] = useState<ModelInfo[]>([])
   const [isFetchingModels, setIsFetchingModels] = useState(false)
   const [modelsMessage, setModelsMessage] = useState<string | null>(null)
 
@@ -289,7 +290,7 @@ export default function ConnectionProfilesTab() {
     setTestMessageResult(null)
   }
 
-  const handleEdit = (profile: ConnectionProfile) => {
+  const handleEdit = async (profile: ConnectionProfile) => {
     setFormData({
       name: profile.name,
       provider: profile.provider,
@@ -305,6 +306,32 @@ export default function ConnectionProfilesTab() {
     })
     setEditingId(profile.id)
     setShowForm(true)
+
+    // Auto-fetch models to show model warnings and enable ModelSelector
+    // We fetch models using the profile data directly since formData state update is async
+    try {
+      setIsFetchingModels(true)
+      const res = await fetch('/api/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: profile.provider,
+          apiKeyId: profile.apiKeyId || undefined,
+          baseUrl: profile.baseUrl || undefined,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setFetchedModels(data.models || [])
+        setFetchedModelsWithInfo(data.modelsWithInfo || [])
+        setModelsMessage(`Found ${data.models?.length || 0} models`)
+      }
+    } catch {
+      // Silently ignore fetch errors - user can manually fetch if needed
+    } finally {
+      setIsFetchingModels(false)
+    }
+
     // Scroll to form after state update
     setTimeout(() => {
       const formElement = document.getElementById('profile-form')
@@ -483,6 +510,7 @@ export default function ConnectionProfilesTab() {
       }
 
       setFetchedModels(data.models || [])
+      setFetchedModelsWithInfo(data.modelsWithInfo || [])
       setModelsMessage(`Found ${data.models?.length || 0} models`)
     } catch (err) {
       setModelsMessage(null)
@@ -910,6 +938,7 @@ export default function ConnectionProfilesTab() {
               {fetchedModels.length > 0 ? (
                 <ModelSelector
                   models={fetchedModels}
+                  modelsWithInfo={fetchedModelsWithInfo}
                   value={formData.modelName}
                   onChange={(value) => setFormData({ ...formData, modelName: value })}
                   placeholder="Select or search a model"

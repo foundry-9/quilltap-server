@@ -486,7 +486,7 @@ var require_package = __commonJS({
   "package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "1.8.5-dev.25",
+      version: "1.8.5-dev.29",
       private: true,
       author: {
         name: "Charles Sebold",
@@ -32760,7 +32760,7 @@ async function getMongoClient() {
     await mongoClient.db("admin").command({ ping: 1 });
     logger.debug("MongoDB ping successful");
     mongoClient.on("connectionClosed", () => {
-      logger.info("MongoDB connection closed");
+      logger.debug("MongoDB connection closed");
     });
     mongoClient.on("error", (error2) => {
       logger.error("MongoDB client error", { error: error2.message });
@@ -32821,7 +32821,7 @@ async function closeMongoConnection() {
     if (mongoClient) {
       logger.debug("Closing MongoDB connection");
       await mongoClient.close();
-      logger.info("MongoDB connection closed successfully");
+      logger.debug("MongoDB connection closed successfully");
     }
     mongoClient = null;
     mongoDatabase = null;
@@ -32835,7 +32835,7 @@ async function closeMongoConnection() {
 }
 function setupMongoDBShutdownHandlers() {
   const handleShutdown = async () => {
-    logger.info("Process shutdown signal received, closing MongoDB connection");
+    logger.debug("Process shutdown signal received, closing MongoDB connection");
     await closeMongoConnection();
   };
   process.on("SIGTERM", handleShutdown);

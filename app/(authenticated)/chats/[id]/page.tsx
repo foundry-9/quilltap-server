@@ -531,6 +531,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   debug.finalizeStreamingEntry(responseEntryId)
                 }
 
+                // Check for empty response (known Gemini API issue)
+                if (data.emptyResponse) {
+                  showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
+                  setStreamingContent('')
+                  setStreaming(false)
+                  setWaitingForResponse(false)
+                  setSending(false)
+                  return
+                }
+
                 // Add assistant message to messages list
                 const assistantMessage: Message = {
                   id: data.messageId,
@@ -655,6 +665,109 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to delete message')
     }
+  }
+
+  // Check if a user message can be resent
+  // Returns true if: it's the last user message AND there are either no messages after it,
+  // or only blank/empty assistant messages after it
+  const canResendMessage = (messageId: string, messageIndex: number): boolean => {
+    const message = messages[messageIndex]
+    if (!message || message.role !== 'USER') return false
+
+    // Check all messages after this one
+    const messagesAfter = messages.slice(messageIndex + 1)
+
+    // If no messages after, can resend
+    if (messagesAfter.length === 0) return true
+
+    // Check if all messages after are blank assistant messages
+    // A message is considered "blank" if it has no content or only whitespace
+    for (const msg of messagesAfter) {
+      // Skip TOOL messages - they don't count as meaningful responses
+      if (msg.role === 'TOOL') continue
+
+      // If there's a non-blank assistant message, can't resend
+      if (msg.role === 'ASSISTANT' && msg.content && msg.content.trim().length > 0) {
+        return false
+      }
+
+      // If there's another user message after this, can't resend
+      if (msg.role === 'USER') {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  // Resend a user message: delete blank responses after it, delete the message, then resend
+  const resendMessage = async (message: Message) => {
+    if (sending) return
+
+    // Extract the original content (strip [Attached: ...] suffix)
+    const originalContent = getDisplayContent(message.content)
+
+    // Get attachments from the original message
+    const originalAttachments = message.attachments || []
+
+    // Find the index of this message
+    const messageIndex = messages.findIndex(m => m.id === message.id)
+    if (messageIndex === -1) return
+
+    // Delete blank assistant messages after this one (from the server)
+    const messagesAfter = messages.slice(messageIndex + 1)
+    for (const msg of messagesAfter) {
+      if (msg.role === 'ASSISTANT' && (!msg.content || msg.content.trim().length === 0)) {
+        try {
+          await fetch(`/api/messages/${msg.id}`, { method: 'DELETE' })
+        } catch {
+          // Ignore errors deleting blank messages
+        }
+      }
+    }
+
+    // Delete the original user message from server
+    try {
+      const deleteRes = await fetch(`/api/messages/${message.id}`, { method: 'DELETE' })
+      if (!deleteRes.ok) {
+        throw new Error('Failed to delete original message')
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to resend message')
+      return
+    }
+
+    // Remove the message and any blank messages after it from the UI
+    setMessages(prev => {
+      const idx = prev.findIndex(m => m.id === message.id)
+      if (idx === -1) return prev
+      // Keep messages before this one
+      return prev.slice(0, idx)
+    })
+
+    // Set up the input and attachments for resending
+    setInput(originalContent)
+
+    // If there were attachments, we need to re-attach them
+    if (originalAttachments.length > 0) {
+      setAttachedFiles(originalAttachments.map(a => ({
+        id: a.id,
+        filename: a.filename,
+        filepath: a.filepath,
+        mimeType: a.mimeType,
+        size: 0, // Size not stored in message attachments
+        url: a.filepath.startsWith('/') ? a.filepath : `/${a.filepath}`,
+      })))
+    }
+
+    // Focus the input so user can see the restored message
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus()
+      }
+    }, 100)
+
+    showSuccessToast('Message restored to input. Press Enter to resend.')
   }
 
   const generateSwipe = async (messageId: string) => {
@@ -856,10 +969,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-slate-900 min-h-0">
         <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4 space-y-4`}>
-        {messages.map((message) => {
+        {messages.map((message, messageIndex) => {
           const isEditing = editingMessageId === message.id
           const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
-
+          const showResendButton = canResendMessage(message.id, messageIndex)
 
           // Render TOOL messages differently
           if (message.role === 'TOOL') {
@@ -1002,6 +1115,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                         >
                           Delete
                         </button>
+                        {showResendButton && (
+                          <button
+                            onClick={() => resendMessage(message)}
+                            className="text-orange-600 dark:text-orange-400 hover:text-orange-900 dark:hover:text-orange-300"
+                            title="Resend this message (deletes blank responses and restores to input)"
+                          >
+                            ↻ Resend
+                          </button>
+                        )}
                       </>
                     )}
 

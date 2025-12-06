@@ -445,18 +445,165 @@ var GoogleProvider = class {
     this.supportsImageGeneration = true;
     this.supportsWebSearch = true;
   }
-  async formatMessagesWithAttachments(messages) {
+  /**
+   * Check if a model is a Gemini 3 thinking model that requires thought signatures
+   * These models require thought signatures on ALL model responses when tools are enabled
+   */
+  isThinkingModel(modelName) {
+    const thinkingModels = [
+      "gemini-3-pro",
+      "gemini-3-pro-preview",
+      "gemini-3-pro-image-preview",
+      "gemini-2.5-pro",
+      // 2.5 Pro also has thinking capabilities
+      "gemini-2.5-flash-preview-05-20"
+      // Thinking preview
+    ];
+    return thinkingModels.some((m) => modelName.toLowerCase().includes(m.toLowerCase()));
+  }
+  /**
+   * Check if a model supports function calling (tools)
+   * Some models like image-specialized models do not support function calling
+   */
+  supportsToolCalling(modelName) {
+    const noToolsModels = [
+      "gemini-2.5-flash-image",
+      // Image generation model, no function calling
+      "gemini-2.0-flash-exp-image-generation",
+      // Experimental image model
+      "imagen"
+      // Imagen models don't support function calling
+    ];
+    const lowerName = modelName.toLowerCase();
+    if (noToolsModels.some((m) => lowerName.includes(m.toLowerCase()))) {
+      return false;
+    }
+    if (lowerName.includes("-image") && !lowerName.includes("vision")) {
+      return false;
+    }
+    return true;
+  }
+  /**
+   * Extract thought signature from Google Gemini response
+   * Gemini 3 thinking models return thoughtSignature in the first part of the response
+   * This must be stored and passed back for multi-turn function calling conversations
+   */
+  extractThoughtSignature(response) {
+    try {
+      const candidates = response?.candidates;
+      if (!candidates || !Array.isArray(candidates) || candidates.length === 0) {
+        return void 0;
+      }
+      const parts = candidates[0]?.content?.parts;
+      if (!parts || !Array.isArray(parts) || parts.length === 0) {
+        return void 0;
+      }
+      const firstPart = parts[0];
+      if (firstPart?.thoughtSignature) {
+        logger.debug("Extracted thought signature from response", {
+          context: "GoogleProvider.extractThoughtSignature",
+          signatureLength: firstPart.thoughtSignature.length
+        });
+        return firstPart.thoughtSignature;
+      }
+      for (const part of parts) {
+        if (part?.functionCall?.thoughtSignature) {
+          logger.debug("Extracted thought signature from function call", {
+            context: "GoogleProvider.extractThoughtSignature",
+            functionName: part.functionCall.name
+          });
+          return part.functionCall.thoughtSignature;
+        }
+      }
+      return void 0;
+    } catch (error) {
+      logger.warn("Error extracting thought signature", {
+        context: "GoogleProvider.extractThoughtSignature",
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return void 0;
+    }
+  }
+  async formatMessagesWithAttachments(messages, modelName, hasTools) {
     logger.debug("Formatting messages with attachments", { context: "GoogleProvider.formatMessagesWithAttachments", messageCount: messages.length });
     const sent = [];
     const failed = [];
+    const isThinking = this.isThinkingModel(modelName);
+    let systemInstruction;
+    let nonSystemMessages = messages;
+    const systemMessages = messages.filter((m) => m.role === "system");
+    if (systemMessages.length > 0) {
+      systemInstruction = systemMessages.map((m) => m.content).join("\n\n");
+      nonSystemMessages = messages.filter((m) => m.role !== "system");
+      logger.debug("Extracted system instruction", {
+        context: "GoogleProvider.formatMessagesWithAttachments",
+        systemMessageCount: systemMessages.length,
+        instructionLength: systemInstruction.length
+      });
+    }
+    let filteredMessages = nonSystemMessages;
+    let shouldDisableTools = false;
+    if (hasTools && !this.supportsToolCalling(modelName)) {
+      shouldDisableTools = true;
+      logger.info("Disabling tools - model does not support function calling", {
+        context: "GoogleProvider.formatMessagesWithAttachments",
+        modelName
+      });
+    }
+    if (!shouldDisableTools && isThinking && hasTools) {
+      const assistantMessages = nonSystemMessages.filter((m) => m.role === "assistant");
+      const assistantWithoutSig = assistantMessages.filter((m) => !m.thoughtSignature);
+      if (assistantWithoutSig.length > 0) {
+        shouldDisableTools = true;
+        logger.warn("Disabling tools for thinking model due to legacy messages without thought signatures", {
+          context: "GoogleProvider.formatMessagesWithAttachments",
+          legacyMessageCount: assistantWithoutSig.length,
+          totalAssistantMessages: assistantMessages.length,
+          modelName
+        });
+      }
+    }
+    const mergedMessages = [];
+    for (const msg of filteredMessages) {
+      const lastMsg = mergedMessages[mergedMessages.length - 1];
+      if (lastMsg && lastMsg.role === "user" && msg.role === "user") {
+        lastMsg.content = lastMsg.content + "\n\n" + msg.content;
+        if (msg.attachments) {
+          lastMsg.attachments = [...lastMsg.attachments || [], ...msg.attachments];
+        }
+        logger.debug("Merged consecutive user messages", {
+          context: "GoogleProvider.formatMessagesWithAttachments"
+        });
+      } else {
+        mergedMessages.push({ ...msg });
+      }
+    }
+    logger.debug("Messages after processing", {
+      context: "GoogleProvider.formatMessagesWithAttachments",
+      originalCount: messages.length,
+      afterSystemExtraction: nonSystemMessages.length,
+      afterMerging: mergedMessages.length,
+      finalRoles: mergedMessages.map((m) => m.role),
+      hasSystemInstruction: !!systemInstruction,
+      shouldDisableTools
+    });
     const formattedMessages = [];
-    for (const msg of messages) {
+    for (const msg of mergedMessages) {
       const formattedMessage = {
         role: msg.role === "assistant" ? "model" : "user",
         parts: []
       };
       if (msg.content) {
         formattedMessage.parts.push({ text: msg.content });
+      }
+      if (msg.role === "assistant" && msg.thoughtSignature) {
+        if (formattedMessage.parts.length > 0 && formattedMessage.parts[0].text !== void 0) {
+          formattedMessage.parts[0].thoughtSignature = msg.thoughtSignature;
+        }
+        logger.debug("Added thought signature to message", {
+          context: "GoogleProvider.formatMessagesWithAttachments",
+          hasSignature: true
+        });
       }
       if (msg.attachments && msg.attachments.length > 0) {
         for (const attachment of msg.attachments) {
@@ -496,34 +643,14 @@ var GoogleProvider = class {
     logger.debug("Messages formatted with attachments", {
       context: "GoogleProvider.formatMessagesWithAttachments",
       sentCount: sent.length,
-      failedCount: failed.length
+      failedCount: failed.length,
+      messageCount: formattedMessages.length
     });
-    return { messages: formattedMessages, attachmentResults: { sent, failed } };
+    return { messages: formattedMessages, systemInstruction, shouldDisableTools, attachmentResults: { sent, failed } };
   }
   async sendMessage(params, apiKey) {
     logger.debug("Google sendMessage called", { context: "GoogleProvider.sendMessage", model: params.model });
     const client = new import_generative_ai.GoogleGenerativeAI(apiKey);
-    const modelConfig = {
-      model: params.model,
-      safetySettings: [
-        {
-          category: import_generative_ai.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-          threshold: import_generative_ai.HarmBlockThreshold.BLOCK_NONE
-        },
-        {
-          category: import_generative_ai.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-          threshold: import_generative_ai.HarmBlockThreshold.BLOCK_NONE
-        },
-        {
-          category: import_generative_ai.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-          threshold: import_generative_ai.HarmBlockThreshold.BLOCK_NONE
-        },
-        {
-          category: import_generative_ai.HarmCategory.HARM_CATEGORY_HARASSMENT,
-          threshold: import_generative_ai.HarmBlockThreshold.BLOCK_NONE
-        }
-      ]
-    };
     const tools = [];
     if (params.tools && params.tools.length > 0) {
       logger.debug("Adding tools to request", { context: "GoogleProvider.sendMessage", toolCount: params.tools.length });
@@ -543,44 +670,8 @@ var GoogleProvider = class {
       logger.debug("Web search enabled", { context: "GoogleProvider.sendMessage" });
       tools.push({ googleSearch: {} });
     }
-    if (tools.length > 0) {
-      modelConfig.tools = tools;
-    }
-    const model = client.getGenerativeModel(modelConfig);
-    const { messages, attachmentResults } = await this.formatMessagesWithAttachments(params.messages);
-    const response = await model.generateContent({
-      contents: messages,
-      generationConfig: {
-        temperature: params.temperature ?? 0.7,
-        maxOutputTokens: params.maxTokens ?? 1e3,
-        topP: params.topP ?? 1,
-        stopSequences: params.stop
-      }
-    });
-    const text = response.text?.() ?? "";
-    const finishReason = response.candidates?.[0]?.finishReason ?? "STOP";
-    const usage = response.usageMetadata;
-    logger.debug("Received Google response", {
-      context: "GoogleProvider.sendMessage",
-      finishReason,
-      promptTokens: usage?.promptTokenCount,
-      completionTokens: usage?.candidatesTokenCount
-    });
-    return {
-      content: text,
-      finishReason,
-      usage: {
-        promptTokens: usage?.promptTokenCount ?? 0,
-        completionTokens: usage?.candidatesTokenCount ?? 0,
-        totalTokens: usage?.totalTokenCount ?? 0
-      },
-      raw: response,
-      attachmentResults
-    };
-  }
-  async *streamMessage(params, apiKey) {
-    logger.debug("Google streamMessage called", { context: "GoogleProvider.streamMessage", model: params.model });
-    const client = new import_generative_ai.GoogleGenerativeAI(apiKey);
+    const hasTools = tools.length > 0;
+    const { messages, systemInstruction, shouldDisableTools, attachmentResults } = await this.formatMessagesWithAttachments(params.messages, params.model, hasTools);
     const modelConfig = {
       model: params.model,
       safetySettings: [
@@ -602,6 +693,55 @@ var GoogleProvider = class {
         }
       ]
     };
+    if (systemInstruction) {
+      modelConfig.systemInstruction = systemInstruction;
+      logger.debug("Using systemInstruction", { context: "GoogleProvider.sendMessage", instructionLength: systemInstruction.length });
+    }
+    if (hasTools && !shouldDisableTools) {
+      modelConfig.tools = tools;
+    } else if (shouldDisableTools) {
+      logger.info("Tools disabled for this request due to legacy messages without thought signatures", {
+        context: "GoogleProvider.sendMessage",
+        toolCount: tools.length
+      });
+    }
+    const model = client.getGenerativeModel(modelConfig);
+    const response = await model.generateContent({
+      contents: messages,
+      generationConfig: {
+        temperature: params.temperature ?? 0.7,
+        maxOutputTokens: params.maxTokens ?? 1e3,
+        topP: params.topP ?? 1,
+        stopSequences: params.stop
+      }
+    });
+    const text = response.text?.() ?? "";
+    const finishReason = response.candidates?.[0]?.finishReason ?? "STOP";
+    const usage = response.usageMetadata;
+    const thoughtSignature = this.extractThoughtSignature(response.response ?? response);
+    logger.debug("Received Google response", {
+      context: "GoogleProvider.sendMessage",
+      finishReason,
+      promptTokens: usage?.promptTokenCount,
+      completionTokens: usage?.candidatesTokenCount,
+      hasThoughtSignature: !!thoughtSignature
+    });
+    return {
+      content: text,
+      finishReason,
+      usage: {
+        promptTokens: usage?.promptTokenCount ?? 0,
+        completionTokens: usage?.candidatesTokenCount ?? 0,
+        totalTokens: usage?.totalTokenCount ?? 0
+      },
+      raw: response,
+      attachmentResults,
+      thoughtSignature
+    };
+  }
+  async *streamMessage(params, apiKey) {
+    logger.debug("Google streamMessage called", { context: "GoogleProvider.streamMessage", model: params.model });
+    const client = new import_generative_ai.GoogleGenerativeAI(apiKey);
     const tools = [];
     if (params.tools && params.tools.length > 0) {
       logger.debug("Adding tools to stream request", { context: "GoogleProvider.streamMessage", toolCount: params.tools.length });
@@ -621,11 +761,42 @@ var GoogleProvider = class {
       logger.debug("Web search enabled for stream", { context: "GoogleProvider.streamMessage" });
       tools.push({ googleSearch: {} });
     }
-    if (tools.length > 0) {
+    const hasTools = tools.length > 0;
+    const { messages, systemInstruction, shouldDisableTools, attachmentResults } = await this.formatMessagesWithAttachments(params.messages, params.model, hasTools);
+    const modelConfig = {
+      model: params.model,
+      safetySettings: [
+        {
+          category: import_generative_ai.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: import_generative_ai.HarmBlockThreshold.BLOCK_NONE
+        },
+        {
+          category: import_generative_ai.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: import_generative_ai.HarmBlockThreshold.BLOCK_NONE
+        },
+        {
+          category: import_generative_ai.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: import_generative_ai.HarmBlockThreshold.BLOCK_NONE
+        },
+        {
+          category: import_generative_ai.HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: import_generative_ai.HarmBlockThreshold.BLOCK_NONE
+        }
+      ]
+    };
+    if (systemInstruction) {
+      modelConfig.systemInstruction = systemInstruction;
+      logger.debug("Using systemInstruction for stream", { context: "GoogleProvider.streamMessage", instructionLength: systemInstruction.length });
+    }
+    if (hasTools && !shouldDisableTools) {
       modelConfig.tools = tools;
+    } else if (shouldDisableTools) {
+      logger.info("Tools disabled for this stream request due to legacy messages without thought signatures", {
+        context: "GoogleProvider.streamMessage",
+        toolCount: tools.length
+      });
     }
     const model = client.getGenerativeModel(modelConfig);
-    const { messages, attachmentResults } = await this.formatMessagesWithAttachments(params.messages);
     const stream = await model.generateContentStream({
       contents: messages,
       generationConfig: {
@@ -649,11 +820,22 @@ var GoogleProvider = class {
     }
     const response = await stream.response;
     const usage = response.usageMetadata;
+    const thoughtSignature = this.extractThoughtSignature(response);
+    const candidates = response?.candidates;
+    const firstCandidate = candidates?.[0];
+    const parts = firstCandidate?.content?.parts || [];
+    const hasFunctionCall = parts.some((p) => p.functionCall);
+    const finishReason = firstCandidate?.finishReason;
     logger.debug("Stream completed", {
       context: "GoogleProvider.streamMessage",
       totalChunks: chunkCount,
       promptTokens: usage?.promptTokenCount,
-      completionTokens: usage?.candidatesTokenCount
+      completionTokens: usage?.candidatesTokenCount,
+      hasThoughtSignature: !!thoughtSignature,
+      hasFunctionCall,
+      finishReason,
+      partsCount: parts.length,
+      partTypes: parts.map((p) => Object.keys(p))
     });
     yield {
       content: "",
@@ -664,7 +846,8 @@ var GoogleProvider = class {
         totalTokens: usage?.totalTokenCount ?? 0
       },
       attachmentResults,
-      rawResponse: response
+      rawResponse: response,
+      thoughtSignature
     };
   }
   async validateApiKey(apiKey) {
@@ -764,6 +947,66 @@ var GoogleProvider = class {
       images,
       raw: response
     };
+  }
+  /**
+   * Get metadata for a specific model, including warnings and recommendations.
+   * Returns warnings for models with known issues or limitations.
+   */
+  getModelMetadata(modelId) {
+    const lowerModelId = modelId.toLowerCase();
+    if (lowerModelId.includes("gemini-3-pro")) {
+      return {
+        id: modelId,
+        displayName: "Gemini 3 Pro",
+        experimental: true,
+        warnings: [
+          {
+            level: "warning",
+            message: "This thinking model may return empty responses due to a known Gemini API issue. Thought signature support is experimental."
+          }
+        ],
+        missingCapabilities: lowerModelId.includes("-image") ? ["reliable-responses"] : void 0
+      };
+    }
+    if (lowerModelId.includes("-image") && !lowerModelId.includes("vision")) {
+      return {
+        id: modelId,
+        displayName: modelId.includes("2.5") ? "Gemini 2.5 Flash Image" : "Image Model",
+        warnings: [
+          {
+            level: "info",
+            message: "This model is optimized for image generation and does not support function calling (tools like memory search will be disabled)."
+          }
+        ],
+        missingCapabilities: ["function-calling", "tools"]
+      };
+    }
+    if (lowerModelId.includes("imagen")) {
+      return {
+        id: modelId,
+        displayName: modelId.includes("4-fast") ? "Imagen 4 Fast" : "Imagen 4",
+        warnings: [
+          {
+            level: "info",
+            message: "Imagen models are specialized for image generation only and do not support chat or function calling."
+          }
+        ],
+        missingCapabilities: ["chat", "function-calling", "tools"]
+      };
+    }
+    return void 0;
+  }
+  /**
+   * Get metadata for all models with special warnings or recommendations.
+   */
+  async getModelsWithMetadata(_apiKey) {
+    const modelsWithWarnings = [
+      "gemini-3-pro-image-preview",
+      "gemini-2.5-flash-image",
+      "imagen-4",
+      "imagen-4-fast"
+    ];
+    return modelsWithWarnings.map((modelId) => this.getModelMetadata(modelId)).filter((m) => m !== void 0);
   }
 };
 

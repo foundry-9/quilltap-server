@@ -146,9 +146,29 @@ export async function POST(req: NextRequest) {
     // Get available models
     const models = await llmProvider.getAvailableModels(decryptedKey)
 
+    // Get model metadata (warnings, recommendations) if the provider supports it
+    const modelMetadata = llmProvider.getModelsWithMetadata
+      ? await llmProvider.getModelsWithMetadata(decryptedKey)
+      : []
+
+    // Build response with model info including any warnings
+    const modelsWithInfo = models.map(modelId => {
+      const metadata = modelMetadata.find(m => m.id === modelId)
+        || (llmProvider.getModelMetadata ? llmProvider.getModelMetadata(modelId) : undefined)
+      return {
+        id: modelId,
+        displayName: metadata?.displayName,
+        warnings: metadata?.warnings,
+        deprecated: metadata?.deprecated,
+        experimental: metadata?.experimental,
+        missingCapabilities: metadata?.missingCapabilities,
+      }
+    })
+
     return NextResponse.json({
       provider,
       models,
+      modelsWithInfo,
       count: models.length,
     })
   } catch (error) {

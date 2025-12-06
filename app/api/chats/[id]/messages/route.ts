@@ -333,7 +333,7 @@ export async function POST(
         return role === 'USER' || role === 'ASSISTANT' || role === 'TOOL'
       })
       .map(msg => {
-        const messageEvent = msg as { role: string; content: string; id?: string }
+        const messageEvent = msg as { role: string; content: string; id?: string; thoughtSignature?: string | null }
 
         // For TOOL messages, parse the content and format as a user message
         // indicating the tool result (LLMs expect tool results as user messages)
@@ -354,10 +354,12 @@ export async function POST(
           }
         }
 
+        // Include thought signature for ASSISTANT messages (required for Gemini 3 thinking models)
         return {
           role: messageEvent.role,
           content: messageEvent.content,
           id: messageEvent.id,
+          thoughtSignature: messageEvent.role === 'ASSISTANT' ? messageEvent.thoughtSignature : undefined,
         }
       })
       .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
@@ -399,9 +401,12 @@ export async function POST(
           attachments: attachmentsToSend,
         }
       }
+      // Preserve thoughtSignature for Gemini 3 thinking models (required for multi-turn function calling)
+      // Convert null to undefined for LLMMessage compatibility
       return {
         role: msg.role,
         content: msg.content,
+        thoughtSignature: msg.thoughtSignature ?? undefined,
       }
     })
 
@@ -438,6 +443,8 @@ export async function POST(
     let usage: { totalTokens?: number } | null = null
     let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
     let rawResponse: unknown = null
+    // Track thought signature from Gemini 3 thinking models (required for multi-turn function calling)
+    let thoughtSignature: string | undefined = undefined
 
     // Prepare tool execution context
     // Pass the character's participant ID so {{me}} in image prompts resolves to the character
@@ -555,6 +562,13 @@ export async function POST(
               if (chunk.rawResponse) {
                 rawResponse = chunk.rawResponse
               }
+              // Capture thought signature from Gemini 3 thinking models
+              if (chunk.thoughtSignature) {
+                thoughtSignature = chunk.thoughtSignature
+                logger.debug('[Chat Messages] Captured thought signature from response', {
+                  signatureLength: thoughtSignature.length,
+                })
+              }
             }
           }
 
@@ -590,16 +604,17 @@ export async function POST(
             generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
             // Add assistant message with tool call to conversation (if there was any content)
+            // Include thought signature for Gemini 3 thinking models
             if (currentResponse && currentResponse.trim().length > 0) {
               currentMessages = [
                 ...currentMessages,
-                { role: 'assistant' as const, content: currentResponse }
+                { role: 'assistant' as const, content: currentResponse, thoughtSignature }
               ]
             } else {
               // Even without content, add a placeholder to maintain conversation flow
               currentMessages = [
                 ...currentMessages,
-                { role: 'assistant' as const, content: '[Tool call made]' }
+                { role: 'assistant' as const, content: '[Tool call made]', thoughtSignature }
               ]
             }
 
@@ -607,7 +622,7 @@ export async function POST(
             for (const toolMsg of results.toolMessages) {
               currentMessages = [
                 ...currentMessages,
-                { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}` }
+                { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined }
               ]
             }
 
@@ -653,6 +668,10 @@ export async function POST(
                   currentRawResponse = chunk.rawResponse
                   rawResponse = chunk.rawResponse
                 }
+                // Capture thought signature from continuation response
+                if (chunk.thoughtSignature) {
+                  thoughtSignature = chunk.thoughtSignature
+                }
               }
             }
           }
@@ -681,6 +700,8 @@ export async function POST(
               tokenCount: usage?.totalTokens || null,
               rawResponse: (rawResponse as Record<string, unknown>) || null,
               attachments: assistantAttachments,
+              // Store thought signature for Gemini 3 thinking models (required for multi-turn function calling)
+              thoughtSignature: thoughtSignature || null,
             }
             await repos.chats.addMessage(id, assistantMessage)
 
@@ -777,8 +798,9 @@ export async function POST(
               )
             )
           } else {
-            // No response content and no tool execution - still need to send done to close the stream
-            logger.warn(`[Chat Messages] Empty response for chat ${id}`)
+            // No response content and no tool execution - this is a known Gemini API issue
+            // where the model returns finishReason: STOP but no content
+            logger.warn(`[Chat Messages] Empty response for chat ${id} - this is a known Gemini API issue`)
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
@@ -787,6 +809,8 @@ export async function POST(
                   usage,
                   attachmentResults,
                   toolsExecuted: false,
+                  emptyResponse: true,
+                  emptyResponseReason: 'The AI model returned an empty response. This is a known issue with some Gemini models. Please try resending your message.',
                 })}\n\n`
               )
             )
