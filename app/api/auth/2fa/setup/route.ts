@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     const { secret, qrCode, encrypted } = await generateTOTPSecret(
       session.user.id,
-      user.email
+      user.email || user.username
     )
 
     return NextResponse.json({

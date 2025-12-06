@@ -34,27 +34,29 @@ function getAdapter(): Adapter {
 }
 
 /**
- * Build credentials provider for email/password login
+ * Build credentials provider for username/password login
  */
 function buildCredentialsProvider() {
   return CredentialsProvider({
     id: 'credentials',
-    name: 'Email and Password',
+    name: 'Username and Password',
     credentials: {
-      email: { label: 'Email', type: 'email' },
+      username: { label: 'Username', type: 'text' },
       password: { label: 'Password', type: 'password' },
       totpCode: { label: '2FA Code (if enabled)', type: 'text' }
     },
     async authorize(credentials) {
-      if (!credentials?.email || !credentials?.password) {
-        throw new Error('Email and password required')
+      if (!credentials?.username || !credentials?.password) {
+        logger.debug('Missing credentials', { context: 'authorize', hasUsername: !!credentials?.username });
+        throw new Error('Username and password required')
       }
 
       // Find user from MongoDB
-      const user = await getRepositories().users.findByEmail(credentials.email)
+      const user = await getRepositories().users.findByUsername(credentials.username)
 
       if (!user?.passwordHash) {
-        throw new Error('Invalid email or password')
+        logger.debug('User not found or no password hash', { context: 'authorize', username: credentials.username });
+        throw new Error('Invalid username or password')
       }
 
       // Verify password
@@ -64,12 +66,14 @@ function buildCredentialsProvider() {
       )
 
       if (!valid) {
-        throw new Error('Invalid email or password')
+        logger.debug('Invalid password', { context: 'authorize', username: credentials.username });
+        throw new Error('Invalid username or password')
       }
 
       // Check if 2FA is enabled
       if (user.totp?.enabled) {
         if (!credentials.totpCode) {
+          logger.debug('2FA required but not provided', { context: 'authorize', username: credentials.username });
           throw new Error('2FA code required')
         }
 
@@ -78,13 +82,16 @@ function buildCredentialsProvider() {
         const totpValid = await verifyTOTP(user.id, credentials.totpCode)
 
         if (!totpValid) {
+          logger.debug('Invalid 2FA code', { context: 'authorize', username: credentials.username });
           throw new Error('Invalid 2FA code')
         }
       }
 
+      logger.info('User authenticated successfully', { context: 'authorize', userId: user.id, username: user.username });
+
       return {
         id: user.id,
-        email: user.email,
+        email: user.email || user.username, // NextAuth expects email, use username as fallback
         name: user.name,
         image: user.image,
       }
@@ -194,8 +201,23 @@ export async function buildAuthOptionsAsync(): Promise<NextAuthOptions> {
     adapter: getAdapter(),
     providers: buildProviders(),
     callbacks: {
-      async session({ session, user }) {
-        if (session.user) {
+      async jwt({ token, user }) {
+        // On initial sign in, add user data to token
+        if (user) {
+          token.id = user.id;
+          token.email = user.email;
+          token.name = user.name;
+          token.image = user.image;
+        }
+        return token;
+      },
+      async session({ session, token, user }) {
+        // For JWT sessions (credentials), use token data
+        if (token && session.user) {
+          session.user.id = token.id as string;
+        }
+        // For database sessions (OAuth), use user data
+        if (user && session.user) {
           session.user.id = user.id;
         }
         return session;
@@ -206,7 +228,9 @@ export async function buildAuthOptionsAsync(): Promise<NextAuthOptions> {
       error: '/auth/error',
     },
     session: {
-      strategy: "database",
+      // Use JWT for credentials provider compatibility
+      // The adapter is still used for OAuth providers
+      strategy: "jwt",
     },
     debug: process.env.NODE_ENV === "development",
   };
@@ -238,8 +262,23 @@ export function getAuthOptions(): NextAuthOptions {
     adapter: getAdapter(),
     providers: buildProviders(),
     callbacks: {
-      async session({ session, user }) {
-        if (session.user) {
+      async jwt({ token, user }) {
+        // On initial sign in, add user data to token
+        if (user) {
+          token.id = user.id;
+          token.email = user.email;
+          token.name = user.name;
+          token.image = user.image;
+        }
+        return token;
+      },
+      async session({ session, token, user }) {
+        // For JWT sessions (credentials), use token data
+        if (token && session.user) {
+          session.user.id = token.id as string;
+        }
+        // For database sessions (OAuth), use user data
+        if (user && session.user) {
           session.user.id = user.id;
         }
         return session;
@@ -250,7 +289,8 @@ export function getAuthOptions(): NextAuthOptions {
       error: '/auth/error',
     },
     session: {
-      strategy: "database",
+      // Use JWT for credentials provider compatibility
+      strategy: "jwt",
     },
     debug: process.env.NODE_ENV === "development",
   };

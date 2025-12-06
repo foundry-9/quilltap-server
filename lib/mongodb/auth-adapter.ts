@@ -29,7 +29,8 @@ import crypto from 'node:crypto';
  */
 interface MongoUser {
   id: string; // UUID-style application ID
-  email: string;
+  username: string;
+  email?: string | null;
   emailVerified: string | null;
   name?: string | null;
   image?: string | null;
@@ -108,6 +109,7 @@ export function getMongoDBAuthAdapter(): Adapter {
   return {
     /**
      * Create a new user in the database
+     * For OAuth users, generates a username from their email or name
      */
     async createUser(user: Omit<AdapterUser, 'id'>): Promise<AdapterUser> {
       try {
@@ -122,9 +124,20 @@ export function getMongoDBAuthAdapter(): Adapter {
         const id = generateId();
         const timestamp = now();
 
+        // Generate username from email or name for OAuth users
+        let username = user.email?.split('@')[0] || user.name?.toLowerCase().replaceAll(/\s+/g, '_') || `user_${id.substring(0, 8)}`;
+
+        // Ensure username is unique by checking and appending random suffix if needed
+        let existingUser = await usersCollection.findOne({ username });
+        while (existingUser) {
+          username = `${username}_${Math.random().toString(36).substring(2, 6)}`;
+          existingUser = await usersCollection.findOne({ username });
+        }
+
         const mongoUser: MongoUser = {
           id,
-          email: user.email,
+          username,
+          email: user.email || null,
           emailVerified: user.emailVerified
             ? user.emailVerified.toISOString()
             : null,
@@ -138,6 +151,7 @@ export function getMongoDBAuthAdapter(): Adapter {
 
         logger.debug('MongoDB Auth: User created successfully', {
           userId: id,
+          username,
           email: user.email,
         });
 
@@ -178,12 +192,12 @@ export function getMongoDBAuthAdapter(): Adapter {
 
         logger.debug('MongoDB Auth: User retrieved', {
           userId: id,
-          email: mongoUser.email,
+          username: mongoUser.username,
         });
 
         return {
           id: mongoUser.id,
-          email: mongoUser.email,
+          email: mongoUser.email || mongoUser.username, // NextAuth expects email, use username as fallback
           emailVerified: mongoUser.emailVerified
             ? new Date(mongoUser.emailVerified)
             : null,
@@ -224,7 +238,7 @@ export function getMongoDBAuthAdapter(): Adapter {
 
         return {
           id: mongoUser.id,
-          email: mongoUser.email,
+          email: mongoUser.email || mongoUser.username, // NextAuth expects email, use username as fallback
           emailVerified: mongoUser.emailVerified
             ? new Date(mongoUser.emailVerified)
             : null,
@@ -293,7 +307,7 @@ export function getMongoDBAuthAdapter(): Adapter {
 
         return {
           id: mongoUser.id,
-          email: mongoUser.email,
+          email: mongoUser.email || mongoUser.username, // NextAuth expects email, use username as fallback
           emailVerified: mongoUser.emailVerified
             ? new Date(mongoUser.emailVerified)
             : null,
@@ -359,7 +373,7 @@ export function getMongoDBAuthAdapter(): Adapter {
 
         return {
           id: updatedUser.id,
-          email: updatedUser.email,
+          email: updatedUser.email || updatedUser.username, // NextAuth expects email, use username as fallback
           emailVerified: updatedUser.emailVerified
             ? new Date(updatedUser.emailVerified)
             : null,
@@ -591,7 +605,7 @@ export function getMongoDBAuthAdapter(): Adapter {
           },
           user: {
             id: mongoUser.id,
-            email: mongoUser.email,
+            email: mongoUser.email || mongoUser.username, // NextAuth expects email, use username as fallback
             emailVerified: mongoUser.emailVerified
               ? new Date(mongoUser.emailVerified)
               : null,

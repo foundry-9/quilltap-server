@@ -72,6 +72,7 @@ export async function getOrCreateAnonymousUser(): Promise<User> {
     // Construct user with fixed ID
     const anonymousUser: User = {
       id: ANONYMOUS_USER_ID,
+      username: 'anonymous',
       email: getAnonymousUserEmail(),
       name: getAnonymousUserName(),
       passwordHash: null,

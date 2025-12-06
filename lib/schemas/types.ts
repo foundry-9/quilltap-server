@@ -77,7 +77,8 @@ export type BackupCodes = z.infer<typeof BackupCodesSchema>;
 
 export const UserSchema = z.object({
   id: UUIDSchema,
-  email: z.string().email(),
+  username: z.string().min(3).max(50),
+  email: z.string().email().nullable().optional(),
   name: z.string().nullable().optional(),
   image: z.string().nullable().optional(),
   emailVerified: TimestampSchema.nullable().optional(),

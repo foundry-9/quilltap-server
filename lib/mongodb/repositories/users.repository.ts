@@ -265,6 +265,52 @@ export class UsersRepository {
   }
 
   /**
+   * Find a user by username
+   */
+  async findByUsername(username: string): Promise<User | null> {
+    const collection = await this.getUsersCollection();
+
+    logger.debug('Finding user by username', {
+      username,
+    });
+
+    try {
+      const user = await collection.findOne({ username });
+
+      if (!user) {
+        logger.debug('User not found by username', {
+          username,
+        });
+        return null;
+      }
+
+      // Remove MongoDB's _id field before validation
+      const { _id, ...userData } = user as any;
+
+      const validationResult = this.validateUserSafe(userData);
+      if (!validationResult.success) {
+        logger.warn('User validation failed', {
+          username,
+          error: validationResult.error,
+        });
+        return null;
+      }
+
+      logger.debug('User found by username', {
+        username,
+      });
+
+      return validationResult.data || null;
+    } catch (error) {
+      logger.error('Error finding user by username', {
+        username,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Find all users
    */
   async findAll(): Promise<User[]> {
@@ -311,7 +357,7 @@ export class UsersRepository {
     const now = this.getCurrentTimestamp();
 
     logger.debug('Creating new user', {
-      email: data.email,
+      username: data.username,
     });
 
     try {
@@ -329,14 +375,14 @@ export class UsersRepository {
 
       logger.info('User created successfully', {
         userId: id,
-        email: data.email,
+        username: data.username,
         insertedId: result.insertedId.toString(),
       });
 
       return validated;
     } catch (error) {
       logger.error('Error creating user', {
-        email: data.email,
+        username: data.username,
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;

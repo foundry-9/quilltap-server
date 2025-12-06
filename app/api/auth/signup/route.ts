@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { logger } from '@/lib/logger'
 
 const SignupSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  username: z.string().min(3, 'Username must be at least 3 characters').max(50, 'Username must be at most 50 characters'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   name: z.string().optional(),
 })
@@ -13,11 +13,14 @@ const SignupSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { email, password, name } = SignupSchema.parse(body)
+    const { username, password, name } = SignupSchema.parse(body)
+
+    logger.debug('Processing signup request', { context: 'POST /api/auth/signup', username })
 
     // Validate password strength
     const validation = validatePasswordStrength(password)
     if (!validation.valid) {
+      logger.debug('Password validation failed', { context: 'POST /api/auth/signup', errors: validation.errors })
       return NextResponse.json(
         { error: 'Password does not meet requirements', details: validation.errors },
         { status: 400 }
@@ -27,11 +30,12 @@ export async function POST(req: NextRequest) {
     const repos = getRepositories()
 
     // Check if user already exists
-    const existing = await repos.users.findByEmail(email)
+    const existing = await repos.users.findByUsername(username)
 
     if (existing) {
+      logger.debug('Username already exists', { context: 'POST /api/auth/signup', username })
       return NextResponse.json(
-        { error: 'User with this email already exists' },
+        { error: 'User with this username already exists' },
         { status: 409 }
       )
     }
@@ -41,17 +45,18 @@ export async function POST(req: NextRequest) {
 
     // Create user
     const user = await repos.users.create({
-      email,
+      username,
       name: name || null,
       passwordHash,
-      emailVerified: new Date().toISOString(), // Auto-verify for now (can add email verification later)
     })
+
+    logger.info('User created successfully', { context: 'POST /api/auth/signup', userId: user.id, username })
 
     return NextResponse.json({
       message: 'Account created successfully',
       user: {
         id: user.id,
-        email: user.email,
+        username: user.username,
         name: user.name,
       }
     }, { status: 201 })

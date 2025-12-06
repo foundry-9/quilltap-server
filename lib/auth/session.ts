@@ -45,7 +45,7 @@ export async function getServerSession(): Promise<ExtendedSession | null> {
         user: {
           id: anonymousUser.id,
           name: anonymousUser.name,
-          email: anonymousUser.email,
+          email: anonymousUser.email || anonymousUser.username,
           image: anonymousUser.image,
         },
         expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
