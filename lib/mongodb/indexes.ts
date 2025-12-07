@@ -120,8 +120,8 @@ export const INDEX_DEFINITIONS: Record<string, IndexDefinition[]> = {
       key: { userId: 1 },
     },
     {
-      key: { userId: 1, name: 1 },
-      options: { unique: true },
+      key: { userId: 1, nameLower: 1 },
+      options: { unique: true, name: 'tags_userId_nameLower_unique' },
     },
   ],
 
