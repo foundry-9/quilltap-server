@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0--dev.11-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.0.0--dev.12-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -635,6 +635,7 @@ Copyright (c) 2025 Foundry-9
 - Removed duplicated memories editing section from character edit page
 - Added global search
 - Rename character + search/replace in templates and throughout records
+- Console and other logs can be seen in the front-end while not in production mode
 
 ## Roadmap
 
@@ -653,7 +654,6 @@ Copyright (c) 2025 Foundry-9
 - [ ] "Visual Novel" options?
 - [ ] Worldbook/Lore
 - [ ] General SSE-based MCP support
-- [ ] Console logging in a front-end window with all log entries at various log levels showing and persisting there
 - [ ] Python script support
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./features/comfy_ui_local_image.md))
 
