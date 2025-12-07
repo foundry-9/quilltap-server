@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0--dev.8-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.0.0--dev.9-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -627,12 +627,13 @@ Copyright (c) 2025 Foundry-9
 - Hide navigation on auth pages and reduce MongoDB connection logging verbosity
 - CI/build improvements: skip env validation during CI build, add MONGODB_URI test default
 
-### 2.1 - Multi-character ST import support, backup/restore
+### 2.1 - Multi-character ST import support, backup/restore, global search
 
 - Multi-character SillyTavern chat import with wizard to assign users, persona
 - Cloud or local backup/restore system
 - "Delete all user data" functionality
 - Removed duplicated memories editing section from character edit page
+- Added global search
 
 ## Roadmap
 

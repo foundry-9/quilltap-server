@@ -10,6 +10,7 @@ import { useChatContext } from "@/components/providers/chat-context";
 import { useQuickHide } from "@/components/providers/quick-hide-provider";
 import { TagDropdown } from "@/components/tags/tag-dropdown";
 import { TagBadge } from "@/components/tags/tag-badge";
+import { SearchBar } from "@/components/search";
 import { routeSupportsDebug } from "@/lib/navigation/route-flags";
 
 interface DashboardNavProps {
@@ -80,6 +81,8 @@ export default function DashboardNav({ user }: DashboardNavProps) {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Global search */}
+            <SearchBar />
             {/* Chat controls - only show when in a chat */}
             {isInChat && chat.chatId && (
               <>
