@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.0--dev.262-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.2.0--dev.0-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -314,19 +314,13 @@ All files (images, attachments, avatars) are stored in S3-compatible storage wit
 
 ### Backup & Restore
 
-For MongoDB backup:
+Quilltap includes a built-in backup and restore system accessible from the **Tools** page (`/tools`):
 
-```bash
-# Using mongodump
-mongodump --uri="mongodb://localhost:27017/quilltap" --out=backup-$(date +%Y%m%d)
+- **Create Backup**: Export all your data as a ZIP file (download or save to cloud)
+- **Restore from Backup**: Import from a local file or cloud backup
+- **Cloud Backups**: List and restore from backups stored in S3
 
-# Restore
-mongorestore --uri="mongodb://localhost:27017/quilltap" backup-YYYYMMDD/quilltap
-```
-
-For S3 backup, use your S3 provider's backup tools or sync to another bucket.
-
-For detailed backup and restore procedures, see [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md).
+For manual/CLI backup procedures using `mongodump` and S3 sync, see [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md).
 
 ## Configuration
 
@@ -393,8 +387,8 @@ Once logged in, you'll need to:
 - [API Documentation](docs/API.md) - Complete API reference
 - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment instructions
 - [Development Progress](DEVELOPMENT.md) - Feature completion status
-- [Roadmap](features/ROADMAP.md) - Technical architecture and implementation details
-- [Local User Authentication](features/LOCAL_USER_AUTH.md) - Original implementation plan for email/password + TOTP 2FA
+- [Roadmap](features/complete/ROADMAP.md) - Technical architecture and implementation details
+- [Local User Authentication](features/complete/LOCAL_USER_AUTH.md) - Implementation of email/password + TOTP 2FA (completed)
 - [Plugin Developer Guide](plugins/README.md) - How to create plugins
 - [LLM Provider Guide](plugins/LLM-PROVIDER-GUIDE.md) - Creating new LLM provider plugins
 - [Auth Provider Guide](plugins/AUTH-PROVIDER-GUIDE.md) - Creating new OAuth provider plugins

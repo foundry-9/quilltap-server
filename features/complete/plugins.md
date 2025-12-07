@@ -59,8 +59,8 @@ The `qtap-plugin-upgrade` plugin provides database migration capabilities:
 
 - [ ] New API endpoints via plugins
 - [ ] New database "tables" via plugins
-- [ ] Alternative file backends (S3, etc.)
-- [ ] Alternative database backends (MongoDB, etc.)
+- [x] S3 file storage (implemented in core, December 2025)
+- [x] MongoDB database backend (implemented in core, December 2025)
 
 ### Frontend Extensions
 

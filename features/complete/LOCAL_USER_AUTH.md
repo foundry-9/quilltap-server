@@ -1,9 +1,10 @@
 # Local User Authentication with TOTP 2FA
 
-> **Feature Status**: Planned
-> **Priority**: Medium
-> **Estimated Effort**: 7-10 development days
-> **Target Phase**: Post-1.0 (v1.1 or v1.2)
+> **Feature Status**: COMPLETED (Phase 1 & 2)
+> **Completed**: December 2025
+> **Remaining Work**: Phase 3 optional features (password reset, email verification)
+
+**Note**: This document has been moved to `features/complete/` as the core functionality (email/password auth + TOTP 2FA) is fully implemented. See `features/PLAN-AUTH-AND-MULTIUSER.md` for planned enhancements.
 
 ## Overview
 
