@@ -504,13 +504,13 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
           {restoreSummary.warnings && restoreSummary.warnings.length > 0 && (
             <div className="bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-700 rounded-lg p-4">
               <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">
-                Warnings:
+                Warnings ({restoreSummary.warnings.length}):
               </p>
-              <ul className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+              <ul className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1 max-h-40 overflow-y-auto">
                 {restoreSummary.warnings.map((warning, idx) => (
                   <li key={idx} className="flex gap-2">
-                    <span>•</span>
-                    <span>{warning}</span>
+                    <span className="flex-shrink-0">•</span>
+                    <span className="break-words">{warning}</span>
                   </li>
                 ))}
               </ul>
@@ -537,10 +537,10 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
       />
 
       {/* Dialog */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md">
+      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto w-[90vw] max-w-2xl">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-h-[90vh] flex flex-col">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Restore Backup</h2>
@@ -562,7 +562,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
           </div>
 
           {/* Body */}
-          <div className="px-6 py-6">
+          <div className="px-6 py-6 overflow-y-auto flex-1">
             {step === 'source' && renderSourceSelection()}
             {step === 'preview' && renderPreview()}
             {step === 'mode' && renderModeSelection()}
@@ -570,7 +570,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 flex gap-3 justify-between">
+          <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 flex gap-3 justify-between flex-shrink-0">
             {step === 'progress' && restoreSummary ? (
               <button
                 onClick={handleCloseAfterRestore}

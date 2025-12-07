@@ -547,6 +547,11 @@ export async function restore(
 
   const repos = getUserRepositories(targetUserId);
 
+  // ID mapping tables to track backup IDs -> newly created IDs
+  // This is necessary because repositories generate new IDs during create()
+  const characterIdMap = new Map<string, string>();
+  const personaIdMap = new Map<string, string>();
+
   // Restore in dependency order
   // 1. Tags (no dependencies)
   moduleLogger.debug('Restoring tags', { count: data.tags.length });
@@ -632,8 +637,11 @@ export async function restore(
   moduleLogger.debug('Restoring characters', { count: data.characters.length });
   for (const character of data.characters) {
     try {
-      const { id, userId, createdAt, updatedAt, ...charData } = character;
-      await repos.characters.create(charData);
+      const { id: backupId, userId, createdAt, updatedAt, ...charData } = character;
+      const createdCharacter = await repos.characters.create(charData);
+      // Track the mapping from backup ID to newly created ID
+      characterIdMap.set(backupId, createdCharacter.id);
+      moduleLogger.debug('Character ID mapping created', { backupId, newId: createdCharacter.id });
     } catch (error) {
       warnings.push(`Failed to restore character "${character.name}": ${error instanceof Error ? error.message : String(error)}`);
       moduleLogger.warn('Failed to restore character', { characterId: character.id, error });
@@ -644,8 +652,11 @@ export async function restore(
   moduleLogger.debug('Restoring personas', { count: data.personas.length });
   for (const persona of data.personas) {
     try {
-      const { id, userId, createdAt, updatedAt, ...personaData } = persona;
-      await repos.personas.create(personaData);
+      const { id: backupId, userId, createdAt, updatedAt, ...personaData } = persona;
+      const createdPersona = await repos.personas.create(personaData);
+      // Track the mapping from backup ID to newly created ID
+      personaIdMap.set(backupId, createdPersona.id);
+      moduleLogger.debug('Persona ID mapping created', { backupId, newId: createdPersona.id });
     } catch (error) {
       warnings.push(`Failed to restore persona "${persona.name}": ${error instanceof Error ? error.message : String(error)}`);
       moduleLogger.warn('Failed to restore persona', { personaId: persona.id, error });
@@ -680,7 +691,35 @@ export async function restore(
   for (const memory of data.memories) {
     try {
       const { id, createdAt, updatedAt, ...memoryData } = memory;
-      await repos.memories.create(memoryData);
+
+      // Remap characterId to the newly created character's ID
+      const newCharacterId = characterIdMap.get(memoryData.characterId);
+      if (!newCharacterId) {
+        warnings.push(`Failed to restore memory: Character ID ${memoryData.characterId} not found in restored characters`);
+        moduleLogger.warn('Failed to restore memory - character not found', {
+          memoryId: memory.id,
+          backupCharacterId: memoryData.characterId,
+        });
+        continue;
+      }
+
+      // Remap personaId if present
+      let newPersonaId = memoryData.personaId;
+      if (memoryData.personaId) {
+        newPersonaId = personaIdMap.get(memoryData.personaId) || null;
+        if (!newPersonaId) {
+          moduleLogger.debug('Memory personaId not found in restored personas, setting to null', {
+            memoryId: memory.id,
+            backupPersonaId: memoryData.personaId,
+          });
+        }
+      }
+
+      await repos.memories.create({
+        ...memoryData,
+        characterId: newCharacterId,
+        personaId: newPersonaId,
+      });
     } catch (error) {
       warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);
       moduleLogger.warn('Failed to restore memory', { memoryId: memory.id, error });
