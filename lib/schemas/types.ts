@@ -75,6 +75,25 @@ export const BackupCodesSchema = z.object({
 
 export type BackupCodes = z.infer<typeof BackupCodesSchema>;
 
+export const TOTPAttemptsSchema = z.object({
+  count: z.number().default(0),
+  lastAttempt: TimestampSchema.nullable().optional(),
+  lockedUntil: TimestampSchema.nullable().optional(),
+});
+
+export type TOTPAttempts = z.infer<typeof TOTPAttemptsSchema>;
+
+export const TrustedDeviceSchema = z.object({
+  id: UUIDSchema,
+  tokenHash: z.string(),
+  name: z.string(),
+  createdAt: TimestampSchema,
+  lastUsedAt: TimestampSchema,
+  expiresAt: TimestampSchema,
+});
+
+export type TrustedDevice = z.infer<typeof TrustedDeviceSchema>;
+
 export const UserSchema = z.object({
   id: UUIDSchema,
   username: z.string().min(3).max(50),
@@ -89,6 +108,8 @@ export const UserSchema = z.object({
   // TOTP 2FA
   totp: TOTPSecretSchema.optional(),
   backupCodes: BackupCodesSchema.optional(),
+  totpAttempts: TOTPAttemptsSchema.optional(),
+  trustedDevices: z.array(TrustedDeviceSchema).optional(),
 
   // Timestamps
   createdAt: TimestampSchema,
