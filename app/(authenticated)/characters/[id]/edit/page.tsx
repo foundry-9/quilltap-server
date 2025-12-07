@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { TagEditor } from '@/components/tags/tag-editor'
-import { MemoryList } from '@/components/memory'
 import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { EntityTabs, Tab } from '@/components/tabs'
@@ -525,11 +524,6 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
                     {/* Tag Editor */}
                     <TagEditor entityType="character" entityId={id} />
-
-                    {/* Memories Section */}
-                    <div className="pt-6 border-t border-gray-200 dark:border-slate-700">
-                      <MemoryList characterId={id} />
-                    </div>
                   </div>
                 )
 
