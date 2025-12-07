@@ -133,7 +133,8 @@ export const config = {
      * - favicon.ico (favicon file)
      * - public files (public directory)
      * - /api/images (file upload endpoint - incompatible with middleware body handling)
+     * - /api/tools/backup (backup endpoints handle large file uploads)
      */
-    '/((?!_next/static|_next/image|favicon.ico|api/images|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/images|api/tools/backup|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

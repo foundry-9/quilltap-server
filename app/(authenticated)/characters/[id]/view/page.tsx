@@ -19,6 +19,7 @@ import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { MemoryList } from '@/components/memory/memory-list'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
+import { TemplateHighlighter, countTemplateReplacements, replaceWithTemplate } from '@/components/characters/TemplateHighlighter'
 
 interface Tag {
   id: string
@@ -155,10 +156,97 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [savingPersona, setSavingPersona] = useState(false)
   const [savingImageProfile, setSavingImageProfile] = useState(false)
   const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
+  const [replacingTemplate, setReplacingTemplate] = useState<'char' | 'user' | null>(null)
   const { style } = useAvatarDisplay()
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
   const quickHideActive = hiddenTagIds.size > 0
   const characterTagIds = character?.tags || []
+
+  // Get the default persona for template highlighting
+  const defaultPersona = personas.find(p => p.id === defaultPersonaId)
+  const defaultPersonaName = defaultPersona?.name || null
+
+  // Count template replacement opportunities in fields that support templates
+  const templateFields = {
+    description: character?.description,
+    personality: character?.personality,
+    scenario: character?.scenario,
+    firstMessage: character?.firstMessage,
+    exampleDialogues: character?.exampleDialogues,
+    systemPrompt: character?.systemPrompt,
+  }
+
+  const templateCounts = character
+    ? countTemplateReplacements(templateFields, character.name, defaultPersonaName)
+    : { charCount: 0, userCount: 0, fieldCounts: {} }
+
+  // Handler for template replacement
+  const handleTemplateReplace = async (type: 'char' | 'user') => {
+    if (!character) return
+
+    const nameToReplace = type === 'char' ? character.name : defaultPersonaName
+    const template = type === 'char' ? '{{char}}' : '{{user}}'
+
+    if (!nameToReplace) return
+
+    setReplacingTemplate(type)
+    clientLogger.debug('Starting template replacement', { type, nameToReplace, template })
+
+    try {
+      // Build update payload with replaced fields
+      const updates: Record<string, string> = {}
+
+      if (character.description) {
+        const replaced = replaceWithTemplate(character.description, nameToReplace, template)
+        if (replaced !== character.description) updates.description = replaced
+      }
+      if (character.personality) {
+        const replaced = replaceWithTemplate(character.personality, nameToReplace, template)
+        if (replaced !== character.personality) updates.personality = replaced
+      }
+      if (character.scenario) {
+        const replaced = replaceWithTemplate(character.scenario, nameToReplace, template)
+        if (replaced !== character.scenario) updates.scenario = replaced
+      }
+      if (character.firstMessage) {
+        const replaced = replaceWithTemplate(character.firstMessage, nameToReplace, template)
+        if (replaced !== character.firstMessage) updates.firstMessage = replaced
+      }
+      if (character.exampleDialogues) {
+        const replaced = replaceWithTemplate(character.exampleDialogues, nameToReplace, template)
+        if (replaced !== character.exampleDialogues) updates.exampleDialogues = replaced
+      }
+      if (character.systemPrompt) {
+        const replaced = replaceWithTemplate(character.systemPrompt, nameToReplace, template)
+        if (replaced !== character.systemPrompt) updates.systemPrompt = replaced
+      }
+
+      if (Object.keys(updates).length === 0) {
+        showSuccessToast('No replacements needed')
+        return
+      }
+
+      const res = await fetch(`/api/characters/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update character')
+      }
+
+      await fetchCharacter()
+      showSuccessToast(`Replaced ${type === 'char' ? 'character name' : 'persona name'} with ${template}`)
+      clientLogger.info('Template replacement completed', { type, fieldsUpdated: Object.keys(updates) })
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to replace template')
+      clientLogger.error('Template replacement failed', { error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setReplacingTemplate(null)
+    }
+  }
 
   const fetchCharacter = useCallback(async () => {
     try {
@@ -417,8 +505,52 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       case 'details':
         return (
           <div className="space-y-6">
-            {/* Edit Button Header */}
-            <div className="flex justify-end">
+            {/* Edit Button Header with Template Replacement Buttons */}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {/* Character Name → {{char}} button */}
+              {templateCounts.charCount > 0 && (
+                <button
+                  onClick={() => handleTemplateReplace('char')}
+                  disabled={replacingTemplate !== null}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={`Replace ${templateCounts.charCount} occurrences of "${character?.name}" with {{char}}`}
+                >
+                  {replacingTemplate === 'char' ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  <span className="hidden sm:inline">{character?.name}</span>
+                  <span className="text-blue-500 dark:text-blue-400">→</span>
+                  <code className="text-xs bg-blue-200 dark:bg-blue-800 px-1 rounded">{`{{char}}`}</code>
+                  <span className="text-xs text-blue-500 dark:text-blue-400">({templateCounts.charCount})</span>
+                </button>
+              )}
+
+              {/* Persona Name → {{user}} button */}
+              {defaultPersonaName && templateCounts.userCount > 0 && (
+                <button
+                  onClick={() => handleTemplateReplace('user')}
+                  disabled={replacingTemplate !== null}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={`Replace ${templateCounts.userCount} occurrences of "${defaultPersonaName}" with {{user}}`}
+                >
+                  {replacingTemplate === 'user' ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-r-transparent"></div>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  <span className="hidden sm:inline">{defaultPersonaName}</span>
+                  <span className="text-green-500 dark:text-green-400">→</span>
+                  <code className="text-xs bg-green-200 dark:bg-green-800 px-1 rounded">{`{{user}}`}</code>
+                  <span className="text-xs text-green-500 dark:text-green-400">({templateCounts.userCount})</span>
+                </button>
+              )}
+
               <Link
                 href={`/characters/${id}/edit`}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 font-medium text-sm"
@@ -430,15 +562,25 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
               </Link>
             </div>
 
-            {/* Main Content */}
+            {/* Main Content with Template Highlighting */}
             <div className="space-y-6">
               {character?.description && (
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     Description
+                    {(templateCounts.fieldCounts.description?.char > 0 || templateCounts.fieldCounts.description?.user > 0) && (
+                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                        (template replacements available)
+                      </span>
+                    )}
                   </h2>
                   <div className="text-gray-700 dark:text-gray-300">
-                    <MessageContent content={character.description} />
+                    <TemplateHighlighter
+                      content={character.description}
+                      characterName={character.name}
+                      personaName={defaultPersonaName}
+                      showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
+                    />
                   </div>
                 </div>
               )}
@@ -447,9 +589,19 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     Personality
+                    {(templateCounts.fieldCounts.personality?.char > 0 || templateCounts.fieldCounts.personality?.user > 0) && (
+                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                        (template replacements available)
+                      </span>
+                    )}
                   </h2>
                   <div className="text-gray-700 dark:text-gray-300">
-                    <MessageContent content={character.personality} />
+                    <TemplateHighlighter
+                      content={character.personality}
+                      characterName={character.name}
+                      personaName={defaultPersonaName}
+                      showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
+                    />
                   </div>
                 </div>
               )}
@@ -458,9 +610,19 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     Scenario
+                    {(templateCounts.fieldCounts.scenario?.char > 0 || templateCounts.fieldCounts.scenario?.user > 0) && (
+                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                        (template replacements available)
+                      </span>
+                    )}
                   </h2>
                   <div className="text-gray-700 dark:text-gray-300">
-                    <MessageContent content={character.scenario} />
+                    <TemplateHighlighter
+                      content={character.scenario}
+                      characterName={character.name}
+                      personaName={defaultPersonaName}
+                      showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
+                    />
                   </div>
                 </div>
               )}
@@ -469,9 +631,19 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     First Message
+                    {(templateCounts.fieldCounts.firstMessage?.char > 0 || templateCounts.fieldCounts.firstMessage?.user > 0) && (
+                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                        (template replacements available)
+                      </span>
+                    )}
                   </h2>
                   <div className="text-gray-700 dark:text-gray-300">
-                    <MessageContent content={character.firstMessage} />
+                    <TemplateHighlighter
+                      content={character.firstMessage}
+                      characterName={character.name}
+                      personaName={defaultPersonaName}
+                      showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
+                    />
                   </div>
                 </div>
               )}
@@ -480,9 +652,19 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     Example Dialogues
+                    {(templateCounts.fieldCounts.exampleDialogues?.char > 0 || templateCounts.fieldCounts.exampleDialogues?.user > 0) && (
+                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                        (template replacements available)
+                      </span>
+                    )}
                   </h2>
                   <div className="text-gray-700 dark:text-gray-300">
-                    <MessageContent content={character.exampleDialogues} />
+                    <TemplateHighlighter
+                      content={character.exampleDialogues}
+                      characterName={character.name}
+                      personaName={defaultPersonaName}
+                      showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
+                    />
                   </div>
                 </div>
               )}
@@ -491,10 +673,20 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     System Prompt
+                    {(templateCounts.fieldCounts.systemPrompt?.char > 0 || templateCounts.fieldCounts.systemPrompt?.user > 0) && (
+                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                        (template replacements available)
+                      </span>
+                    )}
                   </h2>
                   <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded-md overflow-hidden my-2">
                     <code className="text-sm whitespace-pre-wrap break-words">
-                      {character.systemPrompt}
+                      <TemplateHighlighter
+                        content={character.systemPrompt}
+                        characterName={character.name}
+                        personaName={defaultPersonaName}
+                        showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
+                      />
                     </code>
                   </pre>
                 </div>

@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { showConfirmation } from '@/lib/alert'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { showErrorToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { ImportWizard } from '@/components/import/import-wizard'
 
 interface ChatParticipant {
   id: string
@@ -60,6 +61,7 @@ export default function ChatsPage() {
   const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [characters, setCharacters] = useState<Array<{ id: string; name: string; title?: string | null }>>([])
+  const [personas, setPersonas] = useState<Array<{ id: string; name: string; title?: string | null }>>([])
   const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([])
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
@@ -74,6 +76,7 @@ export default function ChatsPage() {
   useEffect(() => {
     fetchChats()
     fetchCharacters()
+    fetchPersonas()
     fetchProfiles()
   }, [])
 
@@ -143,6 +146,18 @@ export default function ChatsPage() {
     }
   }
 
+  const fetchPersonas = async () => {
+    try {
+      const res = await fetch('/api/personas')
+      if (res.ok) {
+        const data = await res.json()
+        setPersonas(data.map((p: any) => ({ id: p.id, name: p.name, title: p.title })))
+      }
+    } catch (err) {
+      clientLogger.error('Failed to fetch personas:', { error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
   const fetchProfiles = async () => {
     try {
       const res = await fetch('/api/profiles')
@@ -168,128 +183,19 @@ export default function ChatsPage() {
     }
   }
 
-  const handleImport = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    const files = formData.getAll('files') as File[]
-    const characterId = formData.get('characterId') as string
-    const profileId = formData.get('profileId') as string
-
-    if (!files || files.length === 0 || !characterId || !profileId) {
-      showErrorToast('Please select at least one file, a character, and a profile')
-      return
-    }
-
-    try {
-      const importedChats: Chat[] = []
-      let successCount = 0
-      let failCount = 0
-      const errors: string[] = []
-
-      for (const file of files) {
-        try {
-          const text = await file.text()
-          let chatData
-
-          // Handle both JSON and JSONL formats
-          if (file.name.endsWith('.jsonl')) {
-            // SillyTavern JSONL format: first line is metadata, rest are messages
-            const lines = text.trim().split('\n').filter(line => line.trim())
-            if (lines.length === 0) throw new Error('Empty JSONL file')
-
-            let metadata: any = {}
-            const messages = []
-
-            for (const line of lines) {
-              try {
-                const obj = JSON.parse(line)
-
-                // First line with chat_metadata is the metadata
-                if (obj.chat_metadata && !metadata.chat_metadata) {
-                  metadata = obj
-                } else if (obj.mes !== undefined) {
-                  // Lines with 'mes' field are messages
-                  messages.push(obj)
-                }
-              } catch {
-                // Skip invalid JSON lines
-                clientLogger.warn('Skipped invalid JSON line:', { line: line.substring(0, 50) })
-              }
-            }
-
-            if (messages.length === 0) {
-              throw new Error('No messages found in JSONL file')
-            }
-
-            // Wrap in the expected format
-            chatData = {
-              messages,
-              chat_metadata: metadata.chat_metadata,
-              character_name: metadata.character_name,
-              user_name: metadata.user_name,
-              create_date: metadata.create_date,
-            }
-          } else {
-            // Parse regular JSON format
-            chatData = JSON.parse(text)
-          }
-
-          const res = await fetch('/api/chats/import', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              chatData,
-              characterId,
-              connectionProfileId: profileId,
-            }),
-          })
-
-          if (!res.ok) {
-            const errorData = await res.json().catch(() => ({}))
-            throw new Error(errorData.error || 'Failed to import chat')
-          }
-
-          const imported = await res.json()
-          // API returns the chat directly, not wrapped in a 'chat' property
-          const chat = imported.chat || imported
-          importedChats.push(chat)
-          successCount++
-        } catch (err) {
-          failCount++
-          const errorMessage = err instanceof Error ? err.message : `Failed to import ${file.name}`
-          errors.push(`${file.name}: ${errorMessage}`)
-          clientLogger.error('Error importing chat:', { error: err instanceof Error ? err.message : String(err) })
-        }
-      }
-
-      // Update chats list with imported chats
-      if (importedChats.length > 0) {
-        const sortedChats = [...importedChats, ...chats].sort(
-          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-        )
-        setChats(sortedChats)
-        // Highlight the first imported chat
-        setHighlightedChatId(importedChats[0].id)
-      }
-
-      setImportDialogOpen(false)
-
-      // Show appropriate message
-      if (failCount === 0) {
-        showSuccessToast(`Successfully imported ${successCount} chat${successCount !== 1 ? 's' : ''}!`)
-      } else if (successCount > 0) {
-        showErrorToast(`Imported ${successCount} chat${successCount !== 1 ? 's' : ''}, ${failCount} failed.\n${errors.join('\n')}`)
-      } else {
-        showErrorToast(`Failed to import all chats.\n${errors.join('\n')}`)
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to import chats'
-      showErrorToast(errorMessage)
-      clientLogger.error('Error importing chats:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }
+  /**
+   * Handle import completion from the new wizard
+   */
+  const handleImportComplete = useCallback(async (chatId: string) => {
+    // Refetch all chats to get the newly imported one
+    await fetchChats()
+    // Also refetch characters/personas in case new ones were created
+    await fetchCharacters()
+    await fetchPersonas()
+    // Highlight the imported chat
+    setHighlightedChatId(chatId)
+    setImportDialogOpen(false)
+  }, [])
 
   if (loading) {
     return (
@@ -447,84 +353,15 @@ export default function ChatsPage() {
         </div>
       )}
 
-      {/* Import Dialog */}
+      {/* Import Wizard */}
       {importDialogOpen && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              Import Chats
-            </h3>
-            <form onSubmit={handleImport}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Select SillyTavern chat JSON files (one or more)
-                  </label>
-                  <input
-                    type="file"
-                    name="files"
-                    accept=".json,.jsonl"
-                    multiple
-                    required
-                    className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-200 hover:file:bg-blue-100 dark:hover:file:bg-blue-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Character
-                  </label>
-                  <select
-                    name="characterId"
-                    required
-                    className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-                  >
-                    <option value="">Select a character</option>
-                    {characters.map((char) => (
-                      <option key={char.id} value={char.id}>
-                        {char.title ? `${char.name} (${char.title})` : char.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Connection Profile
-                  </label>
-                  <select
-                    name="profileId"
-                    required
-                    className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-                  >
-                    <option value="">Select a profile</option>
-                    {profiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex gap-2 justify-end mt-6">
-                <button
-                  type="button"
-                  onClick={() => setImportDialogOpen(false)}
-                  className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
-                >
-                  Import
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <ImportWizard
+          characters={characters}
+          personas={personas}
+          profiles={profiles}
+          onClose={() => setImportDialogOpen(false)}
+          onImportComplete={handleImportComplete}
+        />
       )}
     </div>
   )

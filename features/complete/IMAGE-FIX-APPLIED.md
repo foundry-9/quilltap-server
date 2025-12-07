@@ -41,9 +41,8 @@ const src = filepath.startsWith('/') ? filepath : `/${filepath}`;
 1. [components/images/EmbeddedPhotoGallery.tsx](components/images/EmbeddedPhotoGallery.tsx#L100-L104) - Photo gallery component
 2. [components/images/PhotoGalleryModal.tsx](components/images/PhotoGalleryModal.tsx#L238-L246) - Gallery modal
 3. [components/images/ImageDetailModal.tsx](components/images/ImageDetailModal.tsx#L306-L327) - Image detail view
-4. [components/images/GalleryImageViewModal.tsx](components/images/GalleryImageViewModal.tsx) - Gallery image viewer
-5. [components/images/image-gallery.tsx](components/images/image-gallery.tsx#L150) - Main gallery component
-6. [app/(authenticated)/chats/[id]/page.tsx](app/(authenticated)/chats/[id]/page.tsx) - Chat page avatars and attachments
+4. [components/images/image-gallery.tsx](components/images/image-gallery.tsx#L150) - Main gallery component
+5. [app/(authenticated)/chats/[id]/page.tsx](app/(authenticated)/chats/[id]/page.tsx) - Chat page avatars and attachments
 
 ## Testing
 

@@ -6,10 +6,12 @@ import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useDebugOptional } from "@/components/providers/debug-provider";
+import { useDevConsoleOptional } from "@/components/providers/dev-console-provider";
 import { useChatContext } from "@/components/providers/chat-context";
 import { useQuickHide } from "@/components/providers/quick-hide-provider";
 import { TagDropdown } from "@/components/tags/tag-dropdown";
 import { TagBadge } from "@/components/tags/tag-badge";
+import { SearchBar } from "@/components/search";
 import { routeSupportsDebug } from "@/lib/navigation/route-flags";
 
 interface DashboardNavProps {
@@ -22,6 +24,7 @@ interface DashboardNavProps {
 
 export default function DashboardNav({ user }: DashboardNavProps) {
   const debug = useDebugOptional();
+  const devConsole = useDevConsoleOptional();
   const pathname = usePathname();
   const chat = useChatContext();
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
@@ -70,10 +73,18 @@ export default function DashboardNav({ user }: DashboardNavProps) {
               >
                 Settings
               </Link>
+              <Link
+                href="/tools"
+                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
+              >
+                Tools
+              </Link>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Global search */}
+            <SearchBar />
             {/* Chat controls - only show when in a chat */}
             {isInChat && chat.chatId && (
               <>
@@ -95,16 +106,16 @@ export default function DashboardNav({ user }: DashboardNavProps) {
               </>
             )}
 
-            {/* Debug toggle button */}
-            {debug && supportsDebugToggle && (
+            {/* DevConsole toggle button - only shown in development */}
+            {devConsole && (
               <button
-                onClick={debug.toggleDebugMode}
+                onClick={devConsole.togglePanel}
                 className={`p-2 rounded-md transition-colors ${
-                  debug.isDebugMode
+                  devConsole.isOpen
                     ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
                     : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-800'
                 }`}
-                title={debug.isDebugMode ? 'Disable debug mode' : 'Enable debug mode'}
+                title={devConsole.isOpen ? 'Close DevConsole (Ctrl+Shift+D)' : 'Open DevConsole (Ctrl+Shift+D)'}
               >
                 <svg
                   className="w-5 h-5"

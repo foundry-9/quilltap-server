@@ -106,10 +106,21 @@ export async function POST(req: NextRequest) {
 
     const nameLower = validatedData.name.toLowerCase()
 
+    logger.debug('Checking for existing tag', {
+      userId: session.user.id,
+      tagName: validatedData.name,
+      nameLower,
+    })
+
     // Check if tag already exists (case-insensitive) - user-scoped
     const existingTag = await repos.tags.findByName(validatedData.name)
 
     if (existingTag) {
+      logger.debug('Found existing tag, returning it instead of creating duplicate', {
+        userId: session.user.id,
+        tagName: validatedData.name,
+        existingTagId: existingTag.id,
+      })
       // Return existing tag instead of error
       return NextResponse.json({ tag: existingTag })
     }
@@ -119,6 +130,12 @@ export async function POST(req: NextRequest) {
       name: validatedData.name,
       nameLower,
       quickHide: false,
+    })
+
+    logger.info('Created new tag', {
+      userId: session.user.id,
+      tagId: tag.id,
+      tagName: tag.name,
     })
 
     return NextResponse.json({ tag }, { status: 201 })

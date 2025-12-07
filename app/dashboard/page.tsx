@@ -3,6 +3,7 @@ import { getUserRepositories, getRepositories } from "@/lib/repositories/factory
 import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";
 import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
+import { TwoFactorPrompt } from "@/components/auth/TwoFactorPrompt";
 import type { FileEntry } from "@/lib/schemas/types";
 
 /**
@@ -166,6 +167,9 @@ export default async function Dashboard() {
   return (
     <div className="container mx-auto px-4 py-8 flex flex-col max-w-[800px]">
       <div className="flex-1">
+        {/* 2FA Setup Prompt */}
+        <TwoFactorPrompt />
+
         {/* Show favorite characters section if there are any favorites */}
         {favoriteCharacters.length > 0 ? (
           <FavoriteCharactersSection characters={favoriteCharacters} />

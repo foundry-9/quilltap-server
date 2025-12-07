@@ -43,9 +43,11 @@ function buildCredentialsProvider() {
     credentials: {
       username: { label: 'Username', type: 'text' },
       password: { label: 'Password', type: 'password' },
-      totpCode: { label: '2FA Code (if enabled)', type: 'text' }
+      totpCode: { label: '2FA Code (if enabled)', type: 'text' },
+      trustedDeviceToken: { label: 'Trusted Device Token', type: 'text' },
+      rememberDevice: { label: 'Remember Device', type: 'text' },
     },
-    async authorize(credentials) {
+    async authorize(credentials, req) {
       if (!credentials?.username || !credentials?.password) {
         logger.debug('Missing credentials', { context: 'authorize', hasUsername: !!credentials?.username });
         throw new Error('Username and password required')
@@ -72,18 +74,57 @@ function buildCredentialsProvider() {
 
       // Check if 2FA is enabled
       if (user.totp?.enabled) {
-        if (!credentials.totpCode) {
+        const { verifyTOTP, checkTOTPLockout, verifyTrustedDevice } = await import('@/lib/auth/totp')
+
+        // Check for lockout first
+        const lockoutStatus = await checkTOTPLockout(user.id)
+        if (lockoutStatus.locked) {
+          logger.debug('Account locked due to too many 2FA attempts', {
+            context: 'authorize',
+            username: credentials.username,
+            secondsRemaining: lockoutStatus.secondsRemaining,
+          });
+          throw new Error(`Account temporarily locked. Try again in ${lockoutStatus.secondsRemaining} seconds.`)
+        }
+
+        // Check for trusted device first (bypass TOTP if valid)
+        if (credentials.trustedDeviceToken) {
+          const deviceValid = await verifyTrustedDevice(user.id, credentials.trustedDeviceToken)
+          if (deviceValid) {
+            logger.debug('TOTP bypassed via trusted device', {
+              context: 'authorize',
+              username: credentials.username,
+            });
+            // Skip TOTP verification
+          } else {
+            // Trusted device invalid/expired, fall through to TOTP check
+            if (!credentials.totpCode) {
+              logger.debug('2FA required - trusted device invalid', { context: 'authorize', username: credentials.username });
+              throw new Error('2FA code required')
+            }
+          }
+        } else if (!credentials.totpCode) {
           logger.debug('2FA required but not provided', { context: 'authorize', username: credentials.username });
           throw new Error('2FA code required')
         }
 
-        // Verify TOTP
-        const { verifyTOTP } = await import('@/lib/auth/totp')
-        const totpValid = await verifyTOTP(user.id, credentials.totpCode)
+        // Verify TOTP if code was provided and device wasn't trusted
+        if (credentials.totpCode && !credentials.trustedDeviceToken) {
+          const totpValid = await verifyTOTP(user.id, credentials.totpCode)
 
-        if (!totpValid) {
-          logger.debug('Invalid 2FA code', { context: 'authorize', username: credentials.username });
-          throw new Error('Invalid 2FA code')
+          if (!totpValid) {
+            // Check if now locked after this attempt
+            const newLockoutStatus = await checkTOTPLockout(user.id)
+            if (newLockoutStatus.locked) {
+              logger.debug('Account now locked after failed 2FA attempt', {
+                context: 'authorize',
+                username: credentials.username,
+              });
+              throw new Error(`Invalid 2FA code. Account locked for ${newLockoutStatus.secondsRemaining} seconds.`)
+            }
+            logger.debug('Invalid 2FA code', { context: 'authorize', username: credentials.username });
+            throw new Error('Invalid 2FA code')
+          }
         }
       }
 

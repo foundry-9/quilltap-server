@@ -344,7 +344,7 @@ class UserScopedTagsRepository {
   }
 
   async findByName(name: string): Promise<Tag | null> {
-    const tag = await this.baseRepo.findByName(name, this.userId);
+    const tag = await this.baseRepo.findByName(this.userId, name);
     return tag;
   }
 
