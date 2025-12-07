@@ -159,6 +159,7 @@ export function previewRestore(zipBuffer: Buffer): RestoreSummary {
 
 /**
  * Deletes all user data before restore (for 'replace' mode)
+ * Also used for the "delete all data" feature
  */
 async function deleteUserData(userId: string): Promise<void> {
   moduleLogger.info('Deleting existing user data for replace mode', { userId });
@@ -225,6 +226,155 @@ async function deleteUserData(userId: string): Promise<void> {
       embeddingProfiles: embeddingProfiles.length,
     },
   });
+}
+
+/**
+ * Summary of deleted data counts
+ */
+export interface DeleteSummary {
+  characters: number;
+  personas: number;
+  chats: number;
+  tags: number;
+  files: number;
+  memories: number;
+  apiKeys: number;
+  backups: number;
+  profiles: {
+    connection: number;
+    image: number;
+    embedding: number;
+  };
+}
+
+/**
+ * Deletes all user data including API keys and backups
+ * This is a complete account reset
+ */
+export async function deleteAllUserData(userId: string): Promise<DeleteSummary> {
+  moduleLogger.info('Starting complete user data deletion', { userId });
+
+  const repos = getUserRepositories(userId);
+
+  // First, count everything before deletion
+  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys] =
+    await Promise.all([
+      repos.characters.findAll(),
+      repos.personas.findAll(),
+      repos.chats.findAll(),
+      repos.tags.findAll(),
+      repos.files.findAll(),
+      repos.connections.findAll(),
+      repos.imageProfiles.findAll(),
+      repos.embeddingProfiles.findAll(),
+      repos.connections.getAllApiKeys(),
+    ]);
+
+  // Count memories
+  let memoriesCount = 0;
+  for (const character of characters) {
+    const memories = await repos.memories.findByCharacterId(character.id);
+    memoriesCount += memories.length;
+  }
+
+  // List and count backups
+  const backupKeys = await s3FileService.listUserFiles(userId, 'backups');
+  const backupsCount = backupKeys.length;
+
+  // Now delete everything using the existing function
+  await deleteUserData(userId);
+
+  // Delete API keys
+  for (const apiKey of apiKeys) {
+    try {
+      await repos.connections.deleteApiKey(apiKey.id);
+    } catch (error) {
+      moduleLogger.warn('Failed to delete API key', {
+        apiKeyId: apiKey.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Delete backups from S3
+  for (const backupKey of backupKeys) {
+    try {
+      await s3FileService.deleteByS3Key(backupKey);
+    } catch (error) {
+      moduleLogger.warn('Failed to delete backup', {
+        backupKey,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const summary: DeleteSummary = {
+    characters: characters.length,
+    personas: personas.length,
+    chats: chats.length,
+    tags: tags.length,
+    files: files.length,
+    memories: memoriesCount,
+    apiKeys: apiKeys.length,
+    backups: backupsCount,
+    profiles: {
+      connection: connectionProfiles.length,
+      image: imageProfiles.length,
+      embedding: embeddingProfiles.length,
+    },
+  };
+
+  moduleLogger.info('Complete user data deletion finished', { userId, summary });
+
+  return summary;
+}
+
+/**
+ * Preview what will be deleted (counts only, no actual deletion)
+ */
+export async function previewDeleteAllUserData(userId: string): Promise<DeleteSummary> {
+  moduleLogger.debug('Previewing data to be deleted', { userId });
+
+  const repos = getUserRepositories(userId);
+
+  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys] =
+    await Promise.all([
+      repos.characters.findAll(),
+      repos.personas.findAll(),
+      repos.chats.findAll(),
+      repos.tags.findAll(),
+      repos.files.findAll(),
+      repos.connections.findAll(),
+      repos.imageProfiles.findAll(),
+      repos.embeddingProfiles.findAll(),
+      repos.connections.getAllApiKeys(),
+    ]);
+
+  // Count memories
+  let memoriesCount = 0;
+  for (const character of characters) {
+    const memories = await repos.memories.findByCharacterId(character.id);
+    memoriesCount += memories.length;
+  }
+
+  // List and count backups
+  const backupKeys = await s3FileService.listUserFiles(userId, 'backups');
+
+  return {
+    characters: characters.length,
+    personas: personas.length,
+    chats: chats.length,
+    tags: tags.length,
+    files: files.length,
+    memories: memoriesCount,
+    apiKeys: apiKeys.length,
+    backups: backupKeys.length,
+    profiles: {
+      connection: connectionProfiles.length,
+      image: imageProfiles.length,
+      embedding: embeddingProfiles.length,
+    },
+  };
 }
 
 /**

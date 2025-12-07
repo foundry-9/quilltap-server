@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import BackupRestoreCard from '@/components/tools/backup-restore-card'
+import { DeleteDataCard } from '@/components/tools/delete-data-card'
 
 export default function ToolsPage() {
   return (
@@ -15,6 +16,7 @@ export default function ToolsPage() {
       {/* Tool Cards Grid */}
       <div className="grid gap-6 md:grid-cols-2">
         <BackupRestoreCard />
+        <DeleteDataCard />
       </div>
 
       {/* Back Link */}
