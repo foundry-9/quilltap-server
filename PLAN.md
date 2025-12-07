@@ -1,213 +1,277 @@
-# Physical Descriptions Feature Implementation Plan
+# Implementation Plan: SillyTavern Multi-Character Chat Import
 
 ## Overview
 
-Add physical description records to characters and personas for image generation prompts. Each character/persona can have multiple named descriptions with varying detail levels (short/medium/long/complete) plus a freeform Markdown field. The UI will be reorganized with tabs.
+This feature implements a sophisticated import system for SillyTavern multi-character chats with:
+1. File parsing to extract unique speakers (characters and personas)
+2. A mapping interface to match speakers to existing entities or create new ones
+3. Post-import memory creation prompt
+4. Automatic title generation via the rename system
 
-## Data Model
+## Architecture
 
-### New PhysicalDescription Schema
+### Phase 1: Enhanced Import Dialog Component
 
-```typescript
-PhysicalDescriptionSchema = z.object({
-  id: UUIDSchema,
-  name: z.string().min(1),                              // Required: e.g., "Base Appearance", "Formal Attire"
-  shortPrompt: z.string().max(350).nullable().optional(),   // 350 char max
-  mediumPrompt: z.string().max(500).nullable().optional(),  // 500 char max
-  longPrompt: z.string().max(750).nullable().optional(),    // 750 char max
-  completePrompt: z.string().max(1000).nullable().optional(), // 1000 char max
-  fullDescription: z.string().nullable().optional(),    // Freeform Markdown, no limit
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-})
-```
+**File**: `app/(authenticated)/chats/page.tsx`
 
-### Storage Approach
+Replace the simple import dialog with a multi-step wizard:
 
-Physical descriptions will be stored **embedded within each character/persona JSON file** as an array field `physicalDescriptions: PhysicalDescription[]`. This follows the existing pattern for `personaLinks`, `tags`, and `avatarOverrides`.
+1. **Step 1: File Selection** - User selects JSONL/JSON file
+2. **Step 2: File Analysis** - Parse file and extract unique speakers
+3. **Step 3: Speaker Mapping** - Map each speaker to character/persona (or create new)
+4. **Step 4: Connection Profile Selection** - Select profile for AI characters
+5. **Step 5: Import Confirmation** - Review and import
+6. **Step 6: Post-Import Actions** - Offer memory creation and title generation
 
-**Rationale:**
+### Phase 2: Utility Functions
 
-- Descriptions are tightly coupled to their parent entity
-- No need for cross-entity queries
-- Simpler CRUD operations (no separate repository needed)
-- Consistent with existing embedded arrays in the schema
-
-### Schema Updates
-
-**CharacterSchema additions:**
+**New File**: `lib/sillytavern/multi-char-parser.ts`
 
 ```typescript
-physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
+interface ParsedSpeaker {
+  name: string
+  isUser: boolean  // is_user field from messages
+  avatarPath?: string  // force_avatar or original_avatar
+  messageCount: number
+}
+
+interface ParseResult {
+  speakers: ParsedSpeaker[]
+  messages: STMessage[]
+  metadata: STChatMetadata
+}
 ```
 
-**PersonaSchema additions:**
+Functions:
+- `parseSTFile(content: string): ParseResult` - Parse file and extract speakers
+- `extractUniqueSpeakers(messages: STMessage[]): ParsedSpeaker[]` - Get unique speakers
+
+### Phase 3: Speaker Mapping Types
+
+**New Types** in `lib/sillytavern/multi-char-parser.ts`:
 
 ```typescript
-physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
+interface SpeakerMapping {
+  speakerName: string
+  isUser: boolean
+  mappingType: 'existing_character' | 'existing_persona' | 'create_character' | 'create_persona'
+  entityId?: string  // For existing entities
+  entityName?: string  // For display / new entity creation
+  connectionProfileId?: string  // Required for characters
+}
+
+interface ImportMapping {
+  mappings: SpeakerMapping[]
+  defaultConnectionProfileId: string
+}
 ```
 
-## API Endpoints
+### Phase 4: Enhanced Import API
 
-### Characters
+**Modify**: `app/api/chats/import/route.ts`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/characters/[id]/descriptions` | List all descriptions for character |
-| POST | `/api/characters/[id]/descriptions` | Create new description |
-| GET | `/api/characters/[id]/descriptions/[descId]` | Get single description |
-| PUT | `/api/characters/[id]/descriptions/[descId]` | Update description |
-| DELETE | `/api/characters/[id]/descriptions/[descId]` | Delete description |
+Accept new payload format:
+```typescript
+{
+  chatData: STChat
+  mappings: SpeakerMapping[]
+  defaultConnectionProfileId: string
+  triggerMemoryCreation?: boolean
+  triggerTitleGeneration?: boolean
+}
+```
 
-### Personas
+New logic:
+1. Process mappings - create new characters/personas as needed
+2. Build participants array with correct entity IDs
+3. Import messages with correct role attribution (based on speaker name)
+4. Return created/mapped entities for memory creation
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/personas/[id]/descriptions` | List all descriptions for persona |
-| POST | `/api/personas/[id]/descriptions` | Create new description |
-| GET | `/api/personas/[id]/descriptions/[descId]` | Get single description |
-| PUT | `/api/personas/[id]/descriptions/[descId]` | Update description |
-| DELETE | `/api/personas/[id]/descriptions/[descId]` | Delete description |
+### Phase 5: Quick Create APIs
 
-## UI Changes
+**New File**: `app/api/characters/quick-create/route.ts`
+**New File**: `app/api/personas/quick-create/route.ts`
 
-### Tab Structure for Character View/Edit Pages
+Minimal create endpoints for import:
+- Characters: Just name (can add details later)
+- Personas: Name and minimal description
 
-**Tab 1: Character Details** (current content)
+### Phase 6: Post-Import Memory Creation
 
-- Name, title, description, personality, scenario
-- First message, example dialogues, system prompt
-- Default persona selector
-- Tags
+**New Component**: `components/import/memory-creation-dialog.tsx`
 
-**Tab 2: Associated Profiles**
+After successful import, offer to create memories:
+- Show chat summary (first N messages)
+- For each character in the chat, offer to create a memory
+- For the persona, offer to create relationship memories
 
-- Default Connection Profile selector
-- (Future: Default Image Profile, Embedding Profile)
+Uses existing memory service:
+- `createMemoryWithEmbedding()` from `lib/memory/memory-service.ts`
 
-**Tab 3: Photo Gallery**
+### Phase 7: Title Generation Integration
 
-- PhotoGalleryModal embedded as tab content
-- Character-tagged images grid
-
-**Tab 4: Physical Descriptions**
-
-- List of existing descriptions with cards
-- Add new description button
-- Edit/delete actions on each card
-- Inline editor or modal for create/edit
-
-### Tab Structure for Persona Pages
-
-**Tab 1: Persona Details** (current content)
-
-- Name, title, description
-- Personality traits
-- Tags
-
-**Tab 2: Photo Gallery**
-
-- PhotoGalleryModal embedded as tab content
-
-**Tab 3: Physical Descriptions**
-
-- Same structure as character descriptions
-
-## Components to Create
-
-### 1. PhysicalDescriptionList
-
-- Displays all descriptions for an entity
-- Grid of cards showing name + prompt previews
-- Add button triggers editor
-- Click card to view full description
-
-### 2. PhysicalDescriptionEditor
-
-- Modal or inline form for create/edit
-- Fields: name (required), short/medium/long/complete prompts (with char counters)
-- Freeform Markdown textarea with preview toggle
-- Save/Cancel buttons
-
-### 3. PhysicalDescriptionCard
-
-- Card display of single description
-- Shows name, truncated prompts
-- Edit/Delete action buttons
-- Expand to view full freeform description (rendered Markdown)
-
-### 4. CharacterTabs / PersonaTabs
-
-- Tab navigation component
-- Manages active tab state
-- Renders appropriate content per tab
-
-## Implementation Steps
-
-### Phase 1: Schema & Data Layer
-
-1. Add `PhysicalDescriptionSchema` to `lib/json-store/schemas/types.ts`
-2. Add `physicalDescriptions` field to `CharacterSchema`
-3. Add `physicalDescriptions` field to `PersonaSchema`
-4. Add helper methods to `characters.repository.ts`:
-   - `addDescription(characterId, description)`
-   - `updateDescription(characterId, descriptionId, updates)`
-   - `removeDescription(characterId, descriptionId)`
-5. Add same helper methods to `personas.repository.ts`
-
-### Phase 2: API Endpoints
-
-1. Create `/api/characters/[id]/descriptions/route.ts` (GET, POST)
-2. Create `/api/characters/[id]/descriptions/[descId]/route.ts` (GET, PUT, DELETE)
-3. Create `/api/personas/[id]/descriptions/route.ts` (GET, POST)
-4. Create `/api/personas/[id]/descriptions/[descId]/route.ts` (GET, PUT, DELETE)
-
-### Phase 3: UI Components
-
-1. Create `components/physical-descriptions/physical-description-card.tsx`
-2. Create `components/physical-descriptions/physical-description-editor.tsx`
-3. Create `components/physical-descriptions/physical-description-list.tsx`
-4. Create `components/tabs/entity-tabs.tsx` (reusable tab component)
-
-### Phase 4: Character Pages Refactor
-
-1. Refactor `/characters/[id]/view/page.tsx` to use tabs
-2. Refactor `/characters/[id]/edit/page.tsx` to use tabs
-3. Integrate PhotoGalleryModal as tab content
-4. Integrate PhysicalDescriptionList in Descriptions tab
-
-### Phase 5: Persona Pages Refactor
-
-1. Refactor `/personas/[id]/page.tsx` to use tabs
-2. Integrate PhotoGalleryModal as tab content
-3. Integrate PhysicalDescriptionList in Descriptions tab
+After import, if triggerTitleGeneration is true:
+- Use `generateContextSummary()` to create summary
+- This automatically generates a title via `generateTitleFromSummary()`
+- Or call `considerTitleUpdate()` directly
 
 ## File Changes Summary
 
 ### New Files
-
-- `lib/json-store/schemas/types.ts` (modify - add PhysicalDescriptionSchema)
-- `app/api/characters/[id]/descriptions/route.ts`
-- `app/api/characters/[id]/descriptions/[descId]/route.ts`
-- `app/api/personas/[id]/descriptions/route.ts`
-- `app/api/personas/[id]/descriptions/[descId]/route.ts`
-- `components/physical-descriptions/physical-description-card.tsx`
-- `components/physical-descriptions/physical-description-editor.tsx`
-- `components/physical-descriptions/physical-description-list.tsx`
-- `components/tabs/entity-tabs.tsx`
+1. `lib/sillytavern/multi-char-parser.ts` - Parser utilities
+2. `app/api/characters/quick-create/route.ts` - Quick character creation
+3. `app/api/personas/quick-create/route.ts` - Quick persona creation
+4. `components/import/import-wizard.tsx` - Multi-step import wizard component
+5. `components/import/speaker-mapper.tsx` - Speaker mapping UI component
+6. `components/import/memory-creation-dialog.tsx` - Post-import memory dialog
 
 ### Modified Files
+1. `app/(authenticated)/chats/page.tsx` - Integrate new import wizard
+2. `app/api/chats/import/route.ts` - Handle multi-character mappings
+3. `lib/sillytavern/chat.ts` - Update to handle speaker-to-participant mapping
 
-- `lib/json-store/schemas/types.ts` - Add schemas
-- `lib/json-store/repositories/characters.repository.ts` - Add description methods
-- `lib/json-store/repositories/personas.repository.ts` - Add description methods
-- `app/(authenticated)/characters/[id]/view/page.tsx` - Add tabs
-- `app/(authenticated)/characters/[id]/edit/page.tsx` - Add tabs
-- `app/(authenticated)/personas/[id]/page.tsx` - Add tabs
+## UI/UX Design
 
-## Notes
+### Import Wizard Steps
 
-- All prompts have character limits enforced at both validation and UI level
-- The `fullDescription` field is unlimited Markdown, rendered in view mode
-- Descriptions can be combined programmatically for image generation (future feature)
-- Tab state can be persisted via URL query params for bookmarkability
+**Step 1: File Selection**
+- File input for .json/.jsonl
+- "Next" button
+
+**Step 2: Analyzing...**
+- Loading spinner while parsing
+- Auto-advances to Step 3
+
+**Step 3: Speaker Mapping**
+For each speaker found:
+```
++----------------------------------------------------------------+
+| Speaker: "Charlie" (User - 45 messages)                        |
+| +--------------------------------------------------------------+
+| | O Map to existing persona: [Dropdown of personas]            |
+| | O Create new persona named "Charlie"                         |
+| | O Skip this speaker                                          |
+| +--------------------------------------------------------------+
++----------------------------------------------------------------+
+| Speaker: "Mirel" (AI - 89 messages)                            |
+| +--------------------------------------------------------------+
+| | O Map to existing character: [Dropdown]                      |
+| |   Connection Profile: [Dropdown]                             |
+| | O Create new character named "Mirel"                         |
+| |   Connection Profile: [Dropdown] (required)                  |
+| | O Skip this speaker (messages discarded)                     |
+| +--------------------------------------------------------------+
++----------------------------------------------------------------+
+```
+
+**Step 4: Review & Import**
+- Summary of mappings
+- Import button
+- Progress indicator
+
+**Step 5: Post-Import**
+- Success message with link to chat
+- "Create memories from this chat?" button
+- Title generated automatically in background
+
+### Memory Creation Dialog
+After import:
+```
++----------------------------------------------------------------+
+| Create Memories from Imported Chat                             |
++----------------------------------------------------------------+
+| The chat has been imported. Would you like to create           |
+| memories for the characters based on this conversation?        |
+|                                                                 |
+| Characters in this chat:                                        |
+| [x] Mirel - Create memory about relationship with Charlie      |
+| [x] Jeff - Create memory about pool party event                |
+|                                                                 |
+| Persona:                                                        |
+| [x] Charlie - Create memory about events in this chat          |
+|                                                                 |
+| [Skip] [Create Memories]                                        |
++----------------------------------------------------------------+
+```
+
+## Implementation Order
+
+1. **multi-char-parser.ts** - Core parsing logic (no UI needed)
+2. **quick-create APIs** - Enable creating entities during import
+3. **import/route.ts updates** - Handle new mapping format
+4. **import-wizard.tsx** - Multi-step wizard component
+5. **speaker-mapper.tsx** - Speaker mapping UI
+6. **chats/page.tsx updates** - Integrate wizard
+7. **memory-creation-dialog.tsx** - Post-import memory UI
+8. **Title generation integration** - Hook into context-summary system
+
+## Testing Considerations
+
+- Test with single-character chats (backward compatibility)
+- Test with multi-character chats (the sample file)
+- Test with missing speakers (skip option)
+- Test creating new characters vs mapping to existing
+- Test memory creation with embedding service
+- Test title generation with cheap LLM
+
+## Logging
+
+All operations should log via `logger`:
+- File parsing progress
+- Speaker extraction results
+- Entity creation/mapping decisions
+- Import progress
+- Memory creation results
+- Title generation results
+
+## Data Flow
+
+```
+1. User selects file
+   |
+   v
+2. parseSTFile() extracts speakers and messages
+   |
+   v
+3. User maps speakers -> entities (existing or new)
+   |
+   v
+4. API creates any new entities
+   |
+   v
+5. API builds participants array from mappings
+   |
+   v
+6. API imports messages with speaker->participant attribution
+   |
+   v
+7. Chat created, user prompted for memory creation
+   |
+   v
+8. (Optional) Memory service creates memories
+   |
+   v
+9. Context summary generates title in background
+```
+
+## Message Attribution Logic
+
+When importing messages:
+1. Build a map of `speakerName -> participantId`
+2. For each message:
+   - Find the speaker in the map
+   - If `is_user: true` -> role = 'USER'
+   - If `is_user: false` -> role = 'ASSISTANT'
+   - Set the message's participant reference
+
+The existing system already handles `USER` and `ASSISTANT` roles. The multi-character support comes from the participants array having multiple CHARACTER entries.
+
+## Key Insight: Message Role vs Participant
+
+The role field (`USER`/`ASSISTANT`) indicates who generated the message:
+- `USER` = human-generated (the persona)
+- `ASSISTANT` = AI-generated (a character)
+
+The participant linkage comes from the `participants` array on the chat metadata. Each character and persona in the chat gets a participant entry with their entity ID.
+
+For display purposes, the speaker name from the original message can be preserved in `rawResponse` or a new field.
