@@ -6,6 +6,9 @@ const nextConfig = {
   // Experimental features
   experimental: {
     turbopackUseSystemTlsCerts: true,
+    serverActions: {
+      bodySizeLimit: '100mb',
+    },
   },
 
   // Image optimization configuration

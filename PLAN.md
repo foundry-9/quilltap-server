@@ -1,277 +1,381 @@
-# Implementation Plan: SillyTavern Multi-Character Chat Import
+# Implementation Plan: Tools Page with Backup/Restore Feature
 
 ## Overview
 
-This feature implements a sophisticated import system for SillyTavern multi-character chats with:
-1. File parsing to extract unique speakers (characters and personas)
-2. A mapping interface to match speakers to existing entities or create new ones
-3. Post-import memory creation prompt
-4. Automatic title generation via the rename system
+Add a new top-level `/tools` page after "Settings" in the navigation, with the first tool being a comprehensive backup/restore system that allows users to export all their data (MongoDB collections + S3 files) to a ZIP archive, and restore from either uploaded ZIPs or S3-stored backups.
+
+## Feature Requirements
+
+### Backup Capabilities
+1. Export all user data from MongoDB collections:
+   - Characters (with descriptions)
+   - Personas (with descriptions)
+   - Chats (with all messages)
+   - Tags
+   - Connection Profiles (API keys excluded for security - these are encrypted with user-specific keys)
+   - Image Profiles
+   - Embedding Profiles
+   - Memories
+   - Files metadata
+
+2. Export all user files from S3 storage
+
+3. Package into a ZIP archive with structure:
+   ```
+   quilltap-backup-{userId}-{timestamp}/
+   ├── manifest.json           # Backup metadata
+   ├── data/
+   │   ├── characters.json
+   │   ├── personas.json
+   │   ├── chats.json
+   │   ├── tags.json
+   │   ├── connection-profiles.json
+   │   ├── image-profiles.json
+   │   ├── embedding-profiles.json
+   │   ├── memories.json
+   │   └── files.json          # File metadata
+   └── files/
+       └── {category}/
+           └── {fileId}_{filename}
+   ```
+
+4. Delivery options:
+   - Direct download to browser
+   - Save to S3 (in a `backups/` category)
+
+### Restore Capabilities
+1. Source options:
+   - Upload ZIP file from local machine
+   - Select from S3-stored backups
+
+2. Restore modes:
+   - **Replace Mode**: Delete all existing data first, then restore (same user)
+   - **New Account Mode**: Regenerate all UUIDs consistently to import data into a different account
+
+3. UUID Regeneration Strategy (for New Account Mode):
+   - Create a mapping of old UUID -> new UUID for all entities
+   - Process in dependency order:
+     1. Tags (no dependencies)
+     2. Files (references tags)
+     3. Characters (references tags, files)
+     4. Personas (references tags, files, characters)
+     5. Connection Profiles (references tags)
+     6. Image Profiles (no dependencies)
+     7. Embedding Profiles (no dependencies)
+     8. Chats (references characters, personas, tags)
+     9. Memories (references characters)
+   - Update all foreign key references using the UUID mapping
+
+4. Verification:
+   - Before restore, show summary of what will be imported
+   - Confirm destructive actions (Replace Mode)
 
 ## Architecture
 
-### Phase 1: Enhanced Import Dialog Component
+### New Dependencies
+Add `archiver` for creating ZIP files and `adm-zip` for reading ZIP files:
+```bash
+npm install archiver adm-zip
+npm install -D @types/archiver @types/adm-zip
+```
 
-**File**: `app/(authenticated)/chats/page.tsx`
+### File Structure
 
-Replace the simple import dialog with a multi-step wizard:
+```
+app/
+├── (authenticated)/
+│   └── tools/
+│       └── page.tsx                    # Tools page with cards
+components/
+├── tools/
+│   ├── backup-restore-card.tsx         # Main backup/restore UI card
+│   ├── backup-dialog.tsx               # Backup options dialog
+│   ├── restore-dialog.tsx              # Restore wizard dialog
+│   └── restore-preview.tsx             # Preview what will be restored
+lib/
+├── backup/
+│   ├── backup-service.ts               # Core backup creation logic
+│   ├── restore-service.ts              # Core restore logic
+│   ├── uuid-remapper.ts                # UUID regeneration utilities
+│   └── types.ts                        # Backup/restore types
+app/api/
+├── tools/
+│   └── backup/
+│       ├── create/
+│       │   └── route.ts                # POST - Create backup
+│       ├── download/
+│       │   └── route.ts                # GET - Download backup
+│       ├── list/
+│       │   └── route.ts                # GET - List S3 backups
+│       └── restore/
+│           └── route.ts                # POST - Restore from backup
+```
 
-1. **Step 1: File Selection** - User selects JSONL/JSON file
-2. **Step 2: File Analysis** - Parse file and extract unique speakers
-3. **Step 3: Speaker Mapping** - Map each speaker to character/persona (or create new)
-4. **Step 4: Connection Profile Selection** - Select profile for AI characters
-5. **Step 5: Import Confirmation** - Review and import
-6. **Step 6: Post-Import Actions** - Offer memory creation and title generation
+### API Endpoints
 
-### Phase 2: Utility Functions
+#### POST /api/tools/backup/create
+Create a new backup:
+```typescript
+Request: {
+  destination: 'download' | 's3'
+  filename?: string  // Optional custom filename for S3
+}
+Response: {
+  success: true
+  backupId: string
+  downloadUrl?: string  // If destination is 'download'
+  s3Key?: string        // If destination is 's3'
+}
+```
 
-**New File**: `lib/sillytavern/multi-char-parser.ts`
+#### GET /api/tools/backup/download?backupId={id}
+Download a backup file (streams ZIP directly).
+
+#### GET /api/tools/backup/list
+List available backups in S3:
+```typescript
+Response: {
+  backups: Array<{
+    key: string
+    filename: string
+    createdAt: Date
+    size: number
+  }>
+}
+```
+
+#### POST /api/tools/backup/restore
+Restore from a backup:
+```typescript
+Request: {
+  source: 'upload' | 's3'
+  s3Key?: string           // If source is 's3'
+  file?: File              // If source is 'upload' (multipart form)
+  mode: 'replace' | 'new-account'
+}
+Response: {
+  success: true
+  summary: {
+    characters: number
+    personas: number
+    chats: number
+    messages: number
+    tags: number
+    files: number
+    memories: number
+  }
+}
+```
+
+### Backup Service Implementation
 
 ```typescript
-interface ParsedSpeaker {
-  name: string
-  isUser: boolean  // is_user field from messages
-  avatarPath?: string  // force_avatar or original_avatar
-  messageCount: number
+// lib/backup/backup-service.ts
+
+interface BackupManifest {
+  version: '1.0'
+  createdAt: string
+  userId: string
+  appVersion: string
+  counts: {
+    characters: number
+    personas: number
+    chats: number
+    tags: number
+    connectionProfiles: number
+    imageProfiles: number
+    embeddingProfiles: number
+    memories: number
+    files: number
+  }
 }
 
-interface ParseResult {
-  speakers: ParsedSpeaker[]
-  messages: STMessage[]
-  metadata: STChatMetadata
+export class BackupService {
+  async createBackup(userId: string): Promise<{
+    zipBuffer: Buffer
+    manifest: BackupManifest
+  }>
+
+  async saveToS3(userId: string, zipBuffer: Buffer, filename: string): Promise<string>
+
+  async listS3Backups(userId: string): Promise<BackupInfo[]>
 }
 ```
 
-Functions:
-- `parseSTFile(content: string): ParseResult` - Parse file and extract speakers
-- `extractUniqueSpeakers(messages: STMessage[]): ParsedSpeaker[]` - Get unique speakers
-
-### Phase 3: Speaker Mapping Types
-
-**New Types** in `lib/sillytavern/multi-char-parser.ts`:
+### Restore Service Implementation
 
 ```typescript
-interface SpeakerMapping {
-  speakerName: string
-  isUser: boolean
-  mappingType: 'existing_character' | 'existing_persona' | 'create_character' | 'create_persona'
-  entityId?: string  // For existing entities
-  entityName?: string  // For display / new entity creation
-  connectionProfileId?: string  // Required for characters
+// lib/backup/restore-service.ts
+
+interface RestoreOptions {
+  mode: 'replace' | 'new-account'
+  targetUserId: string
 }
 
-interface ImportMapping {
-  mappings: SpeakerMapping[]
-  defaultConnectionProfileId: string
+interface RestoreSummary {
+  characters: number
+  personas: number
+  chats: number
+  messages: number
+  tags: number
+  files: number
+  memories: number
+  profiles: {
+    connection: number
+    image: number
+    embedding: number
+  }
+}
+
+export class RestoreService {
+  async previewRestore(zipBuffer: Buffer): Promise<RestoreSummary>
+
+  async restore(
+    zipBuffer: Buffer,
+    options: RestoreOptions
+  ): Promise<RestoreSummary>
+
+  private async deleteUserData(userId: string): Promise<void>
+
+  private async remapUuids(
+    data: BackupData,
+    targetUserId: string
+  ): Promise<BackupData>
 }
 ```
 
-### Phase 4: Enhanced Import API
+### UUID Remapper
 
-**Modify**: `app/api/chats/import/route.ts`
-
-Accept new payload format:
 ```typescript
-{
-  chatData: STChat
-  mappings: SpeakerMapping[]
-  defaultConnectionProfileId: string
-  triggerMemoryCreation?: boolean
-  triggerTitleGeneration?: boolean
+// lib/backup/uuid-remapper.ts
+
+export class UuidRemapper {
+  private mapping: Map<string, string> = new Map()
+
+  // Generate new UUID for an old one, caching the mapping
+  remap(oldUuid: string): string
+
+  // Remap an array of UUIDs
+  remapArray(uuids: string[]): string[]
+
+  // Remap entity references in an object
+  remapReferences<T>(obj: T, fields: string[]): T
+
+  // Get the full mapping for debugging
+  getMapping(): Record<string, string>
 }
 ```
 
-New logic:
-1. Process mappings - create new characters/personas as needed
-2. Build participants array with correct entity IDs
-3. Import messages with correct role attribution (based on speaker name)
-4. Return created/mapped entities for memory creation
+## UI Components
 
-### Phase 5: Quick Create APIs
+### Tools Page Layout
+```tsx
+// app/(authenticated)/tools/page.tsx
+export default function ToolsPage() {
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-5xl">
+      <h1>Tools</h1>
+      <p>Utility tools for managing your Quilltap data</p>
 
-**New File**: `app/api/characters/quick-create/route.ts`
-**New File**: `app/api/personas/quick-create/route.ts`
-
-Minimal create endpoints for import:
-- Characters: Just name (can add details later)
-- Personas: Name and minimal description
-
-### Phase 6: Post-Import Memory Creation
-
-**New Component**: `components/import/memory-creation-dialog.tsx`
-
-After successful import, offer to create memories:
-- Show chat summary (first N messages)
-- For each character in the chat, offer to create a memory
-- For the persona, offer to create relationship memories
-
-Uses existing memory service:
-- `createMemoryWithEmbedding()` from `lib/memory/memory-service.ts`
-
-### Phase 7: Title Generation Integration
-
-After import, if triggerTitleGeneration is true:
-- Use `generateContextSummary()` to create summary
-- This automatically generates a title via `generateTitleFromSummary()`
-- Or call `considerTitleUpdate()` directly
-
-## File Changes Summary
-
-### New Files
-1. `lib/sillytavern/multi-char-parser.ts` - Parser utilities
-2. `app/api/characters/quick-create/route.ts` - Quick character creation
-3. `app/api/personas/quick-create/route.ts` - Quick persona creation
-4. `components/import/import-wizard.tsx` - Multi-step import wizard component
-5. `components/import/speaker-mapper.tsx` - Speaker mapping UI component
-6. `components/import/memory-creation-dialog.tsx` - Post-import memory dialog
-
-### Modified Files
-1. `app/(authenticated)/chats/page.tsx` - Integrate new import wizard
-2. `app/api/chats/import/route.ts` - Handle multi-character mappings
-3. `lib/sillytavern/chat.ts` - Update to handle speaker-to-participant mapping
-
-## UI/UX Design
-
-### Import Wizard Steps
-
-**Step 1: File Selection**
-- File input for .json/.jsonl
-- "Next" button
-
-**Step 2: Analyzing...**
-- Loading spinner while parsing
-- Auto-advances to Step 3
-
-**Step 3: Speaker Mapping**
-For each speaker found:
-```
-+----------------------------------------------------------------+
-| Speaker: "Charlie" (User - 45 messages)                        |
-| +--------------------------------------------------------------+
-| | O Map to existing persona: [Dropdown of personas]            |
-| | O Create new persona named "Charlie"                         |
-| | O Skip this speaker                                          |
-| +--------------------------------------------------------------+
-+----------------------------------------------------------------+
-| Speaker: "Mirel" (AI - 89 messages)                            |
-| +--------------------------------------------------------------+
-| | O Map to existing character: [Dropdown]                      |
-| |   Connection Profile: [Dropdown]                             |
-| | O Create new character named "Mirel"                         |
-| |   Connection Profile: [Dropdown] (required)                  |
-| | O Skip this speaker (messages discarded)                     |
-| +--------------------------------------------------------------+
-+----------------------------------------------------------------+
+      <div className="grid gap-6 md:grid-cols-2">
+        <BackupRestoreCard />
+        {/* Future tools go here */}
+      </div>
+    </div>
+  )
+}
 ```
 
-**Step 4: Review & Import**
-- Summary of mappings
-- Import button
-- Progress indicator
+### Backup/Restore Card
+A card component showing:
+- "Backup" button -> Opens BackupDialog
+- "Restore" button -> Opens RestoreDialog
+- List of recent S3 backups (if any)
 
-**Step 5: Post-Import**
-- Success message with link to chat
-- "Create memories from this chat?" button
-- Title generated automatically in background
+### Backup Dialog
+- Radio buttons: "Download" or "Save to Cloud"
+- If S3: optional custom filename
+- Progress indicator during backup
+- Download link or success message
 
-### Memory Creation Dialog
-After import:
-```
-+----------------------------------------------------------------+
-| Create Memories from Imported Chat                             |
-+----------------------------------------------------------------+
-| The chat has been imported. Would you like to create           |
-| memories for the characters based on this conversation?        |
-|                                                                 |
-| Characters in this chat:                                        |
-| [x] Mirel - Create memory about relationship with Charlie      |
-| [x] Jeff - Create memory about pool party event                |
-|                                                                 |
-| Persona:                                                        |
-| [x] Charlie - Create memory about events in this chat          |
-|                                                                 |
-| [Skip] [Create Memories]                                        |
-+----------------------------------------------------------------+
-```
+### Restore Dialog (Multi-step wizard)
+1. **Step 1: Source Selection**
+   - Upload file input
+   - Or dropdown of S3 backups
+
+2. **Step 2: Preview**
+   - Show RestorePreview component
+   - Display counts of each entity type
+   - List any warnings (e.g., existing data will be replaced)
+
+3. **Step 3: Mode Selection**
+   - Radio: Replace existing data / Import as new data
+   - Warning text for replace mode
+   - Confirmation checkbox for destructive action
+
+4. **Step 4: Progress & Results**
+   - Progress bar during restore
+   - Summary of restored items
+   - Any errors/warnings
 
 ## Implementation Order
 
-1. **multi-char-parser.ts** - Core parsing logic (no UI needed)
-2. **quick-create APIs** - Enable creating entities during import
-3. **import/route.ts updates** - Handle new mapping format
-4. **import-wizard.tsx** - Multi-step wizard component
-5. **speaker-mapper.tsx** - Speaker mapping UI
-6. **chats/page.tsx updates** - Integrate wizard
-7. **memory-creation-dialog.tsx** - Post-import memory UI
-8. **Title generation integration** - Hook into context-summary system
+### Phase 1: Infrastructure
+1. Add npm dependencies (`archiver`, `adm-zip`)
+2. Create backup types (`lib/backup/types.ts`)
+3. Implement UUID remapper (`lib/backup/uuid-remapper.ts`)
 
-## Testing Considerations
+### Phase 2: Backup Service
+4. Create backup service (`lib/backup/backup-service.ts`)
+5. Create backup API endpoint (`app/api/tools/backup/create/route.ts`)
+6. Create download API endpoint (`app/api/tools/backup/download/route.ts`)
+7. Create list backups API endpoint (`app/api/tools/backup/list/route.ts`)
 
-- Test with single-character chats (backward compatibility)
-- Test with multi-character chats (the sample file)
-- Test with missing speakers (skip option)
-- Test creating new characters vs mapping to existing
-- Test memory creation with embedding service
-- Test title generation with cheap LLM
+### Phase 3: Restore Service
+8. Create restore service (`lib/backup/restore-service.ts`)
+9. Create restore API endpoint (`app/api/tools/backup/restore/route.ts`)
+
+### Phase 4: UI Components
+10. Add Tools link to navigation (`components/dashboard/nav.tsx`)
+11. Create Tools page (`app/(authenticated)/tools/page.tsx`)
+12. Create BackupRestoreCard component
+13. Create BackupDialog component
+14. Create RestoreDialog component
+15. Create RestorePreview component
+
+### Phase 5: Testing & Polish
+16. Add unit tests for backup/restore services
+17. Add integration tests for API endpoints
+18. Add debug logging throughout
+19. Update README with backup/restore documentation
+
+## Security Considerations
+
+1. **API Keys**: Encrypted API keys are NOT included in backups since they're encrypted with user-specific keys and would be unusable on another account
+2. **User Isolation**: All backup/restore operations are scoped to the authenticated user
+3. **S3 Backups**: Stored in user-specific path `users/{userId}/backups/`
+4. **File Validation**: Validate ZIP structure before restore
+5. **Size Limits**: Consider adding size limits for upload/backup operations
 
 ## Logging
 
-All operations should log via `logger`:
-- File parsing progress
-- Speaker extraction results
-- Entity creation/mapping decisions
-- Import progress
-- Memory creation results
-- Title generation results
-
-## Data Flow
-
-```
-1. User selects file
-   |
-   v
-2. parseSTFile() extracts speakers and messages
-   |
-   v
-3. User maps speakers -> entities (existing or new)
-   |
-   v
-4. API creates any new entities
-   |
-   v
-5. API builds participants array from mappings
-   |
-   v
-6. API imports messages with speaker->participant attribution
-   |
-   v
-7. Chat created, user prompted for memory creation
-   |
-   v
-8. (Optional) Memory service creates memories
-   |
-   v
-9. Context summary generates title in background
+All operations should use the logger with context:
+```typescript
+logger.debug('Starting backup', { userId, destination })
+logger.info('Backup completed', { userId, backupId, counts })
+logger.error('Restore failed', { userId, error: err.message }, err)
 ```
 
-## Message Attribution Logic
+## Error Handling
 
-When importing messages:
-1. Build a map of `speakerName -> participantId`
-2. For each message:
-   - Find the speaker in the map
-   - If `is_user: true` -> role = 'USER'
-   - If `is_user: false` -> role = 'ASSISTANT'
-   - Set the message's participant reference
+1. **Partial Failures**: If restore fails partway through, attempt rollback
+2. **File Missing**: Skip missing S3 files with warning, don't fail entire restore
+3. **Invalid ZIP**: Return clear error message about invalid backup format
+4. **Version Mismatch**: Handle future backup format versions gracefully
 
-The existing system already handles `USER` and `ASSISTANT` roles. The multi-character support comes from the participants array having multiple CHARACTER entries.
+## Notes
 
-## Key Insight: Message Role vs Participant
-
-The role field (`USER`/`ASSISTANT`) indicates who generated the message:
-- `USER` = human-generated (the persona)
-- `ASSISTANT` = AI-generated (a character)
-
-The participant linkage comes from the `participants` array on the chat metadata. Each character and persona in the chat gets a participant entry with their entity ID.
-
-For display purposes, the speaker name from the original message can be preserved in `rawResponse` or a new field.
+- The backup format is JSON-based for human readability and easy debugging
+- Files are stored with their original filenames for easy manual inspection
+- The manifest.json provides quick overview without extracting everything
+- Consider adding optional compression level setting in future

@@ -1,0 +1,564 @@
+/**
+ * Restore Service
+ *
+ * Restores user data from a backup ZIP archive to MongoDB and S3.
+ * Supports two modes:
+ * - 'replace': Deletes existing data and restores from backup
+ * - 'new-account': Regenerates all UUIDs and imports to a new account
+ */
+
+import AdmZip from 'adm-zip';
+import { logger } from '@/lib/logger';
+import { getUserRepositories } from '@/lib/repositories/user-scoped';
+import { getRepositories } from '@/lib/repositories/factory';
+import { s3FileService } from '@/lib/s3/file-service';
+import { UuidRemapper } from './uuid-remapper';
+import type {
+  BackupManifest,
+  BackupData,
+  RestoreOptions,
+  RestoreSummary,
+  ChatWithMessages,
+} from './types';
+import type {
+  Character,
+  Persona,
+  Tag,
+  ConnectionProfile,
+  ImageProfile,
+  EmbeddingProfile,
+  Memory,
+  FileEntry,
+  ChatParticipantBase,
+  PhysicalDescription,
+} from '@/lib/schemas/types';
+
+const moduleLogger = logger.child({ module: 'backup:restore-service' });
+
+/**
+ * Parses a backup ZIP file and extracts its data
+ */
+export function parseBackupZip(zipBuffer: Buffer): BackupData {
+  moduleLogger.debug('Parsing backup ZIP', { size: zipBuffer.length });
+
+  const zip = new AdmZip(zipBuffer);
+  const entries = zip.getEntries();
+
+  // Find the root folder name (quilltap-backup-{timestamp})
+  let rootFolder = '';
+  for (const entry of entries) {
+    if (entry.entryName.includes('manifest.json')) {
+      rootFolder = entry.entryName.split('/')[0] + '/';
+      break;
+    }
+  }
+
+  if (!rootFolder) {
+    throw new Error('Invalid backup: manifest.json not found');
+  }
+
+  moduleLogger.debug('Found backup root folder', { rootFolder });
+
+  // Helper to read JSON from zip
+  const readJson = <T>(path: string): T => {
+    const entry = zip.getEntry(rootFolder + path);
+    if (!entry) {
+      throw new Error(`Invalid backup: ${path} not found`);
+    }
+    const content = entry.getData().toString('utf8');
+    return JSON.parse(content) as T;
+  };
+
+  // Read all data files
+  const manifest = readJson<BackupManifest>('manifest.json');
+  const characters = readJson<Character[]>('data/characters.json');
+  const personas = readJson<Persona[]>('data/personas.json');
+  const chats = readJson<ChatWithMessages[]>('data/chats.json');
+  const tags = readJson<Tag[]>('data/tags.json');
+  const connectionProfiles = readJson<ConnectionProfile[]>('data/connection-profiles.json');
+  const imageProfiles = readJson<ImageProfile[]>('data/image-profiles.json');
+  const embeddingProfiles = readJson<EmbeddingProfile[]>('data/embedding-profiles.json');
+  const memories = readJson<Memory[]>('data/memories.json');
+  const files = readJson<FileEntry[]>('data/files.json');
+
+  moduleLogger.info('Parsed backup ZIP', {
+    version: manifest.version,
+    createdAt: manifest.createdAt,
+    counts: manifest.counts,
+  });
+
+  return {
+    manifest,
+    characters,
+    personas,
+    chats,
+    tags,
+    connectionProfiles,
+    imageProfiles,
+    embeddingProfiles,
+    memories,
+    files,
+  };
+}
+
+/**
+ * Gets a file from the backup ZIP by its metadata
+ */
+export function getFileFromZip(
+  zipBuffer: Buffer,
+  file: FileEntry
+): Buffer | null {
+  const zip = new AdmZip(zipBuffer);
+  const entries = zip.getEntries();
+
+  // Find the root folder
+  let rootFolder = '';
+  for (const entry of entries) {
+    if (entry.entryName.includes('manifest.json')) {
+      rootFolder = entry.entryName.split('/')[0] + '/';
+      break;
+    }
+  }
+
+  // Look for the file
+  const expectedPath = `${rootFolder}files/${file.category}/${file.id}_${file.originalFilename}`;
+  const entry = zip.getEntry(expectedPath);
+
+  if (!entry) {
+    moduleLogger.warn('File not found in backup ZIP', { expectedPath, fileId: file.id });
+    return null;
+  }
+
+  return entry.getData();
+}
+
+/**
+ * Previews what will be restored without actually restoring
+ */
+export function previewRestore(zipBuffer: Buffer): RestoreSummary {
+  const data = parseBackupZip(zipBuffer);
+
+  const totalMessages = data.chats.reduce((sum, chat) => sum + chat.messages.length, 0);
+
+  return {
+    characters: data.characters.length,
+    personas: data.personas.length,
+    chats: data.chats.length,
+    messages: totalMessages,
+    tags: data.tags.length,
+    files: data.files.length,
+    memories: data.memories.length,
+    profiles: {
+      connection: data.connectionProfiles.length,
+      image: data.imageProfiles.length,
+      embedding: data.embeddingProfiles.length,
+    },
+    warnings: [],
+  };
+}
+
+/**
+ * Deletes all user data before restore (for 'replace' mode)
+ */
+async function deleteUserData(userId: string): Promise<void> {
+  moduleLogger.info('Deleting existing user data for replace mode', { userId });
+
+  const repos = getUserRepositories(userId);
+
+  // Get all entities to delete
+  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles] =
+    await Promise.all([
+      repos.characters.findAll(),
+      repos.personas.findAll(),
+      repos.chats.findAll(),
+      repos.tags.findAll(),
+      repos.files.findAll(),
+      repos.connections.findAll(),
+      repos.imageProfiles.findAll(),
+      repos.embeddingProfiles.findAll(),
+    ]);
+
+  // Delete memories for each character first
+  for (const character of characters) {
+    const memories = await repos.memories.findByCharacterId(character.id);
+    for (const memory of memories) {
+      await repos.memories.delete(memory.id);
+    }
+  }
+
+  // Delete all entities
+  await Promise.all([
+    ...characters.map((c) => repos.characters.delete(c.id)),
+    ...personas.map((p) => repos.personas.delete(p.id)),
+    ...chats.map((c) => repos.chats.delete(c.id)),
+    ...tags.map((t) => repos.tags.delete(t.id)),
+    ...connectionProfiles.map((cp) => repos.connections.delete(cp.id)),
+    ...imageProfiles.map((ip) => repos.imageProfiles.delete(ip.id)),
+    ...embeddingProfiles.map((ep) => repos.embeddingProfiles.delete(ep.id)),
+  ]);
+
+  // Delete files from S3
+  for (const file of files) {
+    try {
+      if (file.s3Key) {
+        await s3FileService.deleteByS3Key(file.s3Key);
+      }
+      await repos.files.delete(file.id);
+    } catch (error) {
+      moduleLogger.warn('Failed to delete file during cleanup', {
+        fileId: file.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  moduleLogger.info('Deleted existing user data', {
+    userId,
+    deletedCounts: {
+      characters: characters.length,
+      personas: personas.length,
+      chats: chats.length,
+      tags: tags.length,
+      files: files.length,
+      connectionProfiles: connectionProfiles.length,
+      imageProfiles: imageProfiles.length,
+      embeddingProfiles: embeddingProfiles.length,
+    },
+  });
+}
+
+/**
+ * Remaps all UUIDs in the backup data for new-account mode
+ */
+function remapBackupData(
+  data: BackupData,
+  targetUserId: string,
+  remapper: UuidRemapper
+): BackupData {
+  moduleLogger.debug('Remapping backup data UUIDs', { targetUserId });
+
+  // Remap tags
+  const remappedTags = data.tags.map((tag) => ({
+    ...remapper.remapFields(tag, ['id']),
+    userId: targetUserId,
+  }));
+
+  // Remap files
+  const remappedFiles = data.files.map((file) => ({
+    ...remapper.remapFields(file, ['id']),
+    ...remapper.remapArrayFields(file, ['linkedTo', 'tags']),
+    userId: targetUserId,
+  }));
+
+  // Remap characters
+  const remappedCharacters = data.characters.map((char) => {
+    const remapped = {
+      ...remapper.remapFields(char, ['id', 'defaultImageId', 'defaultConnectionProfileId']),
+      ...remapper.remapArrayFields(char, ['tags']),
+      userId: targetUserId,
+    };
+    // Handle personaLinks array of objects
+    if (remapped.personaLinks) {
+      remapped.personaLinks = remapped.personaLinks.map((link: { personaId: string; isDefault: boolean }) => ({
+        ...link,
+        personaId: remapper.remap(link.personaId),
+      }));
+    }
+    // Handle avatarOverrides
+    if (remapped.avatarOverrides) {
+      remapped.avatarOverrides = remapped.avatarOverrides.map((override: { chatId: string; imageId: string }) => ({
+        chatId: remapper.remap(override.chatId),
+        imageId: remapper.remap(override.imageId),
+      }));
+    }
+    // Handle physicalDescriptions
+    if (remapped.physicalDescriptions) {
+      remapped.physicalDescriptions = remapped.physicalDescriptions.map((desc: PhysicalDescription) => ({
+        ...desc,
+        id: remapper.remap(desc.id),
+      }));
+    }
+    return remapped as Character;
+  });
+
+  // Remap personas
+  const remappedPersonas = data.personas.map((persona) => {
+    const remapped = {
+      ...remapper.remapFields(persona, ['id', 'defaultImageId']),
+      ...remapper.remapArrayFields(persona, ['tags', 'characterLinks']),
+      userId: targetUserId,
+    };
+    // Handle physicalDescriptions
+    if (remapped.physicalDescriptions) {
+      remapped.physicalDescriptions = remapped.physicalDescriptions.map((desc: PhysicalDescription) => ({
+        ...desc,
+        id: remapper.remap(desc.id),
+      }));
+    }
+    return remapped as Persona;
+  });
+
+  // Remap connection profiles
+  const remappedConnectionProfiles = data.connectionProfiles.map((profile) => ({
+    ...remapper.remapFields(profile, ['id', 'apiKeyId']),
+    ...remapper.remapArrayFields(profile, ['tags']),
+    userId: targetUserId,
+  })) as ConnectionProfile[];
+
+  // Remap image profiles
+  const remappedImageProfiles = data.imageProfiles.map((profile) => ({
+    ...remapper.remapFields(profile, ['id', 'apiKeyId']),
+    ...remapper.remapArrayFields(profile, ['tags']),
+    userId: targetUserId,
+  })) as ImageProfile[];
+
+  // Remap embedding profiles
+  const remappedEmbeddingProfiles = data.embeddingProfiles.map((profile) => ({
+    ...remapper.remapFields(profile, ['id', 'apiKeyId']),
+    ...remapper.remapArrayFields(profile, ['tags']),
+    userId: targetUserId,
+  })) as EmbeddingProfile[];
+
+  // Remap chats (complex due to participants and messages)
+  const remappedChats = data.chats.map((chat) => {
+    const remappedChat = {
+      ...remapper.remapFields(chat, ['id']),
+      ...remapper.remapArrayFields(chat, ['tags']),
+      userId: targetUserId,
+    };
+
+    // Remap participants
+    remappedChat.participants = chat.participants.map((participant: ChatParticipantBase) => ({
+      ...remapper.remapFields(participant, [
+        'id',
+        'characterId',
+        'personaId',
+        'connectionProfileId',
+        'imageProfileId',
+      ]),
+    })) as ChatParticipantBase[];
+
+    // Remap messages
+    remappedChat.messages = chat.messages.map((msg) => ({
+      ...remapper.remapFields(msg, ['id', 'swipeGroupId']),
+      ...remapper.remapArrayFields(msg, ['attachments']),
+    }));
+
+    return remappedChat as ChatWithMessages;
+  });
+
+  // Remap memories
+  const remappedMemories = data.memories.map((memory) => ({
+    ...remapper.remapFields(memory, ['id', 'characterId', 'personaId', 'chatId', 'sourceMessageId']),
+    ...remapper.remapArrayFields(memory, ['tags']),
+  })) as Memory[];
+
+  return {
+    manifest: data.manifest,
+    characters: remappedCharacters,
+    personas: remappedPersonas,
+    chats: remappedChats,
+    tags: remappedTags as Tag[],
+    connectionProfiles: remappedConnectionProfiles,
+    imageProfiles: remappedImageProfiles,
+    embeddingProfiles: remappedEmbeddingProfiles,
+    memories: remappedMemories,
+    files: remappedFiles as FileEntry[],
+  };
+}
+
+/**
+ * Restores data from a backup ZIP
+ */
+export async function restore(
+  zipBuffer: Buffer,
+  options: RestoreOptions
+): Promise<RestoreSummary> {
+  const { mode, targetUserId } = options;
+
+  moduleLogger.info('Starting restore operation', { mode, targetUserId });
+
+  const warnings: string[] = [];
+  let data = parseBackupZip(zipBuffer);
+
+  // For replace mode, delete existing data first
+  if (mode === 'replace') {
+    await deleteUserData(targetUserId);
+  }
+
+  // For new-account mode, remap all UUIDs
+  if (mode === 'new-account') {
+    const remapper = new UuidRemapper();
+    data = remapBackupData(data, targetUserId, remapper);
+    moduleLogger.debug('UUID remapping complete', {
+      mappingSize: remapper.getSize(),
+    });
+  }
+
+  const repos = getUserRepositories(targetUserId);
+
+  // Restore in dependency order
+  // 1. Tags (no dependencies)
+  moduleLogger.debug('Restoring tags', { count: data.tags.length });
+  for (const tag of data.tags) {
+    try {
+      const { id, userId, createdAt, updatedAt, ...tagData } = tag;
+      await repos.tags.create({ ...tagData, nameLower: tagData.nameLower || tagData.name.toLowerCase() });
+    } catch (error) {
+      warnings.push(`Failed to restore tag "${tag.name}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore tag', { tagId: tag.id, error });
+    }
+  }
+
+  // 2. Connection profiles (no entity dependencies, but have tag refs)
+  moduleLogger.debug('Restoring connection profiles', { count: data.connectionProfiles.length });
+  for (const profile of data.connectionProfiles) {
+    try {
+      const { id, userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+      // Note: apiKeyId is not restored as API keys are encrypted and can't be restored
+      await repos.connections.create({ ...profileData, apiKeyId: null });
+    } catch (error) {
+      warnings.push(`Failed to restore connection profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore connection profile', { profileId: profile.id, error });
+    }
+  }
+
+  // 3. Image profiles
+  moduleLogger.debug('Restoring image profiles', { count: data.imageProfiles.length });
+  for (const profile of data.imageProfiles) {
+    try {
+      const { id, userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+      await repos.imageProfiles.create({ ...profileData, apiKeyId: null });
+    } catch (error) {
+      warnings.push(`Failed to restore image profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore image profile', { profileId: profile.id, error });
+    }
+  }
+
+  // 4. Embedding profiles
+  moduleLogger.debug('Restoring embedding profiles', { count: data.embeddingProfiles.length });
+  for (const profile of data.embeddingProfiles) {
+    try {
+      const { id, userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+      await repos.embeddingProfiles.create({ ...profileData, apiKeyId: null });
+    } catch (error) {
+      warnings.push(`Failed to restore embedding profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore embedding profile', { profileId: profile.id, error });
+    }
+  }
+
+  // 5. Files (upload to S3 and create metadata)
+  moduleLogger.debug('Restoring files', { count: data.files.length });
+  let filesRestored = 0;
+  for (const file of data.files) {
+    try {
+      const fileBuffer = getFileFromZip(zipBuffer, file);
+      if (fileBuffer) {
+        // Upload to S3
+        await s3FileService.uploadUserFile(
+          targetUserId,
+          file.id,
+          file.originalFilename,
+          file.category,
+          fileBuffer,
+          file.mimeType
+        );
+
+        // Create file metadata
+        const { id, userId, createdAt, updatedAt, s3Key, s3Bucket, ...fileData } = file;
+        const newS3Key = s3FileService.generateS3Key(targetUserId, file.id, file.originalFilename, file.category);
+        await repos.files.create({ ...fileData, s3Key: newS3Key });
+        filesRestored++;
+      } else {
+        warnings.push(`File not found in backup: ${file.originalFilename}`);
+      }
+    } catch (error) {
+      warnings.push(`Failed to restore file "${file.originalFilename}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore file', { fileId: file.id, error });
+    }
+  }
+
+  // 6. Characters
+  moduleLogger.debug('Restoring characters', { count: data.characters.length });
+  for (const character of data.characters) {
+    try {
+      const { id, userId, createdAt, updatedAt, ...charData } = character;
+      await repos.characters.create(charData);
+    } catch (error) {
+      warnings.push(`Failed to restore character "${character.name}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore character', { characterId: character.id, error });
+    }
+  }
+
+  // 7. Personas
+  moduleLogger.debug('Restoring personas', { count: data.personas.length });
+  for (const persona of data.personas) {
+    try {
+      const { id, userId, createdAt, updatedAt, ...personaData } = persona;
+      await repos.personas.create(personaData);
+    } catch (error) {
+      warnings.push(`Failed to restore persona "${persona.name}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore persona', { personaId: persona.id, error });
+    }
+  }
+
+  // 8. Chats (with messages)
+  moduleLogger.debug('Restoring chats', { count: data.chats.length });
+  let messagesRestored = 0;
+  for (const chat of data.chats) {
+    try {
+      const { id, userId, createdAt, updatedAt, messages, ...chatData } = chat;
+      const createdChat = await repos.chats.create(chatData);
+
+      // Add messages to the chat
+      for (const message of messages) {
+        try {
+          await repos.chats.addMessage(createdChat.id, message);
+          messagesRestored++;
+        } catch (msgError) {
+          warnings.push(`Failed to restore message in chat "${chat.title}": ${msgError instanceof Error ? msgError.message : String(msgError)}`);
+        }
+      }
+    } catch (error) {
+      warnings.push(`Failed to restore chat "${chat.title}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore chat', { chatId: chat.id, error });
+    }
+  }
+
+  // 9. Memories
+  moduleLogger.debug('Restoring memories', { count: data.memories.length });
+  for (const memory of data.memories) {
+    try {
+      const { id, createdAt, updatedAt, ...memoryData } = memory;
+      await repos.memories.create(memoryData);
+    } catch (error) {
+      warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore memory', { memoryId: memory.id, error });
+    }
+  }
+
+  const summary: RestoreSummary = {
+    characters: data.characters.length,
+    personas: data.personas.length,
+    chats: data.chats.length,
+    messages: messagesRestored,
+    tags: data.tags.length,
+    files: filesRestored,
+    memories: data.memories.length,
+    profiles: {
+      connection: data.connectionProfiles.length,
+      image: data.imageProfiles.length,
+      embedding: data.embeddingProfiles.length,
+    },
+    warnings,
+  };
+
+  moduleLogger.info('Restore operation completed', {
+    targetUserId,
+    mode,
+    summary,
+    warningCount: warnings.length,
+  });
+
+  return summary;
+}
