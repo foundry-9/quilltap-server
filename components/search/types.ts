@@ -2,6 +2,9 @@
 
 export type SearchType = 'chats' | 'characters' | 'personas' | 'tags' | 'memories'
 
+// Match priority: 0=exact phrase, 1=all terms AND, 2=single term match
+export type MatchPriority = 0 | 1 | 2
+
 export interface BaseSearchResult {
   id: string
   type: SearchType
@@ -14,6 +17,7 @@ export interface BaseSearchResult {
     id: string
     name: string
   }
+  matchPriority: MatchPriority
   createdAt: string
   updatedAt: string
 }

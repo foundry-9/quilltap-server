@@ -13,6 +13,10 @@ const searchLogger = logger.child({ module: 'global-search' })
 const VALID_TYPES = ['chats', 'characters', 'personas', 'tags', 'memories'] as const
 type SearchType = typeof VALID_TYPES[number]
 
+// Match priority levels (lower = better match)
+// 0=exact phrase, 1=all terms AND, 2=individual term, 3=no match (not included in results)
+type MatchPriority = 0 | 1 | 2 | 3
+
 // Search result types
 interface BaseSearchResult {
   id: string
@@ -26,6 +30,7 @@ interface BaseSearchResult {
     id: string
     name: string
   }
+  matchPriority: MatchPriority  // 0=exact phrase, 1=all terms AND, 2=single term
   createdAt: string
   updatedAt: string
 }
@@ -107,25 +112,72 @@ function createSnippet(content: string, query: string, maxLength = 100): string 
   return snippet
 }
 
-// Helper to check if string matches query
+// Parse query into terms for multi-term matching
+function parseQueryTerms(query: string): string[] {
+  return query.toLowerCase().split(/\s+/).filter(term => term.length >= 2)
+}
+
+// Check if string matches query, returning the match priority
+// Priority: 0=exact phrase match, 1=all terms match (AND), 2=any single term, 3=no match
+function getMatchPriority(value: string | null | undefined, query: string, terms: string[]): MatchPriority {
+  if (!value) return 3
+  const lowerValue = value.toLowerCase()
+  const lowerQuery = query.toLowerCase()
+
+  // Priority 0: Exact phrase match
+  if (lowerValue.includes(lowerQuery)) {
+    return 0
+  }
+
+  // Priority 1: All terms match (AND)
+  if (terms.length > 1 && terms.every(term => lowerValue.includes(term))) {
+    return 1
+  }
+
+  // Priority 2: Any single term matches
+  if (terms.some(term => lowerValue.includes(term))) {
+    return 2
+  }
+
+  // Priority 3: No match
+  return 3
+}
+
+// Helper to check if string matches query (legacy - returns boolean)
 function matchesQuery(value: string | null | undefined, query: string): boolean {
   if (!value) return false
   return value.toLowerCase().includes(query.toLowerCase())
 }
 
-// Helper to find which field matched
+// Check if value matches using multi-term logic (returns true for any match)
+function matchesQueryMultiTerm(value: string | null | undefined, query: string, terms: string[]): boolean {
+  return getMatchPriority(value, query, terms) < 3
+}
+
+// Helper to find which field matched (with multi-term support)
 function findMatchedField(
   obj: Record<string, unknown>,
   query: string,
-  fields: string[]
-): { field: string; value: string } | null {
+  fields: string[],
+  terms: string[]
+): { field: string; value: string; priority: MatchPriority } | null {
+  let bestMatch: { field: string; value: string; priority: MatchPriority } | null = null
+
   for (const field of fields) {
     const value = obj[field]
-    if (typeof value === 'string' && matchesQuery(value, query)) {
-      return { field, value }
+    if (typeof value === 'string') {
+      const priority = getMatchPriority(value, query, terms)
+      if (priority < 3) {
+        // Found a match - keep the best one (lowest priority number)
+        if (!bestMatch || priority < bestMatch.priority) {
+          bestMatch = { field, value, priority }
+        }
+        // If we found an exact match (priority 0), no need to keep looking
+        if (priority === 0) break
+      }
     }
   }
-  return null
+  return bestMatch
 }
 
 // GET /api/search - Global search
@@ -178,17 +230,24 @@ export async function GET(req: NextRequest) {
 
     const results: SearchResult[] = []
     const lowerQuery = query.toLowerCase()
+    const terms = parseQueryTerms(query)
+
+    searchLogger.debug('Parsed search terms', { query, terms, termCount: terms.length })
 
     // Load all tags for tag-based matching
     const allTags = await repos.tags.findAll()
     const tagMap = new Map<string, Tag>(allTags.map(t => [t.id, t]))
 
-    // Find tags that match the query
-    const matchingTags = allTags.filter(t =>
-      t.name.toLowerCase().includes(lowerQuery) ||
-      t.nameLower.includes(lowerQuery)
-    )
+    // Find tags that match the query (with priority tracking)
+    const matchingTagsWithPriority = allTags
+      .map(t => ({
+        tag: t,
+        priority: getMatchPriority(t.name, query, terms)
+      }))
+      .filter(({ priority }) => priority < 3)
+    const matchingTags = matchingTagsWithPriority.map(({ tag }) => tag)
     const matchingTagIds = new Set(matchingTags.map(t => t.id))
+    const tagPriorityMap = new Map(matchingTagsWithPriority.map(({ tag, priority }) => [tag.id, priority]))
 
     // Pre-load all entities for cross-referencing
     const allCharacters = await repos.characters.findAll()
@@ -210,28 +269,36 @@ export async function GET(req: NextRequest) {
         totalCharacters: allCharacters.length,
         characterNames: allCharacters.map(c => c.name),
         query,
+        terms,
       })
 
       for (const char of allCharacters) {
-        // Check if any tag matches
+        // Check if any tag matches (get best priority tag match)
         const matchedTagId = char.tags.find(tagId => matchingTagIds.has(tagId))
         const matchedTag = matchedTagId ? tagMap.get(matchedTagId) : undefined
+        const tagMatchPriority = matchedTagId ? (tagPriorityMap.get(matchedTagId) ?? 3) : 3
 
-        // Check direct field matches
-        const match = findMatchedField(char as unknown as Record<string, unknown>, query, characterFields)
+        // Check direct field matches (now returns priority)
+        const match = findMatchedField(char as unknown as Record<string, unknown>, query, characterFields, terms)
 
         searchLogger.debug('Character search check', {
           characterName: char.name,
           characterId: char.id,
           query,
-          matchResult: match ? { field: match.field, matched: true } : { matched: false },
+          terms,
+          matchResult: match ? { field: match.field, priority: match.priority, matched: true } : { matched: false },
           tagMatch: matchedTag ? matchedTag.name : null,
-          nameContainsQuery: char.name.toLowerCase().includes(query.toLowerCase()),
+          tagMatchPriority,
         })
 
         if (match || matchedTag) {
           // Track this character for related chat lookup
           matchedCharacterIds.add(char.id)
+
+          // Determine best match priority (lower is better)
+          const matchPriority: MatchPriority = match
+            ? (matchedTag ? Math.min(match.priority, tagMatchPriority) as MatchPriority : match.priority)
+            : tagMatchPriority as MatchPriority
 
           results.push({
             id: char.id,
@@ -244,6 +311,7 @@ export async function GET(req: NextRequest) {
               : createSnippet(match!.value, query),
             url: `/characters/${char.id}`,
             matchedTag: matchedTag ? { id: matchedTag.id, name: matchedTag.name } : undefined,
+            matchPriority,
             title: char.title,
             avatarUrl: char.avatarUrl,
             isFavorite: char.isFavorite,
@@ -259,16 +327,22 @@ export async function GET(req: NextRequest) {
       const personaFields = ['name', 'title', 'description', 'personalityTraits']
 
       for (const persona of allPersonas) {
-        // Check if any tag matches
+        // Check if any tag matches (get best priority tag match)
         const matchedTagId = persona.tags.find(tagId => matchingTagIds.has(tagId))
         const matchedTag = matchedTagId ? tagMap.get(matchedTagId) : undefined
+        const tagMatchPriority = matchedTagId ? (tagPriorityMap.get(matchedTagId) ?? 3) : 3
 
-        // Check direct field matches
-        const match = findMatchedField(persona as unknown as Record<string, unknown>, query, personaFields)
+        // Check direct field matches (now returns priority)
+        const match = findMatchedField(persona as unknown as Record<string, unknown>, query, personaFields, terms)
 
         if (match || matchedTag) {
           // Track this persona for related chat lookup
           matchedPersonaIds.add(persona.id)
+
+          // Determine best match priority (lower is better)
+          const matchPriority: MatchPriority = match
+            ? (matchedTag ? Math.min(match.priority, tagMatchPriority) as MatchPriority : match.priority)
+            : tagMatchPriority as MatchPriority
 
           results.push({
             id: persona.id,
@@ -281,6 +355,7 @@ export async function GET(req: NextRequest) {
               : createSnippet(match!.value, query),
             url: `/personas/${persona.id}`,
             matchedTag: matchedTag ? { id: matchedTag.id, name: matchedTag.name } : undefined,
+            matchPriority,
             title: persona.title,
             avatarUrl: persona.avatarUrl,
             createdAt: persona.createdAt,
@@ -296,9 +371,10 @@ export async function GET(req: NextRequest) {
       const addedChatIds = new Set<string>()
 
       for (const chat of allChats) {
-        // Check if any tag matches
+        // Check if any tag matches (get best priority tag match)
         const matchedTagId = chat.tags.find(tagId => matchingTagIds.has(tagId))
         const matchedTag = matchedTagId ? tagMap.get(matchedTagId) : undefined
+        const tagMatchPriority = matchedTagId ? (tagPriorityMap.get(matchedTagId) ?? 3) : 3
 
         // Get participant info
         const charParticipants = chat.participants
@@ -310,14 +386,21 @@ export async function GET(req: NextRequest) {
         const personaParticipant = chat.participants.find(p => p.type === 'PERSONA' && p.personaId)
         const persona = personaParticipant?.personaId ? personaMap.get(personaParticipant.personaId) : undefined
 
-        // Check title match
-        const titleMatch = matchesQuery(chat.title, query)
+        // Check title match (with priority)
+        const titlePriority = getMatchPriority(chat.title, query, terms)
+        const titleMatch = titlePriority < 3
 
-        // Check character name match (direct text match in chat)
-        const charNameMatch = characterNames.some(name => matchesQuery(name, query))
+        // Check character name match (direct text match in chat, with priority)
+        let charNamePriority: MatchPriority = 3
+        for (const name of characterNames) {
+          const priority = getMatchPriority(name, query, terms)
+          if (priority < charNamePriority) charNamePriority = priority
+        }
+        const charNameMatch = charNamePriority < 3
 
-        // Check context summary match
-        const contextMatch = matchesQuery(chat.contextSummary, query)
+        // Check context summary match (with priority)
+        const contextPriority = getMatchPriority(chat.contextSummary, query, terms)
+        const contextMatch = contextPriority < 3
 
         // Check if chat contains a matched character (for related results)
         const matchedCharParticipant = chat.participants
@@ -342,6 +425,15 @@ export async function GET(req: NextRequest) {
           let matchedValue = chat.title
           let snippet = chat.title
 
+          // Determine best match priority across all match types
+          let matchPriority: MatchPriority = 3
+          if (titleMatch) matchPriority = Math.min(matchPriority, titlePriority) as MatchPriority
+          if (charNameMatch) matchPriority = Math.min(matchPriority, charNamePriority) as MatchPriority
+          if (contextMatch) matchPriority = Math.min(matchPriority, contextPriority) as MatchPriority
+          if (matchedTag) matchPriority = Math.min(matchPriority, tagMatchPriority) as MatchPriority
+          // Related results get lowest priority (2) if no direct match
+          if (matchPriority === 3 && (matchedViaCharacter || matchedViaPersona)) matchPriority = 2
+
           if (matchedTag) {
             matchedField = 'tag'
             matchedValue = matchedTag.name
@@ -357,7 +449,7 @@ export async function GET(req: NextRequest) {
             matchedValue = matchedViaPersona.name
             snippet = `Chat as ${matchedViaPersona.name}`
           } else if (charNameMatch && !titleMatch) {
-            const matchedCharName = characterNames.find(name => matchesQuery(name, query))!
+            const matchedCharName = characterNames.find(name => matchesQueryMultiTerm(name, query, terms))!
             matchedField = 'character'
             matchedValue = matchedCharName
             snippet = `Chat with ${matchedCharName}`
@@ -376,6 +468,7 @@ export async function GET(req: NextRequest) {
             snippet,
             url: `/chats/${chat.id}`,
             matchedTag: matchedTag ? { id: matchedTag.id, name: matchedTag.name } : undefined,
+            matchPriority,
             characterNames,
             personaName: persona?.name,
             messageCount: chat.messageCount,
@@ -390,7 +483,7 @@ export async function GET(req: NextRequest) {
 
     // Search tags
     if (types.includes('tags')) {
-      for (const tag of matchingTags) {
+      for (const { tag, priority } of matchingTagsWithPriority) {
         // Count usage across entities (use pre-loaded data)
         const usageCount =
           allCharacters.filter(c => c.tags.includes(tag.id)).length +
@@ -405,6 +498,7 @@ export async function GET(req: NextRequest) {
           matchedValue: tag.name,
           snippet: `Tag used ${usageCount} time${usageCount !== 1 ? 's' : ''}`,
           url: `/tags/${tag.id}`,
+          matchPriority: priority,
           usageCount,
           quickHide: tag.quickHide,
           createdAt: tag.createdAt,
@@ -420,20 +514,32 @@ export async function GET(req: NextRequest) {
         const memoryFields = ['content', 'summary']
 
         for (const memory of memories) {
-          // Check if any tag matches
+          // Check if any tag matches (get best priority tag match)
           const matchedTagId = memory.tags.find(tagId => matchingTagIds.has(tagId))
           const matchedTag = matchedTagId ? tagMap.get(matchedTagId) : undefined
+          const tagMatchPriority = matchedTagId ? (tagPriorityMap.get(matchedTagId) ?? 3) : 3
 
-          // Check keywords
-          const keywordMatch = memory.keywords.some(k => k.toLowerCase().includes(lowerQuery))
+          // Check keywords with multi-term support
+          let keywordPriority: MatchPriority = 3
+          for (const keyword of memory.keywords) {
+            const priority = getMatchPriority(keyword, query, terms)
+            if (priority < keywordPriority) keywordPriority = priority
+          }
+          const keywordMatch = keywordPriority < 3
 
-          // Check field matches
-          const match = findMatchedField(memory as unknown as Record<string, unknown>, query, memoryFields)
+          // Check field matches (now returns priority)
+          const match = findMatchedField(memory as unknown as Record<string, unknown>, query, memoryFields, terms)
 
           if (match || keywordMatch || matchedTag) {
             let matchedField = match?.field || 'keywords'
-            let matchedValue = match?.value || memory.keywords.find(k => k.toLowerCase().includes(lowerQuery)) || ''
+            let matchedValue = match?.value || memory.keywords.find(k => matchesQueryMultiTerm(k, query, terms)) || ''
             let snippet = match ? createSnippet(match.value, query) : memory.summary
+
+            // Determine best match priority
+            let matchPriority: MatchPriority = 3
+            if (match) matchPriority = Math.min(matchPriority, match.priority) as MatchPriority
+            if (keywordMatch) matchPriority = Math.min(matchPriority, keywordPriority) as MatchPriority
+            if (matchedTag) matchPriority = Math.min(matchPriority, tagMatchPriority) as MatchPriority
 
             if (matchedTag) {
               matchedField = 'tag'
@@ -450,6 +556,7 @@ export async function GET(req: NextRequest) {
               snippet,
               url: `/characters/${memory.characterId}/memories#${memory.id}`,
               matchedTag: matchedTag ? { id: matchedTag.id, name: matchedTag.name } : undefined,
+              matchPriority,
               characterId: memory.characterId,
               characterName: charMap.get(memory.characterId)?.name,
               importance: memory.importance,
@@ -463,8 +570,14 @@ export async function GET(req: NextRequest) {
     }
 
     // Sort results within each type by relevance
+    // Priority order: exact phrase (0) > all terms AND (1) > single term (2)
     const sortWithinType = (a: SearchResult, b: SearchResult): number => {
-      // Direct name matches first
+      // First sort by match priority (exact phrase > AND match > single term)
+      if (a.matchPriority !== b.matchPriority) {
+        return a.matchPriority - b.matchPriority
+      }
+
+      // Within same priority, name matches first
       const aNameMatch = a.name.toLowerCase().includes(lowerQuery)
       const bNameMatch = b.name.toLowerCase().includes(lowerQuery)
       if (aNameMatch && !bNameMatch) return -1
