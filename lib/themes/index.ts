@@ -120,7 +120,7 @@ export {
 } from './utils';
 
 // ============================================================================
-// THEME REGISTRY EXPORTS
+// THEME REGISTRY EXPORTS (SERVER-SIDE ONLY)
 // ============================================================================
 
 export type {
@@ -146,3 +146,15 @@ export {
   // Initialization
   initializeThemeRegistry,
 } from './theme-registry';
+
+// ============================================================================
+// CLIENT-SIDE PROVIDER EXPORTS
+// ============================================================================
+
+// Note: These are re-exported here for convenience, but should be imported
+// directly from '@/components/providers/theme-provider' when used in
+// client components to ensure proper code splitting.
+
+export type { ThemeContextValue, ThemeSummary } from '@/components/providers/theme-provider';
+export { ThemeProvider, useTheme } from '@/components/providers/theme-provider';
+export { ThemeStyleInjector, generateThemeCSS } from '@/components/providers/theme-style-injector';
