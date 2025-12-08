@@ -18,6 +18,59 @@ import { useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { useTheme, type ThemeSummary } from '@/components/providers/theme-provider'
 import type { ColorMode } from '@/lib/themes/types'
+import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
+
+// Default theme preview colors (from DEFAULT_THEME_TOKENS)
+const DEFAULT_PREVIEW_COLORS = {
+  light: {
+    background: DEFAULT_THEME_TOKENS.colors.light.background,
+    primary: DEFAULT_THEME_TOKENS.colors.light.primary,
+    secondary: DEFAULT_THEME_TOKENS.colors.light.secondary,
+    accent: DEFAULT_THEME_TOKENS.colors.light.accent,
+  },
+  dark: {
+    background: DEFAULT_THEME_TOKENS.colors.dark.background,
+    primary: DEFAULT_THEME_TOKENS.colors.dark.primary,
+    secondary: DEFAULT_THEME_TOKENS.colors.dark.secondary,
+    accent: DEFAULT_THEME_TOKENS.colors.dark.accent,
+  },
+}
+
+// ============================================================================
+// THEME PREVIEW SWATCHES
+// ============================================================================
+
+interface PreviewColors {
+  light: { background: string; primary: string; secondary: string; accent: string };
+  dark: { background: string; primary: string; secondary: string; accent: string };
+}
+
+/**
+ * Renders color swatches showing the theme's actual colors.
+ * Shows both light and dark mode colors side by side.
+ */
+function ThemePreviewSwatches({ previewColors }: { previewColors?: PreviewColors }) {
+  // Fall back to default colors if not provided
+  const colors = previewColors || DEFAULT_PREVIEW_COLORS
+
+  return (
+    <div className="w-full h-full flex">
+      {/* Light mode colors (top half) and dark mode colors (bottom half) */}
+      <div className="flex-1 flex flex-col">
+        <div className="flex-1" style={{ backgroundColor: colors.light.background }} />
+        <div className="flex-1" style={{ backgroundColor: colors.dark.background }} />
+      </div>
+      <div className="flex-1 flex flex-col">
+        <div className="flex-1" style={{ backgroundColor: colors.light.secondary }} />
+        <div className="flex-1" style={{ backgroundColor: colors.dark.secondary }} />
+      </div>
+      <div className="flex-1 flex flex-col">
+        <div className="flex-1" style={{ backgroundColor: colors.light.primary }} />
+        <div className="flex-1" style={{ backgroundColor: colors.dark.primary }} />
+      </div>
+    </div>
+  )
+}
 
 // ============================================================================
 // COLOR MODE OPTIONS
@@ -131,13 +184,10 @@ function ThemeCard({ theme, isActive, onSelect, disabled }: ThemeCardProps) {
             className="w-full h-full object-cover"
           />
         ) : (
-          // Default theme preview - color swatches
-          <div className="w-full h-full flex">
-            <div className="flex-1 bg-white dark:bg-slate-900" />
-            <div className="flex-1 bg-slate-100 dark:bg-slate-800" />
-            <div className="flex-1 bg-slate-200 dark:bg-slate-700" />
-            <div className="flex-1 bg-blue-500 dark:bg-blue-400" />
-          </div>
+          // Theme preview using actual theme colors
+          <ThemePreviewSwatches
+            previewColors={isDefault ? DEFAULT_PREVIEW_COLORS : theme?.previewColors}
+          />
         )}
       </div>
 
@@ -471,11 +521,41 @@ export default function AppearanceTab() {
             <summary className="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
               Debug: Current Theme State
             </summary>
-            <div className="mt-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg font-mono text-xs">
+            <div className="mt-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg font-mono text-xs space-y-2">
               <div>Active Theme ID: {activeThemeId ?? 'default'}</div>
               <div>Color Mode: {colorMode}</div>
               <div>Resolved Mode: {resolvedColorMode}</div>
               <div>Available Themes: {themes.length}</div>
+
+              {/* Visual test: These boxes use CSS variables directly */}
+              <div className="mt-4 pt-4 border-t border-gray-300 dark:border-slate-600">
+                <div className="text-xs font-semibold mb-2">CSS Variable Test (should change with theme):</div>
+                <div className="flex gap-2">
+                  <div
+                    className="w-12 h-12 rounded border"
+                    style={{ backgroundColor: 'var(--theme-background)' }}
+                    title="--theme-background"
+                  />
+                  <div
+                    className="w-12 h-12 rounded border"
+                    style={{ backgroundColor: 'var(--theme-primary)' }}
+                    title="--theme-primary"
+                  />
+                  <div
+                    className="w-12 h-12 rounded border"
+                    style={{ backgroundColor: 'var(--theme-secondary)' }}
+                    title="--theme-secondary"
+                  />
+                  <div
+                    className="w-12 h-12 rounded border"
+                    style={{ backgroundColor: 'var(--theme-accent)' }}
+                    title="--theme-accent"
+                  />
+                </div>
+                <div className="text-xs mt-1 text-gray-500">
+                  bg / primary / secondary / accent
+                </div>
+              </div>
             </div>
           </details>
         </section>

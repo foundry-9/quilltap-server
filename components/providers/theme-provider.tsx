@@ -46,6 +46,10 @@ export interface ThemeSummary {
   supportsDarkMode: boolean;
   tags?: string[];
   isDefault?: boolean;
+  previewColors?: {
+    light: { background: string; primary: string; secondary: string; accent: string };
+    dark: { background: string; primary: string; secondary: string; accent: string };
+  };
 }
 
 /**
@@ -467,6 +471,8 @@ function ThemeStyleInjector({ tokens, mode }: ThemeStyleInjectorProps) {
     clientLogger.debug('Theme: CSS variables injected to head', {
       mode,
       cssLength: cssContent.length,
+      // Log first 500 chars of CSS for debugging
+      cssPreview: cssContent.substring(0, 500),
     });
 
     // Cleanup on unmount

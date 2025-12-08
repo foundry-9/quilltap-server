@@ -1,0 +1,346 @@
+/**
+ * Rains Theme - Component Overrides (Tier 3)
+ *
+ * These CSS overrides provide advanced customization beyond design tokens.
+ * They're applied when the Rains theme is active via [data-theme="rains"].
+ *
+ * Inspired by warm rain-soaked autumn evenings with rich browns and amber glows.
+ */
+
+/* ============================================================================
+   GENERAL COMPONENT ENHANCEMENTS
+   ============================================================================ */
+
+/* Root theme variables for Rains */
+[data-theme="rains"] {
+  /* Cards get a warm, subtle shadow */
+  --card-shadow: 0 4px 12px -2px rgb(30 20 10 / 0.15);
+}
+
+/* ============================================================================
+   CHAT MESSAGE STYLING
+   ============================================================================ */
+
+/* Chat messages with warm, cozy styling */
+[data-theme="rains"] .chat-message {
+  border-radius: var(--radius-lg, 0.75rem);
+  transition: box-shadow var(--transition-normal, 200ms) var(--transition-easing, ease);
+}
+
+[data-theme="rains"] .chat-message:hover {
+  box-shadow: 0 2px 8px -2px rgb(30 20 10 / 0.18);
+}
+
+/* User messages - warm amber accent gradient */
+[data-theme="rains"] .chat-message-user {
+  background: linear-gradient(135deg, hsl(30 75% 55% / 0.12), hsl(25 60% 45% / 0.06));
+}
+
+/* Assistant messages - subtle earthy depth */
+[data-theme="rains"] .chat-message-assistant {
+  background: linear-gradient(180deg, transparent, hsl(25 15% 20% / 0.04));
+}
+
+/* ============================================================================
+   NAVIGATION & HEADER
+   ============================================================================ */
+
+/* Warm frosted glass effect for navigation */
+[data-theme="rains"] .nav-header {
+  backdrop-filter: blur(12px);
+  background: hsl(var(--background) / 0.9);
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+}
+
+/* Sidebar with warm depth */
+[data-theme="rains"] .sidebar {
+  background: linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted) / 0.4));
+}
+
+/* ============================================================================
+   BUTTONS & INTERACTIVE ELEMENTS
+   ============================================================================ */
+
+/* Primary buttons with warm amber gradient */
+[data-theme="rains"] .btn-primary {
+  background: linear-gradient(135deg, hsl(30 75% 50%), hsl(28 70% 45%));
+  transition: all var(--transition-normal, 200ms) var(--transition-easing, ease);
+}
+
+[data-theme="rains"] .btn-primary:hover {
+  background: linear-gradient(135deg, hsl(30 80% 55%), hsl(28 75% 50%));
+  box-shadow: 0 4px 12px -2px hsl(30 75% 50% / 0.45);
+}
+
+[data-theme="rains"] .btn-primary:active {
+  transform: translateY(1px);
+}
+
+/* Secondary buttons with earthy tint */
+[data-theme="rains"] .btn-secondary {
+  border-color: hsl(30 20% 60%);
+}
+
+[data-theme="rains"] .btn-secondary:hover {
+  background: hsl(30 15% 93%);
+  border-color: hsl(30 30% 50%);
+}
+
+/* Dark mode button adjustments */
+.dark[data-theme="rains"] .btn-secondary:hover {
+  background: hsl(25 12% 18%);
+  border-color: hsl(30 25% 35%);
+}
+
+/* ============================================================================
+   INPUT FIELDS
+   ============================================================================ */
+
+/* Inputs with warm-themed focus states */
+[data-theme="rains"] input:focus,
+[data-theme="rains"] textarea:focus,
+[data-theme="rains"] select:focus {
+  border-color: hsl(30 70% 50%);
+  box-shadow: 0 0 0 3px hsl(30 70% 50% / 0.18);
+}
+
+/* Chat input area */
+[data-theme="rains"] .chat-input-container {
+  background: linear-gradient(0deg, hsl(var(--background)), hsl(var(--muted) / 0.25));
+  border-top: 1px solid hsl(var(--border) / 0.6);
+}
+
+/* ============================================================================
+   SCROLLBARS
+   ============================================================================ */
+
+/* Custom scrollbar styling for rains theme */
+[data-theme="rains"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme="rains"] ::-webkit-scrollbar-track {
+  background: hsl(30 10% 92%);
+  border-radius: 4px;
+}
+
+[data-theme="rains"] ::-webkit-scrollbar-thumb {
+  background: hsl(30 15% 65%);
+  border-radius: 4px;
+}
+
+[data-theme="rains"] ::-webkit-scrollbar-thumb:hover {
+  background: hsl(30 20% 55%);
+}
+
+/* Dark mode scrollbar */
+.dark[data-theme="rains"] ::-webkit-scrollbar-track {
+  background: hsl(25 12% 12%);
+}
+
+.dark[data-theme="rains"] ::-webkit-scrollbar-thumb {
+  background: hsl(25 15% 28%);
+}
+
+.dark[data-theme="rains"] ::-webkit-scrollbar-thumb:hover {
+  background: hsl(25 18% 38%);
+}
+
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+
+/* Gentle rain drop animation for loading states */
+@keyframes rains-drip {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 0.8;
+  }
+}
+
+[data-theme="rains"] .loading-indicator {
+  animation: rains-drip 1.2s ease-in-out infinite;
+}
+
+/* Message enter animation - gentle fade like rain settling */
+@keyframes rains-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-theme="rains"] .message-enter {
+  animation: rains-fade-in 0.25s ease-out forwards;
+}
+
+/* ============================================================================
+   CODE BLOCKS
+   ============================================================================ */
+
+/* Code blocks with warm earthy styling */
+[data-theme="rains"] pre,
+[data-theme="rains"] code {
+  background: hsl(30 12% 94%);
+  border: 1px solid hsl(30 15% 85%);
+}
+
+.dark[data-theme="rains"] pre,
+.dark[data-theme="rains"] code {
+  background: hsl(25 14% 14%);
+  border: 1px solid hsl(25 12% 22%);
+}
+
+/* Inline code */
+[data-theme="rains"] :not(pre) > code {
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+}
+
+/* ============================================================================
+   SELECTION
+   ============================================================================ */
+
+/* Text selection with warm amber color */
+[data-theme="rains"] ::selection {
+  background: hsl(30 75% 50% / 0.35);
+  color: inherit;
+}
+
+.dark[data-theme="rains"] ::selection {
+  background: hsl(30 75% 55% / 0.35);
+}
+
+/* ============================================================================
+   FOCUS STATES
+   ============================================================================ */
+
+/* Enhanced focus visible states with amber glow */
+[data-theme="rains"] :focus-visible {
+  outline: 2px solid hsl(30 70% 50%);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   TOOLTIPS & POPOVERS
+   ============================================================================ */
+
+[data-theme="rains"] [role="tooltip"],
+[data-theme="rains"] .popover {
+  box-shadow: 0 8px 24px -4px rgb(30 20 10 / 0.2);
+  border: 1px solid hsl(var(--border) / 0.6);
+}
+
+/* ============================================================================
+   BADGES & TAGS
+   ============================================================================ */
+
+[data-theme="rains"] .badge {
+  border-radius: var(--radius-full, 9999px);
+}
+
+[data-theme="rains"] .badge-primary {
+  background: linear-gradient(135deg, hsl(30 75% 50%), hsl(28 65% 45%));
+}
+
+[data-theme="rains"] .badge-secondary {
+  background: hsl(30 20% 88%);
+  color: hsl(30 35% 30%);
+}
+
+.dark[data-theme="rains"] .badge-secondary {
+  background: hsl(25 15% 22%);
+  color: hsl(30 25% 70%);
+}
+
+/* ============================================================================
+   AVATAR STYLING
+   ============================================================================ */
+
+/* User avatars with warm amber background (matching the screenshot aesthetic) */
+[data-theme="rains"] .avatar-user,
+[data-theme="rains"] .user-avatar {
+  background: linear-gradient(135deg, hsl(30 70% 50%), hsl(25 65% 45%));
+  color: hsl(0 0% 100%);
+}
+
+/* ============================================================================
+   LINKS & ANCHORS
+   ============================================================================ */
+
+[data-theme="rains"] a {
+  color: hsl(30 75% 50%);
+  transition: color var(--transition-fast, 150ms) ease;
+}
+
+[data-theme="rains"] a:hover {
+  color: hsl(30 80% 58%);
+}
+
+.dark[data-theme="rains"] a {
+  color: hsl(30 75% 60%);
+}
+
+.dark[data-theme="rains"] a:hover {
+  color: hsl(30 80% 68%);
+}
+
+/* ============================================================================
+   DIVIDERS & SEPARATORS
+   ============================================================================ */
+
+[data-theme="rains"] hr,
+[data-theme="rains"] .divider {
+  border-color: hsl(30 15% 85%);
+}
+
+.dark[data-theme="rains"] hr,
+.dark[data-theme="rains"] .divider {
+  border-color: hsl(25 12% 22%);
+}
+
+/* ============================================================================
+   CARDS & CONTAINERS
+   ============================================================================ */
+
+[data-theme="rains"] .card {
+  box-shadow: var(--card-shadow);
+  border: 1px solid hsl(var(--border) / 0.5);
+}
+
+.dark[data-theme="rains"] .card {
+  background: hsl(25 12% 12%);
+  border: 1px solid hsl(25 12% 18%);
+}
+
+/* ============================================================================
+   SIDEBAR LIST ITEMS
+   ============================================================================ */
+
+[data-theme="rains"] .sidebar-item:hover {
+  background: hsl(30 15% 90%);
+}
+
+.dark[data-theme="rains"] .sidebar-item:hover {
+  background: hsl(25 12% 16%);
+}
+
+[data-theme="rains"] .sidebar-item.active {
+  background: hsl(30 60% 50% / 0.12);
+  border-left: 3px solid hsl(30 75% 50%);
+}
+
+.dark[data-theme="rains"] .sidebar-item.active {
+  background: hsl(30 60% 50% / 0.15);
+  border-left: 3px solid hsl(30 75% 55%);
+}

@@ -1023,7 +1023,26 @@ plugins/src/qtap-plugin-theme-ocean/
 4. ⏭️ Create preview image (skipped - requires image generation)
 5. ✅ Document theme creation process (README.md)
 
-### Step 7: Documentation & Polish
+### Step 7: UI Component Audit (Estimated: Theme integration)
+
+Audit and update UI components to use theme-aware Tailwind classes instead of hardcoded colors:
+
+1. Replace hardcoded background colors (`bg-gray-50`, `bg-slate-800`, etc.) with `bg-background`, `bg-card`, `bg-muted`
+2. Replace hardcoded text colors (`text-gray-900`, `text-white`, etc.) with `text-foreground`, `text-muted-foreground`
+3. Replace hardcoded border colors (`border-gray-200`, `border-slate-700`, etc.) with `border-border`
+4. Replace hardcoded accent/primary colors (`bg-blue-500`, `text-blue-400`, etc.) with `bg-primary`, `text-primary`
+5. Update interactive states (hover, focus) to use theme variables
+6. Test all components with Default, Ocean, and Rains themes in both light and dark modes
+
+Priority components to update:
+
+- Settings page tabs and forms
+- Chat interface (messages, input area, sidebar)
+- Navigation header
+- Modal dialogs and popovers
+- Buttons and form inputs
+
+### Step 8: Documentation & Polish
 
 1. Update `features/` docs with theming information
 2. Create theme development guide

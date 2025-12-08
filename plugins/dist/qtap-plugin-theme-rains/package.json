@@ -1,0 +1,19 @@
+{
+  "name": "qtap-plugin-theme-rains",
+  "version": "1.0.0",
+  "description": "Rains theme plugin for Quilltap - A warm, earthy dark theme with amber accents",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "author": "Foundry-9",
+  "license": "MIT",
+  "keywords": [
+    "quilltap",
+    "theme",
+    "rains",
+    "brown",
+    "amber",
+    "warm",
+    "dark",
+    "earthy"
+  ]
+}

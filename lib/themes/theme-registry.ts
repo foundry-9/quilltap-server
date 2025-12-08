@@ -464,8 +464,9 @@ class ThemeRegistry {
   }
 
   /**
-   * Get theme metadata for client (without tokens)
+   * Get theme metadata for client (without full tokens)
    * Useful for theme picker UI
+   * Includes preview colors for theme card swatches
    */
   getThemeList(): Array<{
     id: string;
@@ -475,6 +476,10 @@ class ThemeRegistry {
     previewImage?: string;
     tags: string[];
     isDefault: boolean;
+    previewColors?: {
+      light: { background: string; primary: string; secondary: string; accent: string };
+      dark: { background: string; primary: string; secondary: string; accent: string };
+    };
   }> {
     return this.getAll().map(theme => ({
       id: theme.id,
@@ -484,6 +489,21 @@ class ThemeRegistry {
       previewImage: theme.previewImage,
       tags: theme.tags,
       isDefault: theme.isDefault,
+      // Include just the preview colors needed for theme cards
+      previewColors: {
+        light: {
+          background: theme.tokens.colors.light.background,
+          primary: theme.tokens.colors.light.primary,
+          secondary: theme.tokens.colors.light.secondary,
+          accent: theme.tokens.colors.light.accent,
+        },
+        dark: {
+          background: theme.tokens.colors.dark.background,
+          primary: theme.tokens.colors.dark.primary,
+          secondary: theme.tokens.colors.dark.secondary,
+          accent: theme.tokens.colors.dark.accent,
+        },
+      },
     }));
   }
 }
