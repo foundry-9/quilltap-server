@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { formatMessageTime } from '@/lib/format-time'
 import { showErrorToast } from '@/lib/toast'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
+import ReactMarkdown from 'react-markdown'
 
 interface ToolMessageProps {
   readonly message: {
@@ -47,7 +48,8 @@ interface ToolResult {
 }
 
 export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted }: ToolMessageProps) {
-  const [showSource, setShowSource] = useState(false)
+  const [showRequest, setShowRequest] = useState(false)
+  const [showResponse, setShowResponse] = useState(false)
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
 
   let toolData: ToolResult = {
@@ -148,35 +150,26 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
             </span>
           </div>
 
-          {/* Tool result */}
-          {toolData.result && (
-            <div className="text-sm text-foreground">
-              {toolData.result}
-            </div>
-          )}
-
-          {/* Generated images for user-initiated image generation */}
-          {toolData.tool === 'generate_image' && toolData.images && toolData.images.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {toolData.images.map((img) => (
-                <div key={img.id} className="text-xs text-foreground px-2 py-1 bg-primary/10 rounded">
-                  {img.filename}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* View source button */}
+          {/* Tool Request collapsible - shows arguments/prompt sent to the tool */}
           {(toolData.arguments || toolData.prompt) && (
-            <div className="mt-3">
+            <div className="mt-2">
               <button
-                onClick={() => setShowSource(!showSource)}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
+                onClick={() => {
+                  if (process.env.NODE_ENV === 'development') {
+                    console.debug('ToolMessage: Toggling Tool Request view', {
+                      messageId: message.id,
+                      toolName: toolData.toolName,
+                      showRequest: !showRequest
+                    })
+                  }
+                  setShowRequest(!showRequest)
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 type="button"
               >
-                {showSource ? '▼ Hide' : '▶ View'} {toolData.tool === 'generate_image' ? 'prompt' : 'source'}
+                {showRequest ? '▼' : '▶'} Tool Request
               </button>
-              {showSource && (
+              {showRequest && (
                 <div className="mt-2 bg-background rounded p-3 overflow-x-auto border border-border">
                   <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words">
                     {toolData.tool === 'generate_image' && toolData.prompt
@@ -188,8 +181,100 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
             </div>
           )}
 
-          {/* Image attachments */}
-          {imageAttachments.length > 0 && (
+          {/* Tool Response collapsible - shows the result with pretty-printed JSON */}
+          {/* For image generation, also include the image attachments inside this collapsible */}
+          {(toolData.result || (toolData.toolName === 'generate_image' && imageAttachments.length > 0)) && (
+            <div className="mt-2">
+              <button
+                onClick={() => {
+                  if (process.env.NODE_ENV === 'development') {
+                    console.debug('ToolMessage: Toggling Tool Response view', {
+                      messageId: message.id,
+                      toolName: toolData.toolName,
+                      showResponse: !showResponse
+                    })
+                  }
+                  setShowResponse(!showResponse)
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                type="button"
+              >
+                {showResponse ? '▼' : '▶'} Tool Response
+              </button>
+              {showResponse && (
+                <div className="mt-2 bg-background rounded p-3 overflow-x-auto border border-border tool-response-content">
+                  {/* For image generation, show image thumbnails */}
+                  {toolData.toolName === 'generate_image' && imageAttachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {imageAttachments.map((attachment) => (
+                        <div key={attachment.id} className="relative group/thumb overflow-hidden rounded border border-border hover:border-primary/50 transition-colors">
+                          {missingImages.has(attachment.id) ? (
+                            <div className="w-20 h-20 flex items-center justify-center bg-muted">
+                              <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={1.5}
+                                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                />
+                              </svg>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                const normalizedPath = attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`
+                                onImageClick?.(normalizedPath, attachment.filename, attachment.id)
+                              }}
+                              className="relative group/thumb overflow-hidden rounded cursor-pointer block"
+                              type="button"
+                            >
+                              <div className="relative w-20 h-20 bg-muted">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
+                                  alt={attachment.filename}
+                                  className="w-full h-full object-cover"
+                                  onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
+                                />
+                              </div>
+                              <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/20 transition-colors flex items-center justify-center">
+                                <svg className="w-6 h-6 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                </svg>
+                              </div>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Show JSON/text result if present */}
+                  {toolData.result && (() => {
+                    // Try to parse and pretty-print as JSON
+                    try {
+                      const parsed = JSON.parse(toolData.result!)
+                      const formatted = JSON.stringify(parsed, null, 2)
+                      return (
+                        <ReactMarkdown>
+                          {`\`\`\`json\n${formatted}\n\`\`\``}
+                        </ReactMarkdown>
+                      )
+                    } catch {
+                      // Not JSON, display as plain text
+                      return (
+                        <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words">
+                          {toolData.result}
+                        </pre>
+                      )
+                    }
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Image attachments for non-image-generation tools */}
+          {toolData.toolName !== 'generate_image' && imageAttachments.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3">
               {imageAttachments.map((attachment) => (
                 <div key={attachment.id} className="relative group/thumb overflow-hidden rounded border border-border hover:border-primary/50 transition-colors">
@@ -206,7 +291,11 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                     </div>
                   ) : (
                     <button
-                      onClick={() => onImageClick?.(attachment.filepath, attachment.filename, attachment.id)}
+                      onClick={() => {
+                        // Normalize filepath - some files have leading slash, some don't
+                        const normalizedPath = attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`
+                        onImageClick?.(normalizedPath, attachment.filename, attachment.id)
+                      }}
                       className="relative group/thumb overflow-hidden rounded cursor-pointer block"
                       type="button"
                     >
@@ -246,7 +335,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                         ) : (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={`/${attachment.filepath}`}
+                            src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
                             alt={attachment.filename}
                             className="w-full h-full object-cover"
                             onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}

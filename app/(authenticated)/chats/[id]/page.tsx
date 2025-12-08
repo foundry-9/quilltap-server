@@ -983,7 +983,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 message={message}
                 character={getFirstCharacter() ?? undefined}
                 onImageClick={(filepath, filename, fileId) => {
-                  setModalImage({ src: `/${filepath}`, filename, fileId })
+                  // filepath is already normalized by ToolMessage
+                  setModalImage({ src: filepath, filename, fileId })
                 }}
               />
             )
@@ -1050,7 +1051,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                             <button
                               key={attachment.id}
                               onClick={() => setModalImage({
-                                src: `/${attachment.filepath}`,
+                                src: attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`,
                                 filename: attachment.filename,
                                 fileId: attachment.id,
                               })}

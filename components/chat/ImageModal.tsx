@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useCallback, useState } from 'react'
-import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { clientLogger } from '@/lib/client-logger'
@@ -250,13 +249,13 @@ export default function ImageModal({
         className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
         onClick={(e) => e.stopPropagation()}
       >
-        <Image
+        {/* Using regular img instead of Next.js Image because authenticated API routes
+            require session cookies, which Next.js image optimization doesn't forward */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={src}
           alt={filename}
-          width={1920}
-          height={1080}
           className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
-          priority
         />
       </div>
 
