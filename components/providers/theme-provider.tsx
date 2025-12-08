@@ -187,6 +187,7 @@ export function ThemeProvider({
     clientLogger.debug('Theme: applied to DOM', {
       activeThemeId,
       resolvedColorMode,
+      htmlClasses: root.classList.toString(),
     });
   }, [resolvedColorMode, activeThemeId]);
 

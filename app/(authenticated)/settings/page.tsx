@@ -8,6 +8,7 @@ import ImageProfilesTab from '@/components/settings/image-profiles-tab'
 import EmbeddingProfilesTab from '@/components/settings/embedding-profiles-tab'
 import PluginsTab from '@/components/settings/plugins-tab'
 import TagsTab from '@/components/settings/tags-tab'
+import AppearanceTab from '@/components/settings/appearance-tab'
 import { EntityTabs, Tab } from '@/components/tabs'
 
 const SETTINGS_TABS: Tab[] = [
@@ -35,6 +36,15 @@ const SETTINGS_TABS: Tab[] = [
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'appearance',
+    label: 'Appearance',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
       </svg>
     ),
   },
@@ -85,6 +95,8 @@ export default function SettingsPage() {
         return <ConnectionProfilesTab />
       case 'chat':
         return <ChatSettingsTab />
+      case 'appearance':
+        return <AppearanceTab />
       case 'image-profiles':
         return <ImageProfilesTab />
       case 'embedding-profiles':
