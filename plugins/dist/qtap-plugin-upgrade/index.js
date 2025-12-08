@@ -506,7 +506,7 @@ var require_package = __commonJS({
   "package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "1.8.5-dev.39",
+      version: "2.2.0-dev.10",
       private: true,
       author: {
         name: "Charles Sebold",
@@ -549,8 +549,9 @@ var require_package = __commonJS({
         "@aws-sdk/s3-request-presigner": "^3.943.0",
         "@google/generative-ai": "^0.24.1",
         "@openrouter/sdk": "^0.1.27",
+        "adm-zip": "^0.5.16",
+        archiver: "^7.0.1",
         bcrypt: "^5.1.1",
-        glob: "^12.0.0",
         "jest-fetch-mock": "^3.0.3",
         mongodb: "^6.21.0",
         next: "^16.0.5",
@@ -567,12 +568,13 @@ var require_package = __commonJS({
         zod: "^3.23.0"
       },
       devDependencies: {
-        "@eslint/eslintrc": "^3.3.1",
         "@jest/globals": "^30.2.0",
         "@playwright/test": "^1.49.0",
         "@tailwindcss/postcss": "^4.1.17",
         "@testing-library/jest-dom": "^6.9.1",
         "@testing-library/react": "^16.3.0",
+        "@types/adm-zip": "^0.5.7",
+        "@types/archiver": "^7.0.0",
         "@types/bcrypt": "^5.0.2",
         "@types/jest": "^30.0.0",
         "@types/node": "^22.0.0",
