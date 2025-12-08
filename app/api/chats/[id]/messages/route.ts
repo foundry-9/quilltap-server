@@ -12,6 +12,16 @@ import { buildToolsForProvider } from '@/lib/tools'
 import { processMessageForMemoryAsync } from '@/lib/memory'
 import { buildContext } from '@/lib/chat/context-manager'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
+import { resolveConnectionProfile } from '@/lib/chat/connection-resolver'
+import {
+  selectNextSpeaker,
+  calculateTurnStateFromHistory,
+  updateTurnStateAfterMessage,
+  getActiveCharacterParticipants,
+  findUserParticipant,
+  isMultiCharacterChat,
+  type TurnState,
+} from '@/lib/chat/turn-manager'
 import {
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,
@@ -20,6 +30,7 @@ import {
 import { logger } from '@/lib/logger'
 import { requiresApiKey } from '@/lib/plugins/provider-validation'
 import { z } from 'zod'
+import type { MessageEvent } from '@/lib/schemas/types'
 
 // Validation schema
 const sendMessageSchema = z.object({
@@ -207,17 +218,18 @@ export async function POST(
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
 
-    // Get first active character participant
+    // Get user participant (persona) for turn management
+    const userParticipant = findUserParticipant(chat.participants)
+    const userParticipantId = userParticipant?.id ?? null
+
+    // Get first active character participant (for single-character chats or as default responder)
+    // Note: connectionProfileId is no longer required on participant - we resolve it via fallback chain
     const characterParticipant = chat.participants.find(
-      p => p.type === 'CHARACTER' && p.isActive && p.characterId && p.connectionProfileId
+      p => p.type === 'CHARACTER' && p.isActive && p.characterId
     )
 
     if (!characterParticipant?.characterId) {
       return NextResponse.json({ error: 'No active character in chat' }, { status: 404 })
-    }
-
-    if (!characterParticipant.connectionProfileId) {
-      return NextResponse.json({ error: 'No connection profile for character' }, { status: 404 })
     }
 
     // Get character
@@ -226,11 +238,33 @@ export async function POST(
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    // Get connection profile with API key from the participant
-    const connectionProfile = await repos.connections.findById(characterParticipant.connectionProfileId)
+    // Resolve connection profile using fallback chain:
+    // 1. participant.connectionProfileId (per-chat override)
+    // 2. character.defaultConnectionProfileId (character's default)
+    let resolvedConnectionProfileId: string
+    try {
+      resolvedConnectionProfileId = resolveConnectionProfile(characterParticipant, character)
+    } catch (error) {
+      logger.error('[Chat Messages] Failed to resolve connection profile', {
+        participantId: characterParticipant.id,
+        characterId: character.id,
+        characterName: character.name,
+      })
+      return NextResponse.json({ error: 'No connection profile configured for character' }, { status: 400 })
+    }
+
+    // Get connection profile with API key
+    const connectionProfile = await repos.connections.findById(resolvedConnectionProfileId)
     if (!connectionProfile) {
       return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
     }
+
+    logger.debug('[Chat Messages] Using connection profile', {
+      profileId: resolvedConnectionProfileId,
+      provider: connectionProfile.provider,
+      model: connectionProfile.modelName,
+      resolvedFrom: characterParticipant.connectionProfileId ? 'participant' : 'character_default',
+    })
 
     let apiKey = null
     if (connectionProfile.apiKeyId) {
@@ -254,7 +288,7 @@ export async function POST(
     // Load file attachments if provided
     const attachedFiles = await loadAttachedFiles(repos, id, fileIds)
 
-    // Create user message event
+    // Create user message event with participantId for multi-character tracking
     const userMessageId = crypto.randomUUID()
     const now = new Date().toISOString()
     const userMessage = {
@@ -264,10 +298,18 @@ export async function POST(
       content,
       createdAt: now,
       attachments: fileIds || [],
+      // Track which participant (persona) sent this message for multi-character chats
+      participantId: userParticipantId,
     }
 
     // Add user message to chat
     await repos.chats.addMessage(id, userMessage)
+
+    logger.debug('[Chat Messages] User message saved', {
+      messageId: userMessageId,
+      participantId: userParticipantId,
+      isMultiCharacter: isMultiCharacterChat(chat.participants),
+    })
 
     // Update file attachments with message ID using repository
     if (attachedFiles.length > 0) {
@@ -704,8 +746,16 @@ export async function POST(
               attachments: assistantAttachments,
               // Store thought signature for Gemini 3 thinking models (required for multi-turn function calling)
               thoughtSignature: thoughtSignature || null,
+              // Track which participant (character) sent this message for multi-character chats
+              participantId: characterParticipant.id,
             }
             await repos.chats.addMessage(id, assistantMessage)
+
+            logger.debug('[Chat Messages] Assistant message saved', {
+              messageId: assistantMessageId,
+              participantId: characterParticipant.id,
+              characterName: character.name,
+            })
 
             // Save tool messages if tools were executed (this also links images to character)
             const toolSaveResult = toolMessages.length > 0
@@ -730,6 +780,49 @@ export async function POST(
             // Send final message - use assistant message ID if available, otherwise use the first tool message ID
             const finalMessageId = assistantMessageId || firstToolMessageId
 
+            // Calculate next speaker for multi-character chats
+            // Get all updated messages including the one just saved
+            const updatedMessages = await repos.chats.getMessages(id)
+            const messageEvents = updatedMessages.filter(
+              (m): m is typeof m & { type: 'message' } => m.type === 'message'
+            ) as unknown as MessageEvent[]
+
+            // Calculate turn state from message history
+            const turnState = calculateTurnStateFromHistory({
+              messages: messageEvents,
+              participants: chat.participants,
+              userParticipantId,
+            })
+
+            // Load all characters for turn selection
+            const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants)
+            const charactersMap = new Map<string, typeof character>()
+            for (const p of activeCharacterParticipants) {
+              if (p.characterId) {
+                const char = p.id === characterParticipant.id
+                  ? character
+                  : await repos.characters.findById(p.characterId)
+                if (char) {
+                  charactersMap.set(p.characterId, char)
+                }
+              }
+            }
+
+            // Select next speaker
+            const nextSpeakerResult = selectNextSpeaker(
+              chat.participants,
+              charactersMap,
+              turnState,
+              userParticipantId
+            )
+
+            logger.debug('[Chat Messages] Next speaker calculated', {
+              nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+              reason: nextSpeakerResult.reason,
+              cycleComplete: nextSpeakerResult.cycleComplete,
+              isMultiCharacter: isMultiCharacterChat(chat.participants),
+            })
+
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
@@ -738,6 +831,13 @@ export async function POST(
                   usage,
                   attachmentResults,
                   toolsExecuted: toolMessages.length > 0,
+                  // Multi-character turn management info
+                  turn: {
+                    nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+                    reason: nextSpeakerResult.reason,
+                    cycleComplete: nextSpeakerResult.cycleComplete,
+                    isUsersTurn: nextSpeakerResult.nextSpeakerId === null,
+                  },
                 })}\n\n`
               )
             )

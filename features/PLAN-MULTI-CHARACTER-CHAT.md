@@ -6,14 +6,16 @@ This plan covers the implementation of full multi-character chat support for Qui
 
 | Component | Status |
 |-----------|--------|
-| Participants Array in Chat Schema | EXISTS (needs migration verification) |
-| Message participantId Field | PENDING |
-| Character talkativeness Field | PENDING |
-| Turn Selection Algorithm | PENDING |
-| Participant Sidebar UI | PENDING |
-| Nudge/Queue System | PENDING |
-| Add Character Dialog | PENDING |
-| Multi-Character Context Building | PENDING |
+| Participants Array in Chat Schema | ✅ COMPLETE |
+| Message participantId Field | ✅ COMPLETE (Phase 1) |
+| Character talkativeness Field | ✅ COMPLETE (Phase 1) |
+| Turn Selection Algorithm | ✅ COMPLETE (Phase 2) |
+| Turn API Endpoint | ✅ COMPLETE (Phase 2) |
+| Connection Profile Resolver | ✅ COMPLETE (Phase 1) |
+| Participant Sidebar UI | PENDING (Phase 4) |
+| Nudge/Queue System | ✅ CORE COMPLETE (Phase 2) - UI PENDING (Phase 5) |
+| Add Character Dialog | PENDING (Phase 6) |
+| Multi-Character Context Building | PENDING (Phase 3) |
 
 ---
 
