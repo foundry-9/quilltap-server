@@ -41,7 +41,20 @@ export default function CharactersPage() {
   const { shouldHideByIds } = useQuickHide()
 
   const visibleCharacters = useMemo(
-    () => characters.filter(character => !shouldHideByIds(character.tags || [])),
+    () => characters
+      .filter(character => !shouldHideByIds(character.tags || []))
+      .sort((a, b) => {
+        // 1. Favorites first
+        if (a.isFavorite !== b.isFavorite) {
+          return a.isFavorite ? -1 : 1
+        }
+        // 2. Then by chat count (descending)
+        if (a._count.chats !== b._count.chats) {
+          return b._count.chats - a._count.chats
+        }
+        // 3. Then alphabetically by name (case-insensitive)
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      }),
     [characters, shouldHideByIds]
   )
 
