@@ -33,6 +33,7 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
     >
       <div className="flex items-start gap-3">
         {result.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={result.avatarUrl}
             alt={result.name}
@@ -86,6 +87,7 @@ function PersonaResultCard({ result, query, onResultClick }: { result: PersonaSe
     >
       <div className="flex items-start gap-3">
         {result.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={result.avatarUrl}
             alt={result.name}

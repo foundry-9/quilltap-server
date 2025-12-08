@@ -31,7 +31,9 @@ export const metadata = {
   type: 'THEME',
 } as const;
 
-export default {
+const oceanThemePlugin = {
   initialize,
   metadata,
 };
+
+export default oceanThemePlugin;

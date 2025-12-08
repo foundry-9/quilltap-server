@@ -94,7 +94,7 @@ export function ThemeStyleInjector({
       return null;
     }
     return themeTokensToCSS(tokens);
-  }, [tokens, mode, themeId]);
+  }, [tokens]);
 
   // Combine all CSS: fonts + variables + overrides
   const fullCss = useMemo(() => {

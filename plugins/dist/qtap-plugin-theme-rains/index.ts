@@ -30,7 +30,9 @@ export const metadata = {
   type: 'THEME',
 } as const;
 
-export default {
+const rainsThemePlugin = {
   initialize,
   metadata,
 };
+
+export default rainsThemePlugin;

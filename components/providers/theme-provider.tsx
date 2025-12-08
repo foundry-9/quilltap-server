@@ -493,7 +493,7 @@ function ThemeStyleInjector({ tokens, mode, fonts, themeId }: ThemeStyleInjector
   // Generate CSS from tokens
   const baseCss = useMemo(() => {
     return themeTokensToCSS(tokens);
-  }, [tokens, mode]);
+  }, [tokens]);
 
   // Combine all CSS: fonts + variables
   const cssContent = useMemo(() => {
