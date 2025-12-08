@@ -33,10 +33,10 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
   const [expanded, setExpanded] = useState(false)
 
   const importanceColor = memory.importance >= 0.7
-    ? 'text-red-600 dark:text-red-400'
+    ? 'text-destructive'
     : memory.importance >= 0.4
-      ? 'text-yellow-600 dark:text-yellow-400'
-      : 'text-gray-500 dark:text-gray-400'
+      ? 'text-yellow-600'
+      : 'text-muted-foreground'
 
   const importanceLabel = memory.importance >= 0.7
     ? 'High'
@@ -53,11 +53,11 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
   }
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+    <div className="bg-card border border-border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-gray-900 dark:text-white font-medium line-clamp-2">
+          <p className="text-sm text-foreground font-medium line-clamp-2">
             {memory.summary}
           </p>
         </div>
@@ -67,8 +67,8 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
           </span>
           <span className={`text-xs px-2 py-0.5 rounded-full ${
             memory.source === 'AUTO'
-              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-              : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+              ? 'bg-blue-100/80 text-blue-700'
+              : 'bg-green-100/80 text-green-700'
           }`}>
             {memory.source === 'AUTO' ? 'Auto' : 'Manual'}
           </span>
@@ -77,13 +77,13 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
 
       {/* Content Preview / Full Content */}
       <div className="mb-3">
-        <p className={`text-sm text-gray-600 dark:text-gray-300 ${expanded ? '' : 'line-clamp-3'}`}>
+        <p className={`text-sm text-muted-foreground ${expanded ? '' : 'line-clamp-3'}`}>
           {memory.content}
         </p>
         {memory.content.length > 150 && (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
+            className="text-xs text-primary hover:underline mt-1"
           >
             {expanded ? 'Show less' : 'Show more'}
           </button>
@@ -96,7 +96,7 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
           {memory.keywords.map((keyword, index) => (
             <span
               key={index}
-              className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded"
+              className="text-xs px-2 py-0.5 bg-accent text-muted-foreground rounded"
             >
               {keyword}
             </span>
@@ -114,15 +114,15 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-slate-700">
-        <span className="text-xs text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-between pt-2 border-t border-border">
+        <span className="text-xs text-muted-foreground">
           {formatDate(memory.createdAt)}
         </span>
         <div className="flex gap-2">
           {onEdit && (
             <button
               onClick={() => onEdit(memory)}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              className="text-xs text-primary hover:underline"
             >
               Edit
             </button>
@@ -131,7 +131,7 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
             <button
               onClick={() => onDelete(memory.id)}
               disabled={isDeleting}
-              className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+              className="text-xs text-destructive hover:underline disabled:opacity-50"
             >
               {isDeleting ? 'Deleting...' : 'Delete'}
             </button>

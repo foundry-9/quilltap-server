@@ -204,25 +204,25 @@ export function ImportWizard({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 Select SillyTavern chat file (JSON or JSONL)
               </label>
               <input
                 type="file"
                 accept=".json,.jsonl"
                 onChange={handleFileSelect}
-                className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-200 hover:file:bg-blue-100 dark:hover:file:bg-blue-800"
+                className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-accent file:text-primary hover:file:bg-accent/80"
               />
             </div>
 
             {selectedFile && (
-              <div className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="text-sm text-muted-foreground">
                 Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
               </div>
             )}
 
             {error && (
-              <div className="text-sm text-red-600 dark:text-red-400 whitespace-pre-wrap">
+              <div className="text-sm text-destructive whitespace-pre-wrap">
                 {error}
               </div>
             )}
@@ -231,7 +231,7 @@ export function ImportWizard({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600"
+                className="px-4 py-2 border border-border rounded-md text-sm font-medium text-foreground bg-background hover:bg-accent"
               >
                 Cancel
               </button>
@@ -239,7 +239,7 @@ export function ImportWizard({
                 type="button"
                 onClick={handleAnalyze}
                 disabled={!selectedFile}
-                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Analyze File
               </button>
@@ -250,8 +250,8 @@ export function ImportWizard({
       case 'analyzing':
         return (
           <div className="flex flex-col items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400" />
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Analyzing file...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+            <p className="mt-4 text-muted-foreground">Analyzing file...</p>
           </div>
         )
 
@@ -259,7 +259,7 @@ export function ImportWizard({
         return (
           <div className="space-y-4">
             {parseResult && (
-              <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <div className="text-sm text-muted-foreground mb-4">
                 Found {parseResult.messages.length} messages from {parseResult.speakers.length} speaker(s)
                 {parseResult.isGroupChat && ' (Group Chat)'}
               </div>
@@ -277,7 +277,7 @@ export function ImportWizard({
             />
 
             {error && (
-              <div className="text-sm text-red-600 dark:text-red-400 whitespace-pre-wrap">
+              <div className="text-sm text-destructive whitespace-pre-wrap">
                 {error}
               </div>
             )}
@@ -290,7 +290,7 @@ export function ImportWizard({
                   setParseResult(null)
                   setMappings([])
                 }}
-                className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600"
+                className="px-4 py-2 border border-border rounded-md text-sm font-medium text-foreground bg-background hover:bg-accent"
               >
                 Back
               </button>
@@ -298,7 +298,7 @@ export function ImportWizard({
                 type="button"
                 onClick={handleImport}
                 disabled={!defaultProfileId || mappings.length === 0}
-                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Import Chat
               </button>
@@ -309,22 +309,22 @@ export function ImportWizard({
       case 'importing':
         return (
           <div className="flex flex-col items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400" />
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Importing chat...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+            <p className="mt-4 text-muted-foreground">Importing chat...</p>
           </div>
         )
 
       case 'complete':
         return (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+            <div className="flex items-center gap-2 text-green-600">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
               <span className="text-lg font-medium">Import Complete!</span>
             </div>
 
-            <div className="text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-sm text-muted-foreground">
               Imported {importedChat?._count?.messages || 0} messages
               {importedChat?.createdEntities?.characters?.length > 0 && (
                 <>, created {importedChat.createdEntities.characters.length} new character(s)</>
@@ -338,7 +338,7 @@ export function ImportWizard({
               <button
                 type="button"
                 onClick={() => setShowMemoryDialog(true)}
-                className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600"
+                className="px-4 py-2 border border-border rounded-md text-sm font-medium text-foreground bg-background hover:bg-accent"
               >
                 Create Memories...
               </button>
@@ -350,7 +350,7 @@ export function ImportWizard({
                   }
                   onClose()
                 }}
-                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90"
               >
                 Done
               </button>
@@ -362,23 +362,23 @@ export function ImportWizard({
 
   return (
     <>
-      <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 flex items-center justify-center p-4 z-50">
-        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <div className="bg-background rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <h3 className="text-lg font-medium text-foreground mb-4">
             Import SillyTavern Chat
           </h3>
 
           {/* Step indicator */}
-          <div className="flex items-center gap-2 mb-6 text-sm text-gray-500 dark:text-gray-400">
-            <span className={step === 'file-select' ? 'text-blue-600 dark:text-blue-400 font-medium' : ''}>
+          <div className="flex items-center gap-2 mb-6 text-sm text-muted-foreground">
+            <span className={step === 'file-select' ? 'text-primary font-medium' : ''}>
               1. Select File
             </span>
             <span>→</span>
-            <span className={step === 'mapping' ? 'text-blue-600 dark:text-blue-400 font-medium' : ''}>
+            <span className={step === 'mapping' ? 'text-primary font-medium' : ''}>
               2. Map Speakers
             </span>
             <span>→</span>
-            <span className={step === 'complete' ? 'text-blue-600 dark:text-blue-400 font-medium' : ''}>
+            <span className={step === 'complete' ? 'text-primary font-medium' : ''}>
               3. Complete
             </span>
           </div>

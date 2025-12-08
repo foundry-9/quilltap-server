@@ -168,14 +168,14 @@ function ThemeCard({ theme, isActive, onSelect, disabled }: ThemeCardProps) {
         text-left w-full
         ${
           isActive
-            ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-            : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
+            ? 'border-primary bg-accent'
+            : 'border-border hover:border-input'
         }
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
       `}
     >
       {/* Theme Preview */}
-      <div className="w-full h-20 rounded-md mb-3 overflow-hidden border border-gray-200 dark:border-slate-600">
+      <div className="w-full h-20 rounded-md mb-3 overflow-hidden border border-border">
         {theme?.preview ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -192,11 +192,11 @@ function ThemeCard({ theme, isActive, onSelect, disabled }: ThemeCardProps) {
       </div>
 
       {/* Theme Name */}
-      <div className="font-medium text-gray-900 dark:text-white">{name}</div>
+      <div className="font-medium text-foreground">{name}</div>
 
       {/* Theme Description */}
       {description && (
-        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+        <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
           {description}
         </div>
       )}
@@ -204,7 +204,7 @@ function ThemeCard({ theme, isActive, onSelect, disabled }: ThemeCardProps) {
       {/* Dark Mode Support Badge */}
       {!isDefault && theme.supportsDarkMode && (
         <div className="mt-2">
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
             <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -222,7 +222,7 @@ function ThemeCard({ theme, isActive, onSelect, disabled }: ThemeCardProps) {
       {isActive && (
         <div className="absolute top-2 right-2">
           <svg
-            className="w-5 h-5 text-blue-500 dark:text-blue-400"
+            className="w-5 h-5 text-primary"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -273,8 +273,8 @@ function ColorModeSelector({
             flex items-center gap-4 p-4 border rounded-lg transition-colors
             ${
               value === option.value
-                ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800/50'
+                ? 'border-primary bg-accent'
+                : 'border-border hover:bg-accent'
             }
             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
           `}
@@ -302,8 +302,8 @@ function ColorModeSelector({
             flex-shrink-0 p-2 rounded-full
             ${
               value === option.value
-                ? 'bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300'
-                : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
+                ? 'bg-primary/10 text-primary'
+                : 'bg-muted text-muted-foreground'
             }
           `}
           >
@@ -312,8 +312,8 @@ function ColorModeSelector({
 
           {/* Label and Description */}
           <div className="flex-1">
-            <div className="font-medium text-gray-900 dark:text-white">{option.label}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
+            <div className="font-medium text-foreground">{option.label}</div>
+            <div className="text-sm text-muted-foreground">
               {option.description}
               {option.value === 'system' && (
                 <span className="ml-1 text-xs">
@@ -327,7 +327,7 @@ function ColorModeSelector({
           {value === option.value && (
             <div className="flex-shrink-0">
               <svg
-                className="w-5 h-5 text-blue-500 dark:text-blue-400"
+                className="w-5 h-5 text-primary"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -392,7 +392,7 @@ export default function AppearanceTab() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <svg
             className="animate-spin h-5 w-5"
             fill="none"
@@ -439,8 +439,8 @@ export default function AppearanceTab() {
 
       {/* Color Mode Section */}
       <section>
-        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Color Mode</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
+        <h2 className="text-xl font-semibold mb-2 text-foreground">Color Mode</h2>
+        <p className="text-muted-foreground mb-4">
           Choose how Quilltap should appear. You can select light mode, dark mode, or follow your
           system settings.
         </p>
@@ -454,9 +454,9 @@ export default function AppearanceTab() {
       </section>
 
       {/* Theme Selection Section */}
-      <section className="border-t border-gray-200 dark:border-slate-700 pt-8">
-        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Theme</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
+      <section className="border-t border-border pt-8">
+        <h2 className="text-xl font-semibold mb-2 text-foreground">Theme</h2>
+        <p className="text-muted-foreground mb-4">
           Select a theme to customize the colors and appearance of Quilltap.
           {themes.length === 0 && (
             <span className="block mt-1 text-sm">
@@ -488,10 +488,10 @@ export default function AppearanceTab() {
 
         {/* Hint about theme plugins */}
         {themes.length === 0 && (
-          <div className="mt-4 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+          <div className="mt-4 p-4 bg-accent rounded-lg border border-border">
             <div className="flex items-start gap-3">
               <svg
-                className="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0 mt-0.5"
+                className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -504,7 +504,7 @@ export default function AppearanceTab() {
                 />
               </svg>
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Additional themes can be added by installing theme plugins from the{' '}
                   <span className="font-medium">Plugins</span> tab.
                 </p>
@@ -516,19 +516,19 @@ export default function AppearanceTab() {
 
       {/* Current Theme Info (Debug Section - only in development) */}
       {process.env.NODE_ENV === 'development' && (
-        <section className="border-t border-gray-200 dark:border-slate-700 pt-8">
+        <section className="border-t border-border pt-8">
           <details className="text-sm">
-            <summary className="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
               Debug: Current Theme State
             </summary>
-            <div className="mt-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg font-mono text-xs space-y-2">
+            <div className="mt-2 p-3 bg-muted rounded-lg font-mono text-xs space-y-2">
               <div>Active Theme ID: {activeThemeId ?? 'default'}</div>
               <div>Color Mode: {colorMode}</div>
               <div>Resolved Mode: {resolvedColorMode}</div>
               <div>Available Themes: {themes.length}</div>
 
               {/* Visual test: These boxes use CSS variables directly */}
-              <div className="mt-4 pt-4 border-t border-gray-300 dark:border-slate-600">
+              <div className="mt-4 pt-4 border-t border-border">
                 <div className="text-xs font-semibold mb-2">CSS Variable Test (should change with theme):</div>
                 <div className="flex gap-2">
                   <div
@@ -552,7 +552,7 @@ export default function AppearanceTab() {
                     title="--theme-accent"
                   />
                 </div>
-                <div className="text-xs mt-1 text-gray-500">
+                <div className="text-xs mt-1 text-muted-foreground">
                   bg / primary / secondary / accent
                 </div>
               </div>

@@ -203,14 +203,14 @@ export default function TagsTab() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="text-gray-600 dark:text-gray-400">Loading settings...</div>
+        <div className="text-muted-foreground">Loading settings...</div>
       </div>
     )
   }
 
   if (!settings) {
     return (
-      <div className="text-red-600 dark:text-red-400 py-8">
+      <div className="text-destructive py-8">
         Failed to load tag settings
       </div>
     )
@@ -219,34 +219,34 @@ export default function TagsTab() {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-4 text-red-800 dark:text-red-200">
+        <div className="bg-destructive/10 border border-destructive/30 rounded p-4 text-destructive">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-4 text-green-800 dark:text-green-200">
+        <div className="bg-green-50 border border-green-200 rounded p-4 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200">
           Settings saved successfully
         </div>
       )}
 
       <div>
         <h2 className="text-xl font-semibold mb-4">Tag Appearance</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
+        <p className="text-muted-foreground mb-4">
           Map tags to custom emojis and colors. Tags without a custom style use the default gray border/background and show only the tag name.
         </p>
 
         <div className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Tag
               </label>
               <select
                 value={selectedTagId}
                 onChange={(e) => setSelectedTagId(e.target.value)}
                 disabled={tagSaving || availableForStyling.length === 0}
-                className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">Select a tag</option>
                 {availableForStyling.map((tag) => (
@@ -260,7 +260,7 @@ export default function TagsTab() {
               type="button"
               onClick={handleAddTagStyle}
               disabled={!selectedTagId || tagSaving}
-              className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
             >
               Add Style
             </button>
@@ -275,17 +275,17 @@ export default function TagsTab() {
                 const quickHideEnabled = Boolean(tagMeta?.quickHide)
 
                 return (
-                  <div key={tagId} className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800 shadow-sm flex flex-col">
+                  <div key={tagId} className="border border-border rounded-lg p-4 bg-card shadow-sm flex flex-col">
                     <div className="flex-1">
-                      <div className="font-medium text-gray-900 dark:text-white text-sm">{label}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">Preview:</div>
+                      <div className="font-medium text-foreground text-sm">{label}</div>
+                      <div className="text-xs text-muted-foreground mt-2">Preview:</div>
                       <div className="mt-2 mb-4">
                         <TagBadge tag={{ id: tagId, name: label }} styleOverride={mergedStyle} />
                       </div>
                     </div>
 
                     <div className="space-y-3">
-                      <label className="block text-sm text-gray-700 dark:text-gray-300">
+                      <label className="block text-sm text-foreground">
                         Emoji
                         <input
                           type="text"
@@ -294,12 +294,12 @@ export default function TagsTab() {
                           onChange={(e) => handleTagStyleFieldChange(tagId, { emoji: e.target.value.trim() || null })}
                           disabled={tagSaving}
                           placeholder="😀"
-                          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                          className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
                         />
                       </label>
 
                       <div className="space-y-2 pt-1">
-                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <label className="flex items-center gap-2 text-sm text-foreground">
                           <input
                             type="checkbox"
                             checked={mergedStyle.emojiOnly ?? false}
@@ -310,7 +310,7 @@ export default function TagsTab() {
                           <span>Show emoji only</span>
                         </label>
 
-                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <label className="flex items-center gap-2 text-sm text-foreground">
                           <input
                             type="checkbox"
                             checked={mergedStyle.bold ?? false}
@@ -321,7 +321,7 @@ export default function TagsTab() {
                           <span className="font-bold">Bold</span>
                         </label>
 
-                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <label className="flex items-center gap-2 text-sm text-foreground">
                           <input
                             type="checkbox"
                             checked={mergedStyle.italic ?? false}
@@ -332,7 +332,7 @@ export default function TagsTab() {
                           <span className="italic">Italic</span>
                         </label>
 
-                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <label className="flex items-center gap-2 text-sm text-foreground">
                           <input
                             type="checkbox"
                             checked={mergedStyle.strikethrough ?? false}
@@ -343,8 +343,8 @@ export default function TagsTab() {
                           <span className="line-through">Strikethrough</span>
                         </label>
 
-                        <div className="pt-2 mt-2 border-t border-dashed border-gray-200 dark:border-slate-700">
-                          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <div className="pt-2 mt-2 border-t border-dashed border-border">
+                          <label className="flex items-center gap-2 text-sm text-foreground">
                             <input
                               type="checkbox"
                               checked={quickHideEnabled}
@@ -354,31 +354,31 @@ export default function TagsTab() {
                             />
                             <span>Enable quick-hide button</span>
                           </label>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          <p className="text-xs text-muted-foreground mt-1">
                             Adds this tag to the navbar quick-hide controls.
                           </p>
                         </div>
                       </div>
 
-                      <label className="block text-sm text-gray-700 dark:text-gray-300">
+                      <label className="block text-sm text-foreground">
                         Border + Font Color
                         <input
                           type="color"
                           value={mergedStyle.foregroundColor}
                           onChange={(e) => handleTagStyleFieldChange(tagId, { foregroundColor: e.target.value })}
                           disabled={tagSaving}
-                          className="mt-1 block h-10 w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
+                          className="mt-1 block h-10 w-full rounded-md border border-input bg-background"
                         />
                       </label>
 
-                      <label className="block text-sm text-gray-700 dark:text-gray-300">
+                      <label className="block text-sm text-foreground">
                         Background Color
                         <input
                           type="color"
                           value={mergedStyle.backgroundColor}
                           onChange={(e) => handleTagStyleFieldChange(tagId, { backgroundColor: e.target.value })}
                           disabled={tagSaving}
-                          className="mt-1 block h-10 w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
+                          className="mt-1 block h-10 w-full rounded-md border border-input bg-background"
                         />
                       </label>
 
@@ -386,7 +386,7 @@ export default function TagsTab() {
                         type="button"
                         onClick={() => handleRemoveTagStyle(tagId)}
                         disabled={tagSaving}
-                        className="w-full px-3 py-1.5 text-sm rounded-md text-red-600 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
+                        className="w-full px-3 py-1.5 text-sm rounded-md text-destructive border border-destructive/30 hover:bg-destructive/10 disabled:opacity-50"
                       >
                         Remove Style
                       </button>
@@ -396,7 +396,7 @@ export default function TagsTab() {
               })}
             </div>
           ) : (
-            <div className="text-sm text-gray-600 dark:text-gray-400 border border-dashed border-gray-300 dark:border-slate-700 rounded-lg p-4">
+            <div className="text-sm text-muted-foreground border border-dashed border-border rounded-lg p-4">
               No custom tag styles yet. Select a tag above to add an emoji and colors.
             </div>
           )}

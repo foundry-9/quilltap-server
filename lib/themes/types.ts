@@ -95,6 +95,10 @@ export const ColorPaletteSchema = z.object({
   warningForeground: CSSColorSchema.optional().describe('Text on warning color'),
   info: CSSColorSchema.optional().describe('Info state color'),
   infoForeground: CSSColorSchema.optional().describe('Text on info color'),
+
+  // Chat-specific colors
+  chatUser: CSSColorSchema.optional().describe('User message bubble background'),
+  chatUserForeground: CSSColorSchema.optional().describe('User message bubble text'),
 });
 
 export type ColorPalette = z.infer<typeof ColorPaletteSchema>;

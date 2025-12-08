@@ -47,7 +47,7 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
 
   return (
     <div className="mt-8">
-      <h2 className="mb-6 text-2xl font-bold text-gray-900 dark:text-white">
+      <h2 className="mb-6 text-2xl font-bold text-foreground">
         Your Favorite Characters
       </h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -55,7 +55,7 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
           <Link
             key={character.id}
             href={`/characters/${character.id}/view`}
-            className="flex flex-col items-center gap-4 p-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all"
+            className="flex flex-col items-center gap-4 p-4 rounded-lg border border-border bg-card hover:border-primary hover:shadow-md transition-all"
           >
             {getAvatarSrc(character) ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -73,11 +73,11 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
                 </span>
               </div>
             )}
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white text-center truncate w-full px-1">
+            <h3 className="text-sm font-semibold text-foreground text-center truncate w-full px-1">
               {character.name}
             </h3>
             {character.title && (
-              <p className="text-xs text-gray-600 dark:text-gray-400 text-center truncate w-full px-1">
+              <p className="text-xs text-muted-foreground text-center truncate w-full px-1">
                 {character.title}
               </p>
             )}

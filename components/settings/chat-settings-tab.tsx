@@ -227,7 +227,7 @@ export default function ChatSettingsTab() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="text-gray-600 dark:text-gray-400">Loading settings...</div>
+        <div className="text-muted-foreground">Loading settings...</div>
       </div>
     )
   }
@@ -256,7 +256,7 @@ export default function ChatSettingsTab() {
 
       <div>
         <h2 className="text-xl font-semibold mb-4">Message Avatar Display</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
+        <p className="text-muted-foreground mb-4">
           Control how avatars are displayed in chat messages
         </p>
 
@@ -264,7 +264,7 @@ export default function ChatSettingsTab() {
           {AVATAR_MODES.map((mode) => (
             <label
               key={mode.value}
-              className="flex items-start gap-3 p-4 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+              className="flex items-start gap-3 p-4 border border-border rounded hover:bg-accent cursor-pointer transition-colors"
             >
               <input
                 type="radio"
@@ -277,7 +277,7 @@ export default function ChatSettingsTab() {
               />
               <div className="flex-1">
                 <div className="font-medium">{mode.label}</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+                <div className="text-sm text-muted-foreground">
                   {mode.description}
                 </div>
               </div>
@@ -286,9 +286,9 @@ export default function ChatSettingsTab() {
         </div>
       </div>
 
-      <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+      <div className="border-t border-border pt-6">
         <h2 className="text-xl font-semibold mb-4">Avatar Display Style</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
+        <p className="text-muted-foreground mb-4">
           Choose how avatars are shaped and displayed throughout the application
         </p>
 
@@ -296,7 +296,7 @@ export default function ChatSettingsTab() {
           {AVATAR_STYLES.map((style) => (
             <label
               key={style.value}
-              className="flex items-start gap-3 p-4 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+              className="flex items-start gap-3 p-4 border border-border rounded hover:bg-accent cursor-pointer transition-colors"
             >
               <input
                 type="radio"
@@ -309,7 +309,7 @@ export default function ChatSettingsTab() {
               />
               <div className="flex-1">
                 <div className="font-medium">{style.label}</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+                <div className="text-sm text-muted-foreground">
                   {style.description}
                 </div>
               </div>
@@ -319,16 +319,16 @@ export default function ChatSettingsTab() {
         </div>
       </div>
 
-      <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+      <div className="border-t border-border pt-6">
         <h2 className="text-xl font-semibold mb-4">Cheap LLM Settings</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
+        <p className="text-muted-foreground mb-4">
           Configure which LLM to use for background tasks like memory extraction and summarization
         </p>
 
         <div className="space-y-4">
           {/* Strategy Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium mb-2">
               Strategy
             </label>
             <div className="space-y-2">
@@ -339,7 +339,7 @@ export default function ChatSettingsTab() {
               ].map((strategy) => (
                 <label
                   key={strategy.value}
-                  className="flex items-start gap-3 p-3 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                  className="flex items-start gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer transition-colors"
                 >
                   <input
                     type="radio"
@@ -352,7 +352,7 @@ export default function ChatSettingsTab() {
                   />
                   <div className="flex-1">
                     <div className="font-medium text-sm">{strategy.label}</div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                    <div className="text-xs text-muted-foreground">
                       {strategy.description}
                     </div>
                   </div>
@@ -364,14 +364,14 @@ export default function ChatSettingsTab() {
           {/* User Defined Profile Selection */}
           {settings?.cheapLLMSettings.strategy === 'USER_DEFINED' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium mb-2">
                 Select Cheap LLM Profile
               </label>
               <select
                 value={settings?.cheapLLMSettings.userDefinedProfileId || ''}
                 onChange={(e) => handleCheapLLMUpdate({ userDefinedProfileId: e.target.value || null })}
                 disabled={saving || loadingProfiles}
-                className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">Select a profile...</option>
                 {connectionProfiles.map((profile) => (
@@ -390,17 +390,17 @@ export default function ChatSettingsTab() {
 
           {/* Default Cheap Profile (Global Override) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium mb-2">
               Global Default Cheap LLM (Optional Override)
             </label>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+            <p className="text-xs text-muted-foreground mb-2">
               If set, this profile will always be used regardless of strategy
             </p>
             <select
               value={settings?.cheapLLMSettings.defaultCheapProfileId || ''}
               onChange={(e) => handleCheapLLMUpdate({ defaultCheapProfileId: e.target.value || null })}
               disabled={saving || loadingProfiles}
-              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Not set</option>
               {connectionProfiles.map((profile) => (
@@ -412,7 +412,7 @@ export default function ChatSettingsTab() {
           </div>
 
           {/* Fallback to Local */}
-          <label className="flex items-center gap-3 p-3 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+          <label className="flex items-center gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer transition-colors">
             <input
               type="checkbox"
               checked={settings?.cheapLLMSettings.fallbackToLocal ?? true}
@@ -422,7 +422,7 @@ export default function ChatSettingsTab() {
             />
             <div className="flex-1">
               <div className="font-medium text-sm">Fallback to Local</div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">
+              <div className="text-xs text-muted-foreground">
                 Use local Ollama models as fallback if configured strategy is unavailable
               </div>
             </div>
@@ -430,7 +430,7 @@ export default function ChatSettingsTab() {
 
           {/* Embedding Provider */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium mb-2">
               Embedding Provider
             </label>
             <div className="space-y-2">
@@ -441,7 +441,7 @@ export default function ChatSettingsTab() {
               ].map((provider) => (
                 <label
                   key={provider.value}
-                  className="flex items-start gap-3 p-3 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                  className="flex items-start gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer transition-colors"
                 >
                   <input
                     type="radio"
@@ -454,7 +454,7 @@ export default function ChatSettingsTab() {
                   />
                   <div className="flex-1">
                     <div className="font-medium text-sm">{provider.label}</div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                    <div className="text-xs text-muted-foreground">
                       {provider.description}
                     </div>
                   </div>
@@ -465,17 +465,17 @@ export default function ChatSettingsTab() {
 
           {/* Embedding Profile Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium mb-2">
               Embedding Profile (Optional)
             </label>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+            <p className="text-xs text-muted-foreground mb-2">
               Specific embedding profile to use. Leave blank to use the default for the selected embedding provider.
             </p>
             <select
               value={settings?.cheapLLMSettings.embeddingProfileId || ''}
               onChange={(e) => handleCheapLLMUpdate({ embeddingProfileId: e.target.value || null })}
               disabled={saving}
-              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Use default for provider</option>
               {embeddingProfiles.map((profile) => (
@@ -494,19 +494,19 @@ export default function ChatSettingsTab() {
       </div>
 
       {/* Image Description Profile */}
-      <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+      <div className="border-t border-border pt-6">
         <h2 className="text-xl font-semibold mb-4">Image Description Profile</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
+        <p className="text-muted-foreground mb-4">
           When you attach an image to a chat with a provider that doesn&apos;t support images (like Ollama, OpenRouter, etc.),
           this profile will be used to generate a text description of the image.
         </p>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium mb-2">
               Image Description Profile
             </label>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+            <p className="text-xs text-muted-foreground mb-2">
               Select a vision-capable profile (like gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash) to describe images.
               If not set, the system will automatically use any available vision-capable profile.
             </p>
@@ -532,7 +532,7 @@ export default function ChatSettingsTab() {
                 }
               }}
               disabled={saving || loadingProfiles}
-              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Auto-select vision-capable profile</option>
               {connectionProfiles

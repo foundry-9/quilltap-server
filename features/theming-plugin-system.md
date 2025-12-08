@@ -1023,24 +1023,28 @@ plugins/src/qtap-plugin-theme-ocean/
 4. ⏭️ Create preview image (skipped - requires image generation)
 5. ✅ Document theme creation process (README.md)
 
-### Step 7: UI Component Audit (Estimated: Theme integration)
+### Step 7: UI Component Audit (Estimated: Theme integration) ✅ COMPLETE
 
 Audit and update UI components to use theme-aware Tailwind classes instead of hardcoded colors:
 
-1. Replace hardcoded background colors (`bg-gray-50`, `bg-slate-800`, etc.) with `bg-background`, `bg-card`, `bg-muted`
-2. Replace hardcoded text colors (`text-gray-900`, `text-white`, etc.) with `text-foreground`, `text-muted-foreground`
-3. Replace hardcoded border colors (`border-gray-200`, `border-slate-700`, etc.) with `border-border`
-4. Replace hardcoded accent/primary colors (`bg-blue-500`, `text-blue-400`, etc.) with `bg-primary`, `text-primary`
-5. Update interactive states (hover, focus) to use theme variables
-6. Test all components with Default, Ocean, and Rains themes in both light and dark modes
+1. ✅ Replace hardcoded background colors (`bg-gray-50`, `bg-slate-800`, etc.) with `bg-background`, `bg-card`, `bg-muted`
+2. ✅ Replace hardcoded text colors (`text-gray-900`, `text-white`, etc.) with `text-foreground`, `text-muted-foreground`
+3. ✅ Replace hardcoded border colors (`border-gray-200`, `border-slate-700`, etc.) with `border-border`
+4. ✅ Replace hardcoded accent/primary colors (`bg-blue-500`, `text-blue-400`, etc.) with `bg-primary`, `text-primary`
+5. ✅ Update interactive states (hover, focus) to use theme variables
+6. ⏳ Test all components with Default, Ocean, and Rains themes in both light and dark modes (manual testing required)
 
-Priority components to update:
+Components updated (~50+ files, ~1800+ color class replacements):
 
-- Settings page tabs and forms
-- Chat interface (messages, input area, sidebar)
-- Navigation header
-- Modal dialogs and popovers
-- Buttons and form inputs
+- ✅ Settings page tabs (connection-profiles, embedding-profiles, api-keys, plugins, chat-settings, appearance, image-profiles, tags, model-selector, restore-dialog, backup-dialog, delete-data-card)
+- ✅ Chat interface (GenerateImageDialog, ToolMessage, ChatSettingsModal, MessageContent, ChatGalleryImageViewModal, ToolPalette, ImageModal)
+- ✅ Navigation header (nav.tsx, search-results, search-dialog, search-bar, recent-chats)
+- ✅ Modal dialogs and popovers (housekeeping-dialog, image-upload-dialog, ImageDetailModal, PhotoGalleryModal)
+- ✅ Memory components (memory-editor, memory-card, memory-list)
+- ✅ Import/character components (import-wizard, speaker-mapper, character-conversations-tab, favorite-characters)
+- ✅ Gallery components (EmbeddedPhotoGallery, avatar-selector, image-gallery, DeletedImagePlaceholder)
+- ✅ Tag components (tag-dropdown, tag-editor)
+- ✅ Debug components (DebugPanel, ServerLogsTab, BrowserConsoleTab, DevConsolePanel, DevConsoleLayout)
 
 ### Step 8: Documentation & Polish
 

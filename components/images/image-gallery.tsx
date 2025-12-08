@@ -95,7 +95,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
   if (loading) {
     return (
       <div className={`flex items-center justify-center py-12 ${className}`}>
-        <div className="text-gray-500 dark:text-gray-400">Loading images...</div>
+        <div className="text-muted-foreground">Loading images...</div>
       </div>
     );
   }
@@ -103,7 +103,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
   if (error) {
     return (
       <div className={`flex items-center justify-center py-12 ${className}`}>
-        <div className="text-red-500">Error: {error}</div>
+        <div className="text-destructive">Error: {error}</div>
       </div>
     );
   }
@@ -111,7 +111,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
   if (images.length === 0) {
     return (
       <div className={`flex items-center justify-center py-12 ${className}`}>
-        <div className="text-gray-500 dark:text-gray-400">No images found</div>
+        <div className="text-muted-foreground">No images found</div>
       </div>
     );
   }
@@ -131,12 +131,12 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
           key={image.id}
           className={`relative group rounded-lg overflow-hidden border-2 transition-all ${
             selectedImageId === image.id
-              ? 'border-blue-500 ring-2 ring-blue-500 ring-opacity-50'
-              : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+              ? 'border-primary ring-2 ring-primary ring-opacity-50'
+              : 'border-border hover:border-accent'
           } ${onSelectImage ? 'cursor-pointer' : ''}`}
           onClick={() => onSelectImage?.(image)}
         >
-          <div className="aspect-square relative bg-gray-100 dark:bg-gray-800">
+          <div className="aspect-square relative bg-muted">
             {missingImages.has(image.id) ? (
               <DeletedImagePlaceholder
                 imageId={image.id}
@@ -172,7 +172,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
                   e.stopPropagation()
                   handleDeleteImage(image.id)
                 }}
-                className="absolute bottom-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+                className="absolute bottom-2 right-2 bg-destructive text-destructive-foreground p-2 rounded-full hover:bg-destructive/90 transition-colors"
                 title="Delete image"
                 aria-label="Delete image"
               >
@@ -189,7 +189,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
 
           {/* Selected indicator */}
           {selectedImageId === image.id && !missingImages.has(image.id) && (
-            <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
+            <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"

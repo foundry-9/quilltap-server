@@ -35,47 +35,47 @@ export default function DashboardNav({ user }: DashboardNavProps) {
   const supportsDebugToggle = routeSupportsDebug(pathname);
 
   return (
-    <nav className="border-b border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+    <nav className="border-b border-border bg-background">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-8">
-            <Link href="/dashboard" className="text-xl font-bold text-gray-900 dark:text-white">
+            <Link href="/dashboard" className="text-xl font-bold text-foreground">
               Quilltap
             </Link>
             <div className="hidden space-x-4 md:flex">
               <Link
                 href="/dashboard"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
+                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
               >
                 Dashboard
               </Link>
               <Link
                 href="/characters"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
+                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
               >
                 Characters
               </Link>
               <Link
                 href="/personas"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
+                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
               >
                 Personas
               </Link>
               <Link
                 href="/chats"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
+                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
               >
                 Chats
               </Link>
               <Link
                 href="/settings"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
+                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
               >
                 Settings
               </Link>
               <Link
                 href="/tools"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
+                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
               >
                 Tools
               </Link>
@@ -99,7 +99,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 <a
                   href={`/api/chats/${chat.chatId}/export`}
                   download
-                  className="px-3 py-2 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 dark:bg-slate-600 dark:hover:bg-slate-500 transition-colors"
+                  className="px-3 py-2 text-sm bg-primary text-primary-foreground rounded hover:opacity-90 transition-colors"
                 >
                   Export Chat
                 </a>
@@ -113,7 +113,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 className={`p-2 rounded-md transition-colors ${
                   devConsole.isOpen
                     ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
-                    : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-800'
+                    : 'text-muted-foreground hover:bg-muted'
                 }`}
                 title={devConsole.isOpen ? 'Close DevConsole (Ctrl+Shift+D)' : 'Open DevConsole (Ctrl+Shift+D)'}
               >
@@ -129,8 +129,8 @@ export default function DashboardNav({ user }: DashboardNavProps) {
               </button>
             )}
             <div className="hidden text-right md:block">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
+              <p className="text-sm font-medium text-foreground">{user.name}</p>
+              <p className="text-xs text-muted-foreground">{user.email}</p>
             </div>
             {quickHideTags.length > 0 && (
               <div className="flex max-w-xs flex-wrap items-center justify-end gap-2">
@@ -144,8 +144,8 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                       aria-pressed={isActive}
                       className={`rounded-full border px-1 py-0.5 transition-all ${
                         isActive
-                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-400 dark:border-blue-400 dark:bg-blue-900/40 dark:ring-blue-500'
-                          : 'border-gray-300 bg-white hover:border-blue-400 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-blue-400'
+                          ? 'border-primary bg-blue-50 ring-2 ring-ring dark:bg-blue-900/40'
+                          : 'border-border bg-background hover:border-primary'
                       }`}
                       title={isActive ? 'Show items with this tag' : 'Hide items with this tag'}
                     >
@@ -166,7 +166,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
             )}
             <button
               onClick={() => signOut({ callbackUrl: "/" })}
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+              className="rounded-md bg-destructive px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
             >
               Sign Out
             </button>

@@ -174,7 +174,7 @@ export default function ImageModal({
               handleTagCharacter()
             }}
             disabled={isTagging}
-            className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors disabled:opacity-50"
+            className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors disabled:opacity-50"
             title={`Add to ${characterName || 'character'}'s gallery`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -190,7 +190,7 @@ export default function ImageModal({
               handleTagPersona()
             }}
             disabled={isTagging}
-            className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors disabled:opacity-50"
+            className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors disabled:opacity-50"
             title={`Add to ${personaName || 'persona'}'s gallery`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -204,7 +204,7 @@ export default function ImageModal({
             e.stopPropagation()
             handleDownload()
           }}
-          className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+          className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors"
           title="Download"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -217,7 +217,7 @@ export default function ImageModal({
             e.stopPropagation()
             onClose()
           }}
-          className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+          className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors"
           title="Close"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -235,7 +235,7 @@ export default function ImageModal({
               handleDelete()
             }}
             disabled={isDeleting}
-            className="p-2 bg-red-600/80 hover:bg-red-600 rounded-full text-white transition-colors disabled:opacity-50"
+            className="p-2 bg-destructive/80 hover:bg-destructive rounded-full text-primary-foreground transition-colors disabled:opacity-50"
             title="Delete image"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

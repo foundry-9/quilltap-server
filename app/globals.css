@@ -57,9 +57,26 @@
   --theme-input: hsl(214.3 31.8% 91.4%);
   --theme-ring: hsl(222.2 84% 4.9%);
 
+  /* Extended semantic colors */
+  --theme-success: hsl(142 76% 36%);
+  --theme-success-foreground: hsl(0 0% 100%);
+  --theme-warning: hsl(38 92% 50%);
+  --theme-warning-foreground: hsl(0 0% 100%);
+  --theme-info: hsl(221 83% 53%);
+  --theme-info-foreground: hsl(0 0% 100%);
+
+  /* Chat-specific colors - user message bubbles */
+  --theme-chat-user: hsl(221 83% 53%);
+  --theme-chat-user-foreground: hsl(0 0% 100%);
+
   --theme-radius-lg: 0.5rem;
   --theme-radius-md: calc(0.5rem - 2px);
   --theme-radius-sm: calc(0.5rem - 4px);
+
+  /* Typography - default font stacks */
+  --theme-font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --theme-font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+  --theme-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
 /* Dark mode base values */
@@ -83,6 +100,18 @@
   --theme-border: hsl(217.2 32.6% 17.5%);
   --theme-input: hsl(217.2 32.6% 17.5%);
   --theme-ring: hsl(212.7 26.8% 83.9%);
+
+  /* Extended semantic colors - dark mode */
+  --theme-success: hsl(142 71% 45%);
+  --theme-success-foreground: hsl(0 0% 100%);
+  --theme-warning: hsl(38 92% 50%);
+  --theme-warning-foreground: hsl(0 0% 0%);
+  --theme-info: hsl(217 91% 60%);
+  --theme-info-foreground: hsl(0 0% 100%);
+
+  /* Chat-specific colors - user message bubbles */
+  --theme-chat-user: hsl(217 91% 60%);
+  --theme-chat-user-foreground: hsl(0 0% 100%);
 }
 
 /*
@@ -110,11 +139,26 @@
   --color-input: var(--theme-input);
   --color-ring: var(--theme-ring);
 
+  /* Extended semantic colors */
+  --color-success: var(--theme-success);
+  --color-success-foreground: var(--theme-success-foreground);
+  --color-warning: var(--theme-warning);
+  --color-warning-foreground: var(--theme-warning-foreground);
+  --color-info: var(--theme-info);
+  --color-info-foreground: var(--theme-info-foreground);
+
+  /* Chat-specific colors */
+  --color-chat-user: var(--theme-chat-user);
+  --color-chat-user-foreground: var(--theme-chat-user-foreground);
+
   --radius-lg: var(--theme-radius-lg);
   --radius-md: var(--theme-radius-md);
   --radius-sm: var(--theme-radius-sm);
 
-  --font-georgia: Georgia, serif;
+  /* Typography */
+  --font-sans: var(--theme-font-sans);
+  --font-serif: var(--theme-font-serif);
+  --font-mono: var(--theme-font-mono);
 }
 
 @layer base {
@@ -122,12 +166,7 @@
     border-color: var(--color-border);
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
 }
 
-@layer utilities {
-  .font-georgia {
-    font-family: var(--font-georgia);
-  }
-}

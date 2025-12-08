@@ -103,32 +103,32 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+        <div className="p-6 border-b border-border">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <h2 className="text-xl font-semibold text-foreground">
               Memory Cleanup
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              className="text-muted-foreground hover:text-foreground"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-sm text-muted-foreground">
             Clean up old and low-importance memories to stay within limits.
           </p>
         </div>
 
         {/* Options */}
-        <div className="p-6 border-b border-gray-200 dark:border-slate-700 space-y-4">
+        <div className="p-6 border-b border-border space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Max Memories
               </label>
               <input
@@ -137,15 +137,15 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 onChange={(e) => setMaxMemories(parseInt(e.target.value) || 1000)}
                 min={10}
                 max={10000}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Hard cap on total memories
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Max Age (months)
               </label>
               <input
@@ -154,16 +154,16 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 onChange={(e) => setMaxAgeMonths(parseInt(e.target.value) || 6)}
                 min={1}
                 max={120}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Delete old low-importance memories
               </p>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Min Importance: {(minImportance * 100).toFixed(0)}%
             </label>
             <input
@@ -173,9 +173,9 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
               min={0}
               max={0.7}
               step={0.1}
-              className="w-full h-2 bg-gray-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer"
+              className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
             />
-            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
               <span>0%</span>
               <span>Threshold for deletion</span>
               <span>70%</span>
@@ -188,9 +188,9 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
               id="mergeSimilar"
               checked={mergeSimilar}
               onChange={(e) => setMergeSimilar(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              className="w-4 h-4 text-primary rounded focus:ring-ring"
             />
-            <label htmlFor="mergeSimilar" className="text-sm text-gray-700 dark:text-gray-300">
+            <label htmlFor="mergeSimilar" className="text-sm text-foreground">
               Merge similar memories (requires embeddings)
             </label>
           </div>
@@ -200,40 +200,40 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <p className="text-gray-500 dark:text-gray-400">Loading preview...</p>
+              <p className="text-muted-foreground">Loading preview...</p>
             </div>
           ) : error ? (
-            <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded">
+            <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded">
               {error}
             </div>
           ) : preview ? (
             <div className="space-y-4">
               {/* Summary Stats */}
               <div className="grid grid-cols-3 gap-4">
-                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                <div className="bg-green-500/10 border border-green-600/30 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-green-600">
                     {preview.wouldKeep}
                   </p>
-                  <p className="text-sm text-green-600 dark:text-green-500">Keep</p>
+                  <p className="text-sm text-green-600">Keep</p>
                 </div>
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-red-700 dark:text-red-400">
+                <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-destructive">
                     {preview.wouldDelete}
                   </p>
-                  <p className="text-sm text-red-600 dark:text-red-500">Delete</p>
+                  <p className="text-sm text-destructive">Delete</p>
                 </div>
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">
+                <div className="bg-yellow-500/10 border border-yellow-600/30 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-yellow-600">
                     {preview.wouldMerge}
                   </p>
-                  <p className="text-sm text-yellow-600 dark:text-yellow-500">Merge</p>
+                  <p className="text-sm text-yellow-600">Merge</p>
                 </div>
               </div>
 
               {/* Details */}
               {preview.wouldDelete > 0 || preview.wouldMerge > 0 ? (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <h3 className="text-sm font-medium text-foreground mb-2">
                     Changes Preview
                   </h3>
                   <div className="max-h-64 overflow-y-auto space-y-2">
@@ -244,14 +244,14 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                           key={detail.memoryId}
                           className={`p-3 rounded-lg text-sm ${
                             detail.action === 'deleted'
-                              ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
-                              : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
+                              ? 'bg-destructive/10 border border-destructive/30'
+                              : 'bg-yellow-500/10 border border-yellow-600/30'
                           }`}
                         >
-                          <p className="font-medium text-gray-900 dark:text-white line-clamp-1">
+                          <p className="font-medium text-foreground line-clamp-1">
                             {detail.summary || 'Untitled memory'}
                           </p>
-                          <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+                          <p className="text-muted-foreground text-xs mt-1">
                             {detail.reason}
                           </p>
                         </div>
@@ -259,7 +259,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <div className="text-center py-8 text-muted-foreground">
                   <p>No memories to clean up with current settings.</p>
                   <p className="text-sm mt-1">All memories are within retention policy.</p>
                 </div>
@@ -269,19 +269,19 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 dark:border-slate-700 flex gap-3">
+        <div className="p-6 border-t border-border flex gap-3">
           <button
             type="button"
             onClick={handleRun}
             disabled={running || loading || !preview || (preview.wouldDelete === 0 && preview.wouldMerge === 0)}
-            className="flex-1 px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed font-medium"
+            className="flex-1 px-4 py-2 bg-destructive text-white rounded-lg hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
             {running ? 'Running...' : `Delete ${preview?.wouldDelete || 0} Memories`}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 font-medium"
+            className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-accent font-medium transition-colors"
           >
             Cancel
           </button>

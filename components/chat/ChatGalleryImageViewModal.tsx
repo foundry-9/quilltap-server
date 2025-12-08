@@ -251,7 +251,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             onPrev()
           }}
-          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors z-10 cursor-pointer"
+          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors z-10 cursor-pointer"
           title="Previous image (Left Arrow)"
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -266,7 +266,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             onNext()
           }}
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors z-10 cursor-pointer"
+          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors z-10 cursor-pointer"
           title="Next image (Right Arrow)"
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -286,10 +286,10 @@ export default function ChatGalleryImageViewModal({
               handleToggleCharacterTag()
             }}
             disabled={isTagging || checkingTags}
-            className={`p-2 rounded-full text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
+            className={`p-2 rounded-full text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
               isTaggedToCharacter
-                ? 'bg-green-600/80 hover:bg-green-600'
-                : 'bg-white/10 hover:bg-white/20'
+                ? 'bg-primary hover:bg-primary/90'
+                : 'bg-primary/10 hover:bg-primary/20'
             }`}
             title={isTaggedToCharacter ? `Remove from ${characterName || 'character'}'s gallery` : `Add to ${characterName || 'character'}'s gallery`}
           >
@@ -306,10 +306,10 @@ export default function ChatGalleryImageViewModal({
               handleTogglePersonaTag()
             }}
             disabled={isTagging || checkingTags}
-            className={`p-2 rounded-full text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
+            className={`p-2 rounded-full text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
               isTaggedToPersona
-                ? 'bg-green-600/80 hover:bg-green-600'
-                : 'bg-white/10 hover:bg-white/20'
+                ? 'bg-primary hover:bg-primary/90'
+                : 'bg-primary/10 hover:bg-primary/20'
             }`}
             title={isTaggedToPersona ? `Remove from ${personaName || 'persona'}'s gallery` : `Add to ${personaName || 'persona'}'s gallery`}
           >
@@ -324,7 +324,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             handleDownload()
           }}
-          className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors cursor-pointer"
+          className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors cursor-pointer"
           title="Download"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -342,7 +342,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             onClose()
           }}
-          className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors cursor-pointer"
+          className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors cursor-pointer"
           title="Close (Escape)"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -360,7 +360,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             handleDeleteClick()
           }}
-          className="p-2 bg-red-600/80 hover:bg-red-600 rounded-full text-white transition-colors cursor-pointer"
+          className="p-2 bg-destructive/80 hover:bg-destructive rounded-full text-primary-foreground transition-colors cursor-pointer"
           title="Delete image permanently"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

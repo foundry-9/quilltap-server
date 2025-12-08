@@ -65,7 +65,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
 
   return (
     <div className="mt-8">
-      <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
+      <h3 className="mb-4 text-xl font-semibold text-foreground">
         Recent Chats
       </h3>
       {visibleChats.length > 0 ? (
@@ -74,7 +74,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
             <Link
               key={chat.id}
               href={`/chats/${chat.id}`}
-              className="block rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm dark:shadow-lg hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
+              className="block rounded-lg border border-border bg-card p-4 shadow-sm hover:border-primary transition-colors"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-4 flex-grow">
@@ -96,14 +96,14 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
                   )}
                   <div className="flex-grow min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-semibold text-gray-900 dark:text-white truncate">
+                      <h4 className="font-semibold text-foreground truncate">
                         {chat.title}
                       </h4>
-                      <span className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0">
+                      <span className="inline-block bg-primary/10 text-primary text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0">
                         {chat.messageCount}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 truncate">
+                    <p className="text-sm text-muted-foreground mt-1 truncate">
                       with {chat.character.name}
                       {chat.persona && ` as ${chat.persona.name}${chat.persona.title ? ` - ${chat.persona.title}` : ''}`}
                     </p>
@@ -114,7 +114,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
                     )}
                   </div>
                 </div>
-                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0">
+                <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
                   {dateFormatter.format(new Date(chat.updatedAt))}
                 </span>
               </div>
@@ -122,8 +122,8 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center shadow-sm dark:shadow-lg">
-          <p className="text-gray-600 dark:text-gray-400">
+        <div className="rounded-lg border border-border bg-card p-8 text-center shadow-sm">
+          <p className="text-muted-foreground">
             No chats yet. Create a character and start your first conversation!
           </p>
         </div>

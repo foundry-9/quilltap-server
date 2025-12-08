@@ -146,12 +146,12 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
 
       {/* Dialog */}
       <div className="fixed inset-x-4 top-16 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-2xl z-[101]">
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl overflow-hidden">
+        <div className="bg-background rounded-lg shadow-2xl overflow-hidden">
           {/* Search input */}
-          <div className="p-4 border-b border-gray-200 dark:border-slate-700">
+          <div className="p-4 border-b border-border">
             <div className="relative">
               <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -170,7 +170,7 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder="Search chats, characters, personas, tags, memories..."
-                className="w-full pl-10 pr-4 py-3 text-lg border-0 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-0"
+                className="w-full pl-10 pr-4 py-3 text-lg border-0 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none focus:ring-0"
               />
               {query && (
                 <button
@@ -180,7 +180,7 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                     setHasSearched(false)
                     inputRef.current?.focus()
                   }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
                   aria-label="Clear search"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -198,8 +198,8 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                   onClick={() => toggleType(type)}
                   className={`px-2 py-1 text-xs rounded-full transition-colors ${
                     selectedTypes.includes(type)
-                      ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300'
-                      : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'bg-accent text-muted-foreground'
                   }`}
                 >
                   {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -218,7 +218,7 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                 onResultClick={handleResultClick}
               />
             ) : (
-              <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+              <div className="p-6 text-center text-muted-foreground">
                 <p>Type at least 2 characters to search</p>
                 <p className="text-sm mt-1">
                   Search across your chats, characters, personas, tags, and memories
@@ -228,12 +228,12 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
           </div>
 
           {/* Footer with keyboard shortcuts */}
-          <div className="px-4 py-2 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-xs text-gray-500 dark:text-gray-400 flex justify-between">
+          <div className="px-4 py-2 border-t border-border bg-muted text-xs text-muted-foreground flex justify-between">
             <span>
-              <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-slate-700 rounded">↵</kbd> to search
+              <kbd className="px-1.5 py-0.5 bg-accent rounded">↵</kbd> to search
             </span>
             <span>
-              <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-slate-700 rounded">Esc</kbd> to close
+              <kbd className="px-1.5 py-0.5 bg-accent rounded">Esc</kbd> to close
             </span>
           </div>
         </div>

@@ -41,13 +41,17 @@ const COLOR_VAR_MAP: Record<keyof ColorPalette, string> = {
   border: '--theme-border',
   input: '--theme-input',
   ring: '--theme-ring',
-  // Extended colors (optional) - these don't have @theme inline mappings yet
+  // Extended colors (optional)
   success: '--theme-success',
   successForeground: '--theme-success-foreground',
   warning: '--theme-warning',
   warningForeground: '--theme-warning-foreground',
   info: '--theme-info',
   infoForeground: '--theme-info-foreground',
+
+  // Chat-specific colors
+  chatUser: '--theme-chat-user',
+  chatUserForeground: '--theme-chat-user-foreground',
 };
 
 /**

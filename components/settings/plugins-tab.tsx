@@ -43,7 +43,7 @@ const getSourceBadge = (source: PluginSource) => {
     case 'manual':
       return {
         label: 'Manual',
-        className: 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300',
+        className: 'bg-muted text-muted-foreground',
       }
   }
 }
@@ -120,8 +120,8 @@ export default function PluginsTab() {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="flex items-center gap-3">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading plugins...</p>
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-r-transparent"></div>
+          <p className="text-muted-foreground">Loading plugins...</p>
         </div>
       </div>
     )
@@ -131,22 +131,22 @@ export default function PluginsTab() {
     <div className="space-y-6">
       {/* Stats Header */}
       {stats && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+        <div className="bg-accent rounded-lg p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Total Plugins</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
+              <p className="text-sm text-muted-foreground">Total Plugins</p>
+              <p className="text-2xl font-bold text-foreground">{stats.total}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Enabled</p>
+              <p className="text-sm text-muted-foreground">Enabled</p>
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.enabled}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Disabled</p>
-              <p className="text-2xl font-bold text-gray-500 dark:text-gray-500">{stats.disabled}</p>
+              <p className="text-sm text-muted-foreground">Disabled</p>
+              <p className="text-2xl font-bold text-muted-foreground">{stats.disabled}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Errors</p>
+              <p className="text-sm text-muted-foreground">Errors</p>
               <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.errors}</p>
             </div>
           </div>
@@ -155,10 +155,10 @@ export default function PluginsTab() {
 
       {/* Description */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+        <h2 className="text-lg font-semibold text-foreground mb-2">
           Plugin Management
         </h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <p className="text-sm text-muted-foreground">
           Manage installed plugins and their status. Enable or disable plugins to control which
           features are available in Quilltap.
         </p>
@@ -166,9 +166,9 @@ export default function PluginsTab() {
 
       {/* Plugin List */}
       {plugins.length === 0 ? (
-        <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-8 text-center">
+        <div className="bg-card rounded-lg border border-border p-8 text-center">
           <svg
-            className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600"
+            className="mx-auto h-12 w-12 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -180,10 +180,10 @@ export default function PluginsTab() {
               d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
             />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
+          <h3 className="mt-4 text-lg font-medium text-foreground">
             No Plugins Found
           </h3>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-2 text-sm text-muted-foreground">
             No plugins are currently installed. Add plugins to the plugins directory to extend
             Quilltap&apos;s functionality.
           </p>
@@ -195,15 +195,15 @@ export default function PluginsTab() {
             return (
               <div
                 key={plugin.name}
-                className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4 hover:shadow-md transition-shadow"
+                className="bg-card rounded-lg border border-border p-4 hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                      <h3 className="text-lg font-semibold text-foreground truncate">
                         {plugin.title}
                       </h3>
-                      <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded">
+                      <span className="px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded">
                         v{plugin.version}
                       </span>
                       <span className={`px-2 py-0.5 text-xs font-medium rounded ${getSourceBadge(plugin.source).className}`}>
@@ -214,12 +214,12 @@ export default function PluginsTab() {
                           Enabled
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-500 rounded">
+                        <span className="px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded">
                           Disabled
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    <p className="text-sm text-muted-foreground mb-2">
                       {plugin.name}
                     </p>
                     {plugin.capabilities.length > 0 && (
@@ -242,16 +242,16 @@ export default function PluginsTab() {
                     disabled={isToggling}
                     className={`
                       relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
-                      transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500
-                      focus:ring-offset-2 dark:focus:ring-offset-slate-800 disabled:opacity-50 disabled:cursor-not-allowed
-                      ${plugin.enabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-slate-700'}
+                      transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring
+                      focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed
+                      ${plugin.enabled ? 'bg-primary' : 'bg-muted'}
                     `}
                     role="switch"
                     aria-checked={plugin.enabled}
                   >
                     <span
                       className={`
-                        pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0
+                        pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0
                         transition duration-200 ease-in-out
                         ${plugin.enabled ? 'translate-x-5' : 'translate-x-0'}
                       `}

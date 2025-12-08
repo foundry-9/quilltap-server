@@ -275,7 +275,7 @@ export function EmbeddedPhotoGallery({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
@@ -289,7 +289,7 @@ export function EmbeddedPhotoGallery({
       {/* Controls Row */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-4">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             {showOnlyTagged
               ? `${taggedCount} tagged photo${taggedCount !== 1 ? 's' : ''}`
               : `${images.length} photo${images.length !== 1 ? 's' : ''} (${taggedCount} tagged)`
@@ -302,9 +302,9 @@ export function EmbeddedPhotoGallery({
               type="checkbox"
               checked={showOnlyTagged}
               onChange={(e) => setShowOnlyTagged(e.target.checked)}
-              className="rounded border-gray-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+              className="rounded border-input text-primary focus:ring-ring"
             />
-            <span className="text-gray-600 dark:text-gray-400">Show only tagged</span>
+            <span className="text-muted-foreground">Show only tagged</span>
           </label>
         </div>
 
@@ -312,7 +312,7 @@ export function EmbeddedPhotoGallery({
           {/* Upload Button */}
           <button
             onClick={() => setShowUploadDialog(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 rounded-md transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -324,7 +324,7 @@ export function EmbeddedPhotoGallery({
           {onAvatarChange && currentAvatarId && (
             <button
               onClick={handleClearAvatar}
-              className="px-3 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+              className="px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-md transition-colors"
             >
               Clear Avatar
             </button>
@@ -334,20 +334,20 @@ export function EmbeddedPhotoGallery({
           <button
             onClick={() => setThumbnailSizeIndex(Math.max(0, thumbnailSizeIndex - 1))}
             disabled={thumbnailSizeIndex === 0}
-            className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-50"
+            className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
             title="Smaller thumbnails"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
             </svg>
           </button>
-          <span className="text-xs text-gray-500 dark:text-gray-400 w-12 text-center">
+          <span className="text-xs text-muted-foreground w-12 text-center">
             {thumbnailSize}px
           </span>
           <button
             onClick={() => setThumbnailSizeIndex(Math.min(THUMBNAIL_SIZES.length - 1, thumbnailSizeIndex + 1))}
             disabled={thumbnailSizeIndex === THUMBNAIL_SIZES.length - 1}
-            className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-50"
+            className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
             title="Larger thumbnails"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -358,9 +358,9 @@ export function EmbeddedPhotoGallery({
       </div>
 
       {images.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-gray-300 dark:border-slate-600 rounded-lg">
+        <div className="text-center py-12 border border-dashed border-border rounded-lg">
           <svg
-            className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+            className="mx-auto h-12 w-12 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -372,13 +372,13 @@ export function EmbeddedPhotoGallery({
               d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-2 text-sm text-muted-foreground">
             {showOnlyTagged
               ? `No photos tagged to ${entityName}`
               : 'No photos in your library'
             }
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground/70 mt-1">
             {showOnlyTagged
               ? 'Uncheck "Show only tagged" to see all photos and tag them'
               : `Generate or upload images to get started`
@@ -406,12 +406,12 @@ export function EmbeddedPhotoGallery({
                 >
                   <button
                     onClick={() => setSelectedIndex(index)}
-                    className={`relative aspect-square w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-slate-700 hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                    className={`relative aspect-square w-full overflow-hidden rounded-lg bg-muted hover:ring-2 hover:ring-primary focus:outline-none focus:ring-2 focus:ring-ring transition-all ${
                       isAvatar ? 'ring-2 ring-green-500' : ''
                     } ${!isTagged && showOnlyTagged === false ? 'opacity-60' : ''}`}
                   >
                     {missingImages.has(image.id) ? (
-                      <div className="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-500">
+                      <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
@@ -451,8 +451,8 @@ export function EmbeddedPhotoGallery({
                       disabled={isUpdating}
                       className={`p-1.5 rounded-full shadow-md transition-colors ${
                         isTagged
-                          ? 'bg-blue-500 text-white hover:bg-blue-600'
-                          : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600'
+                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                          : 'bg-card text-muted-foreground hover:bg-accent'
                       } ${isUpdating ? 'opacity-50' : ''}`}
                       title={isTagged ? `Remove from ${entityName}` : `Tag to ${entityName}`}
                     >
@@ -477,7 +477,7 @@ export function EmbeddedPhotoGallery({
                       <button
                         onClick={(e) => handleSetAvatar(e, image)}
                         disabled={isUpdating}
-                        className={`p-1.5 rounded-full shadow-md bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-green-500 hover:text-white transition-colors ${isUpdating ? 'opacity-50' : ''}`}
+                        className={`p-1.5 rounded-full shadow-md bg-card text-muted-foreground hover:bg-green-500 hover:text-white transition-colors ${isUpdating ? 'opacity-50' : ''}`}
                         title="Set as avatar"
                       >
                         {settingAvatar === image.id ? (
@@ -500,8 +500,8 @@ export function EmbeddedPhotoGallery({
                         disabled={deletingImage === image.id}
                         className={`p-1.5 rounded-full shadow-md transition-colors ${
                           confirmDelete === image.id
-                            ? 'bg-red-500 text-white'
-                            : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-red-500 hover:text-white'
+                            ? 'bg-destructive text-white'
+                            : 'bg-card text-muted-foreground hover:bg-destructive hover:text-white'
                         } ${deletingImage === image.id ? 'opacity-50' : ''}`}
                         title={confirmDelete === image.id ? 'Click again to confirm delete' : 'Delete image'}
                       >

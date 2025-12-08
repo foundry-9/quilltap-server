@@ -446,8 +446,8 @@ export default function ImageDetailModal({
                           disabled={isLoading}
                           className={`flex-1 px-4 py-2 rounded transition-all font-medium text-sm flex items-center justify-between ${
                             isTagged
-                              ? 'bg-blue-600 text-white hover:bg-blue-700 ring-2 ring-blue-400'
-                              : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
+                              ? 'bg-primary text-primary-foreground hover:bg-primary/90 ring-2 ring-ring'
+                              : 'bg-muted text-muted-foreground hover:bg-muted/80'
                           } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <span>{isLoading ? '...' : character.name}</span>
@@ -496,8 +496,8 @@ export default function ImageDetailModal({
                           disabled={isLoading}
                           className={`flex-1 px-4 py-2 rounded transition-all font-medium text-sm flex items-center justify-between ${
                             isTagged
-                              ? 'bg-purple-600 text-white hover:bg-purple-700 ring-2 ring-purple-400'
-                              : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
+                              ? 'bg-primary text-primary-foreground hover:bg-primary/90 ring-2 ring-ring'
+                              : 'bg-muted text-muted-foreground hover:bg-muted/80'
                           } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <span>{isLoading ? '...' : persona.name}</span>

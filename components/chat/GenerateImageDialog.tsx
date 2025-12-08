@@ -217,15 +217,15 @@ export default function GenerateImageDialog({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+      <div className="bg-card rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+        <div className="flex items-center justify-between p-6 border-b border-border">
+          <h2 className="text-2xl font-bold text-foreground">
             Generate Image
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="text-muted-foreground hover:text-foreground"
             disabled={isGenerating}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,7 +239,7 @@ export default function GenerateImageDialog({
           <div className="flex gap-4">
             {/* Left side - Quick buttons */}
             <div className="w-48 flex-shrink-0 space-y-2">
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <div className="text-sm font-medium text-muted-foreground mb-3">
                 Quick Insert
               </div>
 
@@ -247,7 +247,7 @@ export default function GenerateImageDialog({
               {personaParticipant?.persona && (
                 <button
                   onClick={() => insertPlaceholder('me')}
-                  className="w-full px-3 py-2 text-left text-sm bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-700 transition-colors"
+                  className="w-full px-3 py-2 text-left text-sm bg-primary/10 hover:bg-primary/20 text-primary rounded border border-primary/30 transition-colors"
                   disabled={isGenerating}
                 >
                   <div className="font-medium">{personaParticipant.persona.name}</div>
@@ -261,7 +261,7 @@ export default function GenerateImageDialog({
                   <button
                     key={p.id}
                     onClick={() => insertPlaceholder(p.character!.name)}
-                    className="w-full px-3 py-2 text-left text-sm bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded border border-purple-200 dark:border-purple-700 transition-colors"
+                    className="w-full px-3 py-2 text-left text-sm bg-accent hover:bg-accent/80 text-accent-foreground rounded border border-accent transition-colors"
                     disabled={isGenerating}
                   >
                     <div className="font-medium truncate">{p.character.name}</div>
@@ -274,7 +274,7 @@ export default function GenerateImageDialog({
               <div className="relative pt-4" ref={dropdownRef}>
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded border border-gray-300 dark:border-slate-600 transition-colors flex items-center justify-between"
+                  className="w-full px-3 py-2 text-sm text-foreground bg-muted hover:bg-muted/80 rounded border border-input transition-colors flex items-center justify-between"
                   disabled={isGenerating}
                 >
                   <span>Other Characters...</span>
@@ -284,14 +284,14 @@ export default function GenerateImageDialog({
                 </button>
 
                 {isDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-hidden flex flex-col z-10">
-                    <div className="p-2 border-b border-gray-200 dark:border-slate-600">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-lg max-h-64 overflow-hidden flex flex-col z-10">
+                    <div className="p-2 border-b border-border">
                       <input
                         type="text"
                         placeholder="Search..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-slate-500 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                        className="w-full px-2 py-1 text-sm border border-input rounded bg-background text-foreground"
                       />
                     </div>
                     <div className="overflow-y-auto">
@@ -299,20 +299,20 @@ export default function GenerateImageDialog({
                         <button
                           key={entity.id}
                           onClick={() => handleEntitySelect(entity)}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-slate-600 flex items-center gap-2"
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2"
                         >
                           <span className={`px-1.5 py-0.5 text-xs rounded ${
                             entity.type === 'character'
-                              ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300'
-                              : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                              ? 'bg-accent text-accent-foreground'
+                              : 'bg-primary/20 text-primary'
                           }`}>
                             {entity.type === 'character' ? 'C' : 'P'}
                           </span>
-                          <span className="text-gray-900 dark:text-white">{entity.name}</span>
+                          <span className="text-foreground">{entity.name}</span>
                         </button>
                       ))}
                       {filteredEntities.length === 0 && (
-                        <div className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+                        <div className="px-3 py-4 text-sm text-muted-foreground text-center">
                           No matches found
                         </div>
                       )}
@@ -324,7 +324,7 @@ export default function GenerateImageDialog({
 
             {/* Right side - Prompt input */}
             <div className="flex-1">
-              <label htmlFor="image-prompt" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="image-prompt" className="block text-sm font-medium text-foreground mb-2">
                 Image Prompt
               </label>
               <textarea
@@ -333,10 +333,10 @@ export default function GenerateImageDialog({
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe the image you want to generate. Use {{placeholders}} for characters and personas.&#10;&#10;Examples:&#10;- {{me}} in a forest clearing at sunset&#10;- {{Alice}} and {{me}} having coffee together&#10;- A serene mountain landscape"
-                className="w-full h-64 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-64 px-3 py-2 border border-input rounded-lg bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring"
                 disabled={isGenerating}
               />
-              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              <div className="mt-2 text-xs text-muted-foreground">
                 Click buttons on the left or type {'{{name}}'} to insert placeholders
               </div>
             </div>
@@ -344,16 +344,16 @@ export default function GenerateImageDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-200 dark:border-slate-700">
+        <div className="flex items-center justify-between gap-3 p-6 border-t border-border">
           {!imageProfileId && (
-            <p className="text-sm text-amber-600 dark:text-amber-400">
+            <p className="text-sm text-amber-600">
               Configure an image profile in Chat Settings to generate images
             </p>
           )}
           <div className="flex gap-3 ml-auto">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            className="px-4 py-2 text-foreground hover:bg-muted rounded-lg transition-colors"
             disabled={isGenerating}
           >
             Cancel
@@ -361,7 +361,7 @@ export default function GenerateImageDialog({
           <button
             onClick={handleGenerate}
             disabled={isGenerating || !prompt.trim() || !imageProfileId}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2"
+            className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
           >
             {isGenerating ? (
               <>
