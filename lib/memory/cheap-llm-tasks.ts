@@ -856,33 +856,39 @@ ${exchangesText}`,
 /**
  * Image prompt crafting prompt template
  */
-const IMAGE_PROMPT_CRAFTING_PROMPT = `You are crafting an image generation prompt by replacing character/persona placeholders with their physical descriptions.
+const IMAGE_PROMPT_CRAFTING_PROMPT = `You are an expert image prompt writer. Your job is to craft coherent, well-structured image generation prompts by integrating physical descriptions of people into a scene description.
 
-You will be provided with:
-- The original prompt with {{placeholders}} (e.g., {{me}}, {{user}}, {{CharacterName}})
-- For each placeholder, the resolved name and up to 4 description tiers (short, medium, long, complete)
-- A target character limit for the final prompt
+You will receive:
+- An original prompt describing a scene with {{placeholders}} for people
+- Physical descriptions for each person (in multiple detail levels: short, medium, long, complete)
+- A character limit for the final prompt
 
-Your task:
-1. Replace EACH placeholder with an appropriate physical description from the provided tiers
-2. Select or combine content from the available description tiers to maximize detail while staying under the limit
-3. Integrate descriptions naturally and grammatically into the prompt
-4. Preserve the original scene/action/context
-5. Make the descriptions as long and detailed as possible WITHOUT exceeding the character limit
+Your task is to write a SINGLE COHERENT PARAGRAPH that:
+1. Describes the scene and what is happening
+2. Introduces each person naturally with their physical details woven into the narrative
+3. Maintains proper sentence structure and flow
 
-Guidelines:
-- IMPORTANT: Each placeholder represents a DIFFERENT person - make sure to include distinct descriptions for each
-- For {{me}}/{{char}}: This is the character/assistant - include their full physical description
-- For {{user}}: This is the user's persona - include their full physical description
-- Named placeholders like {{Alice}}: Include that specific character's description
-- You can use any combination of the provided tiers - use complete if it fits, or mix details from different tiers
-- Make descriptions flow naturally with proper grammar, commas, and conjunctions
-- Keep visual details vivid and clear
-- For multiple subjects, describe BOTH people distinctly - don't repeat the same description
-- CRITICAL: The final prompt MUST be under the character limit
-- Maximize detail - use every available character wisely
+CRITICAL WRITING GUIDELINES:
+- Write in a cinematic, descriptive style suitable for image generation
+- Introduce people with phrases like "A young woman with...", "Beside her, a middle-aged man with..."
+- NEVER just concatenate descriptions - write flowing prose that a human would write
+- Use transitional phrases to connect people: "sitting on the lap of", "next to", "holding hands with", etc.
+- Keep the scene context (location, mood, lighting) as a frame around the people descriptions
+- Each person must be clearly distinct and identifiable in the description
 
-Respond with ONLY the final image prompt text, no additional commentary or formatting.`
+STRUCTURE EXAMPLE:
+BAD (concatenated): "Woman with red hair, hazel eyes, fair skin. sitting on Man with gray hair, glasses, plaid shirt.'s lap on a bench"
+GOOD (coherent): "On a sunlit park bench, a young woman with flowing red-orange hair and warm hazel eyes sits comfortably on the lap of a middle-aged man wearing rectangular glasses and a cozy sweater vest. Dappled light filters through the leaves above them."
+
+For the descriptions:
+- Use the most detailed tier that fits within the limit
+- You may condense or paraphrase descriptions to fit naturally
+- Prioritize the most visually distinctive features (hair color, eye color, notable clothing, distinguishing features)
+- Don't include every detail if it makes the text awkward - focus on what matters visually
+
+The final prompt MUST be under the character limit.
+
+Respond with ONLY the final image prompt - no explanations, no markdown, no quotes around it.`
 
 /**
  * Expansion context for image prompt crafting
