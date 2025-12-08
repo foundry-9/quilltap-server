@@ -604,6 +604,10 @@ export class UsersRepository {
             fallbackToLocal: true,
             embeddingProvider: 'OPENAI',
           },
+          themePreference: {
+            activeThemeId: null,
+            colorMode: 'system',
+          },
           ...data,
         };
         return await this.createChatSettings(userId, defaultSettings);

@@ -6,6 +6,11 @@
  */
 
 import { z } from 'zod';
+import { ThemePreferenceSchema, type ThemePreference } from '@/lib/themes/types';
+
+// Re-export theme types for convenience
+export { ThemePreferenceSchema };
+export type { ThemePreference };
 
 // ============================================================================
 // ENUMS
@@ -177,6 +182,11 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Profile ID to use for image description fallback (when provider doesn't support images) */
   imageDescriptionProfileId: UUIDSchema.nullable().optional(),
+  /** Theme preference settings */
+  themePreference: ThemePreferenceSchema.default({
+    activeThemeId: null,
+    colorMode: 'system',
+  }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
