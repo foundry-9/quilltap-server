@@ -55,7 +55,7 @@ async function processToolResults(
   controller: ReadableStreamDefaultController,
   encoder: TextEncoder
 ) {
-  const toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
+  const toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string; expandedPrompt?: string } }> = []
   const generatedImagePaths: Array<{ id: string; filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
 
   // Send tool detection info with tool names for proper UI handling
@@ -125,7 +125,7 @@ async function saveToolMessages(
   repos: ReturnType<typeof getRepositories>,
   chatId: string,
   _userId: string,
-  toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }>,
+  toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string; expandedPrompt?: string } }>,
   generatedImagePaths: Array<{ id: string; filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }>,
   characterId?: string
 ) {
@@ -150,6 +150,8 @@ async function saveToolMessages(
         arguments: toolMsg.arguments,
         provider: toolMsg.metadata?.provider,
         model: toolMsg.metadata?.model,
+        // For image generation, store the expanded prompt (with {{me}} etc. resolved)
+        prompt: toolMsg.metadata?.expandedPrompt,
       }),
       createdAt: new Date().toISOString(),
       attachments: toolAttachments,

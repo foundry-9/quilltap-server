@@ -172,7 +172,8 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
               {showRequest && (
                 <div className="mt-2 bg-background rounded p-3 overflow-x-auto border border-border">
                   <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words">
-                    {toolData.tool === 'generate_image' && toolData.prompt
+                    {/* For image generation, show the expanded prompt (with {{me}} resolved) if available */}
+                    {toolData.toolName === 'generate_image' && toolData.prompt
                       ? toolData.prompt
                       : JSON.stringify(toolData.arguments || {}, null, 2)}
                   </pre>

@@ -859,22 +859,26 @@ ${exchangesText}`,
 const IMAGE_PROMPT_CRAFTING_PROMPT = `You are crafting an image generation prompt by replacing character/persona placeholders with their physical descriptions.
 
 You will be provided with:
-- The original prompt with {{placeholders}}
-- For each placeholder, up to 4 description tiers (short, medium, long, complete)
+- The original prompt with {{placeholders}} (e.g., {{me}}, {{user}}, {{CharacterName}})
+- For each placeholder, the resolved name and up to 4 description tiers (short, medium, long, complete)
 - A target character limit for the final prompt
 
 Your task:
-1. Replace each placeholder with an appropriate description
+1. Replace EACH placeholder with an appropriate physical description from the provided tiers
 2. Select or combine content from the available description tiers to maximize detail while staying under the limit
 3. Integrate descriptions naturally and grammatically into the prompt
 4. Preserve the original scene/action/context
 5. Make the descriptions as long and detailed as possible WITHOUT exceeding the character limit
 
 Guidelines:
+- IMPORTANT: Each placeholder represents a DIFFERENT person - make sure to include distinct descriptions for each
+- For {{me}}/{{char}}: This is the character/assistant - include their full physical description
+- For {{user}}: This is the user's persona - include their full physical description
+- Named placeholders like {{Alice}}: Include that specific character's description
 - You can use any combination of the provided tiers - use complete if it fits, or mix details from different tiers
 - Make descriptions flow naturally with proper grammar, commas, and conjunctions
 - Keep visual details vivid and clear
-- For multiple subjects, describe them cohesively and show their relationships
+- For multiple subjects, describe BOTH people distinctly - don't repeat the same description
 - CRITICAL: The final prompt MUST be under the character limit
 - Maximize detail - use every available character wisely
 
