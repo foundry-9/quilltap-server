@@ -45,6 +45,7 @@ export interface ThemeSummary {
   preview?: string;
   supportsDarkMode: boolean;
   tags?: string[];
+  isDefault?: boolean;
 }
 
 /**
@@ -225,7 +226,10 @@ export function ThemeProvider({
 
       const response = await fetch('/api/themes');
       if (response.ok) {
-        const themes = await response.json();
+        const data = await response.json();
+        // API returns { themes: [...], stats: {...} } - extract just the themes array
+        // Filter out the default theme since it's handled separately in the UI
+        const themes = (data.themes || []).filter((t: ThemeSummary) => !t.isDefault);
         setAvailableThemes(themes);
 
         clientLogger.debug('Theme: loaded available themes', {
@@ -437,24 +441,43 @@ interface ThemeStyleInjectorProps {
 }
 
 /**
- * Injects theme CSS variables into the document
+ * Injects theme CSS variables into the document head
+ * Uses useEffect to ensure proper placement and update
  */
 function ThemeStyleInjector({ tokens, mode }: ThemeStyleInjectorProps) {
   const cssContent = useMemo(() => {
     return themeTokensToCSS(tokens);
   }, [tokens, mode]);
 
-  // Log CSS generation in effect (not during render)
+  // Inject styles into document head
   useEffect(() => {
-    clientLogger.debug('Theme: CSS variables injected', { mode });
+    if (typeof document === 'undefined') return;
+
+    const styleId = 'quilltap-theme-variables';
+    let styleElement = document.getElementById(styleId) as HTMLStyleElement | null;
+
+    if (!styleElement) {
+      styleElement = document.createElement('style');
+      styleElement.id = styleId;
+      document.head.appendChild(styleElement);
+    }
+
+    styleElement.textContent = cssContent;
+
+    clientLogger.debug('Theme: CSS variables injected to head', {
+      mode,
+      cssLength: cssContent.length,
+    });
+
+    // Cleanup on unmount
+    return () => {
+      const el = document.getElementById(styleId);
+      if (el) {
+        el.remove();
+      }
+    };
   }, [cssContent, mode]);
 
-  // Using a style tag with unique ID for easy replacement
-  return (
-    <style
-      id="quilltap-theme-variables"
-      suppressHydrationWarning
-      dangerouslySetInnerHTML={{ __html: cssContent }}
-    />
-  );
+  // Don't render anything - styles are injected via useEffect
+  return null;
 }

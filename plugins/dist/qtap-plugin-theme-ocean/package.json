@@ -1,0 +1,16 @@
+{
+  "name": "qtap-plugin-theme-ocean",
+  "version": "1.0.0",
+  "description": "Ocean theme plugin for Quilltap - A calming blue and teal color scheme",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "author": "Foundry-9",
+  "license": "MIT",
+  "keywords": [
+    "quilltap",
+    "theme",
+    "ocean",
+    "blue",
+    "teal"
+  ]
+}

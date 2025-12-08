@@ -16,98 +16,105 @@ import { DEFAULT_THEME_TOKENS } from './default-tokens';
 
 /**
  * Maps color palette keys to CSS variable names
+ *
+ * Uses --theme-* prefix to work with Tailwind v4's @theme inline directive.
+ * globals.css defines @theme inline { --color-*: var(--theme-*) } which
+ * allows runtime overrides via the --theme-* variables.
  */
 const COLOR_VAR_MAP: Record<keyof ColorPalette, string> = {
-  background: '--color-background',
-  foreground: '--color-foreground',
-  primary: '--color-primary',
-  primaryForeground: '--color-primary-foreground',
-  secondary: '--color-secondary',
-  secondaryForeground: '--color-secondary-foreground',
-  muted: '--color-muted',
-  mutedForeground: '--color-muted-foreground',
-  accent: '--color-accent',
-  accentForeground: '--color-accent-foreground',
-  destructive: '--color-destructive',
-  destructiveForeground: '--color-destructive-foreground',
-  card: '--color-card',
-  cardForeground: '--color-card-foreground',
-  popover: '--color-popover',
-  popoverForeground: '--color-popover-foreground',
-  border: '--color-border',
-  input: '--color-input',
-  ring: '--color-ring',
-  // Extended colors (optional)
-  success: '--color-success',
-  successForeground: '--color-success-foreground',
-  warning: '--color-warning',
-  warningForeground: '--color-warning-foreground',
-  info: '--color-info',
-  infoForeground: '--color-info-foreground',
+  background: '--theme-background',
+  foreground: '--theme-foreground',
+  primary: '--theme-primary',
+  primaryForeground: '--theme-primary-foreground',
+  secondary: '--theme-secondary',
+  secondaryForeground: '--theme-secondary-foreground',
+  muted: '--theme-muted',
+  mutedForeground: '--theme-muted-foreground',
+  accent: '--theme-accent',
+  accentForeground: '--theme-accent-foreground',
+  destructive: '--theme-destructive',
+  destructiveForeground: '--theme-destructive-foreground',
+  card: '--theme-card',
+  cardForeground: '--theme-card-foreground',
+  popover: '--theme-popover',
+  popoverForeground: '--theme-popover-foreground',
+  border: '--theme-border',
+  input: '--theme-input',
+  ring: '--theme-ring',
+  // Extended colors (optional) - these don't have @theme inline mappings yet
+  success: '--theme-success',
+  successForeground: '--theme-success-foreground',
+  warning: '--theme-warning',
+  warningForeground: '--theme-warning-foreground',
+  info: '--theme-info',
+  infoForeground: '--theme-info-foreground',
 };
 
 /**
  * Maps typography keys to CSS variable names
+ * Uses --theme-* prefix for consistency
  */
 const TYPOGRAPHY_VAR_MAP: Record<keyof Typography, string> = {
-  fontSans: '--font-sans',
-  fontSerif: '--font-serif',
-  fontMono: '--font-mono',
-  fontSizeXs: '--font-size-xs',
-  fontSizeSm: '--font-size-sm',
-  fontSizeBase: '--font-size-base',
-  fontSizeLg: '--font-size-lg',
-  fontSizeXl: '--font-size-xl',
-  fontSize2xl: '--font-size-2xl',
-  fontSize3xl: '--font-size-3xl',
-  fontSize4xl: '--font-size-4xl',
-  lineHeightTight: '--line-height-tight',
-  lineHeightNormal: '--line-height-normal',
-  lineHeightRelaxed: '--line-height-relaxed',
-  fontWeightNormal: '--font-weight-normal',
-  fontWeightMedium: '--font-weight-medium',
-  fontWeightSemibold: '--font-weight-semibold',
-  fontWeightBold: '--font-weight-bold',
-  letterSpacingTight: '--letter-spacing-tight',
-  letterSpacingNormal: '--letter-spacing-normal',
-  letterSpacingWide: '--letter-spacing-wide',
+  fontSans: '--theme-font-sans',
+  fontSerif: '--theme-font-serif',
+  fontMono: '--theme-font-mono',
+  fontSizeXs: '--theme-font-size-xs',
+  fontSizeSm: '--theme-font-size-sm',
+  fontSizeBase: '--theme-font-size-base',
+  fontSizeLg: '--theme-font-size-lg',
+  fontSizeXl: '--theme-font-size-xl',
+  fontSize2xl: '--theme-font-size-2xl',
+  fontSize3xl: '--theme-font-size-3xl',
+  fontSize4xl: '--theme-font-size-4xl',
+  lineHeightTight: '--theme-line-height-tight',
+  lineHeightNormal: '--theme-line-height-normal',
+  lineHeightRelaxed: '--theme-line-height-relaxed',
+  fontWeightNormal: '--theme-font-weight-normal',
+  fontWeightMedium: '--theme-font-weight-medium',
+  fontWeightSemibold: '--theme-font-weight-semibold',
+  fontWeightBold: '--theme-font-weight-bold',
+  letterSpacingTight: '--theme-letter-spacing-tight',
+  letterSpacingNormal: '--theme-letter-spacing-normal',
+  letterSpacingWide: '--theme-letter-spacing-wide',
 };
 
 /**
  * Maps spacing keys to CSS variable names
+ * Uses --theme-* prefix for radius to work with @theme inline
  */
 const SPACING_VAR_MAP: Record<keyof Spacing, string> = {
-  radiusSm: '--radius-sm',
-  radiusMd: '--radius-md',
-  radiusLg: '--radius-lg',
-  radiusXl: '--radius-xl',
-  radiusFull: '--radius-full',
-  spacing1: '--spacing-1',
-  spacing2: '--spacing-2',
-  spacing3: '--spacing-3',
-  spacing4: '--spacing-4',
-  spacing5: '--spacing-5',
-  spacing6: '--spacing-6',
-  spacing8: '--spacing-8',
-  spacing10: '--spacing-10',
-  spacing12: '--spacing-12',
-  spacing16: '--spacing-16',
+  radiusSm: '--theme-radius-sm',
+  radiusMd: '--theme-radius-md',
+  radiusLg: '--theme-radius-lg',
+  radiusXl: '--theme-radius-xl',
+  radiusFull: '--theme-radius-full',
+  spacing1: '--theme-spacing-1',
+  spacing2: '--theme-spacing-2',
+  spacing3: '--theme-spacing-3',
+  spacing4: '--theme-spacing-4',
+  spacing5: '--theme-spacing-5',
+  spacing6: '--theme-spacing-6',
+  spacing8: '--theme-spacing-8',
+  spacing10: '--theme-spacing-10',
+  spacing12: '--theme-spacing-12',
+  spacing16: '--theme-spacing-16',
 };
 
 /**
  * Maps effects keys to CSS variable names
+ * Uses --theme-* prefix for consistency
  */
 const EFFECTS_VAR_MAP: Record<keyof Effects, string> = {
-  shadowSm: '--shadow-sm',
-  shadowMd: '--shadow-md',
-  shadowLg: '--shadow-lg',
-  shadowXl: '--shadow-xl',
-  transitionFast: '--transition-fast',
-  transitionNormal: '--transition-normal',
-  transitionSlow: '--transition-slow',
-  transitionEasing: '--transition-easing',
-  focusRingWidth: '--focus-ring-width',
-  focusRingOffset: '--focus-ring-offset',
+  shadowSm: '--theme-shadow-sm',
+  shadowMd: '--theme-shadow-md',
+  shadowLg: '--theme-shadow-lg',
+  shadowXl: '--theme-shadow-xl',
+  transitionFast: '--theme-transition-fast',
+  transitionNormal: '--theme-transition-normal',
+  transitionSlow: '--theme-transition-slow',
+  transitionEasing: '--theme-transition-easing',
+  focusRingWidth: '--theme-focus-ring-width',
+  focusRingOffset: '--theme-focus-ring-offset',
 };
 
 // ============================================================================

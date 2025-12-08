@@ -1,0 +1,260 @@
+/**
+ * Ocean Theme - Component Overrides (Tier 3)
+ *
+ * These CSS overrides provide advanced customization beyond design tokens.
+ * They're applied when the Ocean theme is active via [data-theme="ocean"].
+ */
+
+/* ============================================================================
+   GENERAL COMPONENT ENHANCEMENTS
+   ============================================================================ */
+
+/* Slightly larger border radius for a softer, more fluid look */
+[data-theme="ocean"] {
+  /* Cards get a subtle ocean-blue tinted shadow */
+  --card-shadow: 0 4px 12px -2px rgb(0 80 120 / 0.08);
+}
+
+/* ============================================================================
+   CHAT MESSAGE STYLING
+   ============================================================================ */
+
+/* Chat messages with ocean-inspired styling */
+[data-theme="ocean"] .chat-message {
+  border-radius: var(--radius-lg, 0.75rem);
+  transition: box-shadow var(--transition-normal, 200ms) var(--transition-easing, ease);
+}
+
+[data-theme="ocean"] .chat-message:hover {
+  box-shadow: 0 2px 8px -2px rgb(0 80 120 / 0.1);
+}
+
+/* User messages - slightly warmer teal accent */
+[data-theme="ocean"] .chat-message-user {
+  background: linear-gradient(135deg, hsl(180 60% 45% / 0.1), hsl(200 80% 40% / 0.05));
+}
+
+/* Assistant messages - subtle wave-like gradient */
+[data-theme="ocean"] .chat-message-assistant {
+  background: linear-gradient(180deg, transparent, hsl(200 30% 50% / 0.03));
+}
+
+/* ============================================================================
+   NAVIGATION & HEADER
+   ============================================================================ */
+
+/* Frosted glass effect for navigation */
+[data-theme="ocean"] .nav-header {
+  backdrop-filter: blur(12px);
+  background: hsl(var(--background) / 0.85);
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+}
+
+/* Sidebar with subtle depth */
+[data-theme="ocean"] .sidebar {
+  background: linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted) / 0.3));
+}
+
+/* ============================================================================
+   BUTTONS & INTERACTIVE ELEMENTS
+   ============================================================================ */
+
+/* Primary buttons with ocean gradient */
+[data-theme="ocean"] .btn-primary {
+  background: linear-gradient(135deg, hsl(200 80% 40%), hsl(200 80% 35%));
+  transition: all var(--transition-normal, 200ms) var(--transition-easing, ease);
+}
+
+[data-theme="ocean"] .btn-primary:hover {
+  background: linear-gradient(135deg, hsl(200 80% 45%), hsl(200 80% 40%));
+  box-shadow: 0 4px 12px -2px hsl(200 80% 40% / 0.4);
+}
+
+[data-theme="ocean"] .btn-primary:active {
+  transform: translateY(1px);
+}
+
+/* Secondary buttons with subtle ocean tint */
+[data-theme="ocean"] .btn-secondary {
+  border-color: hsl(200 30% 70%);
+}
+
+[data-theme="ocean"] .btn-secondary:hover {
+  background: hsl(200 30% 95%);
+  border-color: hsl(200 40% 60%);
+}
+
+/* Dark mode button adjustments */
+.dark[data-theme="ocean"] .btn-secondary:hover {
+  background: hsl(200 30% 18%);
+  border-color: hsl(200 40% 40%);
+}
+
+/* ============================================================================
+   INPUT FIELDS
+   ============================================================================ */
+
+/* Inputs with ocean-themed focus states */
+[data-theme="ocean"] input:focus,
+[data-theme="ocean"] textarea:focus,
+[data-theme="ocean"] select:focus {
+  border-color: hsl(200 80% 50%);
+  box-shadow: 0 0 0 3px hsl(200 80% 50% / 0.15);
+}
+
+/* Chat input area */
+[data-theme="ocean"] .chat-input-container {
+  background: linear-gradient(0deg, hsl(var(--background)), hsl(var(--muted) / 0.2));
+  border-top: 1px solid hsl(var(--border) / 0.5);
+}
+
+/* ============================================================================
+   SCROLLBARS
+   ============================================================================ */
+
+/* Custom scrollbar styling for ocean theme */
+[data-theme="ocean"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme="ocean"] ::-webkit-scrollbar-track {
+  background: hsl(200 20% 95%);
+  border-radius: 4px;
+}
+
+[data-theme="ocean"] ::-webkit-scrollbar-thumb {
+  background: hsl(200 30% 70%);
+  border-radius: 4px;
+}
+
+[data-theme="ocean"] ::-webkit-scrollbar-thumb:hover {
+  background: hsl(200 40% 60%);
+}
+
+/* Dark mode scrollbar */
+.dark[data-theme="ocean"] ::-webkit-scrollbar-track {
+  background: hsl(200 30% 12%);
+}
+
+.dark[data-theme="ocean"] ::-webkit-scrollbar-thumb {
+  background: hsl(200 30% 30%);
+}
+
+.dark[data-theme="ocean"] ::-webkit-scrollbar-thumb:hover {
+  background: hsl(200 30% 40%);
+}
+
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+
+/* Subtle wave animation for loading states */
+@keyframes ocean-wave {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+[data-theme="ocean"] .loading-indicator {
+  animation: ocean-wave 1.5s ease-in-out infinite;
+}
+
+/* Message enter animation */
+@keyframes ocean-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-theme="ocean"] .message-enter {
+  animation: ocean-fade-in 0.3s ease-out forwards;
+}
+
+/* ============================================================================
+   CODE BLOCKS
+   ============================================================================ */
+
+/* Code blocks with ocean-themed styling */
+[data-theme="ocean"] pre,
+[data-theme="ocean"] code {
+  background: hsl(200 30% 96%);
+  border: 1px solid hsl(200 20% 88%);
+}
+
+.dark[data-theme="ocean"] pre,
+.dark[data-theme="ocean"] code {
+  background: hsl(200 40% 12%);
+  border: 1px solid hsl(200 30% 22%);
+}
+
+/* Inline code */
+[data-theme="ocean"] :not(pre) > code {
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+}
+
+/* ============================================================================
+   SELECTION
+   ============================================================================ */
+
+/* Text selection with ocean color */
+[data-theme="ocean"] ::selection {
+  background: hsl(200 80% 40% / 0.3);
+  color: inherit;
+}
+
+.dark[data-theme="ocean"] ::selection {
+  background: hsl(200 80% 60% / 0.3);
+}
+
+/* ============================================================================
+   FOCUS STATES
+   ============================================================================ */
+
+/* Enhanced focus visible states */
+[data-theme="ocean"] :focus-visible {
+  outline: 2px solid hsl(200 80% 50%);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   TOOLTIPS & POPOVERS
+   ============================================================================ */
+
+[data-theme="ocean"] [role="tooltip"],
+[data-theme="ocean"] .popover {
+  box-shadow: 0 8px 24px -4px rgb(0 60 100 / 0.15);
+  border: 1px solid hsl(var(--border) / 0.5);
+}
+
+/* ============================================================================
+   BADGES & TAGS
+   ============================================================================ */
+
+[data-theme="ocean"] .badge {
+  border-radius: var(--radius-full, 9999px);
+}
+
+[data-theme="ocean"] .badge-primary {
+  background: linear-gradient(135deg, hsl(200 80% 45%), hsl(200 70% 40%));
+}
+
+[data-theme="ocean"] .badge-secondary {
+  background: hsl(180 30% 90%);
+  color: hsl(180 50% 30%);
+}
+
+.dark[data-theme="ocean"] .badge-secondary {
+  background: hsl(180 30% 20%);
+  color: hsl(180 40% 70%);
+}
