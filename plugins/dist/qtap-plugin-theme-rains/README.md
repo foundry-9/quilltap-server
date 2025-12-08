@@ -52,6 +52,19 @@ Advanced CSS in `styles.css` for specific component enhancements:
 - Enhanced focus states with amber glow
 - Amber-accented avatars
 
+## Bundled Fonts
+
+This theme includes **Fira Code** for monospace text (code blocks, terminal output, etc.).
+
+### Fira Code
+
+- **Source**: [github.com/tonsky/FiraCode](https://github.com/tonsky/FiraCode)
+- **Version**: 6.2
+- **License**: SIL Open Font License 1.1 (see `fonts/OFL.txt`)
+- **Files**: `FiraCode-Regular.woff2`, `FiraCode-Bold.woff2`
+
+Fira Code is a monospaced font with programming ligatures, making code more readable.
+
 ## File Structure
 
 ```
@@ -63,6 +76,10 @@ qtap-plugin-theme-rains/
 ├── index.ts           # Plugin entry point (TypeScript)
 ├── index.js           # Plugin entry point (compiled)
 ├── preview.png        # Theme preview image
+├── fonts/             # Bundled font files
+│   ├── FiraCode-Regular.woff2
+│   ├── FiraCode-Bold.woff2
+│   └── OFL.txt        # Font license
 └── README.md          # This file
 ```
 

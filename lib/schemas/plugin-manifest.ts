@@ -346,6 +346,25 @@ export const AuthProviderConfigSchema = z.object({
 export type AuthProviderConfig = z.infer<typeof AuthProviderConfigSchema>;
 
 /**
+ * Font definition for theme plugins
+ * Allows themes to bundle and load custom fonts
+ */
+export const ThemeFontDefinitionSchema = z.object({
+  /** Font family name (as used in CSS) */
+  family: z.string().min(1).describe('Font family name'),
+  /** Font file path (relative to plugin root) */
+  src: z.string().min(1).describe('Font file path relative to plugin'),
+  /** Font weight (e.g., "400", "700") */
+  weight: z.string().default('400').describe('Font weight'),
+  /** Font style (e.g., "normal", "italic") */
+  style: z.string().default('normal').describe('Font style'),
+  /** Font display strategy */
+  display: z.enum(['auto', 'block', 'swap', 'fallback', 'optional']).default('swap'),
+});
+
+export type ThemeFontDefinition = z.infer<typeof ThemeFontDefinitionSchema>;
+
+/**
  * Theme plugin configuration schema
  *
  * Defines the configuration for theme plugins that provide UI theming.
@@ -370,6 +389,9 @@ export const ThemeConfigSchema = z.object({
 
   /** Theme tags for categorization */
   tags: z.array(z.string()).default([]).optional().describe('Tags for theme discovery'),
+
+  /** Custom fonts bundled with the theme */
+  fonts: z.array(ThemeFontDefinitionSchema).default([]).optional().describe('Custom fonts to load'),
 });
 
 export type ThemeConfig = z.infer<typeof ThemeConfigSchema>;

@@ -23,6 +23,26 @@ import { mergeThemeTokens, themeTokensToCSS } from './utils';
 // ============================================================================
 
 /**
+ * Font definition for loaded themes
+ */
+export interface LoadedThemeFont {
+  /** Font family name */
+  family: string;
+  /** Font file path (absolute) */
+  filePath: string;
+  /** Font weight */
+  weight: string;
+  /** Font style */
+  style: string;
+  /** Font display strategy */
+  display: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
+  /** Plugin name (for URL construction) */
+  pluginName: string;
+  /** Original source path (relative to plugin) */
+  src: string;
+}
+
+/**
  * A loaded theme with all its data
  */
 export interface LoadedTheme {
@@ -64,6 +84,9 @@ export interface LoadedTheme {
 
   /** Whether this is the built-in default theme */
   isDefault: boolean;
+
+  /** Custom fonts bundled with the theme */
+  fonts?: LoadedThemeFont[];
 }
 
 /**
@@ -284,6 +307,38 @@ class ThemeRegistry {
       }
     }
 
+    // Load custom fonts
+    const fonts: LoadedThemeFont[] = [];
+    if (themeConfig.fonts && themeConfig.fonts.length > 0) {
+      for (const fontDef of themeConfig.fonts) {
+        const fontPath = path.join(plugin.pluginPath, fontDef.src);
+        try {
+          await fs.access(fontPath);
+          fonts.push({
+            family: fontDef.family,
+            filePath: fontPath,
+            weight: fontDef.weight || '400',
+            style: fontDef.style || 'normal',
+            display: fontDef.display || 'swap',
+            pluginName: plugin.manifest.name,
+            src: fontDef.src,
+          });
+          logger.debug('Loaded theme font', {
+            themeId,
+            family: fontDef.family,
+            weight: fontDef.weight,
+            path: fontPath,
+          });
+        } catch {
+          logger.warn('Theme font file not found', {
+            themeId,
+            family: fontDef.family,
+            path: fontPath,
+          });
+        }
+      }
+    }
+
     // Create the loaded theme
     const loadedTheme: LoadedTheme = {
       id: themeId,
@@ -299,6 +354,7 @@ class ThemeRegistry {
       tags: themeConfig.tags || plugin.manifest.keywords || [],
       pluginName: plugin.manifest.name,
       isDefault: false,
+      fonts: fonts.length > 0 ? fonts : undefined,
     };
 
     // Register the theme
@@ -309,6 +365,7 @@ class ThemeRegistry {
       name: loadedTheme.name,
       supportsDarkMode: loadedTheme.supportsDarkMode,
       hasCssOverrides: !!cssOverrides,
+      fontCount: fonts.length,
     });
   }
 
@@ -376,6 +433,14 @@ class ThemeRegistry {
   getCSSOverrides(themeId: string): string | undefined {
     const theme = this.state.themes.get(themeId);
     return theme?.cssOverrides;
+  }
+
+  /**
+   * Get fonts for a theme
+   */
+  getFonts(themeId: string): LoadedThemeFont[] {
+    const theme = this.state.themes.get(themeId);
+    return theme?.fonts || [];
   }
 
   /**

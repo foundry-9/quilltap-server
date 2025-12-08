@@ -11,20 +11,29 @@ import { logger } from '@/lib/logger';
 
 /**
  * GET /api/themes/:themeId/tokens
- * Returns the tokens for a specific theme
+ * Returns the tokens and fonts for a specific theme
  *
  * Params:
  * - themeId: Theme identifier (e.g., "default", "ocean")
  *
  * Response format:
  * {
- *   colors: {
- *     light: ColorPalette;
- *     dark: ColorPalette;
+ *   tokens: {
+ *     colors: {
+ *       light: ColorPalette;
+ *       dark: ColorPalette;
+ *     };
+ *     typography?: Typography;
+ *     spacing?: Spacing;
+ *     effects?: Effects;
  *   };
- *   typography?: Typography;
- *   spacing?: Spacing;
- *   effects?: Effects;
+ *   fonts?: Array<{
+ *     family: string;
+ *     src: string;
+ *     weight: string;
+ *     style: string;
+ *     display: string;
+ *   }>;
  * }
  */
 export async function GET(
@@ -59,15 +68,27 @@ export async function GET(
       );
     }
 
-    // Get theme tokens
+    // Get theme tokens and fonts
     const tokens = themeRegistry.getTokens(themeId);
+    const loadedFonts = themeRegistry.getFonts(themeId);
+
+    // Convert fonts to client-friendly format with API URLs
+    const fonts = loadedFonts.map(font => ({
+      family: font.family,
+      // Build URL to serve font via our API route
+      src: `/api/themes/fonts/${font.pluginName}/${font.src}`,
+      weight: font.weight,
+      style: font.style,
+      display: font.display,
+    }));
 
     logger.debug('Theme tokens retrieved successfully', {
       context: 'GET /api/themes/[themeId]/tokens',
       themeId,
+      fontCount: fonts.length,
     });
 
-    return NextResponse.json(tokens);
+    return NextResponse.json({ tokens, fonts });
   } catch (error) {
     const themeIdParam = await params.catch(() => ({ themeId: 'unknown' }));
     logger.error(

@@ -496,6 +496,65 @@ export function getThemeDifferences(
 }
 
 // ============================================================================
+// FONT FACE GENERATION
+// ============================================================================
+
+/**
+ * Font definition for generating @font-face rules
+ */
+export interface FontFaceDefinition {
+  family: string;
+  src: string;
+  weight?: string;
+  style?: string;
+  display?: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
+}
+
+/**
+ * Determine font format from file extension
+ */
+function getFontFormat(src: string): string {
+  const ext = src.toLowerCase().split('.').pop();
+  switch (ext) {
+    case 'woff2': return 'woff2';
+    case 'woff': return 'woff';
+    case 'ttf': return 'truetype';
+    case 'otf': return 'opentype';
+    case 'eot': return 'embedded-opentype';
+    case 'svg': return 'svg';
+    default: return 'woff2'; // Default to woff2
+  }
+}
+
+/**
+ * Generate @font-face CSS rule for a single font
+ */
+export function generateFontFaceRule(font: FontFaceDefinition): string {
+  const format = getFontFormat(font.src);
+
+  return `@font-face {
+  font-family: "${font.family}";
+  src: url("${font.src}") format("${format}");
+  font-weight: ${font.weight || '400'};
+  font-style: ${font.style || 'normal'};
+  font-display: ${font.display || 'swap'};
+}`;
+}
+
+/**
+ * Generate CSS for multiple @font-face rules
+ * @param fonts - Array of font definitions
+ * @returns CSS string with all @font-face rules
+ */
+export function generateFontFacesCSS(fonts: FontFaceDefinition[]): string {
+  if (!fonts || fonts.length === 0) {
+    return '';
+  }
+
+  return fonts.map(font => generateFontFaceRule(font)).join('\n\n');
+}
+
+// ============================================================================
 // CSS VARIABLE MAPPING EXPORTS
 // ============================================================================
 

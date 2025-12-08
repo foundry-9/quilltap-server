@@ -8,6 +8,7 @@
  * as CSS custom properties.
  *
  * The generated CSS includes:
+ * - @font-face rules for custom theme fonts
  * - :root selector with light mode colors and shared tokens
  * - .dark selector with dark mode colors
  *
@@ -15,13 +16,24 @@
  */
 
 import { useMemo, useEffect } from 'react';
-import { themeTokensToCSS } from '@/lib/themes/utils';
+import { themeTokensToCSS, generateFontFacesCSS } from '@/lib/themes/utils';
 import { clientLogger } from '@/lib/client-logger';
 import type { ThemeTokens } from '@/lib/themes/types';
 
 // ============================================================================
 // TYPES
 // ============================================================================
+
+/**
+ * Font definition for client-side CSS injection
+ */
+export interface ThemeFontInfo {
+  family: string;
+  src: string;
+  weight?: string;
+  style?: string;
+  display?: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
+}
 
 export interface ThemeStyleInjectorProps {
   /** Theme tokens to convert to CSS variables */
@@ -35,6 +47,9 @@ export interface ThemeStyleInjectorProps {
 
   /** Optional theme ID for data attributes */
   themeId?: string | null;
+
+  /** Custom fonts to load via @font-face rules */
+  fonts?: ThemeFontInfo[];
 }
 
 // ============================================================================
@@ -63,7 +78,16 @@ export function ThemeStyleInjector({
   mode,
   cssOverrides,
   themeId,
+  fonts,
 }: ThemeStyleInjectorProps) {
+  // Generate @font-face CSS for custom fonts
+  const fontFacesCss = useMemo(() => {
+    if (!fonts || fonts.length === 0) {
+      return '';
+    }
+    return generateFontFacesCSS(fonts);
+  }, [fonts]);
+
   // Generate CSS from tokens (no logging in useMemo to avoid render-time side effects)
   const baseCss = useMemo(() => {
     if (!tokens) {
@@ -72,16 +96,27 @@ export function ThemeStyleInjector({
     return themeTokensToCSS(tokens);
   }, [tokens, mode, themeId]);
 
-  // Combine base CSS with optional overrides
+  // Combine all CSS: fonts + variables + overrides
   const fullCss = useMemo(() => {
     if (!baseCss) return null;
 
-    if (cssOverrides) {
-      return `${baseCss}\n\n/* Theme Component Overrides */\n${cssOverrides}`;
+    const parts: string[] = [];
+
+    // Add @font-face rules first
+    if (fontFacesCss) {
+      parts.push(`/* Theme Custom Fonts */\n${fontFacesCss}`);
     }
 
-    return baseCss;
-  }, [baseCss, cssOverrides]);
+    // Add theme variables
+    parts.push(baseCss);
+
+    // Add component overrides
+    if (cssOverrides) {
+      parts.push(`/* Theme Component Overrides */\n${cssOverrides}`);
+    }
+
+    return parts.join('\n\n');
+  }, [baseCss, cssOverrides, fontFacesCss]);
 
   // Log CSS generation in effect (not during render to avoid setState during render)
   useEffect(() => {
@@ -97,8 +132,9 @@ export function ThemeStyleInjector({
       hasSpacing: !!tokens.spacing,
       hasEffects: !!tokens.effects,
       hasCssOverrides: !!cssOverrides,
+      fontCount: fonts?.length || 0,
     });
-  }, [tokens, mode, themeId, cssOverrides]);
+  }, [tokens, mode, themeId, cssOverrides, fonts]);
 
   // Don't render anything if no CSS to inject
   if (!fullCss) {

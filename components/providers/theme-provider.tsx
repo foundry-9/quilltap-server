@@ -124,6 +124,13 @@ export function ThemeProvider({
     initialTokens ?? DEFAULT_THEME_TOKENS
   );
   const [availableThemes, setAvailableThemes] = useState<ThemeSummary[]>([]);
+  const [themeFonts, setThemeFonts] = useState<Array<{
+    family: string;
+    src: string;
+    weight?: string;
+    style?: string;
+    display?: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
+  }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -206,13 +213,19 @@ export function ThemeProvider({
 
       const response = await fetch(`/api/themes/${themeId}/tokens`);
       if (response.ok) {
-        const themeTokens = await response.json();
-        setTokens(themeTokens);
+        const data = await response.json();
+        // API returns { tokens, fonts }
+        setTokens(data.tokens);
+        setThemeFonts(data.fonts || []);
 
-        clientLogger.debug('Theme: loaded theme tokens', { themeId });
+        clientLogger.debug('Theme: loaded theme tokens', {
+          themeId,
+          fontCount: data.fonts?.length || 0,
+        });
       } else if (response.status === 404) {
         clientLogger.warn('Theme: theme not found, using default', { themeId });
         setTokens(DEFAULT_THEME_TOKENS);
+        setThemeFonts([]);
       } else {
         throw new Error(`Failed to load theme tokens: ${response.status}`);
       }
@@ -221,6 +234,7 @@ export function ThemeProvider({
       clientLogger.warn('Theme: failed to load theme tokens', { themeId, error: message });
       // Fall back to default tokens
       setTokens(DEFAULT_THEME_TOKENS);
+      setThemeFonts([]);
     }
   }, []);
 
@@ -318,11 +332,12 @@ export function ThemeProvider({
     // Update local state immediately for responsiveness
     setActiveThemeId(themeId);
 
-    // Load new theme tokens
+    // Load new theme tokens and fonts
     if (themeId) {
       await loadThemeTokens(themeId);
     } else {
       setTokens(DEFAULT_THEME_TOKENS);
+      setThemeFonts([]);
     }
 
     // Persist to server
@@ -408,7 +423,12 @@ export function ThemeProvider({
 
   return (
     <ThemeContext.Provider value={value}>
-      <ThemeStyleInjector tokens={tokens} mode={resolvedColorMode} />
+      <ThemeStyleInjector
+        tokens={tokens}
+        mode={resolvedColorMode}
+        fonts={themeFonts}
+        themeId={activeThemeId}
+      />
       {children}
     </ThemeContext.Provider>
   );
@@ -437,21 +457,58 @@ export function useTheme(): ThemeContextValue {
 // STYLE INJECTOR (INLINE FOR SIMPLICITY)
 // ============================================================================
 
-import { themeTokensToCSS } from '@/lib/themes/utils';
+import { themeTokensToCSS, generateFontFacesCSS } from '@/lib/themes/utils';
+
+/**
+ * Font info for CSS @font-face generation
+ */
+interface ThemeFontInfo {
+  family: string;
+  src: string;
+  weight?: string;
+  style?: string;
+  display?: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
+}
 
 interface ThemeStyleInjectorProps {
   tokens: ThemeTokens;
   mode: 'light' | 'dark';
+  fonts?: ThemeFontInfo[];
+  themeId?: string | null;
 }
 
 /**
  * Injects theme CSS variables into the document head
  * Uses useEffect to ensure proper placement and update
  */
-function ThemeStyleInjector({ tokens, mode }: ThemeStyleInjectorProps) {
-  const cssContent = useMemo(() => {
+function ThemeStyleInjector({ tokens, mode, fonts, themeId }: ThemeStyleInjectorProps) {
+  // Generate @font-face CSS for custom fonts
+  const fontFacesCss = useMemo(() => {
+    if (!fonts || fonts.length === 0) {
+      return '';
+    }
+    return generateFontFacesCSS(fonts);
+  }, [fonts]);
+
+  // Generate CSS from tokens
+  const baseCss = useMemo(() => {
     return themeTokensToCSS(tokens);
   }, [tokens, mode]);
+
+  // Combine all CSS: fonts + variables
+  const cssContent = useMemo(() => {
+    const parts: string[] = [];
+
+    // Add @font-face rules first
+    if (fontFacesCss) {
+      parts.push(`/* Theme Custom Fonts */\n${fontFacesCss}`);
+    }
+
+    // Add theme variables
+    parts.push(baseCss);
+
+    return parts.join('\n\n');
+  }, [baseCss, fontFacesCss]);
 
   // Inject styles into document head
   useEffect(() => {
@@ -467,10 +524,16 @@ function ThemeStyleInjector({ tokens, mode }: ThemeStyleInjectorProps) {
     }
 
     styleElement.textContent = cssContent;
+    if (themeId) {
+      styleElement.setAttribute('data-theme-id', themeId);
+    }
+    styleElement.setAttribute('data-color-mode', mode);
 
     clientLogger.debug('Theme: CSS variables injected to head', {
       mode,
+      themeId,
       cssLength: cssContent.length,
+      fontCount: fonts?.length || 0,
       // Log first 500 chars of CSS for debugging
       cssPreview: cssContent.substring(0, 500),
     });
@@ -482,7 +545,7 @@ function ThemeStyleInjector({ tokens, mode }: ThemeStyleInjectorProps) {
         el.remove();
       }
     };
-  }, [cssContent, mode]);
+  }, [cssContent, mode, themeId, fonts]);
 
   // Don't render anything - styles are injected via useEffect
   return null;
