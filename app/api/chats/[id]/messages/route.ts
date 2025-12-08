@@ -10,7 +10,8 @@ import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext } from '@/lib/chat/tool-executor'
 import { buildToolsForProvider } from '@/lib/tools'
 import { processMessageForMemoryAsync } from '@/lib/memory'
-import { buildContext } from '@/lib/chat/context-manager'
+import { buildContext, type MessageWithParticipant } from '@/lib/chat/context-manager'
+import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
 import { resolveConnectionProfile } from '@/lib/chat/connection-resolver'
 import {
@@ -30,7 +31,7 @@ import {
 import { logger } from '@/lib/logger'
 import { requiresApiKey } from '@/lib/plugins/provider-validation'
 import { z } from 'zod'
-import type { MessageEvent } from '@/lib/schemas/types'
+import type { MessageEvent, Character, Persona, ChatParticipantBase } from '@/lib/schemas/types'
 
 // Validation schema
 const sendMessageSchema = z.object({
@@ -357,8 +358,9 @@ export async function POST(
       p => p.type === 'PERSONA' && p.isActive && p.personaId
     )
     let persona: { name: string; description: string } | null = null
+    let personaData: Persona | null = null
     if (personaParticipant?.personaId) {
-      const personaData = await repos.personas.findById(personaParticipant.personaId)
+      personaData = await repos.personas.findById(personaParticipant.personaId)
       if (personaData) {
         persona = { name: personaData.name, description: personaData.description }
       }
@@ -366,6 +368,53 @@ export async function POST(
 
     // Get chat settings for embedding profile
     const chatSettings = await repos.users.getChatSettings(user.id)
+
+    // ========================================================================
+    // Phase 3: Multi-Character Context Building Setup
+    // ========================================================================
+
+    // Detect if this is a multi-character chat
+    const isMultiCharacter = isMultiCharacterChat(chat.participants)
+
+    // Load all character and persona data for multi-character chats
+    const participantCharacters = new Map<string, Character>()
+    const participantPersonas = new Map<string, Persona>()
+
+    if (isMultiCharacter) {
+      logger.debug('[Chat Messages] Multi-character chat detected, loading all participant data', {
+        participantCount: chat.participants.length,
+      })
+
+      // Load all characters
+      for (const p of chat.participants) {
+        if (p.type === 'CHARACTER' && p.characterId && p.isActive) {
+          if (p.characterId === character.id) {
+            // Reuse already-loaded character
+            participantCharacters.set(p.characterId, character)
+          } else {
+            const char = await repos.characters.findById(p.characterId)
+            if (char) {
+              participantCharacters.set(p.characterId, char)
+            }
+          }
+        } else if (p.type === 'PERSONA' && p.personaId && p.isActive) {
+          if (personaData && p.personaId === personaData.id) {
+            // Reuse already-loaded persona
+            participantPersonas.set(p.personaId, personaData)
+          } else {
+            const pers = await repos.personas.findById(p.personaId)
+            if (pers) {
+              participantPersonas.set(p.personaId, pers)
+            }
+          }
+        }
+      }
+
+      logger.debug('[Chat Messages] Loaded participant data', {
+        characterCount: participantCharacters.size,
+        personaCount: participantPersonas.size,
+      })
+    }
 
     // Build context with intelligent token management
     // Filter existing messages to include USER, ASSISTANT, and TOOL messages (exclude SYSTEM)
@@ -408,6 +457,49 @@ export async function POST(
       })
       .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
 
+    // Build messages with participant info for multi-character context
+    let messagesWithParticipants: MessageWithParticipant[] | undefined
+
+    if (isMultiCharacter) {
+      messagesWithParticipants = existingMessages
+        .filter(msg => msg.type === 'message')
+        .filter(msg => {
+          const role = (msg as { role: string }).role
+          return role === 'USER' || role === 'ASSISTANT' || role === 'TOOL'
+        })
+        .map(msg => {
+          const messageEvent = msg as MessageEvent
+
+          // For TOOL messages, format as a user message indicating the tool result
+          if (messageEvent.role === 'TOOL') {
+            try {
+              const toolData = JSON.parse(messageEvent.content)
+              const resultText = toolData.result || 'No result'
+
+              return {
+                role: 'USER' as const,
+                content: `[Tool Result: ${toolData.toolName}]\n${resultText}`,
+                id: messageEvent.id,
+                createdAt: messageEvent.createdAt,
+                participantId: null, // Tool messages don't have a participant
+              }
+            } catch {
+              return null
+            }
+          }
+
+          return {
+            role: messageEvent.role,
+            content: messageEvent.content,
+            id: messageEvent.id,
+            thoughtSignature: messageEvent.role === 'ASSISTANT' ? messageEvent.thoughtSignature : undefined,
+            participantId: messageEvent.participantId,
+            createdAt: messageEvent.createdAt,
+          }
+        })
+        .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
+    }
+
     const builtContext = await buildContext({
       provider: connectionProfile.provider,
       modelName: connectionProfile.modelName,
@@ -422,6 +514,12 @@ export async function POST(
       skipMemories: false,
       maxMemories: 10,
       minMemoryImportance: 0.3,
+      // Multi-character context building options (Phase 3)
+      respondingParticipant: isMultiCharacter ? characterParticipant : undefined,
+      allParticipants: isMultiCharacter ? chat.participants : undefined,
+      participantCharacters: isMultiCharacter ? participantCharacters : undefined,
+      participantPersonas: isMultiCharacter ? participantPersonas : undefined,
+      messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
     })
 
     // Log context building results for debugging
@@ -437,20 +535,38 @@ export async function POST(
       return !fallback || (fallback.type !== 'text' && fallback.type !== 'image_description')
     })
 
-    const messages = builtContext.messages.map((msg, idx) => {
-      if (idx === builtContext.messages.length - 1 && msg.role === 'user' && attachmentsToSend.length > 0) {
+    // Apply provider-aware message formatting for multi-character support
+    // This handles name field support or content prefix fallback
+    const formattedContextMessages = isMultiCharacter
+      ? formatMessagesForProvider(
+          builtContext.messages.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            name: msg.name,
+            thoughtSignature: msg.thoughtSignature,
+          })),
+          connectionProfile.provider,
+          character.name
+        )
+      : builtContext.messages
+
+    const messages = formattedContextMessages.map((msg, idx) => {
+      if (idx === formattedContextMessages.length - 1 && msg.role === 'user' && attachmentsToSend.length > 0) {
         return {
           role: msg.role,
           content: msg.content,
           attachments: attachmentsToSend,
+          name: msg.name,
         }
       }
       // Preserve thoughtSignature for Gemini 3 thinking models (required for multi-turn function calling)
       // Convert null to undefined for LLMMessage compatibility
+      // Include name for multi-character support
       return {
         role: msg.role,
         content: msg.content,
         thoughtSignature: msg.thoughtSignature ?? undefined,
+        name: msg.name,
       }
     })
 
@@ -649,16 +765,17 @@ export async function POST(
 
             // Add assistant message with tool call to conversation (if there was any content)
             // Include thought signature for Gemini 3 thinking models
+            // Include name for multi-character support (character name for assistant messages)
             if (currentResponse && currentResponse.trim().length > 0) {
               currentMessages = [
                 ...currentMessages,
-                { role: 'assistant' as const, content: currentResponse, thoughtSignature }
+                { role: 'assistant' as const, content: currentResponse, thoughtSignature, name: undefined }
               ]
             } else {
               // Even without content, add a placeholder to maintain conversation flow
               currentMessages = [
                 ...currentMessages,
-                { role: 'assistant' as const, content: '[Tool call made]', thoughtSignature }
+                { role: 'assistant' as const, content: '[Tool call made]', thoughtSignature, name: undefined }
               ]
             }
 
@@ -666,7 +783,7 @@ export async function POST(
             for (const toolMsg of results.toolMessages) {
               currentMessages = [
                 ...currentMessages,
-                { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined }
+                { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, name: undefined }
               ]
             }
 

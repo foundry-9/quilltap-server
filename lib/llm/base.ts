@@ -66,6 +66,11 @@ export interface LLMMessage {
   // Google Gemini thought signature for thinking models (e.g., gemini-3-pro)
   // Must be preserved and passed back for multi-turn conversations with function calling
   thoughtSignature?: string
+  // Optional name for multi-character chats (provider-dependent support)
+  // OpenAI: supports on user/assistant messages (a-zA-Z0-9_- only, max 64 chars)
+  // Anthropic: not supported natively (will be prefixed to content instead)
+  // Other providers: varies, fallback to content prefix if not supported
+  name?: string
 }
 
 export interface LLMParams {
