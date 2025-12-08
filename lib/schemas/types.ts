@@ -303,6 +303,7 @@ export const CharacterSchema = z.object({
   defaultConnectionProfileId: UUIDSchema.nullable().optional(),
   sillyTavernData: JsonSchema.nullable().optional(),
   isFavorite: z.boolean().default(false),
+  talkativeness: z.number().min(0.1).max(1.0).default(0.5),
 
   // Relationships
   personaLinks: z.array(z.object({
@@ -322,6 +323,9 @@ export const CharacterSchema = z.object({
 });
 
 export type Character = z.infer<typeof CharacterSchema>;
+
+// Input type for creating characters - makes fields with defaults optional
+export type CharacterInput = z.input<typeof CharacterSchema>;
 
 export const PersonaSchema = z.object({
   id: UUIDSchema,
@@ -366,6 +370,8 @@ export const MessageEventSchema = z.object({
   // Google Gemini thought signature for thinking models (e.g., gemini-3-pro)
   // Must be preserved and passed back for multi-turn conversations with function calling
   thoughtSignature: z.string().nullable().optional(),
+  // Multi-character chat: which participant sent this message
+  participantId: UUIDSchema.nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;
@@ -412,6 +418,10 @@ export const ChatParticipantSchema = z.object({
   displayOrder: z.number().default(0),   // For ordering in UI
   isActive: z.boolean().default(true),   // Temporarily disable without removing
 
+  // Multi-character chat fields
+  hasHistoryAccess: z.boolean().default(false),  // Whether this participant can see messages from before they joined
+  joinScenario: z.string().nullable().optional(), // Custom scenario text for how they joined the chat
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -427,15 +437,6 @@ export const ChatParticipantSchema = z.object({
     return false;
   },
   { message: 'CHARACTER participants must have characterId, PERSONA participants must have personaId' }
-).refine(
-  (data) => {
-    // CHARACTER participants must have a connectionProfileId
-    if (data.type === 'CHARACTER') {
-      return data.connectionProfileId != null;
-    }
-    return true;
-  },
-  { message: 'CHARACTER participants must have a connectionProfileId' }
 );
 
 export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
@@ -451,11 +452,16 @@ export const ChatParticipantBaseSchema = z.object({
   systemPromptOverride: z.string().nullable().optional(),
   displayOrder: z.number().default(0),
   isActive: z.boolean().default(true),
+  hasHistoryAccess: z.boolean().default(false),
+  joinScenario: z.string().nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
 
 export type ChatParticipantBase = z.infer<typeof ChatParticipantBaseSchema>;
+
+// Input type for creating chat participants - makes fields with defaults optional
+export type ChatParticipantBaseInput = z.input<typeof ChatParticipantBaseSchema>;
 
 export const ChatMetadataSchema = z.object({
   id: UUIDSchema,
@@ -497,6 +503,9 @@ export const ChatMetadataBaseSchema = z.object({
 });
 
 export type ChatMetadataBase = z.infer<typeof ChatMetadataBaseSchema>;
+
+// Input type for creating chats - makes fields with defaults optional
+export type ChatMetadataInput = z.input<typeof ChatMetadataBaseSchema>;
 
 // Legacy schema for migration (matches old format)
 export const ChatMetadataLegacySchema = z.object({

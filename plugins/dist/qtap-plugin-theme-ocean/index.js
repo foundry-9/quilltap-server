@@ -461,10 +461,11 @@ var metadata = {
   version: "1.0.0",
   type: "THEME"
 };
-var index_default = {
+var oceanThemePlugin = {
   initialize,
   metadata
 };
+var index_default = oceanThemePlugin;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   initialize,
