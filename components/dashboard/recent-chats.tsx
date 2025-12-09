@@ -73,12 +73,12 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
   )
 
   return (
-    <div className="mt-8">
+    <div className="mt-8 flex-1 flex flex-col min-h-0">
       <h3 className="mb-4 text-xl font-semibold text-foreground">
         Recent Chats
       </h3>
       {visibleChats.length > 0 ? (
-        <div className="space-y-3 max-h-96 overflow-y-auto">
+        <div className="space-y-3 flex-1 overflow-y-auto pb-4">
           {visibleChats.map((chat) => {
             const characters = chat.characters
             const characterNames = formatCharacterNames(characters)

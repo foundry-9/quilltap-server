@@ -149,6 +149,21 @@ jest.mock('@/lib/llm/plugin-factory', () => ({
   isProviderFromPlugin: jest.fn(() => true),
 }))
 
+// Mock LLM module (re-exports from plugin-factory)
+jest.mock('@/lib/llm', () => ({
+  createLLMProvider: jest.fn(),
+  createImageProvider: jest.fn(),
+  getAllAvailableProviders: jest.fn(() => []),
+  getAllAvailableImageProviders: jest.fn(() => []),
+  isProviderFromPlugin: jest.fn(() => true),
+}))
+
+// Mock file tag inheritance
+jest.mock('@/lib/files/tag-inheritance', () => ({
+  getInheritedTags: jest.fn().mockResolvedValue([]),
+  mergeTags: jest.fn().mockImplementation((a: string[], b: string[]) => [...new Set([...a, ...b])]),
+}))
+
 // Mock Repositories
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
@@ -174,6 +189,9 @@ jest.mock('@/lib/s3/operations', () => ({
 jest.mock('@/lib/s3/client', () => ({
   getS3Client: jest.fn().mockReturnValue({}),
   getS3Bucket: jest.fn().mockReturnValue('mock-bucket'),
+  buildS3Key: jest.fn().mockImplementation((userId: string, fileId: string, filename: string, category: string) => {
+    return `users/${userId}/${category.toLowerCase()}s/${fileId}/${filename}`
+  }),
 }))
 
 // Mock vector store for embedding operations

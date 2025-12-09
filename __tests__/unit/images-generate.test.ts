@@ -7,22 +7,19 @@ import { POST } from '@/app/api/images/generate/route'
 import { getServerSession } from 'next-auth'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
-import { writeFile, mkdir } from 'node:fs/promises'
 import { getRepositories } from '@/lib/repositories/factory'
+import { uploadFile as uploadS3File } from '@/lib/s3/operations'
+import { getInheritedTags } from '@/lib/files/tag-inheritance'
 
-// Mock dependencies
-jest.mock('next-auth')
-jest.mock('@/lib/encryption')
-jest.mock('@/lib/llm/plugin-factory')
-jest.mock('fs/promises')
-jest.mock('@/lib/repositories/factory')
+// Note: Mocks for next-auth, @/lib/encryption, @/lib/llm, @/lib/repositories/factory,
+// @/lib/s3/operations, @/lib/s3/client, and @/lib/files/tag-inheritance are defined in jest.setup.ts
 
 const mockGetServerSession = jest.mocked(getServerSession)
 const mockDecryptApiKey = jest.mocked(decryptApiKey)
 const mockCreateLLMProvider = jest.mocked(createLLMProvider)
-const mockWriteFile = jest.mocked(writeFile)
-const mockMkdir = jest.mocked(mkdir)
 const mockGetRepositories = jest.mocked(getRepositories)
+const mockUploadS3File = jest.mocked(uploadS3File)
+const mockGetInheritedTags = jest.mocked(getInheritedTags)
 
 // Helper to create a mock NextRequest
 function createMockRequest(body: any) {
@@ -76,6 +73,10 @@ describe('POST /api/images/generate', () => {
       users: {},
       imageProfiles: {},
     } as any)
+
+    // Setup S3 and tag inheritance mocks (base mocks are in jest.setup.ts, but reset here)
+    mockUploadS3File.mockResolvedValue(undefined)
+    mockGetInheritedTags.mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -212,23 +213,19 @@ describe('POST /api/images/generate', () => {
     mockImagesRepo.create.mockResolvedValueOnce({
       id: 'test-image-id',
       userId: 'test-user-id',
-      filename: 'test.png',
-      filepath: 'uploads/generated/test-user-id/test.png',
-      url: null,
+      originalFilename: 'test.png',
       mimeType: 'image/png',
       size: 67,
       width: null,
       height: null,
-      source: 'generated',
+      source: 'GENERATED',
       generationPrompt: 'a beautiful landscape',
       generationModel: 'dall-e-3',
       createdAt: new Date(),
       updatedAt: new Date(),
       tags: [],
+      s3Key: 'users/test-user-id/images/test-image-id/test.png',
     } as any)
-
-    mockMkdir.mockResolvedValueOnce(undefined)
-    mockWriteFile.mockResolvedValueOnce(undefined)
 
     const request = createMockRequest({
       prompt: 'a beautiful landscape',
@@ -244,6 +241,7 @@ describe('POST /api/images/generate', () => {
     expect(data.metadata.prompt).toBe('a beautiful landscape')
     expect(data.metadata.provider).toBe('OPENAI')
     expect(mockProvider.generateImage).toHaveBeenCalled()
+    expect(mockUploadS3File).toHaveBeenCalled()
 
     // Verify new Phase 4 fields are set correctly
     expect(mockImagesRepo.create).toHaveBeenCalledWith(
@@ -307,31 +305,22 @@ describe('POST /api/images/generate', () => {
     mockImagesRepo.create.mockResolvedValueOnce({
       id: 'test-image-id',
       userId: 'test-user-id',
-      filename: 'test.png',
-      filepath: 'uploads/generated/test-user-id/test.png',
-      url: null,
+      originalFilename: 'test.png',
       mimeType: 'image/png',
       size: 67,
       width: null,
       height: null,
-      source: 'generated',
+      source: 'GENERATED',
       generationPrompt: 'a warrior character',
       generationModel: 'dall-e-3',
       createdAt: new Date(),
       updatedAt: new Date(),
-      tags: [
-        {
-          id: 'tag-1',
-          imageId: 'test-image-id',
-          tagType: 'CHARACTER',
-          tagId: 'char-1',
-          createdAt: new Date(),
-        },
-      ],
+      tags: ['inherited-tag-1'],
+      s3Key: 'users/test-user-id/images/test-image-id/test.png',
     } as any)
 
-    mockMkdir.mockResolvedValueOnce(undefined)
-    mockWriteFile.mockResolvedValueOnce(undefined)
+    // Mock inherited tags from the character
+    mockGetInheritedTags.mockResolvedValueOnce(['inherited-tag-1'])
 
     const request = createMockRequest({
       prompt: 'a warrior character',
@@ -404,23 +393,19 @@ describe('POST /api/images/generate', () => {
     mockImagesRepo.create.mockResolvedValueOnce({
       id: 'test-image-id',
       userId: 'test-user-id',
-      filename: 'test.png',
-      filepath: 'uploads/generated/test-user-id/test.png',
-      url: null,
+      originalFilename: 'test.png',
       mimeType: 'image/png',
       size: 67,
       width: null,
       height: null,
-      source: 'generated',
+      source: 'GENERATED',
       generationPrompt: 'a test image',
       generationModel: 'dall-e-3',
       createdAt: new Date(),
       updatedAt: new Date(),
       tags: [],
+      s3Key: 'users/test-user-id/images/test-image-id/test.png',
     } as any)
-
-    mockMkdir.mockResolvedValueOnce(undefined)
-    mockWriteFile.mockResolvedValueOnce(undefined)
 
     const request = createMockRequest({
       prompt: 'a test image',

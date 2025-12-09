@@ -179,8 +179,8 @@ export default async function Dashboard() {
   const recentChats = allRecentChats.filter((chat) => chat !== null);
 
   return (
-    <div className="container mx-auto px-4 py-8 flex flex-col max-w-[800px]">
-      <div className="flex-1">
+    <div className="container mx-auto px-4 pt-4 pb-4 flex flex-col max-w-[800px] h-full overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* 2FA Setup Prompt */}
         <TwoFactorPrompt />
 
@@ -208,12 +208,9 @@ export default async function Dashboard() {
                 {charactersCount}
               </span>
             </div>
-            <p className="mb-6 flex-1 text-sm text-gray-600 dark:text-gray-400">
+            <p className="flex-1 text-sm text-gray-600 dark:text-gray-400">
               Create and manage your AI characters
             </p>
-            <div className="dashboard-manage-btn w-full rounded-md bg-blue-600 dark:bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:hover:bg-blue-800 text-center transition-colors">
-              Manage Characters
-            </div>
           </div>
         </Link>
 
@@ -226,12 +223,9 @@ export default async function Dashboard() {
                 {chatsCount}
               </span>
             </div>
-            <p className="mb-6 flex-1 text-sm text-gray-600 dark:text-gray-400">
+            <p className="flex-1 text-sm text-gray-600 dark:text-gray-400">
               Start conversations with your characters
             </p>
-            <div className="dashboard-manage-btn w-full rounded-md bg-green-600 dark:bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 dark:hover:bg-green-800 text-center transition-colors">
-              Manage Chats
-            </div>
           </div>
         </Link>
 
@@ -244,12 +238,9 @@ export default async function Dashboard() {
                 {personasCount}
               </span>
             </div>
-            <p className="mb-6 flex-1 text-sm text-gray-600 dark:text-gray-400">
+            <p className="flex-1 text-sm text-gray-600 dark:text-gray-400">
               Manage your user personas
             </p>
-            <div className="dashboard-manage-btn w-full rounded-md bg-purple-600 dark:bg-purple-700 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 dark:hover:bg-purple-800 text-center transition-colors">
-              Manage Personas
-            </div>
           </div>
         </Link>
       </div>
