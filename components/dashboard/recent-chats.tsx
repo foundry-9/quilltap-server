@@ -17,6 +17,7 @@ interface CharacterInfo {
     filepath: string
     url?: string | null
   } | null
+  tags?: string[]
 }
 
 interface RecentChat {
@@ -29,6 +30,7 @@ interface RecentChat {
     id: string
     name: string
     title?: string | null
+    tags?: string[]
   } | null
   tags: Array<{
     tag: {
@@ -68,7 +70,22 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
   const visibleChats = useMemo(
-    () => chats.filter(chat => !shouldHideByIds(chat.tags.map(ct => ct.tag.id))),
+    () => chats.filter(chat => {
+      // Collect all tag IDs: chat tags + character tags + persona tags
+      const allTagIds: string[] = chat.tags.map(ct => ct.tag.id)
+
+      for (const character of chat.characters) {
+        if (character.tags) {
+          allTagIds.push(...character.tags)
+        }
+      }
+
+      if (chat.persona?.tags) {
+        allTagIds.push(...chat.persona.tags)
+      }
+
+      return !shouldHideByIds(allTagIds)
+    }),
     [chats, shouldHideByIds]
   )
 

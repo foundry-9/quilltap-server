@@ -72,6 +72,7 @@ async function getCharacterSummary(characterId: string, repos: Repos) {
     avatarUrl: character.avatarUrl,
     defaultImageId: character.defaultImageId,
     defaultImage,
+    tags: character.tags || [],
   }
 }
 
@@ -95,6 +96,7 @@ async function getPersonaSummary(personaId: string, repos: Repos) {
     avatarUrl: persona.avatarUrl,
     defaultImageId: persona.defaultImageId,
     defaultImage,
+    tags: persona.tags || [],
   }
 }
 

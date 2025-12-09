@@ -30,11 +30,13 @@ interface ChatParticipant {
       filepath: string
       url?: string
     }
+    tags?: string[]
   }
   persona?: {
     id: string
     name: string
     title?: string | null
+    tags?: string[]
   }
 }
 
@@ -69,7 +71,21 @@ export default function ChatsPage() {
   const { shouldHideByIds } = useQuickHide()
 
   const visibleChats = useMemo(
-    () => chats.filter(chat => !shouldHideByIds(chat.tags.map(ct => ct.tag.id))),
+    () => chats.filter(chat => {
+      // Collect all tag IDs: chat tags + all participant tags
+      const allTagIds: string[] = chat.tags.map(ct => ct.tag.id)
+
+      for (const participant of chat.participants) {
+        if (participant.character?.tags) {
+          allTagIds.push(...participant.character.tags)
+        }
+        if (participant.persona?.tags) {
+          allTagIds.push(...participant.persona.tags)
+        }
+      }
+
+      return !shouldHideByIds(allTagIds)
+    }),
     [chats, shouldHideByIds]
   )
 

@@ -1,8 +1,8 @@
 import { getServerSession } from "@/lib/auth/session";
 import { getUserRepositories, getRepositories } from "@/lib/repositories/factory";
-import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";
 import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
+import { DashboardCards } from "@/components/dashboard/dashboard-cards";
 import { TwoFactorPrompt } from "@/components/auth/TwoFactorPrompt";
 import type { FileEntry } from "@/lib/schemas/types";
 
@@ -43,10 +43,31 @@ export default async function Dashboard() {
     repos ? repos.personas.findAll() : Promise.resolve([]),
   ]);
 
-  // Count items (now properly filtered by user)
-  const charactersCount = allCharacters.length;
-  const chatsCount = allChats.length;
-  const personasCount = allPersonas.length;
+  // Prepare minimal tag data for dashboard cards (for quick-hide filtering)
+  const characterTagData = allCharacters.map(c => ({ id: c.id, tags: c.tags ?? [] }));
+  // For chats, include participant tags for quick-hide filtering
+  const chatTagData = await Promise.all(allChats.map(async (c) => {
+    const allTagIds: string[] = [...(c.tags ?? [])];
+
+    // Add participant tags
+    for (const participant of c.participants) {
+      if (participant.type === 'CHARACTER' && participant.characterId && repos) {
+        const character = await repos.characters.findById(participant.characterId);
+        if (character?.tags) {
+          allTagIds.push(...character.tags);
+        }
+      }
+      if (participant.type === 'PERSONA' && participant.personaId && repos) {
+        const persona = await repos.personas.findById(participant.personaId);
+        if (persona?.tags) {
+          allTagIds.push(...persona.tags);
+        }
+      }
+    }
+
+    return { id: c.id, tags: allTagIds };
+  }));
+  const personaTagData = allPersonas.map(p => ({ id: p.id, tags: p.tags ?? [] }));
 
   // Get favorite characters
   const favoriteCharacters = repos
@@ -92,8 +113,9 @@ export default async function Dashboard() {
       avatarUrl: string | null
       defaultImageId: string | null
       defaultImage: { id: string; filepath: string; url: null } | null
+      tags: string[]
     }>
-    persona: { id: string; name: string; title?: string | null } | null
+    persona: { id: string; name: string; title?: string | null; tags?: string[] } | null
     tags: Array<{ tag: { id: string; name: string } }>
   } | null> = repos
     ? await Promise.all(
@@ -132,6 +154,7 @@ export default async function Dashboard() {
                   avatarUrl: character.avatarUrl ?? null,
                   defaultImageId: character.defaultImageId ?? null,
                   defaultImage,
+                  tags: character.tags ?? [],
                 };
               })
             );
@@ -151,6 +174,7 @@ export default async function Dashboard() {
                   id: personaData.id,
                   name: personaData.name,
                   title: personaData.title ?? null,
+                  tags: personaData.tags ?? [],
                 };
               }
             }
@@ -198,52 +222,11 @@ export default async function Dashboard() {
           </div>
         )}
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-8">
-        {/* Characters Card */}
-        <Link href="/characters">
-          <div className="dashboard-card h-full flex flex-col rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-blue-500 hover:shadow-md dark:hover:border-blue-500 dark:hover:shadow-md transition-all cursor-pointer">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Characters</h2>
-              <span className="dashboard-badge rounded-full bg-blue-100 dark:bg-blue-900 px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
-                {charactersCount}
-              </span>
-            </div>
-            <p className="flex-1 text-sm text-gray-600 dark:text-gray-400">
-              Create and manage your AI characters
-            </p>
-          </div>
-        </Link>
-
-        {/* Chats Card */}
-        <Link href="/chats">
-          <div className="dashboard-card h-full flex flex-col rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-green-500 hover:shadow-md dark:hover:border-green-500 dark:hover:shadow-md transition-all cursor-pointer">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Chats</h2>
-              <span className="dashboard-badge rounded-full bg-green-100 dark:bg-green-900 px-3 py-1 text-sm font-medium text-green-800 dark:text-green-200">
-                {chatsCount}
-              </span>
-            </div>
-            <p className="flex-1 text-sm text-gray-600 dark:text-gray-400">
-              Start conversations with your characters
-            </p>
-          </div>
-        </Link>
-
-        {/* Personas Card */}
-        <Link href="/personas">
-          <div className="dashboard-card h-full flex flex-col rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-purple-500 hover:shadow-md dark:hover:border-purple-500 dark:hover:shadow-md transition-all cursor-pointer">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Personas</h2>
-              <span className="dashboard-badge rounded-full bg-purple-100 dark:bg-purple-900 px-3 py-1 text-sm font-medium text-purple-800 dark:text-purple-200">
-                {personasCount}
-              </span>
-            </div>
-            <p className="flex-1 text-sm text-gray-600 dark:text-gray-400">
-              Manage your user personas
-            </p>
-          </div>
-        </Link>
-      </div>
+        <DashboardCards
+          characters={characterTagData}
+          chats={chatTagData}
+          personas={personaTagData}
+        />
 
         {/* Recent Chats */}
         <RecentChatsSection chats={recentChats} />
