@@ -287,4 +287,115 @@
   .qt-footer-separator {
     @apply hidden sm:inline;
   }
+
+  /* ==========================================================================
+     AUTH LAYOUT
+     ========================================================================== */
+
+  /**
+   * Auth page wrapper - full page gradient background
+   */
+  .qt-auth-page {
+    @apply flex min-h-screen items-center justify-center;
+    @apply p-4;
+    background: var(--qt-auth-page-bg, linear-gradient(to bottom right, var(--color-slate-900, #0f172a), var(--color-slate-800, #1e293b)));
+  }
+
+  /**
+   * Auth card - centered card for auth forms
+   */
+  .qt-auth-card {
+    @apply w-full max-w-md space-y-8;
+    @apply rounded-lg p-10 shadow-xl;
+    background: var(--qt-auth-card-bg, var(--color-card));
+    color: var(--qt-auth-card-fg, var(--color-card-foreground));
+  }
+
+  /**
+   * Auth card header - title area
+   */
+  .qt-auth-header {
+    @apply text-center;
+  }
+
+  /**
+   * Auth card title
+   */
+  .qt-auth-title {
+    @apply text-3xl font-bold;
+    color: var(--qt-auth-title-fg, var(--color-foreground));
+  }
+
+  /**
+   * Auth card subtitle/description
+   */
+  .qt-auth-subtitle {
+    @apply mt-2 text-sm;
+    color: var(--qt-auth-subtitle-fg, var(--color-muted-foreground));
+  }
+
+  /**
+   * Auth form container
+   */
+  .qt-auth-form {
+    @apply space-y-6;
+  }
+
+  /**
+   * Auth form field group
+   */
+  .qt-auth-field {
+    @apply space-y-1;
+  }
+
+  /**
+   * Auth form label
+   */
+  .qt-auth-label {
+    @apply block text-sm font-medium;
+    color: var(--qt-auth-label-fg, var(--color-foreground));
+  }
+
+  /**
+   * Auth form hint text (below inputs)
+   */
+  .qt-auth-hint {
+    @apply mt-1 text-xs;
+    color: var(--qt-auth-hint-fg, var(--color-muted-foreground));
+  }
+
+  /**
+   * Auth form footer text (sign up / sign in links)
+   */
+  .qt-auth-footer {
+    @apply text-center text-sm;
+    color: var(--qt-auth-footer-fg, var(--color-muted-foreground));
+  }
+
+  /**
+   * Auth divider (Or separator)
+   */
+  .qt-auth-divider {
+    @apply relative;
+  }
+
+  .qt-auth-divider::before {
+    @apply absolute inset-0 flex items-center;
+    content: '';
+  }
+
+  .qt-auth-divider-line {
+    @apply w-full border-t;
+    border-color: var(--qt-auth-divider-color, var(--color-border));
+  }
+
+  .qt-auth-divider-text {
+    @apply relative flex justify-center text-sm;
+  }
+
+  .qt-auth-divider-text span {
+    @apply px-2;
+    background: var(--qt-auth-card-bg, var(--color-card));
+    color: var(--qt-auth-subtitle-fg, var(--color-muted-foreground));
+  }
 }

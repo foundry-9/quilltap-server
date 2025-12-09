@@ -404,4 +404,55 @@
   .qt-skeleton-circle {
     @apply rounded-full;
   }
+
+  /* ==========================================================================
+     ALERTS - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All alert variants share these base styles
+   */
+  .qt-alert,
+  .qt-alert-success,
+  .qt-alert-warning,
+  .qt-alert-error,
+  .qt-alert-info {
+    @apply rounded-lg border px-4 py-3 text-sm;
+  }
+
+  /* ==========================================================================
+     ALERT VARIANTS
+     ========================================================================== */
+
+  /**
+   * Success alert
+   */
+  .qt-alert-success {
+    @apply border-green-200 bg-green-50 text-green-800;
+    @apply dark:border-green-900/50 dark:bg-green-900/20 dark:text-green-200;
+  }
+
+  /**
+   * Warning alert
+   */
+  .qt-alert-warning {
+    @apply border-amber-200 bg-amber-50 text-amber-800;
+    @apply dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200;
+  }
+
+  /**
+   * Error alert
+   */
+  .qt-alert-error {
+    @apply border-red-200 bg-red-50 text-red-800;
+    @apply dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-200;
+  }
+
+  /**
+   * Info alert
+   */
+  .qt-alert-info {
+    @apply border-blue-200 bg-blue-50 text-blue-800;
+    @apply dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-200;
+  }
 }

@@ -142,30 +142,30 @@ function SignInForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-950 dark:to-slate-900">
-      <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-10 shadow-xl dark:bg-slate-800 dark:shadow-2xl dark:shadow-black/20">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Sign In</h1>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+    <div className="qt-auth-page">
+      <div className="qt-auth-card">
+        <div className="qt-auth-header">
+          <h1 className="qt-auth-title">Sign In</h1>
+          <p className="qt-auth-subtitle">
             Welcome back to <BrandName />
           </p>
         </div>
 
         {message && (
-          <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-900/50 dark:bg-green-900/20 dark:text-green-200">
+          <div className="qt-alert-success">
             {message}
           </div>
         )}
 
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-200">
+          <div className="qt-alert-error">
             {error}
           </div>
         )}
 
         {/* Warning when no OAuth providers configured */}
         {authStatus?.warning && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
+          <div className="qt-alert-warning">
             {authStatus.warning}
           </div>
         )}
@@ -173,7 +173,7 @@ function SignInForm() {
         <div className="mt-8 space-y-4">
           {/* OAuth Provider Buttons - dynamically rendered */}
           {authStatusLoading ? (
-            <div className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-500 dark:border-gray-600 dark:bg-slate-700 dark:text-gray-400">
+            <div className="qt-button-secondary w-full justify-center opacity-70">
               Loading authentication options...
             </div>
           ) : (
@@ -181,7 +181,7 @@ function SignInForm() {
               <button
                 key={provider.id}
                 onClick={() => handleOAuthSignIn(provider.id)}
-                className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600 dark:focus:ring-blue-400 dark:focus:ring-offset-slate-800"
+                className="qt-button-secondary w-full justify-center"
               >
                 {renderProviderIcon(provider)}
                 Continue with {provider.name}
@@ -191,22 +191,17 @@ function SignInForm() {
 
           {/* Divider - only show if there are OAuth providers */}
           {authStatus?.hasOAuthProviders && (
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300 dark:border-gray-600" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-2 text-gray-500 dark:bg-slate-800 dark:text-gray-400">Or</span>
+            <div className="qt-auth-divider">
+              <div className="qt-auth-divider-line" />
+              <div className="qt-auth-divider-text">
+                <span>Or</span>
               </div>
             </div>
           )}
 
-          <form onSubmit={handleCredentialsSignIn} className="space-y-6">
-            <div>
-              <label
-                htmlFor="username"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-200"
-              >
+          <form onSubmit={handleCredentialsSignIn} className="qt-auth-form">
+            <div className="qt-auth-field">
+              <label htmlFor="username" className="qt-auth-label">
                 Username
               </label>
               <input
@@ -215,16 +210,13 @@ function SignInForm() {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-slate-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                className="qt-input mt-1"
                 placeholder="your_username"
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-200"
-              >
+            <div className="qt-auth-field">
+              <label htmlFor="password" className="qt-auth-label">
                 Password
               </label>
               <input
@@ -233,18 +225,15 @@ function SignInForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-slate-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                className="qt-input mt-1"
                 placeholder="••••••••"
               />
             </div>
 
             {needsTotp && (
               <>
-                <div>
-                  <label
-                    htmlFor="totpCode"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-200"
-                  >
+                <div className="qt-auth-field">
+                  <label htmlFor="totpCode" className="qt-auth-label">
                     2FA Code
                   </label>
                   <input
@@ -254,9 +243,9 @@ function SignInForm() {
                     value={totpCode}
                     onChange={(e) => setTotpCode(e.target.value)}
                     placeholder="000000"
-                    className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-slate-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                    className="qt-input mt-1"
                   />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="qt-auth-hint">
                     Enter code from your authenticator app, or use a backup code
                   </p>
                 </div>
@@ -267,12 +256,9 @@ function SignInForm() {
                     type="checkbox"
                     checked={rememberDevice}
                     onChange={(e) => setRememberDevice(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-slate-700"
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                   />
-                  <label
-                    htmlFor="rememberDevice"
-                    className="ml-2 text-sm text-gray-600 dark:text-gray-300"
-                  >
+                  <label htmlFor="rememberDevice" className="ml-2 text-sm text-muted-foreground">
                     Remember this device for 30 days
                   </label>
                 </div>
@@ -282,18 +268,15 @@ function SignInForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus:ring-blue-400 dark:focus:ring-offset-slate-800"
+              className="qt-button-primary w-full"
             >
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
-          <p className="text-center text-sm text-gray-600 dark:text-gray-300">
+          <p className="qt-auth-footer">
             Don&apos;t have an account?{" "}
-            <Link
-              href="/auth/signup"
-              className="font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-            >
+            <Link href="/auth/signup" className="qt-link font-medium">
               Sign up
             </Link>
           </p>
@@ -305,7 +288,7 @@ function SignInForm() {
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-950 dark:to-slate-900 dark:text-white">Loading...</div>}>
+    <Suspense fallback={<div className="qt-auth-page text-white">Loading...</div>}>
       <SignInForm />
     </Suspense>
   );

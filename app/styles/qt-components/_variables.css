@@ -196,4 +196,17 @@
   --qt-footer-border: var(--color-border);
   --qt-footer-fg: var(--color-muted-foreground);
   --qt-footer-link-hover: var(--color-primary);
+
+  /* ==========================================================================
+     AUTH PAGE VARIABLES
+     ========================================================================== */
+  --qt-auth-page-bg: linear-gradient(to bottom right, #0f172a, #1e293b);
+  --qt-auth-card-bg: var(--color-card);
+  --qt-auth-card-fg: var(--color-card-foreground);
+  --qt-auth-title-fg: var(--color-foreground);
+  --qt-auth-subtitle-fg: var(--color-muted-foreground);
+  --qt-auth-label-fg: var(--color-foreground);
+  --qt-auth-hint-fg: var(--color-muted-foreground);
+  --qt-auth-footer-fg: var(--color-muted-foreground);
+  --qt-auth-divider-color: var(--color-border);
 }
