@@ -182,6 +182,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
   // Phase 5: Ephemeral messages for nudge/queue notifications (session-only, not persisted)
   const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
+  // Track which participant is currently responding during streaming (for correct avatar display)
+  const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -223,6 +225,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const getFirstCharacter = () => getFirstCharacterParticipant()?.character
   const getFirstPersona = () => getFirstPersonaParticipant()?.persona
   const getFirstConnectionProfile = () => getFirstCharacterParticipant()?.connectionProfile
+
+  // Get the character that is currently responding (for streaming avatar display)
+  // Falls back to first character if no responding participant is set
+  const getRespondingCharacter = () => {
+    if (respondingParticipantId) {
+      const participant = chat?.participants.find(p => p.id === respondingParticipantId)
+      if (participant?.character) {
+        return participant.character
+      }
+    }
+    return getFirstCharacter()
+  }
 
   // Multi-character chat helpers
   // Convert Participant[] to ChatParticipantBase[] for turn manager functions
@@ -395,6 +409,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setWaitingForResponse(true)
     setStreaming(false)
     setStreamingContent('')
+    // Set the responding participant for correct avatar display during streaming
+    setRespondingParticipantId(participantId)
+    clientLogger.debug('[Chat] Set responding participant for streaming', { participantId })
 
     try {
       const res = await fetch(`/api/chats/${id}/messages`, {
@@ -476,6 +493,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setStreaming(false)
       setWaitingForResponse(false)
       setStreamingContent('')
+      setRespondingParticipantId(null)
       scrollToBottom()
     }
   }, [id, streaming, waitingForResponse, participantsAsBase, hasActiveCharacters])
@@ -854,6 +872,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setWaitingForResponse(true)
     setStreaming(false)
     setStreamingContent('')
+    // Set the responding participant for correct avatar display during streaming
+    // For normal messages, the server uses the first active character
+    const firstCharParticipant = getFirstCharacterParticipant()
+    setRespondingParticipantId(firstCharParticipant?.id || null)
+    clientLogger.debug('[Chat] Set responding participant for streaming', {
+      participantId: firstCharParticipant?.id,
+      characterName: firstCharParticipant?.character?.name,
+    })
     // Reset textarea to minimum height (single line)
     if (inputRef.current) {
       inputRef.current.style.height = 'auto'
@@ -1036,6 +1062,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   setStreaming(false)
                   setWaitingForResponse(false)
                   setSending(false)
+                  setRespondingParticipantId(null)
                   return
                 }
 
@@ -1049,6 +1076,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setMessages((prev) => [...prev, assistantMessage])
                 setStreamingContent('')
                 setStreaming(false)
+                setRespondingParticipantId(null)
                 // Refresh chat to get tool messages and memory debug logs
                 await fetchChat()
                 // Update debug entry with memory logs from the fetched chat (with polling)
@@ -1115,6 +1143,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setStreamingContent('')
       setStreaming(false)
       setWaitingForResponse(false)
+      setRespondingParticipantId(null)
     } finally {
       setSending(false)
       setTimeout(() => {
@@ -1718,10 +1747,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             {shouldShowAvatars() && (
               <div className="flex-shrink-0">
                 {renderAvatar({
-                  name: getFirstCharacter()?.name || 'AI',
+                  name: getRespondingCharacter()?.name || 'AI',
                   title: null,
-                  avatarUrl: getFirstCharacter()?.avatarUrl,
-                  defaultImage: getFirstCharacter()?.defaultImage,
+                  avatarUrl: getRespondingCharacter()?.avatarUrl,
+                  defaultImage: getRespondingCharacter()?.defaultImage,
                 })}
               </div>
             )}
@@ -1806,10 +1835,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             {shouldShowAvatars() && (
               <div className="flex-shrink-0">
                 {renderAvatar({
-                  name: getFirstCharacter()?.name || 'AI',
+                  name: getRespondingCharacter()?.name || 'AI',
                   title: null,
-                  avatarUrl: getFirstCharacter()?.avatarUrl,
-                  defaultImage: getFirstCharacter()?.defaultImage,
+                  avatarUrl: getRespondingCharacter()?.avatarUrl,
+                  defaultImage: getRespondingCharacter()?.defaultImage,
                 })}
               </div>
             )}
