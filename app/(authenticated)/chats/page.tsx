@@ -283,8 +283,8 @@ export default function ChatsPage() {
                   <span className="text-6xl text-yellow-200 font-black" style={{ textShadow: '0 0 10px rgba(255, 255, 0, 0.8)' }}>←</span>
                 </div>
               )}
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start flex-1 gap-4">
+              <div className="flex items-stretch justify-between gap-4">
+                <div className="flex items-stretch flex-1 gap-4">
                   {(() => {
                     const characters = getActiveCharacters(chat)
                     const persona = getFirstPersona(chat)
@@ -296,7 +296,10 @@ export default function ChatsPage() {
                       if (characters.length === 0) {
                         // Fallback for no characters
                         return (
-                          <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                          <div
+                            className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`}
+                            style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
+                          >
                             <span className={getAvatarClasses(style, 'lg').fallbackClass}>?</span>
                           </div>
                         )
@@ -311,14 +314,16 @@ export default function ChatsPage() {
                             <img
                               src={avatarSrc}
                               alt={characters[0].name}
-                              width={64}
-                              height={64}
-                              className={getAvatarClasses(style, 'lg').imageClass}
+                              className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full object-cover flex-shrink-0`}
+                              style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
                             />
                           )
                         }
                         return (
-                          <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                          <div
+                            className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`}
+                            style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
+                          >
                             <span className={getAvatarClasses(style, 'lg').fallbackClass}>
                               {characters[0].name.charAt(0).toUpperCase()}
                             </span>
@@ -331,7 +336,7 @@ export default function ChatsPage() {
                       const overlapOffset = style === 'CIRCULAR' ? -12 : -10
 
                       return (
-                        <div className="flex items-center" style={{ marginRight: `${Math.abs(overlapOffset) * (displayChars.length - 1)}px` }}>
+                        <div className="flex items-stretch h-full" style={{ marginRight: `${Math.abs(overlapOffset) * (displayChars.length - 1)}px` }}>
                           {displayChars.map((char, index) => {
                             const avatarSrc = getCharacterAvatarSrc(char)
                             const zIndex = displayChars.length - index
@@ -344,10 +349,8 @@ export default function ChatsPage() {
                                   key={char.id}
                                   src={avatarSrc}
                                   alt={char.name}
-                                  width={48}
-                                  height={48}
-                                  className={`${getAvatarClasses(style, 'md').imageClass} ring-2 ring-card`}
-                                  style={{ zIndex, marginLeft: `${marginLeft}px`, position: 'relative' }}
+                                  className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full object-cover ring-2 ring-card flex-shrink-0`}
+                                  style={{ zIndex, marginLeft: `${marginLeft}px`, position: 'relative', ...(style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : {}) }}
                                   title={char.name}
                                 />
                               )
@@ -355,7 +358,7 @@ export default function ChatsPage() {
                             return (
                               <div
                                 key={char.id}
-                                className={`${getAvatarClasses(style, 'md').wrapperClass} ring-2 ring-card`}
+                                className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center ring-2 ring-card flex-shrink-0`}
                                 style={{
                                   zIndex,
                                   marginLeft: `${marginLeft}px`,
@@ -372,7 +375,7 @@ export default function ChatsPage() {
                           })}
                           {characters.length > 4 && (
                             <div
-                              className={`${getAvatarClasses(style, 'md').wrapperClass} ring-2 ring-card bg-muted`}
+                              className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full bg-muted flex items-center justify-center ring-2 ring-card flex-shrink-0`}
                               style={{ zIndex: 0, marginLeft: `${overlapOffset}px`, position: 'relative' }}
                               title={`+${characters.length - 4} more`}
                             >

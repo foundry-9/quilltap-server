@@ -87,7 +87,10 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
             const renderAvatars = () => {
               if (characters.length === 0) {
                 return (
-                  <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                  <div
+                    className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`}
+                    style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
+                  >
                     <span className={getAvatarClasses(style, 'lg').fallbackClass}>?</span>
                   </div>
                 )
@@ -101,14 +104,16 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
                     <img
                       src={avatarSrc}
                       alt={characters[0].name}
-                      width={64}
-                      height={64}
-                      className={getAvatarClasses(style, 'lg').imageClass}
+                      className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full object-cover flex-shrink-0`}
+                      style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
                     />
                   )
                 }
                 return (
-                  <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                  <div
+                    className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`}
+                    style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
+                  >
                     <span className={getAvatarClasses(style, 'lg').fallbackClass}>
                       {characters[0].name.charAt(0).toUpperCase()}
                     </span>
@@ -121,7 +126,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
               const overlapOffset = style === 'CIRCULAR' ? -12 : -10
 
               return (
-                <div className="flex items-center" style={{ marginRight: `${Math.abs(overlapOffset) * (displayChars.length - 1)}px` }}>
+                <div className="flex items-stretch h-full" style={{ marginRight: `${Math.abs(overlapOffset) * (displayChars.length - 1)}px` }}>
                   {displayChars.map((char, index) => {
                     const avatarSrc = getCharacterAvatarSrc(char)
                     const zIndex = displayChars.length - index
@@ -134,10 +139,8 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
                           key={char.id}
                           src={avatarSrc}
                           alt={char.name}
-                          width={48}
-                          height={48}
-                          className={`${getAvatarClasses(style, 'md').imageClass} ring-2 ring-card`}
-                          style={{ zIndex, marginLeft: `${marginLeft}px`, position: 'relative' }}
+                          className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full object-cover ring-2 ring-card flex-shrink-0`}
+                          style={{ zIndex, marginLeft: `${marginLeft}px`, position: 'relative', ...(style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : {}) }}
                           title={char.name}
                         />
                       )
@@ -145,7 +148,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
                     return (
                       <div
                         key={char.id}
-                        className={`${getAvatarClasses(style, 'md').wrapperClass} ring-2 ring-card`}
+                        className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center ring-2 ring-card flex-shrink-0`}
                         style={{
                           zIndex,
                           marginLeft: `${marginLeft}px`,
@@ -162,7 +165,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
                   })}
                   {characters.length > 4 && (
                     <div
-                      className={`${getAvatarClasses(style, 'md').wrapperClass} ring-2 ring-card bg-muted`}
+                      className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full bg-muted flex items-center justify-center ring-2 ring-card flex-shrink-0`}
                       style={{ zIndex: 0, marginLeft: `${overlapOffset}px`, position: 'relative' }}
                       title={`+${characters.length - 4} more`}
                     >
@@ -181,8 +184,8 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
                 href={`/chats/${chat.id}`}
                 className="block rounded-lg border border-border bg-card p-4 shadow-sm hover:border-primary transition-colors"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-4 flex-grow">
+                <div className="flex items-stretch justify-between gap-3">
+                  <div className="flex items-stretch gap-4 flex-grow">
                     {renderAvatars()}
                     <div className="flex-grow min-w-0">
                       <div className="flex items-center gap-2 mb-1">
