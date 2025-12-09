@@ -1,0 +1,39 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-theme-earl-grey",
+  "title": "Earl Grey Theme",
+  "description": "A sophisticated dark theme with deep slate grays and soft blue accents, inspired by the elegance of classic earl grey tea",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "compatibility": {
+    "quilltapVersion": ">=2.2.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["THEME"],
+  "category": "THEME",
+  "typescript": true,
+  "frontend": "NONE",
+  "styling": "CSS_MODULES",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["theme", "earl-grey", "dark", "slate", "blue", "elegant", "sophisticated"],
+  "themeConfig": {
+    "tokensPath": "tokens.json",
+    "stylesPath": "styles.css",
+    "supportsDarkMode": true,
+    "previewImage": "preview.png",
+    "tags": ["earl-grey", "dark", "slate", "blue", "elegant"]
+  },
+  "permissions": {
+    "fileSystem": [],
+    "network": [],
+    "database": false,
+    "userData": false
+  }
+}
