@@ -626,4 +626,162 @@ export class MemoriesRepository extends MongoBaseRepository<Memory> {
       return 0;
     }
   }
+
+  /**
+   * Find memories that a character has about another character
+   * @param characterId The character who owns the memory
+   * @param aboutCharacterId The character the memory is about
+   * @returns Promise<Memory[]> Array of memories about the other character
+   */
+  async findByCharacterAboutCharacter(
+    characterId: string,
+    aboutCharacterId: string
+  ): Promise<Memory[]> {
+    logger.debug('Finding memories by character about another character', {
+      characterId,
+      aboutCharacterId,
+    });
+    try {
+      const collection = await this.getCollection();
+      const results = await collection
+        .find({ characterId, aboutCharacterId })
+        .sort({ importance: -1, createdAt: -1 })
+        .toArray();
+
+      const memories = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((memory): memory is Memory => memory !== null);
+
+      logger.debug('Found memories about character', {
+        characterId,
+        aboutCharacterId,
+        count: memories.length,
+      });
+      return memories;
+    } catch (error) {
+      logger.error('Error finding memories about character', {
+        characterId,
+        aboutCharacterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Find memories that a character has about any of the specified characters
+   * @param characterId The character who owns the memories
+   * @param aboutCharacterIds Array of character IDs the memories might be about
+   * @returns Promise<Memory[]> Array of memories about the specified characters
+   */
+  async findByCharacterAboutCharacters(
+    characterId: string,
+    aboutCharacterIds: string[]
+  ): Promise<Memory[]> {
+    logger.debug('Finding memories by character about multiple characters', {
+      characterId,
+      aboutCharacterCount: aboutCharacterIds.length,
+    });
+    try {
+      if (aboutCharacterIds.length === 0) {
+        logger.debug('Empty aboutCharacterIds array provided', { characterId });
+        return [];
+      }
+
+      const collection = await this.getCollection();
+      const results = await collection
+        .find({
+          characterId,
+          aboutCharacterId: { $in: aboutCharacterIds },
+        })
+        .sort({ importance: -1, createdAt: -1 })
+        .toArray();
+
+      const memories = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((memory): memory is Memory => memory !== null);
+
+      logger.debug('Found memories about characters', {
+        characterId,
+        aboutCharacterCount: aboutCharacterIds.length,
+        count: memories.length,
+      });
+      return memories;
+    } catch (error) {
+      logger.error('Error finding memories about characters', {
+        characterId,
+        aboutCharacterCount: aboutCharacterIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Text search in memory content and summary for memories about a specific character
+   * @param characterId The character who owns the memories
+   * @param aboutCharacterId The character the memories are about
+   * @param query Search query string
+   * @returns Promise<Memory[]> Array of memories matching the search query
+   */
+  async searchByContentAboutCharacter(
+    characterId: string,
+    aboutCharacterId: string,
+    query: string
+  ): Promise<Memory[]> {
+    logger.debug('Searching memories about character by content', {
+      characterId,
+      aboutCharacterId,
+      queryLength: query.length,
+    });
+    try {
+      const collection = await this.getCollection();
+      const regex = new RegExp(query, 'i');
+
+      const results = await collection
+        .find({
+          characterId,
+          aboutCharacterId,
+          $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
+        })
+        .toArray();
+
+      const memories = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((memory): memory is Memory => memory !== null);
+
+      logger.debug('Found memories about character by content search', {
+        characterId,
+        aboutCharacterId,
+        count: memories.length,
+      });
+      return memories;
+    } catch (error) {
+      logger.error('Error searching memories about character by content', {
+        characterId,
+        aboutCharacterId,
+        queryLength: query.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
 }

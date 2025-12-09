@@ -22,6 +22,7 @@ This plan covers the implementation of full multi-character chat support for Qui
 | Continue Button for Passing Turns | ✅ COMPLETE (Phase 7) |
 | Edge Case Handling | ✅ COMPLETE (Phase 7) |
 | Debug Logging | ✅ COMPLETE (Phase 7) |
+| Inter-Character Memory System | ✅ COMPLETE (Phase 8) |
 
 ---
 
@@ -595,3 +596,115 @@ Resolution order:
 - The participant sidebar replaces some functionality that might have been in ToolPalette - consider whether to keep both or merge
 - Ephemeral messages are a new pattern in the app - document the approach for future use
 - The turn manager is stateless on the server; all state lives in the client and is recalculated from message history on load
+
+---
+
+## Phase 8: Inter-Character Memory System
+
+### Overview
+
+Characters can now form and store memories about each other during multi-character chats. When a character speaks, they can form memories about other characters based on what those characters have said. These memories are retrieved when building context for future conversations involving those characters.
+
+### Implementation Details
+
+#### Schema Changes
+
+**File:** `lib/schemas/types.ts`
+
+Added `aboutCharacterId` field to `MemorySchema`:
+
+```typescript
+aboutCharacterId: UUIDSchema.nullable().optional(), // Optional: memory about another character (for inter-character memories)
+```
+
+#### Database Migration
+
+**File:** `lib/mongodb/migrations/add-inter-character-memory-fields.ts`
+
+Migration adds `aboutCharacterId: null` to all existing memories.
+
+#### Repository Methods
+
+**File:** `lib/mongodb/repositories/memories.repository.ts`
+
+New methods:
+
+- `findByCharacterAboutCharacter(characterId, aboutCharacterId)` - Find memories one character has about another
+- `findByCharacterAboutCharacters(characterId, aboutCharacterIds[])` - Find memories about multiple characters
+- `searchByContentAboutCharacter(characterId, aboutCharacterId, query)` - Text search in inter-character memories
+
+#### Memory Service
+
+**File:** `lib/memory/memory-service.ts`
+
+Updated `CreateMemoryOptions` to include `aboutCharacterId`.
+
+#### LLM Extraction Task
+
+**File:** `lib/memory/cheap-llm-tasks.ts`
+
+New function `extractInterCharacterMemoryFromMessage()`:
+
+- Takes observer character's message and subject character's message
+- Uses LLM to identify what the observer learned about the subject
+- Returns structured memory candidate (content, summary, keywords, importance)
+
+#### Memory Processor
+
+**File:** `lib/memory/memory-processor.ts`
+
+New interface `InterCharacterMemoryContext` and functions:
+
+- `processInterCharacterMemory()` - Process inter-character memory extraction
+- `processInterCharacterMemoryAsync()` - Fire-and-forget wrapper
+
+#### Context Manager
+
+**File:** `lib/chat/context-manager.ts`
+
+Updated `buildContext()` to:
+
+1. Retrieve inter-character memories when in multi-character mode
+2. Format them in a "## Memories About Other Characters" section
+3. Include character names for attribution ("About Luna: ...")
+4. Allocate token budget from the overall memory budget
+
+#### Message Route Integration
+
+**File:** `app/api/chats/[id]/messages/route.ts`
+
+After each character response in multi-character chat:
+
+1. Extract standard user/character memories (existing)
+2. Extract inter-character memories from recent other-character messages
+3. Store memories with `aboutCharacterId` set to the subject character
+
+### How It Works
+
+1. **During Chat**: When Character A responds after Character B spoke, the system extracts any significant memories A would form about B based on B's message.
+
+2. **Memory Storage**: These memories are stored with:
+   - `characterId`: The observing character (who formed the memory)
+   - `aboutCharacterId`: The subject character (who the memory is about)
+   - Standard fields: content, summary, keywords, importance, embedding
+
+3. **Context Injection**: When Character A is about to respond in a chat with Character B, their memories about B are retrieved and included in the context prompt.
+
+### Example
+
+In a chat between Luna (cheerful elf) and Zara (mysterious mage):
+
+**Zara says:** "I've been studying forbidden magic for three centuries now."
+
+**System extracts memory for Luna about Zara:**
+
+- Summary: "Zara has been studying forbidden magic for 300 years"
+- Keywords: ["forbidden magic", "centuries", "study"]
+- Importance: 0.7
+
+**Future context for Luna:**
+
+```markdown
+## Memories About Other Characters
+- About Zara: Zara has been studying forbidden magic for 300 years
+```

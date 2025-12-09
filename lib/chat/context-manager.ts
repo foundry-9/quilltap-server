@@ -18,6 +18,7 @@ import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, SemanticSearchResult } from '@/lib/memory/memory-service'
 import { formatMessagesForProvider, buildMultiCharacterContextSection, type MultiCharacterMessage } from '@/lib/llm/message-formatter'
+import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 
 /**
@@ -465,6 +466,76 @@ export function formatMemoriesForContext(
 }
 
 /**
+ * Format inter-character memories for injection into context
+ * These are memories that the responding character has about other characters in the chat
+ */
+export function formatInterCharacterMemoriesForContext(
+  memories: Memory[],
+  characterNames: Map<string, string>, // aboutCharacterId -> character name
+  maxTokens: number,
+  provider: Provider
+): {
+  content: string
+  tokenCount: number
+  memoriesUsed: number
+  debugMemories: Array<{ aboutCharacterName: string; summary: string; importance: number }>
+} {
+  if (memories.length === 0) {
+    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
+  }
+
+  const memoryParts: string[] = ['## Memories About Other Characters']
+  let currentTokens = estimateTokens('## Memories About Other Characters\n', provider)
+  let memoriesUsed = 0
+  const debugMemories: Array<{ aboutCharacterName: string; summary: string; importance: number }> = []
+
+  // Group memories by character
+  const memoriesByCharacter = new Map<string, Memory[]>()
+  for (const memory of memories) {
+    if (memory.aboutCharacterId) {
+      const existing = memoriesByCharacter.get(memory.aboutCharacterId) || []
+      existing.push(memory)
+      memoriesByCharacter.set(memory.aboutCharacterId, existing)
+    }
+  }
+
+  // Sort memories within each character by importance
+  for (const [characterId, charMemories] of memoriesByCharacter) {
+    const characterName = characterNames.get(characterId) || 'Unknown'
+    const sortedMemories = [...charMemories].sort((a, b) => b.importance - a.importance)
+
+    for (const memory of sortedMemories) {
+      const memoryLine = `- About ${characterName}: ${memory.summary}`
+      const lineTokens = estimateTokens(memoryLine + '\n', provider)
+
+      if (currentTokens + lineTokens > maxTokens) {
+        break
+      }
+
+      memoryParts.push(memoryLine)
+      currentTokens += lineTokens
+      memoriesUsed++
+      debugMemories.push({
+        aboutCharacterName: characterName,
+        summary: memory.summary,
+        importance: memory.importance,
+      })
+    }
+  }
+
+  if (memoriesUsed === 0) {
+    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
+  }
+
+  return {
+    content: memoryParts.join('\n'),
+    tokenCount: currentTokens,
+    memoriesUsed,
+    debugMemories,
+  }
+}
+
+/**
  * Format conversation summary for context
  */
 export function formatSummaryForContext(
@@ -679,6 +750,64 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
 
+  // 2b. Retrieve inter-character memories in multi-character chats
+  let interCharacterMemoryContent = ''
+  let interCharacterMemoryTokens = 0
+  let interCharacterMemoriesIncluded = 0
+
+  if (!skipMemories && isMultiCharacter && character.id && participantCharacters && allParticipants) {
+    try {
+      const repos = getRepositories()
+
+      // Get IDs of other characters in this chat (excluding the responding character)
+      const otherCharacterIds: string[] = []
+      const otherCharacterNames = new Map<string, string>()
+
+      for (const participant of allParticipants) {
+        if (participant.type === 'CHARACTER' && participant.characterId && participant.characterId !== character.id) {
+          const otherCharacter = participantCharacters.get(participant.id)
+          if (otherCharacter) {
+            otherCharacterIds.push(otherCharacter.id)
+            otherCharacterNames.set(otherCharacter.id, otherCharacter.name)
+          }
+        }
+      }
+
+      if (otherCharacterIds.length > 0) {
+        // Fetch memories this character has about other characters
+        const interCharacterMemories = await repos.memories.findByCharacterAboutCharacters(
+          character.id,
+          otherCharacterIds
+        )
+
+        // Use half the remaining memory budget for inter-character memories
+        const interCharacterBudget = Math.floor((budget.memoryBudget - memoryTokens) / 2)
+
+        if (interCharacterMemories.length > 0 && interCharacterBudget > 0) {
+          const formatted = formatInterCharacterMemoriesForContext(
+            interCharacterMemories,
+            otherCharacterNames,
+            interCharacterBudget,
+            provider
+          )
+
+          interCharacterMemoryContent = formatted.content
+          interCharacterMemoryTokens = formatted.tokenCount
+          interCharacterMemoriesIncluded = formatted.memoriesUsed
+
+          logger.debug('[ContextManager] Retrieved inter-character memories', {
+            characterId: character.id,
+            otherCharacterCount: otherCharacterIds.length,
+            memoriesFound: interCharacterMemories.length,
+            memoriesIncluded: interCharacterMemoriesIncluded,
+          })
+        }
+      }
+    } catch (error) {
+      warnings.push(`Failed to retrieve inter-character memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
   // 3. Include conversation summary if available
   let summaryContent = ''
   let summaryTokens = 0
@@ -694,7 +823,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   }
 
   // 4. Calculate remaining budget for messages
-  const usedTokens = finalSystemPromptTokens + memoryTokens + summaryTokens
+  const usedTokens = finalSystemPromptTokens + memoryTokens + interCharacterMemoryTokens + summaryTokens
   const remainingBudget = budget.totalLimit - usedTokens - budget.responseReserve
 
   // 5. Prepare messages based on single vs multi-character mode
@@ -792,6 +921,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     fullSystemContent += '\n\n' + memoryContent
   }
 
+  if (interCharacterMemoryContent) {
+    fullSystemContent += '\n\n' + interCharacterMemoryContent
+  }
+
   if (summaryContent) {
     fullSystemContent += '\n\n' + summaryContent
   }
@@ -834,27 +967,31 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   }
 
   // Calculate final token usage
-  const totalUsed = finalSystemPromptTokens + memoryTokens + summaryTokens + messagesTokens + newUserMessageTokens
+  const totalMemoryTokens = memoryTokens + interCharacterMemoryTokens
+  const totalUsed = finalSystemPromptTokens + totalMemoryTokens + summaryTokens + messagesTokens + newUserMessageTokens
+  const totalMemoriesIncluded = memoriesIncluded + interCharacterMemoriesIncluded
 
   logger.debug('[ContextManager] Context built successfully', {
     isMultiCharacter,
     totalMessages: contextMessages.length,
     tokenUsage: totalUsed,
     messagesTruncated: truncated,
+    memoriesIncluded,
+    interCharacterMemoriesIncluded,
   })
 
   return {
     messages: contextMessages,
     tokenUsage: {
       systemPrompt: finalSystemPromptTokens,
-      memories: memoryTokens,
+      memories: totalMemoryTokens,
       summary: summaryTokens,
       recentMessages: messagesTokens + newUserMessageTokens,
       total: totalUsed,
     },
     budget,
     includedSummary: summaryTokens > 0,
-    memoriesIncluded,
+    memoriesIncluded: totalMemoriesIncluded,
     messagesIncluded: selectedMessages.length + (newUserMessage ? 1 : 0), // +1 for new message if provided
     messagesTruncated: truncated,
     warnings,

@@ -7,7 +7,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory'
-import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, MemoryCandidate } from './cheap-llm-tasks'
+import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, extractInterCharacterMemoryFromMessage, MemoryCandidate } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/schemas/types'
 import { createMemoryWithEmbedding, findSimilarMemories } from './memory-service'
@@ -29,6 +29,36 @@ export interface MemoryExtractionContext {
   userMessage: string
   /** Assistant response content */
   assistantMessage: string
+  /** Source message ID for tracking */
+  sourceMessageId: string
+  /** User ID for API access */
+  userId: string
+  /** Connection profile for cheap LLM */
+  connectionProfile: ConnectionProfile
+  /** Cheap LLM settings */
+  cheapLLMSettings: CheapLLMSettings
+  /** Available connection profiles for user-defined strategy */
+  availableProfiles?: ConnectionProfile[]
+}
+
+/**
+ * Context for inter-character memory extraction in multi-character chats
+ */
+export interface InterCharacterMemoryContext {
+  /** The character who is forming the memory (observer) */
+  observerCharacterId: string
+  /** The observer character's name */
+  observerCharacterName: string
+  /** What the observer said in this exchange */
+  observerMessage: string
+  /** The character being observed (subject of the memory) */
+  subjectCharacterId: string
+  /** The subject character's name */
+  subjectCharacterName: string
+  /** What the subject said in this exchange */
+  subjectMessage: string
+  /** Chat ID for source reference */
+  chatId: string
   /** Source message ID for tracking */
   sourceMessageId: string
   /** User ID for API access */
@@ -191,6 +221,35 @@ async function createMemoryFromCandidate(
     {
       userId: ctx.userId,
       // Embedding generation is automatic if profile is configured
+    }
+  )
+
+  return memory
+}
+
+/**
+ * Creates an inter-character memory from an extraction candidate with embedding generation
+ */
+async function createInterCharacterMemoryFromCandidate(
+  ctx: InterCharacterMemoryContext,
+  candidate: MemoryCandidate
+): Promise<Memory> {
+  // Use the memory service which handles embedding generation
+  const memory = await createMemoryWithEmbedding(
+    {
+      characterId: ctx.observerCharacterId,
+      aboutCharacterId: ctx.subjectCharacterId,
+      chatId: ctx.chatId,
+      content: candidate.content || '',
+      summary: candidate.summary || '',
+      keywords: candidate.keywords || [],
+      importance: candidate.importance || 0.5,
+      source: 'AUTO',
+      sourceMessageId: ctx.sourceMessageId,
+      tags: [],
+    },
+    {
+      userId: ctx.userId,
     }
   )
 
@@ -501,4 +560,153 @@ export async function batchProcessChatForMemories(
   }
 
   return { processed, memoriesCreated, errors }
+}
+
+/**
+ * Processes an inter-character message exchange for potential memory extraction
+ *
+ * This is called in multi-character chats when one character responds to another.
+ * It extracts memories that the responding character forms about other characters.
+ *
+ * @param ctx - The inter-character memory extraction context
+ * @returns The result of memory processing
+ */
+export async function processInterCharacterMemory(
+  ctx: InterCharacterMemoryContext
+): Promise<MemoryProcessingResult> {
+  const debugLogs: string[] = []
+
+  try {
+    // Get cheap LLM provider selection
+    const config = toCheapLLMConfig(ctx.cheapLLMSettings)
+    const selection: CheapLLMSelection = getCheapLLMProvider(
+      ctx.connectionProfile,
+      config,
+      ctx.availableProfiles || [],
+      false
+    )
+
+    // Extract memory that observer has about subject
+    const memoryResult = await extractInterCharacterMemoryFromMessage(
+      ctx.observerCharacterName,
+      ctx.observerMessage,
+      ctx.subjectCharacterName,
+      ctx.subjectMessage,
+      selection,
+      ctx.userId
+    )
+
+    let memoryCreated = false
+    let memoryId: string | undefined = undefined
+    const totalUsage = {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+    }
+
+    if (memoryResult.success && memoryResult.usage) {
+      totalUsage.promptTokens += memoryResult.usage.promptTokens
+      totalUsage.completionTokens += memoryResult.usage.completionTokens
+      totalUsage.totalTokens += memoryResult.usage.totalTokens
+    }
+
+    if (memoryResult.success) {
+      const candidate = memoryResult.result
+
+      if (candidate?.significant) {
+        const isDuplicate = await checkForDuplicateMemory(ctx.observerCharacterId, candidate, ctx.userId)
+        if (!isDuplicate) {
+          const memory = await createInterCharacterMemoryFromCandidate(ctx, candidate)
+          memoryCreated = true
+          memoryId = memory.id
+
+          const logMsg = `[Memory] Created INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
+            `  Content: ${candidate.content}\n` +
+            `  Summary: ${candidate.summary}\n` +
+            `  Importance: ${candidate.importance}\n` +
+            `  Keywords: ${candidate.keywords?.join(', ')}`
+          debugLogs.push(logMsg)
+          logger.debug(logMsg, {
+            observerCharacterId: ctx.observerCharacterId,
+            subjectCharacterId: ctx.subjectCharacterId,
+            chatId: ctx.chatId,
+          })
+        } else {
+          const logMsg = `[Memory] INTER-CHARACTER memory skipped (duplicate): ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
+            `  Summary: ${candidate.summary}`
+          debugLogs.push(logMsg)
+        }
+      } else {
+        const logMsg = `[Memory] INTER-CHARACTER memory not significant enough: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
+          `  Summary: ${candidate?.summary || 'N/A'}\n` +
+          `  Importance: ${candidate?.importance || 'N/A'}`
+        debugLogs.push(logMsg)
+      }
+    } else {
+      const logMsg = `[Memory] INTER-CHARACTER memory extraction failed: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
+        `  Error: ${memoryResult.error}`
+      debugLogs.push(logMsg)
+    }
+
+    return {
+      success: true,
+      memoryCreated,
+      memoryId,
+      usage: totalUsage,
+      debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
+    }
+  } catch (error) {
+    const errorMsg = 'Inter-character memory processing error:' + (error instanceof Error ? error.message : 'Unknown error')
+    logger.error(errorMsg, {
+      observerCharacterId: ctx.observerCharacterId,
+      subjectCharacterId: ctx.subjectCharacterId,
+      userId: ctx.userId,
+    }, error instanceof Error ? error : undefined)
+    return {
+      success: false,
+      memoryCreated: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
+    }
+  }
+}
+
+/**
+ * Processes inter-character memory extraction in the background (fire-and-forget)
+ *
+ * This is a convenience wrapper for multi-character chats.
+ * It extracts memories between all character pairs in the exchange.
+ */
+export function processInterCharacterMemoryAsync(
+  ctx: InterCharacterMemoryContext,
+  onComplete?: (result: MemoryProcessingResult) => void
+): void {
+  processInterCharacterMemory(ctx)
+    .then(result => {
+      if (result.memoryCreated) {
+        logger.info(
+          '[Memory] Created inter-character memory',
+          {
+            memoryId: result.memoryId,
+            observerCharacterId: ctx.observerCharacterId,
+            subjectCharacterId: ctx.subjectCharacterId,
+            userId: ctx.userId,
+          }
+        )
+      } else if (!result.success) {
+        logger.warn(`[Memory] Inter-character extraction failed: ${result.error}`, {
+          observerCharacterId: ctx.observerCharacterId,
+          subjectCharacterId: ctx.subjectCharacterId,
+          userId: ctx.userId,
+        })
+      }
+      onComplete?.(result)
+    })
+    .catch(error => {
+      logger.error('[Memory] Async inter-character processing error', {
+        observerCharacterId: ctx.observerCharacterId,
+        subjectCharacterId: ctx.subjectCharacterId,
+        userId: ctx.userId,
+      }, error instanceof Error ? error : undefined)
+    })
 }

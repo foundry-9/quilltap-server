@@ -381,6 +381,102 @@ CHARACTER: ${assistantMessage}`,
 }
 
 /**
+ * Memory extraction prompt template for inter-character memories
+ */
+const INTER_CHARACTER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories that one CHARACTER has learned about ANOTHER CHARACTER from their conversation.
+Analyze the conversation exchange below and identify if there is something significant that CHARACTER A learns about CHARACTER B that should be remembered for future conversations.
+
+Criteria for significance:
+- Personal information CHARACTER B shares or reveals (preferences, history, relationships, traits, background)
+- Emotional moments or important decisions that reveal CHARACTER B's nature
+- Facts about CHARACTER B that should persist across conversations
+- Relationship dynamics established between the two characters
+- Observations CHARACTER A would naturally make about CHARACTER B
+
+IMPORTANT: Extract what CHARACTER A would remember about CHARACTER B based on this exchange.
+The memory should capture something CHARACTER A learns about CHARACTER B from this interaction.
+
+If significant, respond with JSON only (no markdown, no code blocks):
+{
+  "significant": true,
+  "content": "Full memory content describing what Character A learns about Character B",
+  "summary": "Brief 1-sentence summary",
+  "keywords": ["keyword1", "keyword2"],
+  "importance": 0.0-1.0
+}
+
+If not significant, respond with JSON only:
+{ "significant": false }
+
+Do not include any text outside the JSON object.`
+
+/**
+ * Extracts a potential memory that one character has about another character
+ *
+ * @param characterAName - The character who will remember (the observer)
+ * @param characterAMessage - What character A said
+ * @param characterBName - The character being remembered (the subject)
+ * @param characterBMessage - What character B said
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @returns A memory candidate or null if nothing significant
+ */
+export async function extractInterCharacterMemoryFromMessage(
+  characterAName: string,
+  characterAMessage: string,
+  characterBName: string,
+  characterBMessage: string,
+  selection: CheapLLMSelection,
+  userId: string
+): Promise<CheapLLMTaskResult<MemoryCandidate>> {
+  const messages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: INTER_CHARACTER_MEMORY_EXTRACTION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Character A (the observer): ${characterAName}
+Character B (the subject): ${characterBName}
+
+CONVERSATION:
+${characterAName}: ${characterAMessage}
+
+${characterBName}: ${characterBMessage}`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (content: string): MemoryCandidate => {
+      try {
+        // Clean the response - remove markdown code blocks if present
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+        return {
+          significant: parsed.significant === true,
+          content: parsed.content,
+          summary: parsed.summary,
+          keywords: parsed.keywords || [],
+          importance: typeof parsed.importance === 'number' ? parsed.importance : 0.5,
+        }
+      } catch {
+        // If JSON parsing fails, assume not significant
+        return { significant: false }
+      }
+    }
+  )
+}
+
+/**
  * Chat summarization prompt template
  */
 const CHAT_SUMMARY_PROMPT = `You are a summarizer. Create a concise summary of the following conversation.

@@ -15,11 +15,20 @@ import {
   getMultiCharacterMigrationId,
 } from './add-multi-character-fields';
 
+import {
+  runInterCharacterMemoryFieldsMigration,
+  needsInterCharacterMemoryFieldsMigration,
+  getInterCharacterMemoryMigrationId,
+} from './add-inter-character-memory-fields';
+
 // Export individual migrations
 export {
   runMultiCharacterFieldsMigration,
   needsMultiCharacterFieldsMigration,
   getMultiCharacterMigrationId,
+  runInterCharacterMemoryFieldsMigration,
+  needsInterCharacterMemoryFieldsMigration,
+  getInterCharacterMemoryMigrationId,
 };
 
 /**
@@ -41,6 +50,12 @@ const MIGRATIONS: Migration[] = [
     name: 'Add Multi-Character Fields',
     needsRun: needsMultiCharacterFieldsMigration,
     run: runMultiCharacterFieldsMigration,
+  },
+  {
+    id: getInterCharacterMemoryMigrationId(),
+    name: 'Add Inter-Character Memory Fields',
+    needsRun: needsInterCharacterMemoryFieldsMigration,
+    run: runInterCharacterMemoryFieldsMigration,
   },
 ];
 

@@ -9,7 +9,7 @@ import { decryptApiKey } from '@/lib/encryption'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext } from '@/lib/chat/tool-executor'
 import { buildToolsForProvider } from '@/lib/tools'
-import { processMessageForMemoryAsync } from '@/lib/memory'
+import { processMessageForMemoryAsync, processInterCharacterMemoryAsync } from '@/lib/memory'
 import { buildContext, type MessageWithParticipant } from '@/lib/chat/context-manager'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
@@ -1049,6 +1049,52 @@ export async function POST(
                     }
                   }
                 })
+
+                // In multi-character chats, also extract memories about other characters
+                if (isMultiCharacter && characterParticipant) {
+                  // Get the last message from another character to form memories about them
+                  const otherCharacterMessages = existingMessages
+                    .filter(msg => msg.type === 'message')
+                    .filter(msg => {
+                      const event = msg as { role: string; participantId?: string | null }
+                      return event.role === 'ASSISTANT' && event.participantId && event.participantId !== characterParticipant.id
+                    })
+                    .slice(-5) // Look at last 5 assistant messages from others
+
+                  for (const otherMsg of otherCharacterMessages) {
+                    const event = otherMsg as { role: string; content: string; id?: string; participantId?: string | null }
+                    const otherParticipantId = event.participantId
+                    if (!otherParticipantId) continue
+
+                    // Find the other participant and their character
+                    const otherParticipant = chat.participants.find(p => p.id === otherParticipantId)
+                    if (!otherParticipant || otherParticipant.type !== 'CHARACTER' || !otherParticipant.characterId) continue
+
+                    const otherCharacter = participantCharacters.get(otherParticipant.characterId)
+                    if (!otherCharacter) continue
+
+                    // Extract memory that this character has about the other character
+                    processInterCharacterMemoryAsync({
+                      observerCharacterId: character.id,
+                      observerCharacterName: character.name,
+                      observerMessage: fullResponse,
+                      subjectCharacterId: otherCharacter.id,
+                      subjectCharacterName: otherCharacter.name,
+                      subjectMessage: event.content,
+                      chatId: id,
+                      sourceMessageId: assistantMessageId,
+                      userId: user.id,
+                      connectionProfile,
+                      cheapLLMSettings: chatSettings.cheapLLMSettings,
+                      availableProfiles,
+                    })
+                  }
+
+                  logger.debug('[Chat Messages] Triggered inter-character memory extraction', {
+                    characterId: character.id,
+                    otherCharacterCount: otherCharacterMessages.length,
+                  })
+                }
 
                 // Check if we need to generate a context summary (non-blocking)
                 checkAndGenerateSummaryIfNeeded(

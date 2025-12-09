@@ -362,6 +362,7 @@ export async function GET(
             createdAt: event.createdAt,
             swipeGroupId: event.swipeGroupId || null,
             swipeIndex: event.swipeIndex || null,
+            participantId: event.participantId || null,
             attachments,
             debugMemoryLogs: event.debugMemoryLogs || undefined,
           }

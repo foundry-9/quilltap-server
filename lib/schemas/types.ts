@@ -704,6 +704,7 @@ export const MemorySchema = z.object({
   id: UUIDSchema,
   characterId: UUIDSchema,
   personaId: UUIDSchema.nullable().optional(),      // Optional: specific persona interaction
+  aboutCharacterId: UUIDSchema.nullable().optional(), // Optional: memory about another character (for inter-character memories)
   chatId: UUIDSchema.nullable().optional(),         // Optional: source chat reference
   content: z.string(),                              // The actual memory content
   summary: z.string(),                              // Distilled version for context injection
