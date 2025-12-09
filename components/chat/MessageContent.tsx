@@ -53,7 +53,7 @@ export default function MessageContent({ content, className = '' }: MessageConte
           </SyntaxHighlighter>
         </div>
       ) : (
-        <code className={`${className} font-mono bg-muted px-1 py-0.5 rounded text-sm`} {...props}>
+        <code className={`${className} qt-code-inline`} {...props}>
           {children}
         </code>
       )
@@ -106,7 +106,7 @@ export default function MessageContent({ content, className = '' }: MessageConte
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-primary hover:underline"
+          className="qt-link"
         >
           {children}
         </a>
@@ -170,7 +170,7 @@ export default function MessageContent({ content, className = '' }: MessageConte
           overflow-wrap: break-word !important;
         }
       `}</style>
-      <div className={`prose prose-sm dark:prose-invert max-w-none w-full message-content ${className}`} style={{ overflow: 'hidden' }}>
+      <div className={`qt-chat-message-content qt-prose prose prose-sm dark:prose-invert message-content ${className}`} style={{ overflow: 'hidden' }}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={components}

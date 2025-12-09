@@ -162,16 +162,13 @@ export function ParticipantCard({
   return (
     <div
       className={`
-        relative p-3 rounded-lg border transition-all duration-200
-        ${isCurrentTurn
-          ? 'border-primary bg-primary/5 shadow-[0_0_10px_rgba(var(--primary),0.3)]'
-          : 'border-border bg-card hover:bg-muted/50'
-        }
+        ${isCurrentTurn ? 'qt-participant-card-active' : 'qt-participant-card'}
+        participant-card
       `}
     >
       {/* Queue position badge */}
       {queuePosition > 0 && (
-        <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-info text-info-foreground text-xs font-bold flex items-center justify-center shadow-md">
+        <div className="qt-participant-queue-badge absolute -top-2 -right-2 w-6 h-6 shadow-md">
           {queuePosition}
         </div>
       )}
@@ -181,15 +178,15 @@ export function ParticipantCard({
         <div className="absolute top-2 left-2 w-2 h-2 rounded-full bg-success animate-pulse" />
       )}
 
-      <div className="flex gap-3">
+      <div className="qt-participant-card-header">
         {/* Avatar */}
         <div className="flex-shrink-0">
           <div
             className={`
-              w-12 h-15 rounded overflow-hidden bg-muted flex items-center justify-center
+              qt-participant-card-avatar overflow-hidden bg-muted flex items-center justify-center
               ${isCurrentTurn ? 'ring-2 ring-primary ring-offset-1 ring-offset-card' : ''}
             `}
-            style={{ width: '48px', height: '60px' }}
+            style={{ width: '48px', height: '60px', borderRadius: 'var(--radius-md)' }}
           >
             {avatarSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -207,27 +204,27 @@ export function ParticipantCard({
         </div>
 
         {/* Info */}
-        <div className="flex-1 min-w-0">
+        <div className="qt-participant-card-info">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm text-foreground truncate">
+            <span className="qt-participant-card-name">
               {name}
             </span>
             {isUserParticipant && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+              <span className="qt-badge-secondary text-xs">
                 You
               </span>
             )}
           </div>
 
           {title && (
-            <div className="text-xs text-muted-foreground italic truncate">
+            <div className="qt-participant-card-status italic truncate">
               {title}
             </div>
           )}
 
           {/* LLM indicator for characters */}
           {isCharacter && participant.connectionProfile && (
-            <div className="text-xs text-muted-foreground mt-1 truncate" title={`${participant.connectionProfile.provider}: ${participant.connectionProfile.modelName}`}>
+            <div className="qt-participant-card-status mt-1 truncate" title={`${participant.connectionProfile.provider}: ${participant.connectionProfile.modelName}`}>
               {participant.connectionProfile.modelName || participant.connectionProfile.name}
             </div>
           )}
@@ -246,7 +243,7 @@ export function ParticipantCard({
                 step="0.1"
                 value={localTalkativeness}
                 onChange={handleTalkativenessChange}
-                className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                className="qt-input w-full h-1 rounded-lg appearance-none cursor-pointer accent-primary"
               />
             </div>
           )}
@@ -265,7 +262,7 @@ export function ParticipantCard({
                 step="0.1"
                 value={0.5}
                 disabled
-                className="w-full h-1 bg-muted rounded-lg appearance-none cursor-not-allowed"
+                className="qt-input w-full h-1 rounded-lg appearance-none cursor-not-allowed"
               />
             </div>
           )}
@@ -273,17 +270,17 @@ export function ParticipantCard({
       </div>
 
       {/* Action buttons */}
-      <div className="mt-3 flex gap-2">
+      <div className="qt-participant-card-actions">
         <button
           onClick={handleActionClick}
           disabled={isActionDisabled}
           className={`
-            flex-1 py-1.5 px-3 text-xs font-medium rounded transition-colors
+            flex-1
             ${queuePosition > 0
-              ? 'bg-info/10 text-info hover:bg-info/20 border border-info/30'
+              ? 'qt-badge-info hover:bg-info/20'
               : isCurrentTurn
-                ? 'bg-success/10 text-success border border-success/30 cursor-default'
-                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                ? 'qt-participant-turn-indicator cursor-default'
+                : 'qt-button-secondary qt-button-sm'
             }
             disabled:opacity-50 disabled:cursor-not-allowed
           `}
@@ -302,7 +299,7 @@ export function ParticipantCard({
               onRemove(participant.id)
             }}
             disabled={isGenerating}
-            className="py-1.5 px-2 text-xs font-medium rounded transition-colors bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="qt-button-destructive qt-button-sm py-1.5 px-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title={`Remove ${name} from chat`}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

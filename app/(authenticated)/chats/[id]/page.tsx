@@ -1645,31 +1645,30 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               )}
               <div className="flex-1 min-w-0 group relative">
                 <div
-                  className={`px-4 py-3 rounded-lg ${
+                  className={`chat-message ${
                     message.role === 'USER'
-                      ? 'bg-chat-user text-chat-user-foreground'
-                      : 'bg-card border border-border text-foreground font-serif'
+                      ? 'qt-chat-message-user'
+                      : 'qt-chat-message-assistant'
                   }`}
-                  style={message.role === 'USER' ? { fontFamily: 'var(--font-chat-user)' } : undefined}
                 >
                   {isEditing ? (
                     <div className="space-y-2">
                       <textarea
                         value={editContent}
                         onChange={(e) => setEditContent(e.target.value)}
-                        className="w-full px-3 py-2 border border-border bg-card text-foreground rounded"
+                        className="qt-textarea"
                         rows={3}
                       />
                       <div className="flex gap-2">
                         <button
                           onClick={() => saveEdit(message.id)}
-                          className="px-3 py-1 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90"
+                          className="qt-button-primary qt-button-sm"
                         >
                           Save
                         </button>
                         <button
                           onClick={cancelEdit}
-                          className="px-3 py-1 bg-secondary text-secondary-foreground rounded text-sm hover:bg-secondary/90"
+                          className="qt-button-secondary qt-button-sm"
                         >
                           Cancel
                         </button>
@@ -1678,7 +1677,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   ) : (
                     <>
                       {viewSourceMessageIds.has(message.id) ? (
-                        <div className="bg-muted p-3 rounded font-mono text-sm whitespace-pre-wrap break-words overflow-auto max-h-96">
+                        <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
                           {message.content}
                         </div>
                       ) : (
@@ -2037,7 +2036,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending || uploadingFile}
-                className="w-11 h-11 flex items-center justify-center border border-border bg-card text-muted-foreground rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                className="qt-button-secondary qt-button-icon w-11 h-11"
                 title="Attach file"
               >
                 {uploadingFile ? (
@@ -2058,7 +2057,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     e.stopPropagation()
                     setToolPaletteOpen(!toolPaletteOpen)
                   }}
-                  className="w-11 h-11 flex items-center justify-center border border-border bg-card text-muted-foreground rounded-lg hover:bg-muted"
+                  className="qt-button-secondary qt-button-icon w-11 h-11"
                   title="Tools menu"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2079,7 +2078,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               </div>
             </div>
             {showPreview ? (
-              <div className="flex-1 px-4 py-3 border border-border bg-card text-foreground rounded-lg overflow-y-auto"
+              <div className="qt-chat-composer-input flex-1 overflow-y-auto"
                 style={{
                   lineHeight: '1.5'
                 }}
@@ -2122,7 +2121,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 disabled={sending || !hasActiveCharacters}
                 rows={1}
                 placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
-                className="flex-1 px-4 py-3 border border-border bg-card text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted resize-none overflow-y-auto"
+                className="qt-chat-composer-input flex-1 resize-none overflow-y-auto"
                 style={{
                   lineHeight: '1.5'
                 }}
@@ -2134,7 +2133,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               <button
                 type="submit"
                 disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
-                className="w-11 h-11 flex items-center justify-center bg-success text-success-foreground rounded-lg hover:bg-success/90 disabled:bg-muted disabled:text-muted-foreground transition-colors"
+                className="qt-chat-composer-send"
                 title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
