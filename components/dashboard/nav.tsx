@@ -4,7 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { clientLogger } from "@/lib/client-logger";
 import { useDebugOptional } from "@/components/providers/debug-provider";
 import { useDevConsoleOptional } from "@/components/providers/dev-console-provider";
 import { useChatContext } from "@/components/providers/chat-context";
@@ -32,7 +33,10 @@ export default function DashboardNav({ user }: DashboardNavProps) {
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const { quickHideTags, hiddenTagIds, toggleTag } = useQuickHide();
+  const { quickHideTags, hiddenTagIds, toggleTag, clearAllHidden } = useQuickHide();
+  const [quickHideDropdownOpen, setQuickHideDropdownOpen] = useState(false);
+  const quickHideRef = useRef<HTMLDivElement>(null);
+  const hasAnyHidden = hiddenTagIds.size > 0;
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -50,6 +54,49 @@ export default function DashboardNav({ user }: DashboardNavProps) {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [userMenuOpen]);
+
+  // Close quick-hide dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        quickHideRef.current &&
+        !quickHideRef.current.contains(event.target as Node)
+      ) {
+        setQuickHideDropdownOpen(false);
+      }
+    };
+
+    if (quickHideDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [quickHideDropdownOpen]);
+
+  // Handle eye icon click:
+  // - If dropdown is open: just close dropdown
+  // - If closed eye (something hidden): clear all hidden tags
+  // - If open eye (nothing hidden): open dropdown
+  const handleEyeClick = useCallback(() => {
+    clientLogger.debug('Quick-hide eye icon clicked', {
+      hasAnyHidden,
+      tagCount: quickHideTags.length,
+      dropdownOpen: quickHideDropdownOpen
+    });
+
+    if (quickHideDropdownOpen) {
+      // Dropdown is open: just close it
+      clientLogger.debug('Closing quick-hide dropdown');
+      setQuickHideDropdownOpen(false);
+    } else if (hasAnyHidden) {
+      // Closed eye: clear all hidden tags
+      clientLogger.debug('Clearing all hidden tags via eye icon');
+      clearAllHidden();
+    } else {
+      // Open eye: open dropdown
+      clientLogger.debug('Opening quick-hide dropdown');
+      setQuickHideDropdownOpen(true);
+    }
+  }, [hasAnyHidden, quickHideDropdownOpen, clearAllHidden, quickHideTags.length]);
 
   // Check if we're in a chat conversation
   const isInChat = pathname?.match(/^\/chats\/[^/]+$/);
@@ -151,27 +198,96 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 </svg>
               </button>
             )}
-            {quickHideTags.length > 0 && (
-              <div className="flex max-w-xs flex-wrap items-center justify-end gap-2">
-                {quickHideTags.map(tag => {
-                  const isActive = hiddenTagIds.has(tag.id)
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      onClick={() => toggleTag(tag.id)}
-                      aria-pressed={isActive}
-                      className={`rounded-full border px-1 py-0.5 transition-all ${
-                        isActive
-                          ? 'border-primary bg-blue-50 ring-2 ring-ring dark:bg-blue-900/40'
-                          : 'border-border bg-background hover:border-primary'
-                      }`}
-                      title={isActive ? 'Show items with this tag' : 'Hide items with this tag'}
-                    >
-                      <TagBadge tag={tag} size="sm" className="pointer-events-none" />
-                    </button>
-                  )
-                })}
+            {/* Quick-hide controls */}
+            {quickHideTags.length === 1 && (
+              // Single tag: show toggle button directly
+              <button
+                type="button"
+                onClick={() => toggleTag(quickHideTags[0].id)}
+                aria-pressed={hiddenTagIds.has(quickHideTags[0].id)}
+                className={`rounded-full border px-1 py-0.5 transition-all ${
+                  hiddenTagIds.has(quickHideTags[0].id)
+                    ? 'border-primary bg-blue-50 ring-2 ring-ring dark:bg-blue-900/40'
+                    : 'border-border bg-background hover:border-primary'
+                }`}
+                title={hiddenTagIds.has(quickHideTags[0].id) ? 'Show items with this tag' : 'Hide items with this tag'}
+              >
+                <TagBadge tag={quickHideTags[0]} size="sm" className="pointer-events-none" />
+              </button>
+            )}
+            {quickHideTags.length > 1 && (
+              // Multiple tags: show eye icon with dropdown
+              <div className="relative" ref={quickHideRef}>
+                <button
+                  type="button"
+                  onClick={handleEyeClick}
+                  className={`p-2 rounded-md transition-colors ${
+                    hasAnyHidden
+                      ? 'text-primary bg-primary/10'
+                      : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                  title={hasAnyHidden ? 'Click to show all hidden items' : 'Manage hidden tags'}
+                  aria-expanded={quickHideDropdownOpen}
+                >
+                  {hasAnyHidden ? (
+                    // Closed eye icon (something is hidden)
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                      <path d="M1 1l22 22" />
+                      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                    </svg>
+                  ) : (
+                    // Open eye icon (nothing hidden)
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+
+                {/* Dropdown menu */}
+                {quickHideDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
+                    <div className="p-2 space-y-1">
+                      <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        Quick Hide Tags
+                      </div>
+                      {quickHideTags.map(tag => {
+                        const isHidden = hiddenTagIds.has(tag.id)
+                        return (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            onClick={() => {
+                              clientLogger.debug('Toggling tag from dropdown', { tagId: tag.id, tagName: tag.name, wasHidden: isHidden });
+                              toggleTag(tag.id);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md transition-colors ${
+                              isHidden
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted text-foreground'
+                            }`}
+                          >
+                            <TagBadge tag={tag} size="sm" />
+                            {isHidden ? (
+                              <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                                <path d="M1 1l22 22" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -227,7 +343,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                     {/* Sign Out Button */}
                     <button
                       onClick={() => signOut({ callbackUrl: "/" })}
-                      className="w-full rounded-md bg-destructive px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+                      className="w-full rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
                     >
                       Sign Out
                     </button>

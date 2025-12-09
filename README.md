@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with multi-provider LLM support and full Silly
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.0--dev.47-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.2.0--dev.48-yellow.svg)](package.json)
 
 ## What is Quilltap?
 

@@ -14,6 +14,7 @@ interface QuickHideContextValue {
   hiddenTagIds: Set<string>
   loading: boolean
   toggleTag: (tagId: string) => void
+  clearAllHidden: () => void
   refresh: () => Promise<void>
   shouldHideByIds: (tagIds?: Array<string | null | undefined>) => boolean
 }
@@ -117,16 +118,24 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const toggleTag = useCallback((tagId: string) => {
+    clientLogger.debug('Toggling quick-hide tag', { tagId })
     setHiddenTagIds((prev) => {
       const next = new Set(prev)
       if (next.has(tagId)) {
         next.delete(tagId)
+        clientLogger.debug('Unhiding tag', { tagId })
       } else {
         next.add(tagId)
+        clientLogger.debug('Hiding tag', { tagId })
       }
       return next
     })
   }, [])
+
+  const clearAllHidden = useCallback(() => {
+    clientLogger.debug('Clearing all hidden tags', { previousCount: hiddenTagIds.size })
+    setHiddenTagIds(new Set())
+  }, [hiddenTagIds.size])
 
   const shouldHideByIds = useCallback(
     (tagIds?: Array<string | null | undefined>) => {
@@ -149,10 +158,11 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
       hiddenTagIds,
       loading,
       toggleTag,
+      clearAllHidden,
       refresh: loadTags,
       shouldHideByIds,
     }),
-    [quickHideTags, hiddenTagIds, loading, toggleTag, loadTags, shouldHideByIds]
+    [quickHideTags, hiddenTagIds, loading, toggleTag, clearAllHidden, loadTags, shouldHideByIds]
   )
 
   return <QuickHideContext.Provider value={value}>{children}</QuickHideContext.Provider>
