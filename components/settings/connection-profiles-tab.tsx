@@ -74,6 +74,13 @@ export default function ConnectionProfilesTab() {
     isDefault: false,
     isCheap: false,
     allowWebSearch: false,
+    // OpenRouter-specific fields
+    fallbackModels: [] as string[],
+    enableZDR: false,
+    providerOrder: [] as string[],
+    // Anthropic-specific fields
+    enableCacheBreakpoints: false,
+    cacheStrategy: 'system_only' as 'system_only' | 'system_and_long_context',
   })
 
   // Connection testing states
@@ -281,6 +288,13 @@ export default function ConnectionProfilesTab() {
       isDefault: false,
       isCheap: false,
       allowWebSearch: false,
+      // OpenRouter-specific fields
+      fallbackModels: [],
+      enableZDR: false,
+      providerOrder: [],
+      // Anthropic-specific fields
+      enableCacheBreakpoints: false,
+      cacheStrategy: 'system_only',
     })
     setEditingId(null)
     // Reset connection states
@@ -304,6 +318,13 @@ export default function ConnectionProfilesTab() {
       isDefault: profile.isDefault,
       isCheap: profile.isCheap ?? false,
       allowWebSearch: profile.allowWebSearch ?? false,
+      // OpenRouter-specific fields
+      fallbackModels: profile.parameters?.fallbackModels ?? [],
+      enableZDR: profile.parameters?.providerPreferences?.dataCollection === 'deny',
+      providerOrder: profile.parameters?.providerPreferences?.order ?? [],
+      // Anthropic-specific fields
+      enableCacheBreakpoints: profile.parameters?.enableCacheBreakpoints ?? false,
+      cacheStrategy: profile.parameters?.cacheStrategy ?? 'system_only',
     })
     setEditingId(profile.id)
     setShowForm(true)
@@ -352,6 +373,37 @@ export default function ConnectionProfilesTab() {
       const url = editingId ? `/api/profiles/${editingId}` : '/api/profiles'
 
       // Build request body
+      // Start with base parameters
+      const parameters: Record<string, any> = {
+        temperature: parseFloat(String(formData.temperature)),
+        max_tokens: parseInt(String(formData.maxTokens)),
+        top_p: parseFloat(String(formData.topP)),
+      }
+
+      // Add OpenRouter-specific parameters
+      if (formData.provider === 'OPENROUTER') {
+        if (formData.fallbackModels.length > 0) {
+          parameters.fallbackModels = formData.fallbackModels
+        }
+        // Build providerPreferences if any options are set
+        const providerPreferences: Record<string, any> = {}
+        if (formData.enableZDR) {
+          providerPreferences.dataCollection = 'deny'
+        }
+        if (formData.providerOrder.length > 0) {
+          providerPreferences.order = formData.providerOrder
+        }
+        if (Object.keys(providerPreferences).length > 0) {
+          parameters.providerPreferences = providerPreferences
+        }
+      }
+
+      // Add Anthropic-specific parameters
+      if (formData.provider === 'ANTHROPIC' && formData.enableCacheBreakpoints) {
+        parameters.enableCacheBreakpoints = true
+        parameters.cacheStrategy = formData.cacheStrategy
+      }
+
       const requestBody: any = {
         name: formData.name,
         provider: formData.provider,
@@ -359,11 +411,7 @@ export default function ConnectionProfilesTab() {
         isDefault: formData.isDefault,
         isCheap: formData.isCheap,
         allowWebSearch: formData.allowWebSearch,
-        parameters: {
-          temperature: parseFloat(String(formData.temperature)),
-          max_tokens: parseInt(String(formData.maxTokens)),
-          top_p: parseFloat(String(formData.topP)),
-        },
+        parameters,
       }
 
       // Always include apiKeyId when editing (to support changes)
@@ -1064,6 +1112,221 @@ export default function ConnectionProfilesTab() {
                 )
               })()}
             </div>
+
+            {/* OpenRouter-specific options */}
+            {formData.provider === 'OPENROUTER' && (
+              <div className="border border-border rounded-lg p-4 bg-muted/50">
+                <h4 className="font-medium text-sm mb-3">OpenRouter Options</h4>
+
+                {/* ZDR Toggle */}
+                <div className="flex items-center gap-2 mb-4">
+                  <input
+                    type="checkbox"
+                    id="enableZDR"
+                    checked={formData.enableZDR}
+                    onChange={(e) => setFormData({ ...formData, enableZDR: e.target.checked })}
+                    className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+                  />
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="enableZDR" className="text-sm">
+                      Enable Zero Data Retention (ZDR)
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      When enabled, providers will not store or log your prompts and responses. May limit available providers.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Fallback Models */}
+                {fetchedModels.length > 0 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-2">Fallback Models (Optional)</label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      If the primary model fails or is unavailable, OpenRouter will try these models in order.
+                    </p>
+                    <div className="space-y-1 max-h-32 overflow-y-auto border border-border rounded p-2 bg-background">
+                      {fetchedModels
+                        .filter(model => model !== formData.modelName)
+                        .slice(0, 50)
+                        .map(model => (
+                          <label key={model} className="flex items-center gap-2 cursor-pointer hover:bg-muted p-1 rounded">
+                            <input
+                              type="checkbox"
+                              checked={formData.fallbackModels.includes(model)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setFormData({
+                                    ...formData,
+                                    fallbackModels: [...formData.fallbackModels, model],
+                                  })
+                                } else {
+                                  setFormData({
+                                    ...formData,
+                                    fallbackModels: formData.fallbackModels.filter(m => m !== model),
+                                  })
+                                }
+                              }}
+                              className="w-3 h-3 rounded"
+                            />
+                            <span className="text-xs text-foreground truncate">{model}</span>
+                          </label>
+                        ))}
+                    </div>
+                    {formData.fallbackModels.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs text-muted-foreground mb-1">
+                          Selected fallbacks ({formData.fallbackModels.length}):
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {formData.fallbackModels.map((model, idx) => (
+                            <span
+                              key={model}
+                              className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded flex items-center gap-1"
+                            >
+                              {idx + 1}. {model.split('/').pop()}
+                              <button
+                                type="button"
+                                onClick={() => setFormData({
+                                  ...formData,
+                                  fallbackModels: formData.fallbackModels.filter(m => m !== model),
+                                })}
+                                className="hover:text-destructive ml-1"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Provider Order */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Provider Order (Optional)</label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Specify which infrastructure providers to prefer when routing requests.
+                  </p>
+                  <div className="grid grid-cols-3 gap-1 mb-2">
+                    {['OpenAI', 'Anthropic', 'Google', 'Azure', 'AWS Bedrock', 'Together', 'Fireworks', 'DeepInfra', 'Cloudflare', 'Lepton']
+                      .filter(p => !formData.providerOrder.includes(p))
+                      .map(provider => (
+                        <button
+                          key={provider}
+                          type="button"
+                          onClick={() => setFormData({
+                            ...formData,
+                            providerOrder: [...formData.providerOrder, provider],
+                          })}
+                          className="px-2 py-1 text-xs bg-muted text-foreground rounded hover:bg-accent text-left truncate"
+                        >
+                          + {provider}
+                        </button>
+                      ))}
+                  </div>
+                  {formData.providerOrder.length > 0 && (
+                    <div className="space-y-1 border border-border rounded p-2 bg-background">
+                      <p className="text-xs font-medium mb-1">Priority order:</p>
+                      {formData.providerOrder.map((provider, idx) => (
+                        <div key={provider} className="flex items-center gap-2 bg-primary/5 rounded px-2 py-1">
+                          <span className="text-xs font-medium w-4">{idx + 1}.</span>
+                          <span className="text-xs flex-1">{provider}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (idx > 0) {
+                                const newOrder = [...formData.providerOrder]
+                                ;[newOrder[idx], newOrder[idx - 1]] = [newOrder[idx - 1], newOrder[idx]]
+                                setFormData({ ...formData, providerOrder: newOrder })
+                              }
+                            }}
+                            disabled={idx === 0}
+                            className="px-1 text-xs disabled:opacity-30 hover:bg-muted rounded"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (idx < formData.providerOrder.length - 1) {
+                                const newOrder = [...formData.providerOrder]
+                                ;[newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]]
+                                setFormData({ ...formData, providerOrder: newOrder })
+                              }
+                            }}
+                            disabled={idx === formData.providerOrder.length - 1}
+                            className="px-1 text-xs disabled:opacity-30 hover:bg-muted rounded"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({
+                              ...formData,
+                              providerOrder: formData.providerOrder.filter(p => p !== provider),
+                            })}
+                            className="px-1 text-xs text-destructive hover:bg-destructive/10 rounded"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Anthropic-specific options */}
+            {formData.provider === 'ANTHROPIC' && (
+              <div className="border border-border rounded-lg p-4 bg-muted/50">
+                <h4 className="font-medium text-sm mb-3">Anthropic Options</h4>
+
+                {/* Cache Control */}
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    type="checkbox"
+                    id="enableCacheBreakpoints"
+                    checked={formData.enableCacheBreakpoints}
+                    onChange={(e) => setFormData({ ...formData, enableCacheBreakpoints: e.target.checked })}
+                    className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+                  />
+                  <label htmlFor="enableCacheBreakpoints" className="text-sm">
+                    Enable Prompt Caching (Beta)
+                  </label>
+                </div>
+                {formData.enableCacheBreakpoints && (
+                  <div className="space-y-2 pl-6 mb-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="cacheStrategy"
+                        value="system_only"
+                        checked={formData.cacheStrategy === 'system_only'}
+                        onChange={(e) => setFormData({ ...formData, cacheStrategy: e.target.value as any })}
+                        className="w-3 h-3"
+                      />
+                      <span className="text-sm">System message only</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="cacheStrategy"
+                        value="system_and_long_context"
+                        checked={formData.cacheStrategy === 'system_and_long_context'}
+                        onChange={(e) => setFormData({ ...formData, cacheStrategy: e.target.value as any })}
+                        className="w-3 h-3"
+                      />
+                      <span className="text-sm">System message + long context (character cards, RAG)</span>
+                    </label>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Prompt caching can reduce costs by up to 90% for repeated context. Cached prompts have a 5-minute TTL.
+                </p>
+              </div>
+            )}
 
             {/* Tag Editor (only show when editing existing profile) */}
             {editingId && (

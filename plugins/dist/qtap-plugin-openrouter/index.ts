@@ -58,7 +58,7 @@ const capabilities = {
   chat: true,
   imageGeneration: true,
   embeddings: true,
-  webSearch: false,
+  webSearch: true,
 } as const;
 
 /**

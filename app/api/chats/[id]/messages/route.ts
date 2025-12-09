@@ -767,6 +767,8 @@ export async function POST(
               tools: tools.length > 0 ? tools : undefined,
               // Enable native web search if the profile has it enabled and provider supports it
               webSearchEnabled: useNativeWebSearch,
+              // Pass profile parameters for provider-specific features (fallbacks, provider preferences, etc.)
+              profileParameters: modelParams,
             },
             decryptedKey
           )) {

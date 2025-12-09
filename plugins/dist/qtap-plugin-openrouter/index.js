@@ -458,7 +458,7 @@ var OpenRouterProvider = class {
     // Model-dependent, conservative default
     this.supportedMimeTypes = [];
     this.supportsImageGeneration = true;
-    this.supportsWebSearch = false;
+    this.supportsWebSearch = true;
   }
   /**
    * Helper to collect attachment failures
@@ -510,15 +510,72 @@ var OpenRouterProvider = class {
       requestParams.tools = params.tools;
       requestParams.toolChoice = "auto";
     }
+    if (params.webSearchEnabled) {
+      logger.debug("Enabling web search plugin", {
+        context: "OpenRouterProvider.sendMessage"
+      });
+      requestParams.plugins = [{ id: "web", maxResults: 5 }];
+    }
+    if (params.responseFormat) {
+      if (params.responseFormat.type === "json_schema" && params.responseFormat.jsonSchema) {
+        logger.debug("Adding JSON schema response format", {
+          context: "OpenRouterProvider.sendMessage",
+          schemaName: params.responseFormat.jsonSchema.name
+        });
+        requestParams.responseFormat = {
+          type: "json_schema",
+          jsonSchema: {
+            name: params.responseFormat.jsonSchema.name,
+            strict: params.responseFormat.jsonSchema.strict ?? true,
+            schema: params.responseFormat.jsonSchema.schema
+          }
+        };
+      } else if (params.responseFormat.type !== "text") {
+        requestParams.responseFormat = { type: params.responseFormat.type };
+      }
+    }
+    const profileParams = params.profileParameters;
+    if (profileParams?.fallbackModels?.length) {
+      logger.debug("Adding fallback models", {
+        context: "OpenRouterProvider.sendMessage",
+        fallbackCount: profileParams.fallbackModels.length
+      });
+      requestParams.models = [params.model, ...profileParams.fallbackModels];
+      requestParams.route = "fallback";
+      delete requestParams.model;
+    }
+    const providerPrefs = profileParams?.providerPreferences;
+    if (providerPrefs) {
+      logger.debug("Adding provider preferences", {
+        context: "OpenRouterProvider.sendMessage",
+        hasOrder: !!providerPrefs.order,
+        dataCollection: providerPrefs.dataCollection
+      });
+      requestParams.provider = {};
+      if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
+      if (providerPrefs.allowFallbacks !== void 0) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
+      if (providerPrefs.requireParameters) requestParams.provider.requireParameters = providerPrefs.requireParameters;
+      if (providerPrefs.dataCollection) requestParams.provider.dataCollection = providerPrefs.dataCollection;
+      if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
+      if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
+    }
     const response = await client.chat.send(requestParams);
     const choice = response.choices[0];
     const content = choice.message.content;
     const contentStr = typeof content === "string" ? content : "";
+    const usageAny = response.usage;
+    const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount ? {
+      cachedTokens: usageAny.cachedTokens,
+      cacheDiscount: usageAny.cacheDiscount,
+      cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
+      cacheReadInputTokens: usageAny.cacheReadInputTokens
+    } : void 0;
     logger.debug("Received OpenRouter response", {
       context: "OpenRouterProvider.sendMessage",
       finishReason: choice.finishReason,
       promptTokens: response.usage?.promptTokens,
-      completionTokens: response.usage?.completionTokens
+      completionTokens: response.usage?.completionTokens,
+      cachedTokens: cacheUsage?.cachedTokens
     });
     return {
       content: contentStr,
@@ -529,7 +586,8 @@ var OpenRouterProvider = class {
         totalTokens: response.usage?.totalTokens ?? 0
       },
       raw: response,
-      attachmentResults
+      attachmentResults,
+      cacheUsage
     };
   }
   async *streamMessage(params, apiKey) {
@@ -564,6 +622,55 @@ var OpenRouterProvider = class {
       requestParams.tools = params.tools;
       requestParams.toolChoice = "auto";
     }
+    if (params.webSearchEnabled) {
+      logger.debug("Enabling web search plugin for streaming", {
+        context: "OpenRouterProvider.streamMessage"
+      });
+      requestParams.plugins = [{ id: "web", maxResults: 5 }];
+    }
+    if (params.responseFormat) {
+      if (params.responseFormat.type === "json_schema" && params.responseFormat.jsonSchema) {
+        logger.debug("Adding JSON schema response format for streaming", {
+          context: "OpenRouterProvider.streamMessage",
+          schemaName: params.responseFormat.jsonSchema.name
+        });
+        requestParams.responseFormat = {
+          type: "json_schema",
+          jsonSchema: {
+            name: params.responseFormat.jsonSchema.name,
+            strict: params.responseFormat.jsonSchema.strict ?? true,
+            schema: params.responseFormat.jsonSchema.schema
+          }
+        };
+      } else if (params.responseFormat.type !== "text") {
+        requestParams.responseFormat = { type: params.responseFormat.type };
+      }
+    }
+    const profileParams = params.profileParameters;
+    if (profileParams?.fallbackModels?.length) {
+      logger.debug("Adding fallback models for streaming", {
+        context: "OpenRouterProvider.streamMessage",
+        fallbackCount: profileParams.fallbackModels.length
+      });
+      requestParams.models = [params.model, ...profileParams.fallbackModels];
+      requestParams.route = "fallback";
+      delete requestParams.model;
+    }
+    const providerPrefs = profileParams?.providerPreferences;
+    if (providerPrefs) {
+      logger.debug("Adding provider preferences for streaming", {
+        context: "OpenRouterProvider.streamMessage",
+        hasOrder: !!providerPrefs.order,
+        dataCollection: providerPrefs.dataCollection
+      });
+      requestParams.provider = {};
+      if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
+      if (providerPrefs.allowFallbacks !== void 0) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
+      if (providerPrefs.requireParameters) requestParams.provider.requireParameters = providerPrefs.requireParameters;
+      if (providerPrefs.dataCollection) requestParams.provider.dataCollection = providerPrefs.dataCollection;
+      if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
+      if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
+    }
     const stream = await client.chat.send(requestParams);
     let fullMessage = null;
     for await (const chunk of stream) {
@@ -592,11 +699,19 @@ var OpenRouterProvider = class {
         };
       }
       if (finishReason && hasUsage) {
+        const usageAny = chunk.usage;
+        const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount ? {
+          cachedTokens: usageAny.cachedTokens,
+          cacheDiscount: usageAny.cacheDiscount,
+          cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
+          cacheReadInputTokens: usageAny.cacheReadInputTokens
+        } : void 0;
         logger.debug("Stream completed", {
           context: "OpenRouterProvider.streamMessage",
           finishReason,
           promptTokens: chunk.usage?.promptTokens,
-          completionTokens: chunk.usage?.completionTokens
+          completionTokens: chunk.usage?.completionTokens,
+          cachedTokens: cacheUsage?.cachedTokens
         });
         yield {
           content: "",
@@ -607,7 +722,8 @@ var OpenRouterProvider = class {
             totalTokens: chunk.usage?.totalTokens ?? 0
           },
           attachmentResults,
-          rawResponse: fullMessage
+          rawResponse: fullMessage,
+          cacheUsage
         };
       }
     }
@@ -967,7 +1083,7 @@ var capabilities = {
   chat: true,
   imageGeneration: true,
   embeddings: true,
-  webSearch: false
+  webSearch: true
 };
 var attachmentSupport = {
   supportsAttachments: false,

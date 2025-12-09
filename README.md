@@ -3,7 +3,7 @@
 AI-powered roleplay chat platform with multi-provider LLM support and full SillyTavern compatibility.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.0--dev.37-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.2.0--dev.38-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -632,6 +632,19 @@ Copyright (c) 2025 Foundry-9
 - Console and other logs can be seen in the front-end while not in production mode
 - Finish local username/password and TOTP/MFA login
 
+### 2.2 - Database Tools, Global Search, Character Management, Multi-Character Chat, Dev Console, Themes, OpenRouter Updates
+
+- Added a full Tools workspace with backup/restore flows (including S3 save/download, preview, and restore modes) plus a delete-all-data card so users can export or reset their accounts self-service.
+- Built a global search experience: multi-term AND search with priority boosting, a nav bar search entry point, and supporting API/UI components to browse characters, personas, chats, and tags quickly.
+- Introduced character management upgrades such as the rename/replace + template conversion interface, quick-create APIs, and favorites/chat-count sorting for cards.
+- Delivered a SillyTavern import wizard that maps multi-character chats (with speaker mapping and memory creation) for easier migration from external tools.
+- Implemented the multi-character chat system end-to-end (Phases 1–7): turn management, context building, UI polish (nudge/queue, add/remove participants, streaming avatars), inter-character memory sharing, auto-tagging, and scene-aware placeholder generation.
+- Launched a DevConsole only available in development builds so engineers can inspect server logs, browser consoles, and chat traces without leaving the app.
+- Overhauled theming with a plugin-based runtime, ThemeProvider, database/API storage, Appearance settings tab, Tailwind v4 token standardization, theme font bundling, and shipped new plugins (Ocean, Rains, Earl Grey) plus refreshed legacy themes.
+- Improved tool message rendering by collapsing request/response sections and enhancing tool output readability inside chats.
+- Enhanced LLM and image capabilities: added OpenRouter embeddings, enabled OpenRouter & Google Gemini image generation flows, and tuned cheap-LLM prompts for better multi-person scene descriptions.
+- Updated navigation UX by replacing the static user info block with an actions dropdown for account management shortcuts.
+
 ## Roadmap
 
 - [ ] Finish authentication changes
@@ -643,7 +656,6 @@ Copyright (c) 2025 Foundry-9
   - [ ] Retain site-installed plugins in `plugins/`, controlled by environment variables
   - [ ] Move user-installed plugins to `plugins/users/[login-uuid]/`
   - [ ] Add Apple, GitHub OAuth plugins
-- [ ] Multiple themes and plugin downloadable themes
 - [ ] Enhanced roleplay options using more complex templates
 - [ ] "Visual Novel" options?
 - [ ] Worldbook/Lore
