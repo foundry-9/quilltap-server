@@ -109,16 +109,18 @@
    */
   .qt-dialog-overlay {
     @apply fixed inset-0 z-50;
+    @apply flex items-center justify-center;
     background: var(--qt-dialog-backdrop);
   }
 
   /**
    * Dialog container
+   * When used with overlay, positions via flex centering
+   * Can also be used standalone with fixed positioning
    */
   .qt-dialog {
-    @apply fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2;
+    @apply relative;
     @apply w-full max-w-lg;
-    @apply p-6;
     border-radius: var(--qt-dialog-radius);
     background: var(--qt-dialog-bg);
     border: 1px solid var(--qt-dialog-border);
@@ -129,7 +131,8 @@
    * Dialog header
    */
   .qt-dialog-header {
-    @apply mb-4;
+    @apply px-6 py-4;
+    border-bottom: 1px solid var(--qt-dialog-border);
   }
 
   /**
@@ -150,14 +153,17 @@
    * Dialog body
    */
   .qt-dialog-body {
-    @apply py-4;
+    @apply px-6 py-4;
   }
 
   /**
    * Dialog footer - action buttons
    */
   .qt-dialog-footer {
-    @apply flex justify-end gap-2 mt-4;
+    @apply flex justify-end gap-2;
+    @apply px-6 py-4;
+    @apply bg-muted;
+    border-top: 1px solid var(--qt-dialog-border);
   }
 
   /* ==========================================================================

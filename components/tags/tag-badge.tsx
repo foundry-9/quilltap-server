@@ -20,11 +20,7 @@ export function TagBadge({ tag, onRemove, disabled = false, size = 'md', classNa
     ? mergeWithDefaultTagStyle(styleOverride)
     : getStyleForTag(tag.id)
 
-  const sizeClasses = size === 'sm'
-    ? 'text-xs px-2 py-0.5'
-    : 'text-sm px-3 py-1'
-
-  const baseClasses = `inline-flex items-center gap-1 rounded-full font-medium border-2 transition-colors ${sizeClasses} ${className}`
+  const sizeClass = size === 'sm' ? 'qt-tag-badge-sm' : 'qt-tag-badge-md'
 
   const handleRemove = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
@@ -43,7 +39,7 @@ export function TagBadge({ tag, onRemove, disabled = false, size = 'md', classNa
 
   return (
     <span
-      className={`${baseClasses} ${textClasses}`}
+      className={`qt-tag-badge ${sizeClass} ${textClasses} ${className}`}
       style={{
         color: computedStyle.foregroundColor,
         borderColor: computedStyle.foregroundColor,
@@ -52,7 +48,7 @@ export function TagBadge({ tag, onRemove, disabled = false, size = 'md', classNa
       title={showEmojiOnly ? tag.name : undefined}
     >
       {computedStyle.emoji && (
-        <span aria-hidden="true" className="text-base leading-none">
+        <span aria-hidden="true" className="qt-tag-badge-emoji">
           {computedStyle.emoji}
         </span>
       )}
@@ -62,7 +58,7 @@ export function TagBadge({ tag, onRemove, disabled = false, size = 'md', classNa
           type="button"
           onClick={handleRemove}
           disabled={disabled}
-          className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-current bg-transparent focus:outline-none disabled:opacity-50"
+          className="qt-tag-badge-remove"
           aria-label={`Remove ${tag.name} tag`}
         >
           <svg

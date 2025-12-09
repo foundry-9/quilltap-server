@@ -88,6 +88,52 @@
   }
 
   /* ==========================================================================
+     TAG BADGES
+     ========================================================================== */
+
+  /**
+   * Tag badge - base structural styling
+   * Used with dynamic inline styles for colors from tag style provider
+   */
+  .qt-tag-badge {
+    @apply inline-flex items-center gap-1;
+    @apply font-medium;
+    @apply transition-colors;
+    border-width: 2px;
+    border-style: solid;
+    border-radius: var(--qt-tag-badge-radius, 9999px);
+  }
+
+  .qt-tag-badge-sm {
+    @apply text-xs px-2 py-0.5;
+  }
+
+  .qt-tag-badge-md {
+    @apply text-sm px-3 py-1;
+  }
+
+  /**
+   * Tag badge emoji
+   */
+  .qt-tag-badge-emoji {
+    @apply text-base leading-none;
+  }
+
+  /**
+   * Tag badge remove button
+   */
+  .qt-tag-badge-remove {
+    @apply ml-1 inline-flex h-4 w-4 items-center justify-center;
+    @apply rounded-full border border-current bg-transparent;
+    @apply focus:outline-none disabled:opacity-50;
+    @apply transition-colors;
+  }
+
+  .qt-tag-badge-remove:hover:not(:disabled) {
+    @apply bg-current/10;
+  }
+
+  /* ==========================================================================
      AVATARS
      ========================================================================== */
 
