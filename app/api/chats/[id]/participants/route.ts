@@ -291,7 +291,7 @@ export async function POST(
     }
 
     // Add the participant
-    const result = await repos.chats.addParticipant(id, {
+    let result = await repos.chats.addParticipant(id, {
       type: validatedData.type,
       characterId: validatedData.characterId || null,
       personaId: validatedData.personaId || null,
@@ -306,6 +306,31 @@ export async function POST(
 
     if (!result) {
       return NextResponse.json({ error: 'Failed to add participant' }, { status: 500 })
+    }
+
+    // If adding a CHARACTER, merge the character's tags into the chat
+    if (validatedData.type === 'CHARACTER' && validatedData.characterId) {
+      const character = await repos.characters.findById(validatedData.characterId)
+      if (character && character.tags && character.tags.length > 0) {
+        const existingTagIds = new Set(result.tags || [])
+        const newTags = character.tags.filter((tagId: string) => !existingTagIds.has(tagId))
+
+        if (newTags.length > 0) {
+          logger.debug('[Participants API] Adding character tags to chat', {
+            chatId: id,
+            characterId: validatedData.characterId,
+            characterName: character.name,
+            existingTagCount: existingTagIds.size,
+            newTagCount: newTags.length,
+          })
+
+          const mergedTags = [...(result.tags || []), ...newTags]
+          const updatedChat = await repos.chats.update(id, { tags: mergedTags })
+          if (updatedChat) {
+            result = updatedChat
+          }
+        }
+      }
     }
 
     // Return enriched participant data

@@ -94,12 +94,12 @@ export default function ChatsPage() {
     }
   }, [highlightedChatId])
 
-  // Helper to get first character participant
-  const getFirstCharacter = (chat: Chat) => {
-    const charParticipant = chat.participants.find(
-      p => p.type === 'CHARACTER' && p.isActive && p.character
-    )
-    return charParticipant?.character
+  // Helper to get all active character participants
+  const getActiveCharacters = (chat: Chat) => {
+    return chat.participants
+      .filter(p => p.type === 'CHARACTER' && p.isActive && p.character)
+      .sort((a, b) => a.displayOrder - b.displayOrder)
+      .map(p => p.character!)
   }
 
   // Helper to get first persona participant
@@ -110,15 +110,22 @@ export default function ChatsPage() {
     return personaParticipant?.persona
   }
 
-  const getAvatarSrc = (chat: Chat): string | null => {
-    const character = getFirstCharacter(chat)
-    if (!character) return null
+  // Helper to get avatar src for a character
+  const getCharacterAvatarSrc = (character: NonNullable<ChatParticipant['character']>): string | null => {
     if (character.defaultImage) {
-      // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
       const filepath = character.defaultImage.filepath
       return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
     }
     return character.avatarUrl || null
+  }
+
+  // Helper to format character names for display
+  const formatCharacterNames = (characters: NonNullable<ChatParticipant['character']>[]): string => {
+    if (characters.length === 0) return 'Unknown'
+    if (characters.length === 1) return characters[0].name
+    if (characters.length === 2) return `${characters[0].name} + ${characters[1].name}`
+    // For 3+ characters, list all with " + "
+    return characters.map(c => c.name).join(' + ')
   }
 
   const fetchChats = async () => {
@@ -279,29 +286,108 @@ export default function ChatsPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start flex-1 gap-4">
                   {(() => {
-                    const character = getFirstCharacter(chat)
+                    const characters = getActiveCharacters(chat)
                     const persona = getFirstPersona(chat)
-                    const avatarSrc = getAvatarSrc(chat)
-                    const characterName = character?.name || 'Unknown'
+                    const characterNames = formatCharacterNames(characters)
+                    const isMultiCharacter = characters.length > 1
+
+                    // Render combined avatar for multi-character chats (up to 3)
+                    const renderAvatars = () => {
+                      if (characters.length === 0) {
+                        // Fallback for no characters
+                        return (
+                          <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                            <span className={getAvatarClasses(style, 'lg').fallbackClass}>?</span>
+                          </div>
+                        )
+                      }
+
+                      if (characters.length === 1) {
+                        // Single character - original display
+                        const avatarSrc = getCharacterAvatarSrc(characters[0])
+                        if (avatarSrc) {
+                          return (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={avatarSrc}
+                              alt={characters[0].name}
+                              width={64}
+                              height={64}
+                              className={getAvatarClasses(style, 'lg').imageClass}
+                            />
+                          )
+                        }
+                        return (
+                          <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+                            <span className={getAvatarClasses(style, 'lg').fallbackClass}>
+                              {characters[0].name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )
+                      }
+
+                      // Multi-character: show stacked/overlapping avatars (max 4)
+                      const displayChars = characters.slice(0, 4)
+                      const overlapOffset = style === 'CIRCULAR' ? -12 : -10
+
+                      return (
+                        <div className="flex items-center" style={{ marginRight: `${Math.abs(overlapOffset) * (displayChars.length - 1)}px` }}>
+                          {displayChars.map((char, index) => {
+                            const avatarSrc = getCharacterAvatarSrc(char)
+                            const zIndex = displayChars.length - index
+                            const marginLeft = index === 0 ? 0 : overlapOffset
+
+                            if (avatarSrc) {
+                              return (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  key={char.id}
+                                  src={avatarSrc}
+                                  alt={char.name}
+                                  width={48}
+                                  height={48}
+                                  className={`${getAvatarClasses(style, 'md').imageClass} ring-2 ring-card`}
+                                  style={{ zIndex, marginLeft: `${marginLeft}px`, position: 'relative' }}
+                                  title={char.name}
+                                />
+                              )
+                            }
+                            return (
+                              <div
+                                key={char.id}
+                                className={`${getAvatarClasses(style, 'md').wrapperClass} ring-2 ring-card`}
+                                style={{
+                                  zIndex,
+                                  marginLeft: `${marginLeft}px`,
+                                  position: 'relative',
+                                  ...(style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : {})
+                                }}
+                                title={char.name}
+                              >
+                                <span className={getAvatarClasses(style, 'md').fallbackClass}>
+                                  {char.name.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                            )
+                          })}
+                          {characters.length > 4 && (
+                            <div
+                              className={`${getAvatarClasses(style, 'md').wrapperClass} ring-2 ring-card bg-muted`}
+                              style={{ zIndex: 0, marginLeft: `${overlapOffset}px`, position: 'relative' }}
+                              title={`+${characters.length - 4} more`}
+                            >
+                              <span className="text-sm font-bold text-muted-foreground">
+                                +{characters.length - 4}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
 
                     return (
                       <>
-                        {avatarSrc ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={avatarSrc}
-                            alt={characterName}
-                            width={64}
-                            height={64}
-                            className={getAvatarClasses(style, 'lg').imageClass}
-                          />
-                        ) : (
-                          <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
-                            <span className={getAvatarClasses(style, 'lg').fallbackClass}>
-                              {characterName.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                        )}
+                        {renderAvatars()}
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <h2 className="text-xl font-semibold text-foreground">{chat.title}</h2>
@@ -310,7 +396,7 @@ export default function ChatsPage() {
                             </span>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {characterName}
+                            {characterNames}
                             {persona && ` (${persona.name}${persona.title ? ` - ${persona.title}` : ''})`}
                             {' \u2022 '}
                             {new Date(chat.updatedAt).toLocaleDateString()}

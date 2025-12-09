@@ -286,6 +286,31 @@ async function handleAddParticipant(
     return { error: 'Failed to add participant', status: 500 }
   }
 
+  // If adding a CHARACTER, merge the character's tags into the chat
+  if (data.type === 'CHARACTER' && data.characterId) {
+    const character = await repos.characters.findById(data.characterId)
+    if (character && character.tags && character.tags.length > 0) {
+      const existingTagIds = new Set(result.tags || [])
+      const newTags = character.tags.filter((tagId: string) => !existingTagIds.has(tagId))
+
+      if (newTags.length > 0) {
+        logger.debug('Adding character tags to chat', {
+          chatId,
+          characterId: data.characterId,
+          characterName: character.name,
+          existingTagCount: existingTagIds.size,
+          newTagCount: newTags.length,
+        })
+
+        const mergedTags = [...(result.tags || []), ...newTags]
+        const updatedChat = await repos.chats.update(chatId, { tags: mergedTags })
+        if (updatedChat) {
+          return { chat: updatedChat }
+        }
+      }
+    }
+  }
+
   return { chat: result }
 }
 

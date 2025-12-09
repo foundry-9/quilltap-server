@@ -86,13 +86,14 @@ export default async function Dashboard() {
     title: string
     updatedAt: string
     messageCount: number
-    character: {
+    characters: Array<{
+      id: string
       name: string
       avatarUrl: string | null
       defaultImageId: string | null
       defaultImage: { id: string; filepath: string; url: null } | null
-    }
-    persona: { id: string; name: string } | null
+    }>
+    persona: { id: string; name: string; title?: string | null } | null
     tags: Array<{ tag: { id: string; name: string } }>
   } | null> = repos
     ? await Promise.all(
@@ -100,27 +101,43 @@ export default async function Dashboard() {
           .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
           .slice(0, 5)
           .map(async (chat) => {
-            // Get character from participants
-            const characterParticipant = chat.participants.find(
-              p => p.type === 'CHARACTER' && p.characterId
-            );
-            if (!characterParticipant?.characterId) return null;
+            // Get all active character participants, sorted by displayOrder
+            const characterParticipants = chat.participants
+              .filter(p => p.type === 'CHARACTER' && p.characterId && p.isActive !== false)
+              .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
 
-            const character = await repos.characters.findById(characterParticipant.characterId);
-            // Skip chats without characters
-            if (!character) return null;
+            if (characterParticipants.length === 0) return null;
 
-            let characterDefaultImage = null;
-            if (character.defaultImageId) {
-              const fileEntry = await repos.files.findById(character.defaultImageId);
-              if (fileEntry) {
-                characterDefaultImage = {
-                  id: fileEntry.id,
-                  filepath: getFilePath(fileEntry),
-                  url: null,
+            // Fetch all characters with their images
+            const characters = await Promise.all(
+              characterParticipants.map(async (participant) => {
+                const character = await repos.characters.findById(participant.characterId!);
+                if (!character) return null;
+
+                let defaultImage = null;
+                if (character.defaultImageId) {
+                  const fileEntry = await repos.files.findById(character.defaultImageId);
+                  if (fileEntry) {
+                    defaultImage = {
+                      id: fileEntry.id,
+                      filepath: getFilePath(fileEntry),
+                      url: null,
+                    };
+                  }
+                }
+
+                return {
+                  id: character.id,
+                  name: character.name,
+                  avatarUrl: character.avatarUrl ?? null,
+                  defaultImageId: character.defaultImageId ?? null,
+                  defaultImage,
                 };
-              }
-            }
+              })
+            );
+
+            const validCharacters = characters.filter((c): c is NonNullable<typeof c> => c !== null);
+            if (validCharacters.length === 0) return null;
 
             // Get persona data from participants if present
             let persona = null;
@@ -128,7 +145,14 @@ export default async function Dashboard() {
               p => p.type === 'PERSONA' && p.personaId
             );
             if (personaParticipant?.personaId) {
-              persona = await repos.personas.findById(personaParticipant.personaId);
+              const personaData = await repos.personas.findById(personaParticipant.personaId);
+              if (personaData) {
+                persona = {
+                  id: personaData.id,
+                  name: personaData.name,
+                  title: personaData.title ?? null,
+                };
+              }
             }
 
             // Get tags
@@ -144,18 +168,8 @@ export default async function Dashboard() {
               title: chat.title,
               updatedAt: chat.updatedAt,
               messageCount: chat.messageCount || 0,
-              character: {
-                name: character.name,
-                avatarUrl: character.avatarUrl ?? null,
-                defaultImageId: character.defaultImageId ?? null,
-                defaultImage: characterDefaultImage,
-              },
-              persona: persona
-                ? {
-                    id: persona.id,
-                    name: persona.name,
-                  }
-                : null,
+              characters: validCharacters,
+              persona,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
             };
           })
