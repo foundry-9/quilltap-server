@@ -23,4 +23,5 @@ export type {
   ProviderCapabilities,
   AttachmentSupport,
   ModelInfo,
+  EmbeddingModelInfo,
 } from '../../../lib/plugins/interfaces/provider-plugin';

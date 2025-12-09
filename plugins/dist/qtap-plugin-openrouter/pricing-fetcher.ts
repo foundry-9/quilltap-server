@@ -7,6 +7,7 @@
  */
 
 import { OpenRouter } from '@openrouter/sdk';
+import { Parameter } from '@openrouter/sdk/models';
 import { logger } from '../../../lib/logger';
 
 export interface ModelPricing {
@@ -59,8 +60,8 @@ export async function fetchOpenRouterPricing(
         supportsVision: model.architecture?.modality?.includes('image') || false,
         supportsTools:
           model.supportedParameters?.some(
-            (p) => p === 'tools' || p === 'tool_choice'
-          ) || false,
+            (p) => p === Parameter.Tools || p === Parameter.ToolChoice
+          ) ?? false,
         fetchedAt: new Date().toISOString(),
       });
     }

@@ -564,11 +564,7 @@ var OpenRouterProvider = class {
       requestParams.tools = params.tools;
       requestParams.toolChoice = "auto";
     }
-    const response = await client.chat.send(requestParams);
-    if (!response || typeof response[Symbol.asyncIterator] !== "function") {
-      throw new Error("Expected streaming response from OpenRouter");
-    }
-    const stream = response;
+    const stream = await client.chat.send(requestParams);
     let fullMessage = null;
     for await (const chunk of stream) {
       const content = chunk.choices?.[0]?.delta?.content;
@@ -722,6 +718,156 @@ var OpenRouterProvider = class {
   }
 };
 
+// plugins/dist/qtap-plugin-openrouter/embedding-provider.ts
+var import_sdk2 = require("@openrouter/sdk");
+var OpenRouterEmbeddingProvider = class {
+  /**
+   * Generate an embedding for the given text
+   *
+   * @param text The text to embed
+   * @param model The model to use (e.g., 'openai/text-embedding-3-small')
+   * @param apiKey The OpenRouter API key
+   * @param options Optional configuration (dimensions, encoding format)
+   * @returns The embedding result
+   */
+  async generateEmbedding(text, model, apiKey, options) {
+    logger.debug("OpenRouter generateEmbedding called", {
+      context: "OpenRouterEmbeddingProvider.generateEmbedding",
+      model,
+      textLength: text.length
+    });
+    const client = new import_sdk2.OpenRouter({
+      apiKey,
+      httpReferer: process.env.NEXTAUTH_URL || "http://localhost:3000",
+      xTitle: "Quilltap"
+    });
+    const response = await client.embeddings.generate({
+      input: text,
+      model,
+      dimensions: options?.dimensions
+    });
+    const embeddingData = response.data[0]?.embedding;
+    if (!embeddingData) {
+      throw new Error("No embedding returned from OpenRouter");
+    }
+    let embedding;
+    if (typeof embeddingData === "string") {
+      const buffer = Buffer.from(embeddingData, "base64");
+      embedding = Array.from(
+        new Float32Array(buffer.buffer, buffer.byteOffset, buffer.length / 4)
+      );
+    } else {
+      embedding = embeddingData;
+    }
+    logger.debug("OpenRouter embedding generated", {
+      context: "OpenRouterEmbeddingProvider.generateEmbedding",
+      model: response.model,
+      dimensions: embedding.length,
+      usage: response.usage
+    });
+    return {
+      embedding,
+      model: response.model,
+      dimensions: embedding.length,
+      usage: response.usage ? {
+        promptTokens: response.usage.promptTokens,
+        totalTokens: response.usage.totalTokens,
+        cost: response.usage.cost
+      } : void 0
+    };
+  }
+  /**
+   * Generate embeddings for multiple texts in a batch
+   *
+   * @param texts Array of texts to embed
+   * @param model The model to use
+   * @param apiKey The OpenRouter API key
+   * @param options Optional configuration
+   * @returns Array of embedding results
+   */
+  async generateBatchEmbeddings(texts, model, apiKey, options) {
+    logger.debug("OpenRouter generateBatchEmbeddings called", {
+      context: "OpenRouterEmbeddingProvider.generateBatchEmbeddings",
+      model,
+      count: texts.length
+    });
+    const client = new import_sdk2.OpenRouter({
+      apiKey,
+      httpReferer: process.env.NEXTAUTH_URL || "http://localhost:3000",
+      xTitle: "Quilltap"
+    });
+    const response = await client.embeddings.generate({
+      input: texts,
+      model,
+      dimensions: options?.dimensions
+    });
+    const results = [];
+    for (const data of response.data) {
+      const embeddingData = data.embedding;
+      if (!embeddingData) {
+        continue;
+      }
+      let embedding;
+      if (typeof embeddingData === "string") {
+        const buffer = Buffer.from(embeddingData, "base64");
+        embedding = Array.from(
+          new Float32Array(buffer.buffer, buffer.byteOffset, buffer.length / 4)
+        );
+      } else {
+        embedding = embeddingData;
+      }
+      results.push({
+        embedding,
+        model: response.model,
+        dimensions: embedding.length,
+        usage: response.usage ? {
+          promptTokens: response.usage.promptTokens,
+          totalTokens: response.usage.totalTokens,
+          cost: response.usage.cost
+        } : void 0
+      });
+    }
+    logger.debug("OpenRouter batch embeddings generated", {
+      context: "OpenRouterEmbeddingProvider.generateBatchEmbeddings",
+      model: response.model,
+      count: results.length
+    });
+    return results;
+  }
+  /**
+   * Get available embedding models from OpenRouter
+   *
+   * @param apiKey The OpenRouter API key
+   * @returns Array of model IDs
+   */
+  async getAvailableModels(apiKey) {
+    logger.debug("OpenRouter getAvailableModels called", {
+      context: "OpenRouterEmbeddingProvider.getAvailableModels"
+    });
+    try {
+      const client = new import_sdk2.OpenRouter({
+        apiKey,
+        httpReferer: process.env.NEXTAUTH_URL || "http://localhost:3000",
+        xTitle: "Quilltap"
+      });
+      const response = await client.embeddings.listModels();
+      const models = response.data?.map((m) => m.id) ?? [];
+      logger.debug("OpenRouter embedding models fetched", {
+        context: "OpenRouterEmbeddingProvider.getAvailableModels",
+        count: models.length
+      });
+      return models;
+    } catch (error) {
+      logger.error(
+        "Failed to fetch OpenRouter embedding models",
+        { context: "OpenRouterEmbeddingProvider.getAvailableModels" },
+        error instanceof Error ? error : void 0
+      );
+      return [];
+    }
+  }
+};
+
 // plugins/dist/qtap-plugin-openrouter/icon.tsx
 var import_jsx_runtime = require("react/jsx-runtime");
 function OpenRouterIcon({ className = "h-5 w-5" }) {
@@ -820,7 +966,7 @@ var config = {
 var capabilities = {
   chat: true,
   imageGeneration: false,
-  embeddings: false,
+  embeddings: true,
   webSearch: false
 };
 var attachmentSupport = {
@@ -843,6 +989,16 @@ var plugin = {
       baseUrl
     });
     return new OpenRouterProvider();
+  },
+  /**
+   * Factory method to create an OpenRouter embedding provider instance
+   */
+  createEmbeddingProvider: (baseUrl) => {
+    logger.debug("Creating OpenRouter embedding provider instance", {
+      context: "plugin.createEmbeddingProvider",
+      baseUrl
+    });
+    return new OpenRouterEmbeddingProvider();
   },
   /**
    * Get list of available models from OpenRouter API
@@ -947,6 +1103,56 @@ var plugin = {
         maxOutputTokens: 4096,
         supportsImages: false,
         supportsTools: false
+      }
+    ];
+  },
+  /**
+   * Get static embedding model information
+   * Returns cached information about popular OpenRouter embedding models
+   */
+  getEmbeddingModels: () => {
+    return [
+      {
+        id: "openai/text-embedding-3-small",
+        name: "OpenAI Text Embedding 3 Small",
+        dimensions: 1536,
+        description: "OpenAI small embedding model, efficient for most use cases"
+      },
+      {
+        id: "openai/text-embedding-3-large",
+        name: "OpenAI Text Embedding 3 Large",
+        dimensions: 3072,
+        description: "OpenAI large embedding model for highest quality"
+      },
+      {
+        id: "openai/text-embedding-ada-002",
+        name: "OpenAI Ada 002",
+        dimensions: 1536,
+        description: "OpenAI legacy embedding model"
+      },
+      {
+        id: "cohere/embed-english-v3.0",
+        name: "Cohere Embed English v3",
+        dimensions: 1024,
+        description: "Cohere English embedding model"
+      },
+      {
+        id: "cohere/embed-multilingual-v3.0",
+        name: "Cohere Embed Multilingual v3",
+        dimensions: 1024,
+        description: "Cohere multilingual embedding model"
+      },
+      {
+        id: "voyage/voyage-large-2",
+        name: "Voyage Large 2",
+        dimensions: 1536,
+        description: "Voyage AI large embedding model"
+      },
+      {
+        id: "voyage/voyage-code-2",
+        name: "Voyage Code 2",
+        dimensions: 1536,
+        description: "Voyage AI embedding model optimized for code"
       }
     ];
   },

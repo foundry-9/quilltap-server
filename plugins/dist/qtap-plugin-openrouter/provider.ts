@@ -6,7 +6,7 @@
  */
 
 import { OpenRouter } from '@openrouter/sdk';
-import type { ChatStreamingResponseChunkData } from '@openrouter/sdk/models/chatstreamingresponsechunk';
+import type { ChatGenerationParams, ChatStreamingResponseChunkData } from '@openrouter/sdk/models';
 import type {
   LLMProvider,
   LLMParams,
@@ -136,7 +136,7 @@ export class OpenRouterProvider implements LLMProvider {
       content: m.content,
     }));
 
-    const requestParams: any = {
+    const requestParams: ChatGenerationParams & { stream: true } = {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
@@ -157,17 +157,8 @@ export class OpenRouterProvider implements LLMProvider {
       requestParams.toolChoice = 'auto';
     }
 
-    const response = await client.chat.send(requestParams);
-
-    // Type guard to ensure we have a stream
-    if (
-      !response ||
-      typeof (response as any)[Symbol.asyncIterator] !== 'function'
-    ) {
-      throw new Error('Expected streaming response from OpenRouter');
-    }
-
-    const stream = response as unknown as AsyncIterable<ChatStreamingResponseChunkData>;
+    // SDK 0.2.x returns properly typed EventStream<ChatStreamingResponseChunkData>
+    const stream = await client.chat.send(requestParams);
     let fullMessage: ChatStreamingResponseChunkData | null = null;
 
     for await (const chunk of stream) {

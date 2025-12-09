@@ -2,8 +2,8 @@
  * Embedding Service
  *
  * Provides text embedding functionality using configured embedding profiles.
- * Supports OpenAI and Ollama providers with fallback to text search heuristics
- * when embedding is not available.
+ * Supports OpenAI, Ollama, and OpenRouter providers with fallback to text search
+ * heuristics when embedding is not available.
  */
 
 import { logger } from '@/lib/logger'
@@ -155,6 +155,67 @@ async function generateOllamaEmbedding(
 }
 
 /**
+ * Generate an embedding for text using OpenRouter
+ * Uses the OpenRouter SDK for embeddings API access
+ */
+async function generateOpenRouterEmbedding(
+  text: string,
+  profile: EmbeddingProfile,
+  apiKey: string
+): Promise<EmbeddingResult> {
+  // Dynamic import to avoid loading SDK unless needed
+  const { OpenRouter } = await import('@openrouter/sdk')
+
+  const client = new OpenRouter({
+    apiKey,
+    httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+    xTitle: 'Quilltap',
+  })
+
+  logger.debug('Generating OpenRouter embedding', {
+    context: 'embedding-service',
+    model: profile.modelName,
+    textLength: text.length,
+  })
+
+  const response = await client.embeddings.generate({
+    input: text,
+    model: profile.modelName,
+    dimensions: profile.dimensions || undefined,
+  })
+
+  // Handle both float array and base64 encoded responses
+  const embeddingData = response.data[0]?.embedding
+  if (!embeddingData) {
+    throw new EmbeddingError('No embedding returned from OpenRouter', 'OPENROUTER')
+  }
+
+  // If embedding is base64 encoded string, decode it
+  let embedding: number[]
+  if (typeof embeddingData === 'string') {
+    // Base64 encoded float array - decode it
+    const buffer = Buffer.from(embeddingData, 'base64')
+    embedding = Array.from(new Float32Array(buffer.buffer, buffer.byteOffset, buffer.length / 4))
+  } else {
+    embedding = embeddingData
+  }
+
+  logger.debug('OpenRouter embedding generated', {
+    context: 'embedding-service',
+    model: response.model,
+    dimensions: embedding.length,
+    usage: response.usage,
+  })
+
+  return {
+    embedding,
+    model: response.model,
+    dimensions: embedding.length,
+    provider: 'OPENROUTER',
+  }
+}
+
+/**
  * Get the decrypted API key for an embedding profile
  */
 async function getApiKeyForProfile(
@@ -191,6 +252,14 @@ export async function generateEmbedding(
 
   if (profile.provider === 'OLLAMA') {
     return generateOllamaEmbedding(text, profile)
+  }
+
+  if (profile.provider === 'OPENROUTER') {
+    const apiKey = await getApiKeyForProfile(profile, userId)
+    if (!apiKey) {
+      throw new EmbeddingError('No API key found for OpenRouter embedding profile', 'OPENROUTER')
+    }
+    return generateOpenRouterEmbedding(text, profile, apiKey)
   }
 
   throw new EmbeddingError(`Unsupported embedding provider: ${profile.provider}`)
