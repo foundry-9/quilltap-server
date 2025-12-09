@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { clientLogger } from '@/lib/client-logger'
@@ -19,7 +19,7 @@ export function DashboardCards({ characters, chats, personas }: DashboardCardsPr
     const visibleChats = chats.filter(c => !shouldHideByIds(c.tags))
     const visiblePersonas = personas.filter(p => !shouldHideByIds(p.tags))
 
-    const counts = {
+    return {
       characters: visibleCharacters.length,
       chats: visibleChats.length,
       personas: visiblePersonas.length,
@@ -27,14 +27,14 @@ export function DashboardCards({ characters, chats, personas }: DashboardCardsPr
       totalChats: chats.length,
       totalPersonas: personas.length,
     }
+  }, [characters, chats, personas, shouldHideByIds])
 
+  useEffect(() => {
     clientLogger.debug('Dashboard cards filtered counts', {
       hiddenTagCount: hiddenTagIds.size,
-      counts,
+      counts: visibleCounts,
     })
-
-    return counts
-  }, [characters, chats, personas, shouldHideByIds, hiddenTagIds])
+  }, [visibleCounts, hiddenTagIds.size])
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-8">
