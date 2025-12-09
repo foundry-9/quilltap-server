@@ -162,6 +162,8 @@
   --font-mono: var(--font-jetbrains);
   --font-user-message: var(--font-sans-serif);
   --font-claude-response: var(--font-serif);
+  --font-chat-user: var(--font-sans-serif);
+  --theme-font-chat-user: var(--font-sans-serif);
 
   --always-white: 0 0% 100%;
   --always-black: 0 0% 0%;

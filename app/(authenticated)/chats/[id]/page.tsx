@@ -680,11 +680,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const fetchChatSettings = useCallback(async () => {
     try {
       const res = await fetch('/api/chat-settings')
-      if (!res.ok) throw new Error('Failed to fetch chat settings')
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => 'Unable to read response body')
+        throw new Error(`Failed to fetch chat settings: ${res.status} ${res.statusText} - ${errorBody}`)
+      }
       const data = await res.json()
       setChatSettings(data)
     } catch (err) {
-      clientLogger.error('Failed to fetch chat settings:', { error: err instanceof Error ? err.message : String(err) })
+      clientLogger.error('Failed to fetch chat settings', {
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      })
       // Use default settings if fetch fails
       setChatSettings({ id: '', userId: '', avatarDisplayMode: 'ALWAYS', avatarDisplayStyle: 'CIRCULAR', tagStyles: {}, createdAt: '', updatedAt: '' })
     }
