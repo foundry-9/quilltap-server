@@ -16,7 +16,7 @@ import {
 } from '@/components/chat/EphemeralMessage'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { showConfirmation } from '@/lib/alert'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { clientLogger } from '@/lib/client-logger'
 import MessageContent from '@/components/chat/MessageContent'
@@ -256,6 +256,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return isMultiCharacterChat(participantsAsBase)
   }, [participantsAsBase])
 
+  // Phase 7: Track if there are any active characters (edge case handling)
+  const hasActiveCharacters = useMemo(() => {
+    return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length > 0
+  }, [participantsAsBase])
+
   // Build character map for turn selection
   // The turn manager expects Character objects with at least id and talkativeness
   const charactersMap = useMemo((): Map<string, Character> => {
@@ -356,9 +361,27 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [messages, participantsAsBase, userParticipantId, charactersMap])
 
   // Phase 5: Trigger character response without user message (for nudge action)
+  // Phase 7: Enhanced with edge case validation
   const triggerContinueMode = useCallback(async (participantId: string) => {
     if (streaming || waitingForResponse) {
       clientLogger.debug('[Chat] Skipping continue mode - already generating')
+      return
+    }
+
+    // Phase 7: Edge Case 5 - Validate that the participant still exists and is active
+    const participant = participantsAsBase.find(p => p.id === participantId && p.isActive)
+    if (!participant) {
+      clientLogger.warn('[Chat] Cannot trigger continue mode - participant not found or inactive', {
+        participantId,
+      })
+      showErrorToast('This participant is no longer available in the chat.')
+      return
+    }
+
+    // Phase 7: Edge Case 3 - Check if there are any eligible speakers
+    if (!hasActiveCharacters) {
+      clientLogger.warn('[Chat] No active characters available for continue mode')
+      showErrorToast('No characters available. Add a character to continue the conversation.')
       return
     }
 
@@ -450,7 +473,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setStreamingContent('')
       scrollToBottom()
     }
-  }, [id, streaming, waitingForResponse])
+  }, [id, streaming, waitingForResponse, participantsAsBase, hasActiveCharacters])
 
   // Handle nudge action - Phase 5: Shows ephemeral message and triggers immediate response
   const handleNudge = useCallback((participantId: string) => {
@@ -531,6 +554,35 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     clientLogger.debug('[Chat] Dismissing ephemeral message', { ephemeralId })
     setEphemeralMessages(prev => prev.filter(em => em.id !== ephemeralId))
   }, [])
+
+  // Phase 7: Continue button - User passes turn to next character
+  const handleContinue = useCallback(() => {
+    clientLogger.debug('[Chat] User passing turn via Continue button')
+
+    // Edge case: No active characters
+    if (!hasActiveCharacters) {
+      clientLogger.warn('[Chat] Cannot continue - no active characters')
+      showErrorToast('No characters available. Add a character to continue.')
+      return
+    }
+
+    // Get the next character to speak
+    const result = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
+    if (result.nextSpeakerId && result.nextSpeakerId !== userParticipantId) {
+      clientLogger.debug('[Chat] Selected next speaker for continue', {
+        participantId: result.nextSpeakerId,
+        reason: result.reason,
+      })
+      triggerContinueMode(result.nextSpeakerId)
+    } else {
+      clientLogger.warn('[Chat] Continue button clicked but no valid next speaker', {
+        nextSpeakerId: result.nextSpeakerId,
+        reason: result.reason,
+      })
+      // User-friendly message for edge case 3
+      showInfoToast('All characters have spoken. Send a message to continue the conversation.')
+    }
+  }, [participantsAsBase, charactersMap, turnState, userParticipantId, triggerContinueMode, hasActiveCharacters])
 
   const fetchChatSettings = useCallback(async () => {
     try {
@@ -619,6 +671,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [fetchChat])
 
   // Phase 6: Handle removing a character from the chat
+  // Phase 7: Enhanced with edge case handling
   const handleRemoveCharacter = useCallback(async (participantId: string) => {
     const participant = participantData.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'This character'
@@ -626,7 +679,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     clientLogger.debug('[Chat] Requesting character removal', {
       participantId,
       characterName,
+      isGenerating: streaming || waitingForResponse,
+      currentSpeakerId: turnState.lastSpeakerId,
     })
+
+    // Edge Case 4: Check if this character is currently generating
+    if ((streaming || waitingForResponse) && turnState.lastSpeakerId === participantId) {
+      clientLogger.warn('[Chat] Cannot remove character while they are generating', {
+        participantId,
+        characterName,
+      })
+      showErrorToast(`Cannot remove ${characterName} while they are generating a response. Please wait for them to finish.`)
+      return
+    }
 
     // Confirm with user
     const confirmed = await showConfirmation(
@@ -656,7 +721,28 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       })
 
       showSuccessToast(`${characterName} has been removed from the chat`)
-      fetchChat() // Refresh chat data
+
+      // Clear ephemeral messages for this participant
+      setEphemeralMessages(prev => prev.filter(em => em.participantId !== participantId))
+
+      // Remove from queue if they were queued
+      setTurnState(prev => ({
+        ...prev,
+        queue: prev.queue.filter(qId => qId !== participantId),
+      }))
+
+      // Refresh chat data
+      await fetchChat()
+
+      // Edge Case 1: Check if this was the last character
+      const remainingCharacters = participantsAsBase.filter(
+        p => p.type === 'CHARACTER' && p.isActive && p.id !== participantId
+      )
+
+      if (remainingCharacters.length === 0) {
+        clientLogger.warn('[Chat] No active characters remain in chat')
+        showErrorToast('All characters have been removed. Add a character to continue the conversation.')
+      }
     } catch (err) {
       clientLogger.error('[Chat] Error removing character', {
         error: err instanceof Error ? err.message : String(err),
@@ -664,7 +750,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       })
       showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
     }
-  }, [id, participantData, fetchChat])
+  }, [id, participantData, fetchChat, streaming, waitingForResponse, turnState.lastSpeakerId, participantsAsBase])
 
   useEffect(() => {
     fetchChat()
@@ -1728,6 +1814,30 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
       {/* Input */}
       <div className="flex-shrink-0 bg-card border-t border-border">
+        {/* Phase 7: Edge Case 1 - No active characters warning */}
+        {!hasActiveCharacters && messages.length > 0 && (
+          <div className="bg-warning/10 border-b border-warning/30 p-3">
+            <div className="mx-auto max-w-[800px] flex items-center gap-3 text-warning">
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="flex-1">
+                <p className="font-medium text-sm">No characters in this chat</p>
+                <p className="text-xs text-warning/80 mt-0.5">
+                  Add a character to continue the conversation.
+                </p>
+              </div>
+              {isMultiChar && (
+                <button
+                  onClick={handleAddCharacter}
+                  className="px-3 py-1.5 text-xs font-medium rounded bg-warning text-warning-foreground hover:bg-warning/90 transition-colors"
+                >
+                  Add Character
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4`}>
           {/* Tool execution status indicator */}
           {toolExecutionStatus && (
@@ -1886,9 +1996,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     }
                   }
                 }}
-                disabled={sending}
+                disabled={sending || !hasActiveCharacters}
                 rows={1}
-                placeholder={attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
+                placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
                 className="flex-1 px-4 py-3 border border-border bg-card text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted resize-none overflow-y-auto"
                 style={{
                   lineHeight: '1.5'
@@ -1900,14 +2010,36 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               {/* Send button */}
               <button
                 type="submit"
-                disabled={sending || (!input.trim() && attachedFiles.length === 0)}
+                disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
                 className="w-11 h-11 flex items-center justify-center bg-success text-success-foreground rounded-lg hover:bg-success/90 disabled:bg-muted disabled:text-muted-foreground transition-colors"
-                title="Send message"
+                title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
+              {/* Continue button - Phase 7: Pass turn to next character */}
+              {isMultiChar && hasActiveCharacters && (
+                <button
+                  type="button"
+                  onClick={handleContinue}
+                  disabled={
+                    streaming ||
+                    waitingForResponse ||
+                    turnSelectionResult?.nextSpeakerId !== null
+                  }
+                  className="w-11 h-11 flex items-center justify-center border border-border bg-info text-info-foreground rounded-lg hover:bg-info/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors"
+                  title={
+                    turnSelectionResult?.nextSpeakerId !== null
+                      ? "It's not your turn"
+                      : "Pass turn to next character"
+                  }
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+              )}
               {/* Toggle Preview button */}
               <button
                 type="button"

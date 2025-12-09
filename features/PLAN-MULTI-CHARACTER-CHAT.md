@@ -18,6 +18,10 @@ This plan covers the implementation of full multi-character chat support for Qui
 | Continue Mode API | ✅ COMPLETE (Phase 5) |
 | Add Character Dialog | ✅ COMPLETE (Phase 6) |
 | Multi-Character Context Building | ✅ COMPLETE (Phase 3) |
+| Multi-Character New Chat Page | ✅ COMPLETE (Phase 7) |
+| Continue Button for Passing Turns | ✅ COMPLETE (Phase 7) |
+| Edge Case Handling | ✅ COMPLETE (Phase 7) |
+| Debug Logging | ✅ COMPLETE (Phase 7) |
 
 ---
 
