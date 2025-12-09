@@ -97,7 +97,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
     <>
       {/* Overlay */}
       <button
-        className="fixed inset-0 bg-black bg-opacity-50 z-40 cursor-default border-none p-0"
+        className="qt-dialog-overlay !p-0 cursor-default border-none z-40"
         onClick={handleClose}
         aria-label="Close dialog"
         type="button"
@@ -105,11 +105,11 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
 
       {/* Dialog */}
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
-        <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
+        <div className="qt-dialog max-w-md">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-border">
+          <div className="qt-dialog-header">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-foreground">Create Backup</h2>
+              <h2 className="qt-dialog-title">Create Backup</h2>
               <button
                 onClick={handleClose}
                 className="text-muted-foreground hover:text-foreground"
@@ -120,13 +120,13 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                 </svg>
               </button>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="qt-dialog-description">
               Back up your data to restore it later
             </p>
           </div>
 
           {/* Body */}
-          <div className="px-6 py-6 space-y-6">
+          <div className="qt-dialog-body space-y-6">
             {/* Destination Selection */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-3">
@@ -196,7 +196,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                   value={filename}
                   onChange={(e) => setFilename(e.target.value)}
                   placeholder="backup-2025-12-07"
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="qt-input"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
                   Leave empty to use default name with timestamp
@@ -213,18 +213,18 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 bg-muted border-t border-border flex gap-3 justify-end">
+          <div className="qt-dialog-footer">
             <button
               onClick={handleClose}
               disabled={loading}
-              className="px-4 py-2 border border-input rounded-lg text-sm font-medium text-foreground bg-background hover:bg-accent transition-colors disabled:opacity-50"
+              className="qt-button-secondary"
             >
               Cancel
             </button>
             <button
               onClick={handleCreateBackup}
               disabled={loading}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="qt-button-primary flex items-center gap-2"
             >
               {loading && (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

@@ -37,7 +37,7 @@ export function showAlert(message: string, buttons?: string[]): Promise<string |
     overlayRoot.render(
       <button
         type="button"
-        className="fixed inset-0 bg-black opacity-50 z-[100] cursor-default border-none p-0"
+        className="qt-dialog-overlay !p-0 cursor-default border-none z-[100]"
         onClick={() => handleClose()}
         aria-label="Close dialog"
       />

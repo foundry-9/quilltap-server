@@ -236,7 +236,7 @@ export default function EmbeddingProfilesTab() {
 
       {/* Error Alert */}
       {error && (
-        <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded">
+        <div className="qt-alert-error">
           {error}
         </div>
       )}
@@ -249,7 +249,7 @@ export default function EmbeddingProfilesTab() {
           </h3>
 
           {formError && (
-            <div className="mb-4 bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded">
+            <div className="mb-4 qt-alert-error">
               {formError}
             </div>
           )}
@@ -264,7 +264,7 @@ export default function EmbeddingProfilesTab() {
                 type="text"
                 value={formData.name}
                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-input"
                 placeholder="My OpenAI Embeddings"
                 required
               />
@@ -278,7 +278,7 @@ export default function EmbeddingProfilesTab() {
               <select
                 value={formData.provider}
                 onChange={e => setFormData(prev => ({ ...prev, provider: e.target.value as 'OPENAI' | 'OLLAMA', apiKeyId: '', modelName: '', dimensions: '' }))}
-                className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-select"
               >
                 <option value="OPENAI">OpenAI</option>
                 <option value="OLLAMA">Ollama (Local)</option>
@@ -294,7 +294,7 @@ export default function EmbeddingProfilesTab() {
                 <select
                   value={formData.apiKeyId}
                   onChange={e => setFormData(prev => ({ ...prev, apiKeyId: e.target.value }))}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="qt-select"
                 >
                   <option value="">Select API Key...</option>
                   {filteredApiKeys.map(key => (
@@ -321,7 +321,7 @@ export default function EmbeddingProfilesTab() {
                   type="text"
                   value={formData.baseUrl}
                   onChange={e => setFormData(prev => ({ ...prev, baseUrl: e.target.value }))}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="qt-input"
                   placeholder="http://localhost:11434"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -340,7 +340,7 @@ export default function EmbeddingProfilesTab() {
                   <select
                     value={formData.modelName}
                     onChange={e => handleModelSelect(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="qt-select"
                   >
                     <option value="">Select a model...</option>
                     {currentModels.map(model => (
@@ -360,7 +360,7 @@ export default function EmbeddingProfilesTab() {
                   type="text"
                   value={formData.modelName}
                   onChange={e => setFormData(prev => ({ ...prev, modelName: e.target.value }))}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="qt-input"
                   placeholder="text-embedding-3-small"
                   required
                 />
@@ -376,7 +376,7 @@ export default function EmbeddingProfilesTab() {
                 type="number"
                 value={formData.dimensions}
                 onChange={e => setFormData(prev => ({ ...prev, dimensions: e.target.value }))}
-                className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-input"
                 placeholder="1536"
                 min="1"
               />

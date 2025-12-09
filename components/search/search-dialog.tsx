@@ -138,7 +138,7 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
     <>
       {/* Backdrop */}
       <button
-        className="fixed inset-0 bg-black bg-opacity-50 z-[100] cursor-default"
+        className="qt-dialog-overlay !p-0 cursor-default z-[100]"
         onClick={onClose}
         aria-label="Close search"
         type="button"

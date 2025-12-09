@@ -325,17 +325,17 @@ Example theme override pattern:
 | 4. Content | Complete | 4 files | Tags, avatar selector, surfaces |
 | Footer | Complete | 3 files | Footer wrapper, layout, variables |
 | Auth/Splash | Complete | 7 files | Auth pages, splash, alerts |
-| 5. Core Dialogs | **Pending** | 3 files | High priority |
-| 6. Image Dialogs | Pending | 6 files | High priority |
-| 7. Chat Dialogs | Pending | 7 files | Medium priority |
-| 8. Memory/Import | Pending | 4 files | Medium priority |
-| 9. Tools/Settings | Pending | 4 files | Medium priority |
-| 10. Form Pages | Pending | 8 files | Medium priority |
-| 11. Cards/Lists | Pending | 5 files | Low priority |
-| 12. Badges | Pending | 5 files | Low priority |
-| 13. Debug | Pending | 4 files | Low priority |
-| 14. Nav Cleanup | Pending | 1 file | Low priority |
-| 15. Theme Plugins | Pending | 3 files | After components |
+| 5. Core Dialogs | Complete | 3 files | alert-dialog, character-delete-dialog, lib/alert |
+| 6. Image Dialogs | Complete | 6 files | All image dialogs migrated |
+| 7. Chat Dialogs | Complete | 7 files | All chat dialogs migrated |
+| 8. Memory/Import | Complete | 4 files | All memory/import dialogs migrated |
+| 9. Tools/Settings | Complete | 4 files | backup, restore, search, physical-description-editor |
+| 10. Form Pages | Complete | 8 files | All form pages and settings tabs |
+| 11. Cards/Lists | Complete | 5 files | recent-chats, memory-card, physical-descriptions, backup-restore |
+| 12. Badges | Complete | 5 files | Entity-type badges added to CSS, components migrated |
+| 13. Debug | Complete | 4 files | All debug components migrated |
+| 14. Nav Cleanup | Complete | 1 file | Remaining nav buttons migrated |
+| 15. Theme Plugins | Complete | 3 files | Rains, Ocean, Earl Grey themes updated |
 
 ---
 
@@ -345,12 +345,23 @@ Example theme override pattern:
 2. `8c7da8c` - feat: Migrate content components to qt-* semantic classes (Phase 4)
 3. `a1e18fa` - feat: Migrate footer to qt-* semantic classes
 4. `5d1c78c` - feat: Migrate splash and auth pages to qt-* semantic classes
+5. `7edc82d` - feat: Migrate chat dialogs to qt-* semantic classes (Phase 7)
 
 ---
 
-## Next Steps
+## Migration Complete
 
-1. Start with **Phase 5: Core Dialogs** - these are foundational components
-2. Migrate `alert-dialog.tsx` first as a template for other dialogs
-3. Ensure build passes after each file migration
-4. Commit in logical groups (e.g., all image dialogs together)
+All phases of the qt-* semantic class migration have been completed. The codebase now uses:
+
+- **Semantic dialog classes**: `qt-dialog-*` for overlays, containers, headers, bodies, footers
+- **Semantic button classes**: `qt-button-primary`, `qt-button-secondary`, `qt-button-ghost`, `qt-button-destructive`, `qt-button-icon`
+- **Semantic input classes**: `qt-input`, `qt-textarea`, `qt-select`
+- **Semantic card classes**: `qt-card`, `qt-card-interactive`
+- **Semantic alert classes**: `qt-alert-success`, `qt-alert-warning`, `qt-alert-error`, `qt-alert-info`
+- **Entity-type badge classes**: `qt-badge-character`, `qt-badge-persona`, `qt-badge-chat`, `qt-badge-tag`, `qt-badge-memory`
+- **Status badge classes**: `qt-badge-enabled`, `qt-badge-disabled`, `qt-badge-related`, `qt-badge-manual`, `qt-badge-auto`
+- **Plugin source badges**: `qt-badge-source-included`, `qt-badge-source-npm`, `qt-badge-source-git`, `qt-badge-source-manual`
+- **Utility badges**: `qt-badge-capability`, `qt-badge-version`
+- **Form label classes**: `qt-label`, `qt-hint`
+
+Theme plugins (Rains, Ocean, Earl Grey) have been updated with qt-* variable overrides to leverage the new semantic system.

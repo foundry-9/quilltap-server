@@ -161,7 +161,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
             {devConsole && (
               <button
                 onClick={devConsole.togglePanel}
-                className={`p-2 rounded-md transition-colors ${
+                className={`qt-button-icon ${
                   devConsole.isOpen
                     ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
                     : 'text-muted-foreground hover:bg-muted'
@@ -186,7 +186,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 type="button"
                 onClick={() => toggleTag(quickHideTags[0].id)}
                 aria-pressed={hiddenTagIds.has(quickHideTags[0].id)}
-                className={`rounded-full border px-1 py-0.5 transition-all ${
+                className={`qt-button-ghost rounded-full border px-1 py-0.5 ${
                   hiddenTagIds.has(quickHideTags[0].id)
                     ? 'border-primary bg-blue-50 ring-2 ring-ring dark:bg-blue-900/40'
                     : 'border-border bg-background hover:border-primary'
@@ -202,7 +202,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 <button
                   type="button"
                   onClick={handleEyeClick}
-                  className={`p-2 rounded-md transition-colors ${
+                  className={`qt-button-icon ${
                     hasAnyHidden
                       ? 'text-primary bg-primary/10'
                       : 'text-muted-foreground hover:bg-muted'
@@ -276,7 +276,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
             <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-muted transition-colors"
+                className="qt-navbar-button"
                 aria-label="User menu"
                 aria-expanded={userMenuOpen}
               >
@@ -324,7 +324,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                     {/* Sign Out Button */}
                     <button
                       onClick={() => signOut({ callbackUrl: "/" })}
-                      className="w-full rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                      className="w-full qt-button-destructive"
                     >
                       Sign Out
                     </button>

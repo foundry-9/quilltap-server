@@ -262,7 +262,8 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const modal = container.querySelector('.fixed.inset-0');
+      // Look for qt-dialog-overlay (semantic class) or the dialog container
+      const modal = container.querySelector('.qt-dialog-overlay') || container.querySelector('.qt-dialog');
       expect(modal).toBeInTheDocument();
     });
 

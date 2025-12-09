@@ -21,7 +21,7 @@ function CopyButton({ content }: Readonly<{ content: string }>) {
   return (
     <button
       onClick={handleCopy}
-      className={`px-2 py-1 text-xs rounded transition-colors whitespace-nowrap cursor-pointer ${copied ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'}`}
+      className={`qt-button-sm ${copied ? 'qt-button-primary' : 'qt-button-secondary'}`}
       title={copied ? 'Copied!' : 'Copy to clipboard'}
     >
       {copied ? '✓ Copied' : '📋 Copy'}
@@ -573,7 +573,7 @@ export default function DebugPanel() {
         </div>
         <button
           onClick={clearEntries}
-          className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded"
+          className="qt-button-ghost qt-button-sm"
           title="Clear all entries"
         >
           Clear

@@ -289,11 +289,11 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
         <div
-          className="bg-background border border-border rounded-lg flex flex-col max-h-[90vh] max-w-[90vw]"
+          className="qt-dialog flex flex-col max-h-[90vh] max-w-[90vw]"
           style={{ minWidth: '300px' }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="qt-dialog-header border-b border-border">
             <h2 className="text-lg font-semibold text-foreground">{title}</h2>
             <div className="flex items-center gap-2">
               <button

@@ -29,22 +29,22 @@ const getSourceBadge = (source: PluginSource) => {
     case 'included':
       return {
         label: 'Included',
-        className: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
+        className: 'qt-badge-source-included',
       }
     case 'npm':
       return {
         label: 'NPM',
-        className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+        className: 'qt-badge-source-npm',
       }
     case 'git':
       return {
         label: 'Git',
-        className: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+        className: 'qt-badge-source-git',
       }
     case 'manual':
       return {
         label: 'Manual',
-        className: 'bg-muted text-muted-foreground',
+        className: 'qt-badge-source-manual',
       }
   }
 }
@@ -211,11 +211,11 @@ export default function PluginsTab() {
                         {getSourceBadge(plugin.source).label}
                       </span>
                       {plugin.enabled ? (
-                        <span className="px-2 py-0.5 text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                        <span className="px-2 py-0.5 text-xs font-medium rounded qt-badge-enabled">
                           Enabled
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded">
+                        <span className="px-2 py-0.5 text-xs font-medium rounded qt-badge-disabled">
                           Disabled
                         </span>
                       )}
@@ -228,7 +228,7 @@ export default function PluginsTab() {
                         {plugin.capabilities.map((cap) => (
                           <span
                             key={cap}
-                            className="px-2 py-0.5 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded"
+                            className="px-2 py-0.5 text-xs rounded qt-badge-capability"
                           >
                             {cap}
                           </span>

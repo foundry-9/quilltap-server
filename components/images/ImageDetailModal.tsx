@@ -329,7 +329,7 @@ export default function ImageDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       {/* Navigation buttons - left and right sides */}
@@ -423,7 +423,7 @@ export default function ImageDetailModal({
 
         {/* Tag buttons panel */}
         {!imageMissing && (
-        <div className="bg-black/70 backdrop-blur-sm rounded-lg p-6 w-full max-w-2xl">
+        <div className="qt-panel bg-black/70 backdrop-blur-sm w-full max-w-2xl">
           <div className="flex flex-col gap-4">
             {/* Character tags */}
             {!loadingEntities && characters.length > 0 && (

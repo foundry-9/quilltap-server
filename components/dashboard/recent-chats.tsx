@@ -199,7 +199,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
               <Link
                 key={chat.id}
                 href={`/chats/${chat.id}`}
-                className="block rounded-lg border border-border bg-card p-4 shadow-sm hover:border-primary transition-colors"
+                className="block qt-card-interactive"
               >
                 <div className="flex items-stretch justify-between gap-3">
                   <div className="flex items-stretch gap-4 flex-grow">
@@ -209,7 +209,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
                         <h4 className="font-semibold text-foreground truncate">
                           {chat.title}
                         </h4>
-                        <span className="inline-block bg-primary/10 text-primary text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0">
+                        <span className="inline-block text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0 qt-badge-primary">
                           {chat.messageCount}
                         </span>
                       </div>
@@ -233,7 +233,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
           })}
         </div>
       ) : (
-        <div className="rounded-lg border border-border bg-card p-8 text-center shadow-sm">
+        <div className="qt-card p-8 text-center">
           <p className="text-muted-foreground">
             No chats yet. Create a character and start your first conversation!
           </p>

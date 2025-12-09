@@ -101,7 +101,7 @@ export function ImageProfilePicker({
 
       {/* Show selected profile details */}
       {value && profiles.length > 0 && (
-        <div className="mt-3 p-3 bg-blue-50 dark:bg-slate-700 rounded-md border border-blue-200 dark:border-slate-600">
+        <div className="mt-3 p-3 rounded-md border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
           {(() => {
             const selected = profiles.find(p => p.id === value)
             if (!selected) return null

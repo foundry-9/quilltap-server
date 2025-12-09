@@ -529,7 +529,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
     <>
       {/* Overlay */}
       <button
-        className="fixed inset-0 bg-black bg-opacity-50 z-40 cursor-default border-none p-0"
+        className="qt-dialog-overlay !p-0 cursor-default border-none z-40"
         onClick={handleClose}
         disabled={restoring}
         aria-label="Close dialog"
@@ -538,13 +538,13 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
 
       {/* Dialog */}
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto w-[90vw] max-w-2xl">
-        <div className="bg-background rounded-lg shadow-xl w-full max-h-[90vh] flex flex-col">
+        <div className="qt-dialog w-full max-h-[90vh] flex flex-col">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-border flex-shrink-0">
+          <div className="qt-dialog-header flex-shrink-0">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-foreground">Restore Backup</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <h2 className="qt-dialog-title">Restore Backup</h2>
+                <p className="qt-dialog-description mt-0.5">
                   Step {step === 'source' ? 1 : step === 'preview' ? 2 : step === 'mode' ? 3 : 4} of 4
                 </p>
               </div>
@@ -562,7 +562,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
           </div>
 
           {/* Body */}
-          <div className="px-6 py-6 overflow-y-auto flex-1">
+          <div className="qt-dialog-body overflow-y-auto flex-1">
             {step === 'source' && renderSourceSelection()}
             {step === 'preview' && renderPreview()}
             {step === 'mode' && renderModeSelection()}
@@ -570,11 +570,11 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 bg-muted border-t border-border flex gap-3 justify-between flex-shrink-0">
+          <div className="qt-dialog-footer flex gap-3 justify-between flex-shrink-0">
             {step === 'progress' && restoreSummary ? (
               <button
                 onClick={handleCloseAfterRestore}
-                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+                className="flex-1 qt-button-primary"
               >
                 Close
               </button>
@@ -583,7 +583,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                 <button
                   onClick={handleBack}
                   disabled={step === 'source' || restoring}
-                  className="px-4 py-2 border border-input rounded-lg text-sm font-medium text-foreground bg-background hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="qt-button-secondary"
                 >
                   Back
                 </button>
@@ -593,7 +593,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                     <button
                       onClick={handleClose}
                       disabled={restoring}
-                      className="px-4 py-2 border border-input rounded-lg text-sm font-medium text-foreground bg-background hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="qt-button-secondary"
                     >
                       Cancel
                     </button>
@@ -602,7 +602,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                       <button
                         onClick={handleStartRestore}
                         disabled={restoring || (restoreMode === 'replace' && !confirmReplace)}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="qt-button-primary flex items-center gap-2"
                       >
                         {restoring ? (
                           <>
@@ -623,7 +623,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                           loadingPreview ||
                           (step === 'source' && !selectedFile && !selectedS3Key)
                         }
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="qt-button-primary flex items-center gap-2"
                       >
                         {loadingPreview ? (
                           <>

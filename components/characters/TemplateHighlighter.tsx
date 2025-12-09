@@ -93,7 +93,7 @@ export function TemplateHighlighter({
         parts.push(
           <span
             key={`char-${index}`}
-            className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 px-0.5 rounded border-b-2 border-blue-400 dark:border-blue-600"
+            className="px-0.5 rounded border-b-2 qt-badge-chat border-blue-400 dark:border-blue-600"
             title={`Could be replaced with {{char}}`}
           >
             {matchedText}
@@ -103,7 +103,7 @@ export function TemplateHighlighter({
         parts.push(
           <span
             key={`user-${index}`}
-            className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200 px-0.5 rounded border-b-2 border-green-400 dark:border-green-600"
+            className="px-0.5 rounded border-b-2 qt-badge-persona border-green-400 dark:border-green-600"
             title={`Could be replaced with {{user}}`}
           >
             {matchedText}

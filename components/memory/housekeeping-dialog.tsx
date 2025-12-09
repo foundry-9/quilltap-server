@@ -102,12 +102,12 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
   ) || {}
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="qt-dialog-overlay p-4">
+      <div className="qt-dialog max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="p-6 border-b border-border">
+        <div className="qt-dialog-header">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">
+            <h2 className="qt-dialog-title">
               Memory Cleanup
             </h2>
             <button
@@ -119,13 +119,13 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
               </svg>
             </button>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="qt-dialog-description">
             Clean up old and low-importance memories to stay within limits.
           </p>
         </div>
 
         {/* Options */}
-        <div className="p-6 border-b border-border space-y-4">
+        <div className="qt-dialog-body border-b border-border space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
@@ -137,7 +137,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 onChange={(e) => setMaxMemories(parseInt(e.target.value) || 1000)}
                 min={10}
                 max={10000}
-                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-input"
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Hard cap on total memories
@@ -154,7 +154,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 onChange={(e) => setMaxAgeMonths(parseInt(e.target.value) || 6)}
                 min={1}
                 max={120}
-                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-input"
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Delete old low-importance memories
@@ -269,21 +269,21 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-border flex gap-3">
+        <div className="qt-dialog-footer">
+          <button
+            type="button"
+            onClick={onClose}
+            className="qt-button-secondary"
+          >
+            Cancel
+          </button>
           <button
             type="button"
             onClick={handleRun}
             disabled={running || loading || !preview || (preview.wouldDelete === 0 && preview.wouldMerge === 0)}
-            className="flex-1 px-4 py-2 bg-destructive text-white rounded-lg hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+            className="qt-button-destructive"
           >
             {running ? 'Running...' : `Delete ${preview?.wouldDelete || 0} Memories`}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-accent font-medium transition-colors"
-          >
-            Cancel
           </button>
         </div>
       </div>

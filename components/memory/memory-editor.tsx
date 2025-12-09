@@ -100,11 +100,11 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
       : 'Low'
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-foreground">
+    <div className="qt-dialog-overlay p-4">
+      <div className="qt-dialog max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="qt-dialog-header">
+          <div className="flex items-center justify-between">
+            <h2 className="qt-dialog-title">
               {isEditing ? 'Edit Memory' : 'Add Memory'}
             </h2>
             <button
@@ -116,6 +116,9 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
               </svg>
             </button>
           </div>
+        </div>
+
+        <div className="qt-dialog-body">
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -130,7 +133,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 onChange={handleChange}
                 required
                 placeholder="Brief summary of this memory"
-                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-input"
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 A short description that will be shown in lists and used for context injection.
@@ -149,7 +152,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 required
                 rows={6}
                 placeholder="The complete memory content..."
-                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-textarea"
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 The full details of what this character should remember.
@@ -167,7 +170,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 value={formData.keywords}
                 onChange={handleChange}
                 placeholder="keyword1, keyword2, keyword3"
-                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-input"
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Comma-separated keywords for text-based search.
@@ -201,18 +204,18 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
 
             <div className="flex gap-3 pt-4">
               <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground font-medium"
-              >
-                {saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Memory'}
-              </button>
-              <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-accent font-medium"
+                className="qt-button-secondary"
               >
                 Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="qt-button-primary"
+              >
+                {saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Memory'}
               </button>
             </div>
           </form>

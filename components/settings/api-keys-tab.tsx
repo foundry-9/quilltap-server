@@ -124,7 +124,7 @@ export default function ApiKeysTab() {
   return (
     <div>
       {error && (
-        <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded mb-4">
+        <div className="qt-alert-error mb-4">
           {error}
         </div>
       )}
@@ -212,7 +212,7 @@ export default function ApiKeysTab() {
                 onChange={handleChange}
                 placeholder="e.g., My OpenAI Key"
                 required
-                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-input"
               />
               <p className="text-xs text-muted-foreground mt-1">A friendly name to identify this key</p>
             </div>
@@ -226,7 +226,7 @@ export default function ApiKeysTab() {
                 name="provider"
                 value={formData.provider}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-select"
               >
                 <option value="OPENAI">OpenAI</option>
                 <option value="ANTHROPIC">Anthropic</option>
@@ -251,7 +251,7 @@ export default function ApiKeysTab() {
                 onChange={handleChange}
                 placeholder="Your API key (will be encrypted)"
                 required
-                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-input"
               />
               <p className="text-xs text-muted-foreground mt-1">Your key is encrypted and never exposed</p>
             </div>
@@ -260,14 +260,14 @@ export default function ApiKeysTab() {
               <button
                 type="submit"
                 disabled={formLoading}
-                className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
+                className="px-6 py-2 qt-button-primary"
               >
                 {formLoading ? 'Creating...' : 'Create API Key'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-6 py-2 bg-muted text-foreground rounded-lg hover:bg-accent"
+                className="px-6 py-2 qt-button-secondary"
               >
                 Cancel
               </button>

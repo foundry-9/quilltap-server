@@ -633,13 +633,13 @@ export default function ConnectionProfilesTab() {
   return (
     <div>
       {error && (
-        <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded mb-4">
+        <div className="qt-alert-error mb-4">
           {error}
         </div>
       )}
 
       {apiKeys.length === 0 && (
-        <div className="bg-yellow-50/50 border border-yellow-200/70 text-yellow-700 px-4 py-3 rounded mb-6">
+        <div className="qt-alert-warning mb-6">
           <p className="font-medium">No API keys found</p>
           <p className="text-sm">Add an API key in the &quot;API Keys&quot; tab before creating a connection profile.</p>
         </div>
@@ -800,7 +800,7 @@ export default function ConnectionProfilesTab() {
                   onChange={handleChange}
                   placeholder="e.g., My GPT-4 Profile"
                   required
-                  className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="qt-input"
                 />
               </div>
 
@@ -813,7 +813,7 @@ export default function ConnectionProfilesTab() {
                   name="provider"
                   value={formData.provider}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="qt-select"
                 >
                   {providers.length > 0 ? (
                     providers
@@ -860,7 +860,7 @@ export default function ConnectionProfilesTab() {
                         name="apiKeyId"
                         value={formData.apiKeyId}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="qt-select"
                       >
                         <option value="">Select an API Key</option>
                         {apiKeys
@@ -887,7 +887,7 @@ export default function ConnectionProfilesTab() {
                         value={formData.baseUrl}
                         onChange={handleChange}
                         placeholder="http://localhost:11434"
-                        className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="qt-input"
                       />
                       <p className="text-xs text-muted-foreground mt-1">Required for this provider</p>
                     </div>
@@ -986,7 +986,7 @@ export default function ConnectionProfilesTab() {
                     placeholder="e.g., gpt-4"
                     list="modelSuggestions"
                     required
-                    className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="qt-input"
                   />
                   <datalist id="modelSuggestions">
                     {getModelSuggestions(formData.provider).map(model => (
@@ -1030,7 +1030,7 @@ export default function ConnectionProfilesTab() {
                     onChange={handleChange}
                     min="1"
                     max="4000"
-                    className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="qt-input"
                   />
                 </div>
 

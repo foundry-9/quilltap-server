@@ -122,14 +122,14 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
 
       {/* Upload/Import Dialog */}
       {!showGeneration && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={handleClose}>
+        <div className="qt-dialog-overlay" onClick={handleClose}>
           <div
-            className="bg-background rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden"
+            className="qt-dialog max-w-md mx-4"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="px-6 py-4 border-b border-border">
-              <h2 className="text-xl font-semibold text-foreground">Import Image</h2>
+            <div className="qt-dialog-header">
+              <h2 className="qt-dialog-title">Import Image</h2>
             </div>
 
             {/* Body */}
@@ -218,26 +218,26 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
 
                 {/* Error */}
                 {error && (
-                  <div className="bg-destructive/10 border border-destructive rounded-md p-3">
-                    <p className="text-sm text-destructive">{error}</p>
+                  <div className="qt-alert-error">
+                    <p className="text-sm">{error}</p>
                   </div>
                 )}
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 bg-muted border-t border-border flex justify-end space-x-3">
+              <div className="qt-dialog-footer">
                 <button
                   type="button"
                   onClick={handleClose}
                   disabled={uploading}
-                  className="px-4 py-2 text-sm font-medium text-foreground bg-background border border-input rounded-md hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  className="qt-button-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={uploading || (uploadMode === 'file' && !selectedFile) || (uploadMode === 'url' && !imageUrl)}
-                  className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="qt-button-primary"
                 >
                   {uploading ? 'Uploading...' : uploadMode === 'file' ? 'Upload' : 'Import'}
                 </button>

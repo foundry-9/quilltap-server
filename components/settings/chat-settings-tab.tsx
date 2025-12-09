@@ -243,13 +243,13 @@ export default function ChatSettingsTab() {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-4 text-red-800 dark:text-red-200">
+        <div className="qt-alert-error">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-4 text-green-800 dark:text-green-200">
+        <div className="qt-alert-success">
           Settings saved successfully
         </div>
       )}
@@ -371,7 +371,7 @@ export default function ChatSettingsTab() {
                 value={settings?.cheapLLMSettings.userDefinedProfileId || ''}
                 onChange={(e) => handleCheapLLMUpdate({ userDefinedProfileId: e.target.value || null })}
                 disabled={saving || loadingProfiles}
-                className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-select"
               >
                 <option value="">Select a profile...</option>
                 {connectionProfiles.map((profile) => (
@@ -400,7 +400,7 @@ export default function ChatSettingsTab() {
               value={settings?.cheapLLMSettings.defaultCheapProfileId || ''}
               onChange={(e) => handleCheapLLMUpdate({ defaultCheapProfileId: e.target.value || null })}
               disabled={saving || loadingProfiles}
-              className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-select"
             >
               <option value="">Not set</option>
               {connectionProfiles.map((profile) => (
@@ -475,7 +475,7 @@ export default function ChatSettingsTab() {
               value={settings?.cheapLLMSettings.embeddingProfileId || ''}
               onChange={(e) => handleCheapLLMUpdate({ embeddingProfileId: e.target.value || null })}
               disabled={saving}
-              className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-select"
             >
               <option value="">Use default for provider</option>
               {embeddingProfiles.map((profile) => (
@@ -532,7 +532,7 @@ export default function ChatSettingsTab() {
                 }
               }}
               disabled={saving || loadingProfiles}
-              className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-select"
             >
               <option value="">Auto-select vision-capable profile</option>
               {connectionProfiles

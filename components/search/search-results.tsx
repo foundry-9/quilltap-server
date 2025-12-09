@@ -50,7 +50,7 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
               {result.name}
             </span>
             {result.isFavorite && <span className="text-yellow-500">★</span>}
-            <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">
+            <span className="text-xs px-1.5 py-0.5 rounded qt-badge-character">
               {TYPE_LABELS.characters}
             </span>
           </div>
@@ -60,7 +60,7 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
             {result.matchedTag ? (
               <span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs mr-1">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-tag">
                   🏷️ {result.matchedTag.name}
                 </span>
                 {result.snippet.replace(`Tagged with "${result.matchedTag.name}"`, '').replace(/^[:\s-]+/, '')}
@@ -103,7 +103,7 @@ function PersonaResultCard({ result, query, onResultClick }: { result: PersonaSe
             <span className="font-medium text-foreground truncate">
               {result.name}
             </span>
-            <span className="text-xs px-1.5 py-0.5 bg-green-100 text-green-700 rounded">
+            <span className="text-xs px-1.5 py-0.5 rounded qt-badge-persona">
               {TYPE_LABELS.personas}
             </span>
           </div>
@@ -113,7 +113,7 @@ function PersonaResultCard({ result, query, onResultClick }: { result: PersonaSe
           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
             {result.matchedTag ? (
               <span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs mr-1">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-tag">
                   🏷️ {result.matchedTag.name}
                 </span>
                 {result.snippet.replace(`Tagged with "${result.matchedTag.name}"`, '').replace(/^[:\s-]+/, '')}
@@ -149,11 +149,11 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
             <span className="font-medium text-foreground truncate">
               {result.name}
             </span>
-            <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">
+            <span className="text-xs px-1.5 py-0.5 rounded qt-badge-chat">
               {TYPE_LABELS.chats}
             </span>
             {isRelatedResult && (
-              <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">
+              <span className="text-xs px-1.5 py-0.5 rounded qt-badge-related">
                 Related
               </span>
             )}
@@ -169,21 +169,21 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
             {result.matchedTag ? (
               <span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs mr-1">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-tag">
                   🏷️ {result.matchedTag.name}
                 </span>
                 {result.snippet.replace(`Tagged with "${result.matchedTag.name}"`, '').replace(/^[:\s-]+/, '')}
               </span>
             ) : result.matchedViaCharacter ? (
               <span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs mr-1">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-character">
                   🎭 {result.matchedViaCharacter.name}
                 </span>
                 Chat includes matching character
               </span>
             ) : result.matchedViaPersona ? (
               <span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs mr-1">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-persona">
                   👤 {result.matchedViaPersona.name}
                 </span>
                 Chat includes matching persona
@@ -219,7 +219,7 @@ function TagResultCard({ result, query, onResultClick }: { result: TagSearchResu
             <span className="font-medium text-foreground">
               <HighlightedText text={result.name} query={query} />
             </span>
-            <span className="text-xs px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded">
+            <span className="text-xs px-1.5 py-0.5 rounded qt-badge-tag">
               {TYPE_LABELS.tags}
             </span>
             {result.quickHide && (
@@ -256,13 +256,13 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
             <span className="font-medium text-foreground truncate">
               {result.name}
             </span>
-            <span className="text-xs px-1.5 py-0.5 bg-pink-100 text-pink-700 rounded">
+            <span className="text-xs px-1.5 py-0.5 rounded qt-badge-memory">
               {TYPE_LABELS.memories}
             </span>
             <span className={`text-xs px-1.5 py-0.5 rounded ${
               result.source === 'MANUAL'
-                ? 'bg-purple-100 text-purple-700'
-                : 'bg-muted text-muted-foreground'
+                ? 'qt-badge-manual'
+                : 'qt-badge-auto'
             }`}>
               {result.source === 'MANUAL' ? 'Manual' : 'Auto'}
             </span>
@@ -275,7 +275,7 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
             {result.matchedTag ? (
               <span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs mr-1">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-tag">
                   🏷️ {result.matchedTag.name}
                 </span>
                 {result.snippet.replace(`Tagged with "${result.matchedTag.name}"`, '').replace(/^[:\s-]+/, '')}

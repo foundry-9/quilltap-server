@@ -53,7 +53,7 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
   }
 
   return (
-    <div className="bg-card border border-border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+    <div className="qt-card">
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">

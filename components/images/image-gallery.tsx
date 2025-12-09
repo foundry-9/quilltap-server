@@ -129,10 +129,10 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
       {images.map((image) => (
         <div
           key={image.id}
-          className={`relative group rounded-lg overflow-hidden border-2 transition-all ${
+          className={`qt-card relative group overflow-hidden transition-all p-0 ${
             selectedImageId === image.id
-              ? 'border-primary ring-2 ring-primary ring-opacity-50'
-              : 'border-border hover:border-accent'
+              ? 'ring-2 ring-primary'
+              : ''
           } ${onSelectImage ? 'cursor-pointer' : ''}`}
           onClick={() => onSelectImage?.(image)}
         >

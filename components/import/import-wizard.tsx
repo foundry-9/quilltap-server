@@ -231,7 +231,7 @@ export function ImportWizard({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-border rounded-md text-sm font-medium text-foreground bg-background hover:bg-accent"
+                className="qt-button-secondary"
               >
                 Cancel
               </button>
@@ -239,7 +239,7 @@ export function ImportWizard({
                 type="button"
                 onClick={handleAnalyze}
                 disabled={!selectedFile}
-                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="qt-button-primary"
               >
                 Analyze File
               </button>
@@ -290,7 +290,7 @@ export function ImportWizard({
                   setParseResult(null)
                   setMappings([])
                 }}
-                className="px-4 py-2 border border-border rounded-md text-sm font-medium text-foreground bg-background hover:bg-accent"
+                className="qt-button-secondary"
               >
                 Back
               </button>
@@ -298,7 +298,7 @@ export function ImportWizard({
                 type="button"
                 onClick={handleImport}
                 disabled={!defaultProfileId || mappings.length === 0}
-                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="qt-button-primary"
               >
                 Import Chat
               </button>
@@ -338,7 +338,7 @@ export function ImportWizard({
               <button
                 type="button"
                 onClick={() => setShowMemoryDialog(true)}
-                className="px-4 py-2 border border-border rounded-md text-sm font-medium text-foreground bg-background hover:bg-accent"
+                className="qt-button-secondary"
               >
                 Create Memories...
               </button>
@@ -350,7 +350,7 @@ export function ImportWizard({
                   }
                   onClose()
                 }}
-                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90"
+                className="qt-button-primary"
               >
                 Done
               </button>
@@ -362,9 +362,9 @@ export function ImportWizard({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <div className="bg-background rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <h3 className="text-lg font-medium text-foreground mb-4">
+      <div className="qt-dialog-overlay p-4">
+        <div className="qt-dialog max-w-2xl max-h-[90vh] overflow-y-auto">
+          <h3 className="qt-dialog-title mb-4">
             Import SillyTavern Chat
           </h3>
 

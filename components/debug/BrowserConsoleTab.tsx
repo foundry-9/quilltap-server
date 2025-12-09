@@ -193,19 +193,19 @@ export default function BrowserConsoleTab() {
             {filteredLogs.length}{filteredLogs.length !== consoleLogs.length ? `/${consoleLogs.length}` : ''} entries
           </span>
           {counts.error && (
-            <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-700 rounded">
+            <span className="qt-badge-destructive">
               {counts.error} errors
             </span>
           )}
           {counts.warn && (
-            <span className="text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded">
+            <span className="qt-badge-warning">
               {counts.warn} warnings
             </span>
           )}
         </div>
         <button
           onClick={clearConsoleLogs}
-          className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded"
+          className="qt-button-ghost qt-button-sm"
         >
           Clear
         </button>
@@ -217,7 +217,7 @@ export default function BrowserConsoleTab() {
         {!autoScroll && filteredLogs.length > 0 && (
           <button
             onClick={scrollToTop}
-            className="absolute top-2 right-2 z-10 p-1.5 bg-card border border-border rounded-md shadow-md hover:bg-accent transition-colors"
+            className="absolute top-2 right-2 z-10 qt-button-icon border border-border shadow-md"
             title="Scroll to top"
           >
             <svg className="w-4 h-4 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -230,7 +230,7 @@ export default function BrowserConsoleTab() {
         {!autoScroll && filteredLogs.length > 0 && (
           <button
             onClick={scrollToBottom}
-            className="absolute bottom-2 right-2 z-10 p-1.5 bg-card border border-border rounded-md shadow-md hover:bg-accent transition-colors flex items-center gap-1"
+            className="absolute bottom-2 right-2 z-10 qt-button-icon border border-border shadow-md flex items-center gap-1"
             title="Scroll to bottom and enable auto-scroll"
           >
             <svg className="w-4 h-4 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,7 +242,7 @@ export default function BrowserConsoleTab() {
 
         {/* Auto-scroll indicator when enabled */}
         {autoScroll && filteredLogs.length > 0 && (
-          <div className="absolute bottom-2 right-2 z-10 px-2 py-1 bg-green-100 border border-green-300 rounded-md text-xs text-green-700">
+          <div className="absolute bottom-2 right-2 z-10 px-2 py-1 qt-alert-success">
             Auto-scroll
           </div>
         )}
@@ -287,7 +287,7 @@ export default function BrowserConsoleTab() {
             onClick={() => toggleLevel('error')}
             className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
               enabledLevels.has('error')
-                ? 'bg-red-100 text-red-700'
+                ? 'qt-badge-destructive'
                 : 'bg-accent text-muted-foreground opacity-50'
             }`}
             title={enabledLevels.has('error') ? 'Hide errors' : 'Show errors'}
@@ -299,7 +299,7 @@ export default function BrowserConsoleTab() {
             onClick={() => toggleLevel('warn')}
             className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
               enabledLevels.has('warn')
-                ? 'bg-yellow-100 text-yellow-700'
+                ? 'qt-badge-warning'
                 : 'bg-accent text-muted-foreground opacity-50'
             }`}
             title={enabledLevels.has('warn') ? 'Hide warnings' : 'Show warnings'}
@@ -311,7 +311,7 @@ export default function BrowserConsoleTab() {
             onClick={() => toggleLevel('info')}
             className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
               enabledLevels.has('info')
-                ? 'bg-blue-100 text-blue-700'
+                ? 'qt-badge-info'
                 : 'bg-accent text-muted-foreground opacity-50'
             }`}
             title={enabledLevels.has('info') ? 'Hide info' : 'Show info'}
@@ -335,7 +335,7 @@ export default function BrowserConsoleTab() {
             onClick={() => toggleLevel('debug')}
             className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
               enabledLevels.has('debug')
-                ? 'bg-purple-100 text-purple-700'
+                ? 'qt-badge-info'
                 : 'bg-accent text-muted-foreground opacity-50'
             }`}
             title={enabledLevels.has('debug') ? 'Hide debug' : 'Show debug'}

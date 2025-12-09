@@ -96,7 +96,7 @@ export default function DevConsolePanel({ layout }: DevConsolePanelProps) {
           className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
             activeTab === tab.id
               ? 'bg-background text-foreground border-t border-l border-r border-border -mb-px rounded-t'
-              : 'text-muted-foreground hover:text-foreground hover:bg-accent rounded-t'
+              : 'qt-button-ghost rounded-t'
           }`}
         >
           {tab.icon}
@@ -132,7 +132,7 @@ export default function DevConsolePanel({ layout }: DevConsolePanelProps) {
             </span>
             <button
               onClick={closePanel}
-              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
+              className="qt-button-icon"
               title="Close DevConsole"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -167,7 +167,7 @@ export default function DevConsolePanel({ layout }: DevConsolePanelProps) {
           </span>
           <button
             onClick={closePanel}
-            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
+            className="qt-button-icon"
             title="Close DevConsole"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

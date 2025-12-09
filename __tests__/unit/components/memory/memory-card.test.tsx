@@ -236,8 +236,8 @@ describe('MemoryCard', () => {
     it('should use semantic theme color classes', () => {
       const { container } = render(<MemoryCard memory={mockMemory} />);
 
-      // Component should use semantic theme classes that work in both light and dark mode
-      expect(container.innerHTML).toMatch(/bg-card/);
+      // Component should use semantic qt-* classes that work in both light and dark mode
+      expect(container.innerHTML).toMatch(/qt-card/);
       expect(container.innerHTML).toMatch(/text-foreground/);
       expect(container.innerHTML).toMatch(/border-border/);
     });

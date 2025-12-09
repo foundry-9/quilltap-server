@@ -204,4 +204,44 @@
   .qt-link-subtle:hover {
     @apply text-foreground;
   }
+
+  /* ==========================================================================
+     FORM LABELS
+     ========================================================================== */
+
+  /**
+   * Form label
+   */
+  .qt-label {
+    @apply block text-sm font-medium;
+    color: var(--qt-label-fg, var(--color-foreground));
+  }
+
+  /**
+   * Form hint/help text
+   */
+  .qt-hint {
+    @apply mt-1 text-xs;
+    color: var(--qt-hint-fg, var(--color-muted-foreground));
+  }
+
+  /* ==========================================================================
+     CHECKBOX & RADIO
+     ========================================================================== */
+
+  /**
+   * Checkbox input
+   */
+  .qt-checkbox {
+    @apply w-4 h-4 rounded border-border;
+    @apply text-primary focus:ring-primary;
+  }
+
+  /**
+   * Radio input
+   */
+  .qt-radio {
+    @apply w-4 h-4 border-border;
+    @apply text-primary focus:ring-primary;
+  }
 }
