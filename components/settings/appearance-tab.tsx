@@ -18,6 +18,7 @@ import { useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { useTheme, type ThemeSummary } from '@/components/providers/theme-provider'
 import type { ColorMode } from '@/lib/themes/types'
+import { BrandName } from '@/components/ui/brand-name'
 import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
 
 // Default theme preview colors (from DEFAULT_THEME_TOKENS)
@@ -146,7 +147,7 @@ function ThemeCard({ theme, isActive, onSelect, disabled }: ThemeCardProps) {
   const isDefault = theme === null
   const name = isDefault ? 'Default' : theme.name
   const description = isDefault
-    ? 'The default Quilltap theme with a clean, professional appearance'
+    ? <>The default <BrandName /> theme with a clean, professional appearance</>
     : theme.description
 
   // Log render in useEffect to avoid state updates during render
@@ -441,7 +442,7 @@ export default function AppearanceTab() {
       <section>
         <h2 className="text-xl font-semibold mb-2 text-foreground">Color Mode</h2>
         <p className="text-muted-foreground mb-4">
-          Choose how Quilltap should appear. You can select light mode, dark mode, or follow your
+          Choose how <BrandName /> should appear. You can select light mode, dark mode, or follow your
           system settings.
         </p>
 
@@ -457,7 +458,7 @@ export default function AppearanceTab() {
       <section className="border-t border-border pt-8">
         <h2 className="text-xl font-semibold mb-2 text-foreground">Theme</h2>
         <p className="text-muted-foreground mb-4">
-          Select a theme to customize the colors and appearance of Quilltap.
+          Select a theme to customize the colors and appearance of <BrandName />.
           {themes.length === 0 && (
             <span className="block mt-1 text-sm">
               Install theme plugins to see more options here.

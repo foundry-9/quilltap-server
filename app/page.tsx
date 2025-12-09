@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { getServerSession } from "@/lib/auth/session";
+import { BrandLogo } from "@/components/ui/brand-logo";
 
 export default async function Home() {
   const session = await getServerSession();
@@ -13,15 +13,11 @@ export default async function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-24">
       <div className="text-center">
-        <Image
-          src="/quill.svg"
-          alt="Quilltap"
-          width={128}
-          height={137}
-          className="mx-auto mb-6"
-          priority
-        />
-        <h1 className="text-5xl font-bold text-white mb-4">Welcome to Quilltap</h1>
+        <h1 className="text-white mb-4 flex flex-col items-center">
+          <span className="sr-only">Welcome to Quilltap</span>
+          <span className="text-2xl font-medium mb-2">Welcome to</span>
+          <BrandLogo size="xl" />
+        </h1>
         <p className="text-xl text-slate-300 mb-8">
           AI-powered roleplay chat platform with multi-provider support
         </p>

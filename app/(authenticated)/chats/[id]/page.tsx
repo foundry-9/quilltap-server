@@ -1641,9 +1641,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 <div
                   className={`px-4 py-3 rounded-lg ${
                     message.role === 'USER'
-                      ? 'bg-chat-user text-chat-user-foreground font-sans text-sm'
+                      ? 'bg-chat-user text-chat-user-foreground'
                       : 'bg-card border border-border text-foreground font-serif'
                   }`}
+                  style={message.role === 'USER' ? { fontFamily: 'var(--font-chat-user)' } : undefined}
                 >
                   {isEditing ? (
                     <div className="space-y-2">

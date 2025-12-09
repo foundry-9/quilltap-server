@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { BrandName } from "@/components/ui/brand-name";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -50,7 +51,7 @@ export default function SignupPage() {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create Account</h1>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            Join Quilltap to start your AI roleplay journey
+            Join <BrandName /> to start your AI roleplay journey
           </p>
         </div>
 

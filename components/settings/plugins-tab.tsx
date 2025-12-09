@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { BrandName } from '@/components/ui/brand-name'
 
 type PluginSource = 'included' | 'npm' | 'git' | 'manual'
 
@@ -160,7 +161,7 @@ export default function PluginsTab() {
         </h2>
         <p className="text-sm text-muted-foreground">
           Manage installed plugins and their status. Enable or disable plugins to control which
-          features are available in Quilltap.
+          features are available in <BrandName />.
         </p>
       </div>
 
@@ -185,7 +186,7 @@ export default function PluginsTab() {
           </h3>
           <p className="mt-2 text-sm text-muted-foreground">
             No plugins are currently installed. Add plugins to the plugins directory to extend
-            Quilltap&apos;s functionality.
+            <BrandName />&apos;s functionality.
           </p>
         </div>
       ) : (

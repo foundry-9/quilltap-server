@@ -4,6 +4,7 @@ import { signIn } from "next-auth/react";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { BrandName } from "@/components/ui/brand-name";
 
 interface AuthProvider {
   id: string;
@@ -146,7 +147,7 @@ function SignInForm() {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Sign In</h1>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            Welcome back to Quilltap
+            Welcome back to <BrandName />
           </p>
         </div>
 
