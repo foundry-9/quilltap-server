@@ -349,18 +349,18 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-gray-900 dark:text-white">Loading character...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-foreground">Loading character...</p>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-[800px]">
+    <div className="character-edit container mx-auto max-w-5xl px-4 py-8 text-foreground">
       <div className="mb-8">
         <button
           onClick={handleCancel}
-          className="text-blue-600 dark:text-blue-400 hover:underline mb-4 inline-block"
+          className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
         >
           ← Back
         </button>
@@ -375,15 +375,15 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                 className="w-20 h-20 rounded-full object-cover"
               />
             ) : (
-              <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center">
-                <span className="text-3xl font-bold text-gray-600 dark:text-gray-400">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+                <span className="text-3xl font-bold text-muted-foreground">
                   {character?.name?.charAt(0)?.toUpperCase() || '?'}
                 </span>
               </div>
             )}
             <button
               onClick={() => setShowAvatarSelector(true)}
-              className="absolute -bottom-1 -right-1 bg-blue-600 text-white rounded-full p-1.5 hover:bg-blue-700 shadow-lg"
+              className="absolute -bottom-1 -right-1 rounded-full bg-primary p-1.5 text-primary-foreground shadow-lg transition hover:bg-primary/90"
               title="Change avatar"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -392,7 +392,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
             </button>
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-3xl font-bold text-foreground">
               Edit: {character?.name || 'Loading...'}
             </h1>
           </div>
@@ -400,7 +400,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       </div>
 
       {error && (
-        <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded mb-4">
+        <div className="mb-4 rounded border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive">
           {error}
         </div>
       )}
@@ -413,7 +413,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                 return (
                   <div className="space-y-6">
                     <div>
-                      <label htmlFor="name" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="name" className="block text-sm font-medium mb-2 text-foreground">
                         Name *
                       </label>
                       <input
@@ -423,12 +423,12 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                         value={formData.name}
                         onChange={handleChange}
                         required
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="title" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="title" className="block text-sm font-medium mb-2 text-foreground">
                         Title (Optional)
                       </label>
                       <input
@@ -437,13 +437,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                         name="title"
                         value={formData.title}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="e.g., Student, Teacher, Narrator"
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="description" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="description" className="block text-sm font-medium mb-2 text-foreground">
                         Description (Optional)
                       </label>
                       <textarea
@@ -452,13 +452,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                         value={formData.description}
                         onChange={handleChange}
                         rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="Describe the character's appearance, background, and key traits"
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="personality" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="personality" className="block text-sm font-medium mb-2 text-foreground">
                         Personality (Optional)
                       </label>
                       <textarea
@@ -467,13 +467,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                         value={formData.personality}
                         onChange={handleChange}
                         rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="Describe the character's personality traits and behavioral patterns"
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="scenario" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="scenario" className="block text-sm font-medium mb-2 text-foreground">
                         Scenario (Optional)
                       </label>
                       <textarea
@@ -482,13 +482,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                         value={formData.scenario}
                         onChange={handleChange}
                         rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="Describe the setting and context for conversations"
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="firstMessage" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="firstMessage" className="block text-sm font-medium mb-2 text-foreground">
                         First Message (Optional)
                       </label>
                       <textarea
@@ -497,13 +497,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                         value={formData.firstMessage}
                         onChange={handleChange}
                         rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="The character's opening message to start conversations"
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="exampleDialogues" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="exampleDialogues" className="block text-sm font-medium mb-2 text-foreground">
                         Example Dialogues (Optional)
                       </label>
                       <textarea
@@ -512,13 +512,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                         value={formData.exampleDialogues}
                         onChange={handleChange}
                         rows={6}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="Example conversations to guide the AI's responses"
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="systemPrompt" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="systemPrompt" className="block text-sm font-medium mb-2 text-foreground">
                         System Prompt (Optional)
                       </label>
                       <textarea
@@ -527,7 +527,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                         value={formData.systemPrompt}
                         onChange={handleChange}
                         rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="Custom system instructions (will be combined with auto-generated prompt)"
                       />
                     </div>
@@ -541,7 +541,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                 return (
                   <div className="space-y-6">
                     <div>
-                      <label htmlFor="defaultConnectionProfileId" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="defaultConnectionProfileId" className="block text-sm font-medium mb-2 text-foreground">
                         Default Connection Profile (Optional)
                       </label>
                       <select
@@ -549,7 +549,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                         name="defaultConnectionProfileId"
                         value={formData.defaultConnectionProfileId}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       >
                         <option value="">No default profile</option>
                         {profiles.map((profile) => (
@@ -558,25 +558,25 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                           </option>
                         ))}
                       </select>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Can be overridden for individual chats
                       </p>
                     </div>
 
                     {/* Default Persona Selector */}
                     <div>
-                      <label htmlFor="defaultPersona" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="defaultPersona" className="block text-sm font-medium mb-2 text-foreground">
                         Default Persona (Optional)
                       </label>
                       {loadingPersonas ? (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Loading personas...</p>
+                        <p className="text-sm text-muted-foreground">Loading personas...</p>
                       ) : personas.length > 0 ? (
                         <>
                           <select
                             id="defaultPersona"
                             value={defaultPersonaId}
                             onChange={(e) => setDefaultPersonaId(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                           >
                             <option value="">No default persona</option>
                             {personas.map((persona) => {
@@ -591,12 +591,12 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                               )
                             })}
                           </select>
-                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          <p className="mt-1 text-xs text-muted-foreground">
                             Personas are sorted by number of tags shared with this character
                           </p>
                         </>
                       ) : (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className="text-sm text-muted-foreground">
                           No personas available. Create a persona first.
                         </p>
                       )}
@@ -657,14 +657,14 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 font-medium"
+            className="flex-1 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-primary-foreground shadow transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? 'Saving...' : 'Save Character'}
           </button>
           <button
             type="button"
             onClick={handleCancel}
-            className="px-6 py-3 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 font-medium"
+            className="rounded-lg border border-border bg-card px-6 py-3 text-base font-medium text-muted-foreground shadow transition hover:bg-muted"
           >
             Cancel
           </button>

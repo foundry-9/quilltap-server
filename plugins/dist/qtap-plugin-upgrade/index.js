@@ -506,7 +506,7 @@ var require_package = __commonJS({
   "package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "2.2.0-dev.10",
+      version: "2.2.0-dev.17",
       private: true,
       author: {
         name: "Charles Sebold",
