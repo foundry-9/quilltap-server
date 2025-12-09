@@ -37,17 +37,17 @@ export function DashboardCards({ characters, chats, personas }: DashboardCardsPr
   }, [visibleCounts, hiddenTagIds.size])
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-8">
+    <div className="qt-card-grid mt-8">
       {/* Characters Card */}
       <Link href="/characters">
-        <div className="dashboard-card h-full flex flex-col rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-blue-500 hover:shadow-md dark:hover:border-blue-500 dark:hover:shadow-md transition-all cursor-pointer">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Characters</h2>
-            <span className="dashboard-badge rounded-full bg-blue-100 dark:bg-blue-900 px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
+        <div className="qt-card-interactive dashboard-card h-full flex flex-col">
+          <div className="qt-card-header">
+            <h2 className="qt-card-title">Characters</h2>
+            <span className="qt-badge-info dashboard-badge">
               {visibleCounts.characters}
             </span>
           </div>
-          <p className="flex-1 text-sm text-gray-600 dark:text-gray-400">
+          <p className="qt-card-description flex-1">
             Create and manage your AI characters
           </p>
         </div>
@@ -55,14 +55,14 @@ export function DashboardCards({ characters, chats, personas }: DashboardCardsPr
 
       {/* Chats Card */}
       <Link href="/chats">
-        <div className="dashboard-card h-full flex flex-col rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-green-500 hover:shadow-md dark:hover:border-green-500 dark:hover:shadow-md transition-all cursor-pointer">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Chats</h2>
-            <span className="dashboard-badge rounded-full bg-green-100 dark:bg-green-900 px-3 py-1 text-sm font-medium text-green-800 dark:text-green-200">
+        <div className="qt-card-interactive dashboard-card h-full flex flex-col">
+          <div className="qt-card-header">
+            <h2 className="qt-card-title">Chats</h2>
+            <span className="qt-badge-success dashboard-badge">
               {visibleCounts.chats}
             </span>
           </div>
-          <p className="flex-1 text-sm text-gray-600 dark:text-gray-400">
+          <p className="qt-card-description flex-1">
             Start conversations with your characters
           </p>
         </div>
@@ -70,14 +70,14 @@ export function DashboardCards({ characters, chats, personas }: DashboardCardsPr
 
       {/* Personas Card */}
       <Link href="/personas">
-        <div className="dashboard-card h-full flex flex-col rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-purple-500 hover:shadow-md dark:hover:border-purple-500 dark:hover:shadow-md transition-all cursor-pointer">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Personas</h2>
-            <span className="dashboard-badge rounded-full bg-purple-100 dark:bg-purple-900 px-3 py-1 text-sm font-medium text-purple-800 dark:text-purple-200">
+        <div className="qt-card-interactive dashboard-card h-full flex flex-col">
+          <div className="qt-card-header">
+            <h2 className="qt-card-title">Personas</h2>
+            <span className="qt-badge-primary dashboard-badge">
               {visibleCounts.personas}
             </span>
           </div>
-          <p className="flex-1 text-sm text-gray-600 dark:text-gray-400">
+          <p className="qt-card-description flex-1">
             Manage your user personas
           </p>
         </div>

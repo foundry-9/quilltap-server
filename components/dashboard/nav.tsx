@@ -103,54 +103,35 @@ export default function DashboardNav({ user }: DashboardNavProps) {
   const supportsDebugToggle = routeSupportsDebug(pathname);
 
   return (
-    <nav className="border-b border-border bg-background">
-      <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Link href="/dashboard" className="text-foreground">
-              <BrandLogo size="md" />
+    <nav className="qt-navbar nav-header">
+      <div className="qt-navbar-container">
+        <div className="qt-navbar-section">
+          <Link href="/dashboard" className="text-foreground">
+            <BrandLogo size="md" />
+          </Link>
+          <div className="hidden space-x-1 md:flex">
+            <Link href="/dashboard" className="qt-navbar-link">
+              Dashboard
             </Link>
-            <div className="hidden space-x-4 md:flex">
-              <Link
-                href="/dashboard"
-                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/characters"
-                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
-              >
-                Characters
-              </Link>
-              <Link
-                href="/personas"
-                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
-              >
-                Personas
-              </Link>
-              <Link
-                href="/chats"
-                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
-              >
-                Chats
-              </Link>
-              <Link
-                href="/settings"
-                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
-              >
-                Settings
-              </Link>
-              <Link
-                href="/tools"
-                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
-              >
-                Tools
-              </Link>
-            </div>
+            <Link href="/characters" className="qt-navbar-link">
+              Characters
+            </Link>
+            <Link href="/personas" className="qt-navbar-link">
+              Personas
+            </Link>
+            <Link href="/chats" className="qt-navbar-link">
+              Chats
+            </Link>
+            <Link href="/settings" className="qt-navbar-link">
+              Settings
+            </Link>
+            <Link href="/tools" className="qt-navbar-link">
+              Tools
+            </Link>
           </div>
+        </div>
 
-          <div className="flex items-center gap-4">
+        <div className="qt-navbar-section">
             {/* Global search */}
             <SearchBar />
             {/* Theme selector (shown when enabled in settings) */}
@@ -169,7 +150,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 <a
                   href={`/api/chats/${chat.chatId}/export`}
                   download
-                  className="px-3 py-2 text-sm bg-primary text-primary-foreground rounded hover:opacity-90 transition-colors"
+                  className="qt-button-primary qt-button-sm"
                 >
                   Export Chat
                 </a>
@@ -353,7 +334,6 @@ export default function DashboardNav({ user }: DashboardNavProps) {
             </div>
           </div>
         </div>
-      </div>
     </nav>
   );
 }

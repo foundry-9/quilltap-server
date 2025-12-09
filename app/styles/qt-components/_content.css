@@ -1,0 +1,361 @@
+/**
+ * Quilltap Component System - Content Components
+ *
+ * Badges, avatars, code blocks, typography
+ *
+ * Note: We define shared base styles using comma-separated selectors
+ * rather than @apply to reference other qt-* classes.
+ */
+
+@layer components {
+  /* ==========================================================================
+     BADGES - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All badge variants share these base styles
+   */
+  .qt-badge,
+  .qt-badge-primary,
+  .qt-badge-secondary,
+  .qt-badge-outline,
+  .qt-badge-success,
+  .qt-badge-warning,
+  .qt-badge-destructive,
+  .qt-badge-info {
+    @apply inline-flex items-center justify-center;
+    padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
+    border-radius: var(--qt-badge-radius);
+    font-size: var(--qt-badge-font-size);
+    font-weight: var(--qt-badge-font-weight);
+  }
+
+  /* ==========================================================================
+     BADGE VARIANTS
+     ========================================================================== */
+
+  /**
+   * Primary badge
+   */
+  .qt-badge-primary {
+    background: var(--qt-badge-primary-bg);
+    color: var(--qt-badge-primary-fg);
+  }
+
+  /**
+   * Secondary badge
+   */
+  .qt-badge-secondary {
+    background: var(--qt-badge-secondary-bg);
+    color: var(--qt-badge-secondary-fg);
+  }
+
+  /**
+   * Outline badge
+   */
+  .qt-badge-outline {
+    background: var(--qt-badge-outline-bg);
+    color: var(--qt-badge-outline-fg);
+    border: 1px solid var(--qt-badge-outline-border);
+  }
+
+  /**
+   * Success badge
+   */
+  .qt-badge-success {
+    @apply bg-success/10 text-success border border-success/30;
+  }
+
+  /**
+   * Warning badge
+   */
+  .qt-badge-warning {
+    @apply bg-warning/10 text-warning border border-warning/30;
+  }
+
+  /**
+   * Destructive badge
+   */
+  .qt-badge-destructive {
+    @apply bg-destructive/10 text-destructive border border-destructive/30;
+  }
+
+  /**
+   * Info badge
+   */
+  .qt-badge-info {
+    @apply bg-info/10 text-info border border-info/30;
+  }
+
+  /* ==========================================================================
+     AVATARS
+     ========================================================================== */
+
+  /**
+   * Base avatar
+   */
+  .qt-avatar {
+    @apply relative inline-flex items-center justify-center;
+    @apply overflow-hidden;
+    @apply flex-shrink-0;
+    width: var(--qt-avatar-size);
+    height: var(--qt-avatar-size);
+    border-radius: var(--qt-avatar-radius);
+    background: var(--qt-avatar-bg);
+    color: var(--qt-avatar-fg);
+    border: 2px solid var(--qt-avatar-border);
+  }
+
+  /**
+   * Avatar image
+   */
+  .qt-avatar-image {
+    @apply w-full h-full object-cover;
+  }
+
+  /**
+   * Avatar fallback (initials)
+   */
+  .qt-avatar-fallback {
+    @apply flex items-center justify-center;
+    @apply w-full h-full;
+    @apply text-sm font-medium;
+  }
+
+  /**
+   * Avatar size variants
+   */
+  .qt-avatar-sm {
+    width: var(--qt-avatar-size-sm);
+    height: var(--qt-avatar-size-sm);
+    @apply text-xs;
+  }
+
+  .qt-avatar-lg {
+    width: var(--qt-avatar-size-lg);
+    height: var(--qt-avatar-size-lg);
+    @apply text-base;
+  }
+
+  .qt-avatar-xl {
+    width: var(--qt-avatar-size-xl);
+    height: var(--qt-avatar-size-xl);
+    @apply text-lg;
+  }
+
+  /**
+   * Avatar group (stacked avatars)
+   */
+  .qt-avatar-group {
+    @apply flex -space-x-2;
+  }
+
+  .qt-avatar-group .qt-avatar {
+    @apply ring-2 ring-background;
+  }
+
+  /* ==========================================================================
+     CODE BLOCKS
+     ========================================================================== */
+
+  /**
+   * Inline code
+   */
+  .qt-code-inline {
+    @apply px-1.5 py-0.5;
+    @apply text-sm;
+    border-radius: calc(var(--qt-code-radius) / 2);
+    background: var(--qt-code-bg);
+    color: var(--qt-code-fg);
+    font-family: var(--qt-code-font);
+  }
+
+  /**
+   * Code block
+   */
+  .qt-code-block {
+    @apply p-4;
+    @apply overflow-x-auto;
+    @apply text-sm;
+    border-radius: var(--qt-code-radius);
+    background: var(--qt-code-bg);
+    color: var(--qt-code-fg);
+    border: 1px solid var(--qt-code-border);
+    font-family: var(--qt-code-font);
+  }
+
+  /**
+   * Code block header (language label, copy button)
+   */
+  .qt-code-header {
+    @apply flex items-center justify-between;
+    @apply px-4 py-2;
+    @apply text-xs text-muted-foreground;
+    @apply border-b border-border;
+    border-radius: var(--qt-code-radius) var(--qt-code-radius) 0 0;
+    background: var(--qt-code-bg);
+  }
+
+  /* ==========================================================================
+     TYPOGRAPHY
+     ========================================================================== */
+
+  /**
+   * Prose container for rich text content
+   * Note: Use with "prose prose-sm dark:prose-invert" classes in the component
+   * for typography plugin support (prose classes can't be @apply'd in v4)
+   */
+  .qt-prose {
+    @apply max-w-none;
+  }
+
+  /**
+   * Heading styles
+   */
+  .qt-heading-1 {
+    @apply text-3xl font-bold tracking-tight;
+  }
+
+  .qt-heading-2 {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+
+  .qt-heading-3 {
+    @apply text-xl font-semibold;
+  }
+
+  .qt-heading-4 {
+    @apply text-lg font-semibold;
+  }
+
+  /**
+   * Text styles
+   */
+  .qt-text-lead {
+    @apply text-xl text-muted-foreground;
+  }
+
+  .qt-text-large {
+    @apply text-lg font-semibold;
+  }
+
+  .qt-text-small {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .qt-text-muted {
+    @apply text-muted-foreground;
+  }
+
+  /* ==========================================================================
+     EMPTY STATES
+     ========================================================================== */
+
+  /**
+   * Empty state container
+   */
+  .qt-empty-state {
+    @apply flex flex-col items-center justify-center;
+    @apply py-12 px-4;
+    @apply text-center;
+  }
+
+  /**
+   * Empty state icon
+   */
+  .qt-empty-state-icon {
+    @apply w-12 h-12;
+    @apply text-muted-foreground/50;
+    @apply mb-4;
+  }
+
+  /**
+   * Empty state title
+   */
+  .qt-empty-state-title {
+    @apply text-lg font-medium text-foreground;
+    @apply mb-1;
+  }
+
+  /**
+   * Empty state description
+   */
+  .qt-empty-state-description {
+    @apply text-sm text-muted-foreground;
+    @apply max-w-sm;
+  }
+
+  /**
+   * Empty state action
+   */
+  .qt-empty-state-action {
+    @apply mt-4;
+  }
+
+  /* ==========================================================================
+     LOADING STATES - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All spinner variants share these base styles
+   */
+  .qt-spinner,
+  .qt-spinner-sm,
+  .qt-spinner-lg {
+    @apply animate-spin;
+    @apply border-2 border-current border-t-transparent;
+    @apply rounded-full;
+  }
+
+  /* ==========================================================================
+     LOADING STATE VARIANTS
+     ========================================================================== */
+
+  /**
+   * Spinner (default size)
+   */
+  .qt-spinner {
+    @apply w-5 h-5;
+  }
+
+  .qt-spinner-sm {
+    @apply w-4 h-4;
+  }
+
+  .qt-spinner-lg {
+    @apply w-8 h-8;
+  }
+
+  /* ==========================================================================
+     SKELETON - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All skeleton variants share these base styles
+   */
+  .qt-skeleton,
+  .qt-skeleton-text,
+  .qt-skeleton-circle {
+    @apply animate-pulse;
+    @apply bg-muted;
+    @apply rounded;
+  }
+
+  /* ==========================================================================
+     SKELETON VARIANTS
+     ========================================================================== */
+
+  /**
+   * Text skeleton
+   */
+  .qt-skeleton-text {
+    @apply h-4 w-full;
+  }
+
+  /**
+   * Circle skeleton
+   */
+  .qt-skeleton-circle {
+    @apply rounded-full;
+  }
+}

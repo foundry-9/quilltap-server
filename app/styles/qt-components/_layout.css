@@ -1,0 +1,247 @@
+/**
+ * Quilltap Component System - Layout Components
+ *
+ * Navbar, sidebar, page containers
+ *
+ * Note: We define shared base styles using comma-separated selectors
+ * rather than @apply to reference other qt-* classes.
+ */
+
+@layer components {
+  /* ==========================================================================
+     NAVBAR
+     ========================================================================== */
+
+  /**
+   * Main navigation bar
+   */
+  .qt-navbar {
+    @apply border-b;
+    height: var(--qt-navbar-height);
+    background: var(--qt-navbar-bg);
+    border-color: var(--qt-navbar-border);
+    backdrop-filter: var(--qt-navbar-blur);
+    -webkit-backdrop-filter: var(--qt-navbar-blur);
+    box-shadow: var(--qt-navbar-shadow);
+  }
+
+  /**
+   * Navbar content container
+   */
+  .qt-navbar-container {
+    @apply container mx-auto px-4;
+    @apply flex items-center justify-between;
+    @apply h-full;
+  }
+
+  /**
+   * Navbar section - group of items
+   */
+  .qt-navbar-section {
+    @apply flex items-center gap-4;
+  }
+
+  /* ==========================================================================
+     NAVBAR LINKS - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All navbar link variants share these base styles
+   */
+  .qt-navbar-link,
+  .qt-navbar-link-active {
+    @apply text-sm font-medium;
+    @apply transition-colors duration-150;
+    padding: var(--qt-navbar-link-padding-y) var(--qt-navbar-link-padding-x);
+    border-radius: var(--qt-navbar-link-radius);
+    color: var(--qt-navbar-link-fg);
+  }
+
+  .qt-navbar-link:hover {
+    background: var(--qt-navbar-link-hover-bg);
+  }
+
+  /* ==========================================================================
+     NAVBAR LINK VARIANTS
+     ========================================================================== */
+
+  /**
+   * Active navbar link
+   */
+  .qt-navbar-link-active {
+    background: var(--qt-navbar-link-active-bg);
+  }
+
+  /**
+   * Navbar button - button styled for navbar context
+   */
+  .qt-navbar-button {
+    @apply inline-flex items-center justify-center gap-2;
+    @apply text-sm font-medium;
+    @apply transition-all duration-200;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    padding: var(--qt-navbar-link-padding-y) var(--qt-navbar-link-padding-x);
+    border-radius: var(--qt-navbar-link-radius);
+    background: transparent;
+    color: var(--qt-navbar-link-fg);
+  }
+
+  .qt-navbar-button:hover:not(:disabled) {
+    background: var(--qt-navbar-link-hover-bg);
+  }
+
+  /* ==========================================================================
+     SIDEBAR
+     ========================================================================== */
+
+  /**
+   * Sidebar container
+   */
+  .qt-sidebar {
+    @apply h-full;
+    @apply border-r;
+    @apply overflow-y-auto;
+    width: var(--qt-sidebar-width);
+    background: var(--qt-sidebar-bg);
+    border-color: var(--qt-sidebar-border);
+  }
+
+  /**
+   * Sidebar section - group of items
+   */
+  .qt-sidebar-section {
+    @apply p-4;
+  }
+
+  /**
+   * Sidebar section title
+   */
+  .qt-sidebar-title {
+    @apply text-xs font-semibold uppercase tracking-wider;
+    @apply text-muted-foreground;
+    @apply mb-2 px-2;
+  }
+
+  /* ==========================================================================
+     SIDEBAR ITEMS - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All sidebar item variants share these base styles
+   */
+  .qt-sidebar-item,
+  .qt-sidebar-item-active {
+    @apply flex items-center gap-3;
+    @apply text-sm;
+    @apply transition-colors duration-150;
+    @apply cursor-pointer;
+    padding: var(--qt-sidebar-item-padding-y) var(--qt-sidebar-item-padding-x);
+    border-radius: var(--qt-sidebar-item-radius);
+  }
+
+  .qt-sidebar-item:hover {
+    background: var(--qt-sidebar-item-hover-bg);
+  }
+
+  /* ==========================================================================
+     SIDEBAR ITEM VARIANTS
+     ========================================================================== */
+
+  /**
+   * Active sidebar item
+   */
+  .qt-sidebar-item-active {
+    @apply border-l-2;
+    background: var(--qt-sidebar-item-active-bg);
+    border-color: var(--qt-sidebar-item-active-border);
+  }
+
+  /* ==========================================================================
+     PAGE LAYOUT - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All page variants share these base styles
+   */
+  .qt-page,
+  .qt-page-with-navbar {
+    @apply min-h-screen;
+    @apply bg-background text-foreground;
+  }
+
+  /* ==========================================================================
+     PAGE LAYOUT VARIANTS
+     ========================================================================== */
+
+  /**
+   * Page with navbar offset
+   */
+  .qt-page-with-navbar {
+    padding-top: var(--qt-navbar-height);
+  }
+
+  /**
+   * Page content container
+   */
+  .qt-page-container {
+    @apply container mx-auto px-4 py-6;
+  }
+
+  /**
+   * Page header
+   */
+  .qt-page-header {
+    @apply mb-6;
+  }
+
+  /**
+   * Page title
+   */
+  .qt-page-title {
+    @apply text-2xl font-bold text-foreground;
+  }
+
+  /**
+   * Page description
+   */
+  .qt-page-description {
+    @apply text-muted-foreground mt-1;
+  }
+
+  /* ==========================================================================
+     GRID LAYOUTS
+     ========================================================================== */
+
+  /**
+   * Card grid - responsive grid for cards
+   */
+  .qt-card-grid {
+    @apply grid gap-6;
+    @apply grid-cols-1 md:grid-cols-2 lg:grid-cols-3;
+  }
+
+  /**
+   * Two-column layout
+   */
+  .qt-two-col {
+    @apply grid gap-6;
+    @apply grid-cols-1 lg:grid-cols-2;
+  }
+
+  /**
+   * Main + sidebar layout
+   */
+  .qt-layout-with-sidebar {
+    @apply flex gap-6;
+  }
+
+  .qt-layout-main {
+    @apply flex-1 min-w-0;
+  }
+
+  .qt-layout-sidebar {
+    @apply flex-shrink-0;
+    width: var(--qt-sidebar-width);
+  }
+}

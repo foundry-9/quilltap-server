@@ -198,3 +198,11 @@
   }
 }
 
+/*
+ * Quilltap Component System (qt-* classes)
+ *
+ * Semantic component classes for consistent, themeable UI.
+ * Theme plugins can override via [data-theme="name"] selectors.
+ */
+@import "./styles/qt-components/_index.css";
+

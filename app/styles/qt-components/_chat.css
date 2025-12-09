@@ -1,0 +1,332 @@
+/**
+ * Quilltap Component System - Chat Components
+ *
+ * Chat messages, composer, participant cards
+ *
+ * Note: We define shared base styles using comma-separated selectors
+ * rather than @apply to reference other qt-* classes.
+ */
+
+@layer components {
+  /* ==========================================================================
+     CHAT MESSAGES - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All message variants share these base styles
+   */
+  .qt-chat-message,
+  .qt-chat-message-user,
+  .qt-chat-message-assistant,
+  .qt-chat-message-system {
+    @apply relative;
+    @apply transition-all duration-200;
+    padding: var(--qt-chat-message-padding);
+    border-radius: var(--qt-chat-message-radius);
+    box-shadow: var(--qt-chat-message-shadow);
+  }
+
+  .qt-chat-message:hover,
+  .qt-chat-message-user:hover,
+  .qt-chat-message-assistant:hover {
+    @apply shadow-md;
+  }
+
+  /* ==========================================================================
+     CHAT MESSAGE VARIANTS
+     ========================================================================== */
+
+  /**
+   * User message - sent by the user
+   */
+  .qt-chat-message-user {
+    background: var(--qt-chat-user-bg);
+    color: var(--qt-chat-user-fg);
+    border: 1px solid var(--qt-chat-user-border);
+    font-family: var(--qt-chat-user-font);
+  }
+
+  /**
+   * Assistant message - AI responses
+   */
+  .qt-chat-message-assistant {
+    background: var(--qt-chat-assistant-bg);
+    color: var(--qt-chat-assistant-fg);
+    border: 1px solid var(--qt-chat-assistant-border);
+    font-family: var(--qt-chat-assistant-font);
+  }
+
+  /**
+   * System message - notifications, status updates
+   */
+  .qt-chat-message-system {
+    @apply bg-muted/50 text-muted-foreground;
+    @apply text-sm italic;
+    @apply text-center;
+    @apply py-2;
+  }
+
+  /**
+   * Message header - avatar, name, timestamp
+   */
+  .qt-chat-message-header {
+    @apply flex items-center gap-2 mb-2;
+  }
+
+  /**
+   * Message author name
+   */
+  .qt-chat-message-author {
+    @apply font-semibold text-sm;
+  }
+
+  /**
+   * Message timestamp
+   */
+  .qt-chat-message-time {
+    @apply text-xs text-muted-foreground;
+  }
+
+  /**
+   * Message content area
+   * Note: Use with "prose prose-sm dark:prose-invert" classes in the component
+   * for typography plugin support
+   */
+  .qt-chat-message-content {
+    @apply max-w-none w-full;
+    overflow: hidden;
+  }
+
+  /**
+   * Message actions (edit, delete, copy, etc.)
+   */
+  .qt-chat-message-actions {
+    @apply absolute top-2 right-2;
+    @apply flex gap-1;
+    @apply opacity-0 transition-opacity;
+  }
+
+  .qt-chat-message:hover .qt-chat-message-actions,
+  .qt-chat-message-user:hover .qt-chat-message-actions,
+  .qt-chat-message-assistant:hover .qt-chat-message-actions {
+    @apply opacity-100;
+  }
+
+  /* ==========================================================================
+     CHAT COMPOSER
+     ========================================================================== */
+
+  /**
+   * Composer container
+   */
+  .qt-chat-composer {
+    @apply border-t p-4;
+    background: var(--qt-chat-composer-bg);
+    border-color: var(--qt-chat-composer-border);
+  }
+
+  /**
+   * Composer inner wrapper
+   */
+  .qt-chat-composer-inner {
+    @apply flex items-end gap-3;
+    @apply max-w-4xl mx-auto;
+  }
+
+  /**
+   * Composer input area
+   */
+  .qt-chat-composer-input {
+    @apply flex-1;
+    @apply min-h-12 max-h-48;
+    @apply resize-none;
+    @apply w-full;
+    @apply text-sm;
+    @apply focus:outline-none focus:ring-2;
+    @apply disabled:bg-muted disabled:cursor-not-allowed;
+    @apply placeholder:text-muted-foreground;
+    padding: var(--qt-input-padding-y) var(--qt-input-padding-x);
+    border-radius: var(--qt-chat-composer-radius);
+    background: var(--qt-input-bg);
+    color: var(--qt-input-fg);
+    border: 1px solid var(--qt-input-border);
+  }
+
+  .qt-chat-composer-input:focus {
+    border-color: var(--qt-input-focus-ring);
+    --tw-ring-color: var(--qt-input-focus-ring);
+  }
+
+  /**
+   * Composer actions container
+   */
+  .qt-chat-composer-actions {
+    @apply flex items-center gap-2;
+  }
+
+  /**
+   * Send button
+   */
+  .qt-chat-composer-send {
+    @apply inline-flex items-center justify-center;
+    @apply h-12 w-12;
+    @apply rounded-full;
+    @apply transition-all duration-200;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    background: var(--qt-button-primary-bg);
+    color: var(--qt-button-primary-fg);
+    box-shadow: var(--qt-button-primary-shadow);
+  }
+
+  .qt-chat-composer-send:hover:not(:disabled) {
+    background: var(--qt-button-primary-hover-bg);
+  }
+
+  /* ==========================================================================
+     PARTICIPANT CARDS - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All participant card variants share these base styles
+   */
+  .qt-participant-card,
+  .qt-participant-card-active {
+    @apply relative p-3;
+    @apply transition-all duration-200;
+    border-radius: var(--qt-participant-card-radius);
+    background: var(--qt-participant-card-bg);
+    border: 1px solid var(--qt-participant-card-border);
+  }
+
+  .qt-participant-card:hover {
+    @apply bg-muted/50;
+  }
+
+  /* ==========================================================================
+     PARTICIPANT CARD VARIANTS
+     ========================================================================== */
+
+  /**
+   * Active participant (currently speaking)
+   */
+  .qt-participant-card-active {
+    border-color: var(--qt-participant-card-active-border);
+    box-shadow: var(--qt-participant-card-active-shadow);
+    background: color-mix(in srgb, var(--color-primary) 5%, var(--qt-participant-card-bg));
+  }
+
+  /**
+   * Participant card header
+   */
+  .qt-participant-card-header {
+    @apply flex items-center gap-3;
+  }
+
+  /**
+   * Participant avatar
+   */
+  .qt-participant-card-avatar {
+    @apply w-10 h-10;
+    @apply rounded-full;
+    @apply object-cover;
+    @apply border-2 border-border;
+  }
+
+  /**
+   * Participant info
+   */
+  .qt-participant-card-info {
+    @apply flex-1 min-w-0;
+  }
+
+  /**
+   * Participant name
+   */
+  .qt-participant-card-name {
+    @apply font-medium text-sm truncate;
+  }
+
+  /**
+   * Participant status
+   */
+  .qt-participant-card-status {
+    @apply text-xs text-muted-foreground;
+  }
+
+  /**
+   * Participant actions
+   */
+  .qt-participant-card-actions {
+    @apply flex gap-1 mt-2;
+  }
+
+  /**
+   * Turn indicator badge
+   */
+  .qt-participant-turn-indicator {
+    @apply inline-flex items-center gap-1;
+    @apply px-2 py-0.5;
+    @apply text-xs font-medium;
+    @apply rounded-full;
+    @apply bg-success/10 text-success;
+    @apply border border-success/30;
+  }
+
+  /**
+   * Queue position badge
+   */
+  .qt-participant-queue-badge {
+    @apply inline-flex items-center gap-1;
+    @apply px-2 py-0.5;
+    @apply text-xs font-medium;
+    @apply rounded-full;
+    @apply bg-info/10 text-info;
+    @apply border border-info/30;
+  }
+
+  /* ==========================================================================
+     CHAT CONTAINER
+     ========================================================================== */
+
+  /**
+   * Chat page layout
+   */
+  .qt-chat-layout {
+    @apply flex h-screen;
+  }
+
+  /**
+   * Chat main area
+   */
+  .qt-chat-main {
+    @apply flex-1 flex flex-col;
+    @apply min-w-0;
+  }
+
+  /**
+   * Chat messages container
+   */
+  .qt-chat-messages {
+    @apply flex-1 overflow-y-auto;
+    @apply p-4;
+  }
+
+  /**
+   * Chat messages list
+   */
+  .qt-chat-messages-list {
+    @apply max-w-4xl mx-auto;
+    @apply space-y-4;
+  }
+
+  /**
+   * Chat sidebar (participants)
+   */
+  .qt-chat-sidebar {
+    @apply w-80;
+    @apply border-l border-border;
+    @apply bg-card;
+    @apply overflow-y-auto;
+  }
+}
