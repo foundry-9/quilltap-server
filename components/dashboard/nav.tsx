@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useDebugOptional } from "@/components/providers/debug-provider";
 import { useDevConsoleOptional } from "@/components/providers/dev-console-provider";
 import { useChatContext } from "@/components/providers/chat-context";
@@ -28,7 +28,26 @@ export default function DashboardNav({ user }: DashboardNavProps) {
   const pathname = usePathname();
   const chat = useChatContext();
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const { quickHideTags, hiddenTagIds, toggleTag } = useQuickHide();
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    if (userMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [userMenuOpen]);
 
   // Check if we're in a chat conversation
   const isInChat = pathname?.match(/^\/chats\/[^/]+$/);
@@ -128,10 +147,6 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 </svg>
               </button>
             )}
-            <div className="hidden text-right md:block">
-              <p className="text-sm font-medium text-foreground">{user.name}</p>
-              <p className="text-xs text-muted-foreground">{user.email}</p>
-            </div>
             {quickHideTags.length > 0 && (
               <div className="flex max-w-xs flex-wrap items-center justify-end gap-2">
                 {quickHideTags.map(tag => {
@@ -155,21 +170,67 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 })}
               </div>
             )}
-            {user.image && (
-              <Image
-                src={user.image}
-                alt={user.name || "User"}
-                width={32}
-                height={32}
-                className="h-8 w-8 rounded-full"
-              />
-            )}
-            <button
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="rounded-md bg-destructive px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
-            >
-              Sign Out
-            </button>
+
+            {/* User Menu Dropdown */}
+            <div className="relative" ref={userMenuRef}>
+              <button
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-muted transition-colors"
+                aria-label="User menu"
+                aria-expanded={userMenuOpen}
+              >
+                {user.image ? (
+                  <Image
+                    src={user.image}
+                    alt={user.name || "User"}
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 rounded-full"
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-foreground">
+                    {user.name || user.email || "User"}
+                  </span>
+                )}
+                <svg
+                  className={`w-4 h-4 text-muted-foreground transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+
+              {/* Dropdown Panel */}
+              {userMenuOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
+                  <div className="p-3 space-y-3">
+                    {/* User Info */}
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-foreground">{user.name}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="border-t border-border" />
+
+                    {/* Sign Out Button */}
+                    <button
+                      onClick={() => signOut({ callbackUrl: "/" })}
+                      className="w-full rounded-md bg-destructive px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
