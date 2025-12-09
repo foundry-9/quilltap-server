@@ -1,260 +1,594 @@
 /**
- * Ocean Theme - Component Overrides (Tier 3)
- *
- * These CSS overrides provide advanced customization beyond design tokens.
- * They're applied when the Ocean theme is active via [data-theme="ocean"].
+ * Ocean Theme – Tidal Bloom edition
+ * Layered gradients, luminous glows, and glass panels to show
+ * how far the theme engine can be pushed while staying usable.
  */
 
-/* ============================================================================
-   GENERAL COMPONENT ENHANCEMENTS
-   ============================================================================ */
-
-/* Slightly larger border radius for a softer, more fluid look */
+/* Root tokens */
 [data-theme="ocean"] {
-  /* Cards get a subtle ocean-blue tinted shadow */
-  --card-shadow: 0 4px 12px -2px rgb(0 80 120 / 0.08);
+  color-scheme: light;
+  --ocean-abyss: hsl(214 68% 8%);
+  --ocean-midnight: hsl(210 62% 16%);
+  --ocean-midwater: hsl(199 48% 28%);
+  --ocean-foam: hsl(198 65% 96%);
+  --ocean-mist: hsl(197 38% 92%);
+  --ocean-glow: hsl(189 82% 55%);
+  --ocean-highlight: hsl(174 66% 60%);
+  --ocean-sand: hsl(35 74% 78%);
+  --ocean-glass: hsl(var(--background) / 0.75);
+  --ocean-border-soft: hsl(var(--border) / 0.45);
+  --ocean-border-strong: hsl(var(--border) / 0.85);
+  --ocean-shadow: 0 36px 80px -45px rgb(6 48 68 / 0.65);
+  --ocean-radius: var(--radius-lg, 1rem);
+  --ocean-backdrop: blur(26px) saturate(130%);
+  --ocean-transition: var(--transition-normal, 230ms) var(--transition-easing, cubic-bezier(0.35, 0.05, 0.2, 1));
+  --ocean-text-soft: hsl(var(--mutedForeground));
+  font-family: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
+  background-color: hsl(var(--background));
 }
 
-/* ============================================================================
-   CHAT MESSAGE STYLING
-   ============================================================================ */
+.dark[data-theme="ocean"] {
+  color-scheme: dark;
+  --ocean-glass: hsl(var(--card) / 0.3);
+  --ocean-border-soft: hsl(var(--border) / 0.35);
+  --ocean-border-strong: hsl(var(--border) / 0.8);
+  --ocean-shadow: 0 55px 120px -40px rgb(2 9 18 / 0.85);
+  --ocean-foam: hsl(205 45% 92% / 0.08);
+  --ocean-mist: hsl(207 40% 22% / 0.55);
+}
 
-/* Chat messages with ocean-inspired styling */
+body[data-theme="ocean"] {
+  position: relative;
+  min-height: 100vh;
+  background: radial-gradient(circle at 15% 20%, hsl(190 80% 75% / 0.25), transparent 40%),
+    radial-gradient(circle at 85% 10%, hsl(207 90% 65% / 0.18), transparent 35%),
+    linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted)) 60%, hsl(var(--background)));
+  background-attachment: fixed;
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
+  overflow-x: hidden;
+}
+
+body[data-theme="ocean"]::before,
+body[data-theme="ocean"]::after {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  pointer-events: none;
+  z-index: -2;
+}
+
+body[data-theme="ocean"]::before {
+  background: radial-gradient(circle at 70% 40%, hsl(183 80% 60% / 0.25), transparent 55%),
+    radial-gradient(circle at 30% 80%, hsl(210 70% 45% / 0.2), transparent 50%);
+  filter: blur(80px);
+  opacity: 0.75;
+}
+
+body[data-theme="ocean"]::after {
+  background: linear-gradient(125deg, hsl(var(--accent) / 0.12), transparent 50%) center/120% 120%,
+    repeating-linear-gradient(135deg, hsl(var(--border) / 0.25) 0 1px, transparent 1px 12px);
+  mix-blend-mode: soft-light;
+  opacity: 0.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-theme="ocean"]::after,
+  body[data-theme="ocean"]::before,
+  [data-theme="ocean"] * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Layout surfaces */
+[data-theme="ocean"] .app-shell,
+[data-theme="ocean"] .workspace-shell,
+[data-theme="ocean"] .chat-layout,
+[data-theme="ocean"] .panel,
+[data-theme="ocean"] .card,
+[data-theme="ocean"] [data-surface="panel"] {
+  background: linear-gradient(145deg, var(--ocean-glass), hsl(var(--card) / 0.9));
+  border: 1px solid var(--ocean-border-soft);
+  border-radius: var(--ocean-radius);
+  box-shadow: var(--ocean-shadow);
+  backdrop-filter: var(--ocean-backdrop);
+  transition: background var(--ocean-transition), transform var(--ocean-transition), border-color var(--ocean-transition);
+}
+
+[data-theme="ocean"] .app-shell:hover,
+[data-theme="ocean"] .card:hover {
+  border-color: hsl(var(--accent) / 0.35);
+  transform: translateY(-2px);
+}
+
+[data-theme="ocean"] .nav-header,
+[data-theme="ocean"] header {
+  background: linear-gradient(120deg, hsl(var(--background) / 0.9), hsl(var(--muted) / 0.75));
+  border-bottom: 1px solid var(--ocean-border-strong);
+  backdrop-filter: blur(20px) saturate(135%);
+  box-shadow: 0 15px 50px -35px rgb(5 30 45 / 0.55);
+}
+
+[data-theme="ocean"] .nav-header::after {
+  content: "";
+  position: absolute;
+  inset: auto 2rem -2px 2rem;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, hsl(var(--accent)), hsl(var(--primary)), transparent);
+  opacity: 0.6;
+}
+
+[data-theme="ocean"] .sidebar,
+[data-theme="ocean"] [data-surface="sidebar"] {
+  background: linear-gradient(180deg, hsl(var(--background) / 0.9), hsl(var(--muted) / 0.35));
+  border-right: 1px solid var(--ocean-border-soft);
+  box-shadow: inset 0 1px 0 hsl(var(--border) / 0.25);
+}
+
+[data-theme="ocean"] .sidebar .section-title {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.7rem;
+  color: var(--ocean-text-soft);
+}
+
+/* Tabs / filters */
+[data-theme="ocean"] .tabs-list,
+[data-theme="ocean"] .filter-chips {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  background: hsl(var(--muted) / 0.4);
+  border-radius: calc(var(--ocean-radius) * 0.85);
+}
+
+[data-theme="ocean"] .tabs-trigger,
+[data-theme="ocean"] .chip {
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid transparent;
+  color: var(--ocean-text-soft);
+  transition: background var(--ocean-transition), color var(--ocean-transition), border-color var(--ocean-transition);
+}
+
+[data-theme="ocean"] .tabs-trigger[data-state="active"],
+[data-theme="ocean"] .chip.is-active {
+  background: linear-gradient(120deg, hsl(var(--primary) / 0.2), hsl(var(--accent) / 0.2));
+  border-color: hsl(var(--ring));
+  color: hsl(var(--foreground));
+  box-shadow: 0 10px 25px -15px hsl(var(--ring) / 0.8);
+}
+
+/* Chat thread */
+[data-theme="ocean"] .chat-thread,
+[data-theme="ocean"] .conversation-panel {
+  background: linear-gradient(180deg, hsl(var(--card) / 0.88), hsl(var(--card) / 0.74));
+  border-radius: calc(var(--ocean-radius) * 1.1);
+  border: 1px solid var(--ocean-border-soft);
+  box-shadow: 0 25px 60px -40px rgb(6 48 68 / 0.45);
+}
+
 [data-theme="ocean"] .chat-message {
-  border-radius: var(--radius-lg, 0.75rem);
-  transition: box-shadow var(--transition-normal, 200ms) var(--transition-easing, ease);
+  position: relative;
+  border-radius: calc(var(--ocean-radius) * 1.1);
+  border: 1px solid hsl(var(--border) / 0.35);
+  padding: 1.125rem;
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+  transition: border-color var(--ocean-transition), box-shadow var(--ocean-transition), transform var(--ocean-transition);
+}
+
+[data-theme="ocean"] .chat-message::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, hsl(var(--accent) / 0.05), transparent 60%);
+  opacity: 0;
+  transition: opacity var(--ocean-transition);
 }
 
 [data-theme="ocean"] .chat-message:hover {
-  box-shadow: 0 2px 8px -2px rgb(0 80 120 / 0.1);
+  border-color: hsl(var(--accent) / 0.4);
+  box-shadow: 0 12px 30px -18px hsl(var(--accent) / 0.4);
+  transform: translateY(-2px);
 }
 
-/* User messages - slightly warmer teal accent */
+[data-theme="ocean"] .chat-message:hover::after {
+  opacity: 1;
+}
+
 [data-theme="ocean"] .chat-message-user {
-  background: linear-gradient(135deg, hsl(180 60% 45% / 0.1), hsl(200 80% 40% / 0.05));
+  background: linear-gradient(145deg, hsl(var(--primary) / 0.18), hsl(var(--accent) / 0.16));
+  border-color: hsl(var(--primary) / 0.45);
+  color: hsl(var(--primaryForeground));
+  box-shadow: 0 18px 35px -25px hsl(var(--primary) / 0.7);
 }
 
-/* Assistant messages - subtle wave-like gradient */
 [data-theme="ocean"] .chat-message-assistant {
-  background: linear-gradient(180deg, transparent, hsl(200 30% 50% / 0.03));
+  background: linear-gradient(160deg, hsl(var(--card) / 0.92), hsl(var(--muted) / 0.6));
+  border-color: hsl(var(--border) / 0.4);
+  color: hsl(var(--foreground));
 }
 
-/* ============================================================================
-   NAVIGATION & HEADER
-   ============================================================================ */
-
-/* Frosted glass effect for navigation */
-[data-theme="ocean"] .nav-header {
-  backdrop-filter: blur(12px);
-  background: hsl(var(--background) / 0.85);
-  border-bottom: 1px solid hsl(var(--border) / 0.5);
+[data-theme="ocean"] .chat-message-system,
+[data-theme="ocean"] .chat-message-note {
+  background: linear-gradient(160deg, hsl(var(--info) / 0.12), hsl(var(--muted) / 0.45));
+  border-color: hsl(var(--info) / 0.5);
 }
 
-/* Sidebar with subtle depth */
-[data-theme="ocean"] .sidebar {
-  background: linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted) / 0.3));
+[data-theme="ocean"] .chat-message .message-meta {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--ocean-text-soft);
 }
 
-/* ============================================================================
-   BUTTONS & INTERACTIVE ELEMENTS
-   ============================================================================ */
-
-/* Primary buttons with ocean gradient */
-[data-theme="ocean"] .btn-primary {
-  background: linear-gradient(135deg, hsl(200 80% 40%), hsl(200 80% 35%));
-  transition: all var(--transition-normal, 200ms) var(--transition-easing, ease);
+[data-theme="ocean"] .chat-message .inline-action {
+  border-radius: 999px;
+  padding: 0.25rem 0.85rem;
+  border: 1px solid transparent;
+  background: hsl(var(--muted) / 0.4);
+  color: hsl(var(--foreground));
+  transition: background var(--ocean-transition), border-color var(--ocean-transition);
 }
 
-[data-theme="ocean"] .btn-primary:hover {
-  background: linear-gradient(135deg, hsl(200 80% 45%), hsl(200 80% 40%));
-  box-shadow: 0 4px 12px -2px hsl(200 80% 40% / 0.4);
+[data-theme="ocean"] .chat-message .inline-action:hover {
+  border-color: hsl(var(--accent));
+  background: hsl(var(--accent) / 0.2);
 }
 
-[data-theme="ocean"] .btn-primary:active {
-  transform: translateY(1px);
+/* Message extras */
+[data-theme="ocean"] .thought-badge,
+[data-theme="ocean"] .annotation-pill {
+  background: linear-gradient(120deg, hsl(var(--accent) / 0.45), hsl(var(--primary) / 0.35));
+  color: hsl(var(--primaryForeground));
+  border-radius: 999px;
+  padding: 0.2rem 0.75rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
 }
 
-/* Secondary buttons with subtle ocean tint */
-[data-theme="ocean"] .btn-secondary {
-  border-color: hsl(200 30% 70%);
+[data-theme="ocean"] .tool-call,
+[data-theme="ocean"] .function-result {
+  border: 1px dashed hsl(var(--border) / 0.6);
+  border-radius: calc(var(--ocean-radius) * 0.9);
+  padding: 0.9rem;
+  background: hsl(var(--muted) / 0.5);
 }
 
-[data-theme="ocean"] .btn-secondary:hover {
-  background: hsl(200 30% 95%);
-  border-color: hsl(200 40% 60%);
+/* Composer */
+[data-theme="ocean"] .chat-input-container {
+  background: linear-gradient(180deg, hsl(var(--muted) / 0.7), hsl(var(--background)));
+  border-top: 1px solid var(--ocean-border-strong);
+  box-shadow: 0 -25px 35px -35px rgb(5 20 35 / 0.35);
 }
 
-/* Dark mode button adjustments */
-.dark[data-theme="ocean"] .btn-secondary:hover {
-  background: hsl(200 30% 18%);
-  border-color: hsl(200 40% 40%);
+[data-theme="ocean"] .chat-input-container textarea,
+[data-theme="ocean"] .chat-input-container input,
+[data-theme="ocean"] input,
+[data-theme="ocean"] textarea,
+[data-theme="ocean"] select {
+  background: linear-gradient(120deg, hsl(var(--background)), hsl(var(--muted) / 0.8));
+  border: 1px solid var(--ocean-border-soft);
+  border-radius: calc(var(--ocean-radius) * 0.6);
+  padding: 0.85rem 1rem;
+  transition: border-color var(--ocean-transition), box-shadow var(--ocean-transition), background var(--ocean-transition);
 }
 
-/* ============================================================================
-   INPUT FIELDS
-   ============================================================================ */
-
-/* Inputs with ocean-themed focus states */
 [data-theme="ocean"] input:focus,
 [data-theme="ocean"] textarea:focus,
 [data-theme="ocean"] select:focus {
-  border-color: hsl(200 80% 50%);
-  box-shadow: 0 0 0 3px hsl(200 80% 50% / 0.15);
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.25), 0 18px 30px -25px hsl(var(--ring) / 0.65);
+  background: hsl(var(--background));
 }
 
-/* Chat input area */
-[data-theme="ocean"] .chat-input-container {
-  background: linear-gradient(0deg, hsl(var(--background)), hsl(var(--muted) / 0.2));
-  border-top: 1px solid hsl(var(--border) / 0.5);
+[data-theme="ocean"] .chat-input-toolbar,
+[data-theme="ocean"] .floating-toolbar {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border-radius: calc(var(--ocean-radius) * 0.8);
+  background: hsl(var(--muted) / 0.35);
+  border: 1px solid var(--ocean-border-soft);
 }
 
-/* ============================================================================
-   SCROLLBARS
-   ============================================================================ */
-
-/* Custom scrollbar styling for ocean theme */
-[data-theme="ocean"] ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Buttons */
+[data-theme="ocean"] .btn,
+[data-theme="ocean"] button {
+  font-family: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
+  border-radius: calc(var(--ocean-radius) * 0.7);
+  border: 1px solid transparent;
+  transition: transform var(--ocean-transition), box-shadow var(--ocean-transition), border var(--ocean-transition);
 }
 
-[data-theme="ocean"] ::-webkit-scrollbar-track {
-  background: hsl(200 20% 95%);
-  border-radius: 4px;
+[data-theme="ocean"] .btn-primary,
+[data-theme="ocean"] .btn[data-variant="primary"],
+[data-theme="ocean"] button.btn-primary {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+  color: hsl(var(--primaryForeground));
+  border-color: hsl(var(--primary) / 0.5);
+  box-shadow: 0 20px 40px -30px hsl(var(--primary) / 0.85);
 }
 
-[data-theme="ocean"] ::-webkit-scrollbar-thumb {
-  background: hsl(200 30% 70%);
-  border-radius: 4px;
+[data-theme="ocean"] .btn-primary:hover,
+[data-theme="ocean"] .btn[data-variant="primary"]:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 25px 45px -30px hsl(var(--accent) / 0.9);
 }
 
-[data-theme="ocean"] ::-webkit-scrollbar-thumb:hover {
-  background: hsl(200 40% 60%);
+[data-theme="ocean"] .btn-secondary,
+[data-theme="ocean"] .btn[data-variant="secondary"] {
+  background: hsl(var(--muted) / 0.6);
+  border-color: var(--ocean-border-soft);
+  color: hsl(var(--foreground));
 }
 
-/* Dark mode scrollbar */
-.dark[data-theme="ocean"] ::-webkit-scrollbar-track {
-  background: hsl(200 30% 12%);
+[data-theme="ocean"] .btn-secondary:hover {
+  border-color: hsl(var(--accent));
+  color: hsl(var(--accentForeground));
+  background: hsl(var(--accent) / 0.22);
 }
 
-.dark[data-theme="ocean"] ::-webkit-scrollbar-thumb {
-  background: hsl(200 30% 30%);
+[data-theme="ocean"] .btn-ghost,
+[data-theme="ocean"] .btn[data-variant="ghost"] {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ocean-text-soft);
 }
 
-.dark[data-theme="ocean"] ::-webkit-scrollbar-thumb:hover {
-  background: hsl(200 30% 40%);
+[data-theme="ocean"] .btn-ghost:hover {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border) / 0.45);
+  background: hsl(var(--muted) / 0.4);
 }
 
-/* ============================================================================
-   ANIMATIONS
-   ============================================================================ */
-
-/* Subtle wave animation for loading states */
-@keyframes ocean-wave {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-2px);
-  }
+[data-theme="ocean"] button:focus-visible,
+[data-theme="ocean"] .btn:focus-visible,
+[data-theme="ocean"] .chip:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
 }
 
-[data-theme="ocean"] .loading-indicator {
-  animation: ocean-wave 1.5s ease-in-out infinite;
-}
-
-/* Message enter animation */
-@keyframes ocean-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-[data-theme="ocean"] .message-enter {
-  animation: ocean-fade-in 0.3s ease-out forwards;
-}
-
-/* ============================================================================
-   CODE BLOCKS
-   ============================================================================ */
-
-/* Code blocks with ocean-themed styling */
-[data-theme="ocean"] pre,
-[data-theme="ocean"] code {
-  background: hsl(200 30% 96%);
-  border: 1px solid hsl(200 20% 88%);
-}
-
-.dark[data-theme="ocean"] pre,
-.dark[data-theme="ocean"] code {
-  background: hsl(200 40% 12%);
-  border: 1px solid hsl(200 30% 22%);
-}
-
-/* Inline code */
-[data-theme="ocean"] :not(pre) > code {
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  font-size: 0.875em;
-}
-
-/* ============================================================================
-   SELECTION
-   ============================================================================ */
-
-/* Text selection with ocean color */
-[data-theme="ocean"] ::selection {
-  background: hsl(200 80% 40% / 0.3);
-  color: inherit;
-}
-
-.dark[data-theme="ocean"] ::selection {
-  background: hsl(200 80% 60% / 0.3);
-}
-
-/* ============================================================================
-   FOCUS STATES
-   ============================================================================ */
-
-/* Enhanced focus visible states */
-[data-theme="ocean"] :focus-visible {
-  outline: 2px solid hsl(200 80% 50%);
-  outline-offset: 2px;
-}
-
-/* ============================================================================
-   TOOLTIPS & POPOVERS
-   ============================================================================ */
-
-[data-theme="ocean"] [role="tooltip"],
-[data-theme="ocean"] .popover {
-  box-shadow: 0 8px 24px -4px rgb(0 60 100 / 0.15);
-  border: 1px solid hsl(var(--border) / 0.5);
-}
-
-/* ============================================================================
-   BADGES & TAGS
-   ============================================================================ */
-
-[data-theme="ocean"] .badge {
-  border-radius: var(--radius-full, 9999px);
+/* Badges / status */
+[data-theme="ocean"] .badge,
+[data-theme="ocean"] .status-pill {
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.6);
+  color: hsl(var(--foreground));
+  border: 1px solid var(--ocean-border-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.65rem;
 }
 
 [data-theme="ocean"] .badge-primary {
-  background: linear-gradient(135deg, hsl(200 80% 45%), hsl(200 70% 40%));
+  background: linear-gradient(120deg, hsl(var(--primary)), hsl(var(--accent)));
+  color: hsl(var(--primaryForeground));
+  border: none;
 }
 
-[data-theme="ocean"] .badge-secondary {
-  background: hsl(180 30% 90%);
-  color: hsl(180 50% 30%);
+[data-theme="ocean"] .badge-outline {
+  background: transparent;
+  border: 1px solid hsl(var(--border));
 }
 
-.dark[data-theme="ocean"] .badge-secondary {
-  background: hsl(180 30% 20%);
-  color: hsl(180 40% 70%);
+/* Callouts & markdown */
+[data-theme="ocean"] .markdown h1,
+[data-theme="ocean"] .markdown h2,
+[data-theme="ocean"] .markdown h3,
+[data-theme="ocean"] .markdown h4 {
+  font-family: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground));
+}
+
+[data-theme="ocean"] .markdown blockquote {
+  border-left: 4px solid hsl(var(--accent));
+  background: hsl(var(--muted) / 0.6);
+  border-radius: calc(var(--ocean-radius) * 0.7);
+  padding: 1rem 1.25rem;
+  color: hsl(var(--foreground));
+}
+
+[data-theme="ocean"] .markdown pre,
+[data-theme="ocean"] pre,
+[data-theme="ocean"] code-block {
+  background: linear-gradient(135deg, hsl(var(--background)), hsl(var(--muted) / 0.6));
+  border-radius: calc(var(--ocean-radius) * 0.9);
+  border: 1px solid hsl(var(--border) / 0.5);
+  box-shadow: inset 0 1px 0 hsl(var(--card) / 0.6);
+}
+
+[data-theme="ocean"] pre,
+[data-theme="ocean"] code,
+[data-theme="ocean"] kbd {
+  font-family: var(--font-mono, "Space Mono", "Fira Code", monospace);
+}
+
+[data-theme="ocean"] :not(pre) > code {
+  background: hsl(var(--muted) / 0.7);
+  border-radius: 0.4rem;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.9em;
+  color: hsl(var(--accent));
+}
+
+[data-theme="ocean"] table {
+  border-collapse: collapse;
+  width: 100%;
+  border-radius: calc(var(--ocean-radius) * 0.6);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px hsl(var(--border) / 0.4);
+}
+
+[data-theme="ocean"] table th,
+[data-theme="ocean"] table td {
+  border-bottom: 1px solid hsl(var(--border) / 0.3);
+  padding: 0.75rem;
+}
+
+[data-theme="ocean"] table th {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.65rem;
+  color: var(--ocean-text-soft);
+}
+
+[data-theme="ocean"] .callout,
+[data-theme="ocean"] .alert {
+  border-radius: calc(var(--ocean-radius) * 0.9);
+  border: 1px solid hsl(var(--info) / 0.4);
+  background: linear-gradient(135deg, hsl(var(--info) / 0.15), hsl(var(--muted) / 0.7));
+  box-shadow: 0 18px 35px -30px hsl(var(--info) / 0.4);
+}
+
+[data-theme="ocean"] .callout-success {
+  border-color: hsl(var(--success) / 0.45);
+  background: linear-gradient(135deg, hsl(var(--success) / 0.18), hsl(var(--muted) / 0.6));
+}
+
+[data-theme="ocean"] .callout-warning {
+  border-color: hsl(var(--warning) / 0.5);
+  background: linear-gradient(135deg, hsl(var(--warning) / 0.2), hsl(var(--muted) / 0.6));
+}
+
+/* Command palette / popovers */
+[data-theme="ocean"] .cmdk,
+[data-theme="ocean"] .popover,
+[data-theme="ocean"] [role="tooltip"] {
+  background: linear-gradient(160deg, hsl(var(--card) / 0.98), hsl(var(--muted) / 0.65));
+  border: 1px solid var(--ocean-border-soft);
+  border-radius: calc(var(--ocean-radius) * 1.1);
+  box-shadow: 0 35px 80px -45px rgb(9 36 56 / 0.65);
+  backdrop-filter: blur(20px);
+}
+
+[data-theme="ocean"] .cmdk input {
+  background: transparent;
+  border: none;
+  font-size: 1.15rem;
+}
+
+[data-theme="ocean"] .cmdk [cmdk-item][data-selected="true"] {
+  background: hsl(var(--accent) / 0.25);
+  border-radius: calc(var(--ocean-radius) * 0.8);
+}
+
+/* Avatars */
+[data-theme="ocean"] .avatar-ring,
+[data-theme="ocean"] .chat-message .avatar {
+  position: relative;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px hsl(var(--card)), 0 0 0 4px hsl(var(--accent) / 0.35);
+}
+
+[data-theme="ocean"] .avatar-ring::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  border: 1px solid hsl(var(--ring) / 0.35);
+  opacity: 0;
+  transition: opacity var(--ocean-transition);
+}
+
+[data-theme="ocean"] .avatar-ring:hover::after {
+  opacity: 1;
+}
+
+/* Timeline / progress */
+[data-theme="ocean"] .progress,
+[data-theme="ocean"] progress {
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.6);
+  overflow: hidden;
+}
+
+[data-theme="ocean"] .progress::-webkit-progress-value,
+[data-theme="ocean"] progress::-webkit-progress-value {
+  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)));
+  border-radius: 999px;
+}
+
+[data-theme="ocean"] .timeline-item::before,
+[data-theme="ocean"] .stepper::before {
+  background: linear-gradient(180deg, hsl(var(--accent)), hsl(var(--primary)));
+}
+
+/* Scrollbars */
+[data-theme="ocean"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+[data-theme="ocean"] ::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.6);
+  border-radius: 999px;
+}
+
+[data-theme="ocean"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--accent)));
+  border-radius: 999px;
+}
+
+[data-theme="ocean"] ::-webkit-scrollbar-thumb:hover {
+  filter: brightness(1.1);
+}
+
+/* Selection */
+[data-theme="ocean"] ::selection {
+  background: hsl(var(--accent) / 0.35);
+  color: hsl(var(--foreground));
+}
+
+.dark[data-theme="ocean"] ::selection {
+  background: hsl(var(--accent) / 0.5);
+  color: hsl(var(--accentForeground));
+}
+
+/* Animations */
+@keyframes ocean-sway {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes ocean-glisten {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 200% 50%;
+  }
+}
+
+[data-theme="ocean"] .btn-primary,
+[data-theme="ocean"] .chat-message-user {
+  animation: ocean-sway 6s ease-in-out infinite alternate;
+}
+
+[data-theme="ocean"] .chat-message-assistant::after {
+  background: linear-gradient(120deg, hsl(var(--accent) / 0.08), transparent, hsl(var(--accent) / 0.05));
+  animation: ocean-glisten 12s linear infinite;
+  opacity: 0.4;
+}
+
+[data-theme="ocean"] .loading-indicator {
+  animation: ocean-sway 1.8s ease-in-out infinite;
+}
+
+[data-theme="ocean"] .typing-dot {
+  animation: ocean-glisten 1.2s linear infinite;
 }

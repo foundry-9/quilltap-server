@@ -2,8 +2,8 @@
   "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-theme-ocean",
   "title": "Ocean Theme",
-  "description": "A calming ocean-inspired theme with deep blues and teals, designed for a relaxing yet focused chat experience",
-  "version": "1.0.0",
+  "description": "A bioluminescent ocean theme with layered gradients, glass panels, and gentle motion for a focused-yet-expressive chat experience",
+  "version": "1.1.0",
   "author": {
     "name": "Foundry-9",
     "email": "charles@sebold.tech",
@@ -28,7 +28,30 @@
     "stylesPath": "styles.css",
     "supportsDarkMode": true,
     "previewImage": "preview.png",
-    "tags": ["ocean", "blue", "calming", "nature"]
+    "tags": ["ocean", "blue", "calming", "nature"],
+    "fonts": [
+      {
+        "family": "Space Grotesk",
+        "src": "fonts/SpaceGrotesk-Regular.ttf",
+        "weight": "400",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Space Grotesk",
+        "src": "fonts/SpaceGrotesk-SemiBold.ttf",
+        "weight": "600",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Space Mono",
+        "src": "fonts/SpaceMono-Regular.ttf",
+        "weight": "400",
+        "style": "normal",
+        "display": "swap"
+      }
+    ]
   },
   "permissions": {
     "fileSystem": [],

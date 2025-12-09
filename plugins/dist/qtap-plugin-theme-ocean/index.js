@@ -453,12 +453,12 @@ var logger = new Logger({
 function initialize() {
   logger.debug("Ocean theme plugin loaded", {
     plugin: "qtap-plugin-theme-ocean",
-    version: "1.0.0"
+    version: "1.1.0"
   });
 }
 var metadata = {
   name: "qtap-plugin-theme-ocean",
-  version: "1.0.0",
+  version: "1.1.0",
   type: "THEME"
 };
 var oceanThemePlugin = {

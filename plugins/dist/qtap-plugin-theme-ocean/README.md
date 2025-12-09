@@ -1,110 +1,119 @@
 # Ocean Theme Plugin
 
-A calming ocean-inspired theme for Quilltap with deep blues and teals, designed for a relaxing yet focused chat experience.
+A luminous, bioluminescent-inspired theme for Quilltap that mixes glass surfaces, layered gradients, and fluid motion to create a calm but expressive writing environment.
 
 ## Features
 
-- **Light & Dark Mode**: Full support for both light and dark color schemes
-- **Ocean Color Palette**: Carefully crafted blues, teals, and complementary colors
-- **Component Overrides**: Enhanced styling for chat messages, buttons, and more
-- **Smooth Animations**: Subtle wave-inspired animations for loading states
-- **Accessible**: Maintains proper contrast ratios for readability
+- **Ambient Depth**: Layered backdrop gradients, floating glows, and glass panels that make every surface feel aquatic.
+- **Message Personalities**: Assistant/user/system turns each receive their own gradients, borders, and motion to keep the thread legible.
+- **Custom Typography**: Bundles Space Grotesk for UI copy and Space Mono for code to reinforce the futuristic ocean aesthetic.
+- **Command & Canvas Polish**: Command palette, toolbars, tables, callouts, and chip groups all receive bespoke styling.
+- **Light + Dark Harmony**: Shared palette tuned to stay vibrant in both surface modes with accessible contrast.
+- **Micro-Interactions**: Buttons, bubbles, and typing dots animate with gentle "tidal" motion to show off the theme engine.
 
-## Installation
+## Layered Styling Highlights
 
-This theme is included with Quilltap. To enable it:
-
-1. Go to **Settings** > **Appearance**
-2. Select "Ocean" from the theme picker
-3. Choose your preferred color mode (Light, Dark, or System)
+- Frosted navigation rail with subtle accent line and blurred glass effect.
+- Chat thread container with translucent shell, glowing hover states, and message metadata microtype.
+- Composer toolbar, inline actions, and chips that share a pill-based language.
+- Command palette + popovers built from luminous panels, keeping the experience cohesive.
+- Markdown treatments (tables, blockquotes, code) using the bundled mono font and aqua outlines.
+- Scrollbars, progress bars, avatars, and badges themed to match the palette for full-environment polish.
 
 ## Color Palette
 
 ### Light Mode
-- **Background**: Cool off-white (`hsl(200 20% 98%)`)
-- **Primary**: Ocean blue (`hsl(200 80% 40%)`)
-- **Accent**: Teal (`hsl(180 60% 45%)`)
-- **Text**: Deep navy (`hsl(200 50% 10%)`)
+- **Background**: Mist white (`hsl(198 58% 96%)`)
+- **Primary**: Tidal teal (`hsl(196 78% 42%)`)
+- **Accent**: Reef aqua (`hsl(174 66% 38%)`)
+- **Text**: Midnight navy (`hsl(220 57% 12%)`)
 
 ### Dark Mode
-- **Background**: Deep ocean (`hsl(200 50% 8%)`)
-- **Primary**: Bright ocean blue (`hsl(200 80% 60%)`)
-- **Accent**: Vibrant teal (`hsl(180 60% 50%)`)
-- **Text**: Soft white (`hsl(200 20% 95%)`)
+- **Background**: Abyss blue (`hsl(214 68% 6%)`)
+- **Primary**: Electric cyan (`hsl(188 82% 62%)`)
+- **Accent**: Bioluminescent green (`hsl(176 70% 55%)`)
+- **Text**: Soft foam (`hsl(205 46% 92%)`)
+
+## Bundled Fonts
+
+| Font | Use | License |
+| ---- | --- | ------- |
+| Space Grotesk (400/600) | UI + headings | SIL Open Font License 1.1 |
+| Space Mono (400) | Code + inline monospace | SIL Open Font License 1.1 |
+
+All font files live in `fonts/` alongside the license text.
+
+## Installation
+
+This theme ships with Quilltap. To enable it:
+
+1. Go to **Settings → Appearance**
+2. Choose **Ocean** in the theme picker
+3. Pick *Light*, *Dark*, or *System* mode
 
 ## Customization
 
-The theme provides three tiers of customization:
-
 ### Tier 1: Design Tokens
-Core color, typography, and spacing values defined in `tokens.json`. These CSS custom properties are applied globally.
+`tokens.json` defines the refreshed palette, typography, spacing, and effect scales. Adjust HSL values or font stacks to quickly reskin the vibe.
 
 ### Tier 2: Component Tokens
-Semantic tokens for component-level styling that reference the design tokens.
+Semantic tokens inside Quilltap automatically pick up the palette—primary buttons, informative callouts, and more change without touching CSS.
 
 ### Tier 3: Component Overrides
-Advanced CSS in `styles.css` for specific component enhancements:
-- Gradient backgrounds for user/assistant messages
-- Frosted glass navigation effect
-- Custom scrollbar styling
-- Wave-inspired animations
-- Enhanced focus states
+`styles.css` uses `[data-theme="ocean"]` selectors to author advanced layouts:
+
+- Ambient background layers with pseudo elements
+- Chat-specific gradients, system callouts, and ripple animations
+- Composer + toolbar pills, command palette panels, and markdown polish
+- Scrollbars, badges, tabs, and inline actions tuned to the palette
 
 ## File Structure
 
 ```
 qtap-plugin-theme-ocean/
-├── manifest.json      # Plugin manifest with theme configuration
-├── package.json       # NPM package metadata
-├── tokens.json        # Design tokens (colors, typography, spacing)
-├── styles.css         # Component override CSS (Tier 3)
-├── index.ts           # Plugin entry point
-├── preview.png        # Theme preview image
-└── README.md          # This file
+├── manifest.json      # Plugin manifest and theme config
+├── package.json       # NPM metadata
+├── tokens.json        # Design tokens (colors, typography, spacing, effects)
+├── styles.css         # Component overrides plus font-face declarations
+├── fonts/             # Bundled fonts + SIL license
+│   ├── SpaceGrotesk-Regular.ttf
+│   ├── SpaceGrotesk-SemiBold.ttf
+│   ├── SpaceMono-Regular.ttf
+│   └── OFL.txt
+├── index.ts           # Plugin entry (TypeScript)
+├── index.js           # Compiled entry
+└── README.md          # This document
 ```
 
 ## Development
 
-### Testing the Theme
+1. Enable the plugin in Quilltap settings.
+2. Switch to the Ocean theme in **Appearance**.
+3. Verify the gradients, typography, and animations in both light and dark modes.
+4. Inspect the chat thread, composer, command palette, markdown render, and sidebar to ensure every surface inherits the new styling.
 
-1. Enable the plugin in the Quilltap plugin settings
-2. Select the Ocean theme in Appearance settings
-3. Verify both light and dark modes work correctly
+## Design Philosophy
 
-### Modifying Colors
+Ocean 1.1 leans into three pillars:
 
-Edit `tokens.json` to adjust the color palette. The theme uses HSL color format for easy adjustment:
-
-```json
-{
-  "colors": {
-    "light": {
-      "primary": "hsl(200 80% 40%)"
-    }
-  }
-}
-```
-
-### Adding Component Overrides
-
-Add CSS rules to `styles.css` using the `[data-theme="ocean"]` selector:
-
-```css
-[data-theme="ocean"] .my-component {
-  /* Custom styles */
-}
-```
+- **Depth** through stacked glass, blurred backgrounds, and glowing borders.
+- **Flow** by animating key elements with a slow "tidal" sway rather than flashy motion.
+- **Focus** via high-contrast typography and disciplined spacing so the experience remains usable despite the visual flourish.
 
 ## Credits
 
 - **Author**: Foundry-9
 - **License**: MIT
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 
 ## Changelog
 
+### 1.1.0
+- New color palette with brighter cyan/reef accents.
+- Added bundled Space Grotesk + Space Mono fonts.
+- Reauthored `styles.css` with ambient gradients, glass panels, and expanded component coverage.
+- Enhanced chat thread, toolbar, command palette, markdown, and scrollbar styling.
+- Updated tokens (spacing, effects) to support the new look.
+
 ### 1.0.0
-- Initial release
-- Light and dark mode support
-- Full design token system
-- Component override CSS for enhanced styling
+- Initial release with basic light/dark palette, tokens, and component overrides.

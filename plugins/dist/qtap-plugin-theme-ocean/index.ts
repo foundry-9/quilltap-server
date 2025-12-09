@@ -18,7 +18,7 @@ import { logger } from '@/lib/logger';
 export function initialize(): void {
   logger.debug('Ocean theme plugin loaded', {
     plugin: 'qtap-plugin-theme-ocean',
-    version: '1.0.0',
+    version: '1.1.0',
   });
 }
 
@@ -27,7 +27,7 @@ export function initialize(): void {
  */
 export const metadata = {
   name: 'qtap-plugin-theme-ocean',
-  version: '1.0.0',
+  version: '1.1.0',
   type: 'THEME',
 } as const;
 
