@@ -71,6 +71,7 @@ export async function GET(
     // Get theme tokens and fonts
     const tokens = themeRegistry.getTokens(themeId);
     const loadedFonts = themeRegistry.getFonts(themeId);
+    const cssOverrides = themeRegistry.getCSSOverrides(themeId);
 
     // Convert fonts to client-friendly format with API URLs
     const fonts = loadedFonts.map(font => ({
@@ -88,7 +89,7 @@ export async function GET(
       fontCount: fonts.length,
     });
 
-    return NextResponse.json({ tokens, fonts });
+    return NextResponse.json({ tokens, fonts, cssOverrides });
   } catch (error) {
     const themeIdParam = await params.catch(() => ({ themeId: 'unknown' }));
     logger.error(

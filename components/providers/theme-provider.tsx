@@ -30,6 +30,7 @@ import { useSession } from 'next-auth/react';
 import { clientLogger } from '@/lib/client-logger';
 import type { ThemeTokens, ColorMode, ThemePreference } from '@/lib/themes/types';
 import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens';
+import { ThemeStyleInjector } from '@/components/providers/theme-style-injector';
 
 // ============================================================================
 // TYPES
@@ -103,12 +104,15 @@ interface ThemeProviderProps {
   initialPreference?: ThemePreference;
   /** Initial tokens (for SSR hydration) */
   initialTokens?: ThemeTokens;
+  /** Initial CSS overrides (for SSR hydration) */
+  initialCssOverrides?: string;
 }
 
 export function ThemeProvider({
   children,
   initialPreference,
   initialTokens,
+  initialCssOverrides,
 }: ThemeProviderProps) {
   const { status } = useSession();
 
@@ -131,6 +135,7 @@ export function ThemeProvider({
     style?: string;
     display?: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
   }>>([]);
+  const [cssOverrides, setCssOverrides] = useState<string | undefined>(initialCssOverrides);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -214,18 +219,21 @@ export function ThemeProvider({
       const response = await fetch(`/api/themes/${themeId}/tokens`);
       if (response.ok) {
         const data = await response.json();
-        // API returns { tokens, fonts }
+        // API returns { tokens, fonts, cssOverrides }
         setTokens(data.tokens);
         setThemeFonts(data.fonts || []);
+        setCssOverrides(data.cssOverrides || undefined);
 
         clientLogger.debug('Theme: loaded theme tokens', {
           themeId,
           fontCount: data.fonts?.length || 0,
+          hasCssOverrides: !!data.cssOverrides,
         });
       } else if (response.status === 404) {
         clientLogger.warn('Theme: theme not found, using default', { themeId });
         setTokens(DEFAULT_THEME_TOKENS);
         setThemeFonts([]);
+        setCssOverrides(undefined);
       } else {
         throw new Error(`Failed to load theme tokens: ${response.status}`);
       }
@@ -235,6 +243,7 @@ export function ThemeProvider({
       // Fall back to default tokens
       setTokens(DEFAULT_THEME_TOKENS);
       setThemeFonts([]);
+      setCssOverrides(undefined);
     }
   }, []);
 
@@ -338,6 +347,7 @@ export function ThemeProvider({
     } else {
       setTokens(DEFAULT_THEME_TOKENS);
       setThemeFonts([]);
+      setCssOverrides(undefined);
     }
 
     // Persist to server
@@ -428,6 +438,7 @@ export function ThemeProvider({
         mode={resolvedColorMode}
         fonts={themeFonts}
         themeId={activeThemeId}
+        cssOverrides={cssOverrides}
       />
       {children}
     </ThemeContext.Provider>
@@ -451,102 +462,4 @@ export function useTheme(): ThemeContextValue {
   }
 
   return context;
-}
-
-// ============================================================================
-// STYLE INJECTOR (INLINE FOR SIMPLICITY)
-// ============================================================================
-
-import { themeTokensToCSS, generateFontFacesCSS } from '@/lib/themes/utils';
-
-/**
- * Font info for CSS @font-face generation
- */
-interface ThemeFontInfo {
-  family: string;
-  src: string;
-  weight?: string;
-  style?: string;
-  display?: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
-}
-
-interface ThemeStyleInjectorProps {
-  tokens: ThemeTokens;
-  mode: 'light' | 'dark';
-  fonts?: ThemeFontInfo[];
-  themeId?: string | null;
-}
-
-/**
- * Injects theme CSS variables into the document head
- * Uses useEffect to ensure proper placement and update
- */
-function ThemeStyleInjector({ tokens, mode, fonts, themeId }: ThemeStyleInjectorProps) {
-  // Generate @font-face CSS for custom fonts
-  const fontFacesCss = useMemo(() => {
-    if (!fonts || fonts.length === 0) {
-      return '';
-    }
-    return generateFontFacesCSS(fonts);
-  }, [fonts]);
-
-  // Generate CSS from tokens
-  const baseCss = useMemo(() => {
-    return themeTokensToCSS(tokens);
-  }, [tokens]);
-
-  // Combine all CSS: fonts + variables
-  const cssContent = useMemo(() => {
-    const parts: string[] = [];
-
-    // Add @font-face rules first
-    if (fontFacesCss) {
-      parts.push(`/* Theme Custom Fonts */\n${fontFacesCss}`);
-    }
-
-    // Add theme variables
-    parts.push(baseCss);
-
-    return parts.join('\n\n');
-  }, [baseCss, fontFacesCss]);
-
-  // Inject styles into document head
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-
-    const styleId = 'quilltap-theme-variables';
-    let styleElement = document.getElementById(styleId) as HTMLStyleElement | null;
-
-    if (!styleElement) {
-      styleElement = document.createElement('style');
-      styleElement.id = styleId;
-      document.head.appendChild(styleElement);
-    }
-
-    styleElement.textContent = cssContent;
-    if (themeId) {
-      styleElement.setAttribute('data-theme-id', themeId);
-    }
-    styleElement.setAttribute('data-color-mode', mode);
-
-    clientLogger.debug('Theme: CSS variables injected to head', {
-      mode,
-      themeId,
-      cssLength: cssContent.length,
-      fontCount: fonts?.length || 0,
-      // Log first 500 chars of CSS for debugging
-      cssPreview: cssContent.substring(0, 500),
-    });
-
-    // Cleanup on unmount
-    return () => {
-      const el = document.getElementById(styleId);
-      if (el) {
-        el.remove();
-      }
-    };
-  }, [cssContent, mode, themeId, fonts]);
-
-  // Don't render anything - styles are injected via useEffect
-  return null;
 }
