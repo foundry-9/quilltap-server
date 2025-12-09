@@ -142,8 +142,8 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
             <span
               className={`inline-block px-2 py-0.5 text-xs font-medium rounded ml-auto ${
                 toolData.success
-                  ? 'bg-green-600/20 text-green-700'
-                  : 'bg-red-600/20 text-red-700'
+                  ? 'qt-badge-success'
+                  : 'qt-badge-destructive'
               }`}
             >
               {toolData.success ? 'Success' : 'Failed'}

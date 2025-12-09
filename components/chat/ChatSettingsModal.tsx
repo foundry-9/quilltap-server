@@ -130,13 +130,13 @@ function ParticipantEditor({
   }
 
   return (
-    <div className="border border-border rounded-lg p-4 mb-4">
+    <div className="qt-card mb-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className={`px-2 py-0.5 text-xs rounded ${
             isCharacter
-              ? 'bg-blue-600/20 text-blue-700'
-              : 'bg-green-600/20 text-green-700'
+              ? 'qt-badge-info'
+              : 'qt-badge-success'
           }`}>
             {isCharacter ? 'Character' : 'Persona'}
           </span>
@@ -165,7 +165,7 @@ function ParticipantEditor({
               value={selectedConnectionProfileId}
               onChange={(e) => setSelectedConnectionProfileId(e.target.value)}
               disabled={loading}
-              className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted text-sm"
+              className="qt-select text-sm"
             >
               <option value="">Select a provider...</option>
               {connectionProfiles.map((profile) => (
@@ -185,7 +185,7 @@ function ParticipantEditor({
               value={selectedImageProfileId}
               onChange={(e) => setSelectedImageProfileId(e.target.value)}
               disabled={loading}
-              className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted text-sm"
+              className="qt-select text-sm"
             >
               <option value="">None</option>
               {imageProfiles.map((profile) => (
@@ -209,14 +209,14 @@ function ParticipantEditor({
           disabled={loading}
           placeholder="Custom scenario or context for this participant..."
           rows={2}
-          className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted text-sm resize-none"
+          className="qt-textarea text-sm"
         />
       </div>
 
       <button
         onClick={handleSave}
         disabled={loading}
-        className="px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-lg hover:bg-primary/90 disabled:bg-muted transition-colors"
+        className="qt-button-primary qt-button-sm"
       >
         Save Changes
       </button>
@@ -325,12 +325,15 @@ export default function ChatSettingsModal({
   const sortedParticipants = [...participants].sort((a, b) => a.displayOrder - b.displayOrder)
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="qt-dialog-overlay">
       <div
         ref={modalRef}
-        className="bg-card rounded-lg shadow-lg p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto"
+        className="qt-dialog max-w-lg max-h-[80vh] flex flex-col"
       >
-        <h2 className="text-xl font-semibold text-foreground mb-4">Chat Settings</h2>
+        <div className="qt-dialog-header">
+          <h2 className="qt-dialog-title">Chat Settings</h2>
+        </div>
+        <div className="qt-dialog-body flex-1 overflow-y-auto">
 
         <div className="mb-4">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">
@@ -348,12 +351,13 @@ export default function ChatSettingsModal({
             />
           ))}
         </div>
+        </div>
 
-        <div className="flex justify-end">
+        <div className="qt-dialog-footer flex justify-end">
           <button
             onClick={onClose}
             disabled={loading}
-            className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80 disabled:opacity-50 transition-colors"
+            className="qt-button-secondary"
           >
             Close
           </button>

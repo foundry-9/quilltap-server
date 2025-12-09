@@ -1219,3 +1219,108 @@
   border: 1px solid var(--stroke-soft) !important;
   color: hsl(var(--text-200)) !important;
 }
+
+/* ============================================================================
+   QT-* SEMANTIC COMPONENT OVERRIDES
+   ============================================================================ */
+
+/* Button Variables - Earl Grey sophisticated blue accents */
+[data-theme="earl-grey"] {
+  --qt-button-primary-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.95), hsl(var(--accent-main-000)));
+  --qt-button-primary-fg: hsl(var(--oncolor-100));
+  --qt-button-primary-hover-bg: linear-gradient(135deg, hsl(var(--accent-main-000)), hsl(var(--accent-brand)));
+  --qt-button-primary-shadow: 0 18px 40px -22px hsl(var(--accent-brand) / 0.65);
+  --qt-button-radius: 0.5rem;
+
+  --qt-button-secondary-bg: hsl(var(--bg-200) / 0.9);
+  --qt-button-secondary-fg: hsl(var(--text-300));
+  --qt-button-secondary-border: var(--stroke-soft);
+
+  /* Card Variables - Earl Grey refined card styling */
+  --qt-card-radius: 0.5rem;
+  --qt-card-bg: var(--surface-raised);
+  --qt-card-fg: hsl(var(--text-000));
+  --qt-card-border: var(--stroke-soft);
+  --qt-card-shadow: var(--card-shadow);
+  --qt-card-shadow-hover: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+
+  /* Chat Variables */
+  --qt-chat-message-radius: 0.5rem;
+  --qt-chat-message-padding: 1rem;
+  --qt-chat-message-shadow: var(--chat-shadow);
+
+  --qt-chat-user-bg: var(--theme-user-msg-bg);
+  --qt-chat-user-fg: var(--theme-user-msg-text);
+  --qt-chat-user-border: var(--border-light, currentColor);
+  --qt-chat-user-font: var(--font-user-message);
+
+  --qt-chat-assistant-bg: linear-gradient(160deg, hsl(var(--bg-100) / 0.85), hsl(var(--pictogram-200) / 0.9));
+  --qt-chat-assistant-fg: hsl(var(--text-200));
+  --qt-chat-assistant-border: hsl(var(--border-300) / 0.15);
+  --qt-chat-assistant-font: var(--font-claude-response);
+
+  /* Input Variables */
+  --qt-input-radius: var(--radius-md);
+  --qt-input-focus-ring: hsl(var(--accent-secondary-100));
+
+  /* Auth Page Background */
+  --qt-auth-page-bg: linear-gradient(to bottom right, #0f172a, #1e293b);
+}
+
+/* Button override - Earl Grey primary button */
+[data-theme="earl-grey"] .qt-button-primary {
+  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.95), hsl(var(--accent-main-000)));
+  color: hsl(var(--oncolor-100));
+  border: 1px solid hsl(var(--accent-brand) / 0.65);
+  box-shadow: 0 18px 40px -22px hsl(var(--accent-brand) / 0.65);
+}
+
+[data-theme="earl-grey"] .qt-button-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, hsl(var(--accent-main-000)), hsl(var(--accent-brand)));
+  box-shadow: 0 22px 50px -24px hsl(var(--accent-brand) / 0.85);
+  transform: translateY(-1px);
+}
+
+/* Card override - Earl Grey card styling */
+[data-theme="earl-grey"] .qt-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--stroke-soft);
+  box-shadow: var(--card-shadow);
+  border-radius: 0.5rem;
+}
+
+[data-theme="earl-grey"] .qt-card:hover {
+  border-color: hsl(var(--accent-brand) / 0.45);
+  box-shadow: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+}
+
+/* Chat message override - Earl Grey message styling */
+[data-theme="earl-grey"] .qt-chat-message {
+  border-radius: 0.5rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--stroke-soft);
+  box-shadow: var(--chat-shadow);
+  transition:
+    border-color var(--default-transition-duration) var(--default-transition-timing-function),
+    box-shadow var(--default-transition-duration) var(--default-transition-timing-function);
+}
+
+[data-theme="earl-grey"] .qt-chat-message:hover {
+  border-color: hsl(var(--accent-secondary-000) / 0.35);
+  box-shadow: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+}
+
+[data-theme="earl-grey"] .qt-chat-message-user {
+  border-radius: 18px;
+  background-color: var(--theme-user-msg-bg);
+  color: var(--theme-user-msg-text);
+  border-color: var(--border-light, currentColor);
+  font-family: var(--font-user-message);
+}
+
+[data-theme="earl-grey"] .qt-chat-message-assistant {
+  background: linear-gradient(160deg, hsl(var(--bg-100) / 0.85), hsl(var(--pictogram-200) / 0.9));
+  color: hsl(var(--text-200));
+  border-color: hsl(var(--border-300) / 0.15);
+  font-family: var(--font-claude-response);
+}

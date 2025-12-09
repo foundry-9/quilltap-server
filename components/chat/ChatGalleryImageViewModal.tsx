@@ -243,6 +243,8 @@ export default function ChatGalleryImageViewModal({
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
     >
       {/* Navigation buttons - left and right sides */}
       {onPrev && (

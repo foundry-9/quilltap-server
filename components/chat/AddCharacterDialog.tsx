@@ -251,19 +251,19 @@ export default function AddCharacterDialog({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="qt-dialog-overlay p-4">
       <div
         ref={modalRef}
-        className="bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col"
+        className="qt-dialog max-w-2xl max-h-[90vh] flex flex-col"
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border">
-          <h2 className="text-2xl font-bold text-foreground">
+        <div className="qt-dialog-header flex items-center justify-between">
+          <h2 className="qt-dialog-title">
             Add Character to Chat
           </h2>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
+            className="qt-button-ghost p-2"
             disabled={isAdding}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -273,7 +273,7 @@ export default function AddCharacterDialog({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="qt-dialog-body flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
@@ -296,7 +296,7 @@ export default function AddCharacterDialog({
                   placeholder="Search characters..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-3 py-2 mb-3 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="qt-input mb-3"
                   disabled={isAdding}
                 />
 
@@ -380,7 +380,7 @@ export default function AddCharacterDialog({
                   <select
                     value={selectedConnectionProfileId || ''}
                     onChange={(e) => setSelectedConnectionProfileId(e.target.value || null)}
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="qt-select"
                     disabled={isAdding}
                   >
                     <option value="">Select a connection profile...</option>
@@ -433,7 +433,7 @@ export default function AddCharacterDialog({
                     placeholder="e.g., They walked up and joined the group at the tavern table..."
                     rows={3}
                     disabled={isAdding}
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="qt-textarea"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     This text will be included in the character&apos;s context to explain how they joined the conversation.
@@ -445,10 +445,10 @@ export default function AddCharacterDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-border">
+        <div className="qt-dialog-footer flex items-center justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-foreground hover:bg-muted rounded-lg transition-colors"
+            className="qt-button-secondary"
             disabled={isAdding}
           >
             Cancel
@@ -456,7 +456,7 @@ export default function AddCharacterDialog({
           <button
             onClick={handleAddCharacter}
             disabled={isAdding || !selectedCharacterId || !selectedConnectionProfileId}
-            className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+            className="qt-button-primary flex items-center gap-2"
           >
             {isAdding ? (
               <>

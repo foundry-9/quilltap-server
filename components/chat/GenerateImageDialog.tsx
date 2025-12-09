@@ -216,16 +216,16 @@ export default function GenerateImageDialog({
   const personaParticipant = participants.find(p => p.type === 'PERSONA')
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+    <div className="qt-dialog-overlay p-4">
+      <div className="qt-dialog max-w-3xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border">
-          <h2 className="text-2xl font-bold text-foreground">
+        <div className="qt-dialog-header flex items-center justify-between">
+          <h2 className="qt-dialog-title">
             Generate Image
           </h2>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
+            className="qt-button-ghost p-2"
             disabled={isGenerating}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -235,7 +235,7 @@ export default function GenerateImageDialog({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="qt-dialog-body flex-1 overflow-y-auto">
           <div className="flex gap-4">
             {/* Left side - Quick buttons */}
             <div className="w-48 flex-shrink-0 space-y-2">
@@ -291,7 +291,7 @@ export default function GenerateImageDialog({
                         placeholder="Search..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full px-2 py-1 text-sm border border-input rounded bg-background text-foreground"
+                        className="qt-input"
                       />
                     </div>
                     <div className="overflow-y-auto">
@@ -333,7 +333,7 @@ export default function GenerateImageDialog({
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe the image you want to generate. Use {{placeholders}} for characters and personas.&#10;&#10;Examples:&#10;- {{me}} in a forest clearing at sunset&#10;- {{Alice}} and {{me}} having coffee together&#10;- A serene mountain landscape"
-                className="w-full h-64 px-3 py-2 border border-input rounded-lg bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-textarea h-64"
                 disabled={isGenerating}
               />
               <div className="mt-2 text-xs text-muted-foreground">
@@ -344,16 +344,16 @@ export default function GenerateImageDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 p-6 border-t border-border">
+        <div className="qt-dialog-footer flex items-center justify-between">
           {!imageProfileId && (
-            <p className="text-sm text-amber-600">
+            <p className="text-sm text-warning">
               Configure an image profile in Chat Settings to generate images
             </p>
           )}
           <div className="flex gap-3 ml-auto">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-foreground hover:bg-muted rounded-lg transition-colors"
+            className="qt-button-secondary"
             disabled={isGenerating}
           >
             Cancel
@@ -361,7 +361,7 @@ export default function GenerateImageDialog({
           <button
             onClick={handleGenerate}
             disabled={isGenerating || !prompt.trim() || !imageProfileId}
-            className="px-6 py-2 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+            className="qt-button-primary flex items-center gap-2"
           >
             {isGenerating ? (
               <>

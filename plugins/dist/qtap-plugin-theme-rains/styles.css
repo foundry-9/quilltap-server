@@ -825,3 +825,103 @@
 [data-theme="rains"] .character-card__action--chat svg {
   color: currentColor;
 }
+
+/* ============================================================================
+   QT-* SEMANTIC COMPONENT OVERRIDES
+   ============================================================================ */
+
+/* Button Variables - Rains gradient style */
+[data-theme="rains"] {
+  --qt-button-primary-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.95), hsl(var(--accent-main-000)));
+  --qt-button-primary-fg: hsl(var(--oncolor-100));
+  --qt-button-primary-hover-bg: linear-gradient(135deg, hsl(var(--accent-main-000)), hsl(var(--accent-brand)));
+  --qt-button-primary-shadow: 0 18px 40px -22px hsl(var(--accent-brand) / 0.65);
+  --qt-button-radius: 1rem;
+
+  --qt-button-secondary-bg: hsl(var(--bg-200) / 0.9);
+  --qt-button-secondary-fg: hsl(var(--text-300));
+  --qt-button-secondary-border: var(--stroke-soft);
+
+  /* Card Variables - Rains card styling */
+  --qt-card-radius: 0.75rem;
+  --qt-card-bg: var(--surface-raised);
+  --qt-card-fg: hsl(var(--text-000));
+  --qt-card-border: var(--stroke-soft);
+  --qt-card-shadow: var(--card-shadow);
+  --qt-card-shadow-hover: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+
+  /* Chat Variables */
+  --qt-chat-message-radius: var(--radius-lg, 0.75rem);
+  --qt-chat-message-padding: 1rem;
+  --qt-chat-message-shadow: var(--chat-shadow);
+
+  --qt-chat-user-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--accent-main-000) / 0.85));
+  --qt-chat-user-fg: hsl(var(--oncolor-100));
+  --qt-chat-user-border: hsl(var(--accent-brand) / 0.45);
+  --qt-chat-user-font: var(--font-user-message);
+
+  --qt-chat-assistant-bg: linear-gradient(160deg, hsl(var(--bg-100) / 0.85), hsl(var(--pictogram-200) / 0.9));
+  --qt-chat-assistant-fg: hsl(var(--text-200));
+  --qt-chat-assistant-border: hsl(var(--border-300) / 0.45);
+  --qt-chat-assistant-font: var(--font-claude-response);
+
+  /* Input Variables */
+  --qt-input-radius: var(--radius-md);
+  --qt-input-focus-ring: hsl(var(--accent-secondary-100));
+
+  /* Auth Page Background */
+  --qt-auth-page-bg: linear-gradient(135deg, var(--color-background), hsl(var(--bg-200)));
+}
+
+/* Button override - Rains primary button gradient */
+[data-theme="rains"] .qt-button-primary {
+  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.95), hsl(var(--accent-main-000)));
+  color: hsl(var(--oncolor-100));
+  border: 1px solid hsl(var(--accent-brand) / 0.65);
+  box-shadow: 0 18px 40px -22px hsl(var(--accent-brand) / 0.65);
+}
+
+[data-theme="rains"] .qt-button-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, hsl(var(--accent-main-000)), hsl(var(--accent-brand)));
+  box-shadow: 0 22px 50px -24px hsl(var(--accent-brand) / 0.85);
+  transform: translateY(-1px);
+}
+
+/* Card override - Rains card styling */
+[data-theme="rains"] .qt-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--stroke-soft);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="rains"] .qt-card:hover {
+  border-color: hsl(var(--accent-brand) / 0.45);
+  box-shadow: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+}
+
+/* Chat message override - Rains message styling */
+[data-theme="rains"] .qt-chat-message {
+  border-radius: var(--radius-lg, 0.75rem);
+  background: var(--surface-raised);
+  border: 1px solid var(--stroke-soft);
+  box-shadow: var(--chat-shadow);
+}
+
+[data-theme="rains"] .qt-chat-message:hover {
+  border-color: hsl(var(--accent-secondary-000) / 0.35);
+  box-shadow: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+}
+
+[data-theme="rains"] .qt-chat-message-user {
+  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--accent-main-000) / 0.85));
+  color: hsl(var(--oncolor-100));
+  border-color: hsl(var(--accent-brand) / 0.45);
+  font-family: var(--font-user-message);
+}
+
+[data-theme="rains"] .qt-chat-message-assistant {
+  background: linear-gradient(160deg, hsl(var(--bg-100) / 0.85), hsl(var(--pictogram-200) / 0.9));
+  color: hsl(var(--text-200));
+  border-color: hsl(var(--border-300) / 0.45);
+  font-family: var(--font-claude-response);
+}

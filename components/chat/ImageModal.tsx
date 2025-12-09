@@ -162,6 +162,8 @@ export default function ImageModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
     >
       {/* Control buttons - top right */}
       <div className="absolute top-4 right-4 flex gap-2 z-10">
