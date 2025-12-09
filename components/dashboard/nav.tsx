@@ -58,7 +58,14 @@ export default function DashboardNav({ user }: DashboardNavProps) {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-8">
-            <Link href="/dashboard" className="text-xl font-bold text-foreground">
+            <Link href="/dashboard" className="flex items-center gap-2 text-xl font-bold text-foreground">
+              <Image
+                src="/quill.svg"
+                alt="Quilltap"
+                width={32}
+                height={32}
+                className="h-8 w-8"
+              />
               Quilltap
             </Link>
             <div className="hidden space-x-4 md:flex">

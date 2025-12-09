@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { getServerSession } from "@/lib/auth/session";
 
 export default async function Home() {
@@ -12,6 +13,14 @@ export default async function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-24">
       <div className="text-center">
+        <Image
+          src="/quill.svg"
+          alt="Quilltap"
+          width={128}
+          height={137}
+          className="mx-auto mb-6"
+          priority
+        />
         <h1 className="text-5xl font-bold text-white mb-4">Welcome to Quilltap</h1>
         <p className="text-xl text-slate-300 mb-8">
           AI-powered roleplay chat platform with multi-provider support
