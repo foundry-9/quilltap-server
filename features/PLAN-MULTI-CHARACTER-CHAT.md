@@ -12,7 +12,7 @@ This plan covers the implementation of full multi-character chat support for Qui
 | Turn Selection Algorithm | ✅ COMPLETE (Phase 2) |
 | Turn API Endpoint | ✅ COMPLETE (Phase 2) |
 | Connection Profile Resolver | ✅ COMPLETE (Phase 1) |
-| Participant Sidebar UI | PENDING (Phase 4) |
+| Participant Sidebar UI | ✅ COMPLETE (Phase 4) |
 | Nudge/Queue System | ✅ CORE COMPLETE (Phase 2) - UI PENDING (Phase 5) |
 | Add Character Dialog | PENDING (Phase 6) |
 | Multi-Character Context Building | ✅ COMPLETE (Phase 3) |

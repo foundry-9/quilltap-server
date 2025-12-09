@@ -1,11 +1,13 @@
 'use client'
 
-import { use, useEffect, useState, useRef, useCallback } from 'react'
+import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
+import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
+import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
@@ -21,6 +23,19 @@ import type { TagVisualStyle } from '@/lib/schemas/types'
 import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
+import {
+  type TurnState,
+  type TurnSelectionResult,
+  createInitialTurnState,
+  calculateTurnStateFromHistory,
+  selectNextSpeaker,
+  nudgeParticipant,
+  addToQueue,
+  removeFromQueue,
+  findUserParticipant,
+  isMultiCharacterChat,
+} from '@/lib/chat/turn-manager'
+import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 
 interface MessageAttachment {
   id: string
@@ -38,6 +53,7 @@ interface Message {
   swipeIndex?: number | null
   attachments?: MessageAttachment[]
   debugMemoryLogs?: string[]
+  participantId?: string | null
 }
 
 interface CharacterData {
@@ -51,6 +67,7 @@ interface CharacterData {
     filepath: string
     url?: string
   } | null
+  talkativeness?: number
 }
 
 interface PersonaData {
@@ -84,6 +101,8 @@ interface Participant {
   displayOrder: number
   isActive: boolean
   systemPromptOverride?: string | null
+  characterId?: string | null
+  personaId?: string | null
   character?: CharacterData | null
   persona?: PersonaData | null
   connectionProfile?: ConnectionProfileData | null
@@ -93,6 +112,11 @@ interface Participant {
     provider: string
     modelName: string
   } | null
+  // Multi-character chat fields
+  hasHistoryAccess?: boolean
+  joinScenario?: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 interface Chat {
@@ -146,6 +170,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
+  const [showParticipantSidebar, setShowParticipantSidebar] = useState(true)
+  const [turnState, setTurnState] = useState<TurnState>(createInitialTurnState())
+  const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -187,6 +214,198 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const getFirstCharacter = () => getFirstCharacterParticipant()?.character
   const getFirstPersona = () => getFirstPersonaParticipant()?.persona
   const getFirstConnectionProfile = () => getFirstCharacterParticipant()?.connectionProfile
+
+  // Multi-character chat helpers
+  // Convert Participant[] to ChatParticipantBase[] for turn manager functions
+  const participantsAsBase = useMemo((): ChatParticipantBase[] => {
+    if (!chat?.participants) return []
+    return chat.participants.map(p => ({
+      id: p.id,
+      type: p.type,
+      characterId: p.characterId ?? (p.character?.id ?? null),
+      personaId: p.personaId ?? (p.persona?.id ?? null),
+      connectionProfileId: p.connectionProfile?.id ?? null,
+      imageProfileId: p.imageProfile?.id ?? null,
+      systemPromptOverride: p.systemPromptOverride ?? null,
+      displayOrder: p.displayOrder,
+      isActive: p.isActive,
+      hasHistoryAccess: p.hasHistoryAccess ?? false,
+      joinScenario: p.joinScenario ?? null,
+      createdAt: p.createdAt ?? new Date().toISOString(),
+      updatedAt: p.updatedAt ?? new Date().toISOString(),
+    }))
+  }, [chat?.participants])
+
+  const userParticipantId = useMemo(() => {
+    if (participantsAsBase.length === 0) return null
+    const userParticipant = findUserParticipant(participantsAsBase)
+    return userParticipant?.id ?? null
+  }, [participantsAsBase])
+
+  const isMultiChar = useMemo(() => {
+    if (participantsAsBase.length === 0) return false
+    return isMultiCharacterChat(participantsAsBase)
+  }, [participantsAsBase])
+
+  // Build character map for turn selection
+  // The turn manager expects Character objects with at least id and talkativeness
+  const charactersMap = useMemo((): Map<string, Character> => {
+    const map = new Map<string, Character>()
+    if (!chat?.participants) return map
+    chat.participants.forEach(p => {
+      if (p.type === 'CHARACTER' && p.character) {
+        // Create a minimal Character object with required fields
+        map.set(p.character.id, {
+          id: p.character.id,
+          userId: '', // Not needed for turn selection
+          name: p.character.name,
+          talkativeness: p.character.talkativeness ?? 0.5,
+          isFavorite: false,
+          createdAt: '',
+          updatedAt: '',
+        } as Character)
+      }
+    })
+    return map
+  }, [chat?.participants])
+
+  // Convert participants to ParticipantData format for sidebar
+  const participantData: ParticipantData[] = useMemo(() => {
+    if (!chat?.participants) return []
+    return chat.participants.map(p => ({
+      id: p.id,
+      type: p.type,
+      displayOrder: p.displayOrder,
+      isActive: p.isActive,
+      character: p.character ? {
+        id: p.character.id,
+        name: p.character.name,
+        title: p.character.title,
+        avatarUrl: p.character.avatarUrl,
+        talkativeness: p.character.talkativeness ?? 0.5,
+        defaultImage: p.character.defaultImage,
+      } : null,
+      persona: p.persona ? {
+        id: p.persona.id,
+        name: p.persona.name,
+        title: p.persona.title,
+        avatarUrl: p.persona.avatarUrl,
+        defaultImage: p.persona.defaultImage,
+      } : null,
+      connectionProfile: p.connectionProfile,
+    }))
+  }, [chat?.participants])
+
+  // Get participant by ID for message avatar lookup
+  const getParticipantById = useCallback((participantId: string | null | undefined) => {
+    if (!participantId || !chat?.participants) return null
+    return chat.participants.find(p => p.id === participantId) ?? null
+  }, [chat?.participants])
+
+  // Calculate turn state when messages change
+  useEffect(() => {
+    if (participantsAsBase.length === 0 || messages.length === 0) return
+
+    clientLogger.debug('[Chat] Calculating turn state from messages', {
+      messageCount: messages.length,
+      participantCount: participantsAsBase.length,
+    })
+
+    const messageEvents = messages.map(m => ({
+      type: 'message' as const,
+      id: m.id,
+      role: m.role as 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL',
+      content: m.content,
+      participantId: m.participantId,
+      createdAt: m.createdAt,
+      attachments: m.attachments?.map(a => a.id) ?? [],
+    }))
+
+    const newTurnState = calculateTurnStateFromHistory({
+      messages: messageEvents,
+      participants: participantsAsBase,
+      userParticipantId,
+    })
+
+    setTurnState(newTurnState)
+
+    // Calculate next speaker
+    const result = selectNextSpeaker(
+      participantsAsBase,
+      charactersMap,
+      newTurnState,
+      userParticipantId
+    )
+
+    setTurnSelectionResult(result)
+
+    clientLogger.debug('[Chat] Turn state calculated', {
+      nextSpeakerId: result.nextSpeakerId,
+      reason: result.reason,
+      cycleComplete: result.cycleComplete,
+    })
+  }, [messages, participantsAsBase, userParticipantId, charactersMap])
+
+  // Handle nudge action
+  const handleNudge = useCallback((participantId: string) => {
+    clientLogger.debug('[Chat] Nudging participant', { participantId })
+    const newTurnState = nudgeParticipant(turnState, participantId)
+    setTurnState(newTurnState)
+
+    // Recalculate next speaker
+    if (participantsAsBase.length > 0) {
+      const result = selectNextSpeaker(
+        participantsAsBase,
+        charactersMap,
+        newTurnState,
+        userParticipantId
+      )
+      setTurnSelectionResult(result)
+    }
+  }, [turnState, participantsAsBase, charactersMap, userParticipantId])
+
+  // Handle queue action
+  const handleQueue = useCallback((participantId: string) => {
+    clientLogger.debug('[Chat] Queueing participant', { participantId })
+    const newTurnState = addToQueue(turnState, participantId)
+    setTurnState(newTurnState)
+
+    // Recalculate next speaker
+    if (participantsAsBase.length > 0) {
+      const result = selectNextSpeaker(
+        participantsAsBase,
+        charactersMap,
+        newTurnState,
+        userParticipantId
+      )
+      setTurnSelectionResult(result)
+    }
+  }, [turnState, participantsAsBase, charactersMap, userParticipantId])
+
+  // Handle dequeue action
+  const handleDequeue = useCallback((participantId: string) => {
+    clientLogger.debug('[Chat] Dequeuing participant', { participantId })
+    const newTurnState = removeFromQueue(turnState, participantId)
+    setTurnState(newTurnState)
+
+    // Recalculate next speaker
+    if (participantsAsBase.length > 0) {
+      const result = selectNextSpeaker(
+        participantsAsBase,
+        charactersMap,
+        newTurnState,
+        userParticipantId
+      )
+      setTurnSelectionResult(result)
+    }
+  }, [turnState, participantsAsBase, charactersMap, userParticipantId])
+
+  // Handle talkativeness change (optimistic update - would need API for persistence)
+  const handleTalkativenessChange = useCallback((participantId: string, value: number) => {
+    clientLogger.debug('[Chat] Talkativeness change', { participantId, value })
+    // TODO: In Phase 6, persist this to the database via API
+    // For now, just log it - the local slider state handles display
+  }, [])
 
   const fetchChatSettings = useCallback(async () => {
     try {
@@ -830,6 +1049,29 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }
 
   const getMessageAvatar = (message: Message) => {
+    // Multi-character support: use participantId if available
+    if (message.participantId) {
+      const participant = getParticipantById(message.participantId)
+      if (participant) {
+        if (participant.type === 'CHARACTER' && participant.character) {
+          return {
+            name: participant.character.name,
+            title: participant.character.title,
+            avatarUrl: participant.character.avatarUrl,
+            defaultImage: participant.character.defaultImage,
+          }
+        } else if (participant.type === 'PERSONA' && participant.persona) {
+          return {
+            name: participant.persona.name,
+            title: participant.persona.title,
+            avatarUrl: participant.persona.avatarUrl,
+            defaultImage: participant.persona.defaultImage,
+          }
+        }
+      }
+    }
+
+    // Fallback to original logic for messages without participantId
     if (message.role === 'USER') {
       // Use persona participant if available, otherwise fall back to user
       const persona = getFirstPersona()
@@ -962,10 +1204,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const isDebugMode = debug?.isDebugMode ?? false
 
+  // Show participant sidebar when:
+  // - Multi-character chat (2+ characters)
+  // - Not in debug mode (debug panel takes precedence)
+  // - User hasn't hidden it
+  const shouldShowParticipantSidebar = isMultiChar && !isDebugMode && showParticipantSidebar
+
   return (
     <div className="flex h-full bg-card">
       {/* Main chat area */}
-      <div className={`flex flex-col flex-1 min-h-0 ${isDebugMode ? 'w-1/2' : 'w-full'}`}>
+      <div className={`flex flex-col flex-1 min-h-0 ${isDebugMode ? 'w-1/2' : shouldShowParticipantSidebar ? 'flex-1' : 'w-full'}`}>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-background min-h-0">
@@ -1586,6 +1834,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         }}
       />
       </div>
+
+      {/* Participant Sidebar - shown for multi-character chats when debug mode is off */}
+      {shouldShowParticipantSidebar && (
+        <ParticipantSidebar
+          participants={participantData}
+          turnState={turnState}
+          turnSelectionResult={turnSelectionResult}
+          isGenerating={streaming || waitingForResponse}
+          userParticipantId={userParticipantId}
+          onNudge={handleNudge}
+          onQueue={handleQueue}
+          onDequeue={handleDequeue}
+          onTalkativenessChange={handleTalkativenessChange}
+          className="w-72 flex-shrink-0"
+        />
+      )}
 
       {/* Debug Panel */}
       {isDebugMode && (

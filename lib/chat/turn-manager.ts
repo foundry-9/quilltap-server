@@ -6,7 +6,28 @@
  * Handles turn selection algorithm, queue management, and turn state tracking.
  */
 
-import { logger } from '@/lib/logger'
+// Use a conditional logger that works in both client and server contexts
+// The server-side logger imports 'fs' which causes issues on the client
+const isClient = typeof window !== 'undefined'
+
+// Create a simple logger interface that works in both environments
+const logger = {
+  debug: (message: string, data?: Record<string, unknown>) => {
+    if (isClient) {
+      console.debug(`[Turn Manager] ${message}`, data)
+    } else {
+      // Dynamic import for server-side logger to avoid client bundling issues
+      import('@/lib/logger').then(mod => mod.logger.debug(message, data))
+    }
+  },
+  warn: (message: string, data?: Record<string, unknown>) => {
+    if (isClient) {
+      console.warn(`[Turn Manager] ${message}`, data)
+    } else {
+      import('@/lib/logger').then(mod => mod.logger.warn(message, data))
+    }
+  },
+}
 import type { ChatParticipantBase, Character, MessageEvent } from '@/lib/schemas/types'
 
 // ============================================================================
