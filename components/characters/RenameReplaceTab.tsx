@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showAlert } from '@/lib/alert'
@@ -57,7 +57,10 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
   const [isExecuting, setIsExecuting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  clientLogger.debug('RenameReplaceTab rendered', { characterId, characterName })
+  // Debug logging in useEffect to avoid setState during render
+  useEffect(() => {
+    clientLogger.debug('RenameReplaceTab rendered', { characterId, characterName })
+  }, [characterId, characterName])
 
   const addAdditionalReplacement = useCallback(() => {
     clientLogger.debug('Adding additional replacement pair')

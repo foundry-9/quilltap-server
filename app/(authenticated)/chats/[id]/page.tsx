@@ -175,7 +175,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
-  const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
+  const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ id: string; name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
   const [showParticipantSidebar, setShowParticipantSidebar] = useState(true)
   const [turnState, setTurnState] = useState<TurnState>(createInitialTurnState())
@@ -259,6 +259,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Phase 7: Track if there are any active characters (edge case handling)
   const hasActiveCharacters = useMemo(() => {
     return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length > 0
+  }, [participantsAsBase])
+
+  // Single-character chat: exactly 1 active character (show "Add Character" in tool palette)
+  const isSingleCharacterChat = useMemo(() => {
+    return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length === 1
   }, [participantsAsBase])
 
   // Build character map for turn selection
@@ -968,6 +973,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 const toolNames = data.toolNames as string[]
                 const toolArgs = (data.toolArguments || []) as Record<string, unknown>[]
                 setPendingToolCalls(toolNames.map((name, idx) => ({
+                  id: `tool-${idx}`,
                   name,
                   status: 'pending' as const,
                   arguments: toolArgs[idx],
@@ -984,10 +990,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
               // Handle tool results
               if (data.toolResult) {
-                const { name, success, result } = data.toolResult
-                // Update pending tool call status
-                setPendingToolCalls(prev => prev.map(tc =>
-                  tc.name === name ? { ...tc, status: success ? 'success' : 'error', result } : tc
+                const { index, name, success, result } = data.toolResult
+                // Update pending tool call status by index (more reliable) or fall back to name
+                setPendingToolCalls(prev => prev.map((tc, idx) =>
+                  (index !== undefined && idx === index) || (index === undefined && tc.name === name)
+                    ? { ...tc, status: success ? 'success' : 'error', result }
+                    : tc
                 ))
                 // Only show toast/status for image generation
                 if (name === 'generate_image') {
@@ -1079,7 +1087,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 throw new Error(data.error)
               }
             } catch (parseError) {
-              clientLogger.error('Failed to parse SSE data:', { error: parseError instanceof Error ? parseError.message : String(parseError) })
+              // Only log if it's a real parse error, not an empty JSON object
+              const errorMessage = parseError instanceof Error ? parseError.message : String(parseError)
+              if (errorMessage && errorMessage !== 'undefined' && errorMessage !== '[object Object]') {
+                clientLogger.error('Failed to parse SSE data:', { error: errorMessage, raw: line.slice(6).substring(0, 100) })
+              }
             }
           }
         }
@@ -1762,7 +1774,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 </summary>
                 <div className="mt-2 px-4 py-2 rounded-lg bg-muted border border-border">
                   {pendingToolCalls.map((tc) => (
-                    <div key={tc.name} className="text-xs text-muted-foreground">
+                    <div key={tc.id} className="text-xs text-muted-foreground">
                       <span className="font-medium">{tc.name}</span>
                       {tc.arguments && Object.keys(tc.arguments).length > 0 && (
                         <span className="ml-2 text-muted-foreground/70">
@@ -1950,8 +1962,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   onGalleryClick={() => setGalleryOpen(true)}
                   onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
                   onSettingsClick={() => setChatSettingsModalOpen(true)}
+                  onAddCharacterClick={handleAddCharacter}
                   chatPhotoCount={chatPhotoCount}
                   hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
+                  showAddCharacter={isSingleCharacterChat}
                 />
               </div>
             </div>

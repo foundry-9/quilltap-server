@@ -113,17 +113,22 @@ export function ParticipantCard({
       queuePosition,
       isGenerating,
       isCurrentTurn,
+      isCharacter,
     })
 
     if (queuePosition > 0) {
       // Already in queue - dequeue
       onDequeue(participant.id)
-    } else if (isGenerating || (!isCurrentTurn && !isUserParticipant)) {
-      // Someone is generating or it's not their turn - add to queue
+    } else if (isGenerating) {
+      // Someone is actively generating - add to queue for later
       onQueue(participant.id)
-    } else {
-      // Not generating and eligible - nudge for immediate response
+    } else if (isCharacter) {
+      // Not generating and this is a character - nudge for immediate response
+      // Characters can always be nudged when no one is generating
       onNudge(participant.id)
+    } else {
+      // User persona - queue them
+      onQueue(participant.id)
     }
   }
 
@@ -145,13 +150,14 @@ export function ParticipantCard({
   // Determine button label
   const getActionButtonLabel = () => {
     if (queuePosition > 0) return 'Dequeue'
+    if (isGenerating && isCurrentTurn) return 'Speaking...'
     if (isGenerating) return 'Queue'
-    if (isCurrentTurn) return 'Speaking...'
+    if (isCurrentTurn) return 'Nudge' // Their turn but not yet generating - can nudge to start
     return isCharacter ? 'Nudge' : 'Queue'
   }
 
-  // Determine if button should be disabled
-  const isActionDisabled = isCurrentTurn && !queuePosition
+  // Determine if button should be disabled - only disabled while actively generating
+  const isActionDisabled = isGenerating && isCurrentTurn
 
   return (
     <div

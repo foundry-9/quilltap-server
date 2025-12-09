@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { clientLogger } from '@/lib/client-logger'
 
 interface ToolPaletteProps {
   isOpen: boolean
@@ -8,8 +9,10 @@ interface ToolPaletteProps {
   onGalleryClick: () => void
   onGenerateImageClick: () => void
   onSettingsClick: () => void
+  onAddCharacterClick?: () => void
   chatPhotoCount: number
   hasImageProfile: boolean
+  showAddCharacter?: boolean // Show "Add Character" button for single-character chats
 }
 
 export default function ToolPalette({
@@ -18,8 +21,10 @@ export default function ToolPalette({
   onGalleryClick,
   onGenerateImageClick,
   onSettingsClick,
+  onAddCharacterClick,
   chatPhotoCount,
   hasImageProfile,
+  showAddCharacter = false,
 }: ToolPaletteProps) {
   const paletteRef = useRef<HTMLDivElement>(null)
 
@@ -75,6 +80,24 @@ export default function ToolPalette({
     onClose()
   }
 
+  const handleAddCharacterClick = () => {
+    clientLogger.debug('[ToolPalette] Add Character clicked')
+    onAddCharacterClick?.()
+    onClose()
+  }
+
+  // Debug logging when palette opens
+  useEffect(() => {
+    if (isOpen) {
+      clientLogger.debug('[ToolPalette] Opened', {
+        showAddCharacter,
+        hasAddCharacterCallback: !!onAddCharacterClick,
+        chatPhotoCount,
+        hasImageProfile,
+      })
+    }
+  }, [isOpen, showAddCharacter, onAddCharacterClick, chatPhotoCount, hasImageProfile])
+
   if (!isOpen) return null
 
   return (
@@ -112,6 +135,23 @@ export default function ToolPalette({
           <div>
             <div className="font-medium">Generate Image</div>
             <div className="text-xs text-muted-foreground">With {'{{placeholders}}'} support</div>
+          </div>
+        </button>
+      )}
+
+      {/* Add Character Button - shown only for single-character chats */}
+      {showAddCharacter && onAddCharacterClick && (
+        <button
+          type="button"
+          onClick={handleAddCharacterClick}
+          className="w-full flex items-center gap-3 px-4 py-3 text-left text-foreground hover:bg-accent rounded-lg transition-colors"
+        >
+          <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+          </svg>
+          <div>
+            <div className="font-medium">Add Character</div>
+            <div className="text-xs text-muted-foreground">Start a multi-character chat</div>
           </div>
         </button>
       )}

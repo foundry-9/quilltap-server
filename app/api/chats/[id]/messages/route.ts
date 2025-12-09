@@ -87,7 +87,8 @@ async function processToolResults(
     })}\n\n`)
   )
 
-  for (const toolCall of toolCalls) {
+  for (let toolIndex = 0; toolIndex < toolCalls.length; toolIndex++) {
+    const toolCall = toolCalls[toolIndex]
     const toolResult = await executeToolCallWithContext(toolCall, toolContext)
 
     if (toolResult.success && Array.isArray(toolResult.result)) {
@@ -128,6 +129,7 @@ async function processToolResults(
       encoder.encode(
         `data: ${JSON.stringify({
           toolResult: {
+            index: toolIndex,
             name: toolResult.toolName,
             success: toolResult.success,
             result: toolResult.result,
@@ -231,15 +233,48 @@ export async function POST(
     const userParticipant = findUserParticipant(chat.participants)
     const userParticipantId = userParticipant?.id ?? null
 
-    // Get first active character participant (for single-character chats or as default responder)
+    // Read request body early to check for respondingParticipantId in continue mode
+    const body = await req.json()
+    const isContinueMode = body.continueMode === true
+    const requestedRespondingParticipantId = isContinueMode ? body.respondingParticipantId : undefined
+
+    // Get character participant - use specified participant for continue mode, otherwise first active character
     // Note: connectionProfileId is no longer required on participant - we resolve it via fallback chain
-    const characterParticipant = chat.participants.find(
-      p => p.type === 'CHARACTER' && p.isActive && p.characterId
-    )
+    let characterParticipant: typeof chat.participants[0] | undefined
+
+    if (requestedRespondingParticipantId) {
+      // Continue mode with specific participant requested - find them
+      characterParticipant = chat.participants.find(
+        p => p.id === requestedRespondingParticipantId && p.type === 'CHARACTER' && p.isActive && p.characterId
+      )
+      if (!characterParticipant) {
+        logger.warn('[Chat Messages] Requested responding participant not found or inactive', {
+          chatId: id,
+          requestedParticipantId: requestedRespondingParticipantId,
+        })
+        // Fall back to first active character
+        characterParticipant = chat.participants.find(
+          p => p.type === 'CHARACTER' && p.isActive && p.characterId
+        )
+      }
+    } else {
+      // Normal mode or continue mode without specific participant - use first active character
+      characterParticipant = chat.participants.find(
+        p => p.type === 'CHARACTER' && p.isActive && p.characterId
+      )
+    }
 
     if (!characterParticipant?.characterId) {
       return NextResponse.json({ error: 'No active character in chat' }, { status: 404 })
     }
+
+    logger.debug('[Chat Messages] Selected responding participant', {
+      chatId: id,
+      participantId: characterParticipant.id,
+      characterId: characterParticipant.characterId,
+      isContinueMode,
+      requestedParticipantId: requestedRespondingParticipantId,
+    })
 
     // Get character
     const character = await repos.characters.findById(characterParticipant.characterId)
@@ -290,10 +325,7 @@ export async function POST(
     // Get existing messages
     const existingMessages = await repos.chats.getMessages(id)
 
-    // Validate request body - check for continue mode first
-    const body = await req.json()
-    const isContinueMode = body.continueMode === true
-
+    // body and isContinueMode already parsed earlier for participant selection
     let content = ''
     let fileIds: string[] = []
     let attachedFiles: Awaited<ReturnType<typeof loadAttachedFiles>> = []

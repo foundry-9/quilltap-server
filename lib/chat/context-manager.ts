@@ -725,6 +725,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       allParticipants
     )
 
+    // Debug: Log attributed messages to help diagnose identity confusion
+    logger.debug('[ContextManager] Attributed messages for multi-character', {
+      respondingParticipantId: respondingParticipant.id,
+      messageCount: attributedMessages.length,
+      messages: attributedMessages.map(m => ({
+        role: m.role,
+        name: m.name,
+        participantId: m.participantId,
+        contentPreview: m.content.substring(0, 50),
+      })),
+    })
+
     // Convert to SelectableMessage format
     messagesToProcess = attributedMessages.map(msg => ({
       role: msg.role,

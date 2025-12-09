@@ -14,6 +14,7 @@
  * - Stored in React state only (disappear on reload)
  */
 
+import { useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 
 export type EphemeralMessageType = 'nudge' | 'join' | 'queue' | 'dequeue' | 'system'
@@ -52,11 +53,14 @@ function getDefaultContent(type: EphemeralMessageType, participantName: string):
 }
 
 export function EphemeralMessage({ message, onDismiss }: EphemeralMessageProps) {
-  clientLogger.debug('[EphemeralMessage] Rendering', {
-    id: message.id,
-    type: message.type,
-    participantName: message.participantName,
-  })
+  // Debug logging in useEffect to avoid setState during render
+  useEffect(() => {
+    clientLogger.debug('[EphemeralMessage] Rendered', {
+      id: message.id,
+      type: message.type,
+      participantName: message.participantName,
+    })
+  }, [message.id, message.type, message.participantName])
 
   const content = message.content || getDefaultContent(message.type, message.participantName)
 
