@@ -607,6 +607,7 @@ export class UsersRepository {
           themePreference: {
             activeThemeId: null,
             colorMode: 'system',
+            showNavThemeSelector: false,
           },
           ...data,
         };

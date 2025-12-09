@@ -78,11 +78,17 @@ export interface ThemeContextValue {
   /** Any error that occurred during theme loading */
   error: string | null;
 
+  /** Whether to show theme selector in the navigation bar */
+  showNavThemeSelector: boolean;
+
   /** Set the active theme by ID (null for default) */
   setTheme: (themeId: string | null) => Promise<void>;
 
   /** Set the color mode preference */
   setColorMode: (mode: ColorMode) => Promise<void>;
+
+  /** Set whether to show theme selector in the navigation bar */
+  setShowNavThemeSelector: (show: boolean) => Promise<void>;
 
   /** Refresh available themes list */
   refreshThemes: () => Promise<void>;
@@ -136,6 +142,9 @@ export function ThemeProvider({
     display?: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
   }>>([]);
   const [cssOverrides, setCssOverrides] = useState<string | undefined>(initialCssOverrides);
+  const [showNavThemeSelector, setShowNavThemeSelectorState] = useState<boolean>(
+    initialPreference?.showNavThemeSelector ?? false
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -288,10 +297,12 @@ export function ThemeProvider({
         const preference = await response.json();
         setActiveThemeId(preference.activeThemeId ?? null);
         setColorModeState(preference.colorMode ?? 'system');
+        setShowNavThemeSelectorState(preference.showNavThemeSelector ?? false);
 
         clientLogger.debug('Theme: loaded user preference', {
           activeThemeId: preference.activeThemeId,
           colorMode: preference.colorMode,
+          showNavThemeSelector: preference.showNavThemeSelector,
         });
 
         // If a theme is selected, load its tokens
@@ -403,6 +414,33 @@ export function ThemeProvider({
     await loadAvailableThemes();
   }, [loadAvailableThemes]);
 
+  const setShowNavThemeSelector = useCallback(async (show: boolean) => {
+    clientLogger.debug('Theme: setting showNavThemeSelector', { show });
+
+    // Update local state immediately
+    setShowNavThemeSelectorState(show);
+
+    // Persist to server
+    if (status === 'authenticated') {
+      try {
+        const response = await fetch('/api/theme-preference', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ showNavThemeSelector: show }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to save preference: ${response.status}`);
+        }
+
+        clientLogger.info('Theme: showNavThemeSelector preference saved', { show });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        clientLogger.warn('Theme: failed to save showNavThemeSelector preference', { error: message });
+      }
+    }
+  }, [status]);
+
   // ============================================================================
   // CONTEXT VALUE
   // ============================================================================
@@ -415,8 +453,10 @@ export function ThemeProvider({
     availableThemes,
     isLoading,
     error,
+    showNavThemeSelector,
     setTheme,
     setColorMode,
+    setShowNavThemeSelector,
     refreshThemes,
   }), [
     activeThemeId,
@@ -426,8 +466,10 @@ export function ThemeProvider({
     availableThemes,
     isLoading,
     error,
+    showNavThemeSelector,
     setTheme,
     setColorMode,
+    setShowNavThemeSelector,
     refreshThemes,
   ]);
 

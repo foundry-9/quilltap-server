@@ -53,6 +53,7 @@ export async function GET() {
         themePreference: {
           activeThemeId: null,
           colorMode: 'system',
+          showNavThemeSelector: false,
         },
       });
     }
@@ -61,6 +62,7 @@ export async function GET() {
     const themePreference: ThemePreference = chatSettings?.themePreference ?? {
       activeThemeId: null,
       colorMode: 'system',
+      showNavThemeSelector: false,
     };
 
     logger.debug('Theme preference retrieved', {
@@ -116,7 +118,7 @@ export async function PUT(request: NextRequest) {
     });
 
     // Validate the incoming data
-    const { activeThemeId, colorMode, customOverrides } = body;
+    const { activeThemeId, colorMode, customOverrides, showNavThemeSelector } = body;
 
     // Validate colorMode if provided
     if (colorMode !== undefined) {
@@ -151,6 +153,7 @@ export async function PUT(request: NextRequest) {
     const currentPreference = chatSettings?.themePreference ?? {
       activeThemeId: null,
       colorMode: 'system',
+      showNavThemeSelector: false,
     };
 
     // Build updated preference
@@ -159,6 +162,7 @@ export async function PUT(request: NextRequest) {
       ...(activeThemeId !== undefined && { activeThemeId }),
       ...(colorMode !== undefined && { colorMode }),
       ...(customOverrides !== undefined && { customOverrides }),
+      ...(showNavThemeSelector !== undefined && { showNavThemeSelector }),
     };
 
     // Validate the complete preference

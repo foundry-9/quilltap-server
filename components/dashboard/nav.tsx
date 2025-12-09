@@ -12,6 +12,7 @@ import { useQuickHide } from "@/components/providers/quick-hide-provider";
 import { TagDropdown } from "@/components/tags/tag-dropdown";
 import { TagBadge } from "@/components/tags/tag-badge";
 import { SearchBar } from "@/components/search";
+import { NavThemeSelector } from "@/components/dashboard/nav-theme-selector";
 import { routeSupportsDebug } from "@/lib/navigation/route-flags";
 import { BrandLogo } from "@/components/ui/brand-logo";
 
@@ -65,37 +66,37 @@ export default function DashboardNav({ user }: DashboardNavProps) {
             <div className="hidden space-x-4 md:flex">
               <Link
                 href="/dashboard"
-                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
               >
                 Dashboard
               </Link>
               <Link
                 href="/characters"
-                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
               >
                 Characters
               </Link>
               <Link
                 href="/personas"
-                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
               >
                 Personas
               </Link>
               <Link
                 href="/chats"
-                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
               >
                 Chats
               </Link>
               <Link
                 href="/settings"
-                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
               >
                 Settings
               </Link>
               <Link
                 href="/tools"
-                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
               >
                 Tools
               </Link>
@@ -105,6 +106,8 @@ export default function DashboardNav({ user }: DashboardNavProps) {
           <div className="flex items-center gap-4">
             {/* Global search */}
             <SearchBar />
+            {/* Theme selector (shown when enabled in settings) */}
+            <NavThemeSelector />
             {/* Chat controls - only show when in a chat */}
             {isInChat && chat.chatId && (
               <>

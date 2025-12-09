@@ -104,6 +104,7 @@ export async function GET(req: NextRequest) {
         themePreference: {
           activeThemeId: null,
           colorMode: 'system',
+          showNavThemeSelector: false,
         },
       })
     }
