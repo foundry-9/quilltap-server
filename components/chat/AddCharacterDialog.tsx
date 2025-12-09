@@ -63,13 +63,9 @@ export default function AddCharacterDialog({
   const modalRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  clientLogger.debug('[AddCharacterDialog] Rendering', {
-    isOpen,
-    chatId,
-    existingCharacterIds,
-    selectedCharacterId,
-    selectedConnectionProfileId,
-  })
+  // NOTE: Debug logging during render causes React errors because DevConsoleProvider
+  // intercepts console calls and triggers setState. Logging should only happen
+  // inside useEffect, event handlers, or other non-render contexts.
 
   // Load characters and connection profiles when dialog opens
   useEffect(() => {

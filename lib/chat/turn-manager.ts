@@ -94,9 +94,10 @@ export interface CalculateTurnStateOptions {
 
 /**
  * Creates a fresh turn state (e.g., for a new chat or after reset)
+ * NOTE: This function may be called during React render (e.g., in useState initializer),
+ * so it MUST NOT contain any side effects like logging that could trigger state updates.
  */
 export function createInitialTurnState(): TurnState {
-  logger.debug('[Turn Manager] Creating initial turn state')
   return {
     spokenSinceUserTurn: [],
     currentTurnParticipantId: null,
