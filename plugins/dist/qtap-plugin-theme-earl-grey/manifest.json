@@ -1,7 +1,7 @@
 {
   "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-theme-earl-grey",
-  "title": "Earl Grey Theme",
+  "title": "Earl Grey",
   "description": "A sophisticated dark theme with deep slate grays and soft blue accents, inspired by the elegance of classic earl grey tea",
   "version": "1.0.0",
   "author": {

@@ -1,7 +1,7 @@
 {
   "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-theme-rains",
-  "title": "Rains Theme",
+  "title": "Rains",
   "description": "A warm, earthy dark theme with rich browns and amber accents, inspired by rain-soaked autumn evenings",
   "version": "1.0.0",
   "author": {
