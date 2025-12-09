@@ -188,4 +188,12 @@
   --qt-link-hover-color: color-mix(in srgb, var(--color-primary) 80%, black);
   --qt-link-decoration: underline;
   --qt-link-decoration-hover: underline;
+
+  /* ==========================================================================
+     FOOTER VARIABLES
+     ========================================================================== */
+  --qt-footer-bg: var(--color-background);
+  --qt-footer-border: var(--color-border);
+  --qt-footer-fg: var(--color-muted-foreground);
+  --qt-footer-link-hover: var(--color-primary);
 }

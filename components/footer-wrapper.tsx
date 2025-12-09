@@ -14,15 +14,15 @@ export default function FooterWrapper() {
   }
 
   return (
-    <footer className="border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-4">
-      <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+    <footer className="qt-footer">
+      <div className="qt-footer-container">
         <span>v{packageJson.version}</span>
-        <span className="hidden sm:inline">•</span>
+        <span className="qt-footer-separator">•</span>
         <a
           href="https://github.com/foundry-9/quilltap/"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          className="qt-footer-link"
         >
           <svg
             className="w-5 h-5"
@@ -38,21 +38,21 @@ export default function FooterWrapper() {
           </svg>
           GitHub
         </a>
-        <span className="hidden sm:inline">•</span>
+        <span className="qt-footer-separator">•</span>
         <a
           href="https://github.com/foundry-9/quilltap/blob/main/LICENSE"
           target="_blank"
           rel="noopener noreferrer"
-          className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          className="qt-footer-link"
         >
           Free Software - MIT License
         </a>
-        <span className="hidden sm:inline">•</span>
+        <span className="qt-footer-separator">•</span>
         <a
           href="https://foundry-9.com/"
           target="_blank"
           rel="noopener noreferrer"
-          className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          className="qt-footer-link"
         >
           &copy; {new Date().getFullYear() > 2025 ? `2025-${new Date().getFullYear()}` : "2025"} Foundry-9
         </a>

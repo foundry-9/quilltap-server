@@ -244,4 +244,47 @@
     @apply flex-shrink-0;
     width: var(--qt-sidebar-width);
   }
+
+  /* ==========================================================================
+     FOOTER
+     ========================================================================== */
+
+  /**
+   * Site footer
+   */
+  .qt-footer {
+    @apply border-t;
+    @apply px-4 py-4;
+    background: var(--qt-footer-bg);
+    border-color: var(--qt-footer-border);
+  }
+
+  /**
+   * Footer content container
+   */
+  .qt-footer-container {
+    @apply flex flex-wrap items-center justify-center gap-4;
+    @apply text-sm;
+    color: var(--qt-footer-fg);
+  }
+
+  /**
+   * Footer link
+   */
+  .qt-footer-link {
+    @apply flex items-center gap-1;
+    @apply transition-colors;
+    color: var(--qt-footer-fg);
+  }
+
+  .qt-footer-link:hover {
+    color: var(--qt-footer-link-hover);
+  }
+
+  /**
+   * Footer separator (bullet point between items)
+   */
+  .qt-footer-separator {
+    @apply hidden sm:inline;
+  }
 }
