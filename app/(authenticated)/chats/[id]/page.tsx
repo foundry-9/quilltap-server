@@ -184,6 +184,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
   // Track which participant is currently responding during streaming (for correct avatar display)
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
+  // Track the last auto-triggered participant to prevent duplicate triggers
+  const lastAutoTriggeredRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -497,6 +499,74 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       scrollToBottom()
     }
   }, [id, streaming, waitingForResponse, participantsAsBase, hasActiveCharacters])
+
+  // Auto-trigger next character in multi-character mode when it's their turn
+  // This ensures characters who haven't spoken yet (including newly added ones) get their turn
+  useEffect(() => {
+    // Only auto-trigger in multi-character mode
+    if (!isMultiChar) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - not multi-character mode')
+      return
+    }
+
+    // Don't trigger if we're already generating or waiting
+    if (streaming || waitingForResponse) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - already generating', {
+        streaming,
+        waitingForResponse,
+      })
+      return
+    }
+
+    // Don't trigger if there's no turn selection result yet
+    if (!turnSelectionResult) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - no turn selection result')
+      return
+    }
+
+    // Don't trigger if it's the user's turn (nextSpeakerId is null)
+    if (turnSelectionResult.nextSpeakerId === null) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - user\'s turn', {
+        reason: turnSelectionResult.reason,
+        cycleComplete: turnSelectionResult.cycleComplete,
+      })
+      // Reset the last auto-triggered ref when cycle completes
+      lastAutoTriggeredRef.current = null
+      return
+    }
+
+    // Don't trigger if the next speaker is the user participant
+    if (turnSelectionResult.nextSpeakerId === userParticipantId) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - next speaker is user')
+      return
+    }
+
+    const nextSpeakerId = turnSelectionResult.nextSpeakerId
+
+    // Don't trigger the same participant twice in a row (prevents race condition loops)
+    if (lastAutoTriggeredRef.current === nextSpeakerId) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - same participant already triggered', {
+        nextSpeakerId,
+      })
+      return
+    }
+
+    // We have a character who should speak - trigger them
+    clientLogger.info('[Chat] Auto-triggering next character in multi-character mode', {
+      nextSpeakerId,
+      reason: turnSelectionResult.reason,
+    })
+
+    // Mark this participant as triggered before starting
+    lastAutoTriggeredRef.current = nextSpeakerId
+
+    // Small delay to allow state to settle and prevent race conditions
+    const timeoutId = setTimeout(() => {
+      triggerContinueMode(nextSpeakerId)
+    }, 100)
+
+    return () => clearTimeout(timeoutId)
+  }, [isMultiChar, streaming, waitingForResponse, turnSelectionResult, userParticipantId, triggerContinueMode])
 
   // Handle nudge action - Phase 5: Shows ephemeral message and triggers immediate response
   const handleNudge = useCallback((participantId: string) => {
@@ -856,6 +926,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if ((!input.trim() && attachedFiles.length === 0) || sending) return
+
+    // Reset auto-trigger ref when user sends a message (new turn cycle starts)
+    lastAutoTriggeredRef.current = null
 
     const userMessage = input.trim()
     const fileIds = attachedFiles.map((f) => f.id)
