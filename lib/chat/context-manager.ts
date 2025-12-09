@@ -123,8 +123,8 @@ export interface BuildContextOptions {
   chat: ChatMetadataBase
   /** Existing messages in the conversation */
   existingMessages: Array<{ role: string; content: string; id?: string; thoughtSignature?: string | null }>
-  /** New user message being sent */
-  newUserMessage: string
+  /** New user message being sent (optional for continue mode) */
+  newUserMessage?: string
   /** Custom system prompt override */
   systemPromptOverride?: string | null
   /** Embedding profile ID for semantic search */
@@ -645,12 +645,17 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   let memoriesIncluded = 0
   let debugMemories: Array<{ summary: string; importance: number; score: number }> = []
 
-  if (!skipMemories && character.id) {
+  // In continue mode (no newUserMessage), use the last message content for memory search
+  // or skip memory search if there are no messages
+  const memorySearchQuery = newUserMessage ||
+    (existingMessages.length > 0 ? existingMessages[existingMessages.length - 1].content : '')
+
+  if (!skipMemories && character.id && memorySearchQuery) {
     try {
-      // Search for memories relevant to the new user message
+      // Search for memories relevant to the message (or last message in continue mode)
       const memoryResults = await searchMemoriesSemantic(
         character.id,
-        newUserMessage,
+        memorySearchQuery,
         {
           userId,
           embeddingProfileId,
@@ -762,8 +767,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
 
-  // 7. Add new user message
-  const newUserMessageTokens = estimateTokens(newUserMessage, provider) + 4
+  // 7. Add new user message (only if provided - not in continue mode)
+  const newUserMessageTokens = newUserMessage ? estimateTokens(newUserMessage, provider) + 4 : 0
 
   // 8. Assemble final context
   const contextMessages: ContextMessage[] = []
@@ -796,23 +801,25 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
   }
 
-  // Add new user message
+  // Add new user message (only if provided - not in continue mode)
   // In multi-character mode, include the user's persona name
-  let newUserMsgName: string | undefined
-  if (isMultiCharacter && participantPersonas) {
-    // Find the user/persona participant
-    const personaParticipant = allParticipants?.find(p => p.type === 'PERSONA' && p.isActive)
-    if (personaParticipant?.personaId) {
-      const personaData = participantPersonas.get(personaParticipant.personaId)
-      newUserMsgName = personaData?.name
+  if (newUserMessage) {
+    let newUserMsgName: string | undefined
+    if (isMultiCharacter && participantPersonas) {
+      // Find the user/persona participant
+      const personaParticipant = allParticipants?.find(p => p.type === 'PERSONA' && p.isActive)
+      if (personaParticipant?.personaId) {
+        const personaData = participantPersonas.get(personaParticipant.personaId)
+        newUserMsgName = personaData?.name
+      }
     }
-  }
 
-  contextMessages.push({
-    role: 'user',
-    content: newUserMessage,
-    name: newUserMsgName,
-  })
+    contextMessages.push({
+      role: 'user',
+      content: newUserMessage,
+      name: newUserMsgName,
+    })
+  }
 
   // Calculate final token usage
   const totalUsed = finalSystemPromptTokens + memoryTokens + summaryTokens + messagesTokens + newUserMessageTokens
@@ -836,7 +843,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     budget,
     includedSummary: summaryTokens > 0,
     memoriesIncluded,
-    messagesIncluded: selectedMessages.length + 1, // +1 for new message
+    messagesIncluded: selectedMessages.length + (newUserMessage ? 1 : 0), // +1 for new message if provided
     messagesTruncated: truncated,
     warnings,
     // Debug info for the debug panel

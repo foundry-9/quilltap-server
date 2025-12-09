@@ -8,6 +8,11 @@ import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
+import {
+  EphemeralMessage,
+  createEphemeralMessage,
+  type EphemeralMessageData,
+} from '@/components/chat/EphemeralMessage'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
@@ -173,6 +178,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [showParticipantSidebar, setShowParticipantSidebar] = useState(true)
   const [turnState, setTurnState] = useState<TurnState>(createInitialTurnState())
   const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
+  // Phase 5: Ephemeral messages for nudge/queue notifications (session-only, not persisted)
+  const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -346,9 +353,116 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     })
   }, [messages, participantsAsBase, userParticipantId, charactersMap])
 
-  // Handle nudge action
+  // Phase 5: Trigger character response without user message (for nudge action)
+  const triggerContinueMode = useCallback(async (participantId: string) => {
+    if (streaming || waitingForResponse) {
+      clientLogger.debug('[Chat] Skipping continue mode - already generating')
+      return
+    }
+
+    clientLogger.debug('[Chat] Triggering continue mode for participant', { participantId })
+
+    setWaitingForResponse(true)
+    setStreaming(false)
+    setStreamingContent('')
+
+    try {
+      const res = await fetch(`/api/chats/${id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          continueMode: true,
+          respondingParticipantId: participantId,
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to trigger response')
+      }
+
+      // Handle streaming response
+      const reader = res.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) throw new Error('No response body')
+
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+
+              if (data.content) {
+                fullContent += data.content
+                setWaitingForResponse(false)
+                setStreaming(true)
+                setStreamingContent(fullContent)
+              }
+
+              if (data.done) {
+                // Response complete - add message to state
+                if (fullContent.trim()) {
+                  const newMessage: Message = {
+                    id: data.messageId || `continue-${Date.now()}`,
+                    role: 'ASSISTANT',
+                    content: fullContent,
+                    createdAt: new Date().toISOString(),
+                    participantId,
+                  }
+                  setMessages(prev => [...prev, newMessage])
+                }
+
+                // Clear ephemeral messages for this participant after response
+                setEphemeralMessages(prev =>
+                  prev.filter(em => em.participantId !== participantId)
+                )
+
+                // Update turn state if provided
+                if (data.turn) {
+                  clientLogger.debug('[Chat] Turn info from continue mode', data.turn)
+                }
+              }
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (err) {
+      clientLogger.error('[Chat] Continue mode error:', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      showErrorToast(err instanceof Error ? err.message : 'Failed to generate response')
+    } finally {
+      setStreaming(false)
+      setWaitingForResponse(false)
+      setStreamingContent('')
+      scrollToBottom()
+    }
+  }, [id, streaming, waitingForResponse])
+
+  // Handle nudge action - Phase 5: Shows ephemeral message and triggers immediate response
   const handleNudge = useCallback((participantId: string) => {
     clientLogger.debug('[Chat] Nudging participant', { participantId })
+
+    // Find participant name for ephemeral message
+    const participant = participantData.find(p => p.id === participantId)
+    const participantName = participant?.character?.name || participant?.persona?.name || 'Participant'
+
+    // Add ephemeral nudge notification
+    const ephemeral = createEphemeralMessage('nudge', participantId, participantName)
+    setEphemeralMessages(prev => [...prev, ephemeral])
+
+    // Update turn state
     const newTurnState = nudgeParticipant(turnState, participantId)
     setTurnState(newTurnState)
 
@@ -362,7 +476,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       )
       setTurnSelectionResult(result)
     }
-  }, [turnState, participantsAsBase, charactersMap, userParticipantId])
+
+    // Trigger immediate response generation (Phase 5 enhancement)
+    triggerContinueMode(participantId)
+  }, [turnState, participantsAsBase, charactersMap, userParticipantId, participantData, triggerContinueMode])
 
   // Handle queue action
   const handleQueue = useCallback((participantId: string) => {
@@ -405,6 +522,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     clientLogger.debug('[Chat] Talkativeness change', { participantId, value })
     // TODO: In Phase 6, persist this to the database via API
     // For now, just log it - the local slider state handles display
+  }, [])
+
+  // Phase 5: Dismiss an ephemeral message
+  const handleDismissEphemeral = useCallback((ephemeralId: string) => {
+    clientLogger.debug('[Chat] Dismissing ephemeral message', { ephemeralId })
+    setEphemeralMessages(prev => prev.filter(em => em.id !== ephemeralId))
   }, [])
 
   const fetchChatSettings = useCallback(async () => {
@@ -1507,6 +1630,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             </div>
           </div>
         )}
+
+        {/* Phase 5: Ephemeral messages (nudge notifications, etc.) */}
+        {ephemeralMessages.map((em) => (
+          <EphemeralMessage
+            key={em.id}
+            message={em}
+            onDismiss={handleDismissEphemeral}
+          />
+        ))}
 
         {/* Streaming message */}
         {streaming && streamingContent && (

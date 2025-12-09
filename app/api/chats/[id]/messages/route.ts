@@ -40,6 +40,14 @@ const sendMessageSchema = z.object({
   fileIds: z.array(z.string()).optional(),
 })
 
+// Validation schema for continue mode (nudge action)
+const continueMessageSchema = z.object({
+  // Continue mode - trigger character response without user message
+  continueMode: z.literal(true),
+  // Optional: specify which participant should respond (for multi-character)
+  respondingParticipantId: z.string().uuid().optional(),
+})
+
 // Helper function to load attached files
 async function loadAttachedFiles(repos: ReturnType<typeof getRepositories>, chatId: string, fileIds?: string[]) {
   if (!fileIds || fileIds.length === 0) {
@@ -282,46 +290,68 @@ export async function POST(
     // Get existing messages
     const existingMessages = await repos.chats.getMessages(id)
 
-    // Validate request body
+    // Validate request body - check for continue mode first
     const body = await req.json()
-    const { content, fileIds } = sendMessageSchema.parse(body)
+    const isContinueMode = body.continueMode === true
 
-    // Load file attachments if provided
-    const attachedFiles = await loadAttachedFiles(repos, id, fileIds)
+    let content = ''
+    let fileIds: string[] = []
+    let attachedFiles: Awaited<ReturnType<typeof loadAttachedFiles>> = []
+    let userMessageId: string | null = null
 
-    // Create user message event with participantId for multi-character tracking
-    const userMessageId = crypto.randomUUID()
-    const now = new Date().toISOString()
-    const userMessage = {
-      id: userMessageId,
-      type: 'message' as const,
-      role: 'USER' as const,
-      content,
-      createdAt: now,
-      attachments: fileIds || [],
-      // Track which participant (persona) sent this message for multi-character chats
-      participantId: userParticipantId,
-    }
+    if (isContinueMode) {
+      // Continue mode: validate with continue schema
+      const parsed = continueMessageSchema.parse(body)
+      logger.debug('[Chat Messages] Continue mode activated (nudge)', {
+        chatId: id,
+        respondingParticipantId: parsed.respondingParticipantId,
+      })
+      // In continue mode, we don't create a user message - just trigger character response
+    } else {
+      // Normal mode: validate with send message schema
+      const parsed = sendMessageSchema.parse(body)
+      content = parsed.content
+      fileIds = parsed.fileIds || []
 
-    // Add user message to chat
-    await repos.chats.addMessage(id, userMessage)
+      // Load file attachments if provided
+      attachedFiles = await loadAttachedFiles(repos, id, fileIds)
 
-    logger.debug('[Chat Messages] User message saved', {
-      messageId: userMessageId,
-      participantId: userParticipantId,
-      isMultiCharacter: isMultiCharacterChat(chat.participants),
-    })
+      // Create user message event with participantId for multi-character tracking
+      userMessageId = crypto.randomUUID()
+      const now = new Date().toISOString()
+      const userMessage = {
+        id: userMessageId,
+        type: 'message' as const,
+        role: 'USER' as const,
+        content,
+        createdAt: now,
+        attachments: fileIds || [],
+        // Track which participant (persona) sent this message for multi-character chats
+        participantId: userParticipantId,
+      }
 
-    // Update file attachments with message ID using repository
-    if (attachedFiles.length > 0) {
-      for (const file of attachedFiles) {
-        // Link the file to the message ID
-        await repos.files.addLink(file.id, userMessageId)
+      // Add user message to chat
+      await repos.chats.addMessage(id, userMessage)
+
+      logger.debug('[Chat Messages] User message saved', {
+        messageId: userMessageId,
+        participantId: userParticipantId,
+        isMultiCharacter: isMultiCharacterChat(chat.participants),
+      })
+
+      // Update file attachments with message ID using repository
+      if (attachedFiles.length > 0) {
+        for (const file of attachedFiles) {
+          // Link the file to the message ID
+          await repos.files.addLink(file.id, userMessageId)
+        }
       }
     }
 
-    // Load file data for LLM
-    const fileAttachments = await loadChatFilesForLLM(attachedFiles.map(f => f.id))
+    // Load file data for LLM (only if we have attachments)
+    const fileAttachments = attachedFiles.length > 0
+      ? await loadChatFilesForLLM(attachedFiles.map(f => f.id))
+      : []
 
     // Process file attachment fallbacks if provider doesn't support them
     const fallbackResults: FallbackResult[] = []
@@ -351,7 +381,10 @@ export async function POST(
     }
 
     // If we have fallback content, prepend it to the user's message
-    const finalUserMessageContent = messageContentPrefix ? messageContentPrefix + content : content
+    // In continue mode, finalUserMessageContent will be undefined (no new user message)
+    const finalUserMessageContent = isContinueMode
+      ? undefined
+      : (messageContentPrefix ? messageContentPrefix + content : content)
 
     // Get persona if available
     const personaParticipant = chat.participants.find(
@@ -967,7 +1000,7 @@ export async function POST(
                   characterId: character.id,
                   characterName: character.name,
                   chatId: id,
-                  userMessage: content,
+                  userMessage: isContinueMode ? '[Continue/Nudge - no user message]' : content,
                   assistantMessage: fullResponse,
                   sourceMessageId: assistantMessageId,
                   userId: user.id,
