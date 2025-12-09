@@ -26,4 +26,5 @@ export type {
   ProviderCapabilities,
   AttachmentSupport,
   ModelInfo,
+  ImageGenerationModelInfo,
 } from '../../../lib/plugins/interfaces/provider-plugin';

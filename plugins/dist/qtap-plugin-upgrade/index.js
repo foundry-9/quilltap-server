@@ -506,7 +506,7 @@ var require_package = __commonJS({
   "package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "2.2.0-dev.17",
+      version: "2.2.0-dev.35",
       private: true,
       author: {
         name: "Charles Sebold",
@@ -548,7 +548,7 @@ var require_package = __commonJS({
         "@aws-sdk/client-s3": "^3.943.0",
         "@aws-sdk/s3-request-presigner": "^3.943.0",
         "@google/generative-ai": "^0.24.1",
-        "@openrouter/sdk": "^0.1.27",
+        "@openrouter/sdk": "^0.2.9",
         "adm-zip": "^0.5.16",
         archiver: "^7.0.1",
         bcrypt: "^5.1.1",
@@ -33344,15 +33344,15 @@ var init_emitWarningIfUnsupportedVersion = __esm({
       warningEmitted: false
     };
     emitWarningIfUnsupportedVersion = (version) => {
-      if (version && !state.warningEmitted && parseInt(version.substring(1, version.indexOf("."))) < 18) {
+      if (version && !state.warningEmitted && parseInt(version.substring(1, version.indexOf("."))) < 20) {
         state.warningEmitted = true;
         process.emitWarning(`NodeDeprecationWarning: The AWS SDK for JavaScript (v3) will
-no longer support Node.js 16.x on January 6, 2025.
+no longer support Node.js ${version} in January 2026.
 
 To continue receiving updates to AWS services, bug fixes, and security
 updates please upgrade to a supported Node.js LTS version.
 
-More information can be found at: https://a.co/74kJMmI`);
+More information can be found at: https://a.co/c895JFp`);
       }
     };
   }
@@ -44757,12 +44757,8 @@ var init_AwsRestXmlProtocol = __esm({
             request.headers["content-type"] = contentType;
           }
         }
-        if (request.headers["content-type"] === this.getDefaultContentType()) {
-          if (typeof request.body === "string") {
-            if (!request.body.startsWith("<?xml ")) {
-              request.body = '<?xml version="1.0" encoding="UTF-8"?>' + request.body;
-            }
-          }
+        if (typeof request.body === "string" && request.headers["content-type"] === this.getDefaultContentType() && !request.body.startsWith("<?xml ") && !this.hasUnstructuredPayloadBinding(inputSchema)) {
+          request.body = '<?xml version="1.0" encoding="UTF-8"?>' + request.body;
         }
         return request;
       }
@@ -44790,6 +44786,14 @@ var init_AwsRestXmlProtocol = __esm({
       }
       getDefaultContentType() {
         return "application/xml";
+      }
+      hasUnstructuredPayloadBinding(ns) {
+        for (const [, member2] of ns.structIterator()) {
+          if (member2.getMergedTraits().httpPayload) {
+            return !(member2.isStructSchema() || member2.isMapSchema() || member2.isListSchema());
+          }
+        }
+        return false;
       }
     };
   }
@@ -50252,7 +50256,7 @@ var require_package3 = __commonJS({
     module2.exports = {
       name: "@aws-sdk/client-s3",
       description: "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
-      version: "3.946.0",
+      version: "3.947.0",
       scripts: {
         build: "concurrently 'yarn:build:cjs' 'yarn:build:es' 'yarn:build:types'",
         "build:cjs": "node ../../scripts/compilation/inline client-s3",
@@ -50281,24 +50285,24 @@ var require_package3 = __commonJS({
         "@aws-crypto/sha1-browser": "5.2.0",
         "@aws-crypto/sha256-browser": "5.2.0",
         "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.946.0",
-        "@aws-sdk/credential-provider-node": "3.946.0",
+        "@aws-sdk/core": "3.947.0",
+        "@aws-sdk/credential-provider-node": "3.947.0",
         "@aws-sdk/middleware-bucket-endpoint": "3.936.0",
         "@aws-sdk/middleware-expect-continue": "3.936.0",
-        "@aws-sdk/middleware-flexible-checksums": "3.946.0",
+        "@aws-sdk/middleware-flexible-checksums": "3.947.0",
         "@aws-sdk/middleware-host-header": "3.936.0",
         "@aws-sdk/middleware-location-constraint": "3.936.0",
         "@aws-sdk/middleware-logger": "3.936.0",
         "@aws-sdk/middleware-recursion-detection": "3.936.0",
-        "@aws-sdk/middleware-sdk-s3": "3.946.0",
+        "@aws-sdk/middleware-sdk-s3": "3.947.0",
         "@aws-sdk/middleware-ssec": "3.936.0",
-        "@aws-sdk/middleware-user-agent": "3.946.0",
+        "@aws-sdk/middleware-user-agent": "3.947.0",
         "@aws-sdk/region-config-resolver": "3.936.0",
-        "@aws-sdk/signature-v4-multi-region": "3.946.0",
+        "@aws-sdk/signature-v4-multi-region": "3.947.0",
         "@aws-sdk/types": "3.936.0",
         "@aws-sdk/util-endpoints": "3.936.0",
         "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.946.0",
+        "@aws-sdk/util-user-agent-node": "3.947.0",
         "@smithy/config-resolver": "^4.4.3",
         "@smithy/core": "^3.18.7",
         "@smithy/eventstream-serde-browser": "^4.2.5",
@@ -50335,7 +50339,7 @@ var require_package3 = __commonJS({
         tslib: "^2.6.2"
       },
       devDependencies: {
-        "@aws-sdk/signature-v4-crt": "3.946.0",
+        "@aws-sdk/signature-v4-crt": "3.947.0",
         "@tsconfig/node18": "18.2.4",
         "@types/node": "^18.19.69",
         concurrently: "7.0.0",
@@ -51050,7 +51054,7 @@ var init_package = __esm({
   "node_modules/@aws-sdk/nested-clients/package.json"() {
     package_default = {
       name: "@aws-sdk/nested-clients",
-      version: "3.946.0",
+      version: "3.947.0",
       description: "Nested clients for AWS SDK packages.",
       main: "./dist-cjs/index.js",
       module: "./dist-es/index.js",
@@ -51079,16 +51083,16 @@ var init_package = __esm({
       dependencies: {
         "@aws-crypto/sha256-browser": "5.2.0",
         "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.946.0",
+        "@aws-sdk/core": "3.947.0",
         "@aws-sdk/middleware-host-header": "3.936.0",
         "@aws-sdk/middleware-logger": "3.936.0",
         "@aws-sdk/middleware-recursion-detection": "3.936.0",
-        "@aws-sdk/middleware-user-agent": "3.946.0",
+        "@aws-sdk/middleware-user-agent": "3.947.0",
         "@aws-sdk/region-config-resolver": "3.936.0",
         "@aws-sdk/types": "3.936.0",
         "@aws-sdk/util-endpoints": "3.936.0",
         "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.946.0",
+        "@aws-sdk/util-user-agent-node": "3.947.0",
         "@smithy/config-resolver": "^4.4.3",
         "@smithy/core": "^3.18.7",
         "@smithy/fetch-http-handler": "^5.3.6",
@@ -52395,7 +52399,7 @@ var require_package4 = __commonJS({
     module2.exports = {
       name: "@aws-sdk/client-sso",
       description: "AWS SDK for JavaScript Sso Client for Node.js, Browser and React Native",
-      version: "3.946.0",
+      version: "3.947.0",
       scripts: {
         build: "concurrently 'yarn:build:cjs' 'yarn:build:es' 'yarn:build:types'",
         "build:cjs": "node ../../scripts/compilation/inline client-sso",
@@ -52415,16 +52419,16 @@ var require_package4 = __commonJS({
       dependencies: {
         "@aws-crypto/sha256-browser": "5.2.0",
         "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.946.0",
+        "@aws-sdk/core": "3.947.0",
         "@aws-sdk/middleware-host-header": "3.936.0",
         "@aws-sdk/middleware-logger": "3.936.0",
         "@aws-sdk/middleware-recursion-detection": "3.936.0",
-        "@aws-sdk/middleware-user-agent": "3.946.0",
+        "@aws-sdk/middleware-user-agent": "3.947.0",
         "@aws-sdk/region-config-resolver": "3.936.0",
         "@aws-sdk/types": "3.936.0",
         "@aws-sdk/util-endpoints": "3.936.0",
         "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.946.0",
+        "@aws-sdk/util-user-agent-node": "3.947.0",
         "@smithy/config-resolver": "^4.4.3",
         "@smithy/core": "^3.18.7",
         "@smithy/fetch-http-handler": "^5.3.6",

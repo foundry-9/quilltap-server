@@ -1031,23 +1031,130 @@ var GoogleProvider = class {
 };
 
 // plugins/dist/qtap-plugin-google/image-provider.ts
+var GEMINI_IMAGE_MODELS = [
+  "gemini-2.0-flash-exp",
+  "gemini-2.5-flash-image",
+  "gemini-2.5-flash-preview-native-image",
+  "gemini-3-pro-image-preview"
+  // Nano Banana Pro
+];
+var IMAGEN_MODELS = ["imagen-4", "imagen-4-fast"];
 var GoogleImagenProvider = class {
   constructor() {
     this.provider = "GOOGLE";
-    this.supportedModels = [
-      "imagen-4",
-      "imagen-4-fast",
-      "gemini-2.5-flash-image",
-      "gemini-3-pro-image-preview"
-    ];
+    this.supportedModels = [...IMAGEN_MODELS, ...GEMINI_IMAGE_MODELS];
+  }
+  /**
+   * Check if a model uses the Gemini generateContent API
+   */
+  isGeminiImageModel(model) {
+    return GEMINI_IMAGE_MODELS.some(
+      (m) => model === m || model.startsWith(`${m}-`) || model.includes(m)
+    );
   }
   async generateImage(params, apiKey) {
-    logger.debug("Google Imagen generation started", {
-      context: "GoogleImagenProvider.generateImage",
-      model: params.model,
-      promptLength: params.prompt.length
-    });
     const model = params.model ?? "imagen-4";
+    logger.debug("Google image generation started", {
+      context: "GoogleImagenProvider.generateImage",
+      model,
+      promptLength: params.prompt.length,
+      isGeminiModel: this.isGeminiImageModel(model)
+    });
+    if (this.isGeminiImageModel(model)) {
+      return this.generateWithGemini(params, apiKey, model);
+    } else {
+      return this.generateWithImagen(params, apiKey, model);
+    }
+  }
+  /**
+   * Generate images using Gemini's generateContent API
+   * Used for: gemini-2.5-flash-image, gemini-3-pro-image-preview (Nano Banana Pro)
+   */
+  async generateWithGemini(params, apiKey, model) {
+    const baseUrl = "https://generativelanguage.googleapis.com/v1beta";
+    const endpoint = `${baseUrl}/models/${model}:generateContent`;
+    const requestBody = {
+      contents: [
+        {
+          parts: [{ text: params.prompt }]
+        }
+      ],
+      generationConfig: {
+        responseModalities: ["TEXT", "IMAGE"]
+      }
+    };
+    const imageConfig = {};
+    if (params.aspectRatio) {
+      imageConfig.aspectRatio = params.aspectRatio;
+    }
+    const extendedParams = params;
+    if (extendedParams.imageSize) {
+      imageConfig.imageSize = extendedParams.imageSize;
+    }
+    if (Object.keys(imageConfig).length > 0) {
+      requestBody.generationConfig.imageConfig = imageConfig;
+    }
+    logger.debug("Sending request to Gemini generateContent API", {
+      context: "GoogleImagenProvider.generateWithGemini",
+      endpoint,
+      model,
+      hasImageConfig: Object.keys(imageConfig).length > 0
+    });
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestBody)
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      logger.error("Gemini API error", {
+        context: "GoogleImagenProvider.generateWithGemini",
+        status: response.status,
+        errorMessage: error.error?.message
+      });
+      throw new Error(
+        error.error?.message || `Gemini API error: ${response.status}`
+      );
+    }
+    const data = await response.json();
+    const images = [];
+    let textResponse = "";
+    const candidate = data.candidates?.[0];
+    if (candidate?.content?.parts) {
+      for (const part of candidate.content.parts) {
+        if (part.inlineData) {
+          images.push({
+            data: part.inlineData.data,
+            mimeType: part.inlineData.mimeType || "image/png"
+          });
+        } else if (part.text) {
+          textResponse = part.text;
+        }
+      }
+    }
+    logger.debug("Gemini image generation completed", {
+      context: "GoogleImagenProvider.generateWithGemini",
+      imageCount: images.length,
+      hasTextResponse: !!textResponse
+    });
+    if (images.length === 0) {
+      throw new Error(
+        textResponse || "No images returned from Gemini API"
+      );
+    }
+    return {
+      images,
+      raw: data
+    };
+  }
+  /**
+   * Generate images using Imagen's predict API
+   * Used for: imagen-4, imagen-4-fast
+   */
+  async generateWithImagen(params, apiKey, model) {
     const baseUrl = "https://generativelanguage.googleapis.com/v1beta";
     const endpoint = `${baseUrl}/models/${model}:predict`;
     const requestBody = {
@@ -1068,7 +1175,7 @@ var GoogleImagenProvider = class {
       requestBody.parameters.seed = extendedParams.seed;
     }
     logger.debug("Sending request to Google Imagen API", {
-      context: "GoogleImagenProvider.generateImage",
+      context: "GoogleImagenProvider.generateWithImagen",
       endpoint,
       sampleCount: requestBody.parameters.sampleCount
     });
@@ -1083,15 +1190,17 @@ var GoogleImagenProvider = class {
     if (!response.ok) {
       const error = await response.json();
       logger.error("Google Imagen API error", {
-        context: "GoogleImagenProvider.generateImage",
+        context: "GoogleImagenProvider.generateWithImagen",
         status: response.status,
         errorMessage: error.error?.message
       });
-      throw new Error(error.error?.message || `Google Imagen API error: ${response.status}`);
+      throw new Error(
+        error.error?.message || `Google Imagen API error: ${response.status}`
+      );
     }
     const data = await response.json();
-    logger.debug("Image generation completed", {
-      context: "GoogleImagenProvider.generateImage",
+    logger.debug("Imagen generation completed", {
+      context: "GoogleImagenProvider.generateWithImagen",
       imageCount: data.predictions?.length ?? 0
     });
     return {
@@ -1292,27 +1401,14 @@ var plugin = {
    * Returns cached information about Google models without needing API calls
    */
   getModelInfo: () => {
-    logger.debug("Getting Google model information", { context: "plugin.getModelInfo" });
+    logger.debug("Getting Google model information", {
+      context: "plugin.getModelInfo"
+    });
     return [
+      // Chat models
       {
         id: "gemini-2.5-flash",
         name: "Gemini 2.5 Flash",
-        contextWindow: 1e6,
-        maxOutputTokens: 8192,
-        supportsImages: true,
-        supportsTools: true
-      },
-      {
-        id: "gemini-2.5-flash-image",
-        name: "Gemini 2.5 Flash Image",
-        contextWindow: 1e6,
-        maxOutputTokens: 8192,
-        supportsImages: true,
-        supportsTools: true
-      },
-      {
-        id: "gemini-3-pro-image-preview",
-        name: "Gemini 3 Pro Image Preview",
         contextWindow: 1e6,
         maxOutputTokens: 8192,
         supportsImages: true,
@@ -1326,6 +1422,40 @@ var plugin = {
         supportsImages: true,
         supportsTools: true
       },
+      // Gemini image generation models (use generateContent API)
+      {
+        id: "gemini-2.0-flash-exp",
+        name: "Gemini 2.0 Flash Experimental",
+        contextWindow: 1e6,
+        maxOutputTokens: 8192,
+        supportsImages: true,
+        supportsTools: true
+      },
+      {
+        id: "gemini-2.5-flash-image",
+        name: "Gemini 2.5 Flash Image (Nano Banana)",
+        contextWindow: 1e6,
+        maxOutputTokens: 8192,
+        supportsImages: true,
+        supportsTools: true
+      },
+      {
+        id: "gemini-2.5-flash-preview-native-image",
+        name: "Gemini 2.5 Flash Native Image",
+        contextWindow: 1e6,
+        maxOutputTokens: 8192,
+        supportsImages: true,
+        supportsTools: true
+      },
+      {
+        id: "gemini-3-pro-image-preview",
+        name: "Gemini 3 Pro Image Preview (Nano Banana Pro)",
+        contextWindow: 65536,
+        maxOutputTokens: 32768,
+        supportsImages: true,
+        supportsTools: true
+      },
+      // Imagen models (use predict API)
       {
         id: "imagen-4",
         name: "Imagen 4",
@@ -1341,6 +1471,95 @@ var plugin = {
         maxOutputTokens: 0,
         supportsImages: false,
         supportsTools: false
+      }
+    ];
+  },
+  /**
+   * Get static image generation model information
+   * Returns cached information about Google image generation models
+   */
+  getImageGenerationModels: () => {
+    return [
+      // Gemini image generation models (use generateContent API)
+      {
+        id: "gemini-2.0-flash-exp",
+        name: "Gemini 2.0 Flash Experimental",
+        supportedAspectRatios: [
+          "1:1",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:3",
+          "4:5",
+          "5:4",
+          "9:16",
+          "16:9"
+        ],
+        description: "Experimental Gemini 2.0 model with image generation"
+      },
+      {
+        id: "gemini-2.5-flash-image",
+        name: "Gemini 2.5 Flash Image (Nano Banana)",
+        supportedAspectRatios: [
+          "1:1",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:3",
+          "4:5",
+          "5:4",
+          "9:16",
+          "16:9",
+          "21:9"
+        ],
+        description: "Fast, efficient model for general image generation with text rendering"
+      },
+      {
+        id: "gemini-2.5-flash-preview-native-image",
+        name: "Gemini 2.5 Flash Native Image",
+        supportedAspectRatios: [
+          "1:1",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:3",
+          "4:5",
+          "5:4",
+          "9:16",
+          "16:9",
+          "21:9"
+        ],
+        description: "Native image generation variant of Gemini 2.5 Flash"
+      },
+      {
+        id: "gemini-3-pro-image-preview",
+        name: "Gemini 3 Pro Image Preview (Nano Banana Pro)",
+        supportedAspectRatios: [
+          "1:1",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:3",
+          "4:5",
+          "5:4",
+          "9:16",
+          "16:9",
+          "21:9"
+        ],
+        description: "Advanced image generation with fine-grained creative controls, 2K/4K output, up to 14 reference images"
+      },
+      // Imagen models (use predict API)
+      {
+        id: "imagen-4",
+        name: "Imagen 4",
+        supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
+        description: "High-quality image generation with Imagen 4"
+      },
+      {
+        id: "imagen-4-fast",
+        name: "Imagen 4 Fast",
+        supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
+        description: "Faster image generation variant of Imagen 4"
       }
     ];
   },

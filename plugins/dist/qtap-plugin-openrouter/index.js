@@ -676,9 +676,9 @@ var OpenRouterProvider = class {
     const requestBody = {
       model: params.model ?? "google/gemini-2.5-flash-image-preview",
       messages: [{ role: "user", content: params.prompt }],
+      modalities: ["image", "text"],
+      // Required for image generation
       stream: false
-      // Note: OpenRouter SDK doesn't have direct image generation support yet
-      // We'll use chat completion with special parameters
     };
     if (params.aspectRatio) {
       requestBody.imageConfig = { aspectRatio: params.aspectRatio };
@@ -965,7 +965,7 @@ var config = {
 };
 var capabilities = {
   chat: true,
-  imageGeneration: false,
+  imageGeneration: true,
   embeddings: true,
   webSearch: false
 };
@@ -1153,6 +1153,38 @@ var plugin = {
         name: "Voyage Code 2",
         dimensions: 1536,
         description: "Voyage AI embedding model optimized for code"
+      }
+    ];
+  },
+  /**
+   * Get static image generation model information
+   * Returns cached information about popular OpenRouter image generation models
+   */
+  getImageGenerationModels: () => {
+    return [
+      {
+        id: "google/gemini-2.0-flash-exp:free",
+        name: "Gemini 2.0 Flash Experimental (Free)",
+        supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
+        description: "Free experimental Gemini 2.0 model with image generation capabilities"
+      },
+      {
+        id: "google/gemini-2.5-flash-preview-05-20",
+        name: "Gemini 2.5 Flash Preview",
+        supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
+        description: "Fast preview model with state-of-the-art image generation"
+      },
+      {
+        id: "google/gemini-2.5-flash-preview-native-image",
+        name: "Gemini 2.5 Flash Native Image",
+        supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
+        description: "Native image generation variant of Gemini 2.5 Flash"
+      },
+      {
+        id: "google/gemini-3-pro-image-preview",
+        name: "Nano Banana Pro (Gemini 3 Pro Image)",
+        supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"],
+        description: "Advanced image generation with fine-grained creative controls, 2K/4K output support"
       }
     ];
   },

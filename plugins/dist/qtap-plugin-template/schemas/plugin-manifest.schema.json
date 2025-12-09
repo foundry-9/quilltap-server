@@ -636,6 +636,91 @@
           ],
           "additionalProperties": false
         },
+        "themeConfig": {
+          "type": "object",
+          "properties": {
+            "tokensPath": {
+              "type": "string",
+              "default": "tokens.json",
+              "description": "Path to theme tokens JSON file"
+            },
+            "stylesPath": {
+              "type": "string",
+              "description": "Path to component override CSS file"
+            },
+            "supportsDarkMode": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether theme provides dark mode colors"
+            },
+            "previewImage": {
+              "type": "string",
+              "description": "Theme preview image for theme picker"
+            },
+            "extendsTheme": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Plugin name of theme to extend"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [],
+              "description": "Tags for theme discovery"
+            },
+            "fonts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "family": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Font family name"
+                  },
+                  "src": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Font file path relative to plugin"
+                  },
+                  "weight": {
+                    "type": "string",
+                    "default": "400",
+                    "description": "Font weight"
+                  },
+                  "style": {
+                    "type": "string",
+                    "default": "normal",
+                    "description": "Font style"
+                  },
+                  "display": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "block",
+                      "swap",
+                      "fallback",
+                      "optional"
+                    ],
+                    "default": "swap"
+                  }
+                },
+                "required": [
+                  "family",
+                  "src"
+                ],
+                "additionalProperties": false
+              },
+              "default": [],
+              "description": "Custom fonts to load"
+            }
+          },
+          "additionalProperties": false
+        },
         "permissions": {
           "type": "object",
           "properties": {

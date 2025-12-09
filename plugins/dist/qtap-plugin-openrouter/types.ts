@@ -24,4 +24,5 @@ export type {
   AttachmentSupport,
   ModelInfo,
   EmbeddingModelInfo,
+  ImageGenerationModelInfo,
 } from '../../../lib/plugins/interfaces/provider-plugin';

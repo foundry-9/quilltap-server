@@ -17,6 +17,7 @@ export interface ModelPricing {
   completionCostPer1M: number;
   contextLength: number | null;
   supportsVision: boolean;
+  supportsImageGeneration: boolean;
   supportsTools: boolean;
   fetchedAt: string;
 }
@@ -51,13 +52,26 @@ export async function fetchOpenRouterPricing(
       const promptCostPer1M = promptCost * 1_000_000;
       const completionCostPer1M = completionCost * 1_000_000;
 
+      // Check input modality for vision support (can receive images)
+      const inputModality = model.architecture?.modality;
+      const supportsVision = inputModality?.includes('image') || false;
+
+      // Check output modality for image generation support (can produce images)
+      // OpenRouter exposes this via architecture.outputModality or supported_generation_methods
+      const outputModality = (model.architecture as any)?.outputModality;
+      const supportsImageGeneration =
+        outputModality?.includes('image') ||
+        (model as any).supported_generation_methods?.includes('image') ||
+        false;
+
       models.push({
         modelId: model.id,
         name: model.name,
         promptCostPer1M,
         completionCostPer1M,
         contextLength: model.contextLength,
-        supportsVision: model.architecture?.modality?.includes('image') || false,
+        supportsVision,
+        supportsImageGeneration,
         supportsTools:
           model.supportedParameters?.some(
             (p) => p === Parameter.Tools || p === Parameter.ToolChoice
@@ -101,11 +115,14 @@ export function findCheapestModel(
   models: ModelPricing[],
   options?: {
     requireVision?: boolean;
+    requireImageGeneration?: boolean;
     requireTools?: boolean;
   }
 ): ModelPricing | null {
   const candidates = models.filter((model) => {
     if (options?.requireVision && !model.supportsVision) return false;
+    if (options?.requireImageGeneration && !model.supportsImageGeneration)
+      return false;
     if (options?.requireTools && !model.supportsTools) return false;
     return true;
   });
@@ -113,6 +130,15 @@ export function findCheapestModel(
   if (candidates.length === 0) return null;
 
   return sortByCost(candidates)[0];
+}
+
+/**
+ * Get all models that support image generation
+ */
+export function getImageGenerationModels(
+  models: ModelPricing[]
+): ModelPricing[] {
+  return models.filter((model) => model.supportsImageGeneration);
 }
 
 /**

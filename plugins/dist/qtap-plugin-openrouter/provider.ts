@@ -289,11 +289,11 @@ export class OpenRouterProvider implements LLMProvider {
     const requestBody: any = {
       model: params.model ?? 'google/gemini-2.5-flash-image-preview',
       messages: [{ role: 'user', content: params.prompt }],
+      modalities: ['image', 'text'], // Required for image generation
       stream: false,
-      // Note: OpenRouter SDK doesn't have direct image generation support yet
-      // We'll use chat completion with special parameters
     };
 
+    // Add image configuration if aspect ratio is specified
     if (params.aspectRatio) {
       requestBody.imageConfig = { aspectRatio: params.aspectRatio };
     }
