@@ -7,6 +7,7 @@ import ToolPalette from '@/components/chat/ToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
+import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import {
   EphemeralMessage,
@@ -172,6 +173,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
+  const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
@@ -520,7 +522,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Handle talkativeness change (optimistic update - would need API for persistence)
   const handleTalkativenessChange = useCallback((participantId: string, value: number) => {
     clientLogger.debug('[Chat] Talkativeness change', { participantId, value })
-    // TODO: In Phase 6, persist this to the database via API
+    // TODO: Persist this to the database via API
     // For now, just log it - the local slider state handles display
   }, [])
 
@@ -603,6 +605,66 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       clientLogger.error('Failed to fetch chat photo count:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [id])
+
+  // Phase 6: Handle adding a character to the chat
+  const handleAddCharacter = useCallback(() => {
+    clientLogger.debug('[Chat] Opening add character dialog')
+    setAddCharacterDialogOpen(true)
+  }, [])
+
+  // Phase 6: Handle character added callback - refresh chat data
+  const handleCharacterAdded = useCallback(() => {
+    clientLogger.info('[Chat] Character added, refreshing chat data')
+    fetchChat()
+  }, [fetchChat])
+
+  // Phase 6: Handle removing a character from the chat
+  const handleRemoveCharacter = useCallback(async (participantId: string) => {
+    const participant = participantData.find(p => p.id === participantId)
+    const characterName = participant?.character?.name || 'This character'
+
+    clientLogger.debug('[Chat] Requesting character removal', {
+      participantId,
+      characterName,
+    })
+
+    // Confirm with user
+    const confirmed = await showConfirmation(
+      `Remove ${characterName} from this chat? Their past messages will remain visible, but they will no longer participate in the conversation.`
+    )
+
+    if (!confirmed) {
+      clientLogger.debug('[Chat] Character removal cancelled by user')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/chats/${id}/participants`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to remove character')
+      }
+
+      clientLogger.info('[Chat] Character removed successfully', {
+        participantId,
+        characterName,
+      })
+
+      showSuccessToast(`${characterName} has been removed from the chat`)
+      fetchChat() // Refresh chat data
+    } catch (err) {
+      clientLogger.error('[Chat] Error removing character', {
+        error: err instanceof Error ? err.message : String(err),
+        participantId,
+      })
+      showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
+    }
+  }, [id, participantData, fetchChat])
 
   useEffect(() => {
     fetchChat()
@@ -1979,9 +2041,23 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onQueue={handleQueue}
           onDequeue={handleDequeue}
           onTalkativenessChange={handleTalkativenessChange}
+          onAddCharacter={handleAddCharacter}
+          onRemoveCharacter={handleRemoveCharacter}
           className="w-72 flex-shrink-0"
         />
       )}
+
+      {/* Add Character Dialog - Phase 6 */}
+      <AddCharacterDialog
+        isOpen={addCharacterDialogOpen}
+        onClose={() => setAddCharacterDialogOpen(false)}
+        chatId={id}
+        existingCharacterIds={chat?.participants
+          .filter(p => p.type === 'CHARACTER' && p.isActive)
+          .map(p => p.character?.id)
+          .filter((id): id is string => id !== null && id !== undefined) || []}
+        onCharacterAdded={handleCharacterAdded}
+      />
 
       {/* Debug Panel */}
       {isDebugMode && (

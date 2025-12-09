@@ -30,6 +30,7 @@ interface ParticipantSidebarProps {
   onDequeue: (participantId: string) => void
   onTalkativenessChange?: (participantId: string, value: number) => void
   onAddCharacter?: () => void
+  onRemoveCharacter?: (participantId: string) => void // Phase 6: Remove character from chat
   className?: string
 }
 
@@ -44,6 +45,7 @@ export function ParticipantSidebar({
   onDequeue,
   onTalkativenessChange,
   onAddCharacter,
+  onRemoveCharacter,
   className = '',
 }: ParticipantSidebarProps) {
   clientLogger.debug('[ParticipantSidebar] Rendering', {
@@ -118,6 +120,8 @@ export function ParticipantSidebar({
           const isUserParticipant = participant.id === userParticipantId
           const isCurrentTurn = currentSpeakerId === participant.id
           const queuePos = getQueuePosition(turnState, participant.id)
+          // Can remove if there's more than one active character
+          const canRemove = activeCharacterCount > 1
 
           return (
             <ParticipantCard
@@ -131,6 +135,8 @@ export function ParticipantSidebar({
               onQueue={onQueue}
               onDequeue={onDequeue}
               onTalkativenessChange={onTalkativenessChange}
+              onRemove={onRemoveCharacter}
+              canRemove={canRemove}
             />
           )
         })}

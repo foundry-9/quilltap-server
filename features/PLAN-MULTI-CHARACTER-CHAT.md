@@ -16,7 +16,7 @@ This plan covers the implementation of full multi-character chat support for Qui
 | Nudge/Queue System | ✅ COMPLETE (Phase 5) |
 | EphemeralMessage Component | ✅ COMPLETE (Phase 5) |
 | Continue Mode API | ✅ COMPLETE (Phase 5) |
-| Add Character Dialog | PENDING (Phase 6) |
+| Add Character Dialog | ✅ COMPLETE (Phase 6) |
 | Multi-Character Context Building | ✅ COMPLETE (Phase 3) |
 
 ---

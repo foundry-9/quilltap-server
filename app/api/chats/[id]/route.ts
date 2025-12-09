@@ -48,6 +48,8 @@ const addParticipantSchema = z.object({
   imageProfileId: z.string().uuid().nullish(),
   systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
+  hasHistoryAccess: z.boolean().optional(), // Phase 6: Can see messages from before joining
+  joinScenario: z.string().nullish(), // Phase 6: Custom join scenario text
 })
 
 // Combined update schema
@@ -276,6 +278,8 @@ async function handleAddParticipant(
     systemPromptOverride: data.systemPromptOverride || null,
     displayOrder: data.displayOrder ?? currentParticipantCount,
     isActive: true,
+    hasHistoryAccess: data.hasHistoryAccess ?? false, // Phase 6
+    joinScenario: data.joinScenario || null, // Phase 6
   })
 
   if (!result) {

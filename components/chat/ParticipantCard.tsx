@@ -61,7 +61,9 @@ interface ParticipantCardProps {
   onQueue: (participantId: string) => void
   onDequeue: (participantId: string) => void
   onTalkativenessChange?: (participantId: string, value: number) => void
+  onRemove?: (participantId: string) => void // Phase 6: Remove character from chat
   isUserParticipant?: boolean // True if this is the user's persona
+  canRemove?: boolean // True if this character can be removed (not the only character)
 }
 
 export function ParticipantCard({
@@ -73,7 +75,9 @@ export function ParticipantCard({
   onQueue,
   onDequeue,
   onTalkativenessChange,
+  onRemove,
   isUserParticipant = false,
+  canRemove = true,
 }: ParticipantCardProps) {
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
@@ -262,13 +266,13 @@ export function ParticipantCard({
         </div>
       </div>
 
-      {/* Action button */}
-      <div className="mt-3">
+      {/* Action buttons */}
+      <div className="mt-3 flex gap-2">
         <button
           onClick={handleActionClick}
           disabled={isActionDisabled}
           className={`
-            w-full py-1.5 px-3 text-xs font-medium rounded transition-colors
+            flex-1 py-1.5 px-3 text-xs font-medium rounded transition-colors
             ${queuePosition > 0
               ? 'bg-info/10 text-info hover:bg-info/20 border border-info/30'
               : isCurrentTurn
@@ -280,6 +284,26 @@ export function ParticipantCard({
         >
           {getActionButtonLabel()}
         </button>
+
+        {/* Remove button - only for characters, not user personas */}
+        {isCharacter && !isUserParticipant && onRemove && canRemove && (
+          <button
+            onClick={() => {
+              clientLogger.debug('[ParticipantCard] Remove clicked', {
+                participantId: participant.id,
+                characterName: name,
+              })
+              onRemove(participant.id)
+            }}
+            disabled={isGenerating}
+            className="py-1.5 px-2 text-xs font-medium rounded transition-colors bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={`Remove ${name} from chat`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   )
