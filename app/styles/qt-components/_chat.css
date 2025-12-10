@@ -183,6 +183,10 @@
 
   /**
    * Composer input area
+   * Uses flex-grow to fill available space in the composer-inner container.
+   * The min-h-12 ensures a minimum height, max-h-48 caps growth.
+   * When the composer-inner is taller (due to toolbar buttons), the input
+   * will stretch to fill that height via align-self: stretch.
    */
   .qt-chat-composer-input {
     @apply flex-1;
@@ -193,6 +197,7 @@
     @apply focus:outline-none focus:ring-2;
     @apply disabled:bg-muted disabled:cursor-not-allowed;
     @apply placeholder:text-muted-foreground;
+    align-self: stretch;
     padding: var(--qt-input-padding-y) var(--qt-input-padding-x);
     border-radius: var(--qt-chat-composer-radius);
     background: var(--qt-input-bg);
@@ -348,18 +353,25 @@
 
   /**
    * Chat page layout
+   * Uses h-full to fill the parent container (main element in root layout)
+   * rather than h-screen which would overflow when nav/footer are present.
+   * overflow-hidden prevents any scrolling at this level.
    */
   .qt-chat-layout {
-    @apply flex h-screen;
+    @apply flex h-full;
+    @apply overflow-hidden;
     background: var(--qt-content-bg);
   }
 
   /**
    * Chat main area
+   * overflow-hidden ensures this container never scrolls;
+   * scrolling happens in .qt-chat-messages instead.
    */
   .qt-chat-main {
     @apply flex-1 flex flex-col;
     @apply min-w-0;
+    @apply overflow-hidden;
   }
 
   .qt-chat-main-split {
