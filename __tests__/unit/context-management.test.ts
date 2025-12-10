@@ -30,7 +30,30 @@ import {
   selectRecentMessages,
   willExceedContextLimit,
   getContextStatus,
+  filterMessagesByHistoryAccess,
+  getParticipantName,
+  attributeMessagesForCharacter,
+  buildOtherParticipantsInfo,
+  formatInterCharacterMemoriesForContext,
+  buildContext,
+  type MessageWithParticipant,
 } from '@/lib/chat/context-manager'
+import type { ChatParticipantBase, Character, Persona, Memory } from '@/lib/schemas/types'
+import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { getRepositories } from '@/lib/repositories/factory'
+
+jest.mock('@/lib/memory/memory-service', () => ({
+  searchMemoriesSemantic: jest.fn().mockResolvedValue([]),
+}))
+
+const mockedSearchMemories = searchMemoriesSemantic as jest.MockedFunction<typeof searchMemoriesSemantic>
+const mockedGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
+
+afterEach(() => {
+  mockedSearchMemories.mockReset()
+  mockedSearchMemories.mockResolvedValue([])
+  mockedGetRepositories.mockReset()
+})
 
 describe('Token Counter', () => {
   describe('estimateTokens', () => {
@@ -439,6 +462,366 @@ describe('Context Manager', () => {
     it('should include helpful message', () => {
       const status = getContextStatus(100000, 200000)
       expect(status.message).toBeTruthy()
+    })
+  })
+
+  describe('filterMessagesByHistoryAccess', () => {
+    const participant: ChatParticipantBase = {
+      id: 'char-1',
+      type: 'CHARACTER',
+      characterId: 'char-1',
+      personaId: null,
+      connectionProfileId: null,
+      imageProfileId: null,
+      systemPromptOverride: null,
+      displayOrder: 0,
+      isActive: true,
+      hasHistoryAccess: false,
+      joinScenario: null,
+      createdAt: '2024-01-05T00:00:00.000Z',
+      updatedAt: '2024-01-05T00:00:00.000Z',
+    }
+
+    const messages: MessageWithParticipant[] = [
+      { role: 'USER', content: 'Earlier', participantId: 'user-1', createdAt: '2024-01-01T00:00:00.000Z' },
+      { role: 'ASSISTANT', content: 'Welcome!', participantId: 'char-1', createdAt: '2024-01-06T00:00:00.000Z' },
+    ]
+
+    it('returns all messages when participant has history access', () => {
+      const withAccess = { ...participant, hasHistoryAccess: true }
+      const result = filterMessagesByHistoryAccess(messages, withAccess)
+      expect(result).toHaveLength(2)
+    })
+
+    it('filters out messages that happened before the participant joined', () => {
+      const result = filterMessagesByHistoryAccess(messages, participant)
+      expect(result).toEqual([messages[1]])
+    })
+  })
+
+  describe('participant attribution helpers', () => {
+    const createdAt = new Date().toISOString()
+    const charParticipant: ChatParticipantBase = {
+      id: 'p-char',
+      type: 'CHARACTER',
+      characterId: 'char-1',
+      personaId: null,
+      connectionProfileId: null,
+      imageProfileId: null,
+      systemPromptOverride: null,
+      displayOrder: 0,
+      isActive: true,
+      hasHistoryAccess: true,
+      joinScenario: null,
+      createdAt,
+      updatedAt: createdAt,
+    }
+    const otherCharParticipant: ChatParticipantBase = { ...charParticipant, id: 'p-char-2', characterId: 'char-2' }
+    const personaParticipant: ChatParticipantBase = {
+      id: 'p-user',
+      type: 'PERSONA',
+      personaId: 'persona-1',
+      characterId: null,
+      connectionProfileId: null,
+      imageProfileId: null,
+      systemPromptOverride: null,
+      displayOrder: 0,
+      isActive: true,
+      hasHistoryAccess: true,
+      joinScenario: null,
+      createdAt,
+      updatedAt: createdAt,
+    }
+
+    const characterMap = new Map<string, Character>([
+      ['char-1', {
+        id: 'char-1',
+        userId: 'user',
+        name: 'Lyra',
+        title: 'Navigator',
+        description: null,
+        personality: null,
+        scenario: null,
+        firstMessage: null,
+        exampleDialogues: null,
+        systemPrompt: null,
+        avatarUrl: null,
+        defaultImageId: null,
+        defaultConnectionProfileId: null,
+        sillyTavernData: null,
+        isFavorite: false,
+        talkativeness: 0.5,
+        personaLinks: [],
+        tags: [],
+        avatarOverrides: [],
+        physicalDescriptions: [],
+        createdAt,
+        updatedAt: createdAt,
+      }],
+      ['char-2', {
+        id: 'char-2',
+        userId: 'user',
+        name: 'Iris',
+        title: null,
+        description: 'Strategist',
+        personality: null,
+        scenario: null,
+        firstMessage: null,
+        exampleDialogues: null,
+        systemPrompt: null,
+        avatarUrl: null,
+        defaultImageId: null,
+        defaultConnectionProfileId: null,
+        sillyTavernData: null,
+        isFavorite: false,
+        talkativeness: 0.5,
+        personaLinks: [],
+        tags: [],
+        avatarOverrides: [],
+        physicalDescriptions: [],
+        createdAt,
+        updatedAt: createdAt,
+      }],
+    ])
+    const personaMap = new Map<string, Persona>([[
+      'persona-1',
+      {
+        id: 'persona-1',
+        userId: 'user',
+        name: 'Alex',
+        title: null,
+        description: 'Curious human',
+        personalityTraits: null,
+        avatarUrl: null,
+        defaultImageId: null,
+        sillyTavernData: null,
+        characterLinks: [],
+        tags: [],
+        physicalDescriptions: [],
+        createdAt,
+        updatedAt: createdAt,
+      },
+    ]])
+
+    const allParticipants = [charParticipant, otherCharParticipant, personaParticipant]
+
+    it('returns friendly names for both characters and personas', () => {
+      expect(getParticipantName('p-char', characterMap, personaMap, allParticipants)).toBe('Lyra')
+      expect(getParticipantName('p-user', characterMap, personaMap, allParticipants)).toBe('Alex')
+      expect(getParticipantName('missing', characterMap, personaMap, allParticipants)).toBeUndefined()
+    })
+
+    it('attributes messages to the responding character perspective', () => {
+      const messages: MessageWithParticipant[] = [
+        { role: 'USER', content: 'Hello', participantId: 'p-user' },
+        { role: 'ASSISTANT', content: 'Hi there', participantId: 'p-char-2' },
+        { role: 'ASSISTANT', content: 'My turn', participantId: 'p-char' },
+      ]
+
+      const attributed = attributeMessagesForCharacter(messages, 'p-char', characterMap, personaMap, allParticipants)
+      expect(attributed[0]).toMatchObject({ role: 'user', name: 'Alex' })
+      expect(attributed[1]).toMatchObject({ role: 'user', name: 'Iris' })
+      expect(attributed[2]).toMatchObject({ role: 'assistant', name: 'Lyra' })
+    })
+
+    it('describes other participants for the system prompt', () => {
+      const info = buildOtherParticipantsInfo('p-char', allParticipants, characterMap, personaMap)
+      expect(info).toEqual([
+        expect.objectContaining({ name: 'Iris', type: 'CHARACTER' }),
+        expect.objectContaining({ name: 'Alex', type: 'PERSONA' }),
+      ])
+    })
+  })
+
+  describe('formatInterCharacterMemoriesForContext', () => {
+    const createdAt = new Date().toISOString()
+    const memory: Memory = {
+      id: 'mem-1',
+      characterId: 'char-1',
+      personaId: null,
+      aboutCharacterId: 'char-2',
+      chatId: null,
+      content: 'Detailed note',
+      summary: 'Lyra trusts Iris',
+      keywords: [],
+      tags: [],
+      importance: 0.9,
+      embedding: null,
+      source: 'MANUAL',
+      sourceMessageId: null,
+      lastAccessedAt: null,
+      createdAt,
+      updatedAt: createdAt,
+    }
+
+    it('groups memories by character name and respects token budget', () => {
+      const result = formatInterCharacterMemoriesForContext([memory], new Map([['char-2', 'Iris']]), 1000, 'OPENAI')
+      expect(result.content).toContain('Iris')
+      expect(result.memoriesUsed).toBe(1)
+    })
+
+    it('returns empty payload when no memories fit', () => {
+      const result = formatInterCharacterMemoriesForContext([], new Map(), 10, 'OPENAI')
+      expect(result.content).toBe('')
+      expect(result.memoriesUsed).toBe(0)
+    })
+  })
+
+  describe('buildContext multi-character integration', () => {
+    const timestamp = new Date().toISOString()
+    const participantA: ChatParticipantBase = {
+      id: 'participant-a',
+      type: 'CHARACTER',
+      characterId: 'char-a',
+      personaId: null,
+      connectionProfileId: null,
+      imageProfileId: null,
+      systemPromptOverride: null,
+      displayOrder: 0,
+      isActive: true,
+      hasHistoryAccess: true,
+      joinScenario: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+    const participantB: ChatParticipantBase = { ...participantA, id: 'participant-b', characterId: 'char-b' }
+    const personaParticipant: ChatParticipantBase = {
+      id: 'participant-user',
+      type: 'PERSONA',
+      characterId: null,
+      personaId: 'persona-1',
+      connectionProfileId: null,
+      imageProfileId: null,
+      systemPromptOverride: null,
+      displayOrder: 0,
+      isActive: true,
+      hasHistoryAccess: true,
+      joinScenario: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+
+    const characterA: Character = {
+      id: 'char-a',
+      userId: 'user',
+      name: 'Lyra',
+      title: null,
+      description: null,
+      personality: null,
+      scenario: null,
+      firstMessage: null,
+      exampleDialogues: null,
+      systemPrompt: 'Stay focused',
+      avatarUrl: null,
+      defaultImageId: null,
+      defaultConnectionProfileId: null,
+      sillyTavernData: null,
+      isFavorite: false,
+      talkativeness: 0.6,
+      personaLinks: [],
+      tags: [],
+      avatarOverrides: [],
+      physicalDescriptions: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+    const characterB: Character = { ...characterA, id: 'char-b', name: 'Iris', talkativeness: 0.4 }
+    const persona: Persona = {
+      id: 'persona-1',
+      userId: 'user',
+      name: 'Alex',
+      title: null,
+      description: 'Curious',
+      personalityTraits: null,
+      avatarUrl: null,
+      defaultImageId: null,
+      sillyTavernData: null,
+      characterLinks: [],
+      tags: [],
+      physicalDescriptions: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+
+    const participantCharacters = new Map<string, Character>([
+      ['char-a', characterA],
+      ['char-b', characterB],
+    ])
+    const participantPersonas = new Map<string, Persona>([['persona-1', persona]])
+    const allParticipants = [participantA, participantB, personaParticipant]
+
+    const memory: Memory = {
+      id: 'mem-1',
+      characterId: 'char-a',
+      personaId: null,
+      aboutCharacterId: 'char-b',
+      chatId: 'chat-1',
+      content: 'Detailed history',
+      summary: 'Lyra respects Iris',
+      keywords: [],
+      tags: [],
+      importance: 0.8,
+      embedding: null,
+      source: 'MANUAL',
+      sourceMessageId: null,
+      lastAccessedAt: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+
+    it('retrieves inter-character memories and injects them into context', async () => {
+      const repoMock = {
+        memories: {
+          findByCharacterAboutCharacters: jest.fn().mockResolvedValue([memory]),
+        },
+      }
+      mockedGetRepositories.mockReturnValue(repoMock as any)
+      mockedSearchMemories.mockResolvedValue([])
+
+      const messagesWithParticipants: MessageWithParticipant[] = [
+        { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+        { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+      ]
+
+      const result = await buildContext({
+        provider: 'OPENAI',
+        modelName: 'gpt-4o',
+        userId: 'user',
+        character: characterA,
+        persona: { name: 'Alex', description: 'Curious' },
+        chat: {
+          id: 'chat-1',
+          userId: 'user',
+          participants: allParticipants,
+          title: 'Test Chat',
+          contextSummary: null,
+          sillyTavernMetadata: null,
+          tags: [],
+          messageCount: 2,
+          lastMessageAt: timestamp,
+          lastRenameCheckInterchange: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+        existingMessages: [
+          { role: 'USER', content: 'Hello', id: 'm1' },
+          { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+        ],
+        newUserMessage: 'Ready for the next task?',
+        systemPromptOverride: null,
+        embeddingProfileId: null,
+        skipMemories: false,
+        maxMemories: 1,
+        minMemoryImportance: 0.3,
+        respondingParticipant: participantA,
+        allParticipants,
+        participantCharacters,
+        participantPersonas,
+        messagesWithParticipants,
+      })
+
+      expect(repoMock.memories.findByCharacterAboutCharacters).toHaveBeenCalledWith('char-a', ['char-b'])
+      expect(result.messages[0].content).toContain('## Memories About Other Characters')
     })
   })
 })

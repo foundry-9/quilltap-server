@@ -22,6 +22,8 @@ process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-google-clie
 process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-google-client-secret'
 process.env.ENCRYPTION_MASTER_PEPPER = process.env.ENCRYPTION_MASTER_PEPPER || 'test-pepper-for-unit-tests-32-chars-long!'
 process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quilltap-test'
+process.env.S3_ACCESS_KEY = process.env.S3_ACCESS_KEY || 'test-s3-access-key'
+process.env.S3_SECRET_KEY = process.env.S3_SECRET_KEY || 'test-s3-secret-key'
 
 // Set up globals required for Next.js
 // Note: We check if they're undefined to avoid conflicts with jsdom's implementation

@@ -765,7 +765,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
       for (const participant of allParticipants) {
         if (participant.type === 'CHARACTER' && participant.characterId && participant.characterId !== character.id) {
-          const otherCharacter = participantCharacters.get(participant.id)
+          const otherCharacter = participantCharacters.get(participant.characterId)
           if (otherCharacter) {
             otherCharacterIds.push(otherCharacter.id)
             otherCharacterNames.set(otherCharacter.id, otherCharacter.name)
