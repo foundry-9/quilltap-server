@@ -22,6 +22,7 @@ export { MongoImageProfilesRepository } from './image-profiles.repository';
 export { EmbeddingProfilesRepository } from './embedding-profiles.repository';
 export { MemoriesRepository } from './memories.repository';
 export { FilesRepository } from './files.repository';
+export { BackgroundJobsRepository } from './background-jobs.repository';
 
 // Import all repository classes
 import { MongoBaseRepository } from './base.repository';
@@ -35,6 +36,7 @@ import { MongoImageProfilesRepository } from './image-profiles.repository';
 import { EmbeddingProfilesRepository } from './embedding-profiles.repository';
 import { MemoriesRepository } from './memories.repository';
 import { FilesRepository } from './files.repository';
+import { BackgroundJobsRepository } from './background-jobs.repository';
 
 /**
  * Container interface for all repository instances.
@@ -52,6 +54,7 @@ export interface RepositoryContainer {
   embeddingProfiles: EmbeddingProfilesRepository;
   memories: MemoriesRepository;
   files: FilesRepository; // For direct file access
+  backgroundJobs: BackgroundJobsRepository;
 }
 
 /**
@@ -81,6 +84,7 @@ export function createRepositories(): RepositoryContainer {
       embeddingProfiles: new EmbeddingProfilesRepository(),
       memories: new MemoriesRepository(),
       files: new FilesRepository(),
+      backgroundJobs: new BackgroundJobsRepository(),
     };
 
     logger.debug('Repository container created successfully', {

@@ -731,6 +731,46 @@ export const MemoriesFileSchema = z.object({
 export type MemoriesFile = z.infer<typeof MemoriesFileSchema>;
 
 // ============================================================================
+// BACKGROUND JOBS
+// ============================================================================
+
+export const BackgroundJobTypeEnum = z.enum([
+  'MEMORY_EXTRACTION',
+  'INTER_CHARACTER_MEMORY',
+  'CONTEXT_SUMMARY',
+  'TITLE_UPDATE',
+]);
+export type BackgroundJobType = z.infer<typeof BackgroundJobTypeEnum>;
+
+export const BackgroundJobStatusEnum = z.enum([
+  'PENDING',
+  'PROCESSING',
+  'COMPLETED',
+  'FAILED',
+  'DEAD',
+]);
+export type BackgroundJobStatus = z.infer<typeof BackgroundJobStatusEnum>;
+
+export const BackgroundJobSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  type: BackgroundJobTypeEnum,
+  status: BackgroundJobStatusEnum.default('PENDING'),
+  payload: z.record(z.unknown()),               // Type-specific payload
+  priority: z.number().default(0),              // Higher = more urgent
+  attempts: z.number().default(0),
+  maxAttempts: z.number().default(3),
+  lastError: z.string().nullable().optional(),
+  scheduledAt: TimestampSchema,                 // When job becomes eligible to run
+  startedAt: TimestampSchema.nullable().optional(),
+  completedAt: TimestampSchema.nullable().optional(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type BackgroundJob = z.infer<typeof BackgroundJobSchema>;
+
+// ============================================================================
 // COMPOUND OBJECTS
 // ============================================================================
 

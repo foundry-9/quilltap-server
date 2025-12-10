@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { clientLogger } from '@/lib/client-logger'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 
 /**
  * Props for MemoryCreationDialog
@@ -15,10 +15,12 @@ interface MemoryCreationDialogProps {
       type: 'CHARACTER' | 'PERSONA'
       characterId?: string | null
       personaId?: string | null
+      connectionProfileId?: string | null
       character?: { id: string; name: string } | null
       persona?: { id: string; name: string } | null
     }>
     messages: Array<{
+      id: string
       role: string
       content: string
       rawResponse?: { speakerName?: string } | null
@@ -27,273 +29,183 @@ interface MemoryCreationDialogProps {
       characters: Array<{ id: string; name: string }>
       personas: Array<{ id: string; name: string }>
     }
+    memoryJobCount?: number
   }
   onClose: () => void
 }
 
-interface MemoryCandidate {
-  entityType: 'character' | 'persona'
-  entityId: string
-  entityName: string
-  selected: boolean
-  suggestedContent: string
-}
-
 /**
  * Dialog for creating memories from an imported chat
+ *
+ * Queues background jobs to analyze each message pair for memories,
+ * using the same process as live chats.
  */
 export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProps) {
   const [creating, setCreating] = useState(false)
 
-  // Build memory candidates from participants
-  const initialCandidates = useMemo(() => {
-    const candidates: MemoryCandidate[] = []
-
-    // Get unique character and persona names from participants
-    const characterNames = new Map<string, { id: string; name: string }>()
-    const personaNames = new Map<string, { id: string; name: string }>()
-
-    for (const participant of chat.participants) {
-      if (participant.type === 'CHARACTER' && participant.character) {
-        characterNames.set(participant.character.id, {
-          id: participant.character.id,
-          name: participant.character.name,
-        })
-      } else if (participant.type === 'PERSONA' && participant.persona) {
-        personaNames.set(participant.persona.id, {
-          id: participant.persona.id,
-          name: participant.persona.name,
-        })
+  // Get the first character for analysis
+  const firstCharacter = useMemo(() => {
+    const participant = chat.participants.find(p => p.type === 'CHARACTER' && p.character)
+    if (participant?.character && participant.connectionProfileId) {
+      return {
+        id: participant.character.id,
+        name: participant.character.name,
+        connectionProfileId: participant.connectionProfileId,
       }
     }
+    return null
+  }, [chat.participants])
 
-    // Get the persona name for relationship context
-    const personaName = Array.from(personaNames.values())[0]?.name || 'the user'
-
-    // Generate suggestions for characters
-    for (const character of characterNames.values()) {
-      // Count messages from this character
-      const messageCount = chat.messages.filter(m =>
-        m.rawResponse?.speakerName === character.name && m.role === 'ASSISTANT'
-      ).length
-
-      candidates.push({
-        entityType: 'character',
-        entityId: character.id,
-        entityName: character.name,
-        selected: true,
-        suggestedContent: `Participated in a chat titled "${chat.title}" with ${personaName}. ${
-          messageCount > 0 ? `Contributed ${messageCount} messages.` : ''
-        } This chat was imported from SillyTavern.`,
-      })
-    }
-
-    // Generate suggestions for personas
-    for (const persona of personaNames.values()) {
-      const characterNamesList = Array.from(characterNames.values()).map(c => c.name)
-      const characterNamesStr = characterNamesList.length > 0
-        ? characterNamesList.join(', ')
-        : 'unknown characters'
-
-      candidates.push({
-        entityType: 'persona',
-        entityId: persona.id,
-        entityName: persona.name,
-        selected: true,
-        suggestedContent: `Had a conversation with ${characterNamesStr} in a chat titled "${chat.title}". This chat was imported from SillyTavern.`,
-      })
-    }
-
-    return candidates
-  }, [chat])
-
-  const [candidates, setCandidates] = useState<MemoryCandidate[]>(initialCandidates)
-
-  /**
-   * Toggle candidate selection
-   */
-  const toggleCandidate = useCallback((index: number) => {
-    setCandidates(prev => {
-      const newCandidates = [...prev]
-      newCandidates[index] = {
-        ...newCandidates[index],
-        selected: !newCandidates[index].selected,
+  // Count message pairs for analysis
+  const messagePairCount = useMemo(() => {
+    let count = 0
+    const messages = chat.messages.filter(m => m.role === 'USER' || m.role === 'ASSISTANT')
+    for (let i = 0; i < messages.length - 1; i++) {
+      if (messages[i].role === 'USER' && messages[i + 1].role === 'ASSISTANT') {
+        count++
       }
-      return newCandidates
-    })
-  }, [])
+    }
+    return count
+  }, [chat.messages])
 
   /**
-   * Update candidate content
+   * Queue memory analysis jobs
    */
-  const updateContent = useCallback((index: number, content: string) => {
-    setCandidates(prev => {
-      const newCandidates = [...prev]
-      newCandidates[index] = {
-        ...newCandidates[index],
-        suggestedContent: content,
-      }
-      return newCandidates
-    })
-  }, [])
-
-  /**
-   * Create memories for selected candidates
-   */
-  const handleCreateMemories = useCallback(async () => {
-    const selectedCandidates = candidates.filter(c => c.selected)
-    if (selectedCandidates.length === 0) {
-      onClose()
+  const handleAnalyzeMessages = useCallback(async () => {
+    if (!firstCharacter) {
+      showErrorToast('No character found with a connection profile')
       return
     }
 
     setCreating(true)
 
-    let successCount = 0
-    let failCount = 0
+    try {
+      // Build message pairs
+      const messages = chat.messages.filter(m => m.role === 'USER' || m.role === 'ASSISTANT')
+      const messagePairs: Array<{
+        userMessageId: string
+        assistantMessageId: string
+        userContent: string
+        assistantContent: string
+      }> = []
 
-    for (const candidate of selectedCandidates) {
-      try {
-        // For characters, we use the memory API directly
-        // For personas, we need to create a memory linked to the first character
-        if (candidate.entityType === 'character') {
-          const response = await fetch(`/api/characters/${candidate.entityId}/memories`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              content: candidate.suggestedContent,
-              summary: `Imported chat: ${chat.title}`,
-              keywords: ['imported', 'chat', chat.title.toLowerCase()],
-              importance: 0.5,
-              source: 'AUTO',
-              chatId: chat.id,
-            }),
+      for (let i = 0; i < messages.length - 1; i++) {
+        if (messages[i].role === 'USER' && messages[i + 1].role === 'ASSISTANT') {
+          messagePairs.push({
+            userMessageId: messages[i].id,
+            assistantMessageId: messages[i + 1].id,
+            userContent: messages[i].content,
+            assistantContent: messages[i + 1].content,
           })
-
-          if (!response.ok) {
-            throw new Error(`Failed to create memory for ${candidate.entityName}`)
-          }
-          successCount++
-        } else {
-          // For personas, we create a memory on the first character with the persona ID
-          const firstCharacter = candidates.find(c => c.entityType === 'character')
-          if (firstCharacter) {
-            const response = await fetch(`/api/characters/${firstCharacter.entityId}/memories`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                content: candidate.suggestedContent,
-                summary: `Imported chat: ${chat.title} (${candidate.entityName}'s perspective)`,
-                keywords: ['imported', 'chat', chat.title.toLowerCase(), candidate.entityName.toLowerCase()],
-                importance: 0.5,
-                source: 'AUTO',
-                chatId: chat.id,
-                personaId: candidate.entityId,
-              }),
-            })
-
-            if (!response.ok) {
-              throw new Error(`Failed to create memory for ${candidate.entityName}`)
-            }
-            successCount++
-          }
         }
-
-        clientLogger.info('Created memory', {
-          entityType: candidate.entityType,
-          entityId: candidate.entityId,
-          entityName: candidate.entityName,
-        })
-      } catch (err) {
-        failCount++
-        clientLogger.error('Failed to create memory', {
-          entityType: candidate.entityType,
-          entityId: candidate.entityId,
-          error: err instanceof Error ? err.message : String(err),
-        })
       }
+
+      if (messagePairs.length === 0) {
+        showInfoToast('No message pairs found to analyze')
+        onClose()
+        return
+      }
+
+      // Queue the jobs via the chat-specific endpoint
+      const response = await fetch(`/api/chats/${chat.id}/queue-memories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          characterId: firstCharacter.id,
+          characterName: firstCharacter.name,
+          connectionProfileId: firstCharacter.connectionProfileId,
+          messagePairs,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to queue memory analysis jobs')
+      }
+
+      const result = await response.json()
+      showSuccessToast(`Queued ${result.jobCount || messagePairs.length} messages for memory analysis`)
+
+      clientLogger.info('Queued memory analysis', {
+        chatId: chat.id,
+        characterId: firstCharacter.id,
+        pairCount: messagePairs.length,
+      })
+
+      onClose()
+    } catch (err) {
+      clientLogger.error('Failed to queue memory analysis', {
+        chatId: chat.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      showErrorToast('Failed to queue memory analysis')
+    } finally {
+      setCreating(false)
     }
+  }, [chat.id, chat.messages, firstCharacter, onClose])
 
-    setCreating(false)
+  // If memories were already queued during import, show status
+  if (chat.memoryJobCount && chat.memoryJobCount > 0) {
+    return (
+      <div className="qt-dialog-overlay !z-[60] p-4">
+        <div className="qt-dialog max-w-md">
+          <div className="qt-dialog-header">
+            <h3 className="qt-dialog-title">
+              Memory Analysis Queued
+            </h3>
+          </div>
 
-    if (successCount > 0) {
-      showSuccessToast(`Created ${successCount} memor${successCount === 1 ? 'y' : 'ies'}`)
-    }
-    if (failCount > 0) {
-      showErrorToast(`Failed to create ${failCount} memor${failCount === 1 ? 'y' : 'ies'}`)
-    }
+          <div className="qt-dialog-body">
+            <p className="text-muted-foreground">
+              {chat.memoryJobCount} message{chat.memoryJobCount === 1 ? '' : 's'} queued for memory analysis.
+              Memories will be created in the background as each message is processed.
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              You can check the status in the background jobs section.
+            </p>
+          </div>
 
-    onClose()
-  }, [candidates, chat.id, chat.title, onClose])
-
-  const selectedCount = candidates.filter(c => c.selected).length
+          <div className="qt-dialog-footer">
+            <button
+              type="button"
+              onClick={onClose}
+              className="qt-button qt-button-primary"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="qt-dialog-overlay !z-[60] p-4">
-      <div className="qt-dialog max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="qt-dialog max-w-lg">
         <div className="qt-dialog-header">
           <h3 className="qt-dialog-title">
-            Create Memories from Imported Chat
+            Analyze Messages for Memories
           </h3>
           <p className="qt-dialog-description">
-            Create memories for the characters and personas based on this conversation.
-            You can customize the memory content before creating.
+            Queue message analysis to extract meaningful memories from this conversation.
           </p>
         </div>
 
         <div className="qt-dialog-body">
-
-        <div className="space-y-4">
-          {candidates.map((candidate, index) => (
-            <div
-              key={`${candidate.entityType}-${candidate.entityId}`}
-              className={`border rounded-lg p-4 ${
-                candidate.selected
-                  ? 'border-primary/50 bg-primary/5'
-                  : 'border-border'
-              }`}
-            >
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={candidate.selected}
-                  onChange={() => toggleCandidate(index)}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                      candidate.entityType === 'character'
-                        ? 'qt-badge-primary'
-                        : 'qt-badge-success'
-                    }`}>
-                      {candidate.entityType === 'character' ? 'Character' : 'Persona'}
-                    </span>
-                    <span className="font-medium text-foreground">
-                      {candidate.entityName}
-                    </span>
-                  </div>
-
-                  {candidate.selected && (
-                    <textarea
-                      value={candidate.suggestedContent}
-                      onChange={(e) => updateContent(index, e.target.value)}
-                      rows={3}
-                      className="qt-textarea"
-                      placeholder="Memory content..."
-                    />
-                  )}
-                </div>
-              </label>
-            </div>
-          ))}
-        </div>
-
-        {candidates.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            No characters or personas found to create memories for
+          <div className="bg-muted/50 rounded-lg p-4">
+            <p className="text-sm text-muted-foreground">
+              This will analyze each message exchange using AI to extract meaningful memories,
+              just like live chats. The analysis runs in the background.
+            </p>
+            {firstCharacter ? (
+              <p className="text-sm mt-2">
+                <strong>{messagePairCount}</strong> message pair{messagePairCount === 1 ? '' : 's'} will be analyzed for <strong>{firstCharacter.name}</strong>.
+              </p>
+            ) : (
+              <p className="text-sm text-destructive mt-2">
+                No character with a connection profile found. Cannot analyze messages.
+              </p>
+            )}
           </div>
-        )}
         </div>
 
         <div className="qt-dialog-footer">
@@ -307,17 +219,17 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
           </button>
           <button
             type="button"
-            onClick={handleCreateMemories}
-            disabled={creating || selectedCount === 0}
+            onClick={handleAnalyzeMessages}
+            disabled={creating || !firstCharacter || messagePairCount === 0}
             className="qt-button qt-button-primary"
           >
             {creating ? (
               <>
-                <span className="animate-spin inline-block mr-2">⌛</span>
-                Creating...
+                <span className="animate-spin inline-block mr-2">&#8987;</span>
+                Queueing...
               </>
             ) : (
-              `Create ${selectedCount} Memor${selectedCount === 1 ? 'y' : 'ies'}`
+              `Analyze ${messagePairCount} Message${messagePairCount === 1 ? '' : 's'}`
             )}
           </button>
         </div>
