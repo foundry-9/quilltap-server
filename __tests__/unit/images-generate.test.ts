@@ -4,7 +4,7 @@
  */
 
 import { POST } from '@/app/api/images/generate/route'
-import { getServerSession } from 'next-auth'
+import { getServerSession } from '@/lib/auth/session'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { getRepositories } from '@/lib/repositories/factory'

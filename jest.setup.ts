@@ -8,6 +8,31 @@ jest.mock('next-auth', () => ({
   getServerSession: jest.fn(),
 }))
 
+// Mock our session utilities to avoid running full plugin initialization in tests
+const mockGetServerSession = jest.fn().mockResolvedValue(null)
+
+jest.mock('@/lib/auth/session', () => ({
+  getServerSession: mockGetServerSession,
+  getRequiredSession: jest.fn(async () => {
+    const session = await mockGetServerSession()
+    if (!session?.user?.id) {
+      throw new Error('Unauthorized: No valid session')
+    }
+    return session
+  }),
+  getCurrentUserId: jest.fn(async () => {
+    const session = await mockGetServerSession()
+    return session?.user?.id ?? null
+  }),
+  getRequiredUserId: jest.fn(async () => {
+    const session = await mockGetServerSession()
+    if (!session?.user?.id) {
+      throw new Error('Unauthorized: No valid session')
+    }
+    return session.user.id
+  }),
+}))
+
 // Mock next-auth/react
 jest.mock('next-auth/react', () => ({
   useSession: jest.fn(),
