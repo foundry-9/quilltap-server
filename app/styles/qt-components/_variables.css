@@ -196,10 +196,10 @@
      BADGE VARIABLES
      ========================================================================== */
   --qt-badge-radius: 9999px;
-  --qt-badge-padding-x: 0.625rem;
-  --qt-badge-padding-y: 0.125rem;
-  --qt-badge-font-size: 0.75rem;
-  --qt-badge-font-weight: 500;
+  --qt-badge-padding-x: 0.75rem;
+  --qt-badge-padding-y: 0.25rem;
+  --qt-badge-font-size: 0.875rem;
+  --qt-badge-font-weight: 600;
 
   --qt-badge-primary-bg: var(--color-primary);
   --qt-badge-primary-fg: var(--color-primary-foreground);

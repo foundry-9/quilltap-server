@@ -22,8 +22,27 @@
   .qt-badge-success,
   .qt-badge-warning,
   .qt-badge-destructive,
-  .qt-badge-info {
-    @apply inline-flex items-center justify-center;
+  .qt-badge-info,
+  .qt-badge-character,
+  .qt-badge-persona,
+  .qt-badge-chat,
+  .qt-badge-tag,
+  .qt-badge-memory,
+  .qt-badge-characters,
+  .qt-badge-chats,
+  .qt-badge-personas,
+  .qt-badge-enabled,
+  .qt-badge-disabled,
+  .qt-badge-related,
+  .qt-badge-manual,
+  .qt-badge-auto,
+  .qt-badge-source-included,
+  .qt-badge-source-npm,
+  .qt-badge-source-git,
+  .qt-badge-source-manual,
+  .qt-badge-capability,
+  .qt-badge-version {
+    @apply inline-flex items-center justify-center flex-shrink-0;
     padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
     border-radius: var(--qt-badge-radius);
     font-size: var(--qt-badge-font-size);
@@ -466,27 +485,28 @@
 
   /* ==========================================================================
      ENTITY-TYPE BADGES - Semantic naming with default colors
+     Characters = blue, Chats = green, Personas = purple
      ========================================================================== */
 
   /**
-   * Character badge (purple)
+   * Character badge (blue)
    */
   .qt-badge-character {
+    @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
+  }
+
+  /**
+   * Persona badge (purple)
+   */
+  .qt-badge-persona {
     @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
   }
 
   /**
-   * Persona badge (green)
-   */
-  .qt-badge-persona {
-    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
-  }
-
-  /**
-   * Chat badge (blue)
+   * Chat badge (green)
    */
   .qt-badge-chat {
-    @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
+    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
   }
 
   /**
@@ -505,20 +525,21 @@
 
   /* ==========================================================================
      DASHBOARD ENTITY BADGES - For dashboard card counts
+     Characters = blue, Chats = green, Personas = purple
      ========================================================================== */
 
   /**
-   * Characters badge (purple) - for dashboard character count
+   * Characters badge (blue) - for dashboard character count
    */
   .qt-badge-characters {
-    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+    @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
   }
 
   /**
-   * Chats badge (green/success) - for dashboard chat count
+   * Chats badge (green) - for dashboard chat count
    */
   .qt-badge-chats {
-    @apply bg-success/10 text-success border border-success/30;
+    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
   }
 
   /**

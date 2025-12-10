@@ -113,27 +113,27 @@
   --accent-secondary-100: 210 70.9% 51.6%;
   --accent-secondary-200: 210 70.9% 51.6%;
   --accent-secondary-900: 210 55.9% 24.6%;
-  --bg-000: 60 2.1% 18.4%;
-  --bg-100: 60 2.7% 14.5%;
-  --bg-200: 30 3.3% 11.8%;
-  --bg-300: 60 2.6% 7.6%;
-  --bg-400: 0 0% 0%;
+  --bg-000: 30 8% 18.4%;
+  --bg-100: 30 10% 14.5%;
+  --bg-200: 28 12% 11.8%;
+  --bg-300: 25 14% 7.6%;
+  --bg-400: 20 10% 3%;
   --bg-500: 0 0% 0%;
-  --border-100: 51 16.5% 84.5%;
-  --border-200: 51 16.5% 84.5%;
-  --border-300: 51 16.5% 84.5%;
-  --border-400: 51 16.5% 84.5%;
+  --border-100: 35 20% 84.5%;
+  --border-200: 35 20% 84.5%;
+  --border-300: 35 18% 70%;
+  --border-400: 35 15% 60%;
   --danger-000: 0 98.4% 75.1%;
   --danger-100: 0 67% 59.6%;
   --danger-200: 0 67% 59.6%;
   --danger-900: 0 46.5% 27.8%;
   --oncolor-100: 0 0% 100%;
-  --oncolor-200: 60 6.7% 97.1%;
-  --oncolor-300: 60 6.7% 97.1%;
-  --pictogram-100: 48 3.4% 29.2%;
-  --pictogram-200: 60 2.5% 23.3%;
-  --pictogram-300: 60 2.1% 18.4%;
-  --pictogram-400: 60 2.7% 14.5%;
+  --oncolor-200: 40 12% 97.1%;
+  --oncolor-300: 40 12% 97.1%;
+  --pictogram-100: 32 10% 29.2%;
+  --pictogram-200: 30 9% 23.3%;
+  --pictogram-300: 30 8% 18.4%;
+  --pictogram-400: 30 10% 14.5%;
   --success-000: 97 59.1% 46.1%;
   --success-100: 97 75% 32.9%;
   --success-200: 97 75% 32.9%;
@@ -548,10 +548,15 @@
 /* ============================================================================
    CODE & MONOSPACE SURFACES
    ============================================================================ */
-[data-theme="rains"] pre,
-[data-theme="rains"] code {
+[data-theme="rains"] pre {
   background: hsl(var(--pictogram-200));
   border: 1px solid hsl(var(--border-200) / 0.35);
+  color: hsl(var(--text-000));
+  font-family: var(--font-mono);
+}
+
+[data-theme="rains"] code {
+  background: hsl(var(--pictogram-200));
   color: hsl(var(--text-000));
   font-family: var(--font-mono);
 }
@@ -603,25 +608,6 @@
   background: hsl(var(--bg-200));
   color: hsl(var(--text-200));
   border: 1px solid var(--stroke-soft);
-}
-
-/* Dashboard Entity Badges - Rains styled variants */
-[data-theme="rains"] .qt-badge-characters {
-  background: hsl(var(--accent-pro-900) / 0.4);
-  color: hsl(var(--accent-pro-000));
-  border: 1px solid hsl(var(--accent-pro-100) / 0.4);
-}
-
-[data-theme="rains"] .qt-badge-chats {
-  background: hsl(var(--success-900) / 0.4);
-  color: hsl(var(--success-000));
-  border: 1px solid hsl(var(--success-100) / 0.4);
-}
-
-[data-theme="rains"] .qt-badge-personas {
-  background: hsl(var(--accent-pro-900) / 0.4);
-  color: hsl(var(--accent-pro-000));
-  border: 1px solid hsl(var(--accent-pro-100) / 0.4);
 }
 
 /* ============================================================================

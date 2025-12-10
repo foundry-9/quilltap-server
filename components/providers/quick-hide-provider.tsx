@@ -118,24 +118,31 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const toggleTag = useCallback((tagId: string) => {
-    clientLogger.debug('Toggling quick-hide tag', { tagId })
     setHiddenTagIds((prev) => {
       const next = new Set(prev)
-      if (next.has(tagId)) {
+      const wasHidden = next.has(tagId)
+      if (wasHidden) {
         next.delete(tagId)
-        clientLogger.debug('Unhiding tag', { tagId })
       } else {
         next.add(tagId)
-        clientLogger.debug('Hiding tag', { tagId })
       }
+      // Defer logging to avoid setState during render
+      queueMicrotask(() => {
+        clientLogger.debug(wasHidden ? 'Unhiding tag' : 'Hiding tag', { tagId })
+      })
       return next
     })
   }, [])
 
   const clearAllHidden = useCallback(() => {
-    clientLogger.debug('Clearing all hidden tags', { previousCount: hiddenTagIds.size })
-    setHiddenTagIds(new Set())
-  }, [hiddenTagIds.size])
+    setHiddenTagIds((prev) => {
+      // Defer logging to avoid setState during render
+      queueMicrotask(() => {
+        clientLogger.debug('Clearing all hidden tags', { previousCount: prev.size })
+      })
+      return new Set()
+    })
+  }, [])
 
   const shouldHideByIds = useCallback(
     (tagIds?: Array<string | null | undefined>) => {
