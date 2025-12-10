@@ -575,7 +575,12 @@ ${textContent}`
         // Model decides when to search
         return_citations: true,
         max_search_results: 20,
-        sources: ["web", "x", "news"]
+        // Sources must be objects with a "type" field, not plain strings
+        sources: [
+          { type: "web" },
+          { type: "x" },
+          { type: "news" }
+        ]
       };
     }
     const response = await client.chat.completions.create(requestParams);
@@ -628,7 +633,12 @@ ${textContent}`
         mode: "auto",
         return_citations: true,
         max_search_results: 20,
-        sources: ["web", "x", "news"]
+        // Sources must be objects with a "type" field, not plain strings
+        sources: [
+          { type: "web" },
+          { type: "x" },
+          { type: "news" }
+        ]
       };
     }
     const stream = await client.chat.completions.create(requestParams);

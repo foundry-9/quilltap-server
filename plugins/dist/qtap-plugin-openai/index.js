@@ -468,6 +468,11 @@ var OPENAI_SUPPORTED_MIME_TYPES = [
   "image/gif",
   "image/webp"
 ];
+var REASONING_MODEL_PREFIXES = ["o1", "o3", "o4", "gpt-5"];
+function isReasoningModel(model) {
+  const modelLower = model.toLowerCase();
+  return REASONING_MODEL_PREFIXES.some((prefix) => modelLower.startsWith(prefix));
+}
 var OpenAIProvider = class {
   constructor() {
     this.supportsFileAttachments = true;
@@ -521,7 +526,8 @@ var OpenAIProvider = class {
     return { messages: formattedMessages, attachmentResults: { sent, failed } };
   }
   async sendMessage(params, apiKey) {
-    logger.debug("OpenAI sendMessage called", { context: "OpenAIProvider.sendMessage", model: params.model });
+    const isReasoning = isReasoningModel(params.model);
+    logger.debug("OpenAI sendMessage called", { context: "OpenAIProvider.sendMessage", model: params.model, isReasoningModel: isReasoning });
     const client = new import_openai.default({
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
@@ -530,12 +536,16 @@ var OpenAIProvider = class {
     const requestParams = {
       model: params.model,
       messages,
-      max_completion_tokens: params.maxTokens ?? 1e3,
-      top_p: params.topP ?? 1,
-      stop: params.stop
+      max_completion_tokens: params.maxTokens ?? 1e3
     };
-    if (params.temperature !== void 0) {
-      requestParams.temperature = params.temperature;
+    if (!isReasoning) {
+      requestParams.top_p = params.topP ?? 1;
+      requestParams.stop = params.stop;
+      if (params.temperature !== void 0) {
+        requestParams.temperature = params.temperature;
+      }
+    } else {
+      logger.debug("Skipping sampling parameters for reasoning model", { context: "OpenAIProvider.sendMessage", model: params.model });
     }
     if (params.tools && params.tools.length > 0) {
       logger.debug("Adding tools to request", { context: "OpenAIProvider.sendMessage", toolCount: params.tools.length });
@@ -567,7 +577,8 @@ var OpenAIProvider = class {
     };
   }
   async *streamMessage(params, apiKey) {
-    logger.debug("OpenAI streamMessage called", { context: "OpenAIProvider.streamMessage", model: params.model });
+    const isReasoning = isReasoningModel(params.model);
+    logger.debug("OpenAI streamMessage called", { context: "OpenAIProvider.streamMessage", model: params.model, isReasoningModel: isReasoning });
     const client = new import_openai.default({
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
@@ -577,12 +588,16 @@ var OpenAIProvider = class {
       model: params.model,
       messages,
       max_completion_tokens: params.maxTokens ?? 1e3,
-      top_p: params.topP ?? 1,
       stream: true,
       stream_options: { include_usage: true }
     };
-    if (params.temperature !== void 0) {
-      requestParams.temperature = params.temperature;
+    if (!isReasoning) {
+      requestParams.top_p = params.topP ?? 1;
+      if (params.temperature !== void 0) {
+        requestParams.temperature = params.temperature;
+      }
+    } else {
+      logger.debug("Skipping sampling parameters for reasoning model", { context: "OpenAIProvider.streamMessage", model: params.model });
     }
     if (params.tools && params.tools.length > 0) {
       logger.debug("Adding tools to stream request", { context: "OpenAIProvider.streamMessage", toolCount: params.tools.length });
