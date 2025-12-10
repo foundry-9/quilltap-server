@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.0--dev.72-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.2.0--dev.73-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -20,7 +20,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 - 👥 Multi-character SillyTavern import wizard plus an in-app turn system with nudge/queue controls, inter-character memory sharing, and streaming avatars.
 - 🧰 Tools workspace with backup/restore flows (local download or S3), cloud backup previews, and a delete-all-data card; DevConsole (development builds) surfaces server logs, browser consoles, and chat traces.
 - 🎨 Theme plugin system powered by qt-* semantic utility classes so you can ship new theme packs (Ocean, Rains, Earl Grey are included) and give users an Appearance settings tab + nav toggle for quick swaps.
-- 🖼️ Integrated image generation profiles (OpenAI, Google Imagen, Grok, OpenRouter) plus an asset gallery with tagging, avatar overrides, and secure per-user storage.
+- 🖼️ Integrated image generation profiles (Google Gemini/Imagen 4, Grok, OpenAI, OpenRouter) plus an asset gallery with tagging, avatar overrides, and secure per-user storage.
 - 🔐 Google OAuth plugin, optional no-auth mode, local username/password login, and TOTP MFA backed by AES-256-GCM encrypted API keys and per-user encryption keys.
 - 🐳 Docker-first deployment targeting MongoDB + S3-compatible storage with embedded MinIO and Mongo Express for local development.
 
@@ -60,7 +60,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 
 ### Image Generation
 
-- Create reusable image generation profiles for OpenAI (DALL·E 3), Google Imagen, Grok, and OpenRouter-backed models.
+- Create reusable image generation profiles for Google Gemini (Imagen 4, Gemini image models), Grok, OpenAI, and OpenRouter-backed models (Gemini 2.0/2.5/3.0 via OpenRouter).
 - Launch the generator directly from any chat, iterate on prompts, and send results back into the conversation without leaving the modal.
 - Automatically collect generated output in the gallery so you can reuse it for avatars, personas, or attachments.
 - Configure provider-specific controls (quality, style, safety settings, aspect ratios) and set global defaults in Settings.
@@ -81,13 +81,13 @@ Configure dedicated connection profiles for each provider you want to use:
 
 | Provider | Capabilities |
 |----------|--------------|
-| **OpenAI** | GPT-4o, GPT-4o-mini, GPT-4.1, GPT-3.5 legacy models, tool/function calling, file attachments, and DALL·E 3 image generation. |
-| **Anthropic** | Claude 3/4 families (Opus, Sonnet, Haiku) with streaming, image understanding, and tool/JSON output control. |
-| **Google Gemini** | Gemini 2.0 Flash/Pro with multimodal inputs plus Imagen 3 image generation through Google Generative AI. |
-| **Grok (xAI)** | Grok 2 and Grok 2 Mini via the OpenAI-compatible xAI endpoint, multimodal attachments, and native image generation. |
-| **Gab AI** | OpenAI-compatible chat API focused on text-only completions—ideal for low-cost narration where attachments aren't needed. |
-| **Ollama** | Local/offline models (Llama 3.2, Phi-3, etc.) reachable at `http://localhost:11434`, perfect for the Local First cheap-LLM strategy. |
-| **OpenRouter** | Access 100+ hosted models through the OpenRouter SDK with streaming, pricing sync, and optional image generation (model-dependent). |
+| **OpenAI** | GPT-5/5.1 families, GPT-4o/4o-mini, GPT-4.1/4.1-mini/4.1-nano, GPT-3.5 legacy models, tool/function calling, file attachments, and image generation. |
+| **Anthropic** | Claude 4/4.5 families (Opus, Sonnet, Haiku) and Claude 3 models with streaming, image understanding, and tool/JSON output control. |
+| **Google Gemini** | Gemini 2.5 Flash/Pro with multimodal inputs, web search, plus Imagen 4 image generation through Google Generative AI. |
+| **Grok (xAI)** | Grok 4/4.1 and Grok 3 families via the OpenAI-compatible xAI endpoint with multimodal attachments, web search, and native image generation. |
+| **Gab AI** | Access to multiple model families (Claude, GPT, Gemini, DeepSeek, Qwen, and more) through a unified OpenAI-compatible chat API. |
+| **Ollama** | Local/offline models (Llama, Phi, etc.) reachable at `http://localhost:11434` with embedding support, perfect for the Local First cheap-LLM strategy. |
+| **OpenRouter** | Access 200+ hosted models through the OpenRouter SDK with streaming, embeddings, pricing sync, web search, and image generation (model-dependent). |
 | **OpenAI-Compatible** | Generic connector for LM Studio, vLLM, Text Generation Web UI, and any other OpenAI-format API you want to self-host. |
 
 ### Security & Privacy
