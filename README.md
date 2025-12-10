@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.0--dev.73-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.2.0--dev.74-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -680,17 +680,15 @@ Copyright (c) 2025 Foundry-9
 - Console and other logs can be seen in the front-end while not in production mode
 - Finish local username/password and TOTP/MFA login
 
-### 2.2 - Database Tools, Global Search, Character Management, Multi-Character Chat, Dev Console, Themes, OpenRouter Updates
+### 2.2 - Tools, Global Search, Character Management, Multi-Character Chat, Dev Console, Themes, OpenRouter Updates
 
-- Built a plugin-driven theming architecture (ThemeProvider runtime, database/API persistence, and an Appearance settings tab) so admins can install and switch themes on the fly.
-- Shipped Ocean, Rains, and Earl Grey theme plugins with Tailwind v4 token support, bundled fonts, improved previews, Rains chat-bubble tweaks, and a nav theme selector so theme add-ons behave like first-class packages.
-- Introduced the qt-* semantic component class system (qt-entity-card, qt-font-brand, etc.) and migrated chats, dialogs, content surfaces, splash/auth pages, footer, and dev panels so themes can override UI consistently.
-- Delivered the full multi-character chat system (Phases 1–7): turn management, context building, nudge/queue UI, add/remove participants, streaming polish, and overall integration cleanup.
-- Added inter-character memory sharing, automatic tag syncing, auto-triggered turns, streaming avatar fixes, and regression tests to keep multi-character conversations coherent.
-- Expanded provider support with OpenRouter SDK 0.2.9 + embeddings, new advanced options (e.g., Anthropic cache control), OpenRouter & Google Gemini image generation flows, and better cheap-LLM prompts plus multi-person image placeholders.
-- Enhanced data/navigation UX via file-tag inheritance, dashboard layout tweaks, participant-tag filters, favorites/chat-count sorting, improved quick-hide/theme controls, and a nav actions dropdown replacing the static user block.
-- Improved tool/chat readability with collapsible tool message sections, more informative error logging, and properly scaled chat avatars.
-- Refreshed branding using a new quill icon + simplified logo set, EB Garamond brand typography, a Welcome to Quilltap splash graphic, and qt-font-brand utilities that theme plugins can override.
+- Plugin-driven theming architecture with ThemeProvider runtime, persistence, Appearance settings, and qt-* semantic classes so admins install/switch rich Tailwind v4-compatible theme plugins (Ocean, Rains, Earl Grey) with bundled fonts, previews, and nav selector.
+- Multi-character chat suite completed: turn/state management, context building, nudge/queue UI, participant add/remove, auto-triggered turns, streaming fixes, inter-character memory sharing, tag syncing, and regression coverage.
+- Provider/tooling expansion: OpenRouter SDK 0.2.9 + embeddings, Anthropic cache controls, Google Gemini and OpenRouter image flows, improved cheap-LLM prompts, multi-person image placeholders, and collapsible tool message readability upgrades.
+- Navigation/UX refinements: file-tag inheritance, dashboard tweaks, participant-tag filters, favorites/chat-count sorting, enhanced quick-hide/theme controls, nav actions dropdown, scaled avatars, branding refresh (new quill icon, EB Garamond, splash graphic).
+- New Capabilities Report tool on Tools page generates, stores, and downloads comprehensive diagnostics covering environment, plugins, providers, and storage stats.
+- UI polish and theme coherence: Export Chat moved to ToolPalette, button/badge semantics standardized, Ocean/Rains/Earl Grey typography and palettes aligned, text-shadow fixes, QuickHideProvider render bug resolved.
+- Quality safeguards: pre-commit hooks and Jest setup rebuilt for quieter, more reliable local runs; documentation moved for v2.2 planning/testing; GitHub Actions stabilized via shared jest setup adjustments.
 
 ## Roadmap
 
