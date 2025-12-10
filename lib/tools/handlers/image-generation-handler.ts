@@ -20,6 +20,7 @@ import { preparePromptExpansion } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
+import { getInheritedTags } from '@/lib/files/tag-inheritance';
 
 /**
  * Execution context for image generation tool
@@ -90,6 +91,16 @@ async function saveGeneratedImage(
     });
     logger.debug('Uploaded generated image to S3', { fileId, s3Key, size: buffer.length });
 
+    // Inherit tags from linked entities (e.g., the chat)
+    const inheritedTags = await getInheritedTags(linkedTo, userId);
+
+    logger.debug('Inherited tags for generated image', {
+      context: 'image-generation-handler',
+      fileId,
+      chatId,
+      inheritedTagCount: inheritedTags.length,
+    });
+
     // Create metadata in repository
     const fileEntry = await repos.files.create({
       userId,
@@ -106,7 +117,7 @@ async function saveGeneratedImage(
       generationModel: metadata.model,
       generationRevisedPrompt: metadata.revisedPrompt || null,
       description: null,
-      tags: chatId ? [chatId] : [],
+      tags: inheritedTags,
       s3Key,
     });
 

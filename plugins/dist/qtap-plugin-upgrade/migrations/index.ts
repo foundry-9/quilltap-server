@@ -15,6 +15,7 @@ import { migrateJsonToMongoDBMigration } from './migrate-json-to-mongodb';
 import { migrateFilesToS3Migration } from './migrate-files-to-s3';
 // Data integrity migrations
 import { ensureUserUsernamesMigration } from './ensure-user-usernames';
+import { inheritFileTagsMigration } from './inherit-file-tags';
 
 /**
  * All available migrations.
@@ -30,6 +31,7 @@ export const migrations: Migration[] = [
   migrateFilesToS3Migration,
   // Data integrity migrations
   ensureUserUsernamesMigration,
+  inheritFileTagsMigration,
 ];
 
 export {
@@ -42,4 +44,5 @@ export {
   migrateFilesToS3Migration,
   // Data integrity migrations
   ensureUserUsernamesMigration,
+  inheritFileTagsMigration,
 };

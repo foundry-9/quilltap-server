@@ -29,7 +29,7 @@ jest.mock('@/lib/plugins/provider-registry', () => ({
 
 // Import after mocking
 import { POST as testMessage } from '@/app/api/profiles/test-message/route'
-import { getServerSession } from 'next-auth'
+import { getServerSession } from '@/lib/auth/session'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { getRepositories } from '@/lib/repositories/factory'

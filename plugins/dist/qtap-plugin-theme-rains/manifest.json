@@ -1,0 +1,55 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-theme-rains",
+  "title": "Rains",
+  "description": "A warm, earthy dark theme with rich browns and amber accents, inspired by rain-soaked autumn evenings",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "compatibility": {
+    "quilltapVersion": ">=2.2.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["THEME"],
+  "category": "THEME",
+  "typescript": true,
+  "frontend": "NONE",
+  "styling": "CSS_MODULES",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["theme", "rains", "brown", "amber", "warm", "dark", "earthy", "autumn"],
+  "themeConfig": {
+    "tokensPath": "tokens.json",
+    "stylesPath": "styles.css",
+    "supportsDarkMode": true,
+    "previewImage": "preview.png",
+    "tags": ["rains", "brown", "warm", "earthy", "cozy"],
+    "fonts": [
+      {
+        "family": "Fira Code",
+        "src": "fonts/FiraCode-Regular.woff2",
+        "weight": "400",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Fira Code",
+        "src": "fonts/FiraCode-Bold.woff2",
+        "weight": "700",
+        "style": "normal",
+        "display": "swap"
+      }
+    ]
+  },
+  "permissions": {
+    "fileSystem": [],
+    "network": [],
+    "database": false,
+    "userData": false
+  }
+}

@@ -458,7 +458,7 @@ var OpenRouterProvider = class {
     // Model-dependent, conservative default
     this.supportedMimeTypes = [];
     this.supportsImageGeneration = true;
-    this.supportsWebSearch = false;
+    this.supportsWebSearch = true;
   }
   /**
    * Helper to collect attachment failures
@@ -510,15 +510,72 @@ var OpenRouterProvider = class {
       requestParams.tools = params.tools;
       requestParams.toolChoice = "auto";
     }
+    if (params.webSearchEnabled) {
+      logger.debug("Enabling web search plugin", {
+        context: "OpenRouterProvider.sendMessage"
+      });
+      requestParams.plugins = [{ id: "web", maxResults: 5 }];
+    }
+    if (params.responseFormat) {
+      if (params.responseFormat.type === "json_schema" && params.responseFormat.jsonSchema) {
+        logger.debug("Adding JSON schema response format", {
+          context: "OpenRouterProvider.sendMessage",
+          schemaName: params.responseFormat.jsonSchema.name
+        });
+        requestParams.responseFormat = {
+          type: "json_schema",
+          jsonSchema: {
+            name: params.responseFormat.jsonSchema.name,
+            strict: params.responseFormat.jsonSchema.strict ?? true,
+            schema: params.responseFormat.jsonSchema.schema
+          }
+        };
+      } else if (params.responseFormat.type !== "text") {
+        requestParams.responseFormat = { type: params.responseFormat.type };
+      }
+    }
+    const profileParams = params.profileParameters;
+    if (profileParams?.fallbackModels?.length) {
+      logger.debug("Adding fallback models", {
+        context: "OpenRouterProvider.sendMessage",
+        fallbackCount: profileParams.fallbackModels.length
+      });
+      requestParams.models = [params.model, ...profileParams.fallbackModels];
+      requestParams.route = "fallback";
+      delete requestParams.model;
+    }
+    const providerPrefs = profileParams?.providerPreferences;
+    if (providerPrefs) {
+      logger.debug("Adding provider preferences", {
+        context: "OpenRouterProvider.sendMessage",
+        hasOrder: !!providerPrefs.order,
+        dataCollection: providerPrefs.dataCollection
+      });
+      requestParams.provider = {};
+      if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
+      if (providerPrefs.allowFallbacks !== void 0) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
+      if (providerPrefs.requireParameters) requestParams.provider.requireParameters = providerPrefs.requireParameters;
+      if (providerPrefs.dataCollection) requestParams.provider.dataCollection = providerPrefs.dataCollection;
+      if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
+      if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
+    }
     const response = await client.chat.send(requestParams);
     const choice = response.choices[0];
     const content = choice.message.content;
     const contentStr = typeof content === "string" ? content : "";
+    const usageAny = response.usage;
+    const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount ? {
+      cachedTokens: usageAny.cachedTokens,
+      cacheDiscount: usageAny.cacheDiscount,
+      cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
+      cacheReadInputTokens: usageAny.cacheReadInputTokens
+    } : void 0;
     logger.debug("Received OpenRouter response", {
       context: "OpenRouterProvider.sendMessage",
       finishReason: choice.finishReason,
       promptTokens: response.usage?.promptTokens,
-      completionTokens: response.usage?.completionTokens
+      completionTokens: response.usage?.completionTokens,
+      cachedTokens: cacheUsage?.cachedTokens
     });
     return {
       content: contentStr,
@@ -529,7 +586,8 @@ var OpenRouterProvider = class {
         totalTokens: response.usage?.totalTokens ?? 0
       },
       raw: response,
-      attachmentResults
+      attachmentResults,
+      cacheUsage
     };
   }
   async *streamMessage(params, apiKey) {
@@ -564,11 +622,56 @@ var OpenRouterProvider = class {
       requestParams.tools = params.tools;
       requestParams.toolChoice = "auto";
     }
-    const response = await client.chat.send(requestParams);
-    if (!response || typeof response[Symbol.asyncIterator] !== "function") {
-      throw new Error("Expected streaming response from OpenRouter");
+    if (params.webSearchEnabled) {
+      logger.debug("Enabling web search plugin for streaming", {
+        context: "OpenRouterProvider.streamMessage"
+      });
+      requestParams.plugins = [{ id: "web", maxResults: 5 }];
     }
-    const stream = response;
+    if (params.responseFormat) {
+      if (params.responseFormat.type === "json_schema" && params.responseFormat.jsonSchema) {
+        logger.debug("Adding JSON schema response format for streaming", {
+          context: "OpenRouterProvider.streamMessage",
+          schemaName: params.responseFormat.jsonSchema.name
+        });
+        requestParams.responseFormat = {
+          type: "json_schema",
+          jsonSchema: {
+            name: params.responseFormat.jsonSchema.name,
+            strict: params.responseFormat.jsonSchema.strict ?? true,
+            schema: params.responseFormat.jsonSchema.schema
+          }
+        };
+      } else if (params.responseFormat.type !== "text") {
+        requestParams.responseFormat = { type: params.responseFormat.type };
+      }
+    }
+    const profileParams = params.profileParameters;
+    if (profileParams?.fallbackModels?.length) {
+      logger.debug("Adding fallback models for streaming", {
+        context: "OpenRouterProvider.streamMessage",
+        fallbackCount: profileParams.fallbackModels.length
+      });
+      requestParams.models = [params.model, ...profileParams.fallbackModels];
+      requestParams.route = "fallback";
+      delete requestParams.model;
+    }
+    const providerPrefs = profileParams?.providerPreferences;
+    if (providerPrefs) {
+      logger.debug("Adding provider preferences for streaming", {
+        context: "OpenRouterProvider.streamMessage",
+        hasOrder: !!providerPrefs.order,
+        dataCollection: providerPrefs.dataCollection
+      });
+      requestParams.provider = {};
+      if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
+      if (providerPrefs.allowFallbacks !== void 0) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
+      if (providerPrefs.requireParameters) requestParams.provider.requireParameters = providerPrefs.requireParameters;
+      if (providerPrefs.dataCollection) requestParams.provider.dataCollection = providerPrefs.dataCollection;
+      if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
+      if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
+    }
+    const stream = await client.chat.send(requestParams);
     let fullMessage = null;
     for await (const chunk of stream) {
       const content = chunk.choices?.[0]?.delta?.content;
@@ -596,11 +699,19 @@ var OpenRouterProvider = class {
         };
       }
       if (finishReason && hasUsage) {
+        const usageAny = chunk.usage;
+        const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount ? {
+          cachedTokens: usageAny.cachedTokens,
+          cacheDiscount: usageAny.cacheDiscount,
+          cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
+          cacheReadInputTokens: usageAny.cacheReadInputTokens
+        } : void 0;
         logger.debug("Stream completed", {
           context: "OpenRouterProvider.streamMessage",
           finishReason,
           promptTokens: chunk.usage?.promptTokens,
-          completionTokens: chunk.usage?.completionTokens
+          completionTokens: chunk.usage?.completionTokens,
+          cachedTokens: cacheUsage?.cachedTokens
         });
         yield {
           content: "",
@@ -611,7 +722,8 @@ var OpenRouterProvider = class {
             totalTokens: chunk.usage?.totalTokens ?? 0
           },
           attachmentResults,
-          rawResponse: fullMessage
+          rawResponse: fullMessage,
+          cacheUsage
         };
       }
     }
@@ -680,9 +792,9 @@ var OpenRouterProvider = class {
     const requestBody = {
       model: params.model ?? "google/gemini-2.5-flash-image-preview",
       messages: [{ role: "user", content: params.prompt }],
+      modalities: ["image", "text"],
+      // Required for image generation
       stream: false
-      // Note: OpenRouter SDK doesn't have direct image generation support yet
-      // We'll use chat completion with special parameters
     };
     if (params.aspectRatio) {
       requestBody.imageConfig = { aspectRatio: params.aspectRatio };
@@ -719,6 +831,156 @@ var OpenRouterProvider = class {
       images,
       raw: response
     };
+  }
+};
+
+// plugins/dist/qtap-plugin-openrouter/embedding-provider.ts
+var import_sdk2 = require("@openrouter/sdk");
+var OpenRouterEmbeddingProvider = class {
+  /**
+   * Generate an embedding for the given text
+   *
+   * @param text The text to embed
+   * @param model The model to use (e.g., 'openai/text-embedding-3-small')
+   * @param apiKey The OpenRouter API key
+   * @param options Optional configuration (dimensions, encoding format)
+   * @returns The embedding result
+   */
+  async generateEmbedding(text, model, apiKey, options) {
+    logger.debug("OpenRouter generateEmbedding called", {
+      context: "OpenRouterEmbeddingProvider.generateEmbedding",
+      model,
+      textLength: text.length
+    });
+    const client = new import_sdk2.OpenRouter({
+      apiKey,
+      httpReferer: process.env.NEXTAUTH_URL || "http://localhost:3000",
+      xTitle: "Quilltap"
+    });
+    const response = await client.embeddings.generate({
+      input: text,
+      model,
+      dimensions: options?.dimensions
+    });
+    const embeddingData = response.data[0]?.embedding;
+    if (!embeddingData) {
+      throw new Error("No embedding returned from OpenRouter");
+    }
+    let embedding;
+    if (typeof embeddingData === "string") {
+      const buffer = Buffer.from(embeddingData, "base64");
+      embedding = Array.from(
+        new Float32Array(buffer.buffer, buffer.byteOffset, buffer.length / 4)
+      );
+    } else {
+      embedding = embeddingData;
+    }
+    logger.debug("OpenRouter embedding generated", {
+      context: "OpenRouterEmbeddingProvider.generateEmbedding",
+      model: response.model,
+      dimensions: embedding.length,
+      usage: response.usage
+    });
+    return {
+      embedding,
+      model: response.model,
+      dimensions: embedding.length,
+      usage: response.usage ? {
+        promptTokens: response.usage.promptTokens,
+        totalTokens: response.usage.totalTokens,
+        cost: response.usage.cost
+      } : void 0
+    };
+  }
+  /**
+   * Generate embeddings for multiple texts in a batch
+   *
+   * @param texts Array of texts to embed
+   * @param model The model to use
+   * @param apiKey The OpenRouter API key
+   * @param options Optional configuration
+   * @returns Array of embedding results
+   */
+  async generateBatchEmbeddings(texts, model, apiKey, options) {
+    logger.debug("OpenRouter generateBatchEmbeddings called", {
+      context: "OpenRouterEmbeddingProvider.generateBatchEmbeddings",
+      model,
+      count: texts.length
+    });
+    const client = new import_sdk2.OpenRouter({
+      apiKey,
+      httpReferer: process.env.NEXTAUTH_URL || "http://localhost:3000",
+      xTitle: "Quilltap"
+    });
+    const response = await client.embeddings.generate({
+      input: texts,
+      model,
+      dimensions: options?.dimensions
+    });
+    const results = [];
+    for (const data of response.data) {
+      const embeddingData = data.embedding;
+      if (!embeddingData) {
+        continue;
+      }
+      let embedding;
+      if (typeof embeddingData === "string") {
+        const buffer = Buffer.from(embeddingData, "base64");
+        embedding = Array.from(
+          new Float32Array(buffer.buffer, buffer.byteOffset, buffer.length / 4)
+        );
+      } else {
+        embedding = embeddingData;
+      }
+      results.push({
+        embedding,
+        model: response.model,
+        dimensions: embedding.length,
+        usage: response.usage ? {
+          promptTokens: response.usage.promptTokens,
+          totalTokens: response.usage.totalTokens,
+          cost: response.usage.cost
+        } : void 0
+      });
+    }
+    logger.debug("OpenRouter batch embeddings generated", {
+      context: "OpenRouterEmbeddingProvider.generateBatchEmbeddings",
+      model: response.model,
+      count: results.length
+    });
+    return results;
+  }
+  /**
+   * Get available embedding models from OpenRouter
+   *
+   * @param apiKey The OpenRouter API key
+   * @returns Array of model IDs
+   */
+  async getAvailableModels(apiKey) {
+    logger.debug("OpenRouter getAvailableModels called", {
+      context: "OpenRouterEmbeddingProvider.getAvailableModels"
+    });
+    try {
+      const client = new import_sdk2.OpenRouter({
+        apiKey,
+        httpReferer: process.env.NEXTAUTH_URL || "http://localhost:3000",
+        xTitle: "Quilltap"
+      });
+      const response = await client.embeddings.listModels();
+      const models = response.data?.map((m) => m.id) ?? [];
+      logger.debug("OpenRouter embedding models fetched", {
+        context: "OpenRouterEmbeddingProvider.getAvailableModels",
+        count: models.length
+      });
+      return models;
+    } catch (error) {
+      logger.error(
+        "Failed to fetch OpenRouter embedding models",
+        { context: "OpenRouterEmbeddingProvider.getAvailableModels" },
+        error instanceof Error ? error : void 0
+      );
+      return [];
+    }
   }
 };
 
@@ -819,9 +1081,9 @@ var config = {
 };
 var capabilities = {
   chat: true,
-  imageGeneration: false,
-  embeddings: false,
-  webSearch: false
+  imageGeneration: true,
+  embeddings: true,
+  webSearch: true
 };
 var attachmentSupport = {
   supportsAttachments: false,
@@ -843,6 +1105,16 @@ var plugin = {
       baseUrl
     });
     return new OpenRouterProvider();
+  },
+  /**
+   * Factory method to create an OpenRouter embedding provider instance
+   */
+  createEmbeddingProvider: (baseUrl) => {
+    logger.debug("Creating OpenRouter embedding provider instance", {
+      context: "plugin.createEmbeddingProvider",
+      baseUrl
+    });
+    return new OpenRouterEmbeddingProvider();
   },
   /**
    * Get list of available models from OpenRouter API
@@ -947,6 +1219,88 @@ var plugin = {
         maxOutputTokens: 4096,
         supportsImages: false,
         supportsTools: false
+      }
+    ];
+  },
+  /**
+   * Get static embedding model information
+   * Returns cached information about popular OpenRouter embedding models
+   */
+  getEmbeddingModels: () => {
+    return [
+      {
+        id: "openai/text-embedding-3-small",
+        name: "OpenAI Text Embedding 3 Small",
+        dimensions: 1536,
+        description: "OpenAI small embedding model, efficient for most use cases"
+      },
+      {
+        id: "openai/text-embedding-3-large",
+        name: "OpenAI Text Embedding 3 Large",
+        dimensions: 3072,
+        description: "OpenAI large embedding model for highest quality"
+      },
+      {
+        id: "openai/text-embedding-ada-002",
+        name: "OpenAI Ada 002",
+        dimensions: 1536,
+        description: "OpenAI legacy embedding model"
+      },
+      {
+        id: "cohere/embed-english-v3.0",
+        name: "Cohere Embed English v3",
+        dimensions: 1024,
+        description: "Cohere English embedding model"
+      },
+      {
+        id: "cohere/embed-multilingual-v3.0",
+        name: "Cohere Embed Multilingual v3",
+        dimensions: 1024,
+        description: "Cohere multilingual embedding model"
+      },
+      {
+        id: "voyage/voyage-large-2",
+        name: "Voyage Large 2",
+        dimensions: 1536,
+        description: "Voyage AI large embedding model"
+      },
+      {
+        id: "voyage/voyage-code-2",
+        name: "Voyage Code 2",
+        dimensions: 1536,
+        description: "Voyage AI embedding model optimized for code"
+      }
+    ];
+  },
+  /**
+   * Get static image generation model information
+   * Returns cached information about popular OpenRouter image generation models
+   */
+  getImageGenerationModels: () => {
+    return [
+      {
+        id: "google/gemini-2.0-flash-exp:free",
+        name: "Gemini 2.0 Flash Experimental (Free)",
+        supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
+        description: "Free experimental Gemini 2.0 model with image generation capabilities"
+      },
+      {
+        id: "google/gemini-2.5-flash-preview-05-20",
+        name: "Gemini 2.5 Flash Preview",
+        supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
+        description: "Fast preview model with state-of-the-art image generation"
+      },
+      {
+        id: "google/gemini-2.5-flash-preview-native-image",
+        name: "Gemini 2.5 Flash Native Image",
+        supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
+        description: "Native image generation variant of Gemini 2.5 Flash"
+      },
+      {
+        id: "google/gemini-3-pro-image-preview",
+        name: "Nano Banana Pro (Gemini 3 Pro Image)",
+        supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"],
+        description: "Advanced image generation with fine-grained creative controls, 2K/4K output support"
       }
     ];
   },

@@ -7,6 +7,8 @@ import ChatSettingsTab from '@/components/settings/chat-settings-tab'
 import ImageProfilesTab from '@/components/settings/image-profiles-tab'
 import EmbeddingProfilesTab from '@/components/settings/embedding-profiles-tab'
 import PluginsTab from '@/components/settings/plugins-tab'
+import TagsTab from '@/components/settings/tags-tab'
+import AppearanceTab from '@/components/settings/appearance-tab'
 import { EntityTabs, Tab } from '@/components/tabs'
 
 const SETTINGS_TABS: Tab[] = [
@@ -38,6 +40,15 @@ const SETTINGS_TABS: Tab[] = [
     ),
   },
   {
+    id: 'appearance',
+    label: 'Appearance',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+      </svg>
+    ),
+  },
+  {
     id: 'image-profiles',
     label: 'Image Profiles',
     icon: (
@@ -64,6 +75,15 @@ const SETTINGS_TABS: Tab[] = [
       </svg>
     ),
   },
+  {
+    id: 'tags',
+    label: 'Tags',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+      </svg>
+    ),
+  },
 ]
 
 export default function SettingsPage() {
@@ -75,12 +95,16 @@ export default function SettingsPage() {
         return <ConnectionProfilesTab />
       case 'chat':
         return <ChatSettingsTab />
+      case 'appearance':
+        return <AppearanceTab />
       case 'image-profiles':
         return <ImageProfilesTab />
       case 'embedding-profiles':
         return <EmbeddingProfilesTab />
       case 'plugins':
         return <PluginsTab />
+      case 'tags':
+        return <TagsTab />
       default:
         return null
     }

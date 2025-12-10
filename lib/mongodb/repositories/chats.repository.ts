@@ -18,9 +18,11 @@ import { MongoBaseRepository } from './base.repository';
 import {
   ChatMetadata,
   ChatMetadataBaseSchema,
+  ChatMetadataInput,
   ChatEvent,
   ChatEventSchema,
   ChatParticipantBase,
+  ChatParticipantBaseInput,
   ChatParticipantBaseSchema,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
@@ -194,22 +196,24 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
 
   /**
    * Create a new chat
+   * @param data The chat data (without id, createdAt, updatedAt). Fields with defaults are optional.
    */
-  async create(data: Omit<ChatMetadata, 'id' | 'createdAt' | 'updatedAt'>): Promise<ChatMetadata> {
+  async create(data: Omit<ChatMetadataInput, 'id' | 'createdAt' | 'updatedAt'>): Promise<ChatMetadata> {
     try {
       logger.debug('Creating new chat', { userId: data.userId, title: data.title });
 
       const id = (this as any).generateId();
       const now = (this as any).getCurrentTimestamp();
 
-      const chat: ChatMetadata = {
+      const chatInput = {
         ...data,
         id,
         createdAt: now,
         updatedAt: now,
       };
 
-      const validated = this.validate(chat);
+      // Parse through schema to apply defaults
+      const validated = this.validate(chatInput);
       const collection = await (this as any).getCollection();
 
       // Insert into chats collection
@@ -387,10 +391,12 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
 
   /**
    * Add a participant to a chat
+   * @param chatId The chat ID
+   * @param participant The participant data (without id, createdAt, updatedAt). Fields with defaults are optional.
    */
   async addParticipant(
     chatId: string,
-    participant: Omit<ChatParticipantBase, 'id' | 'createdAt' | 'updatedAt'>
+    participant: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<ChatMetadata | null> {
     try {
       logger.debug('Adding participant to chat', {
@@ -407,15 +413,15 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
       }
 
       const now = (this as any).getCurrentTimestamp();
-      const newParticipant: ChatParticipantBase = {
+      const participantInput = {
         ...participant,
         id: (this as any).generateId(),
         createdAt: now,
         updatedAt: now,
       };
 
-      // Validate the participant
-      ChatParticipantBaseSchema.parse(newParticipant);
+      // Validate the participant (this applies defaults like hasHistoryAccess)
+      const newParticipant = ChatParticipantBaseSchema.parse(participantInput);
 
       const participants = [...chat.participants, newParticipant];
       return await this.update(chatId, { participants });

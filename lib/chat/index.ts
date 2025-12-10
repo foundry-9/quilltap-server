@@ -31,3 +31,30 @@ export {
   type GenerateSummaryOptions,
   type SummaryGenerationResult,
 } from './context-summary'
+
+export {
+  // Turn state types
+  type TurnState,
+  type TurnSelectionResult,
+  type CalculateTurnStateOptions,
+  // Turn state initialization
+  createInitialTurnState,
+  calculateTurnStateFromHistory,
+  // Turn selection algorithm
+  selectNextSpeaker,
+  // Turn state updates
+  updateTurnStateAfterMessage,
+  // Queue management
+  addToQueue,
+  removeFromQueue,
+  popFromQueue,
+  nudgeParticipant,
+  // Utility functions
+  getQueuePosition,
+  isParticipantsTurn,
+  isUsersTurn,
+  getSelectionExplanation,
+  findUserParticipant,
+  getActiveCharacterParticipants,
+  isMultiCharacterChat,
+} from './turn-manager'

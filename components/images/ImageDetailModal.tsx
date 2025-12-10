@@ -329,7 +329,7 @@ export default function ImageDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       {/* Navigation buttons - left and right sides */}
@@ -423,7 +423,7 @@ export default function ImageDetailModal({
 
         {/* Tag buttons panel */}
         {!imageMissing && (
-        <div className="bg-black/70 backdrop-blur-sm rounded-lg p-6 w-full max-w-2xl">
+        <div className="qt-panel bg-black/70 backdrop-blur-sm w-full max-w-2xl">
           <div className="flex flex-col gap-4">
             {/* Character tags */}
             {!loadingEntities && characters.length > 0 && (
@@ -446,8 +446,8 @@ export default function ImageDetailModal({
                           disabled={isLoading}
                           className={`flex-1 px-4 py-2 rounded transition-all font-medium text-sm flex items-center justify-between ${
                             isTagged
-                              ? 'bg-blue-600 text-white hover:bg-blue-700 ring-2 ring-blue-400'
-                              : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
+                              ? 'bg-primary text-primary-foreground hover:bg-primary/90 ring-2 ring-ring'
+                              : 'bg-muted text-muted-foreground hover:bg-muted/80'
                           } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <span>{isLoading ? '...' : character.name}</span>
@@ -496,8 +496,8 @@ export default function ImageDetailModal({
                           disabled={isLoading}
                           className={`flex-1 px-4 py-2 rounded transition-all font-medium text-sm flex items-center justify-between ${
                             isTagged
-                              ? 'bg-purple-600 text-white hover:bg-purple-700 ring-2 ring-purple-400'
-                              : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
+                              ? 'bg-primary text-primary-foreground hover:bg-primary/90 ring-2 ring-ring'
+                              : 'bg-muted text-muted-foreground hover:bg-muted/80'
                           } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <span>{isLoading ? '...' : persona.name}</span>

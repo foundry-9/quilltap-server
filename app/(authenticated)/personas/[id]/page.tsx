@@ -176,26 +176,26 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg">Loading persona...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-foreground">Loading persona...</p>
       </div>
     )
   }
 
   if (hiddenTagIds.size > 0 && persona && shouldHideByIds(persona.tags || [])) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-slate-900">
+      <div className="flex min-h-screen items-center justify-center bg-muted">
         <HiddenPlaceholder />
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-[800px]">
+    <div className="persona-edit container mx-auto max-w-5xl px-4 py-8 text-foreground">
       <div className="mb-8">
         <Link
           href="/personas"
-          className="text-blue-600 dark:text-blue-400 hover:underline mb-4 inline-block"
+          className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
         >
           ← Back to Personas
         </Link>
@@ -210,15 +210,15 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
                 className="w-20 h-20 rounded-full object-cover"
               />
             ) : (
-              <div className="w-20 h-20 rounded-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center">
-                <span className="text-3xl font-bold text-gray-600 dark:text-gray-400">
+              <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center">
+                <span className="text-3xl font-bold text-muted-foreground">
                   {persona?.name?.charAt(0)?.toUpperCase() || '?'}
                 </span>
               </div>
             )}
             <button
               onClick={() => setShowAvatarSelector(true)}
-              className="absolute -bottom-1 -right-1 bg-blue-600 text-white rounded-full p-1.5 hover:bg-blue-700 shadow-lg"
+              className="absolute -bottom-1 -right-1 rounded-full bg-primary p-1.5 text-primary-foreground shadow-lg transition hover:bg-primary/90"
               title="Change avatar"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -227,21 +227,21 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
             </button>
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{persona?.name || 'Loading...'}</h1>
+            <h1 className="text-3xl font-bold text-foreground">{persona?.name || 'Loading...'}</h1>
             {persona?.title && (
-              <p className="text-gray-600 dark:text-gray-400">{persona.title}</p>
+              <p className="text-muted-foreground">{persona.title}</p>
             )}
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded mb-4">
+        <div className="mb-4 rounded border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} className="persona-section-card rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm">
         <EntityTabs tabs={EDIT_PERSONA_TABS} defaultTab="details">
           {(activeTab: string) => {
             switch (activeTab) {
@@ -249,7 +249,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
                 return (
                   <div className="space-y-6">
                     <div>
-                      <label htmlFor="name" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="name" className="block text-sm font-medium mb-2 text-foreground">
                         Name *
                       </label>
                       <input
@@ -259,12 +259,12 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
                         value={formData.name}
                         onChange={handleChange}
                         required
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="title" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="title" className="block text-sm font-medium mb-2 text-foreground">
                         Title (Optional)
                       </label>
                       <input
@@ -273,13 +273,13 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
                         name="title"
                         value={formData.title}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="e.g., Student, Teacher, Narrator"
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="description" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+                      <label htmlFor="description" className="block text-sm font-medium mb-2 text-foreground">
                         Description *
                       </label>
                       <textarea
@@ -289,7 +289,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
                         onChange={handleChange}
                         required
                         rows={6}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="Describe this persona's characteristics, background, and role"
                       />
                     </div>
@@ -336,17 +336,17 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
           }}
         </EntityTabs>
 
-        <div className="flex gap-4 mt-8">
+        <div className="mt-8 flex gap-4">
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600"
+            className="flex-1 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-primary-foreground shadow transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? 'Saving...' : 'Save Persona'}
           </button>
           <Link
             href="/personas"
-            className="px-6 py-3 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 text-center"
+            className="rounded-lg border border-border bg-card px-6 py-3 text-base font-medium text-muted-foreground shadow transition hover:bg-muted/80"
           >
             Cancel
           </Link>

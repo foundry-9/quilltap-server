@@ -142,31 +142,31 @@ export default function PersonasPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-gray-600 dark:text-gray-400">Loading personas...</div>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-foreground">Loading personas...</p>
       </div>
     )
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="sm:flex sm:items-center sm:justify-between mb-8">
+    <div className="persona-page container mx-auto max-w-5xl px-4 py-8 text-foreground">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Personas</h1>
-          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            Manage your user personas for roleplay chats
+          <h1 className="text-3xl font-semibold leading-tight">Personas</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage the user personas that represent you in conversations.
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 flex gap-2">
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setImportDialogOpen(true)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700"
+            className="qt-button persona-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Import
           </button>
           <Link
             href="/personas/new"
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-800"
+            className="qt-button persona-toolbar__button persona-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Create Persona
           </Link>
@@ -174,15 +174,15 @@ export default function PersonasPage() {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-md">
-          <p className="text-sm text-red-600 dark:text-red-200">{error}</p>
+        <div className="mb-6 rounded border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
         </div>
       )}
 
       {visiblePersonas.length === 0 ? (
-        <div className="text-center py-12">
+        <div className="persona-empty-state mt-12 rounded-2xl border border-dashed border-border/70 bg-card/80 px-8 py-12 text-center shadow-sm">
           <svg
-            className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600"
+            className="mx-auto h-12 w-12 text-muted-foreground/70"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -194,25 +194,25 @@ export default function PersonasPage() {
               d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
             />
           </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No personas</h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Get started by creating a new persona or importing one.
+          <h3 className="mt-4 text-base font-semibold text-foreground">No personas yet</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Create a persona to represent yourself or import one from SillyTavern.
           </p>
           <div className="mt-6">
             <Link
               href="/personas/new"
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-800"
+              className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90"
             >
               Create Persona
             </Link>
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="persona-card-grid mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
           {visiblePersonas.map((persona) => (
             <div
               key={persona.id}
-              className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 hover:shadow-lg transition-shadow bg-white dark:bg-slate-800 flex flex-col"
+              className="qt-entity-card persona-card"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center flex-grow gap-4">
@@ -233,27 +233,27 @@ export default function PersonasPage() {
                     </div>
                   )}
                   <div className="flex-grow">
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{persona.name}</h2>
+                    <h2 className="text-xl font-semibold text-foreground">{persona.name}</h2>
                     {persona.title && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{persona.title}</p>
+                      <p className="text-sm text-muted-foreground">{persona.title}</p>
                     )}
                   </div>
                 </div>
               </div>
 
               <div className="flex-grow">
-                <p className="text-gray-700 dark:text-gray-300 mb-4 line-clamp-3">
+                <p className="mb-4 line-clamp-3 text-sm text-muted-foreground">
                   {persona.description}
                 </p>
 
                 {persona.characters.length > 0 && (
                   <div className="mb-4">
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-medium">Linked to:</p>
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">Linked to:</p>
                     <div className="flex flex-wrap gap-1">
                       {persona.characters.map((link) => (
                         <span
                           key={link.character.id}
-                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                          className="inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary"
                         >
                           {link.character.name}
                         </span>
@@ -264,7 +264,7 @@ export default function PersonasPage() {
 
                 {persona.tags.length > 0 && (
                   <div className="mb-4">
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-medium">Tags:</p>
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">Tags:</p>
                     <div className="flex flex-wrap gap-1">
                       {persona.tags.map((tagLink) => (
                         <TagBadge
@@ -278,16 +278,16 @@ export default function PersonasPage() {
                 )}
               </div>
 
-              <div className="flex gap-2 mt-4">
+              <div className="qt-entity-card-actions persona-card-actions">
                 <Link
                   href={`/personas/${persona.id}`}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-center"
+                  className="persona-card__action inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"
                 >
                   Edit
                 </Link>
                 <button
                   onClick={() => setGalleryPersona({ id: persona.id, name: persona.name })}
-                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  className="persona-card__action inline-flex items-center justify-center rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted"
                   title="Photos"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -296,14 +296,14 @@ export default function PersonasPage() {
                 </button>
                 <a
                   href={`/api/personas/${persona.id}/export`}
-                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  className="persona-card__action inline-flex items-center justify-center rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted"
                   title="Export"
                 >
                   ↓
                 </a>
                 <button
                   onClick={() => handleDelete(persona.id)}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                  className="persona-card__action inline-flex items-center justify-center rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground shadow-sm transition hover:bg-destructive/90"
                 >
                   Delete
                 </button>
@@ -315,14 +315,14 @@ export default function PersonasPage() {
 
       {/* Import Dialog */}
       {importDialogOpen && (
-        <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+        <div className="persona-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <h3 className="mb-4 text-lg font-semibold text-foreground">
               Import Persona
             </h3>
             <form onSubmit={handleImport}>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="mb-2 block text-sm font-medium text-foreground">
                   Select SillyTavern persona JSON file
                 </label>
                 <input
@@ -330,20 +330,20 @@ export default function PersonasPage() {
                   name="file"
                   accept=".json"
                   required
-                  className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-900 file:text-indigo-700 dark:file:text-indigo-200 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-800"
+                  className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:bg-primary/30"
                 />
               </div>
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => setImportDialogOpen(false)}
-                  className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600"
+                  className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-800"
+                  className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90"
                 >
                   Import
                 </button>

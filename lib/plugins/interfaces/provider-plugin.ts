@@ -137,6 +137,28 @@ export interface EmbeddingModelInfo {
 }
 
 /**
+ * Information about an image generation model supported by the provider
+ *
+ * @interface ImageGenerationModelInfo
+ */
+export interface ImageGenerationModelInfo {
+  /** Unique identifier for the image generation model */
+  id: string;
+
+  /** Human-readable name of the model */
+  name: string;
+
+  /** Supported aspect ratios (e.g., ['1:1', '16:9', '9:16']) */
+  supportedAspectRatios?: string[];
+
+  /** Supported image sizes (e.g., ['1024x1024', '512x512']) */
+  supportedSizes?: string[];
+
+  /** Description of the model's characteristics or use cases */
+  description?: string;
+}
+
+/**
  * Provider capabilities configuration
  *
  * Describes what features/capabilities the provider supports
@@ -390,6 +412,25 @@ export interface LLMProviderPlugin {
    * ```
    */
   getEmbeddingModels?: () => EmbeddingModelInfo[];
+
+  /**
+   * Get image generation models supported by this provider (OPTIONAL)
+   *
+   * Returns information about image generation models available from this provider.
+   * Only applicable for providers where `capabilities.imageGeneration` is true.
+   *
+   * @returns Array of ImageGenerationModelInfo objects
+   *
+   * @example
+   * ```typescript
+   * const imageModels = plugin.getImageGenerationModels?.() || [];
+   * // Returns: [
+   * //   { id: 'dall-e-3', name: 'DALL-E 3', supportedAspectRatios: ['1:1', '16:9'] },
+   * //   ...
+   * // ]
+   * ```
+   */
+  getImageGenerationModels?: () => ImageGenerationModelInfo[];
 
   /**
    * Validate an API key for this provider

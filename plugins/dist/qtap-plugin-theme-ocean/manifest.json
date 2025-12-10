@@ -1,0 +1,62 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-theme-ocean",
+  "title": "Ocean",
+  "description": "A bioluminescent ocean theme with layered gradients, glass panels, and gentle motion for a focused-yet-expressive chat experience",
+  "version": "1.1.18",
+  "author": {
+    "name": "Foundry-9",
+    "email": "charles@sebold.tech",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "compatibility": {
+    "quilltapVersion": ">=2.2.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["THEME"],
+  "category": "THEME",
+  "typescript": true,
+  "frontend": "NONE",
+  "styling": "CSS_MODULES",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["theme", "ocean", "blue", "teal", "calming", "dark", "light"],
+  "themeConfig": {
+    "tokensPath": "tokens.json",
+    "stylesPath": "styles.css",
+    "supportsDarkMode": true,
+    "previewImage": "preview.png",
+    "tags": ["ocean", "blue", "calming", "nature"],
+    "fonts": [
+      {
+        "family": "DM Sans",
+        "src": "fonts/DMSans-latin.woff2",
+        "weight": "400 700",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "DM Sans",
+        "src": "fonts/DMSans-latin-ext.woff2",
+        "weight": "400 700",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Space Mono",
+        "src": "fonts/SpaceMono-Regular.ttf",
+        "weight": "400",
+        "style": "normal",
+        "display": "swap"
+      }
+    ]
+  },
+  "permissions": {
+    "fileSystem": [],
+    "network": [],
+    "database": false,
+    "userData": false
+  }
+}

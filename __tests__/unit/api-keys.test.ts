@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
-import { getServerSession } from 'next-auth'
+import { getServerSession } from '@/lib/auth/session'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
 import { getUserRepositories } from '@/lib/repositories/factory'
 

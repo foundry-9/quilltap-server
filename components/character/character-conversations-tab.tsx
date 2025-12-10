@@ -183,8 +183,8 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
   if (loading && chats.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-r-transparent"></div>
           Loading conversations...
         </div>
       </div>
@@ -194,10 +194,10 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
   if (error && chats.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-600 dark:text-red-400">{error}</p>
+        <p className="text-destructive">{error}</p>
         <button
           onClick={() => fetchChats(0, searchQuery, false)}
-          className="mt-4 text-blue-600 dark:text-blue-400 hover:underline"
+          className="mt-4 text-primary hover:underline"
         >
           Try again
         </button>
@@ -215,10 +215,10 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={handleSearch}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            className="w-full pl-10 pr-4 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -228,7 +228,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
         </div>
         <Link
           href={`/characters/${characterId}/view?action=chat`}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-800 font-medium text-sm whitespace-nowrap"
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm whitespace-nowrap"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -239,9 +239,9 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
 
       {/* Conversations List */}
       {visibleChats.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-gray-300 dark:border-slate-600 rounded-lg">
+        <div className="text-center py-12 border border-dashed border-border rounded-lg">
           <svg
-            className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+            className="mx-auto h-12 w-12 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -253,7 +253,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
               d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
             />
           </svg>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-2 text-sm text-muted-foreground">
             {searchQuery
               ? `No conversations found matching "${searchQuery}"`
               : `No conversations with ${characterName} yet`
@@ -262,7 +262,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
           {!searchQuery && (
             <Link
               href={`/characters/${characterId}/view?action=chat`}
-              className="mt-4 inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:underline"
+              className="mt-4 inline-flex items-center gap-2 text-primary hover:underline"
             >
               Start your first conversation
             </Link>
@@ -273,21 +273,21 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
           {visibleChats.map((chat) => (
             <div
               key={chat.id}
-              className="flex items-start justify-between gap-4 p-4 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 hover:shadow-sm transition-all"
+              className="flex items-start justify-between gap-4 p-4 bg-background rounded-lg border border-border hover:shadow-sm transition-all"
             >
               <Link
                 href={`/chats/${chat.id}`}
                 className="flex-1 min-w-0 block"
               >
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-medium text-gray-900 dark:text-white truncate">
+                  <h3 className="font-medium text-foreground truncate">
                     {chat.title || `Chat with ${characterName}`}
                   </h3>
-                  <span className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0">
+                  <span className="inline-block bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0">
                     {chat._count?.messages ?? chat.messages.length}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   {chat.persona && (
                     <>
                       as {chat.persona.title ? `${chat.persona.name} (${chat.persona.title})` : chat.persona.name}
@@ -296,7 +296,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                   )}
                   {formatDate(chat.updatedAt)}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1 mt-2">
+                <p className="text-sm text-muted-foreground line-clamp-1 mt-2">
                   {getPreviewText(chat.messages)}
                 </p>
                 {chat.tags && chat.tags.length > 0 && (
@@ -309,7 +309,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
               <div className="flex flex-col gap-2 flex-shrink-0">
                 <Link
                   href={`/chats/${chat.id}`}
-                  className="w-10 h-10 flex items-center justify-center bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
                   title="Open chat"
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -320,7 +320,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                 <button
                   onClick={(e) => deleteChat(chat.id, e)}
                   disabled={deletingChatId === chat.id}
-                  className="w-10 h-10 flex items-center justify-center bg-red-600 dark:bg-red-700 text-white rounded hover:bg-red-700 dark:hover:bg-red-800 disabled:opacity-50 transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-destructive text-white rounded hover:bg-red-700 disabled:opacity-50 transition-colors"
                   title="Delete chat"
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -334,13 +334,13 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
           {/* Load more trigger */}
           <div ref={loadMoreRef} className="py-4">
             {loadingMore && (
-              <div className="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+              <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-r-transparent"></div>
                 Loading more...
               </div>
             )}
             {!hasMore && visibleChats.length > 0 && (
-              <p className="text-center text-sm text-gray-400 dark:text-gray-500">
+              <p className="text-center text-sm text-muted-foreground">
                 No more conversations
               </p>
             )}

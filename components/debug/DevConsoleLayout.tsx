@@ -57,14 +57,14 @@ export default function DevConsoleLayout({ children }: DevConsoleLayoutProps) {
       <div className="flex h-full">
         {/* Main content - fixed width */}
         <div
-          className="flex-shrink-0 overflow-y-auto bg-gray-50 dark:bg-slate-950"
+          className="flex-shrink-0 overflow-y-auto bg-background"
           style={{ width: `${MAIN_CONTENT_WIDTH}px` }}
         >
           {children}
         </div>
 
         {/* DevConsole panel - takes remaining space */}
-        <div className="flex-1 min-w-0 border-l border-gray-200 dark:border-slate-700">
+        <div className="flex-1 min-w-0 border-l border-border">
           <DevConsolePanel layout="side" />
         </div>
       </div>
@@ -74,7 +74,7 @@ export default function DevConsoleLayout({ children }: DevConsoleLayoutProps) {
   // Narrow viewport or DevConsole closed: full-width main content
   return (
     <>
-      <div className={`h-full overflow-y-auto bg-gray-50 dark:bg-slate-950 ${showBottomPanel ? 'pb-[40vh]' : ''}`}>
+      <div className={`h-full overflow-y-auto bg-background ${showBottomPanel ? 'pb-[40vh]' : ''}`}>
         {children}
       </div>
 

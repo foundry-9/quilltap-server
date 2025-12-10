@@ -11,6 +11,7 @@ import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as
 import { buildS3Key } from './s3/client';
 import type { FileEntry, FileCategory } from './schemas/types';
 import { logger } from '@/lib/logger';
+import { getInheritedTags } from './files/tag-inheritance';
 
 export interface ChatFileUploadResult {
   id: string;
@@ -153,6 +154,16 @@ export async function uploadChatFile(
   });
   logger.debug('Uploaded chat file to S3', { fileId, s3Key, size: buffer.length });
 
+  // Inherit tags from the chat (and any other linked entities)
+  const inheritedTags = await getInheritedTags(linkedTo, userId);
+
+  logger.debug('Inherited tags for chat file', {
+    context: 'chat-files-v2',
+    fileId,
+    chatId,
+    inheritedTagCount: inheritedTags.length,
+  });
+
   // Create metadata in repository
   const fileEntry = await repos.files.create({
     userId,
@@ -169,7 +180,7 @@ export async function uploadChatFile(
     generationModel: null,
     generationRevisedPrompt: null,
     description: null,
-    tags: [],
+    tags: inheritedTags,
     s3Key,
   });
 

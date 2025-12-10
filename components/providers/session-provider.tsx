@@ -5,6 +5,7 @@ import { DebugProvider } from "./debug-provider";
 import { TagStyleProvider } from "./tag-style-provider";
 import { QuickHideProvider } from "./quick-hide-provider";
 import { DevConsoleProvider } from "./dev-console-provider";
+import { ThemeProvider } from "./theme-provider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -12,15 +13,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
       refetchInterval={5 * 60}
       refetchOnWindowFocus={false}
     >
-      <DevConsoleProvider>
-        <DebugProvider>
-          <TagStyleProvider>
-            <QuickHideProvider>
-              {children}
-            </QuickHideProvider>
-          </TagStyleProvider>
-        </DebugProvider>
-      </DevConsoleProvider>
+      <ThemeProvider>
+        <DevConsoleProvider>
+          <DebugProvider>
+            <TagStyleProvider>
+              <QuickHideProvider>
+                {children}
+              </QuickHideProvider>
+            </TagStyleProvider>
+          </DebugProvider>
+        </DevConsoleProvider>
+      </ThemeProvider>
     </SessionProvider>
   );
 }

@@ -229,16 +229,19 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
   const selectedCount = candidates.filter(c => c.selected).length
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 flex items-center justify-center p-4 z-[60]">
-      <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-          Create Memories from Imported Chat
-        </h3>
+    <div className="qt-dialog-overlay !z-[60] p-4">
+      <div className="qt-dialog max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="qt-dialog-header">
+          <h3 className="qt-dialog-title">
+            Create Memories from Imported Chat
+          </h3>
+          <p className="qt-dialog-description">
+            Create memories for the characters and personas based on this conversation.
+            You can customize the memory content before creating.
+          </p>
+        </div>
 
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          Create memories for the characters and personas based on this conversation.
-          You can customize the memory content before creating.
-        </p>
+        <div className="qt-dialog-body">
 
         <div className="space-y-4">
           {candidates.map((candidate, index) => (
@@ -246,8 +249,8 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
               key={`${candidate.entityType}-${candidate.entityId}`}
               className={`border rounded-lg p-4 ${
                 candidate.selected
-                  ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30'
-                  : 'border-gray-200 dark:border-slate-700'
+                  ? 'border-primary/50 bg-primary/5'
+                  : 'border-border'
               }`}
             >
               <label className="flex items-start gap-3 cursor-pointer">
@@ -261,12 +264,12 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
                   <div className="flex items-center gap-2 mb-2">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                       candidate.entityType === 'character'
-                        ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
-                        : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                        ? 'qt-badge-primary'
+                        : 'qt-badge-success'
                     }`}>
                       {candidate.entityType === 'character' ? 'Character' : 'Persona'}
                     </span>
-                    <span className="font-medium text-gray-900 dark:text-white">
+                    <span className="font-medium text-foreground">
                       {candidate.entityName}
                     </span>
                   </div>
@@ -276,7 +279,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
                       value={candidate.suggestedContent}
                       onChange={(e) => updateContent(index, e.target.value)}
                       rows={3}
-                      className="w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2 border"
+                      className="qt-textarea"
                       placeholder="Memory content..."
                     />
                   )}
@@ -287,17 +290,18 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
         </div>
 
         {candidates.length === 0 && (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+          <div className="text-center py-8 text-muted-foreground">
             No characters or personas found to create memories for
           </div>
         )}
+        </div>
 
-        <div className="flex gap-2 justify-end mt-6">
+        <div className="qt-dialog-footer">
           <button
             type="button"
             onClick={onClose}
             disabled={creating}
-            className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50"
+            className="qt-button qt-button-secondary"
           >
             Skip
           </button>
@@ -305,7 +309,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
             type="button"
             onClick={handleCreateMemories}
             disabled={creating || selectedCount === 0}
-            className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="qt-button qt-button-primary"
           >
             {creating ? (
               <>

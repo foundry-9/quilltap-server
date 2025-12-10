@@ -97,10 +97,10 @@ export function PhysicalDescriptionList({ entityType, entityId }: PhysicalDescri
   if (error) {
     return (
       <div className="text-center py-8">
-        <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+        <p className="text-destructive mb-4">{error}</p>
         <button
           onClick={fetchDescriptions}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="qt-button qt-button-primary"
         >
           Retry
         </button>
@@ -111,12 +111,12 @@ export function PhysicalDescriptionList({ entityType, entityId }: PhysicalDescri
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <h3 className="text-lg font-semibold text-foreground">
           Physical Descriptions
         </h3>
         <button
           onClick={handleCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+          className="qt-button qt-button-primary qt-button-sm flex items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -126,9 +126,9 @@ export function PhysicalDescriptionList({ entityType, entityId }: PhysicalDescri
       </div>
 
       {descriptions.length === 0 ? (
-        <div className="text-center py-8 border border-dashed border-gray-300 dark:border-slate-600 rounded-lg">
+        <div className="text-center py-8 border border-dashed border-border rounded-lg">
           <svg
-            className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+            className="mx-auto h-12 w-12 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -140,10 +140,10 @@ export function PhysicalDescriptionList({ entityType, entityId }: PhysicalDescri
               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
             />
           </svg>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-2 text-sm text-muted-foreground">
             No physical descriptions yet
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground/70 mt-1">
             Add descriptions to use for image generation prompts
           </p>
         </div>

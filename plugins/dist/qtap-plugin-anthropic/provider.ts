@@ -30,6 +30,12 @@ interface AnthropicMessage {
   content: string | AnthropicContentBlock[]
 }
 
+// Anthropic profile parameters for cache control
+interface AnthropicProfileParams {
+  enableCacheBreakpoints?: boolean
+  cacheStrategy?: 'system_only' | 'system_and_long_context'
+}
+
 export class AnthropicProvider implements LLMProvider {
   readonly supportsFileAttachments = true
   readonly supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES
@@ -124,11 +130,33 @@ export class AnthropicProvider implements LLMProvider {
     const systemMessage = params.messages.find(m => m.role === 'system')
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
 
+    // Extract profile parameters for cache control
+    const profileParams = params.profileParameters as AnthropicProfileParams | undefined
+
     const requestParams: any = {
       model: params.model,
-      system: systemMessage?.content,
       messages,
       max_tokens: params.maxTokens ?? 1000,
+    }
+
+    // Handle system message with optional cache control
+    if (systemMessage?.content) {
+      if (profileParams?.enableCacheBreakpoints) {
+        // Use array format with cache_control for prompt caching
+        // This can reduce costs by 90% for repeated system prompts
+        logger.debug('Enabling cache control for system message', {
+          context: 'AnthropicProvider.sendMessage',
+          cacheStrategy: profileParams.cacheStrategy || 'system_only',
+        })
+        requestParams.system = [{
+          type: 'text',
+          text: systemMessage.content,
+          cache_control: { type: 'ephemeral' },
+        }]
+      } else {
+        // Standard string format
+        requestParams.system = systemMessage.content
+      }
     }
 
     // Anthropic API requires either temperature OR top_p, not both
@@ -160,6 +188,23 @@ export class AnthropicProvider implements LLMProvider {
 
     const content = response.content[0]
 
+    // Extract cache usage if available (when prompt caching is enabled)
+    const rawUsage = response.usage as any
+    const cacheUsage = (rawUsage.cache_creation_input_tokens !== undefined || rawUsage.cache_read_input_tokens !== undefined)
+      ? {
+          cacheCreationInputTokens: rawUsage.cache_creation_input_tokens,
+          cacheReadInputTokens: rawUsage.cache_read_input_tokens,
+        }
+      : undefined
+
+    if (cacheUsage) {
+      logger.debug('Anthropic cache usage', {
+        context: 'AnthropicProvider.sendMessage',
+        cacheCreationInputTokens: cacheUsage.cacheCreationInputTokens,
+        cacheReadInputTokens: cacheUsage.cacheReadInputTokens,
+      })
+    }
+
     return {
       content: content.type === 'text' ? content.text : '',
       finishReason: response.stop_reason ?? 'stop',
@@ -170,6 +215,7 @@ export class AnthropicProvider implements LLMProvider {
       },
       raw: response,
       attachmentResults,
+      cacheUsage,
     }
   }
 
@@ -181,12 +227,33 @@ export class AnthropicProvider implements LLMProvider {
     const systemMessage = params.messages.find(m => m.role === 'system')
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
 
+    // Extract profile parameters for cache control
+    const profileParams = params.profileParameters as AnthropicProfileParams | undefined
+
     const requestParams: any = {
       model: params.model,
-      system: systemMessage?.content,
       messages,
       max_tokens: params.maxTokens ?? 1000,
       stream: true,
+    }
+
+    // Handle system message with optional cache control
+    if (systemMessage?.content) {
+      if (profileParams?.enableCacheBreakpoints) {
+        // Use array format with cache_control for prompt caching
+        logger.debug('Enabling cache control for streaming system message', {
+          context: 'AnthropicProvider.streamMessage',
+          cacheStrategy: profileParams.cacheStrategy || 'system_only',
+        })
+        requestParams.system = [{
+          type: 'text',
+          text: systemMessage.content,
+          cache_control: { type: 'ephemeral' },
+        }]
+      } else {
+        // Standard string format
+        requestParams.system = systemMessage.content
+      }
     }
 
     // Anthropic API requires either temperature OR top_p, not both
@@ -215,6 +282,8 @@ export class AnthropicProvider implements LLMProvider {
     let stopReason: string | null = null
     let messageId: string | null = null
     let model: string | null = null
+    let cacheCreationInputTokens: number | undefined
+    let cacheReadInputTokens: number | undefined
 
     for await (const event of stream) {
       if (event.type === 'content_block_delta') {
@@ -233,6 +302,10 @@ export class AnthropicProvider implements LLMProvider {
         totalInputTokens = event.message.usage.input_tokens
         messageId = event.message.id
         model = event.message.model
+        // Track cache usage if available
+        const rawUsage = event.message.usage as any
+        cacheCreationInputTokens = rawUsage.cache_creation_input_tokens
+        cacheReadInputTokens = rawUsage.cache_read_input_tokens
       }
 
       // Track usage and stop reason from message_delta event
@@ -245,10 +318,20 @@ export class AnthropicProvider implements LLMProvider {
 
       // Final event
       if (event.type === 'message_stop') {
+        // Build cache usage object if available
+        const cacheUsage = (cacheCreationInputTokens !== undefined || cacheReadInputTokens !== undefined)
+          ? {
+              cacheCreationInputTokens,
+              cacheReadInputTokens,
+            }
+          : undefined
+
         logger.debug('Stream completed', {
           context: 'AnthropicProvider.streamMessage',
           promptTokens: totalInputTokens,
           completionTokens: totalOutputTokens,
+          cacheCreationInputTokens,
+          cacheReadInputTokens,
         })
 
         // Build the full message object for tool call detection
@@ -275,6 +358,7 @@ export class AnthropicProvider implements LLMProvider {
           },
           attachmentResults,
           rawResponse: fullMessage,
+          cacheUsage,
         }
       }
     }

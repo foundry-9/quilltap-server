@@ -540,12 +540,27 @@ var AnthropicProvider = class {
     const client = new import_sdk.default({ apiKey });
     const systemMessage = params.messages.find((m) => m.role === "system");
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
+    const profileParams = params.profileParameters;
     const requestParams = {
       model: params.model,
-      system: systemMessage?.content,
       messages,
       max_tokens: params.maxTokens ?? 1e3
     };
+    if (systemMessage?.content) {
+      if (profileParams?.enableCacheBreakpoints) {
+        logger.debug("Enabling cache control for system message", {
+          context: "AnthropicProvider.sendMessage",
+          cacheStrategy: profileParams.cacheStrategy || "system_only"
+        });
+        requestParams.system = [{
+          type: "text",
+          text: systemMessage.content,
+          cache_control: { type: "ephemeral" }
+        }];
+      } else {
+        requestParams.system = systemMessage.content;
+      }
+    }
     if (params.temperature !== void 0) {
       requestParams.temperature = params.temperature;
     } else if (params.topP !== void 0) {
@@ -566,6 +581,18 @@ var AnthropicProvider = class {
       completionTokens: response.usage.output_tokens
     });
     const content = response.content[0];
+    const rawUsage = response.usage;
+    const cacheUsage = rawUsage.cache_creation_input_tokens !== void 0 || rawUsage.cache_read_input_tokens !== void 0 ? {
+      cacheCreationInputTokens: rawUsage.cache_creation_input_tokens,
+      cacheReadInputTokens: rawUsage.cache_read_input_tokens
+    } : void 0;
+    if (cacheUsage) {
+      logger.debug("Anthropic cache usage", {
+        context: "AnthropicProvider.sendMessage",
+        cacheCreationInputTokens: cacheUsage.cacheCreationInputTokens,
+        cacheReadInputTokens: cacheUsage.cacheReadInputTokens
+      });
+    }
     return {
       content: content.type === "text" ? content.text : "",
       finishReason: response.stop_reason ?? "stop",
@@ -575,7 +602,8 @@ var AnthropicProvider = class {
         totalTokens: response.usage.input_tokens + response.usage.output_tokens
       },
       raw: response,
-      attachmentResults
+      attachmentResults,
+      cacheUsage
     };
   }
   async *streamMessage(params, apiKey) {
@@ -583,13 +611,28 @@ var AnthropicProvider = class {
     const client = new import_sdk.default({ apiKey });
     const systemMessage = params.messages.find((m) => m.role === "system");
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
+    const profileParams = params.profileParameters;
     const requestParams = {
       model: params.model,
-      system: systemMessage?.content,
       messages,
       max_tokens: params.maxTokens ?? 1e3,
       stream: true
     };
+    if (systemMessage?.content) {
+      if (profileParams?.enableCacheBreakpoints) {
+        logger.debug("Enabling cache control for streaming system message", {
+          context: "AnthropicProvider.streamMessage",
+          cacheStrategy: profileParams.cacheStrategy || "system_only"
+        });
+        requestParams.system = [{
+          type: "text",
+          text: systemMessage.content,
+          cache_control: { type: "ephemeral" }
+        }];
+      } else {
+        requestParams.system = systemMessage.content;
+      }
+    }
     if (params.temperature !== void 0) {
       requestParams.temperature = params.temperature;
     } else if (params.topP !== void 0) {
@@ -609,6 +652,8 @@ var AnthropicProvider = class {
     let stopReason = null;
     let messageId = null;
     let model = null;
+    let cacheCreationInputTokens;
+    let cacheReadInputTokens;
     for await (const event of stream) {
       if (event.type === "content_block_delta") {
         if (event.delta?.type === "text_delta" && event.delta?.text) {
@@ -624,6 +669,9 @@ var AnthropicProvider = class {
         totalInputTokens = event.message.usage.input_tokens;
         messageId = event.message.id;
         model = event.message.model;
+        const rawUsage = event.message.usage;
+        cacheCreationInputTokens = rawUsage.cache_creation_input_tokens;
+        cacheReadInputTokens = rawUsage.cache_read_input_tokens;
       }
       if (event.type === "message_delta") {
         totalOutputTokens = event.usage.output_tokens;
@@ -632,10 +680,16 @@ var AnthropicProvider = class {
         }
       }
       if (event.type === "message_stop") {
+        const cacheUsage = cacheCreationInputTokens !== void 0 || cacheReadInputTokens !== void 0 ? {
+          cacheCreationInputTokens,
+          cacheReadInputTokens
+        } : void 0;
         logger.debug("Stream completed", {
           context: "AnthropicProvider.streamMessage",
           promptTokens: totalInputTokens,
-          completionTokens: totalOutputTokens
+          completionTokens: totalOutputTokens,
+          cacheCreationInputTokens,
+          cacheReadInputTokens
         });
         const fullMessage = {
           id: messageId,
@@ -658,7 +712,8 @@ var AnthropicProvider = class {
             totalTokens: totalInputTokens + totalOutputTokens
           },
           attachmentResults,
-          rawResponse: fullMessage
+          rawResponse: fullMessage,
+          cacheUsage
         };
       }
     }

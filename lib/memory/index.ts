@@ -25,8 +25,11 @@ export {
 export {
   processMessageForMemory,
   processMessageForMemoryAsync,
+  processInterCharacterMemory,
+  processInterCharacterMemoryAsync,
   batchProcessChatForMemories,
   type MemoryExtractionContext,
+  type InterCharacterMemoryContext,
   type MemoryProcessingResult,
 } from './memory-processor'
 

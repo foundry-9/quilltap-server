@@ -2,13 +2,27 @@
 
 This plan covers the implementation of authentication improvements and multi-user data management for Quilltap v1.8.
 
+## Status Overview (December 2025)
+
+| Component | Status |
+|-----------|--------|
+| Local Auth (email/password) | COMPLETED |
+| TOTP 2FA | COMPLETED |
+| No-Auth Mode | COMPLETED |
+| Per-User Data Storage | PENDING |
+| Site-Wide Plugins | PENDING |
+| Per-User Plugins | PENDING |
+| Google OAuth Plugin | PENDING |
+
+**Note:** For completed Local Auth details, see `features/complete/LOCAL_USER_AUTH.md`.
+
 ## Overview of Changes
 
-1. **No-Auth Option** - Allow running without authentication via environment variables
+1. **No-Auth Option** - Allow running without authentication via environment variables (COMPLETED)
 2. **Per-User Data Storage** - Move user data to `data/users/[login-uuid]/`
 3. **Site-Wide Plugins** - Environment-controlled site-installed plugins in `plugins/`
 4. **Per-User Plugins** - User-installed plugins in `plugins/users/[login-uuid]/`
-5. **Complete Local Auth** - Finish email/password + TOTP/MFA implementation
+5. ~~**Complete Local Auth** - Finish email/password + TOTP/MFA implementation~~ (COMPLETED)
 6. **Google OAuth Plugin** - Convert hardcoded Google OAuth to plugin architecture
 
 ---

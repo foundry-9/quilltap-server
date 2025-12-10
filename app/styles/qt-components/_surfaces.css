@@ -1,0 +1,272 @@
+/**
+ * Quilltap Component System - Surface Components
+ *
+ * Cards, panels, dialogs, popovers - container surfaces
+ *
+ * Note: We define shared base styles using comma-separated selectors
+ * rather than @apply to reference other qt-* classes.
+ */
+
+@layer components {
+  /* ==========================================================================
+     CARDS - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All card variants share these base styles
+   */
+  .qt-card,
+  .qt-card-interactive {
+    @apply transition-all duration-200;
+    padding: var(--qt-card-padding);
+    border-radius: var(--qt-card-radius);
+    background: var(--qt-card-bg);
+    color: var(--qt-card-fg);
+    border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity) * 100%), transparent);
+    box-shadow: var(--qt-card-shadow);
+    transition: var(--qt-card-transition);
+  }
+
+  /* ==========================================================================
+     CARD VARIANTS
+     ========================================================================== */
+
+  /**
+   * Interactive card - has hover state
+   */
+  .qt-card-interactive {
+    @apply cursor-pointer;
+  }
+
+  .qt-card-interactive:hover {
+    @apply -translate-y-0.5;
+    border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+    box-shadow: var(--qt-card-shadow-hover);
+  }
+
+  /**
+   * Entity card - for character, persona, and chat list items
+   * Extends qt-card-interactive with flex column layout
+   */
+  .qt-entity-card {
+    @apply flex h-full flex-col gap-4;
+    @apply cursor-pointer;
+    padding: var(--qt-card-padding);
+    border-radius: var(--qt-entity-card-radius, var(--qt-card-radius));
+    background: var(--qt-entity-card-bg, var(--qt-card-bg));
+    color: var(--qt-card-fg);
+    border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity) * 100%), transparent);
+    box-shadow: var(--qt-card-shadow);
+    transition: var(--qt-card-transition);
+  }
+
+  .qt-entity-card:hover {
+    @apply -translate-y-0.5;
+    border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+    box-shadow: var(--qt-card-shadow-hover);
+  }
+
+  /**
+   * Entity card actions container
+   */
+  .qt-entity-card-actions {
+    @apply flex flex-wrap gap-2 mt-auto;
+  }
+
+  /**
+   * Card sections
+   */
+  .qt-card-header {
+    @apply flex items-center justify-between mb-4;
+  }
+
+  .qt-card-body {
+    @apply flex-1;
+  }
+
+  .qt-card-footer {
+    @apply flex flex-wrap gap-2 mt-4 pt-4;
+    border-top: 1px solid var(--qt-card-border);
+  }
+
+  /**
+   * Card title
+   */
+  .qt-card-title {
+    @apply text-lg font-semibold text-foreground;
+  }
+
+  /**
+   * Card description
+   */
+  .qt-card-description {
+    @apply text-sm text-muted-foreground;
+  }
+
+  /* ==========================================================================
+     PANELS - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All panel variants share these base styles
+   */
+  .qt-panel,
+  .qt-panel-elevated {
+    @apply p-4;
+    border-radius: var(--qt-panel-radius);
+    background: var(--qt-panel-bg);
+    border: 1px solid var(--qt-panel-border);
+  }
+
+  /* ==========================================================================
+     PANEL VARIANTS
+     ========================================================================== */
+
+  /**
+   * Panel with shadow
+   */
+  .qt-panel-elevated {
+    box-shadow: var(--qt-panel-shadow);
+  }
+
+  /* ==========================================================================
+     DIALOGS
+     ========================================================================== */
+
+  /**
+   * Dialog overlay/backdrop
+   */
+  .qt-dialog-overlay {
+    @apply fixed inset-0 z-50;
+    @apply flex items-center justify-center;
+    background: var(--qt-dialog-backdrop);
+  }
+
+  /**
+   * Dialog container
+   * When used with overlay, positions via flex centering
+   * Can also be used standalone with fixed positioning
+   */
+  .qt-dialog {
+    @apply relative;
+    @apply w-full max-w-lg;
+    border-radius: var(--qt-dialog-radius);
+    background: var(--qt-dialog-bg);
+    border: 1px solid var(--qt-dialog-border);
+    box-shadow: var(--qt-dialog-shadow);
+  }
+
+  /**
+   * Dialog header
+   */
+  .qt-dialog-header {
+    @apply px-6 py-4;
+    border-bottom: 1px solid var(--qt-dialog-border);
+  }
+
+  /**
+   * Dialog title
+   */
+  .qt-dialog-title {
+    @apply text-lg font-semibold text-foreground;
+  }
+
+  /**
+   * Dialog description
+   */
+  .qt-dialog-description {
+    @apply text-sm text-muted-foreground mt-1;
+  }
+
+  /**
+   * Dialog body
+   */
+  .qt-dialog-body {
+    @apply px-6 py-4;
+  }
+
+  /**
+   * Dialog footer - action buttons
+   */
+  .qt-dialog-footer {
+    @apply flex justify-end gap-2;
+    @apply px-6 py-4;
+    @apply bg-muted;
+    border-top: 1px solid var(--qt-dialog-border);
+    border-radius: 0 0 var(--qt-dialog-radius) var(--qt-dialog-radius);
+  }
+
+  /* ==========================================================================
+     POPOVERS - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All popover variants share these base styles
+   */
+  .qt-popover,
+  .qt-dropdown {
+    @apply z-50 min-w-32;
+    @apply p-4;
+    border-radius: var(--qt-popover-radius);
+    background: var(--qt-popover-bg);
+    color: var(--qt-popover-fg);
+    border: 1px solid var(--qt-popover-border);
+    box-shadow: var(--qt-popover-shadow);
+  }
+
+  /* ==========================================================================
+     POPOVER VARIANTS
+     ========================================================================== */
+
+  /**
+   * Dropdown menu - popover variant for menus
+   */
+  .qt-dropdown {
+    @apply p-1;
+  }
+
+  /**
+   * Dropdown menu item
+   */
+  .qt-dropdown-item {
+    @apply flex items-center gap-2;
+    @apply px-3 py-2;
+    @apply text-sm;
+    @apply rounded-md;
+    @apply cursor-pointer;
+    @apply transition-colors duration-150;
+  }
+
+  .qt-dropdown-item:hover {
+    @apply bg-muted;
+  }
+
+  .qt-dropdown-item:focus {
+    @apply bg-muted outline-none;
+  }
+
+  /**
+   * Dropdown separator
+   */
+  .qt-dropdown-separator {
+    @apply my-1 -mx-1;
+    @apply h-px;
+    @apply bg-border;
+  }
+
+  /* ==========================================================================
+     TOOLTIPS
+     ========================================================================== */
+
+  /**
+   * Tooltip container
+   */
+  .qt-tooltip {
+    @apply z-50;
+    @apply px-3 py-1.5;
+    @apply text-xs;
+    border-radius: var(--qt-popover-radius);
+    background: var(--color-foreground);
+    color: var(--color-background);
+  }
+}

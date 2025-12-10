@@ -4,7 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { clientLogger } from "@/lib/client-logger";
 import { useDebugOptional } from "@/components/providers/debug-provider";
 import { useDevConsoleOptional } from "@/components/providers/dev-console-provider";
 import { useChatContext } from "@/components/providers/chat-context";
@@ -12,7 +13,9 @@ import { useQuickHide } from "@/components/providers/quick-hide-provider";
 import { TagDropdown } from "@/components/tags/tag-dropdown";
 import { TagBadge } from "@/components/tags/tag-badge";
 import { SearchBar } from "@/components/search";
+import { NavThemeSelector } from "@/components/dashboard/nav-theme-selector";
 import { routeSupportsDebug } from "@/lib/navigation/route-flags";
+import { BrandLogo } from "@/components/ui/brand-logo";
 
 interface DashboardNavProps {
   user: {
@@ -28,93 +31,129 @@ export default function DashboardNav({ user }: DashboardNavProps) {
   const pathname = usePathname();
   const chat = useChatContext();
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
-  const { quickHideTags, hiddenTagIds, toggleTag } = useQuickHide();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const { quickHideTags, hiddenTagIds, toggleTag, clearAllHidden } = useQuickHide();
+  const [quickHideDropdownOpen, setQuickHideDropdownOpen] = useState(false);
+  const quickHideRef = useRef<HTMLDivElement>(null);
+  const hasAnyHidden = hiddenTagIds.size > 0;
+  const singleQuickHideTag = quickHideTags.length === 1 ? quickHideTags[0] : null;
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    if (userMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [userMenuOpen]);
+
+  // Close quick-hide dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        quickHideRef.current &&
+        !quickHideRef.current.contains(event.target as Node)
+      ) {
+        setQuickHideDropdownOpen(false);
+      }
+    };
+
+    if (quickHideDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [quickHideDropdownOpen]);
+
+  // Handle eye icon click:
+  // - If dropdown is open: just close dropdown
+  // - If closed eye (something hidden): clear all hidden tags
+  // - If open eye (nothing hidden): open dropdown
+  const handleEyeClick = useCallback(() => {
+    clientLogger.debug('Quick-hide eye icon clicked', {
+      hasAnyHidden,
+      tagCount: quickHideTags.length,
+      dropdownOpen: quickHideDropdownOpen
+    });
+
+    if (quickHideDropdownOpen) {
+      // Dropdown is open: just close it
+      clientLogger.debug('Closing quick-hide dropdown');
+      setQuickHideDropdownOpen(false);
+    } else if (hasAnyHidden) {
+      // Closed eye: clear all hidden tags
+      clientLogger.debug('Clearing all hidden tags via eye icon');
+      clearAllHidden();
+    } else {
+      // Open eye: open dropdown
+      clientLogger.debug('Opening quick-hide dropdown');
+      setQuickHideDropdownOpen(true);
+    }
+  }, [hasAnyHidden, quickHideDropdownOpen, clearAllHidden, quickHideTags.length]);
 
   // Check if we're in a chat conversation
   const isInChat = pathname?.match(/^\/chats\/[^/]+$/);
   const supportsDebugToggle = routeSupportsDebug(pathname);
 
   return (
-    <nav className="border-b border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Link href="/dashboard" className="text-xl font-bold text-gray-900 dark:text-white">
-              Quilltap
+    <nav className="qt-navbar nav-header">
+      <div className="qt-navbar-container">
+        <div className="qt-navbar-section">
+          <Link href="/dashboard" className="text-foreground">
+            <BrandLogo size="md" />
+          </Link>
+          <div className="hidden space-x-1 md:flex">
+            <Link href="/dashboard" className="qt-navbar-link">
+              Dashboard
             </Link>
-            <div className="hidden space-x-4 md:flex">
-              <Link
-                href="/dashboard"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/characters"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
-              >
-                Characters
-              </Link>
-              <Link
-                href="/personas"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
-              >
-                Personas
-              </Link>
-              <Link
-                href="/chats"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
-              >
-                Chats
-              </Link>
-              <Link
-                href="/settings"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
-              >
-                Settings
-              </Link>
-              <Link
-                href="/tools"
-                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
-              >
-                Tools
-              </Link>
-            </div>
+            <Link href="/characters" className="qt-navbar-link">
+              Characters
+            </Link>
+            <Link href="/personas" className="qt-navbar-link">
+              Personas
+            </Link>
+            <Link href="/chats" className="qt-navbar-link">
+              Chats
+            </Link>
+            <Link href="/settings" className="qt-navbar-link">
+              Settings
+            </Link>
+            <Link href="/tools" className="qt-navbar-link">
+              Tools
+            </Link>
           </div>
+        </div>
 
-          <div className="flex items-center gap-4">
+        <div className="qt-navbar-section">
             {/* Global search */}
             <SearchBar />
+            {/* Theme selector (shown when enabled in settings) */}
+            <NavThemeSelector />
             {/* Chat controls - only show when in a chat */}
             {isInChat && chat.chatId && (
-              <>
-                <TagDropdown
-                  tags={chat.tags}
-                  isOpen={tagDropdownOpen}
-                  onToggle={() => setTagDropdownOpen(!tagDropdownOpen)}
-                  onTagRemove={chat.onTagRemove}
-                  onTagAdd={chat.onTagAdd}
-                  loading={chat.tagsLoading}
-                />
-                <a
-                  href={`/api/chats/${chat.chatId}/export`}
-                  download
-                  className="px-3 py-2 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 dark:bg-slate-600 dark:hover:bg-slate-500 transition-colors"
-                >
-                  Export Chat
-                </a>
-              </>
+              <TagDropdown
+                tags={chat.tags}
+                isOpen={tagDropdownOpen}
+                onToggle={() => setTagDropdownOpen(!tagDropdownOpen)}
+                onTagRemove={chat.onTagRemove}
+                onTagAdd={chat.onTagAdd}
+                loading={chat.tagsLoading}
+              />
             )}
 
             {/* DevConsole toggle button - only shown in development */}
             {devConsole && (
               <button
                 onClick={devConsole.togglePanel}
-                className={`p-2 rounded-md transition-colors ${
-                  devConsole.isOpen
-                    ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
-                    : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-800'
-                }`}
+                className={`qt-navbar-toggle ${devConsole.isOpen ? 'qt-navbar-toggle-active' : ''}`}
                 title={devConsole.isOpen ? 'Close DevConsole (Ctrl+Shift+D)' : 'Open DevConsole (Ctrl+Shift+D)'}
               >
                 <svg
@@ -128,51 +167,149 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 </svg>
               </button>
             )}
-            <div className="hidden text-right md:block">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
-            </div>
-            {quickHideTags.length > 0 && (
-              <div className="flex max-w-xs flex-wrap items-center justify-end gap-2">
-                {quickHideTags.map(tag => {
-                  const isActive = hiddenTagIds.has(tag.id)
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      onClick={() => toggleTag(tag.id)}
-                      aria-pressed={isActive}
-                      className={`rounded-full border px-1 py-0.5 transition-all ${
-                        isActive
-                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-400 dark:border-blue-400 dark:bg-blue-900/40 dark:ring-blue-500'
-                          : 'border-gray-300 bg-white hover:border-blue-400 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-blue-400'
-                      }`}
-                      title={isActive ? 'Show items with this tag' : 'Hide items with this tag'}
-                    >
-                      <TagBadge tag={tag} size="sm" className="pointer-events-none" />
-                    </button>
-                  )
-                })}
+            {/* Quick-hide controls */}
+            {singleQuickHideTag && (
+              // Single tag: show toggle button directly
+              <button
+                type="button"
+                onClick={() => toggleTag(singleQuickHideTag.id)}
+                aria-pressed={hiddenTagIds.has(singleQuickHideTag.id)}
+                className={`qt-button qt-navbar-chip-button ${hiddenTagIds.has(singleQuickHideTag.id) ? 'qt-navbar-chip-button-active' : ''}`}
+                title={hiddenTagIds.has(singleQuickHideTag.id) ? 'Show items with this tag' : 'Hide items with this tag'}
+              >
+                <TagBadge tag={singleQuickHideTag} size="sm" className="pointer-events-none" />
+              </button>
+            )}
+            {quickHideTags.length > 1 && (
+              // Multiple tags: show eye icon with dropdown
+              <div className="relative" ref={quickHideRef}>
+                <button
+                  type="button"
+                  onClick={handleEyeClick}
+                  className={`qt-navbar-toggle ${hasAnyHidden ? 'qt-navbar-toggle-active' : ''}`}
+                  title={hasAnyHidden ? 'Click to show all hidden items' : 'Manage hidden tags'}
+                  aria-expanded={quickHideDropdownOpen}
+                >
+                  {hasAnyHidden ? (
+                    // Closed eye icon (something is hidden)
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                      <path d="M1 1l22 22" />
+                      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                    </svg>
+                  ) : (
+                    // Open eye icon (nothing hidden)
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+
+                {/* Dropdown menu */}
+                {quickHideDropdownOpen && (
+                  <div className="qt-navbar-dropdown w-56">
+                    <div className="qt-navbar-dropdown-section space-y-1">
+                      <div className="qt-navbar-dropdown-label">
+                        Quick Hide Tags
+                      </div>
+                      {quickHideTags.map(tag => {
+                        const isHidden = hiddenTagIds.has(tag.id)
+                        return (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            onClick={() => {
+                              clientLogger.debug('Toggling tag from dropdown', { tagId: tag.id, tagName: tag.name, wasHidden: isHidden });
+                              toggleTag(tag.id);
+                            }}
+                            className={`qt-navbar-dropdown-item ${isHidden ? 'qt-navbar-dropdown-item-active' : ''}`}
+                          >
+                            <TagBadge tag={tag} size="sm" />
+                            {isHidden ? (
+                              <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                                <path d="M1 1l22 22" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-            {user.image && (
-              <Image
-                src={user.image}
-                alt={user.name || "User"}
-                width={32}
-                height={32}
-                className="h-8 w-8 rounded-full"
-              />
-            )}
-            <button
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-            >
-              Sign Out
-            </button>
+
+            {/* User Menu Dropdown */}
+            <div className="relative" ref={userMenuRef}>
+              <button
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="qt-button qt-navbar-button"
+                aria-label="User menu"
+                aria-expanded={userMenuOpen}
+              >
+                {user.image ? (
+                  <Image
+                    src={user.image}
+                    alt={user.name || "User"}
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 rounded-full"
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-foreground">
+                    {user.name || user.email || "User"}
+                  </span>
+                )}
+                <svg
+                  className={`w-4 h-4 text-muted-foreground transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+
+              {/* Dropdown Panel */}
+              {userMenuOpen && (
+                <div className="qt-navbar-dropdown w-56">
+                  <div className="qt-navbar-dropdown-section space-y-3">
+                    {/* User Info */}
+                    <div className="qt-navbar-dropdown-header">
+                      <p className="text-sm font-medium text-foreground">{user.name}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="qt-navbar-dropdown-divider" />
+
+                    {/* Sign Out Button */}
+                    <button
+                      onClick={() => signOut({ callbackUrl: "/" })}
+                      className="qt-button qt-button-destructive w-full justify-center"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
     </nav>
   );
 }

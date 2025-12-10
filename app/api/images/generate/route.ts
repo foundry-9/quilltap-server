@@ -11,10 +11,12 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { logger } from '@/lib/logger'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
 import { createHash } from 'crypto'
 import { z } from 'zod'
+import { uploadFile as uploadS3File } from '@/lib/s3/operations'
+import { buildS3Key } from '@/lib/s3/client'
+import { getInheritedTags } from '@/lib/files/tag-inheritance'
+import type { FileCategory, FileSource } from '@/lib/schemas/types'
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1).max(4000),
@@ -117,7 +119,7 @@ export async function POST(request: NextRequest) {
       decryptedKey
     )
 
-    // Save generated images and create database records
+    // Save generated images to S3 and create database records
     const savedImages = await Promise.all(
       imageGenResponse.images.map(async (generatedImage, index) => {
         // Decode base64 to buffer
@@ -127,42 +129,65 @@ export async function POST(request: NextRequest) {
         const mimeTypeParts = generatedImage.mimeType.split('/')
         const ext = mimeTypeParts[1] === 'jpeg' ? 'jpg' : mimeTypeParts[1] || 'png'
 
-        // Generate unique filename
-        const hash = createHash('sha256').update(imageBuffer).digest('hex')
-        const shortHash = hash.substring(0, 8)
-        const filename = `${session.user.id}_${Date.now()}_${index}_${shortHash}.${ext}`
+        // Generate unique filename and hash
+        const sha256 = createHash('sha256').update(imageBuffer).digest('hex')
+        const shortHash = sha256.substring(0, 8)
+        const filename = `generated_${Date.now()}_${index}_${shortHash}.${ext}`
 
-        // Create user-specific generated directory
-        const userGeneratedDir = join(process.cwd(), 'public', 'uploads', 'generated', session.user.id)
-        await mkdir(userGeneratedDir, { recursive: true })
+        // Generate a new file ID
+        const fileId = crypto.randomUUID()
+        const category: FileCategory = 'IMAGE'
+        const source: FileSource = 'GENERATED'
 
-        // Save file
-        const filepath = join('uploads', 'generated', session.user.id, filename)
-        const fullPath = join(process.cwd(), 'public', filepath)
+        // Build linkedTo from tags (entity IDs)
+        const linkedTo = tags?.map(t => t.tagId) || []
 
-        await writeFile(fullPath, imageBuffer)
+        // Upload to S3
+        const s3Key = buildS3Key(session.user.id, fileId, filename, category)
+        await uploadS3File(s3Key, imageBuffer, generatedImage.mimeType, {
+          userId: session.user.id,
+          fileId,
+          category,
+          filename,
+          sha256,
+        })
+        logger.debug('Uploaded generated image to S3', { fileId, s3Key, size: imageBuffer.length })
+
+        // Inherit tags from linked entities
+        const inheritedTags = await getInheritedTags(linkedTo, session.user.id)
+
+        logger.debug('Inherited tags for generated image', {
+          context: 'images-generate',
+          fileIndex: index,
+          linkedTo,
+          inheritedTagCount: inheritedTags.length,
+        })
 
         // Create database record using files repository (FileEntry format)
         const file = await repos.files.create({
-          sha256: hash,
+          sha256,
           userId: session.user.id,
           originalFilename: filename,
           mimeType: generatedImage.mimeType,
           size: imageBuffer.length,
-          source: 'GENERATED',
-          category: 'IMAGE',
-          linkedTo: [],
+          source,
+          category,
+          linkedTo,
           generationPrompt: prompt,
           generationModel: profile.modelName,
           generationRevisedPrompt: generatedImage.revisedPrompt || null,
-          tags: tags?.map(t => t.tagId) || [],
+          tags: inheritedTags,
+          s3Key,
         })
+
+        // Use API route for S3-backed files
+        const filepath = `/api/files/${file.id}`
 
         return {
           id: file.id,
           filename: file.originalFilename,
           filepath,
-          url: `/${filepath}`,
+          url: filepath,
           mimeType: file.mimeType,
           size: file.size,
           revisedPrompt: generatedImage.revisedPrompt,

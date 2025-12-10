@@ -74,21 +74,21 @@ export function SpeakerMapper({
     return (
       <div
         key={speaker.name}
-        className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-gray-50 dark:bg-slate-900"
+        className="border border-border rounded-lg p-4 bg-muted"
       >
         {/* Speaker info header */}
         <div className="flex items-center gap-2 mb-3">
           <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
             isUser
-              ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-              : 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-purple-100 text-purple-800'
           }`}>
             {isUser ? 'User' : 'AI'}
           </span>
-          <span className="font-medium text-gray-900 dark:text-white">
+          <span className="font-medium text-foreground">
             &ldquo;{speaker.name}&rdquo;
           </span>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
+          <span className="text-sm text-muted-foreground">
             ({speaker.messageCount} message{speaker.messageCount !== 1 ? 's' : ''})
           </span>
         </div>
@@ -111,7 +111,7 @@ export function SpeakerMapper({
                   className="mt-1"
                 />
                 <div className="flex-1">
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                  <span className="text-sm text-foreground">
                     Map to existing persona
                   </span>
                   {mapping.mappingType === 'existing_persona' && (
@@ -124,7 +124,7 @@ export function SpeakerMapper({
                           entityName: persona?.name,
                         })
                       }}
-                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-2 py-1 border"
+                      className="mt-1 block w-full rounded-md border border-input bg-background text-foreground shadow-sm focus:border-ring focus:ring-ring text-sm px-2 py-1"
                     >
                       <option value="">Select a persona</option>
                       {personas.map(p => (
@@ -149,7 +149,7 @@ export function SpeakerMapper({
                   })}
                   className="mt-1"
                 />
-                <span className="text-sm text-gray-700 dark:text-gray-300">
+                <span className="text-sm text-foreground">
                   Create new persona named &ldquo;{speaker.name}&rdquo;
                 </span>
               </label>
@@ -166,7 +166,7 @@ export function SpeakerMapper({
                   })}
                   className="mt-1"
                 />
-                <span className="text-sm text-gray-500 dark:text-gray-400">
+                <span className="text-sm text-muted-foreground">
                   Skip (messages will be imported without persona)
                 </span>
               </label>
@@ -187,7 +187,7 @@ export function SpeakerMapper({
                   className="mt-1"
                 />
                 <div className="flex-1">
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                  <span className="text-sm text-foreground">
                     Map to existing character
                   </span>
                   {mapping.mappingType === 'existing_character' && (
@@ -201,7 +201,7 @@ export function SpeakerMapper({
                             entityName: character?.name,
                           })
                         }}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-2 py-1 border"
+                        className="mt-1 block w-full rounded-md border border-input bg-background text-foreground shadow-sm focus:border-ring focus:ring-ring text-sm px-2 py-1"
                       >
                         <option value="">Select a character</option>
                         {characters.map(c => (
@@ -211,7 +211,7 @@ export function SpeakerMapper({
                         ))}
                       </select>
                       <div className="mt-2">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                        <span className="text-xs text-muted-foreground">
                           Connection Profile (optional override):
                         </span>
                         <select
@@ -219,7 +219,7 @@ export function SpeakerMapper({
                           onChange={(e) => onMappingChange(index, {
                             connectionProfileId: e.target.value || undefined,
                           })}
-                          className="mt-1 block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-2 py-1 border"
+                          className="mt-1 block w-full rounded-md border border-input bg-background text-foreground shadow-sm focus:border-ring focus:ring-ring text-sm px-2 py-1"
                         >
                           <option value="">Use default profile</option>
                           {profiles.map(p => (
@@ -245,12 +245,12 @@ export function SpeakerMapper({
                   className="mt-1"
                 />
                 <div className="flex-1">
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                  <span className="text-sm text-foreground">
                     Create new character named &ldquo;{speaker.name}&rdquo;
                   </span>
                   {mapping.mappingType === 'create_character' && (
                     <div className="mt-2">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                      <span className="text-xs text-muted-foreground">
                         Connection Profile:
                       </span>
                       <select
@@ -258,7 +258,7 @@ export function SpeakerMapper({
                         onChange={(e) => onMappingChange(index, {
                           connectionProfileId: e.target.value || undefined,
                         })}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-2 py-1 border"
+                        className="mt-1 block w-full rounded-md border border-input bg-background text-foreground shadow-sm focus:border-ring focus:ring-ring text-sm px-2 py-1"
                       >
                         <option value="">Use default profile</option>
                         {profiles.map(p => (
@@ -283,7 +283,7 @@ export function SpeakerMapper({
                   })}
                   className="mt-1"
                 />
-                <span className="text-sm text-gray-500 dark:text-gray-400">
+                <span className="text-sm text-muted-foreground">
                   Skip (messages from this speaker will be discarded)
                 </span>
               </label>
@@ -297,17 +297,17 @@ export function SpeakerMapper({
   return (
     <div className="space-y-6">
       {/* Default connection profile */}
-      <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+      <div className="bg-accent rounded-lg p-4">
+        <label className="block text-sm font-medium text-foreground mb-2">
           Default Connection Profile
         </label>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+        <p className="text-xs text-muted-foreground mb-2">
           This profile will be used for any characters that don&apos;t have a specific profile assigned.
         </p>
         <select
           value={defaultProfileId}
           onChange={(e) => onDefaultProfileChange(e.target.value)}
-          className="block w-full rounded-md border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2 border"
+          className="block w-full rounded-md border border-input bg-background text-foreground shadow-sm focus:border-ring focus:ring-ring text-sm px-3 py-2"
         >
           <option value="">Select a profile</option>
           {profiles.map(p => (
@@ -319,7 +319,7 @@ export function SpeakerMapper({
       {/* User/Persona speakers */}
       {userSpeakers.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+          <h4 className="text-sm font-medium text-foreground mb-3">
             User Speakers (map to Personas)
           </h4>
           <div className="space-y-3">
@@ -333,7 +333,7 @@ export function SpeakerMapper({
       {/* AI/Character speakers */}
       {aiSpeakers.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+          <h4 className="text-sm font-medium text-foreground mb-3">
             AI Speakers (map to Characters)
           </h4>
           <div className="space-y-3">
@@ -345,7 +345,7 @@ export function SpeakerMapper({
       )}
 
       {speakers.length === 0 && (
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+        <div className="text-center py-8 text-muted-foreground">
           No speakers found in the file
         </div>
       )}

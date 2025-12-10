@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getServerSession } from "@/lib/auth/session";
+import { BrandLogo } from "@/components/ui/brand-logo";
 
 export default async function Home() {
   const session = await getServerSession();
@@ -10,16 +11,20 @@ export default async function Home() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-24">
+    <main className="qt-auth-page p-24">
       <div className="text-center">
-        <h1 className="text-5xl font-bold text-white mb-4">Welcome to Quilltap</h1>
-        <p className="text-xl text-slate-300 mb-8">
+        <h1 className="text-white mb-4 flex flex-col items-center">
+          <span className="sr-only">Welcome to Quilltap</span>
+          <span className="text-2xl font-medium mb-2 qt-font-brand">Welcome to</span>
+          <BrandLogo size="xl" />
+        </h1>
+        <p className="text-xl mb-8 qt-font-brand">
           AI-powered roleplay chat platform with multi-provider support
         </p>
         <div className="flex gap-4 justify-center">
           <Link
             href="/auth/signin"
-            className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-700 transition"
+            className="qt-button qt-button-primary qt-button-lg shadow-lg"
           >
             Get Started
           </Link>
@@ -27,7 +32,7 @@ export default async function Home() {
             href="https://github.com/foundry-9/quilltap"
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-lg bg-slate-700 px-6 py-3 text-sm font-semibold text-white shadow-lg hover:bg-slate-600 transition"
+            className="qt-button qt-button-secondary qt-button-lg shadow-lg"
           >
             Learn More
           </a>

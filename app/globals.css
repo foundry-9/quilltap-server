@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Configure dark mode to use class-based switching instead of prefers-color-scheme */
+@variant dark (&:where(.dark, .dark *));
+
 @font-face {
   font-family: "Inter";
   src: url("/fonts/Inter-Regular.woff2") format("woff2");
@@ -24,56 +27,166 @@
   font-display: swap;
 }
 
-@theme {
-  --color-border: hsl(214.3 31.8% 91.4%);
-  --color-input: hsl(214.3 31.8% 91.4%);
-  --color-ring: hsl(222.2 84% 4.9%);
-  --color-background: hsl(0 0% 100%);
-  --color-foreground: hsl(222.2 84% 4.9%);
-  --color-primary: hsl(222.2 47.4% 11.2%);
-  --color-primary-foreground: hsl(210 40% 98%);
-  --color-secondary: hsl(210 40% 96.1%);
-  --color-secondary-foreground: hsl(222.2 47.4% 11.2%);
-  --color-destructive: hsl(0 84.2% 60.2%);
-  --color-destructive-foreground: hsl(210 40% 98%);
-  --color-muted: hsl(210 40% 96.1%);
-  --color-muted-foreground: hsl(215.4 16.3% 46.9%);
-  --color-accent: hsl(210 40% 96.1%);
-  --color-accent-foreground: hsl(222.2 47.4% 11.2%);
-  --color-popover: hsl(0 0% 100%);
-  --color-popover-foreground: hsl(222.2 84% 4.9%);
-  --color-card: hsl(0 0% 100%);
-  --color-card-foreground: hsl(222.2 84% 4.9%);
-
-  --radius-lg: 0.5rem;
-  --radius-md: calc(0.5rem - 2px);
-  --radius-sm: calc(0.5rem - 4px);
-
-  --font-georgia: Georgia, serif;
+@font-face {
+  font-family: "EB Garamond";
+  src: url("/fonts/EBGaramond-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 
+@font-face {
+  font-family: "EB Garamond";
+  src: url("/fonts/EBGaramond-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "EB Garamond";
+  src: url("/fonts/EBGaramond-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
+ * Quilltap Theming System (Tailwind CSS v4)
+ *
+ * This uses @theme inline to enable runtime theme switching.
+ * Base values are defined in :root, and @theme inline references them.
+ * Theme plugins can override these values via injected CSS.
+ */
+
+/* Base theme variables (light mode defaults) */
+:root {
+  --theme-background: hsl(0 0% 100%);
+  --theme-foreground: hsl(222.2 84% 4.9%);
+  --theme-card: hsl(0 0% 100%);
+  --theme-card-foreground: hsl(222.2 84% 4.9%);
+  --theme-popover: hsl(0 0% 100%);
+  --theme-popover-foreground: hsl(222.2 84% 4.9%);
+  --theme-primary: hsl(222.2 47.4% 11.2%);
+  --theme-primary-foreground: hsl(210 40% 98%);
+  --theme-secondary: hsl(210 40% 96.1%);
+  --theme-secondary-foreground: hsl(222.2 47.4% 11.2%);
+  --theme-muted: hsl(210 40% 96.1%);
+  --theme-muted-foreground: hsl(215.4 16.3% 46.9%);
+  --theme-accent: hsl(210 40% 96.1%);
+  --theme-accent-foreground: hsl(222.2 47.4% 11.2%);
+  --theme-destructive: hsl(0 84.2% 60.2%);
+  --theme-destructive-foreground: hsl(210 40% 98%);
+  --theme-border: hsl(214.3 31.8% 91.4%);
+  --theme-input: hsl(214.3 31.8% 91.4%);
+  --theme-ring: hsl(222.2 84% 4.9%);
+
+  /* Extended semantic colors */
+  --theme-success: hsl(142 76% 36%);
+  --theme-success-foreground: hsl(0 0% 100%);
+  --theme-warning: hsl(38 92% 50%);
+  --theme-warning-foreground: hsl(0 0% 100%);
+  --theme-info: hsl(221 83% 53%);
+  --theme-info-foreground: hsl(0 0% 100%);
+
+  /* Chat-specific colors - user message bubbles */
+  --theme-chat-user: hsl(221 83% 53%);
+  --theme-chat-user-foreground: hsl(0 0% 100%);
+
+  --theme-radius-lg: 0.5rem;
+  --theme-radius-md: calc(0.5rem - 2px);
+  --theme-radius-sm: calc(0.5rem - 4px);
+
+  /* Typography - default font stacks */
+  --theme-font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --theme-font-serif: "EB Garamond", Georgia, Cambria, "Times New Roman", Times, serif;
+  --theme-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --theme-font-brand: "EB Garamond", Georgia, "Times New Roman", serif;
+  --theme-font-chat-user: var(--theme-font-brand);
+}
+
+/* Dark mode base values */
 .dark {
-  @theme {
-    --color-background: hsl(222.2 84% 4.9%);
-    --color-foreground: hsl(210 40% 98%);
-    --color-card: hsl(222.2 84% 4.9%);
-    --color-card-foreground: hsl(210 40% 98%);
-    --color-popover: hsl(222.2 84% 4.9%);
-    --color-popover-foreground: hsl(210 40% 98%);
-    --color-primary: hsl(210 40% 98%);
-    --color-primary-foreground: hsl(222.2 47.4% 11.2%);
-    --color-secondary: hsl(217.2 32.6% 17.5%);
-    --color-secondary-foreground: hsl(210 40% 98%);
-    --color-muted: hsl(217.2 32.6% 17.5%);
-    --color-muted-foreground: hsl(215 20.2% 65.1%);
-    --color-accent: hsl(217.2 32.6% 17.5%);
-    --color-accent-foreground: hsl(210 40% 98%);
-    --color-destructive: hsl(0 62.8% 30.6%);
-    --color-destructive-foreground: hsl(210 40% 98%);
-    --color-border: hsl(217.2 32.6% 17.5%);
-    --color-input: hsl(217.2 32.6% 17.5%);
-    --color-ring: hsl(212.7 26.8% 83.9%);
-  }
+  --theme-background: hsl(222.2 84% 4.9%);
+  --theme-foreground: hsl(210 40% 98%);
+  --theme-card: hsl(222.2 84% 4.9%);
+  --theme-card-foreground: hsl(210 40% 98%);
+  --theme-popover: hsl(222.2 84% 4.9%);
+  --theme-popover-foreground: hsl(210 40% 98%);
+  --theme-primary: hsl(210 40% 98%);
+  --theme-primary-foreground: hsl(222.2 47.4% 11.2%);
+  --theme-secondary: hsl(217.2 32.6% 17.5%);
+  --theme-secondary-foreground: hsl(210 40% 98%);
+  --theme-muted: hsl(217.2 32.6% 17.5%);
+  --theme-muted-foreground: hsl(215 20.2% 65.1%);
+  --theme-accent: hsl(217.2 32.6% 17.5%);
+  --theme-accent-foreground: hsl(210 40% 98%);
+  --theme-destructive: hsl(0 62.8% 30.6%);
+  --theme-destructive-foreground: hsl(210 40% 98%);
+  --theme-border: hsl(217.2 32.6% 17.5%);
+  --theme-input: hsl(217.2 32.6% 17.5%);
+  --theme-ring: hsl(212.7 26.8% 83.9%);
+
+  /* Extended semantic colors - dark mode */
+  --theme-success: hsl(142 71% 45%);
+  --theme-success-foreground: hsl(0 0% 100%);
+  --theme-warning: hsl(38 92% 50%);
+  --theme-warning-foreground: hsl(0 0% 0%);
+  --theme-info: hsl(217 91% 60%);
+  --theme-info-foreground: hsl(0 0% 100%);
+
+  /* Chat-specific colors - user message bubbles */
+  --theme-chat-user: hsl(217 91% 60%);
+  --theme-chat-user-foreground: hsl(0 0% 100%);
+}
+
+/*
+ * @theme inline: Makes Tailwind reference the CSS variables at runtime
+ * This enables dynamic theme switching without rebuilding CSS
+ */
+@theme inline {
+  --color-background: var(--theme-background);
+  --color-foreground: var(--theme-foreground);
+  --color-card: var(--theme-card);
+  --color-card-foreground: var(--theme-card-foreground);
+  --color-popover: var(--theme-popover);
+  --color-popover-foreground: var(--theme-popover-foreground);
+  --color-primary: var(--theme-primary);
+  --color-primary-foreground: var(--theme-primary-foreground);
+  --color-secondary: var(--theme-secondary);
+  --color-secondary-foreground: var(--theme-secondary-foreground);
+  --color-muted: var(--theme-muted);
+  --color-muted-foreground: var(--theme-muted-foreground);
+  --color-accent: var(--theme-accent);
+  --color-accent-foreground: var(--theme-accent-foreground);
+  --color-destructive: var(--theme-destructive);
+  --color-destructive-foreground: var(--theme-destructive-foreground);
+  --color-border: var(--theme-border);
+  --color-input: var(--theme-input);
+  --color-ring: var(--theme-ring);
+
+  /* Extended semantic colors */
+  --color-success: var(--theme-success);
+  --color-success-foreground: var(--theme-success-foreground);
+  --color-warning: var(--theme-warning);
+  --color-warning-foreground: var(--theme-warning-foreground);
+  --color-info: var(--theme-info);
+  --color-info-foreground: var(--theme-info-foreground);
+
+  /* Chat-specific colors */
+  --color-chat-user: var(--theme-chat-user);
+  --color-chat-user-foreground: var(--theme-chat-user-foreground);
+
+  --radius-lg: var(--theme-radius-lg);
+  --radius-md: var(--theme-radius-md);
+  --radius-sm: var(--theme-radius-sm);
+
+  /* Typography */
+  --font-sans: var(--theme-font-sans);
+  --font-serif: var(--theme-font-serif);
+  --font-mono: var(--theme-font-mono);
+  --font-brand: var(--theme-font-brand);
+  --font-chat-user: var(--theme-font-chat-user);
 }
 
 @layer base {
@@ -81,12 +194,15 @@
     border-color: var(--color-border);
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
 }
 
-@layer utilities {
-  .font-georgia {
-    font-family: var(--font-georgia);
-  }
-}
+/*
+ * Quilltap Component System (qt-* classes)
+ *
+ * Semantic component classes for consistent, themeable UI.
+ * Theme plugins can override via [data-theme="name"] selectors.
+ */
+@import "./styles/qt-components/_index.css";
+

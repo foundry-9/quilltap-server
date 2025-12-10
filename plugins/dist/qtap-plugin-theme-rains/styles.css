@@ -1,0 +1,998 @@
+/**
+ * Rains Theme - Claude-inspired styling
+ *
+ * This file mirrors the requested layout rules and custom properties
+ * (fonts remapped to the existing Quilltap stacks) so the UI matches
+ * the provided reference while still fitting within the plugin system.
+ */
+
+/* ============================================================================
+   ROOT BASELINE (matches shared snippet)
+   ============================================================================ */
+[data-theme="rains"] {
+  -webkit-locale: "en-US";
+  border: 0 solid;
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x: ;
+  --tw-pan-y: ;
+  --tw-pinch-zoom: ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position: ;
+  --tw-gradient-via-position: ;
+  --tw-gradient-to-position: ;
+  --tw-ordinal: ;
+  --tw-slashed-zero: ;
+  --tw-numeric-figure: ;
+  --tw-numeric-spacing: ;
+  --tw-numeric-fraction: ;
+  --tw-ring-inset: ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: hsl(var(--accent-secondary-100) / 1);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur: ;
+  --tw-brightness: ;
+  --tw-contrast: ;
+  --tw-grayscale: ;
+  --tw-hue-rotate: ;
+  --tw-invert: ;
+  --tw-saturate: ;
+  --tw-sepia: ;
+  --tw-drop-shadow: ;
+  --tw-backdrop-blur: ;
+  --tw-backdrop-brightness: ;
+  --tw-backdrop-contrast: ;
+  --tw-backdrop-grayscale: ;
+  --tw-backdrop-hue-rotate: ;
+  --tw-backdrop-invert: ;
+  --tw-backdrop-opacity: ;
+  --tw-backdrop-saturate: ;
+  --tw-backdrop-sepia: ;
+  --tw-contain-size: ;
+  --tw-contain-layout: ;
+  --tw-contain-paint: ;
+  --tw-contain-style: ;
+  border-color: hsl(var(--border-100));
+  box-sizing: border-box;
+  outline-color: hsl(var(--accent-secondary-100));
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border-300) / 0.35) transparent;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  tab-size: 4;
+  font-family: var(--font-ui);
+  font-feature-settings: normal;
+  font-variation-settings: normal;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0;
+  margin: 0;
+  --PhoneInput-color--focus: #03b2cb;
+  --PhoneInputInternationalIconPhone-opacity: 0.8;
+  --PhoneInputInternationalIconGlobe-opacity: 0.65;
+  --PhoneInputCountrySelect-marginRight: 0.35em;
+  --PhoneInputCountrySelectArrow-width: 0.3em;
+  --PhoneInputCountrySelectArrow-marginLeft: var(--PhoneInputCountrySelect-marginRight);
+  --PhoneInputCountrySelectArrow-borderWidth: 1px;
+  --PhoneInputCountrySelectArrow-opacity: 0.45;
+  --PhoneInputCountrySelectArrow-color: currentColor;
+  --PhoneInputCountrySelectArrow-color--focus: var(--PhoneInput-color--focus);
+  --PhoneInputCountrySelectArrow-transform: rotate(45deg);
+  --PhoneInputCountryFlag-aspectRatio: 1.5;
+  --PhoneInputCountryFlag-height: 1em;
+  --PhoneInputCountryFlag-borderWidth: 1px;
+  --PhoneInputCountryFlag-borderColor: rgba(0, 0, 0, 0.5);
+  --PhoneInputCountryFlag-borderColor--focus: var(--PhoneInput-color--focus);
+  --PhoneInputCountryFlag-backgroundColor--loading: rgba(0, 0, 0, 0.1);
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  height: 100dvh;
+  --dropdown-max-height: 480px;
+  color-scheme: dark;
+
+  --accent-brand: 15 63.1% 59.6%;
+  --accent-main-000: 15 54.2% 51.2%;
+  --accent-main-100: 15 63.1% 59.6%;
+  --accent-main-200: 15 63.1% 59.6%;
+  --accent-main-900: 0 0% 0%;
+  --accent-pro-000: 251 84.6% 74.5%;
+  --accent-pro-100: 251 40.2% 54.1%;
+  --accent-pro-200: 251 40% 45.1%;
+  --accent-pro-900: 250 25.3% 19.4%;
+  --accent-secondary-000: 210 65.5% 67.1%;
+  --accent-secondary-100: 210 70.9% 51.6%;
+  --accent-secondary-200: 210 70.9% 51.6%;
+  --accent-secondary-900: 210 55.9% 24.6%;
+  --bg-000: 30 8% 18.4%;
+  --bg-100: 30 10% 14.5%;
+  --bg-200: 28 12% 11.8%;
+  --bg-300: 25 14% 7.6%;
+  --bg-400: 20 10% 3%;
+  --bg-500: 0 0% 0%;
+  --border-100: 35 20% 84.5%;
+  --border-200: 35 20% 84.5%;
+  --border-300: 35 18% 70%;
+  --border-400: 35 15% 60%;
+  --danger-000: 0 98.4% 75.1%;
+  --danger-100: 0 67% 59.6%;
+  --danger-200: 0 67% 59.6%;
+  --danger-900: 0 46.5% 27.8%;
+  --oncolor-100: 0 0% 100%;
+  --oncolor-200: 40 12% 97.1%;
+  --oncolor-300: 40 12% 97.1%;
+  --pictogram-100: 32 10% 29.2%;
+  --pictogram-200: 30 9% 23.3%;
+  --pictogram-300: 30 8% 18.4%;
+  --pictogram-400: 30 10% 14.5%;
+  --success-000: 97 59.1% 46.1%;
+  --success-100: 97 75% 32.9%;
+  --success-200: 97 75% 32.9%;
+  --success-900: 127 100% 13.9%;
+  --text-000: 48 33.3% 97.1%;
+  --text-100: 48 33.3% 97.1%;
+  --text-200: 50 9% 73.7%;
+  --text-300: 50 9% 73.7%;
+  --text-400: 48 4.8% 59.2%;
+  --text-500: 48 4.8% 59.2%;
+  --warning-000: 40 71% 50%;
+  --warning-100: 39 93.4% 35.9%;
+  --warning-200: 39 93.4% 35.9%;
+  --warning-900: 45 94.8% 15.1%;
+
+  --font-anthropic-sans: var(--theme-font-sans, Inter, system-ui, sans-serif);
+  --font-anthropic-serif: var(--theme-font-serif, Georgia, serif);
+  --font-open-dyslexic: var(--theme-font-serif, Georgia, serif);
+  --font-jetbrains: var(--theme-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  --font-ui: var(--font-anthropic-sans);
+  --font-ui-serif: var(--font-anthropic-serif);
+  --font-sans-serif: var(--font-ui);
+  --font-serif: var(--font-ui-serif);
+  --font-system: system-ui, sans-serif;
+  --font-dyslexia: var(--font-open-dyslexic), "Comic Sans MS", ui-serif, Georgia, serif;
+  --font-mono: var(--font-jetbrains);
+  --font-user-message: var(--font-sans-serif);
+  --font-claude-response: var(--font-serif);
+  --font-chat-user: var(--font-sans-serif);
+  --theme-font-chat-user: var(--font-sans-serif);
+
+  --always-white: 0 0% 100%;
+  --always-black: 0 0% 0%;
+  background-color: hsl(var(--bg-100));
+  color: hsl(var(--text-000));
+
+  --surface-base: hsl(var(--bg-100));
+  --surface-raised: hsl(var(--bg-000));
+  --surface-muted: hsl(var(--bg-200));
+  --surface-deep: hsl(var(--bg-300));
+  --stroke-soft: hsl(var(--border-300) / 0.35);
+  --stroke-strong: hsl(var(--border-100) / 0.65);
+  --card-shadow: 0 45px 120px -70px hsl(var(--always-black) / 0.9);
+  --chat-shadow: 0 24px 60px -40px hsl(var(--always-black) / 0.85);
+
+  --font-sans: var(--theme-font-sans);
+  --font-serif: var(--theme-font-serif);
+  --font-mono: var(--theme-font-mono);
+  --color-black: #000;
+  --color-white: #fff;
+  --spacing: 0.25rem;
+  --container-xs: 20rem;
+  --container-md: 28rem;
+  --container-lg: 32rem;
+  --container-2xl: 42rem;
+  --container-3xl: 48rem;
+  --container-4xl: 56rem;
+  --container-5xl: 64rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: calc(1 / 0.75);
+  --text-sm: 0.875rem;
+  --text-sm--line-height: calc(1.25 / 0.875);
+  --text-base: 1rem;
+  --text-base--line-height: calc(1.5 / 1);
+  --text-lg: 1.125rem;
+  --text-lg--line-height: calc(1.75 / 1.125);
+  --text-xl: 1.25rem;
+  --text-xl--line-height: calc(1.75 / 1.25);
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: calc(2 / 1.5);
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: calc(2.25 / 1.875);
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: calc(2.5 / 2.25);
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 1;
+  --text-6xl: 3.75rem;
+  --text-6xl--line-height: 1;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-black: 900;
+  --tracking-wide: 0.025em;
+  --tracking-wider: 0.05em;
+  --leading-tight: 1.25;
+  --radius-lg: var(--theme-radius-lg);
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --shadow-md: 0 4px 6px -1px #0000001a, 0 2px 4px -2px #0000001a;
+  --drop-shadow-lg: 0 4px 4px #00000026;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --animate-spin: spin 1s linear infinite;
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --blur-sm: 8px;
+  --default-transition-duration: 0.15s;
+  --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  --default-font-family: var(--theme-font-sans);
+  --default-mono-font-family: var(--theme-font-mono);
+  --color-background: var(--theme-background);
+  --color-foreground: var(--theme-foreground);
+  --color-border: var(--theme-border);
+  --color-red-50: lab(96.5005% 4.18508 1.52328);
+  --color-red-100: lab(92.243% 10.2865 3.83865);
+  --color-red-200: lab(86.017% 19.8815 7.75869);
+  --color-red-300: lab(76.5514% 36.422 15.5335);
+  --color-red-400: lab(63.7053% 60.745 31.3109);
+  --color-red-500: lab(55.4814% 75.0732 48.8528);
+  --color-red-600: lab(48.4493% 77.4328 61.5452);
+  --color-red-700: lab(40.4273% 67.2623 53.7441);
+  --color-red-800: lab(33.7174% 55.8993 41.0293);
+  --color-red-900: lab(28.5139% 44.5539 29.0463);
+  --color-orange-100: lab(94.7127% 3.58394 14.3151);
+  --color-orange-200: lab(88.4871% 9.94918 28.8378);
+  --color-orange-400: lab(70.0429% 42.5156 75.8207);
+  --color-orange-600: lab(57.1026% 64.2584 89.8886);
+  --color-orange-700: lab(46.4615% 57.7275 70.8507);
+  --color-orange-800: lab(37.1566% 46.6433 50.5562);
+  --color-orange-900: lab(30.2951% 36.0434 37.671);
+  --color-amber-50: lab(98.6252% -0.635922 8.42309);
+  --color-amber-100: lab(95.916% -1.21653 23.111);
+  --color-amber-200: lab(91.7203% -0.505269 49.9084);
+  --color-amber-300: lab(86.4156% 6.13147 78.3961);
+  --color-amber-400: lab(80.1641% 16.6016 99.2089);
+  --color-amber-500: lab(72.7183% 31.8672 97.9407);
+  --color-amber-600: lab(60.3514% 40.5624 87.1228);
+  --color-amber-700: lab(47.2709% 42.9082 69.2966);
+  --color-amber-800: lab(37.8822% 37.1699 52.2718);
+  --color-amber-900: lab(31.2288% 30.2627 40.0378);
+  --color-yellow-50: lab(98.6846% -1.79055 9.7766);
+  --color-yellow-100: lab(97.3564% -4.51407 27.344);
+  --color-yellow-200: lab(94.3433% -5.00429 52.9663);
+  --color-yellow-300: lab(89.7033% -0.480294 84.4917);
+  --color-yellow-400: lab(83.2664% 8.65132 106.895);
+  --color-yellow-500: lab(76.3898% 14.5258 98.4589);
+  --color-yellow-600: lab(62.7799% 22.4197 86.1544);
+  --color-yellow-700: lab(47.8202% 25.2426 66.5015);
+  --color-yellow-800: lab(38.7484% 23.5833 51.4916);
+  --color-yellow-900: lab(32.3865% 21.1273 38.5959);
+  --color-green-50: lab(98.1563% -5.60117 2.75915);
+  --color-green-100: lab(96.1861% -13.8464 6.52365);
+  --color-green-200: lab(92.4222% -26.4702 12.9427);
+  --color-green-300: lab(86.9953% -47.2691 25.0054);
+  --color-green-400: lab(78.503% -64.9265 39.7492);
+  --color-green-500: lab(70.5521% -66.5147 45.8073);
+  --color-green-600: lab(59.0978% -58.6621 41.2579);
+  --color-green-700: lab(47.0329% -47.0239 31.4788);
+  --color-green-800: lab(37.4616% -36.7971 22.9692);
+  --color-green-900: lab(30.797% -29.6927 17.382);
+  --color-emerald-50: lab(97.8462% -6.94966 1.85487);
+  --color-emerald-100: lab(94.9004% -17.0769 5.63836);
+  --color-emerald-200: lab(90.2247% -31.039 9.47084);
+  --color-emerald-400: lab(75.0771% -60.7313 19.4147);
+  --color-emerald-600: lab(55.0481% -49.9246 15.93);
+  --color-emerald-700: lab(44.4871% -41.0396 11.0361);
+  --color-emerald-800: lab(35.3675% -33.1188 8.04002);
+  --color-emerald-900: lab(28.8637% -26.9249 5.45986);
+  --color-cyan-50: lab(98.3304% -5.97432 -2.62108);
+  --color-cyan-100: lab(95.3146% -13.8285 -6.84732);
+  --color-cyan-200: lab(91.0821% -24.0435 -12.8306);
+  --color-cyan-500: lab(67.805% -35.3952 -30.2018);
+  --color-cyan-600: lab(55.1767% -26.7496 -30.5139);
+  --color-cyan-700: lab(44.7267% -21.5987 -26.118);
+  --color-blue-50: lab(96.492% -1.14644 -5.11479);
+  --color-blue-100: lab(92.0301% -2.24757 -11.6453);
+  --color-blue-200: lab(86.15% -4.04379 -21.0797);
+  --color-blue-300: lab(77.5052% -6.4629 -36.42);
+  --color-blue-400: lab(65.0361% -1.42065 -56.9802);
+  --color-blue-500: lab(54.1736% 13.3369 -74.6839);
+  --color-blue-600: lab(44.0605% 29.0279 -86.0352);
+  --color-blue-700: lab(36.9089% 35.0961 -85.6872);
+  --color-blue-800: lab(30.2514% 27.7853 -70.2699);
+  --color-blue-900: lab(26.1542% 15.7545 -51.5504);
+  --color-indigo-50: lab(95.4818% 0.411302 -6.78529);
+  --color-indigo-100: lab(91.6577% 1.04591 -12.7199);
+  --color-indigo-400: lab(59.866% 22.4834 -64.4485);
+  --color-indigo-500: lab(48.295% 38.3129 -81.9673);
+  --color-indigo-600: lab(38.4009% 52.6132 -92.3857);
+  --color-indigo-700: lab(32.4486% 49.2217 -84.6695);
+  --color-indigo-800: lab(26.6645% 37.9804 -68.6402);
+  --color-indigo-900: lab(23.3911% 24.6978 -50.4718);
+  --color-violet-50: lab(96.2416% 2.28849 -5.51657);
+  --color-violet-100: lab(93.0838% 4.35197 -9.88284);
+  --color-violet-200: lab(87.0888% 8.53688 -19.4189);
+  --color-violet-300: lab(76.7419% 18.3911 -37.0706);
+  --color-violet-500: lab(49.9355% 55.1776 -81.8963);
+  --color-violet-600: lab(41.088% 68.9966 -91.995);
+  --color-violet-700: lab(35.2783% 67.9912 -88.793);
+  --color-violet-800: lab(29.3188% 57.7986 -76.1493);
+  --color-purple-50: lab(97.1627% 2.99937 -4.13398);
+  --color-purple-100: lab(93.3333% 6.97437 -9.83434);
+  --color-purple-200: lab(87.8405% 13.4282 -18.7159);
+  --color-purple-300: lab(78.3298% 26.2195 -34.9499);
+  --color-purple-400: lab(63.6946% 47.6127 -59.2066);
+  --color-purple-500: lab(52.0183% 66.11 -78.2316);
+  --color-purple-600: lab(43.0295% 75.21 -86.5669);
+  --color-purple-700: lab(36.1758% 69.8525 -80.0381);
+  --color-purple-800: lab(30.6017% 56.7637 -64.4751);
+  --color-purple-900: lab(24.9401% 45.2703 -51.2728);
+  --color-pink-100: lab(93.5864% 9.01193 -3.15079);
+  --color-pink-500: lab(56.9303% 76.8162 -8.07021);
+  --color-pink-700: lab(42.1737% 71.8009 7.42233);
+  --color-slate-100: lab(96.286% -0.852436 -2.46847);
+  --color-slate-300: lab(84.7652% -1.94535 -7.93337);
+  --color-slate-500: lab(48.0876% -2.03595 -16.5814);
+  --color-slate-600: lab(35.5623% -1.74978 -15.4316);
+  --color-slate-700: lab(26.9569% -1.47016 -15.6993);
+  --color-slate-800: lab(16.132% -0.318035 -14.6672);
+  --color-slate-900: lab(7.78673% 1.82345 -15.0537);
+  --color-slate-950: lab(1.76974% 1.32743 -9.28855);
+  --color-gray-50: lab(98.2596% -0.247031 -0.706708);
+  --color-gray-100: lab(96.1596% -0.0823438 -1.13575);
+  --color-gray-200: lab(91.6229% -0.159115 -2.26791);
+  --color-gray-300: lab(85.1236% -0.612259 -3.7138);
+  --color-gray-400: lab(65.9269% -0.832707 -8.17473);
+  --color-gray-500: lab(47.7841% -0.393182 -10.0268);
+  --color-gray-600: lab(35.6337% -1.58697 -10.8425);
+  --color-gray-700: lab(27.1134% -0.956401 -12.3224);
+  --color-gray-800: lab(16.1051% -1.18239 -11.7533);
+  --color-gray-900: lab(8.11897% 0.811279 -12.254);
+}
+
+[data-theme="rains"] body,
+[data-theme="rains"] .app-shell {
+  background: var(--surface-base);
+  color: hsl(var(--text-000));
+}
+
+/* ============================================================================
+   CHAT EXPERIENCE
+   ============================================================================ */
+[data-theme="rains"] .chat-message {
+  border-radius: var(--radius-lg, 0.75rem);
+  background: var(--surface-raised);
+  border: 1px solid var(--stroke-soft);
+  box-shadow: var(--chat-shadow);
+  transition:
+    border-color var(--transition-normal, 200ms) var(--transition-easing, cubic-bezier(0.4, 0, 0.2, 1)),
+    box-shadow var(--transition-normal, 200ms) var(--transition-easing, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+[data-theme="rains"] .chat-message:hover {
+  border-color: hsl(var(--accent-secondary-000) / 0.35);
+  box-shadow: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+}
+
+[data-theme="rains"] .chat-message-user {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--accent-brand) / 0.3),
+    hsl(var(--accent-main-000) / 0.85)
+  );
+  color: hsl(var(--oncolor-100));
+  border-color: hsl(var(--accent-brand) / 0.45);
+  font-family: var(--font-user-message);
+}
+
+[data-theme="rains"] .chat-message-assistant {
+  background: linear-gradient(
+    160deg,
+    hsl(var(--bg-100) / 0.85),
+    hsl(var(--pictogram-200) / 0.9)
+  );
+  color: hsl(var(--text-200));
+  border-color: hsl(var(--border-300) / 0.45);
+  font-family: var(--font-claude-response);
+}
+
+[data-theme="rains"][data-color-mode="dark"] .chat-message-user,
+[data-theme="rains"][data-color-mode="dark"] .bg-chat-user {
+  background: hsl(var(--bg-400) / 0.95) !important;
+  color: hsl(var(--text-000)) !important;
+  border-color: hsl(var(--border-300) / 0.55) !important;
+  box-shadow: 0 35px 80px -60px hsl(var(--always-black) / 0.95);
+}
+
+/* ============================================================================
+   NAVIGATION & SIDEBAR
+   ============================================================================ */
+[data-theme="rains"] .nav-header {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  background: linear-gradient(
+    180deg,
+    hsl(var(--bg-200) / 0.9),
+    hsl(var(--bg-200) / 0.75)
+  );
+  border-bottom: 1px solid hsl(var(--border-300) / 0.45);
+  box-shadow: 0 20px 50px -40px hsl(var(--always-black) / 0.8);
+}
+
+[data-theme="rains"] .sidebar {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--bg-200) / 0.95),
+    hsl(var(--bg-300) / 0.9)
+  );
+  border-right: 1px solid hsl(var(--border-300) / 0.25);
+}
+
+/* ============================================================================
+   BUTTONS & INTERACTIVE CONTROLS
+   ============================================================================ */
+[data-theme="rains"] .btn-primary {
+  background-image: linear-gradient(
+    135deg,
+    hsl(var(--accent-brand) / 0.95),
+    hsl(var(--accent-main-000))
+  );
+  color: hsl(var(--oncolor-100));
+  border: 1px solid hsl(var(--accent-brand) / 0.65);
+  box-shadow: 0 18px 40px -22px hsl(var(--accent-brand) / 0.65);
+  transition: transform 150ms ease, box-shadow 200ms ease;
+}
+
+[data-theme="rains"] .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 50px -24px hsl(var(--accent-brand) / 0.85);
+}
+
+[data-theme="rains"] .btn-primary:active {
+  transform: translateY(1px);
+}
+
+[data-theme="rains"] .btn-secondary {
+  background: hsl(var(--bg-200) / 0.9);
+  border: 1px solid var(--stroke-soft);
+  color: hsl(var(--text-300));
+}
+
+[data-theme="rains"] .btn-secondary:hover {
+  background: hsl(var(--bg-200));
+  border-color: var(--stroke-strong);
+}
+
+/* ============================================================================
+   INPUTS & CHAT COMPOSER
+   ============================================================================ */
+[data-theme="rains"] input:focus,
+[data-theme="rains"] textarea:focus,
+[data-theme="rains"] select:focus {
+  border-color: hsl(var(--accent-secondary-100));
+  box-shadow: 0 0 0 3px hsl(var(--accent-secondary-000) / 0.3);
+}
+
+[data-theme="rains"] .chat-input-container {
+  background: linear-gradient(
+    0deg,
+    hsl(var(--bg-300)),
+    hsl(var(--bg-200))
+  );
+  border-top: 1px solid hsl(var(--border-300) / 0.3);
+}
+
+/* ============================================================================
+   SCROLLBARS
+   ============================================================================ */
+[data-theme="rains"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme="rains"] ::-webkit-scrollbar-track {
+  background: hsl(var(--bg-300));
+  border-radius: 999px;
+}
+
+[data-theme="rains"] ::-webkit-scrollbar-thumb {
+  background: hsl(var(--border-200) / 0.55);
+  border-radius: 999px;
+}
+
+[data-theme="rains"] ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--border-200) / 0.75);
+}
+
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+@keyframes rains-drip {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 0.85;
+  }
+}
+
+[data-theme="rains"] .loading-indicator {
+  animation: rains-drip 1.2s ease-in-out infinite;
+}
+
+@keyframes rains-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-theme="rains"] .message-enter {
+  animation: rains-fade-in 0.25s ease-out forwards;
+}
+
+/* ============================================================================
+   CODE & MONOSPACE SURFACES
+   ============================================================================ */
+[data-theme="rains"] pre {
+  background: hsl(var(--pictogram-200));
+  border: 1px solid hsl(var(--border-200) / 0.35);
+  color: hsl(var(--text-000));
+  font-family: var(--font-mono);
+}
+
+[data-theme="rains"] code {
+  background: hsl(var(--pictogram-200));
+  color: hsl(var(--text-000));
+  font-family: var(--font-mono);
+}
+
+[data-theme="rains"] :not(pre) > code {
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.35rem;
+  font-size: 0.875em;
+}
+
+/* ============================================================================
+   SELECTION & FOCUS
+   ============================================================================ */
+[data-theme="rains"] ::selection {
+  background: hsl(var(--accent-secondary-000) / 0.35);
+  color: hsl(var(--text-000));
+}
+
+[data-theme="rains"] :focus-visible {
+  outline: 2px solid hsl(var(--accent-secondary-100));
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px hsl(var(--accent-secondary-000) / 0.2);
+}
+
+/* ============================================================================
+   TOOLTIPS, POPOVERS & BADGES
+   ============================================================================ */
+[data-theme="rains"] [role="tooltip"],
+[data-theme="rains"] .popover {
+  background: var(--surface-raised);
+  border: 1px solid hsl(var(--border-300) / 0.4);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="rains"] .badge {
+  border-radius: var(--radius-full, 9999px);
+}
+
+[data-theme="rains"] .badge-primary {
+  background: linear-gradient(
+    120deg,
+    hsl(var(--accent-brand) / 0.95),
+    hsl(var(--accent-main-000))
+  );
+  color: hsl(var(--oncolor-100));
+}
+
+[data-theme="rains"] .badge-secondary {
+  background: hsl(var(--bg-200));
+  color: hsl(var(--text-200));
+  border: 1px solid var(--stroke-soft);
+}
+
+/* ============================================================================
+   AVATARS & LINKS
+   ============================================================================ */
+[data-theme="rains"] .avatar-user,
+[data-theme="rains"] .user-avatar {
+  background: linear-gradient(
+    130deg,
+    hsl(var(--accent-brand) / 0.95),
+    hsl(var(--accent-main-000))
+  );
+  color: hsl(var(--oncolor-100));
+}
+
+[data-theme="rains"] a {
+  color: hsl(var(--accent-secondary-100));
+  transition: color var(--transition-fast, 150ms) ease;
+}
+
+[data-theme="rains"] a:hover {
+  color: hsl(var(--accent-secondary-000));
+}
+
+/* Navbar links should be white, not blue */
+[data-theme="rains"] .qt-navbar-link,
+[data-theme="rains"] .qt-navbar-link-active {
+  color: hsl(var(--text-000));
+}
+
+[data-theme="rains"] .qt-navbar-link:hover {
+  color: hsl(var(--text-000));
+}
+
+/* Footer links should be white, not blue */
+[data-theme="rains"] .qt-footer-link {
+  color: hsl(var(--text-200));
+}
+
+[data-theme="rains"] .qt-footer-link:hover {
+  color: hsl(var(--text-000));
+}
+
+/* Brand text should be white */
+[data-theme="rains"] .qt-font-brand {
+  color: hsl(var(--text-000));
+}
+
+/* ============================================================================
+   DIVIDERS, CARDS & LISTS
+   ============================================================================ */
+[data-theme="rains"] hr,
+[data-theme="rains"] .divider {
+  border-color: hsl(var(--border-300) / 0.4);
+}
+
+[data-theme="rains"] .card {
+  background: var(--surface-raised);
+  border: 1px solid var(--stroke-soft);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="rains"] .sidebar-item:hover {
+  background: hsl(var(--bg-200) / 0.65);
+}
+
+[data-theme="rains"] .sidebar-item.active {
+  background: hsl(var(--accent-brand) / 0.14);
+  border-left: 3px solid hsl(var(--accent-brand));
+  color: hsl(var(--text-000));
+}
+
+/* ============================================================================
+   CHARACTER PAGES
+   ============================================================================ */
+[data-theme="rains"] .character-page,
+[data-theme="rains"] .persona-page,
+[data-theme="rains"] .chat-page {
+  color: hsl(var(--text-000));
+}
+
+[data-theme="rains"] .character-toolbar__button,
+[data-theme="rains"] .persona-toolbar__button,
+[data-theme="rains"] .chat-toolbar__button {
+  border-color: hsl(var(--border-300) / 0.35);
+  background: hsl(var(--bg-200) / 0.6);
+  box-shadow: 0 12px 30px -20px hsl(var(--always-black) / 0.6);
+}
+
+[data-theme="rains"] .character-toolbar__button--primary,
+[data-theme="rains"] .persona-toolbar__button--primary,
+[data-theme="rains"] .chat-toolbar__button--primary {
+  background-image: linear-gradient(120deg, hsl(var(--accent-brand)), hsl(var(--accent-main-000)));
+  border-color: hsl(var(--accent-brand) / 0.35);
+  color: hsl(var(--oncolor-100));
+  box-shadow: 0 18px 45px -25px hsl(var(--accent-brand) / 0.8);
+}
+
+[data-theme="rains"] .qt-entity-card,
+[data-theme="rains"] .character-card,
+[data-theme="rains"] .persona-card,
+[data-theme="rains"] .chat-card {
+  background-image: radial-gradient(circle at top left, hsl(var(--bg-200) / 0.95), hsl(var(--bg-100) / 0.8));
+  border-color: hsl(var(--border-300) / 0.35);
+  box-shadow: var(--chat-shadow);
+}
+
+[data-theme="rains"] .qt-entity-card:hover,
+[data-theme="rains"] .character-card:hover,
+[data-theme="rains"] .persona-card:hover,
+[data-theme="rains"] .chat-card:hover {
+  border-color: hsl(var(--accent-brand) / 0.45);
+}
+
+[data-theme="rains"] .character-card__action,
+[data-theme="rains"] .persona-card__action,
+[data-theme="rains"] .chat-card__action {
+  border-color: hsl(var(--border-300) / 0.4);
+  background: hsl(var(--bg-200) / 0.8);
+  color: hsl(var(--text-200));
+}
+
+[data-theme="rains"] .character-card__action--chat {
+  background-image: linear-gradient(120deg, hsl(var(--success-000) / 0.9), hsl(var(--success-100)));
+  border: none;
+  color: hsl(var(--oncolor-100));
+  box-shadow: 0 15px 35px -20px hsl(var(--success-000) / 0.8);
+}
+
+[data-theme="rains"] .character-card__action svg,
+[data-theme="rains"] .persona-card__action svg,
+[data-theme="rains"] .chat-card__action svg {
+  color: currentColor;
+}
+
+[data-theme="rains"] .character-empty-state,
+[data-theme="rains"] .persona-empty-state,
+[data-theme="rains"] .chat-empty-state {
+  border-color: hsl(var(--border-300) / 0.35);
+  box-shadow: 0 35px 80px -60px hsl(var(--always-black) / 0.9);
+}
+
+[data-theme="rains"] .chat-card__badge {
+  background: hsl(var(--accent-brand) / 0.18);
+  color: hsl(var(--accent-brand));
+  border: 1px solid hsl(var(--accent-brand) / 0.4);
+}
+
+[data-theme="rains"] .character-view .character-section-card,
+[data-theme="rains"] .persona-section-card {
+  background: linear-gradient(145deg, hsl(var(--bg-200) / 0.9), hsl(var(--bg-100) / 0.85));
+  border-color: hsl(var(--border-300) / 0.4);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="rains"] .character-view .character-chat-dialog,
+[data-theme="rains"] .character-import-dialog,
+[data-theme="rains"] .persona-import-dialog {
+  background: linear-gradient(170deg, hsl(var(--bg-200)), hsl(var(--bg-100)));
+  border-color: hsl(var(--border-300) / 0.4);
+  box-shadow: 0 50px 140px -80px hsl(var(--always-black) / 0.95);
+}
+
+[data-theme="rains"] .character-view,
+[data-theme="rains"] .persona-edit {
+  background: hsl(var(--bg-100));
+}
+
+[data-theme="rains"] .character-view .character-section-card h2,
+[data-theme="rains"] .character-edit h1,
+[data-theme="rains"] .persona-edit h1 {
+  color: hsl(var(--text-000));
+}
+
+/* Serif headings for key sections */
+[data-theme="rains"] h1,
+[data-theme="rains"] h2,
+[data-theme="rains"] h3,
+[data-theme="rains"] h4,
+[data-theme="rains"] .character-page h1,
+[data-theme="rains"] .character-card h2,
+[data-theme="rains"] .character-card h3,
+[data-theme="rains"] .character-card h4,
+[data-theme="rains"] .character-view h1,
+[data-theme="rains"] .character-view .character-section-card h2,
+[data-theme="rains"] .character-view .character-section-card h3,
+[data-theme="rains"] .character-view .character-section-card h4,
+[data-theme="rains"] .persona-page h1,
+[data-theme="rains"] .persona-card h2,
+[data-theme="rains"] .persona-card h3,
+[data-theme="rains"] .persona-card h4,
+[data-theme="rains"] .persona-edit h1,
+[data-theme="rains"] .persona-section-card h1,
+[data-theme="rains"] .persona-section-card h2,
+[data-theme="rains"] .persona-section-card h3,
+[data-theme="rains"] .persona-section-card h4,
+[data-theme="rains"] .chat-page h1,
+[data-theme="rains"] .chat-card h2,
+[data-theme="rains"] .chat-card h3,
+[data-theme="rains"] .chat-card h4 {
+  font-family: Georgia, "Times New Roman", Times, serif !important;
+  font-weight: 500 !important;
+}
+
+[data-theme="rains"] .character-edit form input,
+[data-theme="rains"] .character-edit form textarea,
+[data-theme="rains"] .character-edit form select,
+[data-theme="rains"] .persona-section-card input,
+[data-theme="rains"] .persona-section-card textarea,
+[data-theme="rains"] .persona-section-card select {
+  background: hsl(var(--bg-000) / 0.95);
+  border-color: hsl(var(--border-300) / 0.45);
+  color: hsl(var(--text-000));
+}
+
+[data-theme="rains"] .character-edit form input:focus,
+[data-theme="rains"] .character-edit form textarea:focus,
+[data-theme="rains"] .character-edit form select:focus,
+[data-theme="rains"] .persona-section-card input:focus,
+[data-theme="rains"] .persona-section-card textarea:focus,
+[data-theme="rains"] .persona-section-card select:focus {
+  border-color: hsl(var(--accent-secondary-100));
+  box-shadow: 0 0 0 3px hsl(var(--accent-secondary-000) / 0.2);
+}
+
+[data-theme="rains"] .character-view .character-section-card,
+[data-theme="rains"] .persona-section-card {
+  border-radius: 1.25rem;
+}
+
+[data-theme="rains"] .character-edit-link {
+  color: hsl(var(--text-000)) !important;
+  background: hsl(var(--accent-brand) / 0.9);
+  border: 1px solid hsl(var(--accent-brand));
+  box-shadow: 0 20px 45px -25px hsl(var(--always-black) / 0.9);
+}
+
+[data-theme="rains"] .character-edit-link:hover {
+  background: hsl(var(--accent-brand));
+}
+
+[data-theme="rains"] .character-edit-link svg {
+  color: currentColor;
+}
+
+[data-theme="rains"] .character-card__action--chat svg {
+  color: currentColor;
+}
+
+/* ============================================================================
+   QT-* SEMANTIC COMPONENT OVERRIDES
+   ============================================================================ */
+
+/* Button Variables - Rains gradient style */
+[data-theme="rains"] {
+  --qt-button-primary-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.95), hsl(var(--accent-main-000)));
+  --qt-button-primary-fg: hsl(var(--oncolor-100));
+  --qt-button-primary-hover-bg: linear-gradient(135deg, hsl(var(--accent-main-000)), hsl(var(--accent-brand)));
+  --qt-button-primary-shadow: 0 18px 40px -22px hsl(var(--accent-brand) / 0.65);
+  --qt-button-radius: 1rem;
+
+  --qt-button-secondary-bg: hsl(var(--bg-200) / 0.9);
+  --qt-button-secondary-fg: hsl(var(--text-300));
+  --qt-button-secondary-border: var(--stroke-soft);
+
+  /* Status tokens */
+  --qt-status-success-bg: hsl(var(--success-900) / 0.35);
+  --qt-status-success-fg: hsl(var(--success-000));
+  --qt-status-success-border: hsl(var(--success-100) / 0.5);
+
+  --qt-status-warning-bg: hsl(var(--warning-900) / 0.35);
+  --qt-status-warning-fg: hsl(var(--warning-000));
+  --qt-status-warning-border: hsl(var(--warning-100) / 0.5);
+
+  --qt-status-info-bg: hsl(var(--accent-secondary-900) / 0.35);
+  --qt-status-info-fg: hsl(var(--accent-secondary-100));
+  --qt-status-info-border: hsl(var(--accent-secondary-100) / 0.5);
+
+  --qt-status-danger-bg: hsl(var(--danger-900) / 0.35);
+  --qt-status-danger-fg: hsl(var(--danger-000));
+  --qt-status-danger-border: hsl(var(--danger-100) / 0.5);
+
+  /* Card Variables - Rains card styling */
+  --qt-card-radius: 0.75rem;
+  --qt-card-bg: var(--surface-raised);
+  --qt-card-fg: hsl(var(--text-000));
+  --qt-card-border: var(--stroke-soft);
+  --qt-card-shadow: var(--card-shadow);
+  --qt-card-shadow-hover: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+
+  /* Chat Variables */
+  --qt-chat-message-radius: var(--radius-lg, 0.75rem);
+  --qt-chat-message-padding: 1rem;
+  --qt-chat-message-shadow: var(--chat-shadow);
+
+  --qt-chat-user-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--accent-main-000) / 0.85));
+  --qt-chat-user-fg: hsl(var(--oncolor-100));
+  --qt-chat-user-border: hsl(var(--accent-brand) / 0.45);
+  --qt-chat-user-font: var(--font-user-message);
+
+  --qt-chat-assistant-bg: linear-gradient(160deg, hsl(var(--bg-100) / 0.85), hsl(var(--pictogram-200) / 0.9));
+  --qt-chat-assistant-fg: hsl(var(--text-200));
+  --qt-chat-assistant-border: hsl(var(--border-300) / 0.45);
+  --qt-chat-assistant-font: var(--font-claude-response);
+
+  --qt-chat-composer-bg: hsl(var(--bg-100));
+  --qt-chat-composer-border: hsl(var(--stroke-soft));
+  --qt-chat-composer-radius: var(--radius-lg);
+  --qt-chat-composer-padding-x: 1.25rem;
+  --qt-chat-composer-padding-y: 1.25rem;
+
+  --qt-chat-toolbar-gap: 0.75rem;
+  --qt-chat-toolbar-button-bg: hsl(var(--bg-200));
+  --qt-chat-toolbar-button-fg: hsl(var(--text-200));
+  --qt-chat-toolbar-button-hover-bg: hsl(var(--bg-000) / 0.8);
+  --qt-chat-toolbar-button-border: hsl(var(--border-300) / 0.4);
+
+  --qt-chat-attachment-border: hsl(var(--border-300) / 0.4);
+  --qt-chat-attachment-hover-border: hsl(var(--accent-brand) / 0.55);
+  --qt-chat-attachment-overlay: rgb(0 0 0 / 0.55);
+
+  --qt-chat-sidebar-width: 21rem;
+  --qt-chat-sidebar-bg: hsl(var(--bg-100));
+  --qt-chat-sidebar-border: hsl(var(--border-300) / 0.35);
+  --qt-chat-sidebar-header-border: hsl(var(--border-300) / 0.35);
+  --qt-chat-sidebar-muted: hsl(var(--text-400));
+  --qt-chat-sidebar-heading: hsl(var(--text-000));
+
+  /* Input Variables */
+  --qt-input-radius: var(--radius-md);
+  --qt-input-focus-ring: hsl(var(--accent-secondary-100));
+
+  /* Auth Page Background */
+  --qt-auth-page-bg: linear-gradient(135deg, var(--color-background), hsl(var(--bg-200)));
+}
+
+/* Button override - Rains primary button gradient */
+[data-theme="rains"] .qt-button-primary {
+  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.95), hsl(var(--accent-main-000)));
+  color: hsl(var(--oncolor-100));
+  border: 1px solid hsl(var(--accent-brand) / 0.65);
+  box-shadow: 0 18px 40px -22px hsl(var(--accent-brand) / 0.65);
+}
+
+[data-theme="rains"] .qt-button-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, hsl(var(--accent-main-000)), hsl(var(--accent-brand)));
+  box-shadow: 0 22px 50px -24px hsl(var(--accent-brand) / 0.85);
+  transform: translateY(-1px);
+}
+
+/* Card override - Rains card styling */
+[data-theme="rains"] .qt-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--stroke-soft);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="rains"] .qt-card:hover {
+  border-color: hsl(var(--accent-brand) / 0.45);
+  box-shadow: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+}
+
+/* Chat message override - Rains message styling */
+[data-theme="rains"] .qt-chat-message {
+  border-radius: var(--radius-lg, 0.75rem);
+  background: var(--surface-raised);
+  border: 1px solid var(--stroke-soft);
+  box-shadow: var(--chat-shadow);
+}
+
+[data-theme="rains"] .qt-chat-message:hover {
+  border-color: hsl(var(--accent-secondary-000) / 0.35);
+  box-shadow: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+}
+
+[data-theme="rains"] .qt-chat-message-user {
+  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--accent-main-000) / 0.85));
+  color: hsl(var(--oncolor-100));
+  border-color: hsl(var(--accent-brand) / 0.45);
+  font-family: var(--font-user-message);
+}
+
+[data-theme="rains"] .qt-chat-message-assistant {
+  background: linear-gradient(160deg, hsl(var(--bg-100) / 0.85), hsl(var(--pictogram-200) / 0.9));
+  color: hsl(var(--text-200));
+  border-color: hsl(var(--border-300) / 0.45);
+  font-family: var(--font-claude-response);
+}

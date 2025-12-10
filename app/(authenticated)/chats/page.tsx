@@ -30,11 +30,13 @@ interface ChatParticipant {
       filepath: string
       url?: string
     }
+    tags?: string[]
   }
   persona?: {
     id: string
     name: string
     title?: string | null
+    tags?: string[]
   }
 }
 
@@ -69,7 +71,21 @@ export default function ChatsPage() {
   const { shouldHideByIds } = useQuickHide()
 
   const visibleChats = useMemo(
-    () => chats.filter(chat => !shouldHideByIds(chat.tags.map(ct => ct.tag.id))),
+    () => chats.filter(chat => {
+      // Collect all tag IDs: chat tags + all participant tags
+      const allTagIds: string[] = chat.tags.map(ct => ct.tag.id)
+
+      for (const participant of chat.participants) {
+        if (participant.character?.tags) {
+          allTagIds.push(...participant.character.tags)
+        }
+        if (participant.persona?.tags) {
+          allTagIds.push(...participant.persona.tags)
+        }
+      }
+
+      return !shouldHideByIds(allTagIds)
+    }),
     [chats, shouldHideByIds]
   )
 
@@ -94,12 +110,12 @@ export default function ChatsPage() {
     }
   }, [highlightedChatId])
 
-  // Helper to get first character participant
-  const getFirstCharacter = (chat: Chat) => {
-    const charParticipant = chat.participants.find(
-      p => p.type === 'CHARACTER' && p.isActive && p.character
-    )
-    return charParticipant?.character
+  // Helper to get all active character participants
+  const getActiveCharacters = (chat: Chat) => {
+    return chat.participants
+      .filter(p => p.type === 'CHARACTER' && p.isActive && p.character)
+      .sort((a, b) => a.displayOrder - b.displayOrder)
+      .map(p => p.character!)
   }
 
   // Helper to get first persona participant
@@ -110,15 +126,22 @@ export default function ChatsPage() {
     return personaParticipant?.persona
   }
 
-  const getAvatarSrc = (chat: Chat): string | null => {
-    const character = getFirstCharacter(chat)
-    if (!character) return null
+  // Helper to get avatar src for a character
+  const getCharacterAvatarSrc = (character: NonNullable<ChatParticipant['character']>): string | null => {
     if (character.defaultImage) {
-      // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
       const filepath = character.defaultImage.filepath
       return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
     }
     return character.avatarUrl || null
+  }
+
+  // Helper to format character names for display
+  const formatCharacterNames = (characters: NonNullable<ChatParticipant['character']>[]): string => {
+    if (characters.length === 0) return 'Unknown'
+    if (characters.length === 1) return characters[0].name
+    if (characters.length === 2) return `${characters[0].name} + ${characters[1].name}`
+    // For 3+ characters, list all with " + "
+    return characters.map(c => c.name).join(' + ')
   }
 
   const fetchChats = async () => {
@@ -199,22 +222,22 @@ export default function ChatsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-gray-900 dark:text-white">Loading chats...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-foreground">Loading chats...</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-red-600 dark:text-red-400">Error: {error}</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-destructive">Error: {error}</p>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-[800px]">
+    <div className="chat-page container mx-auto max-w-5xl px-4 py-8 text-foreground">
       <style>{`
         @keyframes arrowFlash {
           0% {
@@ -235,18 +258,18 @@ export default function ChatsPage() {
         }
       `}</style>
 
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Chats</h1>
-        <div className="flex gap-2">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
+        <h1 className="text-3xl font-semibold leading-tight">Chats</h1>
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setImportDialogOpen(true)}
-            className="px-4 py-2 bg-gray-600 dark:bg-slate-600 text-white rounded hover:bg-gray-700 dark:hover:bg-slate-500"
+            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Import
           </button>
           <Link
-            href="/characters"
-            className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800"
+            href="/chats/new"
+            className="qt-button chat-toolbar__button chat-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             New Chat
           </Link>
@@ -254,63 +277,145 @@ export default function ChatsPage() {
       </div>
 
       {visibleChats.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-lg text-gray-600 dark:text-gray-400 mb-4">No chats yet</p>
+        <div className="chat-empty-state mt-12 rounded-2xl border border-dashed border-border/70 bg-card/80 px-8 py-12 text-center shadow-sm">
+          <p className="mb-4 text-lg text-muted-foreground">No chats yet</p>
           <Link
-            href="/characters"
-            className="text-blue-600 dark:text-blue-400 hover:underline"
+            href="/chats/new"
+            className="font-medium text-primary hover:text-primary/80"
           >
-            Start a chat with a character
+            Start a new chat
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="chat-card-stack space-y-4">
           {visibleChats.map((chat) => (
             <div
               key={chat.id}
               ref={highlightedChatId === chat.id ? importedChatRef : null}
-              className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 bg-white dark:bg-slate-800 hover:shadow-lg dark:hover:shadow-xl transition-shadow relative"
+              className="qt-entity-card chat-card relative"
             >
               {highlightedChatId === chat.id && (
                 <div className="absolute -right-12 top-1/2 transform -translate-y-1/2 arrow-highlight">
                   <span className="text-6xl text-yellow-200 font-black" style={{ textShadow: '0 0 10px rgba(255, 255, 0, 0.8)' }}>←</span>
                 </div>
               )}
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start flex-1 gap-4">
+              <div className="flex items-stretch justify-between gap-4">
+                <div className="flex items-stretch flex-1 gap-4">
                   {(() => {
-                    const character = getFirstCharacter(chat)
+                    const characters = getActiveCharacters(chat)
                     const persona = getFirstPersona(chat)
-                    const avatarSrc = getAvatarSrc(chat)
-                    const characterName = character?.name || 'Unknown'
+                    const characterNames = formatCharacterNames(characters)
+                    const isMultiCharacter = characters.length > 1
+
+                    // Render combined avatar for multi-character chats (up to 3)
+                    const renderAvatars = () => {
+                      if (characters.length === 0) {
+                        // Fallback for no characters
+                        return (
+                          <div
+                            className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`}
+                            style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
+                          >
+                            <span className={getAvatarClasses(style, 'lg').fallbackClass}>?</span>
+                          </div>
+                        )
+                      }
+
+                      if (characters.length === 1) {
+                        // Single character - original display
+                        const avatarSrc = getCharacterAvatarSrc(characters[0])
+                        if (avatarSrc) {
+                          return (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={avatarSrc}
+                              alt={characters[0].name}
+                              className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full object-cover flex-shrink-0`}
+                              style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
+                            />
+                          )
+                        }
+                        return (
+                          <div
+                            className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`}
+                            style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
+                          >
+                            <span className={getAvatarClasses(style, 'lg').fallbackClass}>
+                              {characters[0].name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )
+                      }
+
+                      // Multi-character: show stacked/overlapping avatars (max 4)
+                      const displayChars = characters.slice(0, 4)
+                      const overlapOffset = style === 'CIRCULAR' ? -12 : -10
+
+                      return (
+                        <div className="flex items-stretch h-full" style={{ marginRight: `${Math.abs(overlapOffset) * (displayChars.length - 1)}px` }}>
+                          {displayChars.map((char, index) => {
+                            const avatarSrc = getCharacterAvatarSrc(char)
+                            const zIndex = displayChars.length - index
+                            const marginLeft = index === 0 ? 0 : overlapOffset
+
+                            if (avatarSrc) {
+                              return (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  key={char.id}
+                                  src={avatarSrc}
+                                  alt={char.name}
+                                  className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full object-cover ring-2 ring-card flex-shrink-0`}
+                                  style={{ zIndex, marginLeft: `${marginLeft}px`, position: 'relative', ...(style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : {}) }}
+                                  title={char.name}
+                                />
+                              )
+                            }
+                            return (
+                              <div
+                                key={char.id}
+                                className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center ring-2 ring-card flex-shrink-0`}
+                                style={{
+                                  zIndex,
+                                  marginLeft: `${marginLeft}px`,
+                                  position: 'relative',
+                                  ...(style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : {})
+                                }}
+                                title={char.name}
+                              >
+                                <span className={getAvatarClasses(style, 'md').fallbackClass}>
+                                  {char.name.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                            )
+                          })}
+                          {characters.length > 4 && (
+                            <div
+                              className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full bg-muted flex items-center justify-center ring-2 ring-card flex-shrink-0`}
+                              style={{ zIndex: 0, marginLeft: `${overlapOffset}px`, position: 'relative' }}
+                              title={`+${characters.length - 4} more`}
+                            >
+                              <span className="text-sm font-bold text-muted-foreground">
+                                +{characters.length - 4}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
 
                     return (
                       <>
-                        {avatarSrc ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={avatarSrc}
-                            alt={characterName}
-                            width={64}
-                            height={64}
-                            className={getAvatarClasses(style, 'lg').imageClass}
-                          />
-                        ) : (
-                          <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
-                            <span className={getAvatarClasses(style, 'lg').fallbackClass}>
-                              {characterName.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                        )}
+                        {renderAvatars()}
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{chat.title}</h2>
-                            <span className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 text-sm font-semibold px-3 py-1 rounded-full">
+                            <h2 className="text-xl font-semibold text-foreground">{chat.title}</h2>
+                            <span className="chat-card__badge inline-flex items-center rounded-full bg-primary/15 px-3 py-1 text-sm font-semibold text-primary">
                               {chat._count.messages}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {characterName}
+                          <p className="text-sm text-muted-foreground">
+                            {characterNames}
                             {persona && ` (${persona.name}${persona.title ? ` - ${persona.title}` : ''})`}
                             {' \u2022 '}
                             {new Date(chat.updatedAt).toLocaleDateString()}
@@ -329,7 +434,7 @@ export default function ChatsPage() {
                 <div className="flex flex-col gap-2">
                   <Link
                     href={`/chats/${chat.id}`}
-                    className="w-10 h-10 flex items-center justify-center bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors"
+                    className="chat-card__action inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow transition hover:bg-primary/90"
                     title="Open chat"
                   >
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -339,10 +444,10 @@ export default function ChatsPage() {
                   </Link>
                   <button
                     onClick={() => deleteChat(chat.id)}
-                    className="w-10 h-10 flex items-center justify-center bg-red-600 dark:bg-red-700 rounded hover:bg-red-700 dark:hover:bg-red-800 transition-colors"
+                    className="chat-card__action inline-flex h-10 w-10 items-center justify-center rounded-lg bg-destructive text-destructive-foreground shadow transition hover:bg-destructive/90"
                     title="Delete chat"
                   >
-                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
                   </button>

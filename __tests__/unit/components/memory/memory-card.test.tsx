@@ -72,11 +72,11 @@ describe('MemoryCard', () => {
   });
 
   describe('importance display', () => {
-    it('should display high importance in red', () => {
+    it('should display high importance with destructive color', () => {
       const highImportanceMemory = { ...mockMemory, importance: 0.8 };
       const { container } = render(<MemoryCard memory={highImportanceMemory} />);
 
-      const importanceElement = container.querySelector('.text-red-600');
+      const importanceElement = container.querySelector('.text-destructive');
       expect(importanceElement).toBeInTheDocument();
       expect(screen.getByText('High')).toBeInTheDocument();
     });
@@ -90,11 +90,11 @@ describe('MemoryCard', () => {
       expect(screen.getByText('Medium')).toBeInTheDocument();
     });
 
-    it('should display low importance in gray', () => {
+    it('should display low importance with muted color', () => {
       const lowImportanceMemory = { ...mockMemory, importance: 0.2 };
       const { container } = render(<MemoryCard memory={lowImportanceMemory} />);
 
-      const importanceElement = container.querySelector('.text-gray-500');
+      const importanceElement = container.querySelector('.text-muted-foreground');
       expect(importanceElement).toBeInTheDocument();
       expect(screen.getByText('Low')).toBeInTheDocument();
     });
@@ -232,12 +232,14 @@ describe('MemoryCard', () => {
     });
   });
 
-  describe('dark mode support', () => {
-    it('should apply dark mode classes', () => {
+  describe('theme support', () => {
+    it('should use semantic theme color classes', () => {
       const { container } = render(<MemoryCard memory={mockMemory} />);
 
-      // Dark mode classes should be present in the component
-      expect(container.innerHTML).toMatch(/dark:/);
+      // Component should use semantic qt-* classes that work in both light and dark mode
+      expect(container.innerHTML).toMatch(/qt-card/);
+      expect(container.innerHTML).toMatch(/text-foreground/);
+      expect(container.innerHTML).toMatch(/border-border/);
     });
   });
 });

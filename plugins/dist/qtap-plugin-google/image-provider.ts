@@ -1,29 +1,188 @@
 /**
  * Google Image Generation Provider Implementation for Quilltap Plugin
  *
- * Supports Imagen models through Google's Generative AI API
+ * Supports both:
+ * - Imagen models via :predict API (imagen-4, imagen-4-fast)
+ * - Gemini image models via :generateContent API (gemini-2.5-flash-image, gemini-3-pro-image-preview)
  */
 
-import type { ImageGenProvider as ImageGenProviderBase, ImageGenParams, ImageGenResponse } from './types';
+import type {
+  ImageGenProvider as ImageGenProviderBase,
+  ImageGenParams,
+  ImageGenResponse,
+} from './types';
 import { logger } from '../../../lib/logger';
+
+/**
+ * Models that use the Gemini generateContent API for image generation
+ * These models require responseModalities: ["TEXT", "IMAGE"]
+ */
+const GEMINI_IMAGE_MODELS = [
+  'gemini-2.0-flash-exp',
+  'gemini-2.5-flash-image',
+  'gemini-2.5-flash-preview-native-image',
+  'gemini-3-pro-image-preview', // Nano Banana Pro
+];
+
+/**
+ * Models that use the Imagen predict API
+ */
+const IMAGEN_MODELS = ['imagen-4', 'imagen-4-fast'];
 
 export class GoogleImagenProvider implements ImageGenProviderBase {
   readonly provider = 'GOOGLE';
-  readonly supportedModels = [
-    'imagen-4',
-    'imagen-4-fast',
-    'gemini-2.5-flash-image',
-    'gemini-3-pro-image-preview',
-  ];
+  readonly supportedModels = [...IMAGEN_MODELS, ...GEMINI_IMAGE_MODELS];
 
-  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    logger.debug('Google Imagen generation started', {
+  /**
+   * Check if a model uses the Gemini generateContent API
+   */
+  private isGeminiImageModel(model: string): boolean {
+    return GEMINI_IMAGE_MODELS.some(
+      (m) => model === m || model.startsWith(`${m}-`) || model.includes(m)
+    );
+  }
+
+  async generateImage(
+    params: ImageGenParams,
+    apiKey: string
+  ): Promise<ImageGenResponse> {
+    const model = params.model ?? 'imagen-4';
+
+    logger.debug('Google image generation started', {
       context: 'GoogleImagenProvider.generateImage',
-      model: params.model,
+      model,
       promptLength: params.prompt.length,
+      isGeminiModel: this.isGeminiImageModel(model),
     });
 
-    const model = params.model ?? 'imagen-4';
+    // Route to the appropriate API based on model type
+    if (this.isGeminiImageModel(model)) {
+      return this.generateWithGemini(params, apiKey, model);
+    } else {
+      return this.generateWithImagen(params, apiKey, model);
+    }
+  }
+
+  /**
+   * Generate images using Gemini's generateContent API
+   * Used for: gemini-2.5-flash-image, gemini-3-pro-image-preview (Nano Banana Pro)
+   */
+  private async generateWithGemini(
+    params: ImageGenParams,
+    apiKey: string,
+    model: string
+  ): Promise<ImageGenResponse> {
+    const baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+    const endpoint = `${baseUrl}/models/${model}:generateContent`;
+
+    // Build request body for Gemini image generation
+    const requestBody: Record<string, unknown> = {
+      contents: [
+        {
+          parts: [{ text: params.prompt }],
+        },
+      ],
+      generationConfig: {
+        responseModalities: ['TEXT', 'IMAGE'],
+      },
+    };
+
+    // Add image configuration if aspect ratio or size specified
+    const imageConfig: Record<string, string> = {};
+    if (params.aspectRatio) {
+      imageConfig.aspectRatio = params.aspectRatio;
+    }
+
+    // Extended params for size/resolution
+    const extendedParams = params as ImageGenParams & {
+      imageSize?: string;
+      seed?: number;
+    };
+    if (extendedParams.imageSize) {
+      imageConfig.imageSize = extendedParams.imageSize;
+    }
+
+    if (Object.keys(imageConfig).length > 0) {
+      (requestBody.generationConfig as Record<string, unknown>).imageConfig =
+        imageConfig;
+    }
+
+    logger.debug('Sending request to Gemini generateContent API', {
+      context: 'GoogleImagenProvider.generateWithGemini',
+      endpoint,
+      model,
+      hasImageConfig: Object.keys(imageConfig).length > 0,
+    });
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'x-goog-api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      logger.error('Gemini API error', {
+        context: 'GoogleImagenProvider.generateWithGemini',
+        status: response.status,
+        errorMessage: error.error?.message,
+      });
+      throw new Error(
+        error.error?.message || `Gemini API error: ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    // Extract images from Gemini response format
+    // Response: { candidates: [{ content: { parts: [{ text?, inlineData: { mimeType, data } }] } }] }
+    const images: { data: string; mimeType: string }[] = [];
+    let textResponse = '';
+
+    const candidate = data.candidates?.[0];
+    if (candidate?.content?.parts) {
+      for (const part of candidate.content.parts) {
+        if (part.inlineData) {
+          images.push({
+            data: part.inlineData.data,
+            mimeType: part.inlineData.mimeType || 'image/png',
+          });
+        } else if (part.text) {
+          textResponse = part.text;
+        }
+      }
+    }
+
+    logger.debug('Gemini image generation completed', {
+      context: 'GoogleImagenProvider.generateWithGemini',
+      imageCount: images.length,
+      hasTextResponse: !!textResponse,
+    });
+
+    if (images.length === 0) {
+      throw new Error(
+        textResponse || 'No images returned from Gemini API'
+      );
+    }
+
+    return {
+      images,
+      raw: data,
+    };
+  }
+
+  /**
+   * Generate images using Imagen's predict API
+   * Used for: imagen-4, imagen-4-fast
+   */
+  private async generateWithImagen(
+    params: ImageGenParams,
+    apiKey: string,
+    model: string
+  ): Promise<ImageGenResponse> {
     const baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
     const endpoint = `${baseUrl}/models/${model}:predict`;
 
@@ -40,19 +199,22 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
 
     // Add optional parameters
     if (params.aspectRatio) {
-      (requestBody.parameters as Record<string, unknown>).aspectRatio = params.aspectRatio;
+      (requestBody.parameters as Record<string, unknown>).aspectRatio =
+        params.aspectRatio;
     }
 
-    // Seed parameter is provider-specific, access via type assertion
+    // Seed parameter is provider-specific
     const extendedParams = params as ImageGenParams & { seed?: number };
     if (extendedParams.seed !== undefined) {
-      (requestBody.parameters as Record<string, unknown>).seed = extendedParams.seed;
+      (requestBody.parameters as Record<string, unknown>).seed =
+        extendedParams.seed;
     }
 
     logger.debug('Sending request to Google Imagen API', {
-      context: 'GoogleImagenProvider.generateImage',
+      context: 'GoogleImagenProvider.generateWithImagen',
       endpoint,
-      sampleCount: (requestBody.parameters as Record<string, unknown>).sampleCount,
+      sampleCount: (requestBody.parameters as Record<string, unknown>)
+        .sampleCount,
     });
 
     const response = await fetch(endpoint, {
@@ -67,17 +229,19 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
     if (!response.ok) {
       const error = await response.json();
       logger.error('Google Imagen API error', {
-        context: 'GoogleImagenProvider.generateImage',
+        context: 'GoogleImagenProvider.generateWithImagen',
         status: response.status,
         errorMessage: error.error?.message,
       });
-      throw new Error(error.error?.message || `Google Imagen API error: ${response.status}`);
+      throw new Error(
+        error.error?.message || `Google Imagen API error: ${response.status}`
+      );
     }
 
     const data = await response.json();
 
-    logger.debug('Image generation completed', {
-      context: 'GoogleImagenProvider.generateImage',
+    logger.debug('Imagen generation completed', {
+      context: 'GoogleImagenProvider.generateWithImagen',
       imageCount: data.predictions?.length ?? 0,
     });
 

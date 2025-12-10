@@ -248,6 +248,8 @@ async function handleMultiCharacterImport(
       systemPromptOverride: null,
       displayOrder: displayOrder++,
       isActive: true,
+      hasHistoryAccess: false,
+      joinScenario: null,
       createdAt: now,
       updatedAt: now,
     })
@@ -599,6 +601,8 @@ async function handleLegacyImport(
     systemPromptOverride: null,
     displayOrder: 0,
     isActive: true,
+    hasHistoryAccess: false,
+    joinScenario: null,
     createdAt: now,
     updatedAt: now,
   })
@@ -615,6 +619,8 @@ async function handleLegacyImport(
       systemPromptOverride: null,
       displayOrder: 1,
       isActive: true,
+      hasHistoryAccess: false,
+      joinScenario: null,
       createdAt: now,
       updatedAt: now,
     })

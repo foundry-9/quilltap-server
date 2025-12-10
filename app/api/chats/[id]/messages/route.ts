@@ -9,9 +9,20 @@ import { decryptApiKey } from '@/lib/encryption'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext } from '@/lib/chat/tool-executor'
 import { buildToolsForProvider } from '@/lib/tools'
-import { processMessageForMemoryAsync } from '@/lib/memory'
-import { buildContext } from '@/lib/chat/context-manager'
+import { processMessageForMemoryAsync, processInterCharacterMemoryAsync } from '@/lib/memory'
+import { buildContext, type MessageWithParticipant } from '@/lib/chat/context-manager'
+import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
+import { resolveConnectionProfile } from '@/lib/chat/connection-resolver'
+import {
+  selectNextSpeaker,
+  calculateTurnStateFromHistory,
+  updateTurnStateAfterMessage,
+  getActiveCharacterParticipants,
+  findUserParticipant,
+  isMultiCharacterChat,
+  type TurnState,
+} from '@/lib/chat/turn-manager'
 import {
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,
@@ -20,12 +31,21 @@ import {
 import { logger } from '@/lib/logger'
 import { requiresApiKey } from '@/lib/plugins/provider-validation'
 import { z } from 'zod'
+import type { MessageEvent, Character, Persona, ChatParticipantBase } from '@/lib/schemas/types'
 
 // Validation schema
 const sendMessageSchema = z.object({
   content: z.string().min(1, 'Message content is required'),
   // Optional array of file IDs to attach to this message
   fileIds: z.array(z.string()).optional(),
+})
+
+// Validation schema for continue mode (nudge action)
+const continueMessageSchema = z.object({
+  // Continue mode - trigger character response without user message
+  continueMode: z.literal(true),
+  // Optional: specify which participant should respond (for multi-character)
+  respondingParticipantId: z.string().uuid().optional(),
 })
 
 // Helper function to load attached files
@@ -55,7 +75,7 @@ async function processToolResults(
   controller: ReadableStreamDefaultController,
   encoder: TextEncoder
 ) {
-  const toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
+  const toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string; expandedPrompt?: string } }> = []
   const generatedImagePaths: Array<{ id: string; filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
 
   // Send tool detection info with tool names for proper UI handling
@@ -67,7 +87,8 @@ async function processToolResults(
     })}\n\n`)
   )
 
-  for (const toolCall of toolCalls) {
+  for (let toolIndex = 0; toolIndex < toolCalls.length; toolIndex++) {
+    const toolCall = toolCalls[toolIndex]
     const toolResult = await executeToolCallWithContext(toolCall, toolContext)
 
     if (toolResult.success && Array.isArray(toolResult.result)) {
@@ -108,6 +129,7 @@ async function processToolResults(
       encoder.encode(
         `data: ${JSON.stringify({
           toolResult: {
+            index: toolIndex,
             name: toolResult.toolName,
             success: toolResult.success,
             result: toolResult.result,
@@ -125,7 +147,7 @@ async function saveToolMessages(
   repos: ReturnType<typeof getRepositories>,
   chatId: string,
   _userId: string,
-  toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }>,
+  toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string; expandedPrompt?: string } }>,
   generatedImagePaths: Array<{ id: string; filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }>,
   characterId?: string
 ) {
@@ -150,6 +172,8 @@ async function saveToolMessages(
         arguments: toolMsg.arguments,
         provider: toolMsg.metadata?.provider,
         model: toolMsg.metadata?.model,
+        // For image generation, store the expanded prompt (with {{me}} etc. resolved)
+        prompt: toolMsg.metadata?.expandedPrompt,
       }),
       createdAt: new Date().toISOString(),
       attachments: toolAttachments,
@@ -205,18 +229,52 @@ export async function POST(
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
 
-    // Get first active character participant
-    const characterParticipant = chat.participants.find(
-      p => p.type === 'CHARACTER' && p.isActive && p.characterId && p.connectionProfileId
-    )
+    // Get user participant (persona) for turn management
+    const userParticipant = findUserParticipant(chat.participants)
+    const userParticipantId = userParticipant?.id ?? null
+
+    // Read request body early to check for respondingParticipantId in continue mode
+    const body = await req.json()
+    const isContinueMode = body.continueMode === true
+    const requestedRespondingParticipantId = isContinueMode ? body.respondingParticipantId : undefined
+
+    // Get character participant - use specified participant for continue mode, otherwise first active character
+    // Note: connectionProfileId is no longer required on participant - we resolve it via fallback chain
+    let characterParticipant: typeof chat.participants[0] | undefined
+
+    if (requestedRespondingParticipantId) {
+      // Continue mode with specific participant requested - find them
+      characterParticipant = chat.participants.find(
+        p => p.id === requestedRespondingParticipantId && p.type === 'CHARACTER' && p.isActive && p.characterId
+      )
+      if (!characterParticipant) {
+        logger.warn('[Chat Messages] Requested responding participant not found or inactive', {
+          chatId: id,
+          requestedParticipantId: requestedRespondingParticipantId,
+        })
+        // Fall back to first active character
+        characterParticipant = chat.participants.find(
+          p => p.type === 'CHARACTER' && p.isActive && p.characterId
+        )
+      }
+    } else {
+      // Normal mode or continue mode without specific participant - use first active character
+      characterParticipant = chat.participants.find(
+        p => p.type === 'CHARACTER' && p.isActive && p.characterId
+      )
+    }
 
     if (!characterParticipant?.characterId) {
       return NextResponse.json({ error: 'No active character in chat' }, { status: 404 })
     }
 
-    if (!characterParticipant.connectionProfileId) {
-      return NextResponse.json({ error: 'No connection profile for character' }, { status: 404 })
-    }
+    logger.debug('[Chat Messages] Selected responding participant', {
+      chatId: id,
+      participantId: characterParticipant.id,
+      characterId: characterParticipant.characterId,
+      isContinueMode,
+      requestedParticipantId: requestedRespondingParticipantId,
+    })
 
     // Get character
     const character = await repos.characters.findById(characterParticipant.characterId)
@@ -224,11 +282,33 @@ export async function POST(
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    // Get connection profile with API key from the participant
-    const connectionProfile = await repos.connections.findById(characterParticipant.connectionProfileId)
+    // Resolve connection profile using fallback chain:
+    // 1. participant.connectionProfileId (per-chat override)
+    // 2. character.defaultConnectionProfileId (character's default)
+    let resolvedConnectionProfileId: string
+    try {
+      resolvedConnectionProfileId = resolveConnectionProfile(characterParticipant, character)
+    } catch (error) {
+      logger.error('[Chat Messages] Failed to resolve connection profile', {
+        participantId: characterParticipant.id,
+        characterId: character.id,
+        characterName: character.name,
+      })
+      return NextResponse.json({ error: 'No connection profile configured for character' }, { status: 400 })
+    }
+
+    // Get connection profile with API key
+    const connectionProfile = await repos.connections.findById(resolvedConnectionProfileId)
     if (!connectionProfile) {
       return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
     }
+
+    logger.debug('[Chat Messages] Using connection profile', {
+      profileId: resolvedConnectionProfileId,
+      provider: connectionProfile.provider,
+      model: connectionProfile.modelName,
+      resolvedFrom: characterParticipant.connectionProfileId ? 'participant' : 'character_default',
+    })
 
     let apiKey = null
     if (connectionProfile.apiKeyId) {
@@ -245,38 +325,65 @@ export async function POST(
     // Get existing messages
     const existingMessages = await repos.chats.getMessages(id)
 
-    // Validate request body
-    const body = await req.json()
-    const { content, fileIds } = sendMessageSchema.parse(body)
+    // body and isContinueMode already parsed earlier for participant selection
+    let content = ''
+    let fileIds: string[] = []
+    let attachedFiles: Awaited<ReturnType<typeof loadAttachedFiles>> = []
+    let userMessageId: string | null = null
 
-    // Load file attachments if provided
-    const attachedFiles = await loadAttachedFiles(repos, id, fileIds)
+    if (isContinueMode) {
+      // Continue mode: validate with continue schema
+      const parsed = continueMessageSchema.parse(body)
+      logger.debug('[Chat Messages] Continue mode activated (nudge)', {
+        chatId: id,
+        respondingParticipantId: parsed.respondingParticipantId,
+      })
+      // In continue mode, we don't create a user message - just trigger character response
+    } else {
+      // Normal mode: validate with send message schema
+      const parsed = sendMessageSchema.parse(body)
+      content = parsed.content
+      fileIds = parsed.fileIds || []
 
-    // Create user message event
-    const userMessageId = crypto.randomUUID()
-    const now = new Date().toISOString()
-    const userMessage = {
-      id: userMessageId,
-      type: 'message' as const,
-      role: 'USER' as const,
-      content,
-      createdAt: now,
-      attachments: fileIds || [],
-    }
+      // Load file attachments if provided
+      attachedFiles = await loadAttachedFiles(repos, id, fileIds)
 
-    // Add user message to chat
-    await repos.chats.addMessage(id, userMessage)
+      // Create user message event with participantId for multi-character tracking
+      userMessageId = crypto.randomUUID()
+      const now = new Date().toISOString()
+      const userMessage = {
+        id: userMessageId,
+        type: 'message' as const,
+        role: 'USER' as const,
+        content,
+        createdAt: now,
+        attachments: fileIds || [],
+        // Track which participant (persona) sent this message for multi-character chats
+        participantId: userParticipantId,
+      }
 
-    // Update file attachments with message ID using repository
-    if (attachedFiles.length > 0) {
-      for (const file of attachedFiles) {
-        // Link the file to the message ID
-        await repos.files.addLink(file.id, userMessageId)
+      // Add user message to chat
+      await repos.chats.addMessage(id, userMessage)
+
+      logger.debug('[Chat Messages] User message saved', {
+        messageId: userMessageId,
+        participantId: userParticipantId,
+        isMultiCharacter: isMultiCharacterChat(chat.participants),
+      })
+
+      // Update file attachments with message ID using repository
+      if (attachedFiles.length > 0) {
+        for (const file of attachedFiles) {
+          // Link the file to the message ID
+          await repos.files.addLink(file.id, userMessageId)
+        }
       }
     }
 
-    // Load file data for LLM
-    const fileAttachments = await loadChatFilesForLLM(attachedFiles.map(f => f.id))
+    // Load file data for LLM (only if we have attachments)
+    const fileAttachments = attachedFiles.length > 0
+      ? await loadChatFilesForLLM(attachedFiles.map(f => f.id))
+      : []
 
     // Process file attachment fallbacks if provider doesn't support them
     const fallbackResults: FallbackResult[] = []
@@ -306,15 +413,19 @@ export async function POST(
     }
 
     // If we have fallback content, prepend it to the user's message
-    const finalUserMessageContent = messageContentPrefix ? messageContentPrefix + content : content
+    // In continue mode, finalUserMessageContent will be undefined (no new user message)
+    const finalUserMessageContent = isContinueMode
+      ? undefined
+      : (messageContentPrefix ? messageContentPrefix + content : content)
 
     // Get persona if available
     const personaParticipant = chat.participants.find(
       p => p.type === 'PERSONA' && p.isActive && p.personaId
     )
     let persona: { name: string; description: string } | null = null
+    let personaData: Persona | null = null
     if (personaParticipant?.personaId) {
-      const personaData = await repos.personas.findById(personaParticipant.personaId)
+      personaData = await repos.personas.findById(personaParticipant.personaId)
       if (personaData) {
         persona = { name: personaData.name, description: personaData.description }
       }
@@ -322,6 +433,53 @@ export async function POST(
 
     // Get chat settings for embedding profile
     const chatSettings = await repos.users.getChatSettings(user.id)
+
+    // ========================================================================
+    // Phase 3: Multi-Character Context Building Setup
+    // ========================================================================
+
+    // Detect if this is a multi-character chat
+    const isMultiCharacter = isMultiCharacterChat(chat.participants)
+
+    // Load all character and persona data for multi-character chats
+    const participantCharacters = new Map<string, Character>()
+    const participantPersonas = new Map<string, Persona>()
+
+    if (isMultiCharacter) {
+      logger.debug('[Chat Messages] Multi-character chat detected, loading all participant data', {
+        participantCount: chat.participants.length,
+      })
+
+      // Load all characters
+      for (const p of chat.participants) {
+        if (p.type === 'CHARACTER' && p.characterId && p.isActive) {
+          if (p.characterId === character.id) {
+            // Reuse already-loaded character
+            participantCharacters.set(p.characterId, character)
+          } else {
+            const char = await repos.characters.findById(p.characterId)
+            if (char) {
+              participantCharacters.set(p.characterId, char)
+            }
+          }
+        } else if (p.type === 'PERSONA' && p.personaId && p.isActive) {
+          if (personaData && p.personaId === personaData.id) {
+            // Reuse already-loaded persona
+            participantPersonas.set(p.personaId, personaData)
+          } else {
+            const pers = await repos.personas.findById(p.personaId)
+            if (pers) {
+              participantPersonas.set(p.personaId, pers)
+            }
+          }
+        }
+      }
+
+      logger.debug('[Chat Messages] Loaded participant data', {
+        characterCount: participantCharacters.size,
+        personaCount: participantPersonas.size,
+      })
+    }
 
     // Build context with intelligent token management
     // Filter existing messages to include USER, ASSISTANT, and TOOL messages (exclude SYSTEM)
@@ -364,6 +522,49 @@ export async function POST(
       })
       .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
 
+    // Build messages with participant info for multi-character context
+    let messagesWithParticipants: MessageWithParticipant[] | undefined
+
+    if (isMultiCharacter) {
+      messagesWithParticipants = existingMessages
+        .filter(msg => msg.type === 'message')
+        .filter(msg => {
+          const role = (msg as { role: string }).role
+          return role === 'USER' || role === 'ASSISTANT' || role === 'TOOL'
+        })
+        .map(msg => {
+          const messageEvent = msg as MessageEvent
+
+          // For TOOL messages, format as a user message indicating the tool result
+          if (messageEvent.role === 'TOOL') {
+            try {
+              const toolData = JSON.parse(messageEvent.content)
+              const resultText = toolData.result || 'No result'
+
+              return {
+                role: 'USER' as const,
+                content: `[Tool Result: ${toolData.toolName}]\n${resultText}`,
+                id: messageEvent.id,
+                createdAt: messageEvent.createdAt,
+                participantId: null, // Tool messages don't have a participant
+              }
+            } catch {
+              return null
+            }
+          }
+
+          return {
+            role: messageEvent.role,
+            content: messageEvent.content,
+            id: messageEvent.id,
+            thoughtSignature: messageEvent.role === 'ASSISTANT' ? messageEvent.thoughtSignature : undefined,
+            participantId: messageEvent.participantId,
+            createdAt: messageEvent.createdAt,
+          }
+        })
+        .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
+    }
+
     const builtContext = await buildContext({
       provider: connectionProfile.provider,
       modelName: connectionProfile.modelName,
@@ -378,6 +579,12 @@ export async function POST(
       skipMemories: false,
       maxMemories: 10,
       minMemoryImportance: 0.3,
+      // Multi-character context building options (Phase 3)
+      respondingParticipant: isMultiCharacter ? characterParticipant : undefined,
+      allParticipants: isMultiCharacter ? chat.participants : undefined,
+      participantCharacters: isMultiCharacter ? participantCharacters : undefined,
+      participantPersonas: isMultiCharacter ? participantPersonas : undefined,
+      messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
     })
 
     // Log context building results for debugging
@@ -393,20 +600,38 @@ export async function POST(
       return !fallback || (fallback.type !== 'text' && fallback.type !== 'image_description')
     })
 
-    const messages = builtContext.messages.map((msg, idx) => {
-      if (idx === builtContext.messages.length - 1 && msg.role === 'user' && attachmentsToSend.length > 0) {
+    // Apply provider-aware message formatting for multi-character support
+    // This handles name field support or content prefix fallback
+    const formattedContextMessages = isMultiCharacter
+      ? formatMessagesForProvider(
+          builtContext.messages.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            name: msg.name,
+            thoughtSignature: msg.thoughtSignature,
+          })),
+          connectionProfile.provider,
+          character.name
+        )
+      : builtContext.messages
+
+    const messages = formattedContextMessages.map((msg, idx) => {
+      if (idx === formattedContextMessages.length - 1 && msg.role === 'user' && attachmentsToSend.length > 0) {
         return {
           role: msg.role,
           content: msg.content,
           attachments: attachmentsToSend,
+          name: msg.name,
         }
       }
       // Preserve thoughtSignature for Gemini 3 thinking models (required for multi-turn function calling)
       // Convert null to undefined for LLMMessage compatibility
+      // Include name for multi-character support
       return {
         role: msg.role,
         content: msg.content,
         thoughtSignature: msg.thoughtSignature ?? undefined,
+        name: msg.name,
       }
     })
 
@@ -542,6 +767,8 @@ export async function POST(
               tools: tools.length > 0 ? tools : undefined,
               // Enable native web search if the profile has it enabled and provider supports it
               webSearchEnabled: useNativeWebSearch,
+              // Pass profile parameters for provider-specific features (fallbacks, provider preferences, etc.)
+              profileParameters: modelParams,
             },
             decryptedKey
           )) {
@@ -605,16 +832,17 @@ export async function POST(
 
             // Add assistant message with tool call to conversation (if there was any content)
             // Include thought signature for Gemini 3 thinking models
+            // Include name for multi-character support (character name for assistant messages)
             if (currentResponse && currentResponse.trim().length > 0) {
               currentMessages = [
                 ...currentMessages,
-                { role: 'assistant' as const, content: currentResponse, thoughtSignature }
+                { role: 'assistant' as const, content: currentResponse, thoughtSignature, name: undefined }
               ]
             } else {
               // Even without content, add a placeholder to maintain conversation flow
               currentMessages = [
                 ...currentMessages,
-                { role: 'assistant' as const, content: '[Tool call made]', thoughtSignature }
+                { role: 'assistant' as const, content: '[Tool call made]', thoughtSignature, name: undefined }
               ]
             }
 
@@ -622,7 +850,7 @@ export async function POST(
             for (const toolMsg of results.toolMessages) {
               currentMessages = [
                 ...currentMessages,
-                { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined }
+                { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, name: undefined }
               ]
             }
 
@@ -702,8 +930,16 @@ export async function POST(
               attachments: assistantAttachments,
               // Store thought signature for Gemini 3 thinking models (required for multi-turn function calling)
               thoughtSignature: thoughtSignature || null,
+              // Track which participant (character) sent this message for multi-character chats
+              participantId: characterParticipant.id,
             }
             await repos.chats.addMessage(id, assistantMessage)
+
+            logger.debug('[Chat Messages] Assistant message saved', {
+              messageId: assistantMessageId,
+              participantId: characterParticipant.id,
+              characterName: character.name,
+            })
 
             // Save tool messages if tools were executed (this also links images to character)
             const toolSaveResult = toolMessages.length > 0
@@ -728,6 +964,49 @@ export async function POST(
             // Send final message - use assistant message ID if available, otherwise use the first tool message ID
             const finalMessageId = assistantMessageId || firstToolMessageId
 
+            // Calculate next speaker for multi-character chats
+            // Get all updated messages including the one just saved
+            const updatedMessages = await repos.chats.getMessages(id)
+            const messageEvents = updatedMessages.filter(
+              (m): m is typeof m & { type: 'message' } => m.type === 'message'
+            ) as unknown as MessageEvent[]
+
+            // Calculate turn state from message history
+            const turnState = calculateTurnStateFromHistory({
+              messages: messageEvents,
+              participants: chat.participants,
+              userParticipantId,
+            })
+
+            // Load all characters for turn selection
+            const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants)
+            const charactersMap = new Map<string, typeof character>()
+            for (const p of activeCharacterParticipants) {
+              if (p.characterId) {
+                const char = p.id === characterParticipant.id
+                  ? character
+                  : await repos.characters.findById(p.characterId)
+                if (char) {
+                  charactersMap.set(p.characterId, char)
+                }
+              }
+            }
+
+            // Select next speaker
+            const nextSpeakerResult = selectNextSpeaker(
+              chat.participants,
+              charactersMap,
+              turnState,
+              userParticipantId
+            )
+
+            logger.debug('[Chat Messages] Next speaker calculated', {
+              nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+              reason: nextSpeakerResult.reason,
+              cycleComplete: nextSpeakerResult.cycleComplete,
+              isMultiCharacter: isMultiCharacterChat(chat.participants),
+            })
+
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
@@ -736,6 +1015,13 @@ export async function POST(
                   usage,
                   attachmentResults,
                   toolsExecuted: toolMessages.length > 0,
+                  // Multi-character turn management info
+                  turn: {
+                    nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+                    reason: nextSpeakerResult.reason,
+                    cycleComplete: nextSpeakerResult.cycleComplete,
+                    isUsersTurn: nextSpeakerResult.nextSpeakerId === null,
+                  },
                 })}\n\n`
               )
             )
@@ -748,7 +1034,7 @@ export async function POST(
                   characterId: character.id,
                   characterName: character.name,
                   chatId: id,
-                  userMessage: content,
+                  userMessage: isContinueMode ? '[Continue/Nudge - no user message]' : content,
                   assistantMessage: fullResponse,
                   sourceMessageId: assistantMessageId,
                   userId: user.id,
@@ -765,6 +1051,52 @@ export async function POST(
                     }
                   }
                 })
+
+                // In multi-character chats, also extract memories about other characters
+                if (isMultiCharacter && characterParticipant) {
+                  // Get the last message from another character to form memories about them
+                  const otherCharacterMessages = existingMessages
+                    .filter(msg => msg.type === 'message')
+                    .filter(msg => {
+                      const event = msg as { role: string; participantId?: string | null }
+                      return event.role === 'ASSISTANT' && event.participantId && event.participantId !== characterParticipant.id
+                    })
+                    .slice(-5) // Look at last 5 assistant messages from others
+
+                  for (const otherMsg of otherCharacterMessages) {
+                    const event = otherMsg as { role: string; content: string; id?: string; participantId?: string | null }
+                    const otherParticipantId = event.participantId
+                    if (!otherParticipantId) continue
+
+                    // Find the other participant and their character
+                    const otherParticipant = chat.participants.find(p => p.id === otherParticipantId)
+                    if (!otherParticipant || otherParticipant.type !== 'CHARACTER' || !otherParticipant.characterId) continue
+
+                    const otherCharacter = participantCharacters.get(otherParticipant.characterId)
+                    if (!otherCharacter) continue
+
+                    // Extract memory that this character has about the other character
+                    processInterCharacterMemoryAsync({
+                      observerCharacterId: character.id,
+                      observerCharacterName: character.name,
+                      observerMessage: fullResponse,
+                      subjectCharacterId: otherCharacter.id,
+                      subjectCharacterName: otherCharacter.name,
+                      subjectMessage: event.content,
+                      chatId: id,
+                      sourceMessageId: assistantMessageId,
+                      userId: user.id,
+                      connectionProfile,
+                      cheapLLMSettings: chatSettings.cheapLLMSettings,
+                      availableProfiles,
+                    })
+                  }
+
+                  logger.debug('[Chat Messages] Triggered inter-character memory extraction', {
+                    characterId: character.id,
+                    otherCharacterCount: otherCharacterMessages.length,
+                  })
+                }
 
                 // Check if we need to generate a context summary (non-blocking)
                 checkAndGenerateSummaryIfNeeded(
