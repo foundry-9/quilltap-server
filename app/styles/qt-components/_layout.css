@@ -81,6 +81,7 @@
     @apply transition-all duration-200;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    cursor: pointer;
     padding: var(--qt-navbar-link-padding-y) var(--qt-navbar-link-padding-x);
     border-radius: var(--qt-navbar-link-radius);
     background: transparent;
@@ -96,6 +97,8 @@
    */
   .qt-navbar-toggle {
     @apply inline-flex items-center justify-center;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    cursor: pointer;
     width: 2.5rem;
     height: 2.5rem;
     border-radius: var(--qt-navbar-link-radius);
@@ -157,6 +160,7 @@
   .qt-navbar-dropdown-item {
     @apply flex items-center justify-between gap-2;
     @apply w-full px-3 py-2 rounded-md text-sm;
+    cursor: pointer;
     transition: background 150ms ease, color 150ms ease;
   }
 
@@ -174,6 +178,7 @@
    */
   .qt-navbar-chip-button {
     @apply inline-flex items-center gap-1 text-sm;
+    cursor: pointer;
     padding: 0.25rem 0.75rem;
     border-radius: 9999px;
     border: 1px solid var(--qt-navbar-link-hover-bg);

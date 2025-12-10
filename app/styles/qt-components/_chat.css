@@ -154,6 +154,7 @@
    */
   .qt-chat-toolbar-button {
     @apply inline-flex items-center justify-center;
+    cursor: pointer;
     width: 2.75rem;
     height: 2.75rem;
     border-radius: var(--qt-button-radius);
@@ -227,6 +228,7 @@
     @apply transition-all duration-200;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    cursor: pointer;
     background: var(--qt-button-primary-bg);
     color: var(--qt-button-primary-fg);
     box-shadow: var(--qt-button-primary-shadow);
@@ -433,6 +435,7 @@
 
   .qt-chat-attachment-button {
     @apply relative overflow-hidden rounded transition-colors;
+    cursor: pointer;
     border: 1px solid var(--qt-chat-attachment-border);
   }
 

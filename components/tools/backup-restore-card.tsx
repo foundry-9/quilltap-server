@@ -175,7 +175,7 @@ export default function BackupRestoreCard() {
                 </div>
                 <button
                   onClick={() => handleRestoreFromBackup(backup.key)}
-                  className="ml-4 px-3 py-1.5 text-sm bg-accent text-accent-foreground rounded hover:bg-accent/80 whitespace-nowrap transition-colors"
+                  className="qt-button qt-button-secondary ml-4 px-3 py-1.5 text-sm whitespace-nowrap"
                 >
                   Restore
                 </button>
