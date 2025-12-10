@@ -1,11 +1,12 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { clientLogger } from '@/lib/client-logger'
 
 interface CharacterInfo {
   id: string
@@ -66,34 +67,130 @@ function formatCharacterNames(characters: CharacterInfo[]): string {
   return characters.map(c => c.name).join(' + ')
 }
 
-export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
+// Transform API response to RecentChat format
+function transformApiChatToRecentChat(apiChat: any): RecentChat {
+  const characters: CharacterInfo[] = []
+  let persona: RecentChat['persona'] = null
+
+  for (const participant of apiChat.participants || []) {
+    if (participant.type === 'CHARACTER' && participant.character) {
+      characters.push({
+        id: participant.character.id,
+        name: participant.character.name,
+        avatarUrl: participant.character.avatarUrl,
+        defaultImageId: participant.character.defaultImageId,
+        defaultImage: participant.character.defaultImage,
+        tags: participant.character.tags || [],
+      })
+    }
+    if (participant.type === 'PERSONA' && participant.persona) {
+      persona = {
+        id: participant.persona.id,
+        name: participant.persona.name,
+        title: participant.persona.title,
+        tags: participant.persona.tags || [],
+      }
+    }
+  }
+
+  return {
+    id: apiChat.id,
+    title: apiChat.title,
+    updatedAt: apiChat.updatedAt,
+    messageCount: apiChat._count?.messages || 0,
+    characters,
+    persona,
+    tags: apiChat.tags || [],
+  }
+}
+
+export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionProps) {
   const { style } = useAvatarDisplay()
-  const { shouldHideByIds } = useQuickHide()
-  const visibleChats = useMemo(
-    () => chats.filter(chat => {
-      // Collect all tag IDs: chat tags + character tags + persona tags
-      const allTagIds: string[] = chat.tags.map(ct => ct.tag.id)
+  const { hiddenTagIds, loading: quickHideLoading } = useQuickHide()
+  const [chats, setChats] = useState<RecentChat[]>(initialChats)
+  const [loading, setLoading] = useState(false)
+  const [hasInitialized, setHasInitialized] = useState(false)
 
-      for (const character of chat.characters) {
-        if (character.tags) {
-          allTagIds.push(...character.tags)
-        }
+  // Fetch recent chats from API with excluded tags
+  const fetchRecentChats = useCallback(async (excludeTagIds: string[]) => {
+    try {
+      setLoading(true)
+      const params = new URLSearchParams()
+      params.set('limit', '5')
+      if (excludeTagIds.length > 0) {
+        params.set('excludeTagIds', excludeTagIds.join(','))
       }
 
-      if (chat.persona?.tags) {
-        allTagIds.push(...chat.persona.tags)
+      clientLogger.debug('Fetching recent chats', {
+        excludeTagIds: excludeTagIds.length > 0 ? excludeTagIds : undefined,
+      })
+
+      const response = await fetch(`/api/chats?${params.toString()}`, {
+        cache: 'no-store',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch chats')
       }
 
-      return !shouldHideByIds(allTagIds)
-    }),
-    [chats, shouldHideByIds]
-  )
+      const data = await response.json()
+      const transformedChats = (data.chats || []).map(transformApiChatToRecentChat)
+
+      clientLogger.debug('Received recent chats', {
+        count: transformedChats.length,
+        excludedTagCount: excludeTagIds.length,
+      })
+
+      setChats(transformedChats)
+    } catch (error) {
+      clientLogger.error('Error fetching recent chats', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      // On error, keep the existing chats
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Refetch when hiddenTagIds changes (after initial load)
+  useEffect(() => {
+    // Wait for quick-hide provider to finish loading
+    if (quickHideLoading) {
+      return
+    }
+
+    // Mark as initialized after first render with quick-hide ready
+    if (!hasInitialized) {
+      setHasInitialized(true)
+      // If there are hidden tags on initial load, fetch filtered data
+      if (hiddenTagIds.size > 0) {
+        fetchRecentChats(Array.from(hiddenTagIds))
+      }
+      return
+    }
+
+    // After initialization, always refetch when hiddenTagIds changes
+    clientLogger.debug('Quick-hide state changed, refetching recent chats', {
+      hiddenTagCount: hiddenTagIds.size,
+    })
+    fetchRecentChats(Array.from(hiddenTagIds))
+  }, [hiddenTagIds, quickHideLoading, hasInitialized, fetchRecentChats])
+
+  // Use the chats directly - filtering is done server-side now
+  const visibleChats = chats
 
   return (
     <div className="mt-8 flex-1 flex flex-col min-h-0">
-      <h3 className="mb-4 text-xl font-semibold text-foreground">
-        Recent Chats
-      </h3>
+      <div className="flex items-center gap-2 mb-4">
+        <h3 className="text-xl font-semibold text-foreground">
+          Recent Chats
+        </h3>
+        {loading && (
+          <span className="text-sm text-muted-foreground animate-pulse">
+            updating...
+          </span>
+        )}
+      </div>
       {visibleChats.length > 0 ? (
         <div className="space-y-3 flex-1 overflow-y-auto pb-4">
           {visibleChats.map((chat) => {
