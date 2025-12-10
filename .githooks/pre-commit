@@ -48,6 +48,45 @@ kill_repo_node_processes() {
   return 0
 }
 
+ensure_next_removed_with_retry() {
+  local max_attempts="${1:-2}"
+  local wait_seconds="${2:-5}"
+  local attempt=1
+
+  while [ $attempt -le $max_attempts ]; do
+    if [ ! -d "$REPO_ROOT/.next" ]; then
+      if [ $attempt -eq 1 ]; then
+        echo "   - .next directory already absent."
+      else
+        echo "   - .next directory removed."
+      fi
+      return 0
+    fi
+
+    if rm -rf "$REPO_ROOT/.next" 2>/dev/null; then
+      if [ ! -d "$REPO_ROOT/.next" ]; then
+        echo "   - .next directory removed."
+        return 0
+      fi
+    fi
+
+    if [ $attempt -lt $max_attempts ]; then
+      echo "   - Failed to remove .next directory (attempt $attempt/$max_attempts). Retrying in $wait_seconds seconds..."
+      sleep "$wait_seconds"
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  if [ -d "$REPO_ROOT/.next" ]; then
+    echo "   - .next directory is still present after $max_attempts attempts."
+    return 1
+  fi
+
+  echo "   - .next directory removed."
+  return 0
+}
+
 watchman_available() {
   command -v watchman >/dev/null 2>&1
 }
@@ -108,50 +147,67 @@ assert_watchman_not_watching() {
 
 echo "🔍 Running pre-commit checks..."
 
-log_step "🛑 Step 1/11: Ensuring the local Node app for this repo is stopped..."
+log_step "🛑 Step 1/12: Ensuring the local Node app for this repo is stopped..."
 if kill_repo_node_processes "$REPO_ROOT"; then
   echo "✅ Active Node processes tied to this repo were terminated."
 else
   echo "ℹ️ No running Node processes for this repo were detected."
 fi
 
-log_step "🧹 Step 2/11: Removing the .next directory..."
-if [ -d "$REPO_ROOT/.next" ]; then
-  rm -rf "$REPO_ROOT/.next"
-  echo "✅ Removed .next."
+log_step "🧹 Step 2/12: Ensuring the .next directory is removed..."
+if ensure_next_removed_with_retry 2 5; then
+  echo "✅ Pre-build .next cleanup completed."
 else
-  echo "ℹ️ .next directory not found; nothing to remove."
+  echo "❌ Unable to remove .next directory before running checks."
+  exit 1
 fi
 
-log_step "📋 Step 3/11: Running ESLint..."
+log_step "📋 Step 3/12: Running ESLint..."
 npm run lint
 echo "✅ Linting passed!"
 
-log_step "👀 Step 4/11: Stopping watchman for this repository..."
+log_step "👀 Step 4/12: Stopping watchman for this repository..."
 stop_watchman_for_repo
 assert_watchman_not_watching
 echo "✅ watchman is not watching this repository."
 
-log_step "🧪 Step 5/11: Running unit tests (npm run test:unit)..."
+log_step "🧪 Step 5/12: Running unit tests (npm run test:unit)..."
 assert_watchman_not_watching
 npm run test:unit
 echo "✅ Unit tests passed!"
 
-log_step "👀 Step 6/11: Re-checking watchman and stopping it again if needed..."
+log_step "👀 Step 6/12: Re-checking watchman and stopping it again if needed..."
 stop_watchman_for_repo
 assert_watchman_not_watching
 echo "✅ watchman confirmed stopped."
 
-log_step "🧾 Step 7/11: Running TypeScript (npx tsc)..."
+log_step "🧾 Step 7/12: Running TypeScript (npx tsc)..."
 assert_watchman_not_watching
 npx tsc
 echo "✅ TypeScript check passed!"
 
-log_step "🏗️ Step 8/11: Building the project..."
-npm run build
-echo "✅ Build passed!"
+log_step "🏗️ Step 8/12: Building the project..."
+build_exit_code=0
+if npm run build; then
+  echo "✅ Build passed!"
+else
+  build_exit_code=$?
+  echo "❌ Build failed! Post-build cleanup will still run before exiting."
+fi
 
-log_step "🧮 Step 9/11: Calculating and applying version updates..."
+log_step "🧹 Step 9/12: Ensuring .next directory is removed after build..."
+if ensure_next_removed_with_retry 2 5; then
+  echo "✅ Post-build .next cleanup completed."
+else
+  echo "❌ Unable to remove .next directory after retries."
+  exit 1
+fi
+
+if [ $build_exit_code -ne 0 ]; then
+  exit $build_exit_code
+fi
+
+log_step "🧮 Step 10/12: Calculating and applying version updates..."
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
   SED_INPLACE=(-i '')
@@ -206,7 +262,7 @@ fi
 
 echo "✅ Version set: $NEW_VERSION (base: $BASE_VERSION, branch: $CURRENT_BRANCH)"
 
-log_step "📦 Step 10/11: Finalizing dependency artifacts and staging changes..."
+log_step "📦 Step 11/12: Finalizing dependency artifacts and staging changes..."
 
 if [ -f package-lock.json ]; then
   npm install --package-lock-only
@@ -227,7 +283,7 @@ if [ -f README.md ]; then
   git add README.md
 fi
 
-log_step "🎉 Step 11/11: All validations completed successfully!"
+log_step "🎉 Step 12/12: All validations completed successfully!"
 echo "✨ All pre-commit checks passed!"
 
 exit 0
