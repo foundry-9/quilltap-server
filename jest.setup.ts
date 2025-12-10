@@ -3,6 +3,25 @@ import fetchMock from 'jest-fetch-mock'
 
 fetchMock.enableMocks()
 
+const shouldSilenceConsole = process.env.ENABLE_TEST_LOGS !== 'true'
+
+if (shouldSilenceConsole) {
+  const consoleMethodsToSilence: Array<'log' | 'info' | 'debug' | 'warn' | 'trace' | 'error'> = [
+    'log',
+    'info',
+    'debug',
+    'warn',
+    'trace',
+    'error',
+  ]
+  const noop = (..._args: any[]) => {}
+  const silencedSpies = consoleMethodsToSilence.map((method) => jest.spyOn(console, method).mockImplementation(noop))
+
+  afterAll(() => {
+    silencedSpies.forEach((spy) => spy.mockRestore())
+  })
+}
+
 // Mock next-auth before any tests import it
 jest.mock('next-auth', () => ({
   getServerSession: jest.fn(),
