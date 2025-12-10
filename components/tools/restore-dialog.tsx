@@ -574,7 +574,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
             {step === 'progress' && restoreSummary ? (
               <button
                 onClick={handleCloseAfterRestore}
-                className="flex-1 qt-button-primary"
+                className="flex-1 qt-button qt-button-primary"
               >
                 Close
               </button>
@@ -583,7 +583,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                 <button
                   onClick={handleBack}
                   disabled={step === 'source' || restoring}
-                  className="qt-button-secondary"
+                  className="qt-button qt-button-secondary"
                 >
                   Back
                 </button>
@@ -593,7 +593,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                     <button
                       onClick={handleClose}
                       disabled={restoring}
-                      className="qt-button-secondary"
+                      className="qt-button qt-button-secondary"
                     >
                       Cancel
                     </button>
@@ -602,7 +602,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                       <button
                         onClick={handleStartRestore}
                         disabled={restoring || (restoreMode === 'replace' && !confirmReplace)}
-                        className="qt-button-primary flex items-center gap-2"
+                        className="qt-button qt-button-primary flex items-center gap-2"
                       >
                         {restoring ? (
                           <>
@@ -623,7 +623,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                           loadingPreview ||
                           (step === 'source' && !selectedFile && !selectedS3Key)
                         }
-                        className="qt-button-primary flex items-center gap-2"
+                        className="qt-button qt-button-primary flex items-center gap-2"
                       >
                         {loadingPreview ? (
                           <>

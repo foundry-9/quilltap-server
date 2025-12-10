@@ -22,8 +22,8 @@
   --ocean-highlight: hsl(174 66% 60%);
   --ocean-sand: hsl(35 74% 78%);
 
-  /* Ocean Surface Tokens */
-  --ocean-glass: hsl(var(--background) / 0.75);
+  /* Ocean Surface Tokens - OPAQUE for readability */
+  --ocean-glass: hsl(var(--background) / 0.95);
   --ocean-border-soft: hsl(var(--border) / 0.45);
   --ocean-border-strong: hsl(var(--border) / 0.85);
   --ocean-shadow: 0 36px 80px -45px rgb(6 48 68 / 0.65);
@@ -31,6 +31,13 @@
   --ocean-backdrop: blur(26px) saturate(130%);
   --ocean-transition: var(--transition-normal, 230ms) var(--transition-easing, cubic-bezier(0.35, 0.05, 0.2, 1));
   --ocean-text-soft: hsl(var(--mutedForeground));
+
+  /* Text outline for readability on light backgrounds */
+  --ocean-text-stroke:
+    -1px -1px 0 var(--ocean-abyss),
+     1px -1px 0 var(--ocean-abyss),
+    -1px  1px 0 var(--ocean-abyss),
+     1px  1px 0 var(--ocean-abyss);
 
   /* Base Styling */
   font-family: var(--font-sans, "DM Sans", system-ui, sans-serif);
@@ -40,17 +47,17 @@
      QT-* VARIABLE OVERRIDES
      ============================================================================ */
 
-  /* Button Variables */
+  /* Button Variables - Dark backgrounds for contrast on light backgrounds */
   --qt-button-radius: calc(var(--ocean-radius) * 0.7);
-  --qt-button-primary-bg: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
-  --qt-button-primary-fg: hsl(var(--primaryForeground));
-  --qt-button-primary-hover-bg: linear-gradient(135deg, hsl(var(--accent)), hsl(var(--primary)));
-  --qt-button-primary-shadow: 0 20px 40px -30px hsl(var(--primary) / 0.85);
+  --qt-button-primary-bg: linear-gradient(135deg, var(--ocean-abyss), var(--ocean-midnight));
+  --qt-button-primary-fg: hsl(var(--accent));
+  --qt-button-primary-hover-bg: linear-gradient(135deg, var(--ocean-midnight), var(--ocean-abyss));
+  --qt-button-primary-shadow: 0 20px 40px -30px rgb(0 0 0 / 0.65);
 
-  --qt-button-secondary-bg: hsl(var(--muted) / 0.6);
-  --qt-button-secondary-fg: hsl(var(--foreground));
-  --qt-button-secondary-border: var(--ocean-border-soft);
-  --qt-button-secondary-hover-bg: hsl(var(--accent) / 0.22);
+  --qt-button-secondary-bg: linear-gradient(135deg, var(--ocean-midnight), var(--ocean-abyss));
+  --qt-button-secondary-fg: hsl(210 20% 85%);
+  --qt-button-secondary-border: hsl(var(--border));
+  --qt-button-secondary-hover-bg: linear-gradient(135deg, var(--ocean-abyss), var(--ocean-midnight));
 
   --qt-button-ghost-bg: transparent;
   --qt-button-ghost-fg: var(--ocean-text-soft);
@@ -77,9 +84,9 @@
   --qt-status-danger-fg: var(--color-destructive);
   --qt-status-danger-border: color-mix(in srgb, var(--color-destructive) 45%, transparent);
 
-  /* Card Variables - Glass morphism style */
+  /* Card Variables - Opaque for readability */
   --qt-card-radius: var(--ocean-radius);
-  --qt-card-bg: linear-gradient(145deg, var(--ocean-glass), hsl(var(--card) / 0.9));
+  --qt-card-bg: linear-gradient(145deg, hsl(var(--card)), hsl(var(--card) / 0.98));
   --qt-card-fg: hsl(var(--foreground));
   --qt-card-border: var(--ocean-border-soft);
   --qt-card-border-opacity: 1;
@@ -110,20 +117,20 @@
   --qt-sidebar-item-active-bg: linear-gradient(120deg, hsl(var(--primary) / 0.2), hsl(var(--accent) / 0.2));
   --qt-sidebar-item-active-border: hsl(var(--ring));
 
-  /* Panel/Dialog Variables */
+  /* Panel/Dialog Variables - Opaque for readability */
   --qt-panel-radius: var(--ocean-radius);
-  --qt-panel-bg: linear-gradient(145deg, var(--ocean-glass), hsl(var(--card) / 0.9));
+  --qt-panel-bg: linear-gradient(145deg, hsl(var(--card)), hsl(var(--card) / 0.98));
   --qt-panel-border: var(--ocean-border-soft);
   --qt-panel-shadow: var(--ocean-shadow);
 
   --qt-dialog-radius: calc(var(--ocean-radius) * 1.1);
-  --qt-dialog-bg: linear-gradient(160deg, hsl(var(--card) / 0.98), hsl(var(--muted) / 0.65));
+  --qt-dialog-bg: linear-gradient(160deg, hsl(var(--card)), hsl(var(--muted)));
   --qt-dialog-border: var(--ocean-border-soft);
   --qt-dialog-shadow: 0 35px 80px -45px rgb(9 36 56 / 0.65);
   --qt-dialog-backdrop: rgb(0 0 0 / 0.5);
 
   --qt-popover-radius: calc(var(--ocean-radius) * 1.1);
-  --qt-popover-bg: linear-gradient(160deg, hsl(var(--card) / 0.98), hsl(var(--muted) / 0.65));
+  --qt-popover-bg: linear-gradient(160deg, hsl(var(--card)), hsl(var(--muted)));
   --qt-popover-fg: hsl(var(--foreground));
   --qt-popover-border: var(--ocean-border-soft);
   --qt-popover-shadow: 0 35px 80px -45px rgb(9 36 56 / 0.65);
@@ -133,14 +140,14 @@
   --qt-chat-message-padding: 1.125rem;
   --qt-chat-message-shadow: 0 25px 60px -40px rgb(6 48 68 / 0.45);
 
-  --qt-chat-user-bg: linear-gradient(145deg, hsl(var(--primary) / 0.18), hsl(var(--accent) / 0.16));
+  --qt-chat-user-bg: linear-gradient(145deg, hsl(var(--primary) / 0.85), hsl(var(--accent) / 0.8));
   --qt-chat-user-fg: hsl(var(--primaryForeground));
-  --qt-chat-user-border: hsl(var(--primary) / 0.45);
+  --qt-chat-user-border: hsl(var(--primary) / 0.65);
   --qt-chat-user-font: var(--font-sans, "DM Sans", system-ui, sans-serif);
 
-  --qt-chat-assistant-bg: linear-gradient(160deg, hsl(var(--card) / 0.92), hsl(var(--muted) / 0.6));
+  --qt-chat-assistant-bg: linear-gradient(160deg, hsl(var(--card)), hsl(var(--muted)));
   --qt-chat-assistant-fg: hsl(var(--foreground));
-  --qt-chat-assistant-border: hsl(var(--border) / 0.4);
+  --qt-chat-assistant-border: hsl(var(--border) / 0.6);
   --qt-chat-assistant-font: var(--font-sans, "DM Sans", system-ui, sans-serif);
 
   --qt-chat-composer-bg: linear-gradient(180deg, hsl(var(--muted) / 0.7), hsl(var(--background)));
@@ -160,14 +167,14 @@
   --qt-chat-attachment-overlay: rgb(3 12 22 / 0.5);
 
   --qt-chat-sidebar-width: 22rem;
-  --qt-chat-sidebar-bg: linear-gradient(180deg, var(--ocean-glass), hsl(var(--card) / 0.95));
+  --qt-chat-sidebar-bg: linear-gradient(180deg, hsl(var(--card)), hsl(var(--card) / 0.98));
   --qt-chat-sidebar-border: var(--ocean-border-soft);
   --qt-chat-sidebar-header-border: var(--ocean-border-soft);
   --qt-chat-sidebar-muted: var(--ocean-text-soft);
   --qt-chat-sidebar-heading: hsl(var(--foreground));
 
   --qt-participant-card-radius: var(--ocean-radius);
-  --qt-participant-card-bg: linear-gradient(145deg, var(--ocean-glass), hsl(var(--card) / 0.9));
+  --qt-participant-card-bg: linear-gradient(145deg, hsl(var(--card)), hsl(var(--card) / 0.98));
   --qt-participant-card-border: var(--ocean-border-soft);
   --qt-participant-card-active-border: hsl(var(--ring));
   --qt-participant-card-active-shadow: 0 10px 25px -15px hsl(var(--ring) / 0.8);
@@ -203,7 +210,7 @@
   --qt-auth-page-bg: radial-gradient(circle at 15% 20%, hsl(190 80% 75% / 0.25), transparent 40%),
     radial-gradient(circle at 85% 10%, hsl(207 90% 65% / 0.18), transparent 35%),
     linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted)) 60%, hsl(var(--background)));
-  --qt-auth-card-bg: linear-gradient(145deg, var(--ocean-glass), hsl(var(--card) / 0.9));
+  --qt-auth-card-bg: linear-gradient(145deg, hsl(var(--card)), hsl(var(--card) / 0.98));
   --qt-auth-card-fg: hsl(var(--foreground));
   --qt-auth-title-fg: hsl(var(--foreground));
   --qt-auth-subtitle-fg: var(--ocean-text-soft);
@@ -290,26 +297,46 @@
    These provide special effects (gradients, glass, animations) not possible via variables
    ============================================================================ */
 
-/* Primary Button - Gradient with scale effect */
+/* All buttons - Remove text-shadow that may be inherited from generic text rules */
+[data-theme="ocean"] .qt-button,
+[data-theme="ocean"] .qt-button-primary,
+[data-theme="ocean"] .qt-button-secondary,
+[data-theme="ocean"] .qt-button-ghost,
+[data-theme="ocean"] .qt-button-destructive,
+[data-theme="ocean"] .qt-button-icon {
+  text-shadow: none;
+}
+
+/* Primary Button - Dark background for contrast on light backgrounds */
 [data-theme="ocean"] .qt-button-primary {
-  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
-  color: hsl(var(--primaryForeground));
-  border: 1px solid hsl(var(--primary) / 0.5);
-  box-shadow: 0 20px 40px -30px hsl(var(--primary) / 0.85);
+  background: linear-gradient(135deg, var(--ocean-abyss), var(--ocean-midnight));
+  color: hsl(var(--accent));
+  border: 2px solid hsl(var(--accent));
+  box-shadow: 0 20px 40px -30px rgb(0 0 0 / 0.65);
   animation: ocean-sway 6s ease-in-out infinite alternate;
+  font-weight: 600;
 }
 
 [data-theme="ocean"] .qt-button-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, hsl(var(--accent)), hsl(var(--primary)));
-  box-shadow: 0 25px 45px -30px hsl(var(--accent) / 0.9);
+  background: linear-gradient(135deg, var(--ocean-midnight), var(--ocean-abyss));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary));
+  box-shadow: 0 25px 45px -30px rgb(0 0 0 / 0.75);
   transform: translateY(-2px) scale(1.01);
 }
 
-/* Secondary Button - Accent hover effect */
+/* Secondary Button - Dark background with border for contrast */
+[data-theme="ocean"] .qt-button-secondary {
+  background: linear-gradient(135deg, var(--ocean-midnight), var(--ocean-abyss));
+  color: hsl(210 20% 85%);
+  border: 2px solid hsl(var(--border));
+  font-weight: 500;
+}
+
 [data-theme="ocean"] .qt-button-secondary:hover:not(:disabled) {
   border-color: hsl(var(--accent));
-  color: hsl(var(--accentForeground));
-  background: hsl(var(--accent) / 0.22);
+  color: hsl(var(--accent));
+  background: linear-gradient(135deg, var(--ocean-abyss), var(--ocean-midnight));
 }
 
 /* Ghost Button - Border on hover */
@@ -318,17 +345,17 @@
   border-color: hsl(var(--border) / 0.45);
 }
 
-/* Card - Glass morphism with backdrop blur */
+/* Card - Opaque backgrounds for readability */
 [data-theme="ocean"] .qt-card,
 [data-theme="ocean"] .qt-card-interactive {
-  background: linear-gradient(145deg, var(--ocean-glass), hsl(var(--card) / 0.9));
+  background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--card) / 0.98));
   backdrop-filter: var(--ocean-backdrop);
   transition: background var(--ocean-transition), transform var(--ocean-transition), border-color var(--ocean-transition);
 }
 
-/* Interactive cards - More opaque and darker for readability */
+/* Interactive cards - Fully opaque */
 [data-theme="ocean"] .qt-card-interactive {
-  background: linear-gradient(145deg, hsl(210 35% 18% / 0.92), hsl(210 30% 22% / 0.88));
+  background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--muted)));
   backdrop-filter: blur(16px) saturate(110%);
 }
 
@@ -338,23 +365,23 @@
   transform: translateY(-2px);
 }
 
-/* Panel - Glass effect */
+/* Panel - Opaque for readability */
 [data-theme="ocean"] .qt-panel,
 [data-theme="ocean"] .qt-panel-elevated {
-  background: linear-gradient(145deg, var(--ocean-glass), hsl(var(--card) / 0.9));
+  background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--card) / 0.98));
   backdrop-filter: var(--ocean-backdrop);
 }
 
-/* Dialog - Gradient background with blur */
+/* Dialog - Opaque background */
 [data-theme="ocean"] .qt-dialog {
-  background: linear-gradient(160deg, hsl(var(--card) / 0.98), hsl(var(--muted) / 0.65));
+  background: linear-gradient(160deg, hsl(var(--card)), hsl(var(--muted)));
   backdrop-filter: blur(20px);
 }
 
-/* Popover - Glass effect */
+/* Popover - Opaque background */
 [data-theme="ocean"] .qt-popover,
 [data-theme="ocean"] .qt-dropdown {
-  background: linear-gradient(160deg, hsl(var(--card) / 0.98), hsl(var(--muted) / 0.65));
+  background: linear-gradient(160deg, hsl(var(--card)), hsl(var(--muted)));
   backdrop-filter: blur(20px);
 }
 
@@ -414,16 +441,16 @@
   opacity: 1;
 }
 
-/* User Message - Gradient with sway animation */
+/* User Message - Opaque gradient with sway animation */
 [data-theme="ocean"] .qt-chat-message-user {
-  background: linear-gradient(145deg, hsl(var(--primary) / 0.18), hsl(var(--accent) / 0.16));
+  background: linear-gradient(145deg, hsl(var(--primary) / 0.85), hsl(var(--accent) / 0.8));
   box-shadow: 0 18px 35px -25px hsl(var(--primary) / 0.7);
   animation: ocean-sway 6s ease-in-out infinite alternate;
 }
 
-/* Assistant Message - Gradient background with glisten */
+/* Assistant Message - Opaque gradient background with glisten */
 [data-theme="ocean"] .qt-chat-message-assistant {
-  background: linear-gradient(160deg, hsl(var(--card) / 0.92), hsl(var(--muted) / 0.6));
+  background: linear-gradient(160deg, hsl(var(--card)), hsl(var(--muted)));
 }
 
 [data-theme="ocean"] .qt-chat-message-assistant::after {
@@ -495,9 +522,9 @@
   box-shadow: 0 18px 35px -30px hsl(var(--info) / 0.4);
 }
 
-/* Auth Card - Glass effect */
+/* Auth Card - Opaque for readability */
 [data-theme="ocean"] .qt-auth-card {
-  background: linear-gradient(145deg, var(--ocean-glass), hsl(var(--card) / 0.9));
+  background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--card) / 0.98));
   backdrop-filter: var(--ocean-backdrop);
 }
 
@@ -522,6 +549,48 @@
 /* Brand text - white in dark theme */
 [data-theme="ocean"] .qt-font-brand {
   color: hsl(var(--foreground));
+}
+
+/* ============================================================================
+   TEXT READABILITY - Outline for text on light backgrounds
+   ============================================================================ */
+
+/* Page titles and headings that may appear on body background */
+[data-theme="ocean"] .qt-page-title,
+[data-theme="ocean"] .qt-page-description,
+[data-theme="ocean"] h1:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *):not(.qt-navbar *):not(.qt-auth-card *),
+[data-theme="ocean"] h2:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *):not(.qt-navbar *):not(.qt-auth-card *),
+[data-theme="ocean"] h3:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *):not(.qt-navbar *):not(.qt-auth-card *) {
+  text-shadow: var(--ocean-text-stroke);
+}
+
+/* Loading and empty state text */
+[data-theme="ocean"] .qt-content-scroll > div > p,
+[data-theme="ocean"] .qt-content-scroll > div > span,
+[data-theme="ocean"] .qt-page > div > p:not(.qt-card *),
+[data-theme="ocean"] .qt-page-with-navbar > div > p:not(.qt-card *) {
+  text-shadow: var(--ocean-text-stroke);
+}
+
+/* Dashboard and section headings */
+[data-theme="ocean"] .text-gray-900:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *),
+[data-theme="ocean"] .text-gray-800:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *),
+[data-theme="ocean"] .text-gray-700:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *),
+[data-theme="ocean"] .text-gray-600:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *) {
+  text-shadow: var(--ocean-text-stroke);
+}
+
+/* Dark mode text classes that need contrast */
+[data-theme="ocean"] .dark\:text-white:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *):not(.qt-navbar *),
+[data-theme="ocean"] .dark\:text-gray-400:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *):not(.qt-navbar *),
+[data-theme="ocean"] .dark\:text-gray-300:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *):not(.qt-navbar *) {
+  text-shadow: var(--ocean-text-stroke);
+}
+
+/* Generic text that may be on background - exclude buttons and links */
+[data-theme="ocean"] .font-bold:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *):not(.qt-navbar *):not(.qt-chat-message *):not(button):not(button *):not(a):not(a *),
+[data-theme="ocean"] .font-semibold:not(.qt-card *):not(.qt-panel *):not(.qt-dialog *):not(.qt-navbar *):not(.qt-chat-message *):not(button):not(button *):not(a):not(a *) {
+  text-shadow: var(--ocean-text-stroke);
 }
 
 /* ============================================================================

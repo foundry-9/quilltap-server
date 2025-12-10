@@ -24,7 +24,7 @@ export default async function Home() {
         <div className="flex gap-4 justify-center">
           <Link
             href="/auth/signin"
-            className="qt-button-primary qt-button-lg shadow-lg"
+            className="qt-button qt-button-primary qt-button-lg shadow-lg"
           >
             Get Started
           </Link>
@@ -32,7 +32,7 @@ export default async function Home() {
             href="https://github.com/foundry-9/quilltap"
             target="_blank"
             rel="noopener noreferrer"
-            className="qt-button-secondary qt-button-lg shadow-lg"
+            className="qt-button qt-button-secondary qt-button-lg shadow-lg"
           >
             Learn More
           </a>

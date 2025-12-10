@@ -216,7 +216,7 @@ function ParticipantEditor({
       <button
         onClick={handleSave}
         disabled={loading}
-        className="qt-button-primary qt-button-sm"
+        className="qt-button qt-button-primary qt-button-sm"
       >
         Save Changes
       </button>
@@ -357,7 +357,7 @@ export default function ChatSettingsModal({
           <button
             onClick={onClose}
             disabled={loading}
-            className="qt-button-secondary"
+            className="qt-button qt-button-secondary"
           >
             Close
           </button>

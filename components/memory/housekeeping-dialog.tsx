@@ -273,7 +273,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
           <button
             type="button"
             onClick={onClose}
-            className="qt-button-secondary"
+            className="qt-button qt-button-secondary"
           >
             Cancel
           </button>
@@ -281,7 +281,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
             type="button"
             onClick={handleRun}
             disabled={running || loading || !preview || (preview.wouldDelete === 0 && preview.wouldMerge === 0)}
-            className="qt-button-destructive"
+            className="qt-button qt-button-destructive"
           >
             {running ? 'Running...' : `Delete ${preview?.wouldDelete || 0} Memories`}
           </button>

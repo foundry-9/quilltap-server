@@ -275,7 +275,7 @@ export function PhysicalDescriptionEditor({
           <button
             type="button"
             onClick={onClose}
-            className="qt-button-secondary"
+            className="qt-button qt-button-secondary"
           >
             Cancel
           </button>
@@ -283,7 +283,7 @@ export function PhysicalDescriptionEditor({
             type="button"
             onClick={handleSave}
             disabled={saving || !formData.name.trim()}
-            className="qt-button-primary"
+            className="qt-button qt-button-primary"
           >
             {saving ? 'Saving...' : isEditing ? 'Update' : 'Create'}
           </button>

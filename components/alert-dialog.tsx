@@ -38,7 +38,7 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
   const getButtonStyle = (index: number, total: number) => {
     // Last button is primary (blue), others are secondary (gray)
     const isLast = index === total - 1
-    return isLast ? 'qt-button-primary' : 'qt-button-secondary'
+    return isLast ? 'qt-button qt-button-primary' : 'qt-button qt-button-secondary'
   }
 
   return (
@@ -60,7 +60,7 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
           {showCopy && (
             <button
               onClick={handleCopy}
-              className="qt-button-secondary"
+              className="qt-button qt-button-secondary"
             >
               Copy
             </button>

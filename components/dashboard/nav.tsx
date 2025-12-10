@@ -174,7 +174,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 type="button"
                 onClick={() => toggleTag(singleQuickHideTag.id)}
                 aria-pressed={hiddenTagIds.has(singleQuickHideTag.id)}
-                className={`qt-navbar-chip-button ${hiddenTagIds.has(singleQuickHideTag.id) ? 'qt-navbar-chip-button-active' : ''}`}
+                className={`qt-button qt-navbar-chip-button ${hiddenTagIds.has(singleQuickHideTag.id) ? 'qt-navbar-chip-button-active' : ''}`}
                 title={hiddenTagIds.has(singleQuickHideTag.id) ? 'Show items with this tag' : 'Hide items with this tag'}
               >
                 <TagBadge tag={singleQuickHideTag} size="sm" className="pointer-events-none" />
@@ -252,7 +252,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
             <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="qt-navbar-button"
+                className="qt-button qt-navbar-button"
                 aria-label="User menu"
                 aria-expanded={userMenuOpen}
               >
@@ -300,7 +300,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                     {/* Sign Out Button */}
                     <button
                       onClick={() => signOut({ callbackUrl: "/" })}
-                      className="qt-button-destructive w-full justify-center"
+                      className="qt-button qt-button-destructive w-full justify-center"
                     >
                       Sign Out
                     </button>

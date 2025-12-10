@@ -21,7 +21,7 @@ function CopyButton({ content }: Readonly<{ content: string }>) {
   return (
     <button
       onClick={handleCopy}
-      className={`qt-button-sm ${copied ? 'qt-button-primary' : 'qt-button-secondary'}`}
+      className={`qt-button qt-button-sm ${copied ? 'qt-button-primary' : 'qt-button-secondary'}`}
       title={copied ? 'Copied!' : 'Copy to clipboard'}
     >
       {copied ? '✓ Copied' : '📋 Copy'}
@@ -573,7 +573,7 @@ export default function DebugPanel() {
         </div>
         <button
           onClick={clearEntries}
-          className="qt-button-ghost qt-button-sm"
+          className="qt-button qt-button-ghost qt-button-sm"
           title="Clear all entries"
         >
           Clear

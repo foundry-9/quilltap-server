@@ -231,7 +231,7 @@ export function ImportWizard({
               <button
                 type="button"
                 onClick={onClose}
-                className="qt-button-secondary"
+                className="qt-button qt-button-secondary"
               >
                 Cancel
               </button>
@@ -239,7 +239,7 @@ export function ImportWizard({
                 type="button"
                 onClick={handleAnalyze}
                 disabled={!selectedFile}
-                className="qt-button-primary"
+                className="qt-button qt-button-primary"
               >
                 Analyze File
               </button>
@@ -290,7 +290,7 @@ export function ImportWizard({
                   setParseResult(null)
                   setMappings([])
                 }}
-                className="qt-button-secondary"
+                className="qt-button qt-button-secondary"
               >
                 Back
               </button>
@@ -298,7 +298,7 @@ export function ImportWizard({
                 type="button"
                 onClick={handleImport}
                 disabled={!defaultProfileId || mappings.length === 0}
-                className="qt-button-primary"
+                className="qt-button qt-button-primary"
               >
                 Import Chat
               </button>
@@ -338,7 +338,7 @@ export function ImportWizard({
               <button
                 type="button"
                 onClick={() => setShowMemoryDialog(true)}
-                className="qt-button-secondary"
+                className="qt-button qt-button-secondary"
               >
                 Create Memories...
               </button>
@@ -350,7 +350,7 @@ export function ImportWizard({
                   }
                   onClose()
                 }}
-                className="qt-button-primary"
+                className="qt-button qt-button-primary"
               >
                 Done
               </button>

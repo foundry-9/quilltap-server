@@ -205,7 +205,7 @@ export default function BrowserConsoleTab() {
         </div>
         <button
           onClick={clearConsoleLogs}
-          className="qt-button-ghost qt-button-sm"
+          className="qt-button qt-button-ghost qt-button-sm"
         >
           Clear
         </button>
@@ -217,7 +217,7 @@ export default function BrowserConsoleTab() {
         {!autoScroll && filteredLogs.length > 0 && (
           <button
             onClick={scrollToTop}
-            className="absolute top-2 right-2 z-10 qt-button-icon border border-border shadow-md"
+            className="absolute top-2 right-2 z-10 qt-button qt-button-icon border border-border shadow-md"
             title="Scroll to top"
           >
             <svg className="w-4 h-4 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -230,7 +230,7 @@ export default function BrowserConsoleTab() {
         {!autoScroll && filteredLogs.length > 0 && (
           <button
             onClick={scrollToBottom}
-            className="absolute bottom-2 right-2 z-10 qt-button-icon border border-border shadow-md flex items-center gap-1"
+            className="absolute bottom-2 right-2 z-10 qt-button qt-button-icon border border-border shadow-md flex items-center gap-1"
             title="Scroll to bottom and enable auto-scroll"
           >
             <svg className="w-4 h-4 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -285,7 +285,7 @@ export default function BrowserConsoleTab() {
           <span className="text-muted-foreground mr-1">Filter:</span>
           <button
             onClick={() => toggleLevel('error')}
-            className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
+            className={`qt-button flex items-center gap-1 px-2 py-1 rounded transition-colors ${
               enabledLevels.has('error')
                 ? 'qt-badge-destructive'
                 : 'bg-accent text-muted-foreground opacity-50'
@@ -297,7 +297,7 @@ export default function BrowserConsoleTab() {
           </button>
           <button
             onClick={() => toggleLevel('warn')}
-            className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
+            className={`qt-button flex items-center gap-1 px-2 py-1 rounded transition-colors ${
               enabledLevels.has('warn')
                 ? 'qt-badge-warning'
                 : 'bg-accent text-muted-foreground opacity-50'
@@ -309,7 +309,7 @@ export default function BrowserConsoleTab() {
           </button>
           <button
             onClick={() => toggleLevel('info')}
-            className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
+            className={`qt-button flex items-center gap-1 px-2 py-1 rounded transition-colors ${
               enabledLevels.has('info')
                 ? 'qt-badge-info'
                 : 'bg-accent text-muted-foreground opacity-50'
@@ -321,7 +321,7 @@ export default function BrowserConsoleTab() {
           </button>
           <button
             onClick={() => toggleLevel('log')}
-            className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
+            className={`qt-button flex items-center gap-1 px-2 py-1 rounded transition-colors ${
               enabledLevels.has('log')
                 ? 'bg-muted text-foreground'
                 : 'bg-accent text-muted-foreground opacity-50'
@@ -333,7 +333,7 @@ export default function BrowserConsoleTab() {
           </button>
           <button
             onClick={() => toggleLevel('debug')}
-            className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
+            className={`qt-button flex items-center gap-1 px-2 py-1 rounded transition-colors ${
               enabledLevels.has('debug')
                 ? 'qt-badge-info'
                 : 'bg-accent text-muted-foreground opacity-50'

@@ -1671,13 +1671,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       <div className="flex gap-2">
                         <button
                           onClick={() => saveEdit(message.id)}
-                          className="qt-button-primary qt-button-sm"
+                          className="qt-button qt-button-primary qt-button-sm"
                         >
                           Save
                         </button>
                         <button
                           onClick={cancelEdit}
-                          className="qt-button-secondary qt-button-sm"
+                          className="qt-button qt-button-secondary qt-button-sm"
                         >
                           Cancel
                         </button>
@@ -1704,7 +1704,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                                 fileId: attachment.id,
                               })}
                               type="button"
-                              className="qt-chat-attachment-button"
+                              className="qt-button qt-chat-attachment-button"
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
@@ -1959,7 +1959,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             {isMultiChar && (
               <button
                 onClick={handleAddCharacter}
-                className="qt-button-secondary qt-button-sm"
+                className="qt-button qt-button-secondary qt-button-sm"
               >
                 Add Character
               </button>
@@ -2044,7 +2044,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending || uploadingFile}
-                className="qt-chat-toolbar-button"
+                className="qt-button qt-chat-toolbar-button"
                 title="Attach file"
               >
                 {uploadingFile ? (
@@ -2065,7 +2065,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     e.stopPropagation()
                     setToolPaletteOpen(!toolPaletteOpen)
                   }}
-                  className="qt-chat-toolbar-button"
+                  className="qt-button qt-chat-toolbar-button"
                   title="Tools menu"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

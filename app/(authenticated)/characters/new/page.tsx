@@ -256,13 +256,13 @@ export default function NewCharacterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 qt-button-primary"
+            className="qt-button flex-1 qt-button-primary"
           >
             {loading ? 'Creating...' : 'Create Character'}
           </button>
           <Link
             href="/characters"
-            className="px-6 py-3 qt-button-secondary text-center"
+            className="qt-button px-6 py-3 qt-button-secondary text-center"
           >
             Cancel
           </Link>

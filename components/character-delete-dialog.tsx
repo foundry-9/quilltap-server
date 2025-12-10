@@ -181,14 +181,14 @@ export function CharacterDeleteDialog({
           <div className="flex gap-3 justify-end">
             <button
               onClick={onClose}
-              className="qt-button-secondary"
+              className="qt-button qt-button-secondary"
             >
               Cancel
             </button>
             <button
               onClick={handleConfirm}
               disabled={loading}
-              className="qt-button-destructive"
+              className="qt-button qt-button-destructive"
             >
               Delete Character
             </button>

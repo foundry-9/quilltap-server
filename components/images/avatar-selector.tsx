@@ -73,7 +73,7 @@ export function AvatarSelector({
             <h2 className="qt-dialog-title">Select Avatar</h2>
             <button
               onClick={() => setShowUploadDialog(true)}
-              className="qt-button-primary"
+              className="qt-button qt-button-primary"
             >
               Import Image
             </button>
@@ -98,21 +98,21 @@ export function AvatarSelector({
                 onSelect('');
                 onClose();
               }}
-              className="qt-button-ghost"
+              className="qt-button qt-button-ghost"
             >
               Clear Avatar
             </button>
             <div className="flex space-x-3">
               <button
                 onClick={handleClose}
-                className="qt-button-secondary"
+                className="qt-button qt-button-secondary"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={!selectedImageId}
-                className="qt-button-primary"
+                className="qt-button qt-button-primary"
               >
                 Set as Avatar
               </button>

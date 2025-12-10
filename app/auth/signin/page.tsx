@@ -173,7 +173,7 @@ function SignInForm() {
         <div className="mt-8 space-y-4">
           {/* OAuth Provider Buttons - dynamically rendered */}
           {authStatusLoading ? (
-            <div className="qt-button-secondary w-full justify-center opacity-70">
+            <div className="qt-button qt-button-secondary w-full justify-center opacity-70">
               Loading authentication options...
             </div>
           ) : (
@@ -181,7 +181,7 @@ function SignInForm() {
               <button
                 key={provider.id}
                 onClick={() => handleOAuthSignIn(provider.id)}
-                className="qt-button-secondary w-full justify-center"
+                className="qt-button qt-button-secondary w-full justify-center"
               >
                 {renderProviderIcon(provider)}
                 Continue with {provider.name}
@@ -268,7 +268,7 @@ function SignInForm() {
             <button
               type="submit"
               disabled={loading}
-              className="qt-button-primary w-full"
+              className="qt-button qt-button-primary w-full"
             >
               {loading ? "Signing in..." : "Sign In"}
             </button>

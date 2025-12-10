@@ -263,7 +263,7 @@ export default function AddCharacterDialog({
           </h2>
           <button
             onClick={onClose}
-            className="qt-button-ghost p-2"
+            className="qt-button qt-button-ghost p-2"
             disabled={isAdding}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -448,7 +448,7 @@ export default function AddCharacterDialog({
         <div className="qt-dialog-footer flex items-center justify-end gap-3">
           <button
             onClick={onClose}
-            className="qt-button-secondary"
+            className="qt-button qt-button-secondary"
             disabled={isAdding}
           >
             Cancel
@@ -456,7 +456,7 @@ export default function AddCharacterDialog({
           <button
             onClick={handleAddCharacter}
             disabled={isAdding || !selectedCharacterId || !selectedConnectionProfileId}
-            className="qt-button-primary flex items-center gap-2"
+            className="qt-button qt-button-primary flex items-center gap-2"
           >
             {isAdding ? (
               <>

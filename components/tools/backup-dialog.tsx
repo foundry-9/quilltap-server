@@ -217,14 +217,14 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
             <button
               onClick={handleClose}
               disabled={loading}
-              className="qt-button-secondary"
+              className="qt-button qt-button-secondary"
             >
               Cancel
             </button>
             <button
               onClick={handleCreateBackup}
               disabled={loading}
-              className="qt-button-primary flex items-center gap-2"
+              className="qt-button qt-button-primary flex items-center gap-2"
             >
               {loading && (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

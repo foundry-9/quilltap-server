@@ -206,14 +206,14 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
               <button
                 type="button"
                 onClick={onClose}
-                className="qt-button-secondary"
+                className="qt-button qt-button-secondary"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="qt-button-primary"
+                className="qt-button qt-button-primary"
               >
                 {saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Memory'}
               </button>

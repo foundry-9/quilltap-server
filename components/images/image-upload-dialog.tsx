@@ -230,14 +230,14 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                   type="button"
                   onClick={handleClose}
                   disabled={uploading}
-                  className="qt-button-secondary"
+                  className="qt-button qt-button-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={uploading || (uploadMode === 'file' && !selectedFile) || (uploadMode === 'url' && !imageUrl)}
-                  className="qt-button-primary"
+                  className="qt-button qt-button-primary"
                 >
                   {uploading ? 'Uploading...' : uploadMode === 'file' ? 'Upload' : 'Import'}
                 </button>

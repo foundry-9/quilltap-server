@@ -285,7 +285,7 @@ export function ImageProfileForm({
             type="button"
             onClick={handleValidateKey}
             disabled={!formData.apiKeyId || isValidatingKey}
-            className="px-3 py-2 qt-button-primary"
+            className="qt-button px-3 py-2 qt-button-primary"
           >
             {isValidatingKey ? 'Validating...' : 'Validate'}
           </button>
@@ -351,7 +351,7 @@ export function ImageProfileForm({
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 qt-button-secondary"
+            className="qt-button px-4 py-2 qt-button-secondary"
           >
             Cancel
           </button>
@@ -359,7 +359,7 @@ export function ImageProfileForm({
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2 qt-button-primary"
+          className="qt-button px-4 py-2 qt-button-primary"
         >
           {loading ? 'Saving...' : profile ? 'Update' : 'Create'}
         </button>

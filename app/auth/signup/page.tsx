@@ -116,7 +116,7 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="qt-button-primary w-full"
+            className="qt-button qt-button-primary w-full"
           >
             {loading ? "Creating account..." : "Sign Up"}
           </button>

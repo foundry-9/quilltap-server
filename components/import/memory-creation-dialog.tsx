@@ -301,7 +301,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
             type="button"
             onClick={onClose}
             disabled={creating}
-            className="qt-button-secondary"
+            className="qt-button qt-button-secondary"
           >
             Skip
           </button>
@@ -309,7 +309,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
             type="button"
             onClick={handleCreateMemories}
             disabled={creating || selectedCount === 0}
-            className="qt-button-primary"
+            className="qt-button qt-button-primary"
           >
             {creating ? (
               <>

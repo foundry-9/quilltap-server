@@ -113,9 +113,26 @@ Ocean 1.1 leans into three pillars:
 
 - **Author**: Foundry-9
 - **License**: MIT
-- **Version**: 1.1.13
+- **Version**: 1.1.16
 
 ## Changelog
+
+### 1.1.16
+
+- Added explicit `text-shadow: none` to all button variants to prevent inherited text-stroke
+
+### 1.1.15
+
+- Changed buttons to use dark backgrounds with bright accent borders/text for better contrast
+- Primary and secondary buttons now use ocean-abyss/midnight gradients
+- Improved button legibility on the light ocean background
+
+### 1.1.14
+
+- Made all cards, panels, and dialogs fully opaque for better readability
+- Added text stroke/outline for headings and text on light backgrounds
+- Improved chat message backgrounds to be more opaque
+- Enhanced contrast for text that may appear on the body background image
 
 ### 1.1.13
 

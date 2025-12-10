@@ -280,7 +280,7 @@ export function ParticipantCard({
               ? 'qt-badge-info hover:bg-info/20'
               : isCurrentTurn
                 ? 'qt-participant-turn-indicator cursor-default'
-                : 'qt-button-secondary qt-button-sm'
+                : 'qt-button qt-button-secondary qt-button-sm'
             }
             disabled:opacity-50 disabled:cursor-not-allowed
           `}
@@ -299,7 +299,7 @@ export function ParticipantCard({
               onRemove(participant.id)
             }}
             disabled={isGenerating}
-            className="qt-button-destructive qt-button-sm py-1.5 px-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="qt-button qt-button-destructive qt-button-sm py-1.5 px-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title={`Remove ${name} from chat`}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

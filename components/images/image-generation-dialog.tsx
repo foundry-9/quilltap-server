@@ -400,7 +400,7 @@ export function ImageGenerationDialog({
               type="button"
               onClick={handleClose}
               disabled={generating}
-              className="qt-button-secondary"
+              className="qt-button qt-button-secondary"
             >
               Cancel
             </button>
@@ -408,7 +408,7 @@ export function ImageGenerationDialog({
               <button
                 type="button"
                 onClick={handleConfirm}
-                className="qt-button-primary"
+                className="qt-button qt-button-primary"
               >
                 Done
               </button>
@@ -416,7 +416,7 @@ export function ImageGenerationDialog({
               <button
                 type="submit"
                 disabled={generating || !selectedProfileId || profiles.length === 0}
-                className="qt-button-primary"
+                className="qt-button qt-button-primary"
               >
                 {generating ? 'Generating...' : 'Generate'}
               </button>

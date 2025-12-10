@@ -260,14 +260,14 @@ export default function ApiKeysTab() {
               <button
                 type="submit"
                 disabled={formLoading}
-                className="px-6 py-2 qt-button-primary"
+                className="px-6 py-2 qt-button qt-button-primary"
               >
                 {formLoading ? 'Creating...' : 'Create API Key'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-6 py-2 qt-button-secondary"
+                className="px-6 py-2 qt-button qt-button-secondary"
               >
                 Cancel
               </button>

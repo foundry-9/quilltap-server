@@ -225,7 +225,7 @@ export default function GenerateImageDialog({
           </h2>
           <button
             onClick={onClose}
-            className="qt-button-ghost p-2"
+            className="qt-button qt-button-ghost p-2"
             disabled={isGenerating}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -353,7 +353,7 @@ export default function GenerateImageDialog({
           <div className="flex gap-3 ml-auto">
           <button
             onClick={onClose}
-            className="qt-button-secondary"
+            className="qt-button qt-button-secondary"
             disabled={isGenerating}
           >
             Cancel
@@ -361,7 +361,7 @@ export default function GenerateImageDialog({
           <button
             onClick={handleGenerate}
             disabled={isGenerating || !prompt.trim() || !imageProfileId}
-            className="qt-button-primary flex items-center gap-2"
+            className="qt-button qt-button-primary flex items-center gap-2"
           >
             {isGenerating ? (
               <>
