@@ -13,6 +13,7 @@ interface ToolPaletteProps {
   chatPhotoCount: number
   hasImageProfile: boolean
   showAddCharacter?: boolean // Show "Add Character" button for single-character chats
+  chatId: string // Chat ID for export functionality
 }
 
 export default function ToolPalette({
@@ -25,6 +26,7 @@ export default function ToolPalette({
   chatPhotoCount,
   hasImageProfile,
   showAddCharacter = false,
+  chatId,
 }: ToolPaletteProps) {
   const paletteRef = useRef<HTMLDivElement>(null)
 
@@ -86,6 +88,13 @@ export default function ToolPalette({
     onClose()
   }
 
+  const handleExportClick = () => {
+    clientLogger.debug('[ToolPalette] Export Chat clicked', { chatId })
+    // Trigger download by navigating to the export endpoint
+    window.location.href = `/api/chats/${chatId}/export`
+    onClose()
+  }
+
   // Debug logging when palette opens
   useEffect(() => {
     if (isOpen) {
@@ -94,9 +103,10 @@ export default function ToolPalette({
         hasAddCharacterCallback: !!onAddCharacterClick,
         chatPhotoCount,
         hasImageProfile,
+        chatId,
       })
     }
-  }, [isOpen, showAddCharacter, onAddCharacterClick, chatPhotoCount, hasImageProfile])
+  }, [isOpen, showAddCharacter, onAddCharacterClick, chatPhotoCount, hasImageProfile, chatId])
 
   if (!isOpen) return null
 
@@ -169,6 +179,21 @@ export default function ToolPalette({
         <div>
           <div className="font-medium">Chat Settings</div>
           <div className="text-xs text-muted-foreground">Provider & Images</div>
+        </div>
+      </button>
+
+      {/* Export Chat Button */}
+      <button
+        type="button"
+        onClick={handleExportClick}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left text-foreground hover:bg-accent rounded-lg transition-colors"
+      >
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        <div>
+          <div className="font-medium">Export Chat</div>
+          <div className="text-xs text-muted-foreground">Download as JSONL</div>
         </div>
       </button>
     </div>

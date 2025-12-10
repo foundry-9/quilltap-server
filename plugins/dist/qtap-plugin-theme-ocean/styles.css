@@ -33,7 +33,7 @@
   --ocean-text-soft: hsl(var(--mutedForeground));
 
   /* Base Styling */
-  font-family: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
+  font-family: var(--font-sans, "DM Sans", system-ui, sans-serif);
   background-color: hsl(var(--background));
 
   /* ============================================================================
@@ -136,12 +136,12 @@
   --qt-chat-user-bg: linear-gradient(145deg, hsl(var(--primary) / 0.18), hsl(var(--accent) / 0.16));
   --qt-chat-user-fg: hsl(var(--primaryForeground));
   --qt-chat-user-border: hsl(var(--primary) / 0.45);
-  --qt-chat-user-font: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
+  --qt-chat-user-font: var(--font-sans, "DM Sans", system-ui, sans-serif);
 
   --qt-chat-assistant-bg: linear-gradient(160deg, hsl(var(--card) / 0.92), hsl(var(--muted) / 0.6));
   --qt-chat-assistant-fg: hsl(var(--foreground));
   --qt-chat-assistant-border: hsl(var(--border) / 0.4);
-  --qt-chat-assistant-font: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
+  --qt-chat-assistant-font: var(--font-sans, "DM Sans", system-ui, sans-serif);
 
   --qt-chat-composer-bg: linear-gradient(180deg, hsl(var(--muted) / 0.7), hsl(var(--background)));
   --qt-chat-composer-border: var(--ocean-border-strong);
@@ -238,7 +238,7 @@
   background-position: center;
   background-attachment: fixed;
   color: hsl(var(--foreground));
-  font-family: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
+  font-family: var(--font-sans, "DM Sans", system-ui, sans-serif);
   overflow-x: hidden;
 }
 

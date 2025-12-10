@@ -28,7 +28,23 @@
     "stylesPath": "styles.css",
     "supportsDarkMode": true,
     "previewImage": "preview.png",
-    "tags": ["earl-grey", "dark", "slate", "blue", "elegant"]
+    "tags": ["earl-grey", "dark", "slate", "blue", "elegant"],
+    "fonts": [
+      {
+        "family": "Rethink Sans",
+        "src": "fonts/RethinkSans-latin.woff2",
+        "weight": "400 700",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Rethink Sans",
+        "src": "fonts/RethinkSans-latin-ext.woff2",
+        "weight": "400 700",
+        "style": "normal",
+        "display": "swap"
+      }
+    ]
   },
   "permissions": {
     "fileSystem": [],

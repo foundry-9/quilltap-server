@@ -193,6 +193,7 @@
     @apply px-6 py-4;
     @apply bg-muted;
     border-top: 1px solid var(--qt-dialog-border);
+    border-radius: 0 0 var(--qt-dialog-radius) var(--qt-dialog-radius);
   }
 
   /* ==========================================================================

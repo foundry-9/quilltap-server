@@ -6,7 +6,7 @@ A luminous, bioluminescent-inspired theme for Quilltap that mixes glass surfaces
 
 - **Ambient Depth**: Layered backdrop gradients, floating glows, and glass panels that make every surface feel aquatic.
 - **Message Personalities**: Assistant/user/system turns each receive their own gradients, borders, and motion to keep the thread legible.
-- **Custom Typography**: Bundles Space Grotesk for UI copy and Space Mono for code to reinforce the futuristic ocean aesthetic.
+- **Custom Typography**: Bundles DM Sans for UI copy and Space Mono for code to reinforce the futuristic ocean aesthetic.
 - **Command & Canvas Polish**: Command palette, toolbars, tables, callouts, and chip groups all receive bespoke styling.
 - **Light + Dark Harmony**: Shared palette tuned to stay vibrant in both surface modes with accessible contrast.
 - **Micro-Interactions**: Buttons, bubbles, and typing dots animate with gentle "tidal" motion to show off the theme engine.
@@ -38,8 +38,17 @@ A luminous, bioluminescent-inspired theme for Quilltap that mixes glass surfaces
 
 | Font | Use | License |
 | ---- | --- | ------- |
-| Space Grotesk (400/600) | UI + headings | SIL Open Font License 1.1 |
+| DM Sans (400-700) | UI + headings | SIL Open Font License 1.1 |
 | Space Mono (400) | Code + inline monospace | SIL Open Font License 1.1 |
+
+### DM Sans
+
+- **Source**: [Google Fonts](https://fonts.google.com/specimen/DM+Sans)
+- **Designer**: Colophon Foundry, Indian Type Foundry
+- **Files**: `DMSans-latin.woff2`, `DMSans-latin-ext.woff2`
+- **Weights**: 400-700 (variable font)
+
+DM Sans is a low-contrast geometric sans-serif with excellent legibility, complementing the Ocean theme's clean, modern aesthetic.
 
 All font files live in `fonts/` alongside the license text.
 
@@ -76,8 +85,8 @@ qtap-plugin-theme-ocean/
 ├── tokens.json        # Design tokens (colors, typography, spacing, effects)
 ├── styles.css         # Component overrides plus font-face declarations
 ├── fonts/             # Bundled fonts + SIL license
-│   ├── SpaceGrotesk-Regular.ttf
-│   ├── SpaceGrotesk-SemiBold.ttf
+│   ├── DMSans-latin.woff2
+│   ├── DMSans-latin-ext.woff2
 │   ├── SpaceMono-Regular.ttf
 │   └── OFL.txt
 ├── index.ts           # Plugin entry (TypeScript)
@@ -104,11 +113,17 @@ Ocean 1.1 leans into three pillars:
 
 - **Author**: Foundry-9
 - **License**: MIT
-- **Version**: 1.1.0
+- **Version**: 1.1.13
 
 ## Changelog
 
+### 1.1.13
+
+- Replaced Space Grotesk with DM Sans as the primary sans-serif font
+- Switched to woff2 format for smaller file sizes
+
 ### 1.1.0
+
 - New color palette with brighter cyan/reef accents.
 - Added bundled Space Grotesk + Space Mono fonts.
 - Reauthored `styles.css` with ambient gradients, glass panels, and expanded component coverage.
@@ -116,4 +131,5 @@ Ocean 1.1 leans into three pillars:
 - Updated tokens (spacing, effects) to support the new look.
 
 ### 1.0.0
+
 - Initial release with basic light/dark palette, tokens, and component overrides.

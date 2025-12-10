@@ -31,16 +31,16 @@
     "tags": ["ocean", "blue", "calming", "nature"],
     "fonts": [
       {
-        "family": "Space Grotesk",
-        "src": "fonts/SpaceGrotesk-Regular.ttf",
-        "weight": "400",
+        "family": "DM Sans",
+        "src": "fonts/DMSans-latin.woff2",
+        "weight": "400 700",
         "style": "normal",
         "display": "swap"
       },
       {
-        "family": "Space Grotesk",
-        "src": "fonts/SpaceGrotesk-SemiBold.ttf",
-        "weight": "600",
+        "family": "DM Sans",
+        "src": "fonts/DMSans-latin-ext.woff2",
+        "weight": "400 700",
         "style": "normal",
         "display": "swap"
       },

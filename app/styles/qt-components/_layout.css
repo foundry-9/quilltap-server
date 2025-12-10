@@ -16,7 +16,7 @@
    * Main navigation bar
    */
   .qt-navbar {
-    @apply border-b;
+    @apply border-b relative z-40;
     height: var(--qt-navbar-height);
     background: var(--qt-navbar-bg);
     border-color: var(--qt-navbar-border);

@@ -144,7 +144,7 @@
   /* ============================================================================
      FONT STACKS
      ============================================================================ */
-  --default-font-family: "ui-sans-serif", "-apple-system", "system-ui", "Segoe UI", "Helvetica", "Apple Color Emoji", "Arial", "sans-serif", "Segoe UI Emoji", "Segoe UI Symbol";
+  --default-font-family: "Rethink Sans", "ui-sans-serif", "-apple-system", "system-ui", "Segoe UI", "Helvetica", "Apple Color Emoji", "Arial", "sans-serif", "Segoe UI Emoji", "Segoe UI Symbol";
   --default-mono-font-family: "ui-monospace", "SFMono-Regular", "SF Mono", "Menlo", "Consolas", "Liberation Mono", "monospace";
 
   --font-anthropic-sans: var(--theme-font-sans, var(--default-font-family));

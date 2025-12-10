@@ -139,23 +139,14 @@ export default function DashboardNav({ user }: DashboardNavProps) {
             <NavThemeSelector />
             {/* Chat controls - only show when in a chat */}
             {isInChat && chat.chatId && (
-              <>
-                <TagDropdown
-                  tags={chat.tags}
-                  isOpen={tagDropdownOpen}
-                  onToggle={() => setTagDropdownOpen(!tagDropdownOpen)}
-                  onTagRemove={chat.onTagRemove}
-                  onTagAdd={chat.onTagAdd}
-                  loading={chat.tagsLoading}
-                />
-                <a
-                  href={`/api/chats/${chat.chatId}/export`}
-                  download
-                  className="qt-button-primary qt-button-sm"
-                >
-                  Export Chat
-                </a>
-              </>
+              <TagDropdown
+                tags={chat.tags}
+                isOpen={tagDropdownOpen}
+                onToggle={() => setTagDropdownOpen(!tagDropdownOpen)}
+                onTagRemove={chat.onTagRemove}
+                onTagAdd={chat.onTagAdd}
+                loading={chat.tagsLoading}
+              />
             )}
 
             {/* DevConsole toggle button - only shown in development */}

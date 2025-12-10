@@ -204,7 +204,7 @@ export function NavThemeSelector() {
 
       {/* Dropdown panel */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+        <div className="qt-navbar-dropdown w-56 overflow-hidden">
           <div className="p-2 max-h-80 overflow-y-auto">
             {/* Default theme option */}
             <ThemeOption

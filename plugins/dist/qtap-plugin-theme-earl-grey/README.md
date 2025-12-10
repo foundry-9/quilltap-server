@@ -52,6 +52,20 @@ Advanced CSS in `styles.css` for specific component enhancements:
 - Enhanced focus states with blue glow
 - Blue-accented avatars and interactive elements
 
+## Bundled Fonts
+
+This theme includes **Rethink Sans** as the primary sans-serif font for all UI text.
+
+### Rethink Sans
+
+- **Source**: [Google Fonts](https://fonts.google.com/specimen/Rethink+Sans)
+- **Designer**: Hans Thiessen, Nico Inosanto
+- **License**: SIL Open Font License 1.1 (see `fonts/OFL.txt`)
+- **Files**: `RethinkSans-latin.woff2`, `RethinkSans-latin-ext.woff2`
+- **Weights**: 400-700 (variable font)
+
+Rethink Sans is a geometric sans-serif with a friendly, modern character. Its clean lines and balanced proportions complement the sophisticated aesthetic of the Earl Grey theme.
+
 ## File Structure
 
 ```
@@ -61,7 +75,12 @@ qtap-plugin-theme-earl-grey/
 ├── tokens.json        # Design tokens (colors, typography, spacing)
 ├── styles.css         # Component override CSS (Tier 3)
 ├── index.ts           # Plugin entry point (TypeScript)
+├── index.js           # Plugin entry point (compiled)
 ├── preview.png        # Theme preview image (optional)
+├── fonts/             # Bundled font files
+│   ├── RethinkSans-latin.woff2
+│   ├── RethinkSans-latin-ext.woff2
+│   └── OFL.txt        # Font license
 └── README.md          # This file
 ```
 
@@ -111,11 +130,17 @@ The goal is to create a visually clean, professional environment that's easy on 
 
 - **Author**: Foundry-9
 - **License**: MIT
-- **Version**: 1.0.0
+- **Version**: 1.0.6
 
 ## Changelog
 
+### 1.0.6
+
+- Added Rethink Sans as the primary sans-serif font
+- Bundled woff2 font files for latin and latin-ext character sets
+
 ### 1.0.0
+
 - Initial release
 - Dark mode support
 - Full design token system

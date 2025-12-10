@@ -2082,6 +2082,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   chatPhotoCount={chatPhotoCount}
                   hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
                   showAddCharacter={isSingleCharacterChat}
+                  chatId={id}
                 />
               </div>
             </div>
