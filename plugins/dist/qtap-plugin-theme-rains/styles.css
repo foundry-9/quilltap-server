@@ -887,6 +887,23 @@
   --qt-button-secondary-fg: hsl(var(--text-300));
   --qt-button-secondary-border: var(--stroke-soft);
 
+  /* Status tokens */
+  --qt-status-success-bg: hsl(var(--success-900) / 0.35);
+  --qt-status-success-fg: hsl(var(--success-000));
+  --qt-status-success-border: hsl(var(--success-100) / 0.5);
+
+  --qt-status-warning-bg: hsl(var(--warning-900) / 0.35);
+  --qt-status-warning-fg: hsl(var(--warning-000));
+  --qt-status-warning-border: hsl(var(--warning-100) / 0.5);
+
+  --qt-status-info-bg: hsl(var(--accent-secondary-900) / 0.35);
+  --qt-status-info-fg: hsl(var(--accent-secondary-100));
+  --qt-status-info-border: hsl(var(--accent-secondary-100) / 0.5);
+
+  --qt-status-danger-bg: hsl(var(--danger-900) / 0.35);
+  --qt-status-danger-fg: hsl(var(--danger-000));
+  --qt-status-danger-border: hsl(var(--danger-100) / 0.5);
+
   /* Card Variables - Rains card styling */
   --qt-card-radius: 0.75rem;
   --qt-card-bg: var(--surface-raised);
@@ -909,6 +926,29 @@
   --qt-chat-assistant-fg: hsl(var(--text-200));
   --qt-chat-assistant-border: hsl(var(--border-300) / 0.45);
   --qt-chat-assistant-font: var(--font-claude-response);
+
+  --qt-chat-composer-bg: hsl(var(--bg-100));
+  --qt-chat-composer-border: hsl(var(--stroke-soft));
+  --qt-chat-composer-radius: var(--radius-lg);
+  --qt-chat-composer-padding-x: 1.25rem;
+  --qt-chat-composer-padding-y: 1.25rem;
+
+  --qt-chat-toolbar-gap: 0.75rem;
+  --qt-chat-toolbar-button-bg: hsl(var(--bg-200));
+  --qt-chat-toolbar-button-fg: hsl(var(--text-200));
+  --qt-chat-toolbar-button-hover-bg: hsl(var(--bg-000) / 0.8);
+  --qt-chat-toolbar-button-border: hsl(var(--border-300) / 0.4);
+
+  --qt-chat-attachment-border: hsl(var(--border-300) / 0.4);
+  --qt-chat-attachment-hover-border: hsl(var(--accent-brand) / 0.55);
+  --qt-chat-attachment-overlay: rgb(0 0 0 / 0.55);
+
+  --qt-chat-sidebar-width: 21rem;
+  --qt-chat-sidebar-bg: hsl(var(--bg-100));
+  --qt-chat-sidebar-border: hsl(var(--border-300) / 0.35);
+  --qt-chat-sidebar-header-border: hsl(var(--border-300) / 0.35);
+  --qt-chat-sidebar-muted: hsl(var(--text-400));
+  --qt-chat-sidebar-heading: hsl(var(--text-000));
 
   /* Input Variables */
   --qt-input-radius: var(--radius-md);

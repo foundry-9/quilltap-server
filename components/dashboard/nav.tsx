@@ -37,6 +37,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
   const [quickHideDropdownOpen, setQuickHideDropdownOpen] = useState(false);
   const quickHideRef = useRef<HTMLDivElement>(null);
   const hasAnyHidden = hiddenTagIds.size > 0;
+  const singleQuickHideTag = quickHideTags.length === 1 ? quickHideTags[0] : null;
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -161,11 +162,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
             {devConsole && (
               <button
                 onClick={devConsole.togglePanel}
-                className={`qt-button-icon ${
-                  devConsole.isOpen
-                    ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
-                    : 'text-muted-foreground hover:bg-muted'
-                }`}
+                className={`qt-navbar-toggle ${devConsole.isOpen ? 'qt-navbar-toggle-active' : ''}`}
                 title={devConsole.isOpen ? 'Close DevConsole (Ctrl+Shift+D)' : 'Open DevConsole (Ctrl+Shift+D)'}
               >
                 <svg
@@ -180,20 +177,16 @@ export default function DashboardNav({ user }: DashboardNavProps) {
               </button>
             )}
             {/* Quick-hide controls */}
-            {quickHideTags.length === 1 && (
+            {singleQuickHideTag && (
               // Single tag: show toggle button directly
               <button
                 type="button"
-                onClick={() => toggleTag(quickHideTags[0].id)}
-                aria-pressed={hiddenTagIds.has(quickHideTags[0].id)}
-                className={`qt-button-ghost rounded-full border px-1 py-0.5 ${
-                  hiddenTagIds.has(quickHideTags[0].id)
-                    ? 'border-primary bg-blue-50 ring-2 ring-ring dark:bg-blue-900/40'
-                    : 'border-border bg-background hover:border-primary'
-                }`}
-                title={hiddenTagIds.has(quickHideTags[0].id) ? 'Show items with this tag' : 'Hide items with this tag'}
+                onClick={() => toggleTag(singleQuickHideTag.id)}
+                aria-pressed={hiddenTagIds.has(singleQuickHideTag.id)}
+                className={`qt-navbar-chip-button ${hiddenTagIds.has(singleQuickHideTag.id) ? 'qt-navbar-chip-button-active' : ''}`}
+                title={hiddenTagIds.has(singleQuickHideTag.id) ? 'Show items with this tag' : 'Hide items with this tag'}
               >
-                <TagBadge tag={quickHideTags[0]} size="sm" className="pointer-events-none" />
+                <TagBadge tag={singleQuickHideTag} size="sm" className="pointer-events-none" />
               </button>
             )}
             {quickHideTags.length > 1 && (
@@ -202,11 +195,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                 <button
                   type="button"
                   onClick={handleEyeClick}
-                  className={`qt-button-icon ${
-                    hasAnyHidden
-                      ? 'text-primary bg-primary/10'
-                      : 'text-muted-foreground hover:bg-muted'
-                  }`}
+                  className={`qt-navbar-toggle ${hasAnyHidden ? 'qt-navbar-toggle-active' : ''}`}
                   title={hasAnyHidden ? 'Click to show all hidden items' : 'Manage hidden tags'}
                   aria-expanded={quickHideDropdownOpen}
                 >
@@ -229,9 +218,9 @@ export default function DashboardNav({ user }: DashboardNavProps) {
 
                 {/* Dropdown menu */}
                 {quickHideDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
-                    <div className="p-2 space-y-1">
-                      <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <div className="qt-navbar-dropdown w-56">
+                    <div className="qt-navbar-dropdown-section space-y-1">
+                      <div className="qt-navbar-dropdown-label">
                         Quick Hide Tags
                       </div>
                       {quickHideTags.map(tag => {
@@ -244,11 +233,7 @@ export default function DashboardNav({ user }: DashboardNavProps) {
                               clientLogger.debug('Toggling tag from dropdown', { tagId: tag.id, tagName: tag.name, wasHidden: isHidden });
                               toggleTag(tag.id);
                             }}
-                            className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md transition-colors ${
-                              isHidden
-                                ? 'bg-primary/10 text-primary'
-                                : 'hover:bg-muted text-foreground'
-                            }`}
+                            className={`qt-navbar-dropdown-item ${isHidden ? 'qt-navbar-dropdown-item-active' : ''}`}
                           >
                             <TagBadge tag={tag} size="sm" />
                             {isHidden ? (
@@ -310,21 +295,21 @@ export default function DashboardNav({ user }: DashboardNavProps) {
 
               {/* Dropdown Panel */}
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
-                  <div className="p-3 space-y-3">
+                <div className="qt-navbar-dropdown w-56">
+                  <div className="qt-navbar-dropdown-section space-y-3">
                     {/* User Info */}
-                    <div className="text-right">
+                    <div className="qt-navbar-dropdown-header">
                       <p className="text-sm font-medium text-foreground">{user.name}</p>
                       <p className="text-xs text-muted-foreground">{user.email}</p>
                     </div>
 
                     {/* Divider */}
-                    <div className="border-t border-border" />
+                    <div className="qt-navbar-dropdown-divider" />
 
                     {/* Sign Out Button */}
                     <button
                       onClick={() => signOut({ callbackUrl: "/" })}
-                      className="w-full qt-button-destructive"
+                      className="qt-button-destructive w-full justify-center"
                     >
                       Sign Out
                     </button>

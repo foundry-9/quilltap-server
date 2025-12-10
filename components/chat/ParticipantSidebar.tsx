@@ -85,32 +85,37 @@ export function ParticipantSidebar({
     return participants.filter(p => p.type === 'CHARACTER' && p.isActive).length
   }, [participants])
 
+  const sidebarClasses = ['qt-chat-sidebar']
+  if (className) {
+    sidebarClasses.push(className)
+  }
+
   return (
-    <div className={`flex flex-col h-full bg-card border-l border-border ${className}`}>
+    <div className={sidebarClasses.join(' ')}>
       {/* Header */}
-      <div className="flex-shrink-0 p-4 border-b border-border">
+      <div className="qt-chat-sidebar-header">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-foreground">Participants</h3>
-          <span className="text-xs text-muted-foreground">
+          <h3 className="qt-chat-sidebar-heading">Participants</h3>
+          <span className="qt-chat-sidebar-meta">
             {activeCharacterCount} character{activeCharacterCount !== 1 ? 's' : ''}
           </span>
         </div>
 
         {/* Turn status indicator - Phase 7: Enhanced with edge case handling */}
         {turnSelectionResult && (
-          <div className="mt-2 text-xs text-muted-foreground">
+          <div className="mt-2 qt-chat-sidebar-meta">
             {activeCharacterCount === 0 ? (
               // Edge Case 1: No characters
-              <span className="text-warning">No characters available</span>
+              <span style={{ color: 'var(--qt-status-warning-fg)' }}>No characters available</span>
             ) : turnSelectionResult.nextSpeakerId === null ? (
               // Edge Case 3: User's turn (no eligible speakers or cycle complete)
               turnSelectionResult.cycleComplete ? (
-                <span className="text-success">All characters have spoken - your turn</span>
+                <span style={{ color: 'var(--qt-status-success-fg)' }}>All characters have spoken - your turn</span>
               ) : (
-                <span className="text-success">Your turn to speak</span>
+                <span style={{ color: 'var(--qt-status-success-fg)' }}>Your turn to speak</span>
               )
             ) : isGenerating ? (
-              <span className="text-info">Generating response...</span>
+              <span style={{ color: 'var(--qt-status-info-fg)' }}>Generating response...</span>
             ) : (
               <span>Waiting for next turn...</span>
             )}
@@ -119,22 +124,22 @@ export function ParticipantSidebar({
 
         {/* Queue indicator */}
         {turnState.queue.length > 0 && (
-          <div className="mt-1 text-xs text-info">
+          <div className="mt-1 qt-chat-sidebar-meta qt-chat-sidebar-queue">
             {turnState.queue.length} in queue
           </div>
         )}
       </div>
 
       {/* Participant list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="qt-chat-sidebar-list">
         {/* Phase 7: Edge Case - Empty participant list */}
         {sortedParticipants.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-            <svg className="w-12 h-12 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="qt-empty-state py-8">
+            <svg className="qt-empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
-            <p className="text-sm font-medium">No participants</p>
-            <p className="text-xs mt-1">All characters have been removed</p>
+            <p className="qt-empty-state-title">No participants</p>
+            <p className="qt-empty-state-description">All characters have been removed</p>
           </div>
         )}
         {sortedParticipants.map((participant) => {
@@ -165,7 +170,7 @@ export function ParticipantSidebar({
 
       {/* Add character button (Phase 6 placeholder) */}
       {onAddCharacter && (
-        <div className="flex-shrink-0 p-4 border-t border-border">
+        <div className="qt-chat-sidebar-add">
           <button
             onClick={onAddCharacter}
             className="w-full py-2 px-4 text-sm font-medium rounded-lg border border-dashed border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors flex items-center justify-center gap-2"
@@ -180,7 +185,7 @@ export function ParticipantSidebar({
 
       {/* Turn explanation (debug info) */}
       {turnSelectionResult?.debug && (
-        <div className="flex-shrink-0 p-4 border-t border-border text-xs text-muted-foreground">
+        <div className="qt-chat-sidebar-debug">
           <details>
             <summary className="cursor-pointer hover:text-foreground">Turn Debug Info</summary>
             <div className="mt-2 space-y-1">

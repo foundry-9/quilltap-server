@@ -175,7 +175,7 @@ export function ParticipantCard({
 
       {/* Turn indicator dot */}
       {isCurrentTurn && (
-        <div className="absolute top-2 left-2 w-2 h-2 rounded-full bg-success animate-pulse" />
+        <div className="qt-participant-turn-dot" />
       )}
 
       <div className="qt-participant-card-header">

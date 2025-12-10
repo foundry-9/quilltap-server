@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with multi-provider LLM support and full Silly
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.0--dev.61-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.2.0--dev.62-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -667,6 +667,7 @@ Copyright (c) 2025 Foundry-9
 - [ ] Python script support
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./features/comfy_ui_local_image.md))
 - [ ] Arcadia "art deco" theme to show off what the theme system can really do
+- [ ] Fully mobile-capable media breakpoints
 
 ## Acknowledgments
 

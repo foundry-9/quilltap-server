@@ -91,6 +91,105 @@
     background: var(--qt-navbar-link-hover-bg);
   }
 
+  /**
+   * Navbar toggle/icon button
+   */
+  .qt-navbar-toggle {
+    @apply inline-flex items-center justify-center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--qt-navbar-link-radius);
+    color: var(--qt-navbar-link-fg);
+    transition: color 150ms ease, background 150ms ease;
+  }
+
+  .qt-navbar-toggle:hover:not(:disabled) {
+    background: var(--qt-navbar-link-hover-bg);
+  }
+
+  .qt-navbar-toggle-active {
+    background: color-mix(in srgb, var(--color-primary) 13%, transparent);
+    color: var(--color-primary);
+  }
+
+  .qt-navbar-toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /**
+   * Navbar dropdown/panel shell
+   */
+  .qt-navbar-dropdown {
+    @apply absolute right-0 mt-2 z-50;
+    min-width: 14rem;
+    border-radius: var(--qt-popover-radius);
+    background: var(--qt-popover-bg);
+    color: var(--qt-popover-fg);
+    border: 1px solid var(--qt-popover-border);
+    box-shadow: var(--qt-popover-shadow);
+  }
+
+  .qt-navbar-dropdown-section {
+    @apply p-3 space-y-3;
+  }
+
+  .qt-navbar-dropdown-label {
+    @apply text-xs font-semibold uppercase tracking-wider;
+    padding: 0.25rem 0.5rem;
+    color: var(--qt-navbar-link-fg);
+    opacity: 0.7;
+  }
+
+  .qt-navbar-dropdown-header {
+    @apply text-right text-sm font-medium;
+  }
+
+  .qt-navbar-dropdown-subtext {
+    @apply text-xs text-muted-foreground;
+  }
+
+  .qt-navbar-dropdown-divider {
+    @apply border-t;
+    border-color: var(--qt-popover-border);
+  }
+
+  .qt-navbar-dropdown-item {
+    @apply flex items-center justify-between gap-2;
+    @apply w-full px-3 py-2 rounded-md text-sm;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .qt-navbar-dropdown-item:hover {
+    background: var(--qt-navbar-link-hover-bg);
+  }
+
+  .qt-navbar-dropdown-item-active {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+  }
+
+  /**
+   * Compact chip-style navbar buttons (quick-hide tags)
+   */
+  .qt-navbar-chip-button {
+    @apply inline-flex items-center gap-1 text-sm;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    border: 1px solid var(--qt-navbar-link-hover-bg);
+    transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+  }
+
+  .qt-navbar-chip-button:hover {
+    background: var(--qt-navbar-link-hover-bg);
+  }
+
+  .qt-navbar-chip-button-active {
+    border-color: var(--qt-sidebar-item-active-border);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+  }
+
   /* ==========================================================================
      SIDEBAR
      ========================================================================== */

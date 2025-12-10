@@ -1601,14 +1601,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // - User hasn't hidden it
   const shouldShowParticipantSidebar = isMultiChar && !isDebugMode && showParticipantSidebar
 
+  const mainClasses = ['qt-chat-main']
+  if (isDebugMode) {
+    mainClasses.push('qt-chat-main-split')
+  }
+
   return (
-    <div className="qt-content">
+    <div className="qt-chat-layout">
       {/* Main chat area */}
-      <div className={`flex flex-col flex-1 min-h-0 ${isDebugMode ? 'w-1/2' : shouldShowParticipantSidebar ? 'flex-1' : 'w-full'}`}>
+      <div className={mainClasses.join(' ')}>
 
       {/* Messages */}
-      <div className="qt-content-scroll">
-        <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4 space-y-4`}>
+      <div className="qt-chat-messages">
+        <div className="qt-chat-messages-list">
         {messages.map((message, messageIndex) => {
           const isEditing = editingMessageId === message.id
           const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
@@ -1629,21 +1634,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             )
           }
 
-          const messageAvatar = shouldShowAvatars() ? getMessageAvatar(message) : null
+        const messageAvatar = shouldShowAvatars() ? getMessageAvatar(message) : null
+        const messageRowClasses = ['qt-chat-message-row']
+        if (message.role === 'USER') {
+          messageRowClasses.push('qt-chat-message-row-user')
+        } else {
+          messageRowClasses.push('qt-chat-message-row-assistant')
+        }
 
-          return (
-            <div
-              key={message.id}
-              className={`flex gap-4 w-[90%] ${
-                message.role === 'USER' ? 'justify-end ml-auto' : 'justify-start'
-              }`}
-            >
+        return (
+          <div
+            key={message.id}
+            className={messageRowClasses.join(' ')}
+          >
               {message.role === 'ASSISTANT' && shouldShowAvatars() && (
                 <div className="flex-shrink-0">
                   {renderAvatar(messageAvatar)}
                 </div>
               )}
-              <div className="flex-1 min-w-0 group relative">
+            <div className="qt-chat-message-body group">
                 <div
                   className={`chat-message ${
                     message.role === 'USER'
@@ -1685,7 +1694,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       )}
                       {/* Image attachment thumbnails */}
                       {getImageAttachments(message).length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
+                        <div className="qt-chat-attachment-list">
                           {getImageAttachments(message).map((attachment) => (
                             <button
                               key={attachment.id}
@@ -1694,7 +1703,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                                 filename: attachment.filename,
                                 fileId: attachment.id,
                               })}
-                              className="relative group/thumb overflow-hidden rounded border border-border hover:border-primary transition-colors"
+                              type="button"
+                              className="qt-chat-attachment-button"
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
@@ -1702,10 +1712,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                                 alt={attachment.filename}
                                 width={80}
                                 height={80}
-                                className="w-20 h-20 object-cover"
+                                className="qt-chat-attachment-image"
                               />
-                              <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/20 transition-colors flex items-center justify-center">
-                                <svg className="w-6 h-6 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <div className="qt-chat-attachment-overlay">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                                 </svg>
                               </div>
@@ -1822,7 +1832,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         {/* Waiting for response - show large quill animation */}
         {waitingForResponse && !streaming && (
-          <div className="flex gap-4 w-[90%] justify-start items-center">
+          <div className="qt-chat-message-row qt-chat-message-row-assistant items-center">
             {shouldShowAvatars() && (
               <div className="flex-shrink-0">
                 {renderAvatar({
@@ -1841,7 +1851,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         {/* Pending tool calls - shown collapsed before streaming response */}
         {pendingToolCalls.length > 0 && (
-          <div className="flex gap-4 w-[90%] justify-start">
+          <div className="qt-chat-message-row qt-chat-message-row-assistant">
             <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-muted text-lg">
               {(() => {
                 if (pendingToolCalls.some(tc => tc.name === 'generate_image')) return '🎨'
@@ -1910,7 +1920,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         {/* Streaming message */}
         {streaming && streamingContent && (
-          <div className="flex gap-4 w-[90%] justify-start">
+          <div className="qt-chat-message-row qt-chat-message-row-assistant">
             {shouldShowAvatars() && (
               <div className="flex-shrink-0">
                 {renderAvatar({
@@ -1933,41 +1943,39 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 bg-card border-t border-border">
+      <div className="qt-chat-composer">
         {/* Phase 7: Edge Case 1 - No active characters warning */}
         {!hasActiveCharacters && messages.length > 0 && (
-          <div className="bg-warning/10 border-b border-warning/30 p-3">
-            <div className="mx-auto max-w-[800px] flex items-center gap-3 text-warning">
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <div className="flex-1">
-                <p className="font-medium text-sm">No characters in this chat</p>
-                <p className="text-xs text-warning/80 mt-0.5">
-                  Add a character to continue the conversation.
-                </p>
-              </div>
-              {isMultiChar && (
-                <button
-                  onClick={handleAddCharacter}
-                  className="px-3 py-1.5 text-xs font-medium rounded bg-warning text-warning-foreground hover:bg-warning/90 transition-colors"
-                >
-                  Add Character
-                </button>
-              )}
+          <div className="qt-alert qt-alert-warning flex items-center gap-3">
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div className="flex-1">
+              <p className="font-medium text-sm">No characters in this chat</p>
+              <p className="text-xs opacity-80 mt-0.5">
+                Add a character to continue the conversation.
+              </p>
             </div>
+            {isMultiChar && (
+              <button
+                onClick={handleAddCharacter}
+                className="qt-button-secondary qt-button-sm"
+              >
+                Add Character
+              </button>
+            )}
           </div>
         )}
-        <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4`}>
+        <div className="qt-chat-composer-content">
           {/* Tool execution status indicator */}
           {toolExecutionStatus && (
             <div
-              className={`mb-4 p-3 rounded-lg flex items-center gap-2 ${
+              className={`qt-alert flex items-center gap-2 ${
                 toolExecutionStatus.status === 'pending'
-                  ? 'bg-info/10 border border-info/30 text-info'
+                  ? 'qt-alert-info'
                   : toolExecutionStatus.status === 'success'
-                  ? 'bg-success/10 border border-success/30 text-success'
-                  : 'bg-destructive/10 border border-destructive/30 text-destructive'
+                    ? 'qt-alert-success'
+                    : 'qt-alert-error'
               }`}
             >
               {toolExecutionStatus.status === 'pending' ? (
@@ -1989,18 +1997,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
           {/* Attached files preview */}
           {attachedFiles.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2">
+            <div className="qt-chat-attachment-list mb-2">
               {attachedFiles.map((file) => (
                 <div
                   key={file.id}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg text-sm"
+                  className="qt-chat-attachment-chip"
                 >
                   {file.mimeType.startsWith('image/') ? (
-                    <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   ) : (
-                    <svg className="w-4 h-4 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   )}
@@ -2010,7 +2018,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   <button
                     type="button"
                     onClick={() => removeAttachedFile(file.id)}
-                    className="text-muted-foreground hover:text-destructive"
+                    className="qt-chat-attachment-chip-remove"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2020,7 +2028,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               ))}
             </div>
           )}
-          <form onSubmit={sendMessage} className="flex gap-2">
+          <form onSubmit={sendMessage} className="qt-chat-composer-inner">
             {/* Hidden file input */}
             <input
               ref={fileInputRef}
@@ -2030,13 +2038,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               className="hidden"
             />
             {/* Buttons column */}
-            <div className="flex flex-col gap-2">
+            <div className="qt-chat-toolbar">
               {/* Attach file button */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending || uploadingFile}
-                className="qt-button-secondary qt-button-icon w-11 h-11"
+                className="qt-chat-toolbar-button"
                 title="Attach file"
               >
                 {uploadingFile ? (
@@ -2057,7 +2065,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     e.stopPropagation()
                     setToolPaletteOpen(!toolPaletteOpen)
                   }}
-                  className="qt-button-secondary qt-button-icon w-11 h-11"
+                  className="qt-chat-toolbar-button"
                   title="Tools menu"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2078,7 +2086,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               </div>
             </div>
             {showPreview ? (
-              <div className="qt-chat-composer-input flex-1 overflow-y-auto"
+              <div className="qt-chat-composer-input overflow-y-auto"
                 style={{
                   lineHeight: '1.5'
                 }}
@@ -2121,14 +2129,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 disabled={sending || !hasActiveCharacters}
                 rows={1}
                 placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
-                className="qt-chat-composer-input flex-1 resize-none overflow-y-auto"
+                className="qt-chat-composer-input resize-none overflow-y-auto"
                 style={{
                   lineHeight: '1.5'
                 }}
               />
             )}
             {/* Buttons column - right side */}
-            <div className="flex flex-col gap-2">
+            <div className="qt-chat-toolbar">
               {/* Send button */}
               <button
                 type="submit"
@@ -2150,7 +2158,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     waitingForResponse ||
                     turnSelectionResult?.nextSpeakerId !== null
                   }
-                  className="w-11 h-11 flex items-center justify-center border border-border bg-info text-info-foreground rounded-lg hover:bg-info/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors"
+                  className="qt-chat-toolbar-button qt-chat-continue-button"
                   title={
                     turnSelectionResult?.nextSpeakerId !== null
                       ? "It's not your turn"
@@ -2166,7 +2174,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               <button
                 type="button"
                 onClick={() => setShowPreview(!showPreview)}
-                className="w-11 h-11 flex items-center justify-center border border-border bg-card text-muted-foreground rounded-lg hover:bg-muted"
+                className="qt-chat-toolbar-button"
                 title="Toggle preview"
               >
                 {showPreview ? (
@@ -2297,7 +2305,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onTalkativenessChange={handleTalkativenessChange}
           onAddCharacter={handleAddCharacter}
           onRemoveCharacter={handleRemoveCharacter}
-          className="w-72 flex-shrink-0"
         />
       )}
 
@@ -2315,7 +2322,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
       {/* Debug Panel */}
       {isDebugMode && (
-        <div className="w-1/2 h-full">
+        <div className="qt-chat-debug-panel">
           <DebugPanel />
         </div>
       )}

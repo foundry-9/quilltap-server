@@ -317,6 +317,7 @@ export default function NewChatPage() {
                       className={'w-full flex items-center gap-3 rounded-lg border p-3 transition ' + (isSelected ? 'border-primary bg-primary/10' : 'border-border bg-card hover:border-primary/50 hover:bg-muted/50')}
                     >
                       {avatarSrc ? (
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img src={avatarSrc} alt={character.name} className={getAvatarClasses(style, 'sm').imageClass} />
                       ) : (
                         <div className={getAvatarClasses(style, 'sm').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
@@ -354,6 +355,7 @@ export default function NewChatPage() {
                       <div key={sc.character.id} className="rounded-lg border border-border bg-muted/30 p-4">
                         <div className="flex items-start gap-3">
                           {avatarSrc ? (
+                            // eslint-disable-next-line @next/next/no-img-element
                             <img src={avatarSrc} alt={sc.character.name} className={getAvatarClasses(style, 'sm').imageClass} />
                           ) : (
                             <div className={getAvatarClasses(style, 'sm').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>

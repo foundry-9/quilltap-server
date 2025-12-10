@@ -264,6 +264,12 @@ Consider adding to `_interactive.css`:
 }
 ```
 
+### New Semantic Hooks (2024-XX)
+
+- Added status token variables `--qt-status-success-*`, `--qt-status-warning-*`, `--qt-status-info-*`, and `--qt-status-danger-*` plus chat/composer knobs (`--qt-chat-toolbar-*`, `--qt-chat-attachment-*`, `--qt-chat-sidebar-*`, `--qt-chat-composer-padding-*`). Themes should override these variables instead of Tailwind utilities when restyling badges, alerts, or chat controls.
+- Introduced chat layout classes `.qt-chat-layout`, `.qt-chat-main`, `.qt-chat-message-row`, `.qt-chat-message-body`, `.qt-chat-attachment-list`, `.qt-chat-toolbar`, `.qt-chat-toolbar-button`, `.qt-chat-continue-button`, `.qt-chat-sidebar-*`, and `.qt-chat-attachment-chip*`. Chat pages now consume these semantics end-to-end.
+- Expanded navbar helpers with `.qt-navbar-toggle`, `.qt-navbar-toggle-active`, `.qt-navbar-dropdown`, `.qt-navbar-dropdown-item`, `.qt-navbar-chip-button`, and related helpers so quick-hide controls, dropdowns, and icon buttons inherit theme styling automatically.
+
 ---
 
 ## Key Patterns to Replace

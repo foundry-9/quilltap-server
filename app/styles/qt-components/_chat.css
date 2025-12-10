@@ -60,10 +60,9 @@
    * System message - notifications, status updates
    */
   .qt-chat-message-system {
-    @apply bg-muted/50 text-muted-foreground;
-    @apply text-sm italic;
-    @apply text-center;
-    @apply py-2;
+    @apply text-sm italic text-center py-2;
+    background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+    color: var(--color-muted-foreground);
   }
 
   /**
@@ -120,17 +119,66 @@
    * Composer container
    */
   .qt-chat-composer {
-    @apply border-t p-4;
     background: var(--qt-chat-composer-bg);
-    border-color: var(--qt-chat-composer-border);
+    border-top: 1px solid var(--qt-chat-composer-border);
+    padding: var(--qt-chat-composer-padding-y) var(--qt-chat-composer-padding-x);
   }
 
   /**
    * Composer inner wrapper
    */
   .qt-chat-composer-inner {
-    @apply flex items-end gap-3;
+    @apply flex items-end;
+    gap: var(--qt-chat-toolbar-gap);
     @apply max-w-4xl mx-auto;
+  }
+
+  /**
+   * Container for form + helper blocks
+   */
+  .qt-chat-composer-content {
+    @apply mx-auto space-y-4;
+    max-width: var(--qt-chat-message-row-max-width);
+  }
+
+  /**
+   * Vertical toolbar stacks for composer buttons
+   */
+  .qt-chat-toolbar {
+    @apply flex flex-col;
+    gap: var(--qt-chat-toolbar-gap);
+  }
+
+  /**
+   * Toolbar button - used for attachment/tools/continue controls
+   */
+  .qt-chat-toolbar-button {
+    @apply inline-flex items-center justify-center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--qt-button-radius);
+    border: 1px solid var(--qt-chat-toolbar-button-border);
+    background: var(--qt-chat-toolbar-button-bg);
+    color: var(--qt-chat-toolbar-button-fg);
+    transition: var(--qt-button-transition);
+  }
+
+  .qt-chat-toolbar-button:hover:not(:disabled) {
+    background: var(--qt-chat-toolbar-button-hover-bg);
+  }
+
+  .qt-chat-toolbar-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /**
+   * Continue/pass turn button
+   */
+  .qt-chat-continue-button {
+    background: var(--qt-status-info-bg);
+    color: var(--qt-status-info-fg);
+    border: 1px solid var(--qt-status-info-border);
   }
 
   /**
@@ -262,27 +310,36 @@
   }
 
   /**
+   * Active participant indicator dot
+   */
+  .qt-participant-turn-dot {
+    @apply absolute rounded-full animate-pulse;
+    width: 0.5rem;
+    height: 0.5rem;
+    background: var(--qt-status-success-fg);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--qt-status-success-fg) 25%, transparent);
+    top: 0.5rem;
+    left: 0.5rem;
+  }
+
+  /**
    * Turn indicator badge
    */
   .qt-participant-turn-indicator {
-    @apply inline-flex items-center gap-1;
-    @apply px-2 py-0.5;
-    @apply text-xs font-medium;
-    @apply rounded-full;
-    @apply bg-success/10 text-success;
-    @apply border border-success/30;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full;
+    background: var(--qt-status-success-bg);
+    color: var(--qt-status-success-fg);
+    border: 1px solid var(--qt-status-success-border);
   }
 
   /**
    * Queue position badge
    */
   .qt-participant-queue-badge {
-    @apply inline-flex items-center gap-1;
-    @apply px-2 py-0.5;
-    @apply text-xs font-medium;
-    @apply rounded-full;
-    @apply bg-info/10 text-info;
-    @apply border border-info/30;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full;
+    background: var(--qt-status-info-bg);
+    color: var(--qt-status-info-fg);
+    border: 1px solid var(--qt-status-info-border);
   }
 
   /* ==========================================================================
@@ -294,6 +351,7 @@
    */
   .qt-chat-layout {
     @apply flex h-screen;
+    background: var(--qt-content-bg);
   }
 
   /**
@@ -304,29 +362,174 @@
     @apply min-w-0;
   }
 
+  .qt-chat-main-split {
+    width: 50%;
+  }
+
+  .qt-chat-debug-panel {
+    width: 50%;
+    @apply h-full;
+  }
+
   /**
    * Chat messages container
    */
   .qt-chat-messages {
     @apply flex-1 overflow-y-auto;
-    @apply p-4;
+    padding: var(--qt-card-padding);
   }
 
   /**
    * Chat messages list
    */
   .qt-chat-messages-list {
-    @apply max-w-4xl mx-auto;
-    @apply space-y-4;
+    @apply mx-auto space-y-4;
+    max-width: var(--qt-chat-message-row-max-width);
+  }
+
+  /**
+   * Chat message row container
+   */
+  .qt-chat-message-row {
+    @apply flex gap-4;
+    width: 90%;
+    max-width: var(--qt-chat-message-row-max-width);
+  }
+
+  .qt-chat-message-row-user {
+    margin-left: auto;
+    justify-content: flex-end;
+  }
+
+  .qt-chat-message-row-assistant {
+    justify-content: flex-start;
+  }
+
+  /**
+   * Chat message body wrapper
+   */
+  .qt-chat-message-body {
+    @apply flex-1 min-w-0 relative;
+  }
+
+  /**
+   * Attachment list + thumbnails
+   */
+  .qt-chat-attachment-list {
+    @apply flex flex-wrap gap-2 mt-2;
+  }
+
+  .qt-chat-attachment-button {
+    @apply relative overflow-hidden rounded transition-colors;
+    border: 1px solid var(--qt-chat-attachment-border);
+  }
+
+  .qt-chat-attachment-button:hover {
+    border-color: var(--qt-chat-attachment-hover-border);
+  }
+
+  .qt-chat-attachment-image {
+    width: 5rem;
+    height: 5rem;
+    @apply object-cover;
+  }
+
+  .qt-chat-attachment-overlay {
+    @apply absolute inset-0 flex items-center justify-center;
+    background: transparent;
+    transition: background 150ms ease, opacity 150ms ease;
+  }
+
+  .qt-chat-attachment-button:hover .qt-chat-attachment-overlay {
+    background: var(--qt-chat-attachment-overlay);
+  }
+
+  .qt-chat-attachment-overlay svg {
+    @apply w-6 h-6 text-white;
+    opacity: 0;
+    transition: opacity 150ms ease;
+    filter: drop-shadow(0 0 8px rgb(0 0 0 / 0.45));
+  }
+
+  .qt-chat-attachment-button:hover .qt-chat-attachment-overlay svg {
+    opacity: 1;
+  }
+
+  /**
+   * Attachment chips (composer preview)
+   */
+  .qt-chat-attachment-chip {
+    @apply inline-flex items-center gap-2 rounded-lg text-sm;
+    padding: 0.375rem 0.75rem;
+    background: var(--color-muted);
+    color: var(--color-foreground);
+  }
+
+  .qt-chat-attachment-chip-icon {
+    @apply w-4 h-4;
+  }
+
+  .qt-chat-attachment-chip-icon-success {
+    color: var(--qt-status-success-fg);
+  }
+
+  .qt-chat-attachment-chip-icon-info {
+    color: var(--qt-status-info-fg);
+  }
+
+  .qt-chat-attachment-chip-remove {
+    color: var(--color-muted-foreground);
+    transition: color 150ms ease;
+  }
+
+  .qt-chat-attachment-chip-remove:hover {
+    color: var(--qt-status-danger-fg);
   }
 
   /**
    * Chat sidebar (participants)
    */
   .qt-chat-sidebar {
-    @apply w-80;
-    @apply border-l border-border;
-    @apply bg-card;
-    @apply overflow-y-auto;
+    width: var(--qt-chat-sidebar-width);
+    border-left: 1px solid var(--qt-chat-sidebar-border);
+    background: var(--qt-chat-sidebar-bg);
+    @apply overflow-hidden flex flex-col;
+  }
+
+  .qt-chat-sidebar-header {
+    border-bottom: 1px solid var(--qt-chat-sidebar-header-border);
+    padding: 1rem;
+  }
+
+  .qt-chat-sidebar-heading {
+    color: var(--qt-chat-sidebar-heading);
+    @apply text-base font-semibold;
+  }
+
+  .qt-chat-sidebar-meta {
+    color: var(--qt-chat-sidebar-muted);
+    @apply text-xs;
+  }
+
+  .qt-chat-sidebar-queue {
+    color: var(--qt-status-info-fg);
+  }
+
+  .qt-chat-sidebar-list {
+    @apply flex-1 overflow-y-auto;
+    padding: 1rem;
+    @apply space-y-3;
+  }
+
+  .qt-chat-sidebar-add {
+    border-top: 1px solid var(--qt-chat-sidebar-header-border);
+    padding: 1rem;
+  }
+
+  .qt-chat-sidebar-debug {
+    border-top: 1px solid var(--qt-chat-sidebar-header-border);
+    padding: 1rem;
+    color: var(--qt-chat-sidebar-muted);
+    @apply text-xs;
   }
 }

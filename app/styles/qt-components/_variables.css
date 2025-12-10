@@ -39,6 +39,25 @@
   --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 90%, black);
 
   /* ==========================================================================
+     STATUS TOKENS
+     ========================================================================== */
+  --qt-status-success-bg: color-mix(in srgb, var(--color-success) 12%, transparent);
+  --qt-status-success-fg: var(--color-success);
+  --qt-status-success-border: color-mix(in srgb, var(--color-success) 35%, transparent);
+
+  --qt-status-warning-bg: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  --qt-status-warning-fg: var(--color-warning);
+  --qt-status-warning-border: color-mix(in srgb, var(--color-warning) 35%, transparent);
+
+  --qt-status-info-bg: color-mix(in srgb, var(--color-info) 12%, transparent);
+  --qt-status-info-fg: var(--color-info);
+  --qt-status-info-border: color-mix(in srgb, var(--color-info) 35%, transparent);
+
+  --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 12%, transparent);
+  --qt-status-danger-fg: var(--color-destructive);
+  --qt-status-danger-border: color-mix(in srgb, var(--color-destructive) 35%, transparent);
+
+  /* ==========================================================================
      CARD VARIABLES
      ========================================================================== */
   --qt-card-radius: var(--radius-lg);
@@ -145,6 +164,27 @@
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
   --qt-chat-composer-radius: var(--radius-lg);
+  --qt-chat-composer-padding-x: 1.25rem;
+  --qt-chat-composer-padding-y: 1rem;
+
+  --qt-chat-toolbar-gap: 0.5rem;
+  --qt-chat-toolbar-button-bg: var(--color-muted);
+  --qt-chat-toolbar-button-fg: var(--color-muted-foreground);
+  --qt-chat-toolbar-button-hover-bg: color-mix(in srgb, var(--color-muted) 85%, transparent);
+  --qt-chat-toolbar-button-border: var(--color-border);
+
+  --qt-chat-attachment-border: var(--color-border);
+  --qt-chat-attachment-hover-border: var(--color-primary);
+  --qt-chat-attachment-overlay: rgb(0 0 0 / 0.25);
+
+  --qt-chat-message-row-max-width: 800px;
+
+  --qt-chat-sidebar-width: 20rem;
+  --qt-chat-sidebar-bg: var(--color-card);
+  --qt-chat-sidebar-border: var(--color-border);
+  --qt-chat-sidebar-header-border: var(--color-border);
+  --qt-chat-sidebar-muted: var(--color-muted-foreground);
+  --qt-chat-sidebar-heading: var(--color-foreground);
 
   --qt-participant-card-radius: var(--radius-lg);
   --qt-participant-card-bg: var(--color-card);

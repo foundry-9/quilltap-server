@@ -60,6 +60,23 @@
   --qt-button-destructive-fg: hsl(var(--destructiveForeground));
   --qt-button-destructive-hover-bg: hsl(var(--destructive) / 0.9);
 
+  /* Status tokens */
+  --qt-status-success-bg: color-mix(in srgb, var(--color-success) 18%, transparent);
+  --qt-status-success-fg: var(--color-success);
+  --qt-status-success-border: color-mix(in srgb, var(--color-success) 45%, transparent);
+
+  --qt-status-warning-bg: color-mix(in srgb, var(--color-warning) 18%, transparent);
+  --qt-status-warning-fg: var(--color-warning);
+  --qt-status-warning-border: color-mix(in srgb, var(--color-warning) 45%, transparent);
+
+  --qt-status-info-bg: color-mix(in srgb, var(--color-info) 18%, transparent);
+  --qt-status-info-fg: var(--color-info);
+  --qt-status-info-border: color-mix(in srgb, var(--color-info) 45%, transparent);
+
+  --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 18%, transparent);
+  --qt-status-danger-fg: var(--color-destructive);
+  --qt-status-danger-border: color-mix(in srgb, var(--color-destructive) 45%, transparent);
+
   /* Card Variables - Glass morphism style */
   --qt-card-radius: var(--ocean-radius);
   --qt-card-bg: linear-gradient(145deg, var(--ocean-glass), hsl(var(--card) / 0.9));
@@ -129,6 +146,25 @@
   --qt-chat-composer-bg: linear-gradient(180deg, hsl(var(--muted) / 0.7), hsl(var(--background)));
   --qt-chat-composer-border: var(--ocean-border-strong);
   --qt-chat-composer-radius: calc(var(--ocean-radius) * 0.8);
+  --qt-chat-composer-padding-x: 1.5rem;
+  --qt-chat-composer-padding-y: 1.25rem;
+
+  --qt-chat-toolbar-gap: 0.75rem;
+  --qt-chat-toolbar-button-bg: linear-gradient(145deg, var(--ocean-glass), hsl(var(--muted) / 0.8));
+  --qt-chat-toolbar-button-fg: hsl(var(--foreground));
+  --qt-chat-toolbar-button-hover-bg: hsl(var(--accent) / 0.35);
+  --qt-chat-toolbar-button-border: var(--ocean-border-soft);
+
+  --qt-chat-attachment-border: var(--ocean-border-soft);
+  --qt-chat-attachment-hover-border: hsl(var(--accent));
+  --qt-chat-attachment-overlay: rgb(3 12 22 / 0.5);
+
+  --qt-chat-sidebar-width: 22rem;
+  --qt-chat-sidebar-bg: linear-gradient(180deg, var(--ocean-glass), hsl(var(--card) / 0.95));
+  --qt-chat-sidebar-border: var(--ocean-border-soft);
+  --qt-chat-sidebar-header-border: var(--ocean-border-soft);
+  --qt-chat-sidebar-muted: var(--ocean-text-soft);
+  --qt-chat-sidebar-heading: hsl(var(--foreground));
 
   --qt-participant-card-radius: var(--ocean-radius);
   --qt-participant-card-bg: linear-gradient(145deg, var(--ocean-glass), hsl(var(--card) / 0.9));
