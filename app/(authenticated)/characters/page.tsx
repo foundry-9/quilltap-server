@@ -207,7 +207,7 @@ export default function CharactersPage() {
           {visibleCharacters.map((character) => (
             <div
               key={character.id}
-              className="character-card flex h-full flex-col gap-4 rounded-2xl border border-border/60 bg-card/90 p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-xl"
+              className="qt-entity-card character-card"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center flex-grow gap-4">
@@ -250,7 +250,7 @@ export default function CharactersPage() {
                 {character.description}
               </p>
 
-              <div className="character-card-actions flex flex-wrap gap-2">
+              <div className="qt-entity-card-actions character-card-actions">
                 <Link
                   href={`/characters/${character.id}/view?action=chat`}
                   className="character-card__action character-card__action--chat inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow-sm transition hover:bg-success/90"

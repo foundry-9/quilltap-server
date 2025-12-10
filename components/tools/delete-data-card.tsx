@@ -125,7 +125,7 @@ export function DeleteDataCard() {
   return (
     <>
       {/* Card */}
-      <div className="bg-card rounded-lg shadow-md border border-border p-6">
+      <div className="qt-card p-6">
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0 w-12 h-12 bg-destructive/10 rounded-lg flex items-center justify-center">
             <svg className="w-6 h-6 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">

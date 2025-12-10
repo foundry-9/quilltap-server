@@ -309,6 +309,9 @@
   --qt-footer-fg: hsl(var(--text-400));
   --qt-footer-link-hover: hsl(var(--accent-secondary-000));
 
+  /* Brand Variables */
+  --qt-brand-fg: hsl(var(--text-000));
+
   /* Auth Page Variables */
   --qt-auth-page-bg: linear-gradient(to bottom right, #0f172a, #1e293b);
   --qt-auth-card-bg: var(--surface-raised);
@@ -389,6 +392,25 @@
 /* Primary Badge - Gradient background */
 [data-theme="earl-grey"] .qt-badge-primary {
   background: linear-gradient(120deg, hsl(var(--accent-brand) / 0.95), hsl(var(--accent-main-000)));
+}
+
+/* Dashboard Entity Badges - Earl Grey styled variants */
+[data-theme="earl-grey"] .qt-badge-characters {
+  background: hsl(var(--accent-pro-900) / 0.4);
+  color: hsl(var(--accent-pro-000));
+  border: 1px solid hsl(var(--accent-pro-100) / 0.4);
+}
+
+[data-theme="earl-grey"] .qt-badge-chats {
+  background: hsl(var(--success-900) / 0.4);
+  color: hsl(var(--success-000));
+  border: 1px solid hsl(var(--success-100) / 0.4);
+}
+
+[data-theme="earl-grey"] .qt-badge-personas {
+  background: hsl(var(--accent-pro-900) / 0.4);
+  color: hsl(var(--accent-pro-000));
+  border: 1px solid hsl(var(--accent-pro-100) / 0.4);
 }
 
 /* Alert overrides - Earl Grey color variations */

@@ -496,6 +496,31 @@
   }
 
   /* ==========================================================================
+     DASHBOARD ENTITY BADGES - For dashboard card counts
+     ========================================================================== */
+
+  /**
+   * Characters badge (purple) - for dashboard character count
+   */
+  .qt-badge-characters {
+    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+  }
+
+  /**
+   * Chats badge (green/success) - for dashboard chat count
+   */
+  .qt-badge-chats {
+    @apply bg-success/10 text-success border border-success/30;
+  }
+
+  /**
+   * Personas badge (purple) - for dashboard persona count
+   */
+  .qt-badge-personas {
+    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+  }
+
+  /* ==========================================================================
      STATUS BADGES
      ========================================================================== */
 

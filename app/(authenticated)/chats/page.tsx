@@ -292,7 +292,7 @@ export default function ChatsPage() {
             <div
               key={chat.id}
               ref={highlightedChatId === chat.id ? importedChatRef : null}
-              className="chat-card relative rounded-2xl border border-border/60 bg-card/90 p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-xl"
+              className="qt-entity-card chat-card relative"
             >
               {highlightedChatId === chat.id && (
                 <div className="absolute -right-12 top-1/2 transform -translate-y-1/2 arrow-highlight">

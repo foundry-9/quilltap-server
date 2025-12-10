@@ -605,6 +605,25 @@
   border: 1px solid var(--stroke-soft);
 }
 
+/* Dashboard Entity Badges - Rains styled variants */
+[data-theme="rains"] .qt-badge-characters {
+  background: hsl(var(--accent-pro-900) / 0.4);
+  color: hsl(var(--accent-pro-000));
+  border: 1px solid hsl(var(--accent-pro-100) / 0.4);
+}
+
+[data-theme="rains"] .qt-badge-chats {
+  background: hsl(var(--success-900) / 0.4);
+  color: hsl(var(--success-000));
+  border: 1px solid hsl(var(--success-100) / 0.4);
+}
+
+[data-theme="rains"] .qt-badge-personas {
+  background: hsl(var(--accent-pro-900) / 0.4);
+  color: hsl(var(--accent-pro-000));
+  border: 1px solid hsl(var(--accent-pro-100) / 0.4);
+}
+
 /* ============================================================================
    AVATARS & LINKS
    ============================================================================ */
@@ -625,6 +644,30 @@
 
 [data-theme="rains"] a:hover {
   color: hsl(var(--accent-secondary-000));
+}
+
+/* Navbar links should be white, not blue */
+[data-theme="rains"] .qt-navbar-link,
+[data-theme="rains"] .qt-navbar-link-active {
+  color: hsl(var(--text-000));
+}
+
+[data-theme="rains"] .qt-navbar-link:hover {
+  color: hsl(var(--text-000));
+}
+
+/* Footer links should be white, not blue */
+[data-theme="rains"] .qt-footer-link {
+  color: hsl(var(--text-200));
+}
+
+[data-theme="rains"] .qt-footer-link:hover {
+  color: hsl(var(--text-000));
+}
+
+/* Brand text should be white */
+[data-theme="rains"] .qt-font-brand {
+  color: hsl(var(--text-000));
 }
 
 /* ============================================================================
@@ -677,6 +720,7 @@
   box-shadow: 0 18px 45px -25px hsl(var(--accent-brand) / 0.8);
 }
 
+[data-theme="rains"] .qt-entity-card,
 [data-theme="rains"] .character-card,
 [data-theme="rains"] .persona-card,
 [data-theme="rains"] .chat-card {
@@ -685,6 +729,7 @@
   box-shadow: var(--chat-shadow);
 }
 
+[data-theme="rains"] .qt-entity-card:hover,
 [data-theme="rains"] .character-card:hover,
 [data-theme="rains"] .persona-card:hover,
 [data-theme="rains"] .chat-card:hover {

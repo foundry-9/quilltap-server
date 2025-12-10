@@ -51,6 +51,10 @@
   --qt-card-shadow-hover: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   --qt-card-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* Entity card - extends card for character/persona/chat list items */
+  --qt-entity-card-radius: calc(var(--radius-lg) * 1.25);
+  --qt-entity-card-bg: color-mix(in srgb, var(--color-card) 90%, transparent);
+
   /* ==========================================================================
      INPUT VARIABLES
      ========================================================================== */
@@ -79,6 +83,13 @@
   --qt-navbar-link-fg: var(--color-foreground);
   --qt-navbar-link-hover-bg: var(--color-muted);
   --qt-navbar-link-active-bg: var(--color-muted);
+
+  /* ==========================================================================
+     CONTENT AREA VARIABLES
+     ========================================================================== */
+  --qt-content-bg: var(--color-card);
+  --qt-content-fg: var(--color-card-foreground);
+  --qt-content-scroll-bg: var(--color-background);
 
   /* ==========================================================================
      SIDEBAR VARIABLES
@@ -196,6 +207,11 @@
   --qt-footer-border: var(--color-border);
   --qt-footer-fg: var(--color-muted-foreground);
   --qt-footer-link-hover: var(--color-primary);
+
+  /* ==========================================================================
+     BRAND VARIABLES
+     ========================================================================== */
+  --qt-brand-fg: var(--color-foreground);
 
   /* ==========================================================================
      AUTH PAGE VARIABLES

@@ -1602,12 +1602,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const shouldShowParticipantSidebar = isMultiChar && !isDebugMode && showParticipantSidebar
 
   return (
-    <div className="flex h-full bg-card">
+    <div className="qt-content">
       {/* Main chat area */}
       <div className={`flex flex-col flex-1 min-h-0 ${isDebugMode ? 'w-1/2' : shouldShowParticipantSidebar ? 'flex-1' : 'w-full'}`}>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto bg-background min-h-0">
+      <div className="qt-content-scroll">
         <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4 space-y-4`}>
         {messages.map((message, messageIndex) => {
           const isEditing = editingMessageId === message.id

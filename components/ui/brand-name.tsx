@@ -10,7 +10,7 @@ interface BrandNameProps {
  */
 export function BrandName({ className = "" }: BrandNameProps) {
   return (
-    <span className={`font-brand ${className}`}>
+    <span className={`qt-font-brand ${className}`}>
       Quilltap
     </span>
   );

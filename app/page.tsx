@@ -15,10 +15,10 @@ export default async function Home() {
       <div className="text-center">
         <h1 className="text-white mb-4 flex flex-col items-center">
           <span className="sr-only">Welcome to Quilltap</span>
-          <span className="text-2xl font-medium mb-2 font-brand">Welcome to</span>
+          <span className="text-2xl font-medium mb-2 qt-font-brand">Welcome to</span>
           <BrandLogo size="xl" />
         </h1>
-        <p className="text-xl text-slate-300 mb-8 font-brand">
+        <p className="text-xl mb-8 qt-font-brand">
           AI-powered roleplay chat platform with multi-provider support
         </p>
         <div className="flex gap-4 justify-center">

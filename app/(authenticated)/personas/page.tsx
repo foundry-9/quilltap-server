@@ -212,7 +212,7 @@ export default function PersonasPage() {
           {visiblePersonas.map((persona) => (
             <div
               key={persona.id}
-              className="persona-card flex h-full flex-col gap-4 rounded-2xl border border-border/60 bg-card/90 p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-xl"
+              className="qt-entity-card persona-card"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center flex-grow gap-4">
@@ -278,7 +278,7 @@ export default function PersonasPage() {
                 )}
               </div>
 
-              <div className="persona-card-actions mt-4 flex flex-wrap gap-2">
+              <div className="qt-entity-card-actions persona-card-actions">
                 <Link
                   href={`/personas/${persona.id}`}
                   className="persona-card__action inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"

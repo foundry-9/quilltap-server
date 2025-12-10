@@ -158,6 +158,30 @@
   }
 
   /* ==========================================================================
+     CONTENT AREA
+     ========================================================================== */
+
+  /**
+   * Full-height content wrapper for app-like pages (chat, etc.)
+   * Unlike qt-page which uses min-h-screen for scrollable pages,
+   * qt-content fills available space in flex containers.
+   */
+  .qt-content {
+    @apply flex h-full;
+    background: var(--qt-content-bg);
+    color: var(--qt-content-fg);
+  }
+
+  /**
+   * Scrollable message/content area within qt-content
+   * This is the primary themed background area where messages appear
+   */
+  .qt-content-scroll {
+    @apply flex-1 overflow-y-auto min-h-0;
+    background: var(--qt-content-scroll-bg);
+  }
+
+  /* ==========================================================================
      PAGE LAYOUT - Shared base styles
      ========================================================================== */
 
@@ -397,5 +421,18 @@
     @apply px-2;
     background: var(--qt-auth-card-bg, var(--color-card));
     color: var(--qt-auth-subtitle-fg, var(--color-muted-foreground));
+  }
+
+  /* ==========================================================================
+     BRAND TYPOGRAPHY
+     ========================================================================== */
+
+  /**
+   * Brand name text - uses brand font with appropriate color
+   * In dark mode, defaults to foreground color (typically white)
+   */
+  .qt-font-brand {
+    font-family: var(--font-brand);
+    color: var(--qt-brand-fg, var(--color-foreground));
   }
 }

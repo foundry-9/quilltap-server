@@ -43,7 +43,7 @@ export function DashboardCards({ characters, chats, personas }: DashboardCardsPr
         <div className="qt-card-interactive dashboard-card h-full flex flex-col">
           <div className="qt-card-header">
             <h2 className="qt-card-title">Characters</h2>
-            <span className="qt-badge-info dashboard-badge">
+            <span className="qt-badge-characters dashboard-badge">
               {visibleCounts.characters}
             </span>
           </div>
@@ -58,7 +58,7 @@ export function DashboardCards({ characters, chats, personas }: DashboardCardsPr
         <div className="qt-card-interactive dashboard-card h-full flex flex-col">
           <div className="qt-card-header">
             <h2 className="qt-card-title">Chats</h2>
-            <span className="qt-badge-success dashboard-badge">
+            <span className="qt-badge-chats dashboard-badge">
               {visibleCounts.chats}
             </span>
           </div>
@@ -73,7 +73,7 @@ export function DashboardCards({ characters, chats, personas }: DashboardCardsPr
         <div className="qt-card-interactive dashboard-card h-full flex flex-col">
           <div className="qt-card-header">
             <h2 className="qt-card-title">Personas</h2>
-            <span className="qt-badge-primary dashboard-badge">
+            <span className="qt-badge-personas dashboard-badge">
               {visibleCounts.personas}
             </span>
           </div>
