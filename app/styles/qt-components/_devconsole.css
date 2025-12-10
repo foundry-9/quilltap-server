@@ -1,0 +1,431 @@
+/**
+ * Quilltap Component System - DevConsole Components
+ *
+ * Styling for the developer console panel and log entries
+ *
+ * Classes:
+ *   .qt-devconsole           - Main DevConsole container
+ *   .qt-devconsole-header    - Header bar with tabs
+ *   .qt-devconsole-content   - Main scrollable content area
+ *   .qt-devconsole-footer    - Footer with filters
+ *
+ *   .qt-log-entry            - Base log entry row
+ *   .qt-log-entry-error      - Error level styling
+ *   .qt-log-entry-warn       - Warning level styling
+ *   .qt-log-entry-info       - Info level styling
+ *   .qt-log-entry-debug      - Debug level styling
+ *   .qt-log-entry-log        - Default log level styling
+ *   .qt-log-entry-raw        - Raw/unstructured log entry
+ *
+ *   .qt-log-timestamp        - Timestamp column
+ *   .qt-log-level            - Level badge column
+ *   .qt-log-message          - Message content area
+ *   .qt-log-context          - Expandable context/details section
+ *   .qt-log-error-details    - Error stack trace container
+ */
+
+@layer components {
+  /* ==========================================================================
+     DEVCONSOLE CONTAINER
+     ========================================================================== */
+
+  /**
+   * Main DevConsole container
+   */
+  .qt-devconsole {
+    @apply h-full flex flex-col;
+    background: var(--qt-devconsole-bg);
+  }
+
+  /**
+   * DevConsole header bar
+   */
+  .qt-devconsole-header {
+    @apply flex items-center justify-between px-4 py-2;
+    @apply border-b;
+    background: var(--qt-devconsole-header-bg);
+    border-color: var(--qt-devconsole-border);
+  }
+
+  /**
+   * DevConsole tab bar container
+   */
+  .qt-devconsole-tabs {
+    @apply flex items-center;
+    background: var(--qt-devconsole-tabs-bg);
+    border-color: var(--qt-devconsole-border);
+  }
+
+  /**
+   * DevConsole content area
+   */
+  .qt-devconsole-content {
+    @apply flex-1 overflow-hidden relative;
+    background: var(--qt-devconsole-content-bg);
+  }
+
+  /**
+   * DevConsole scrollable log list
+   */
+  .qt-devconsole-logs {
+    @apply h-full overflow-y-auto;
+    background: var(--qt-devconsole-content-bg);
+  }
+
+  /**
+   * DevConsole footer with filters
+   */
+  .qt-devconsole-footer {
+    @apply px-4 py-2 border-t;
+    background: var(--qt-devconsole-footer-bg);
+    border-color: var(--qt-devconsole-border);
+  }
+
+  /* ==========================================================================
+     LOG ENTRY - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All log entry variants share these base styles
+   */
+  .qt-log-entry,
+  .qt-log-entry-error,
+  .qt-log-entry-warn,
+  .qt-log-entry-info,
+  .qt-log-entry-debug,
+  .qt-log-entry-log,
+  .qt-log-entry-raw {
+    @apply border-l-4 px-3 py-2 border-b;
+    border-bottom-color: var(--qt-devconsole-border);
+  }
+
+  /**
+   * Log entry inner layout
+   */
+  .qt-log-entry-row {
+    @apply flex items-start gap-2;
+  }
+
+  /* ==========================================================================
+     LOG ENTRY VARIANTS - Level-specific styling
+     ========================================================================== */
+
+  /**
+   * Error log entry (red)
+   */
+  .qt-log-entry-error {
+    background: var(--qt-log-error-bg);
+    border-left-color: var(--qt-log-error-border);
+  }
+
+  /**
+   * Warning log entry (yellow/amber)
+   */
+  .qt-log-entry-warn {
+    background: var(--qt-log-warn-bg);
+    border-left-color: var(--qt-log-warn-border);
+  }
+
+  /**
+   * Info log entry (blue)
+   */
+  .qt-log-entry-info {
+    background: var(--qt-log-info-bg);
+    border-left-color: var(--qt-log-info-border);
+  }
+
+  /**
+   * Debug log entry (gray/muted)
+   */
+  .qt-log-entry-debug {
+    background: var(--qt-log-debug-bg);
+    border-left-color: var(--qt-log-debug-border);
+  }
+
+  /**
+   * Default log entry (neutral)
+   */
+  .qt-log-entry-log {
+    background: var(--qt-log-default-bg);
+    border-left-color: var(--qt-log-default-border);
+  }
+
+  /**
+   * Raw/unstructured log entry (no level indicator)
+   */
+  .qt-log-entry-raw {
+    @apply px-3 py-1.5 text-xs font-mono border-l-0;
+    background: var(--qt-devconsole-content-bg);
+    color: var(--color-muted-foreground);
+  }
+
+  /* ==========================================================================
+     LOG ENTRY ELEMENTS
+     ========================================================================== */
+
+  /**
+   * Timestamp column
+   */
+  .qt-log-timestamp {
+    @apply text-xs font-mono whitespace-nowrap flex-shrink-0;
+    color: var(--color-muted-foreground);
+  }
+
+  /**
+   * Level badge column - shared base
+   */
+  .qt-log-level,
+  .qt-log-level-error,
+  .qt-log-level-warn,
+  .qt-log-level-info,
+  .qt-log-level-debug,
+  .qt-log-level-log {
+    @apply text-xs font-semibold uppercase flex-shrink-0 w-12;
+  }
+
+  /**
+   * Level badge variants
+   */
+  .qt-log-level-error {
+    color: var(--qt-log-error-fg);
+  }
+
+  .qt-log-level-warn {
+    color: var(--qt-log-warn-fg);
+  }
+
+  .qt-log-level-info {
+    color: var(--qt-log-info-fg);
+  }
+
+  .qt-log-level-debug {
+    color: var(--qt-log-debug-fg);
+  }
+
+  .qt-log-level-log {
+    color: var(--qt-log-default-fg);
+  }
+
+  /**
+   * Message content area
+   */
+  .qt-log-message {
+    @apply flex-1 min-w-0;
+  }
+
+  .qt-log-message-text {
+    @apply text-sm;
+    color: var(--color-foreground);
+  }
+
+  /**
+   * Expandable context section
+   */
+  .qt-log-context {
+    @apply mt-1;
+  }
+
+  .qt-log-context summary {
+    @apply text-xs cursor-pointer;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-log-context summary:hover {
+    color: var(--color-foreground);
+  }
+
+  .qt-log-context pre {
+    @apply mt-1 text-xs font-mono p-2 rounded overflow-x-auto;
+    background: var(--color-muted);
+  }
+
+  /**
+   * Error stack trace container
+   */
+  .qt-log-error-details {
+    @apply mt-1 p-2 rounded text-xs;
+    background: var(--qt-log-error-details-bg);
+  }
+
+  .qt-log-error-details-title {
+    @apply font-semibold;
+    color: var(--qt-log-error-fg);
+  }
+
+  .qt-log-error-details pre {
+    @apply mt-1 text-xs font-mono whitespace-pre-wrap overflow-x-auto;
+    color: var(--qt-log-error-stack-fg);
+  }
+
+  /* ==========================================================================
+     STATUS INDICATORS
+     ========================================================================== */
+
+  /**
+   * Connection status indicator
+   */
+  .qt-devconsole-status {
+    @apply flex items-center gap-2;
+  }
+
+  .qt-devconsole-status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  .qt-devconsole-status-dot-connected {
+    @apply bg-green-500 animate-pulse;
+  }
+
+  .qt-devconsole-status-dot-disconnected {
+    @apply bg-red-500;
+  }
+
+  .qt-devconsole-status-text {
+    @apply text-xs;
+    color: var(--color-muted-foreground);
+  }
+
+  /* ==========================================================================
+     FILTER BUTTONS
+     ========================================================================== */
+
+  /**
+   * Filter button container
+   */
+  .qt-log-filters {
+    @apply flex items-center justify-center gap-2 text-xs;
+  }
+
+  .qt-log-filters-label {
+    @apply mr-1;
+    color: var(--color-muted-foreground);
+  }
+
+  /**
+   * Filter toggle button - shared base
+   */
+  .qt-log-filter,
+  .qt-log-filter-error,
+  .qt-log-filter-warn,
+  .qt-log-filter-info,
+  .qt-log-filter-debug,
+  .qt-log-filter-log {
+    @apply flex items-center gap-1 px-2 py-1 rounded transition-colors cursor-pointer;
+  }
+
+  .qt-log-filter-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  /**
+   * Filter button - active states
+   */
+  .qt-log-filter-error[data-active="true"] {
+    background: var(--qt-log-error-bg);
+    color: var(--qt-log-error-fg);
+  }
+  .qt-log-filter-error[data-active="true"] .qt-log-filter-dot {
+    @apply bg-red-500;
+  }
+
+  .qt-log-filter-warn[data-active="true"] {
+    background: var(--qt-log-warn-bg);
+    color: var(--qt-log-warn-fg);
+  }
+  .qt-log-filter-warn[data-active="true"] .qt-log-filter-dot {
+    @apply bg-yellow-500;
+  }
+
+  .qt-log-filter-info[data-active="true"] {
+    background: var(--qt-log-info-bg);
+    color: var(--qt-log-info-fg);
+  }
+  .qt-log-filter-info[data-active="true"] .qt-log-filter-dot {
+    @apply bg-blue-500;
+  }
+
+  .qt-log-filter-debug[data-active="true"] {
+    background: var(--qt-log-debug-bg);
+    color: var(--qt-log-debug-fg);
+  }
+  .qt-log-filter-debug[data-active="true"] .qt-log-filter-dot {
+    @apply bg-gray-500;
+  }
+
+  .qt-log-filter-log[data-active="true"] {
+    background: var(--qt-log-default-bg);
+    color: var(--qt-log-default-fg);
+  }
+  .qt-log-filter-log[data-active="true"] .qt-log-filter-dot {
+    @apply bg-gray-400;
+  }
+
+  /**
+   * Filter button - inactive states
+   */
+  .qt-log-filter-error[data-active="false"],
+  .qt-log-filter-warn[data-active="false"],
+  .qt-log-filter-info[data-active="false"],
+  .qt-log-filter-debug[data-active="false"],
+  .qt-log-filter-log[data-active="false"] {
+    @apply bg-muted text-muted-foreground opacity-50;
+  }
+
+  .qt-log-filter-error[data-active="false"] .qt-log-filter-dot,
+  .qt-log-filter-warn[data-active="false"] .qt-log-filter-dot,
+  .qt-log-filter-info[data-active="false"] .qt-log-filter-dot,
+  .qt-log-filter-debug[data-active="false"] .qt-log-filter-dot,
+  .qt-log-filter-log[data-active="false"] .qt-log-filter-dot {
+    @apply bg-gray-400;
+  }
+
+  /* ==========================================================================
+     EMPTY STATE
+     ========================================================================== */
+
+  /**
+   * Empty state container for when no logs present
+   */
+  .qt-devconsole-empty {
+    @apply flex flex-col items-center justify-center h-full;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-devconsole-empty-icon {
+    @apply w-12 h-12 mb-3 opacity-50;
+  }
+
+  .qt-devconsole-empty-title {
+    @apply text-sm;
+  }
+
+  .qt-devconsole-empty-description {
+    @apply text-xs mt-1;
+  }
+
+  /* ==========================================================================
+     SCROLL CONTROLS
+     ========================================================================== */
+
+  /**
+   * Scroll control buttons
+   */
+  .qt-devconsole-scroll-btn {
+    @apply absolute z-10;
+  }
+
+  .qt-devconsole-scroll-top {
+    @apply top-2 right-2;
+  }
+
+  .qt-devconsole-scroll-bottom {
+    @apply bottom-2 right-2;
+  }
+
+  /**
+   * Auto-scroll indicator
+   */
+  .qt-devconsole-autoscroll {
+    @apply absolute bottom-2 right-2 z-10 px-2 py-1;
+  }
+}

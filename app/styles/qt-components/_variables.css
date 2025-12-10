@@ -265,4 +265,62 @@
   --qt-auth-hint-fg: var(--color-muted-foreground);
   --qt-auth-footer-fg: var(--color-muted-foreground);
   --qt-auth-divider-color: var(--color-border);
+
+  /* ==========================================================================
+     DEVCONSOLE VARIABLES
+     ========================================================================== */
+  --qt-devconsole-bg: var(--color-background);
+  --qt-devconsole-header-bg: var(--color-card);
+  --qt-devconsole-tabs-bg: var(--color-muted);
+  --qt-devconsole-content-bg: var(--color-background);
+  --qt-devconsole-footer-bg: var(--color-card);
+  --qt-devconsole-border: var(--color-border);
+
+  /* Log entry level colors - Error (red) */
+  --qt-log-error-bg: hsl(0 100% 97%);
+  --qt-log-error-fg: hsl(0 72% 51%);
+  --qt-log-error-border: hsl(0 72% 51%);
+  --qt-log-error-details-bg: hsl(0 100% 95%);
+  --qt-log-error-stack-fg: hsl(0 65% 45%);
+
+  /* Log entry level colors - Warning (amber/yellow) */
+  --qt-log-warn-bg: hsl(45 100% 96%);
+  --qt-log-warn-fg: hsl(32 95% 44%);
+  --qt-log-warn-border: hsl(38 92% 50%);
+
+  /* Log entry level colors - Info (blue) */
+  --qt-log-info-bg: hsl(214 100% 97%);
+  --qt-log-info-fg: hsl(221 83% 53%);
+  --qt-log-info-border: hsl(221 83% 53%);
+
+  /* Log entry level colors - Debug (gray) */
+  --qt-log-debug-bg: var(--color-muted);
+  --qt-log-debug-fg: var(--color-muted-foreground);
+  --qt-log-debug-border: hsl(215 14% 70%);
+
+  /* Log entry level colors - Default/Log (neutral) */
+  --qt-log-default-bg: color-mix(in srgb, var(--color-muted) 30%, transparent);
+  --qt-log-default-fg: var(--color-muted-foreground);
+  --qt-log-default-border: var(--color-muted-foreground);
+}
+
+/* Dark mode overrides for DevConsole */
+.dark {
+  --qt-log-error-bg: hsl(0 50% 10%);
+  --qt-log-error-fg: hsl(0 90% 70%);
+  --qt-log-error-border: hsl(0 72% 51%);
+  --qt-log-error-details-bg: hsl(0 40% 15%);
+  --qt-log-error-stack-fg: hsl(0 80% 65%);
+
+  --qt-log-warn-bg: hsl(45 50% 10%);
+  --qt-log-warn-fg: hsl(38 92% 65%);
+  --qt-log-warn-border: hsl(38 92% 50%);
+
+  --qt-log-info-bg: hsl(214 50% 12%);
+  --qt-log-info-fg: hsl(217 91% 70%);
+  --qt-log-info-border: hsl(221 83% 53%);
+
+  --qt-log-debug-bg: var(--color-muted);
+  --qt-log-debug-fg: var(--color-muted-foreground);
+  --qt-log-debug-border: hsl(215 14% 50%);
 }
