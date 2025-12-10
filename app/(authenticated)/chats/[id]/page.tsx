@@ -24,7 +24,6 @@ import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDebugOptional } from '@/components/providers/debug-provider'
-import DebugPanel from '@/components/debug/DebugPanel'
 import type { TagVisualStyle } from '@/lib/schemas/types'
 import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
@@ -1696,23 +1695,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     )
   }
 
-  const isDebugMode = debug?.isDebugMode ?? false
-
   // Show participant sidebar when:
   // - Multi-character chat (2+ characters)
-  // - Not in debug mode (debug panel takes precedence)
   // - User hasn't hidden it
-  const shouldShowParticipantSidebar = isMultiChar && !isDebugMode && showParticipantSidebar
-
-  const mainClasses = ['qt-chat-main']
-  if (isDebugMode) {
-    mainClasses.push('qt-chat-main-split')
-  }
+  const shouldShowParticipantSidebar = isMultiChar && showParticipantSidebar
 
   return (
     <div className="qt-chat-layout">
       {/* Main chat area */}
-      <div className={mainClasses.join(' ')}>
+      <div className="qt-chat-main">
 
       {/* Messages */}
       <div className="qt-chat-messages">
@@ -2427,12 +2418,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         onCharacterAdded={handleCharacterAdded}
       />
 
-      {/* Debug Panel */}
-      {isDebugMode && (
-        <div className="qt-chat-debug-panel">
-          <DebugPanel />
-        </div>
-      )}
     </div>
   )
 }
