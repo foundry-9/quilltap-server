@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.0--dev.66-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.2.0--dev.67-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -711,6 +711,14 @@ Copyright (c) 2025 Foundry-9
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./features/comfy_ui_local_image.md))
 - [ ] Arcadia "art deco" theme to show off what the theme system can really do
 - [ ] Fully mobile-capable media breakpoints
+- [ ] Character checkpointing (backups of a character at a certain point in time)
+- [ ] Setup wizard
+  - [ ] Default assistant, editable
+  - [ ] Can be restored quickly to basics
+  - [ ] Has intimate knowledge of this application
+  - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
+- [ ] Character build-out wizard
+  - Uses LLM of choice to fill out gaps in character fields or physical descriptions
 
 ## Acknowledgments
 
