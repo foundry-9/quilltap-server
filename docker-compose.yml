@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Basic development setup with MongoDB and MinIO
 # For a more complete setup, use docker-compose.dev-mongo.yml
 
@@ -72,10 +70,11 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
-      - /app/node_modules
+      - app-node-modules:/app/node_modules
       - /app/.next
     command: npm run devssl
 
 volumes:
   mongo-data:
   minio-data:
+  app-node-modules:
