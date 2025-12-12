@@ -53,11 +53,19 @@ interface Participant {
   } | null
 }
 
+interface RoleplayTemplate {
+  id: string
+  name: string
+  description: string | null
+  isBuiltIn: boolean
+}
+
 interface ChatSettingsModalProps {
   isOpen: boolean
   onClose: () => void
   chatId: string
   participants: Participant[]
+  roleplayTemplateId?: string | null
   onSuccess?: () => void
 }
 
@@ -229,16 +237,28 @@ export default function ChatSettingsModal({
   onClose,
   chatId,
   participants,
+  roleplayTemplateId: initialRoleplayTemplateId,
   onSuccess,
 }: Readonly<ChatSettingsModalProps>) {
   const modalRef = useRef<HTMLDivElement>(null)
   const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
+  const [roleplayTemplates, setRoleplayTemplates] = useState<RoleplayTemplate[]>([])
+  const [selectedRoleplayTemplateId, setSelectedRoleplayTemplateId] = useState<string | null>(
+    initialRoleplayTemplateId ?? null
+  )
+  const [roleplayTemplateSaving, setRoleplayTemplateSaving] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // Update local state when prop changes
+  useEffect(() => {
+    setSelectedRoleplayTemplateId(initialRoleplayTemplateId ?? null)
+  }, [initialRoleplayTemplateId])
 
   useEffect(() => {
     if (isOpen) {
       fetchProfiles()
+      fetchRoleplayTemplates()
     }
   }, [isOpen])
 
@@ -291,6 +311,44 @@ export default function ChatSettingsModal({
     }
   }
 
+  const fetchRoleplayTemplates = async () => {
+    try {
+      const res = await fetch('/api/roleplay-templates')
+      if (res.ok) {
+        const data = await res.json()
+        setRoleplayTemplates(data)
+      }
+    } catch (error) {
+      clientLogger.error('Failed to fetch roleplay templates', { error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  const handleRoleplayTemplateChange = async (templateId: string | null) => {
+    try {
+      setRoleplayTemplateSaving(true)
+      const res = await fetch(`/api/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roleplayTemplateId: templateId }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to update roleplay template')
+      }
+
+      setSelectedRoleplayTemplateId(templateId)
+      showSuccessToast('Roleplay template updated')
+      clientLogger.info('Roleplay template updated for chat', { chatId, templateId })
+      onSuccess?.()
+    } catch (error) {
+      clientLogger.error('Failed to update roleplay template', { error: error instanceof Error ? error.message : String(error) })
+      showErrorToast(error instanceof Error ? error.message : 'Failed to update roleplay template')
+    } finally {
+      setRoleplayTemplateSaving(false)
+    }
+  }
+
   const handleParticipantUpdate = async (participantId: string, updates: ParticipantUpdate) => {
     try {
       setLoading(true)
@@ -334,6 +392,36 @@ export default function ChatSettingsModal({
           <h2 className="qt-dialog-title">Chat Settings</h2>
         </div>
         <div className="qt-dialog-body flex-1 overflow-y-auto">
+
+        {/* Roleplay Template Section */}
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">
+            Roleplay Template
+          </h3>
+          <div className="qt-card">
+            <label htmlFor="roleplay-template" className="block text-sm font-medium text-foreground mb-1">
+              Formatting Style
+            </label>
+            <select
+              id="roleplay-template"
+              value={selectedRoleplayTemplateId || ''}
+              onChange={(e) => handleRoleplayTemplateChange(e.target.value || null)}
+              disabled={roleplayTemplateSaving || loading}
+              className="qt-select text-sm"
+            >
+              <option value="">None (no formatting template)</option>
+              {roleplayTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}{template.isBuiltIn ? ' (Built-in)' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground mt-2">
+              Controls how the AI formats dialogue, actions, and thoughts in this chat.
+              {roleplayTemplateSaving && <span className="ml-2">Saving...</span>}
+            </p>
+          </div>
+        </div>
 
         <div className="mb-4">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">

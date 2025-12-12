@@ -127,6 +127,7 @@ interface Participant {
 interface Chat {
   id: string
   title: string
+  roleplayTemplateId?: string | null
   participants: Participant[]
   user: {
     id: string
@@ -2344,6 +2345,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         onClose={() => setChatSettingsModalOpen(false)}
         chatId={id}
         participants={chat?.participants || []}
+        roleplayTemplateId={chat?.roleplayTemplateId}
         onSuccess={fetchChat}
       />
 

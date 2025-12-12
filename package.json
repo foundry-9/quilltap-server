@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.3.0-dev.15",
+  "version": "2.3.0-dev.16",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -35,7 +35,8 @@
     "consolidate-images": "tsx scripts/consolidate-images.ts",
     "consolidate-images:dry-run": "tsx scripts/consolidate-images.ts --dry-run",
     "cleanup-old-files": "tsx scripts/cleanup-old-files.ts",
-    "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts"
+    "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts",
+    "deploy:dev": "./cicd/deploy.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",

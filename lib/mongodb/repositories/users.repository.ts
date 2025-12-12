@@ -595,6 +595,30 @@ export class UsersRepository {
       if (!existing) {
         // Create new settings with defaults
         logger.debug('Chat settings not found, creating new settings for user', { userId });
+
+        // Try to get the "Standard" roleplay template ID for default
+        let defaultRoleplayTemplateId: string | null = null;
+        try {
+          const db = await getMongoDatabase();
+          const templatesCollection = db.collection('roleplay_templates');
+          const standardTemplate = await templatesCollection.findOne({
+            name: 'Standard',
+            isBuiltIn: true,
+          });
+          if (standardTemplate) {
+            defaultRoleplayTemplateId = (standardTemplate as any).id;
+            logger.debug('Setting Standard template as default for new user', {
+              userId,
+              templateId: defaultRoleplayTemplateId,
+            });
+          }
+        } catch (templateError) {
+          logger.warn('Could not load default roleplay template', {
+            userId,
+            error: templateError instanceof Error ? templateError.message : String(templateError),
+          });
+        }
+
         const defaultSettings: Omit<ChatSettings, 'id' | 'userId' | 'createdAt' | 'updatedAt'> = {
           avatarDisplayMode: 'ALWAYS',
           avatarDisplayStyle: 'CIRCULAR',
@@ -609,6 +633,7 @@ export class UsersRepository {
             colorMode: 'system',
             showNavThemeSelector: false,
           },
+          defaultRoleplayTemplateId,
           ...data,
         };
         return await this.createChatSettings(userId, defaultSettings);

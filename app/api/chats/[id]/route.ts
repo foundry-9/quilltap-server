@@ -27,6 +27,7 @@ function getFilePath(file: FileEntry): string {
 const updateChatSchema = z.object({
   title: z.string().optional(),
   contextSummary: z.string().optional(),
+  roleplayTemplateId: z.string().uuid().nullish(),
 })
 
 // Validation schema for participant updates
@@ -58,6 +59,8 @@ const chatUpdateRequestSchema = z.object({
   updateParticipant: updateParticipantSchema.optional(),
   addParticipant: addParticipantSchema.optional(),
   removeParticipantId: z.string().uuid().optional(),
+  // Direct roleplay template update (convenience shorthand)
+  roleplayTemplateId: z.string().uuid().nullish(),
 })
 
 type Repos = ReturnType<typeof getRepositories>
@@ -398,6 +401,7 @@ export async function GET(
       id: chatMetadata.id,
       title: chatMetadata.title,
       contextSummary: chatMetadata.contextSummary,
+      roleplayTemplateId: chatMetadata.roleplayTemplateId,
       updatedAt: chatMetadata.updatedAt,
       createdAt: chatMetadata.createdAt,
       participants: enrichedParticipants,
@@ -422,7 +426,36 @@ async function processChatUpdates(
 ): Promise<{ chat: ChatMetadata } | { error: string; status: number }> {
   let updatedChat = existingChat
 
+  // Handle direct roleplayTemplateId update (convenience shorthand)
+  if (typeof validatedData.roleplayTemplateId !== 'undefined') {
+    // Validate template exists if setting a non-null value
+    if (validatedData.roleplayTemplateId !== null) {
+      const template = await repos.roleplayTemplates.findById(validatedData.roleplayTemplateId)
+      if (!template) {
+        return { error: 'Roleplay template not found', status: 404 }
+      }
+    }
+
+    logger.debug('Updating chat roleplay template', {
+      chatId,
+      templateId: validatedData.roleplayTemplateId,
+    })
+
+    const result = await repos.chats.update(chatId, {
+      roleplayTemplateId: validatedData.roleplayTemplateId,
+    })
+    if (result) updatedChat = result
+  }
+
   if (validatedData.chat) {
+    // Also validate roleplayTemplateId if included in nested chat object
+    if (validatedData.chat.roleplayTemplateId !== undefined && validatedData.chat.roleplayTemplateId !== null) {
+      const template = await repos.roleplayTemplates.findById(validatedData.chat.roleplayTemplateId)
+      if (!template) {
+        return { error: 'Roleplay template not found', status: 404 }
+      }
+    }
+
     const result = await repos.chats.update(chatId, validatedData.chat)
     if (result) updatedChat = result
   }

@@ -516,6 +516,16 @@ export async function POST(req: NextRequest) {
       validatedData.scenario
     )
 
+    // Get user's default roleplay template to inherit for new chat
+    const chatSettings = await repos.users.getChatSettings(user.id)
+    const defaultRoleplayTemplateId = chatSettings?.defaultRoleplayTemplateId || null
+
+    logger.debug('Creating chat with roleplay template', {
+      context: 'POST /api/chats',
+      roleplayTemplateId: defaultRoleplayTemplateId,
+      inheritedFrom: 'user_default',
+    })
+
     const now = new Date().toISOString()
     // Use input type here - the schema validation will apply defaults
     const participantsWithTimestamps: ChatParticipantBaseInput[] = buildResult.participants.map(p => ({
@@ -531,6 +541,7 @@ export async function POST(req: NextRequest) {
       title: validatedData.title || `Chat with ${context.character.name}`,
       contextSummary: validatedData.scenario || null,
       tags: Array.from(buildResult.tags),
+      roleplayTemplateId: defaultRoleplayTemplateId,
       messageCount: 0,
       lastMessageAt: null,
       lastRenameCheckInterchange: 0,

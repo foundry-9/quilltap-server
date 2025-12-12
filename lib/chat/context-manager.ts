@@ -128,6 +128,8 @@ export interface BuildContextOptions {
   newUserMessage?: string
   /** Custom system prompt override */
   systemPromptOverride?: string | null
+  /** Roleplay template for formatting instructions (prepended to system prompt) */
+  roleplayTemplate?: { systemPrompt: string } | null
   /** Embedding profile ID for semantic search */
   embeddingProfileId?: string
   /** Skip memory retrieval */
@@ -190,9 +192,19 @@ export function buildSystemPrompt(
   persona?: { name: string; description: string } | null,
   systemPromptOverride?: string | null,
   /** For multi-character chats: info about other participants */
-  otherParticipants?: OtherParticipantInfo[]
+  otherParticipants?: OtherParticipantInfo[],
+  /** Roleplay template to prepend (formatting instructions) */
+  roleplayTemplate?: { systemPrompt: string } | null
 ): string {
   const parts: string[] = []
+
+  // Roleplay template system prompt (formatting instructions) - prepended first
+  if (roleplayTemplate?.systemPrompt) {
+    logger.debug('Prepending roleplay template to system prompt', {
+      templatePromptLength: roleplayTemplate.systemPrompt.length,
+    })
+    parts.push(roleplayTemplate.systemPrompt)
+  }
 
   // Base system prompt from character or override
   if (systemPromptOverride) {
@@ -656,6 +668,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     existingMessages,
     newUserMessage,
     systemPromptOverride,
+    roleplayTemplate,
     embeddingProfileId,
     skipMemories = false,
     maxMemories = 10,
@@ -699,7 +712,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     )
   }
 
-  const systemPrompt = buildSystemPrompt(character, persona, systemPromptOverride, otherParticipantsInfo)
+  const systemPrompt = buildSystemPrompt(character, persona, systemPromptOverride, otherParticipantsInfo, roleplayTemplate)
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 
   // Check if system prompt exceeds budget

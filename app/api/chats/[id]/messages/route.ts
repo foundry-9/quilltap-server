@@ -322,6 +322,9 @@ export async function POST(
       imageProfile = await repos.imageProfiles.findById(imageProfileId)
     }
 
+    // Roleplay template lookup is deferred until after chatSettings is loaded
+    // to allow fallback to user's default template
+
     // Get existing messages
     const existingMessages = await repos.chats.getMessages(id)
 
@@ -431,8 +434,40 @@ export async function POST(
       }
     }
 
-    // Get chat settings for embedding profile
+    // Get chat settings for embedding profile and default roleplay template
     const chatSettings = await repos.users.getChatSettings(user.id)
+
+    // Get roleplay template from chat-level setting
+    // For older/imported chats without a template, auto-update from user default
+    let roleplayTemplate = null
+    let roleplayTemplateId = chat.roleplayTemplateId
+
+    // If chat doesn't have a template set (older or imported chat), inherit from user default
+    if (roleplayTemplateId === undefined || roleplayTemplateId === null) {
+      const userDefaultTemplateId = chatSettings?.defaultRoleplayTemplateId
+      if (userDefaultTemplateId) {
+        // Auto-update the chat to have the user's default template
+        logger.debug('[Chat Messages] Auto-setting roleplay template for chat without one', {
+          chatId: id,
+          templateId: userDefaultTemplateId,
+          source: 'user_default',
+        })
+        await repos.chats.update(id, { roleplayTemplateId: userDefaultTemplateId })
+        roleplayTemplateId = userDefaultTemplateId
+      }
+    }
+
+    if (roleplayTemplateId) {
+      roleplayTemplate = await repos.roleplayTemplates.findById(roleplayTemplateId)
+      if (roleplayTemplate) {
+        logger.debug('[Chat Messages] Using roleplay template', {
+          templateId: roleplayTemplate.id,
+          templateName: roleplayTemplate.name,
+          isBuiltIn: roleplayTemplate.isBuiltIn,
+          source: 'chat_setting',
+        })
+      }
+    }
 
     // ========================================================================
     // Phase 3: Multi-Character Context Building Setup
@@ -575,6 +610,7 @@ export async function POST(
       existingMessages: conversationMessages,
       newUserMessage: finalUserMessageContent,
       systemPromptOverride: characterParticipant.systemPromptOverride,
+      roleplayTemplate: roleplayTemplate ? { systemPrompt: roleplayTemplate.systemPrompt } : null,
       embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
       skipMemories: false,
       maxMemories: 10,
