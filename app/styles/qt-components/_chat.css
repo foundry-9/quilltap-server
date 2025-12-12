@@ -311,20 +311,28 @@
 
   /**
    * Narration/action text styling
+   * Dark background for contrast on any message bubble
    */
   .qt-chat-narration {
     color: var(--qt-rp-narration-color);
     background: var(--qt-rp-narration-bg);
     font-style: var(--qt-rp-narration-style);
+    padding: var(--qt-rp-narration-padding);
+    border-radius: var(--qt-rp-narration-radius);
+    display: inline;
   }
 
   /**
    * Internal monologue text styling - italic purple
+   * Dark background for contrast on any message bubble
    */
   .qt-chat-inner-monologue {
     color: var(--qt-rp-inner-monologue-color);
     background: var(--qt-rp-inner-monologue-bg);
     font-style: var(--qt-rp-inner-monologue-style);
+    padding: var(--qt-rp-inner-monologue-padding);
+    border-radius: var(--qt-rp-inner-monologue-radius);
+    display: inline;
   }
 
   /**
