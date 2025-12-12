@@ -46,7 +46,7 @@ You must adhere to the following standard roleplay syntax for all outputs.
   {
     userId: null,
     name: 'Quilltap RP',
-    description: 'Custom formatting protocol with dialogue as bare text, actions in [brackets], thoughts in {braces}, and OOC with >> prefix.',
+    description: 'Custom formatting protocol with dialogue as bare text, actions in [brackets], thoughts in {braces}, and OOC with // prefix.',
     systemPrompt: `[SYSTEM INSTRUCTION: INTERACTION FORMATTING PROTOCOL]
 You must adhere to the following custom syntax for all outputs. Do NOT use standard roleplay formatting.
 
@@ -60,8 +60,8 @@ You must adhere to the following custom syntax for all outputs. Do NOT use stand
 3. INTERNAL MONOLOGUE: Enclose private thoughts and feelings in CURLY BRACES { }.
    - Example: {He's lying to me. I can feel it.}
 
-4. META/OOC: Any Out-of-Character comments or instructions must start with ">> ".
-   - Example: >> The user is simulating a high-gravity environment now.
+4. META/OOC: Any Out-of-Character comments or instructions must start with "// ".
+   - Example: // The user is simulating a high-gravity environment now.
 
 5. STRICT COMPLIANCE: You must mirror this formatting in your responses. Never use asterisks for actions.`,
     isBuiltIn: true,

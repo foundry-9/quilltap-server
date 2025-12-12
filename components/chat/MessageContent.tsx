@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo, ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -10,6 +11,115 @@ interface MessageContentProps {
   content: string
   className?: string
 }
+
+/**
+ * Process roleplay syntax in a string and return React elements
+ * Handles both Standard and Quilltap RP template formats
+ */
+function processRoleplayText(text: string): ReactNode[] {
+  const result: ReactNode[] = []
+  let remaining = text
+  let key = 0
+
+  // Combined pattern to match all roleplay syntax
+  // Order matters: more specific patterns first
+  const patterns: Array<{
+    regex: RegExp
+    className: string
+    wrapper: (match: string, inner: string) => string
+  }> = [
+    // Quilltap RP: // OOC (comment-style, line prefix)
+    { regex: /^\/\/ .+$/m, className: 'qt-chat-ooc', wrapper: (m) => m },
+    // Quilltap RP: {internal monologue}
+    { regex: /\{[^}]+\}/, className: 'qt-chat-inner-monologue', wrapper: (m) => m },
+    // Quilltap RP: [narration] - not followed by ( to avoid links
+    { regex: /\[[^\]]+\](?!\()/, className: 'qt-chat-narration', wrapper: (m) => m },
+    // Standard: ((OOC))
+    { regex: /\(\([^)]+\)\)/, className: 'qt-chat-ooc', wrapper: (m) => m },
+    // Standard: (OOC) - single parens, avoid URLs
+    { regex: /\([^()]+\)/, className: 'qt-chat-ooc', wrapper: (m) => m },
+    // Standard: "dialogue"
+    { regex: /"[^"]+"/, className: 'qt-chat-dialogue', wrapper: (m) => m },
+    // Standard: *narration* - single asterisks only (not bold **)
+    { regex: /(?<!\*)\*[^*]+\*(?!\*)/, className: 'qt-chat-narration', wrapper: (m) => m },
+  ]
+
+  while (remaining.length > 0) {
+    let earliestMatch: { index: number; length: number; className: string; text: string } | null = null
+
+    // Find the earliest match among all patterns
+    for (const pattern of patterns) {
+      const match = remaining.match(pattern.regex)
+      if (match && match.index !== undefined) {
+        // Skip single parentheses if they look like URLs
+        if (pattern.className === 'qt-chat-ooc' && match[0].startsWith('(') && !match[0].startsWith('((')) {
+          if (match[0].includes('http') || match[0].includes('://')) {
+            continue
+          }
+        }
+
+        if (!earliestMatch || match.index < earliestMatch.index) {
+          earliestMatch = {
+            index: match.index,
+            length: match[0].length,
+            className: pattern.className,
+            text: pattern.wrapper(match[0], match[0]),
+          }
+        }
+      }
+    }
+
+    if (earliestMatch) {
+      // Add text before the match
+      if (earliestMatch.index > 0) {
+        result.push(remaining.substring(0, earliestMatch.index))
+      }
+
+      // Add the styled span
+      result.push(
+        <span key={key++} className={earliestMatch.className}>
+          {earliestMatch.text}
+        </span>
+      )
+
+      // Continue with remaining text
+      remaining = remaining.substring(earliestMatch.index + earliestMatch.length)
+    } else {
+      // No more matches, add remaining text
+      result.push(remaining)
+      break
+    }
+  }
+
+  return result
+}
+
+/**
+ * Recursively process children to apply roleplay styling to text nodes
+ */
+function processChildren(children: ReactNode): ReactNode {
+  if (typeof children === 'string') {
+    const processed = processRoleplayText(children)
+    return processed.length === 1 && typeof processed[0] === 'string'
+      ? processed[0]
+      : <>{processed}</>
+  }
+
+  if (Array.isArray(children)) {
+    return children.map((child, i) => {
+      if (typeof child === 'string') {
+        const processed = processRoleplayText(child)
+        return processed.length === 1 && typeof processed[0] === 'string'
+          ? processed[0]
+          : <span key={i}>{processed}</span>
+      }
+      return child
+    })
+  }
+
+  return children
+}
+
 
 export default function MessageContent({ content, className = '' }: MessageContentProps) {
   const components: Components = {
@@ -58,28 +168,28 @@ export default function MessageContent({ content, className = '' }: MessageConte
         </code>
       )
     },
-    // Paragraph spacing - inherits font from parent
+    // Paragraph spacing - inherits font from parent, processes roleplay syntax
     p({ children }) {
-      return <p className="mb-2 last:mb-0">{children}</p>
+      return <p className="mb-2 last:mb-0">{processChildren(children)}</p>
     },
     // Headings - inherit font from parent
     h1({ children }) {
-      return <h1 className="text-2xl font-bold mb-2 mt-4 first:mt-0">{children}</h1>
+      return <h1 className="text-2xl font-bold mb-2 mt-4 first:mt-0">{processChildren(children)}</h1>
     },
     h2({ children }) {
-      return <h2 className="text-xl font-bold mb-2 mt-3 first:mt-0">{children}</h2>
+      return <h2 className="text-xl font-bold mb-2 mt-3 first:mt-0">{processChildren(children)}</h2>
     },
     h3({ children }) {
-      return <h3 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{children}</h3>
+      return <h3 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{processChildren(children)}</h3>
     },
     h4({ children }) {
-      return <h4 className="text-base font-semibold mb-1 mt-2 first:mt-0">{children}</h4>
+      return <h4 className="text-base font-semibold mb-1 mt-2 first:mt-0">{processChildren(children)}</h4>
     },
     h5({ children }) {
-      return <h5 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h5>
+      return <h5 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{processChildren(children)}</h5>
     },
     h6({ children }) {
-      return <h6 className="text-xs font-semibold mb-1 mt-2 first:mt-0">{children}</h6>
+      return <h6 className="text-xs font-semibold mb-1 mt-2 first:mt-0">{processChildren(children)}</h6>
     },
     // Lists - inherit font from parent
     ul({ children }) {
@@ -89,13 +199,13 @@ export default function MessageContent({ content, className = '' }: MessageConte
       return <ol className="list-decimal list-inside mb-2 ml-4">{children}</ol>
     },
     li({ children }) {
-      return <li className="mb-1">{children}</li>
+      return <li className="mb-1">{processChildren(children)}</li>
     },
     // Blockquotes - inherit font from parent
     blockquote({ children }) {
       return (
         <blockquote className="border-l-4 border-border pl-4 py-1 my-2 italic">
-          {children}
+          {processChildren(children)}
         </blockquote>
       )
     },

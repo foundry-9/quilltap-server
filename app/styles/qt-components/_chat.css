@@ -239,6 +239,108 @@
   }
 
   /* ==========================================================================
+     ROLEPLAY ANNOTATION STYLES
+     ========================================================================== */
+
+  /**
+   * Roleplay annotation toolbar - horizontal row of annotation buttons
+   */
+  .qt-rp-annotation-toolbar {
+    @apply flex items-center gap-2 px-3 py-2;
+    border-bottom: 1px solid var(--qt-chat-composer-border);
+  }
+
+  /**
+   * Base annotation button style
+   */
+  .qt-rp-annotation-button {
+    @apply inline-flex items-center justify-center;
+    @apply text-xs font-medium;
+    @apply px-3 py-1.5;
+    @apply rounded-md;
+    @apply transition-all duration-150;
+    cursor: pointer;
+    border: none;
+  }
+
+  .qt-rp-annotation-button:hover:not(:disabled) {
+    @apply opacity-80;
+    transform: translateY(-1px);
+  }
+
+  .qt-rp-annotation-button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  /**
+   * Narration button - slate/gray
+   */
+  .qt-rp-annotation-button-narration {
+    background: var(--qt-rp-button-narration-bg);
+    color: var(--qt-rp-button-narration-fg);
+  }
+
+  /**
+   * Internal monologue button - purple
+   */
+  .qt-rp-annotation-button-internal {
+    background: var(--qt-rp-button-internal-bg);
+    color: var(--qt-rp-button-internal-fg);
+  }
+
+  /**
+   * OOC (Out of Character) button - green/black terminal style
+   */
+  .qt-rp-annotation-button-ooc {
+    background: var(--qt-rp-button-ooc-bg);
+    color: var(--qt-rp-button-ooc-fg);
+    font-family: var(--font-mono);
+  }
+
+  /* ==========================================================================
+     ROLEPLAY TEXT STYLING IN MESSAGES
+     ========================================================================== */
+
+  /**
+   * Dialogue text styling
+   */
+  .qt-chat-dialogue {
+    color: var(--qt-rp-dialogue-color);
+    background: var(--qt-rp-dialogue-bg);
+  }
+
+  /**
+   * Narration/action text styling
+   */
+  .qt-chat-narration {
+    color: var(--qt-rp-narration-color);
+    background: var(--qt-rp-narration-bg);
+    font-style: var(--qt-rp-narration-style);
+  }
+
+  /**
+   * Internal monologue text styling - italic purple
+   */
+  .qt-chat-inner-monologue {
+    color: var(--qt-rp-inner-monologue-color);
+    background: var(--qt-rp-inner-monologue-bg);
+    font-style: var(--qt-rp-inner-monologue-style);
+  }
+
+  /**
+   * Out of Character (OOC) text styling
+   * Terminal-style bright green on black
+   */
+  .qt-chat-ooc {
+    color: var(--qt-rp-ooc-color);
+    background: var(--qt-rp-ooc-bg);
+    font-family: var(--qt-rp-ooc-font);
+    padding: var(--qt-rp-ooc-padding);
+    border-radius: var(--qt-rp-ooc-radius);
+    display: inline;
+  }
+
+  /* ==========================================================================
      PARTICIPANT CARDS - Shared base styles
      ========================================================================== */
 

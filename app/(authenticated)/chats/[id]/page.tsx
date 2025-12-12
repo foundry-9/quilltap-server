@@ -21,6 +21,7 @@ import { safeJsonParse } from '@/lib/fetch-helpers'
 import { clientLogger } from '@/lib/client-logger'
 import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
+import RoleplayAnnotationButtons from '@/components/chat/RoleplayAnnotationButtons'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDebugOptional } from '@/components/providers/debug-provider'
@@ -2123,6 +2124,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               ))}
             </div>
           )}
+          {/* Roleplay annotation buttons */}
+          <RoleplayAnnotationButtons
+            roleplayTemplateId={chat?.roleplayTemplateId}
+            inputRef={inputRef}
+            input={input}
+            setInput={setInput}
+            disabled={sending || !hasActiveCharacters}
+          />
           <form onSubmit={sendMessage} className="qt-chat-composer-inner">
             {/* Hidden file input */}
             <input
