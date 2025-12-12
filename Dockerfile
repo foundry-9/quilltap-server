@@ -35,7 +35,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build Next.js
-RUN npm run build
+# SKIP_ENV_VALIDATION=true skips runtime env var validation during build
+RUN SKIP_ENV_VALIDATION=true npm run build
 
 # Production stage
 FROM base AS production

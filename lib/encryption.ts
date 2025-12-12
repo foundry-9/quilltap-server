@@ -10,21 +10,26 @@ import crypto from 'crypto'
 import { logger } from '@/lib/logger'
 
 const ALGORITHM = 'aes-256-gcm'
-const MASTER_PEPPER = process.env.ENCRYPTION_MASTER_PEPPER!
 const KEY_LENGTH = 32 // 256 bits
 const IV_LENGTH = 16 // 128 bits
 const PBKDF2_ITERATIONS = 100000
 const PBKDF2_DIGEST = 'sha256'
 
-// Validate that master pepper is configured
-if (!MASTER_PEPPER) {
+// Skip validation during build time (Next.js static generation)
+const SKIP_ENV_VALIDATION = process.env.SKIP_ENV_VALIDATION === 'true'
+
+// Get master pepper - may be undefined during build
+const MASTER_PEPPER = process.env.ENCRYPTION_MASTER_PEPPER || ''
+
+// Validate that master pepper is configured (skip during build)
+if (!SKIP_ENV_VALIDATION && !MASTER_PEPPER) {
   throw new Error(
     'ENCRYPTION_MASTER_PEPPER environment variable is not set. ' +
     'Generate one with: openssl rand -base64 32'
   )
 }
 
-if (MASTER_PEPPER.length < 32) {
+if (!SKIP_ENV_VALIDATION && MASTER_PEPPER && MASTER_PEPPER.length < 32) {
   logger.warn(
     'ENCRYPTION_MASTER_PEPPER should be at least 32 characters for security',
     { context: 'encryption.init', pepperLength: MASTER_PEPPER.length }
