@@ -53,6 +53,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Copy plugins (required for LLM providers, auth, themes, etc.)
+COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
+
 USER nextjs
 
 EXPOSE 3000

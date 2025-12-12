@@ -19,3 +19,7 @@ docker tag quilltap:latest ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/qui
 docker push ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/quilltap:latest
 
 echo "Done! Image pushed to ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/quilltap:latest"
+
+echo "Deploying to ECS..."
+aws ecs update-service --cluster quilltap-cluster --service quilltap-dev --force-new-deployment --region us-east-1
+echo "Deployment initiated. Check ECS console for status."
