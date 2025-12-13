@@ -4,6 +4,7 @@
 
 ### 2.3-dev
 
+- fix: Docker production build now pre-compiles plugins and includes SDK dependencies for LLM providers
 - feat: add background job queue for memory extraction on import
 - doc: usage tracking feature request
 - Fix for pre-commit when starting a new major/minor/release

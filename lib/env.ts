@@ -96,17 +96,20 @@ const envSchema = z
     (data) => {
       // S3 configuration validation for external mode
       if (data.S3_MODE === 'external') {
-        // If using a custom endpoint (MinIO or other S3-compatible service), require explicit credentials
-        if (data.S3_ENDPOINT && (!data.S3_ACCESS_KEY || !data.S3_SECRET_KEY)) {
+        // For AWS S3 (with or without endpoint), credentials are optional - IAM roles can provide them
+        // Only require explicit credentials if one is provided but not the other
+        if (
+          (data.S3_ACCESS_KEY && !data.S3_SECRET_KEY) ||
+          (!data.S3_ACCESS_KEY && data.S3_SECRET_KEY)
+        ) {
           return false;
         }
-        // For AWS S3 (no endpoint), credentials are optional - IAM roles can provide them
       }
       return true;
     },
     {
       message:
-        'S3_ACCESS_KEY and S3_SECRET_KEY are required when S3_MODE is external with a custom S3_ENDPOINT',
+        'S3_ACCESS_KEY and S3_SECRET_KEY must both be provided, or both omitted (for IAM role auth)',
       path: ['S3_MODE'],
     }
   );

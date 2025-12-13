@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -33,6 +33,10 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Build plugins first (transpile TypeScript to JavaScript)
+# SKIP_ENV_VALIDATION=true skips runtime env var validation during build
+RUN SKIP_ENV_VALIDATION=true npm run build:plugins
 
 # Build Next.js
 # SKIP_ENV_VALIDATION=true skips runtime env var validation during build

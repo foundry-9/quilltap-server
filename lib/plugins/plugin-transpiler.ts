@@ -110,10 +110,21 @@ async function getLatestModTime(dir: string): Promise<number> {
 }
 
 /**
+ * Check if esbuild is available (it won't be in production standalone builds)
+ */
+function isEsbuildAvailable(): boolean {
+  const cwd = process.cwd();
+  const esbuildBin = join(cwd, 'node_modules', '.bin', 'esbuild');
+  return existsSync(esbuildBin);
+}
+
+/**
  * Check if a plugin needs to be recompiled
  * Returns true if:
  * - The output .js file doesn't exist
  * - Any .ts file in the plugin directory is newer than the output
+ * Returns false if:
+ * - esbuild is not available (production) and .js exists
  */
 async function needsRecompile(
   pluginDir: string,
@@ -122,6 +133,12 @@ async function needsRecompile(
   // If output doesn't exist, definitely need to compile
   if (!existsSync(outputFile)) {
     return true;
+  }
+
+  // In production (standalone builds), esbuild isn't available
+  // If the .js file exists, assume it was pre-compiled at build time
+  if (!isEsbuildAvailable()) {
+    return false;
   }
 
   try {

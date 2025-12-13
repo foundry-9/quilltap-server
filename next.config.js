@@ -3,6 +3,29 @@ const nextConfig = {
   // Standalone output for Docker deployments
   output: 'standalone',
 
+  // External packages that plugins need at runtime (not detected by Next.js static analysis)
+  serverExternalPackages: [
+    'openai',
+    '@anthropic-ai/sdk',
+    '@google/generative-ai',
+    '@openrouter/sdk',
+    'zod',
+  ],
+
+  // Include plugin SDK dependencies in standalone output for Docker deployments
+  // (these are loaded dynamically by plugins, so Next.js doesn't trace them automatically)
+  outputFileTracingIncludes: {
+    '/*': [
+      './node_modules/openai/**/*',
+      './node_modules/@anthropic-ai/**/*',
+      './node_modules/@google/**/*',
+      './node_modules/@openrouter/**/*',
+      './node_modules/ollama/**/*',
+      './node_modules/zod/**/*',
+      './node_modules/next-auth/**/*',
+    ],
+  },
+
   // Experimental features
   experimental: {
     turbopackUseSystemTlsCerts: true,

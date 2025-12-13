@@ -2,7 +2,7 @@
 # This image contains the complete Quilltap application with MongoDB and MinIO
 # running in a single container, suitable for development and testing.
 
-FROM node:20-alpine
+FROM node:22-alpine
 
 # Install system dependencies including MongoDB, curl, and other utilities
 RUN apk add --no-cache \
