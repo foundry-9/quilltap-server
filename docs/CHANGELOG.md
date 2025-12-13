@@ -4,6 +4,7 @@
 
 ### 2.3-dev
 
+- feat: Add delete button for cloud backups on Tools page with confirmation dialog
 - refactor: Bundle LLM SDK dependencies into plugin output files for Docker standalone compatibility
   - Plugins are now self-contained (~200-400KB each with bundled SDKs)
   - Removed SDK packages from EXTERNAL_PACKAGES in plugin-transpiler.ts

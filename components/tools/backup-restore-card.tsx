@@ -18,6 +18,8 @@ export default function BackupRestoreCard() {
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deletingKey, setDeletingKey] = useState<string | null>(null)
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null)
 
   useEffect(() => {
     fetchBackups()
@@ -76,6 +78,29 @@ export default function BackupRestoreCard() {
   const handleRestoreDialogClose = () => {
     setShowRestoreDialog(false)
     setSelectedBackupKey(undefined)
+  }
+
+  const handleDeleteBackup = async (backupKey: string) => {
+    try {
+      setDeletingKey(backupKey)
+      setError(null)
+      const res = await fetch('/api/tools/backup/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ s3Key: backupKey })
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete backup')
+      }
+      // Refresh the backup list
+      await fetchBackups()
+      setConfirmDeleteKey(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete backup')
+    } finally {
+      setDeletingKey(null)
+    }
   }
 
   return (
@@ -173,12 +198,43 @@ export default function BackupRestoreCard() {
                     <span>{formatFileSize(backup.size)}</span>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleRestoreFromBackup(backup.key)}
-                  className="qt-button qt-button-secondary ml-4 px-3 py-1.5 text-sm whitespace-nowrap"
-                >
-                  Restore
-                </button>
+                <div className="flex items-center gap-2 ml-4">
+                  {confirmDeleteKey === backup.key ? (
+                    <>
+                      <span className="text-sm text-muted-foreground">Delete?</span>
+                      <button
+                        onClick={() => handleDeleteBackup(backup.key)}
+                        disabled={deletingKey === backup.key}
+                        className="qt-button px-3 py-1.5 text-sm whitespace-nowrap bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                      >
+                        {deletingKey === backup.key ? 'Deleting...' : 'Yes'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteKey(null)}
+                        disabled={deletingKey === backup.key}
+                        className="qt-button qt-button-secondary px-3 py-1.5 text-sm whitespace-nowrap"
+                      >
+                        No
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setConfirmDeleteKey(backup.key)}
+                        className="qt-button qt-button-secondary px-3 py-1.5 text-sm whitespace-nowrap text-destructive hover:bg-destructive/10"
+                        title="Delete backup"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => handleRestoreFromBackup(backup.key)}
+                        className="qt-button qt-button-secondary px-3 py-1.5 text-sm whitespace-nowrap"
+                      >
+                        Restore
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
