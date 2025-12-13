@@ -4,6 +4,7 @@
 
 ### 2.3-dev
 
+- feat: Add Tasks Queue tool card to view background job queue status, pending jobs, and estimated token usage
 - style: Add vertical scrolling to cloud backups and capabilities reports lists when more than 2 items
 - feat: Add delete button for cloud backups on Tools page with confirmation dialog
 - refactor: Bundle LLM SDK dependencies into plugin output files for Docker standalone compatibility
