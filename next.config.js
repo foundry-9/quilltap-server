@@ -3,24 +3,23 @@ const nextConfig = {
   // Standalone output for Docker deployments
   output: 'standalone',
 
-  // External packages that plugins need at runtime (not detected by Next.js static analysis)
+  // External packages that the main app needs at runtime
+  // NOTE: LLM provider SDKs are now bundled INTO plugin output files, so they
+  // don't need to be listed here. Only packages used directly by the main app
+  // (not plugins) need to be in serverExternalPackages.
   serverExternalPackages: [
-    'openai',
-    '@anthropic-ai/sdk',
-    '@google/generative-ai',
-    '@openrouter/sdk',
-    'zod',
+    'openai',           // Used by lib/image-gen/openai.ts
+    '@openrouter/sdk',  // Used by lib/embedding/embedding-service.ts, lib/llm/pricing-fetcher.ts
+    'zod',              // Used throughout the app
   ],
 
-  // Include plugin SDK dependencies in standalone output for Docker deployments
-  // (these are loaded dynamically by plugins, so Next.js doesn't trace them automatically)
+  // Include dependencies in standalone output for Docker deployments
+  // NOTE: Plugin SDK dependencies are now bundled into plugins, so we only need
+  // to include packages that the main app uses directly.
   outputFileTracingIncludes: {
     '/*': [
       './node_modules/openai/**/*',
-      './node_modules/@anthropic-ai/**/*',
-      './node_modules/@google/**/*',
       './node_modules/@openrouter/**/*',
-      './node_modules/ollama/**/*',
       './node_modules/zod/**/*',
       './node_modules/next-auth/**/*',
     ],

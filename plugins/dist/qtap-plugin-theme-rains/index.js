@@ -243,14 +243,14 @@ var envSchema = import_zod.z.object({
 ).refine(
   (data) => {
     if (data.S3_MODE === "external") {
-      if (!data.S3_ENDPOINT || !data.S3_ACCESS_KEY || !data.S3_SECRET_KEY) {
+      if (data.S3_ACCESS_KEY && !data.S3_SECRET_KEY || !data.S3_ACCESS_KEY && data.S3_SECRET_KEY) {
         return false;
       }
     }
     return true;
   },
   {
-    message: "S3_ENDPOINT, S3_ACCESS_KEY, and S3_SECRET_KEY are required when S3_MODE is external",
+    message: "S3_ACCESS_KEY and S3_SECRET_KEY must both be provided, or both omitted (for IAM role auth)",
     path: ["S3_MODE"]
   }
 );

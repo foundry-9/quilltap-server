@@ -4,6 +4,11 @@
 
 ### 2.3-dev
 
+- refactor: Bundle LLM SDK dependencies into plugin output files for Docker standalone compatibility
+  - Plugins are now self-contained (~200-400KB each with bundled SDKs)
+  - Removed SDK packages from EXTERNAL_PACKAGES in plugin-transpiler.ts
+  - Simplified next.config.js outputFileTracingIncludes (only main app deps)
+  - Changed plugin package.json peerDependencies to devDependencies
 - fix: Docker production build now pre-compiles plugins and includes SDK dependencies for LLM providers
 - feat: add background job queue for memory extraction on import
 - doc: usage tracking feature request

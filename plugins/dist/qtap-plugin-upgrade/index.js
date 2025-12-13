@@ -325,14 +325,14 @@ var init_env = __esm({
     ).refine(
       (data2) => {
         if (data2.S3_MODE === "external") {
-          if (!data2.S3_ENDPOINT || !data2.S3_ACCESS_KEY || !data2.S3_SECRET_KEY) {
+          if (data2.S3_ACCESS_KEY && !data2.S3_SECRET_KEY || !data2.S3_ACCESS_KEY && data2.S3_SECRET_KEY) {
             return false;
           }
         }
         return true;
       },
       {
-        message: "S3_ENDPOINT, S3_ACCESS_KEY, and S3_SECRET_KEY are required when S3_MODE is external",
+        message: "S3_ACCESS_KEY and S3_SECRET_KEY must both be provided, or both omitted (for IAM role auth)",
         path: ["S3_MODE"]
       }
     );
@@ -506,7 +506,7 @@ var require_package = __commonJS({
   "package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "2.2.0",
+      version: "2.3.0-dev.19",
       private: true,
       author: {
         name: "Charles Sebold",
@@ -541,7 +541,8 @@ var require_package = __commonJS({
         "consolidate-images": "tsx scripts/consolidate-images.ts",
         "consolidate-images:dry-run": "tsx scripts/consolidate-images.ts --dry-run",
         "cleanup-old-files": "tsx scripts/cleanup-old-files.ts",
-        "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts"
+        "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts",
+        "deploy:dev": "./cicd/deploy.sh"
       },
       dependencies: {
         "@anthropic-ai/sdk": "^0.71.0",
@@ -563,6 +564,7 @@ var require_package = __commonJS({
         "react-dom": "^19.2.0",
         "react-markdown": "^10.1.0",
         "react-syntax-highlighter": "^16.1.0",
+        "rehype-raw": "^7.0.0",
         "remark-gfm": "^4.0.1",
         speakeasy: "^2.0.0",
         zod: "^3.23.0"
@@ -66807,17 +66809,21 @@ function sanitizeEndpoint(endpoint) {
     return "****";
   }
 }
-function validateCredentials(accessKey, secretKey, logger_inst) {
+function validateCredentials(accessKey, secretKey, endpoint, logger_inst) {
   const errors = [];
-  if (!accessKey) {
-    const errorMsg = "S3_ACCESS_KEY is required";
-    logger_inst.warn(errorMsg);
-    errors.push(errorMsg);
-  }
-  if (!secretKey) {
-    const errorMsg = "S3_SECRET_KEY is required";
-    logger_inst.warn(errorMsg);
-    errors.push(errorMsg);
+  if (endpoint) {
+    if (!accessKey) {
+      const errorMsg = "S3_ACCESS_KEY is required when using S3_ENDPOINT";
+      logger_inst.warn(errorMsg);
+      errors.push(errorMsg);
+    }
+    if (!secretKey) {
+      const errorMsg = "S3_SECRET_KEY is required when using S3_ENDPOINT";
+      logger_inst.warn(errorMsg);
+      errors.push(errorMsg);
+    }
+  } else if (!accessKey && !secretKey) {
+    logger_inst.info("No explicit S3 credentials provided - using AWS SDK default credential chain");
   }
   return errors;
 }
@@ -66861,7 +66867,7 @@ function validateS3Config() {
   const publicUrl = process.env.S3_PUBLIC_URL;
   const forcePathStyle = endpoint ? true : process.env.S3_FORCE_PATH_STYLE === "true";
   errors.push(
-    ...validateCredentials(accessKey, secretKey, logger_inst),
+    ...validateCredentials(accessKey, secretKey, endpoint, logger_inst),
     ...validateRegionEndpoint(mode, endpoint, region, logger_inst)
   );
   const configData = {
@@ -66958,26 +66964,21 @@ async function testS3Connection() {
       message: errorMsg
     };
   }
-  if (!config.accessKey || !config.secretKey) {
-    const errorMsg = "S3 credentials are not available";
-    logger_inst.error(errorMsg);
-    return {
-      success: false,
-      message: errorMsg
-    };
-  }
   try {
     logger_inst.debug("Creating S3 client for connection test", {
       endpoint: config.endpoint,
       region: config.region,
       bucket: config.bucket,
-      forcePathStyle: config.forcePathStyle
+      forcePathStyle: config.forcePathStyle,
+      hasExplicitCredentials: !!(config.accessKey && config.secretKey)
     });
     const client = new import_client_s3.S3Client({
       region: config.region,
-      credentials: {
-        accessKeyId: config.accessKey,
-        secretAccessKey: config.secretKey
+      ...config.accessKey && config.secretKey && {
+        credentials: {
+          accessKeyId: config.accessKey,
+          secretAccessKey: config.secretKey
+        }
       },
       ...config.endpoint && {
         endpoint: config.endpoint,
@@ -69332,18 +69333,18 @@ function getS3Client() {
       moduleLogger.error(errorMsg);
       throw new Error(errorMsg);
     }
-    if (!config.accessKey || !config.secretKey) {
-      const errorMsg = "S3 credentials are not available (S3_ACCESS_KEY and S3_SECRET_KEY required)";
-      moduleLogger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
     const clientConfig = {
-      region: config.region,
-      credentials: {
+      region: config.region
+    };
+    if (config.accessKey && config.secretKey) {
+      clientConfig.credentials = {
         accessKeyId: config.accessKey,
         secretAccessKey: config.secretKey
-      }
-    };
+      };
+      moduleLogger.debug("Using explicit S3 credentials");
+    } else {
+      moduleLogger.debug("Using AWS SDK default credential chain (IAM role, env vars, etc.)");
+    }
     if (config.endpoint) {
       clientConfig.endpoint = config.endpoint;
       clientConfig.forcePathStyle = config.forcePathStyle;

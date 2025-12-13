@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-upgrade",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Quilltap upgrade and migration manager plugin",
   "main": "index.js",
   "types": "index.d.ts",
@@ -20,7 +20,7 @@
     "url": "https://foundry-9.com"
   },
   "license": "MIT",
-  "peerDependencies": {
+  "devDependencies": {
     "zod": "^3.22.0"
   }
 }

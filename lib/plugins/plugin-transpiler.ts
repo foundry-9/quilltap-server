@@ -23,13 +23,10 @@ import { existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
 // External packages that should NOT be bundled (they're available at runtime)
+// NOTE: LLM provider SDKs are intentionally NOT in this list - they get bundled
+// INTO each plugin's output to make plugins self-contained for Docker production.
+// This avoids issues with Next.js standalone mode not including dynamically-loaded deps.
 const EXTERNAL_PACKAGES = [
-  // LLM provider SDKs (available in main app)
-  '@anthropic-ai/sdk',
-  'openai',
-  '@google/generative-ai',
-  '@openrouter/sdk',
-  'ollama',
   // React and related packages (available in main app)
   'react',
   'react-dom',
