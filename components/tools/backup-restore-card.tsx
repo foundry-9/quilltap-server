@@ -183,7 +183,7 @@ export default function BackupRestoreCard() {
             <p className="text-muted-foreground">No cloud backups yet. Create one to get started.</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-[180px] overflow-y-auto">
             {backups.map((backup) => (
               <div
                 key={backup.key}

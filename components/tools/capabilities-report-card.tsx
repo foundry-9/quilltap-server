@@ -304,7 +304,7 @@ export function CapabilitiesReportCard() {
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-[180px] overflow-y-auto">
             {reports.map((report) => (
               <div
                 key={report.id}
