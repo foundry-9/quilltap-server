@@ -506,7 +506,7 @@ var require_package = __commonJS({
   "../../../package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "2.3.0-dev.27",
+      version: "2.3.0-dev.29",
       private: true,
       author: {
         name: "Charles Sebold",
@@ -522,7 +522,7 @@ var require_package = __commonJS({
       scripts: {
         dev: "next dev",
         devssl: "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
-        build: "next build",
+        build: "npm run build:plugins && next build",
         "build:plugins": "tsx scripts/build-plugins.ts",
         start: "next start",
         lint: "eslint .",
