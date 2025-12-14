@@ -28,7 +28,7 @@ export function useAvatarDisplay() {
         const data = await res.json()
         setStyle((data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle)
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err) || 'Unknown error'
+        const errorMessage = (err instanceof Error ? err.message : String(err)) || 'Unknown error'
         clientLogger.error('Error fetching avatar display style', { error: errorMessage })
         setError(errorMessage)
         // Default to circular on error
@@ -57,8 +57,9 @@ export function useAvatarDisplay() {
       const data = await res.json()
       setStyle((data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle)
     } catch (err) {
-      clientLogger.error('Error updating avatar display style:', { error: err instanceof Error ? err.message : String(err) })
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      const errorMessage = (err instanceof Error ? err.message : String(err)) || 'Unknown error'
+      clientLogger.error('Error updating avatar display style:', { error: errorMessage })
+      setError(errorMessage)
       // Revert to previous style on error
       setStyle(style === 'CIRCULAR' ? 'RECTANGULAR' : 'CIRCULAR')
     }

@@ -4,6 +4,7 @@
 
 ### 2.4-dev
 
+- fix: Error message extraction in useAvatarDisplay hook - operator precedence fix ensures fallback to 'Unknown error'
 - feat: Responsive navbar with dynamic collapse - menu items collapse into logo dropdown when space is limited
 - New development checkpoint
 
