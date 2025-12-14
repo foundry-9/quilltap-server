@@ -88,6 +88,11 @@ export async function processNextJob(): Promise<boolean> {
 
     if (!job) {
       logger.debug('[JobQueue] No jobs available');
+      // Auto-stop when queue is empty
+      if (processorRunning) {
+        stopProcessor();
+        logger.info('[JobQueue] Processor auto-stopped - queue is empty');
+      }
       return false;
     }
 

@@ -775,6 +775,7 @@ export const BackgroundJobStatusEnum = z.enum([
   'COMPLETED',
   'FAILED',
   'DEAD',
+  'PAUSED',
 ]);
 export type BackgroundJobStatus = z.infer<typeof BackgroundJobStatusEnum>;
 

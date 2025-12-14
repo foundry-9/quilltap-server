@@ -4,6 +4,10 @@
 
 ### 2.3-dev
 
+- feat: Add job-level controls to Tasks Queue - pause/resume, delete, and view buttons for each job with detail dialog
+- feat: Tasks Queue auto-start/stop - processor starts automatically when jobs are enqueued and stops when queue empties
+- fix: Improve error handling in useAvatarDisplay hook - 401 responses now logged as debug instead of error
+- feat: Add Start Queue and Stop Queue buttons to Tasks Queue card for controlling background job processor
 - fix: Docker build failure from esbuild platform mismatch (exclude plugin node_modules, fix ENV format)
 - fix: CI build now runs `npm run build` instead of `npx next build` to include plugin builds
 - fix: integration test failure attempt to fix for Github Actions

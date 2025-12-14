@@ -9,6 +9,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { BackgroundJobType } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import type { QueueStats } from '@/lib/mongodb/repositories/background-jobs.repository';
+import { ensureProcessorRunning } from './processor';
 
 /**
  * Options for creating a job
@@ -108,6 +109,10 @@ export async function enqueueJob(
   });
 
   logger.info('Background job enqueued', { jobId: job.id, type, userId });
+
+  // Auto-start the processor when a job is enqueued
+  ensureProcessorRunning();
+
   return job.id;
 }
 
@@ -212,6 +217,11 @@ export async function enqueueMemoryExtractionBatch(
     characterId,
     jobCount: jobIds.length,
   });
+
+  // Auto-start the processor when jobs are enqueued
+  if (jobIds.length > 0) {
+    ensureProcessorRunning();
+  }
 
   return jobIds;
 }

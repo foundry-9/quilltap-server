@@ -4,11 +4,12 @@
  * Provides status information about the background jobs (cheap LLM) queue.
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
 import { BackgroundJobsRepository } from '@/lib/mongodb/repositories/background-jobs.repository';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
+import { startProcessor, stopProcessor, getProcessorStatus } from '@/lib/background-jobs/processor';
 
 /**
  * Rough estimate of tokens for a job based on its type and payload
@@ -82,13 +83,14 @@ export async function GET() {
     // Get overall stats for the user
     const stats = await repo.getStats(session.user.id);
 
-    // Get pending and processing jobs for the user
+    // Get pending, processing, failed, and paused jobs for the user
     const pendingJobs = await repo.findByUserId(session.user.id, 'PENDING');
     const processingJobs = await repo.findByUserId(session.user.id, 'PROCESSING');
     const failedJobs = await repo.findByUserId(session.user.id, 'FAILED');
+    const pausedJobs = await repo.findByUserId(session.user.id, 'PAUSED');
 
-    // Combine active jobs (pending + processing + failed that will retry)
-    const activeJobs = [...processingJobs, ...pendingJobs, ...failedJobs.filter(j => j.attempts < j.maxAttempts)];
+    // Combine active jobs (pending + processing + failed that will retry + paused)
+    const activeJobs = [...processingJobs, ...pendingJobs, ...failedJobs.filter(j => j.attempts < j.maxAttempts), ...pausedJobs];
 
     // Sort by priority (descending) then scheduledAt (ascending)
     activeJobs.sort((a, b) => {
@@ -123,10 +125,13 @@ export async function GET() {
       };
     });
 
+    const processorStatus = getProcessorStatus();
+
     logger.debug('Tasks queue status retrieved', {
       userId: session.user.id,
       activeJobCount: activeJobs.length,
       totalEstimatedTokens,
+      processorRunning: processorStatus.running,
     });
 
     return NextResponse.json({
@@ -140,6 +145,7 @@ export async function GET() {
       },
       jobs: jobDetails,
       totalEstimatedTokens,
+      processorStatus,
     });
   } catch (error) {
     logger.error('Error fetching tasks queue status', {
@@ -147,6 +153,63 @@ export async function GET() {
     });
     return NextResponse.json(
       { error: 'Failed to fetch queue status' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/tools/tasks-queue
+ * Control the queue processor (start/stop)
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession();
+    if (!session?.user?.id) {
+      logger.warn('Unauthorized access to tasks queue control API');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { action } = body;
+
+    if (!action || !['start', 'stop'].includes(action)) {
+      return NextResponse.json(
+        { error: 'Invalid action. Must be "start" or "stop"' },
+        { status: 400 }
+      );
+    }
+
+    logger.info('Tasks queue control action', {
+      userId: session.user.id,
+      action,
+    });
+
+    if (action === 'start') {
+      startProcessor();
+    } else {
+      stopProcessor();
+    }
+
+    const processorStatus = getProcessorStatus();
+
+    logger.debug('Tasks queue processor status updated', {
+      userId: session.user.id,
+      action,
+      running: processorStatus.running,
+    });
+
+    return NextResponse.json({
+      success: true,
+      action,
+      processorStatus,
+    });
+  } catch (error) {
+    logger.error('Error controlling tasks queue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: 'Failed to control queue' },
       { status: 500 }
     );
   }

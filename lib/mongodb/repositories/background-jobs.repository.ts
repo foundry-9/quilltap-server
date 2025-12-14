@@ -18,6 +18,7 @@ export interface QueueStats {
   completed: number;
   failed: number;
   dead: number;
+  paused: number;
 }
 
 /**
@@ -485,6 +486,7 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
         completed: 0,
         failed: 0,
         dead: 0,
+        paused: 0,
       };
 
       for (const result of results) {
@@ -506,6 +508,9 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
           case 'DEAD':
             stats.dead = count;
             break;
+          case 'PAUSED':
+            stats.paused = count;
+            break;
         }
       }
 
@@ -516,7 +521,7 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
         userId,
         error: error instanceof Error ? error.message : String(error),
       });
-      return { pending: 0, processing: 0, completed: 0, failed: 0, dead: 0 };
+      return { pending: 0, processing: 0, completed: 0, failed: 0, dead: 0, paused: 0 };
     }
   }
 
@@ -573,6 +578,81 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
         error: error instanceof Error ? error.message : String(error),
       });
       return false;
+    }
+  }
+
+  /**
+   * Pause a pending or failed job
+   */
+  async pause(id: string): Promise<BackgroundJob | null> {
+    logger.debug('Pausing background job', { jobId: id });
+    try {
+      const collection = await this.getCollection();
+      const now = this.getCurrentTimestamp();
+
+      const result = await collection.findOneAndUpdate(
+        { id, status: { $in: ['PENDING', 'FAILED'] } },
+        {
+          $set: {
+            status: 'PAUSED',
+            updatedAt: now,
+          },
+        },
+        { returnDocument: 'after' }
+      );
+
+      if (!result) {
+        logger.warn('Background job not found or not pausable', { jobId: id });
+        return null;
+      }
+
+      const validated = this.validate(result);
+      logger.info('Background job paused', { jobId: id, type: validated.type });
+      return validated;
+    } catch (error) {
+      logger.error('Error pausing background job', {
+        jobId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Resume a paused job
+   */
+  async resume(id: string): Promise<BackgroundJob | null> {
+    logger.debug('Resuming background job', { jobId: id });
+    try {
+      const collection = await this.getCollection();
+      const now = this.getCurrentTimestamp();
+
+      const result = await collection.findOneAndUpdate(
+        { id, status: 'PAUSED' },
+        {
+          $set: {
+            status: 'PENDING',
+            scheduledAt: now,
+            updatedAt: now,
+          },
+        },
+        { returnDocument: 'after' }
+      );
+
+      if (!result) {
+        logger.warn('Background job not found or not resumable', { jobId: id });
+        return null;
+      }
+
+      const validated = this.validate(result);
+      logger.info('Background job resumed', { jobId: id, type: validated.type });
+      return validated;
+    } catch (error) {
+      logger.error('Error resuming background job', {
+        jobId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
   }
 
