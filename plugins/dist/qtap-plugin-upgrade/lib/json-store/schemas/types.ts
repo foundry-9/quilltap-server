@@ -46,7 +46,7 @@ export const TimestampSchema = z.string().datetime().or(z.date()).transform(d =>
 });
 
 // JSON field (flexible structure)
-export const JsonSchema = z.record(z.unknown());
+export const JsonSchema = z.record(z.string(), z.unknown());
 
 // Encryption fields (AES-256-GCM)
 export const EncryptedFieldSchema = z.object({
@@ -112,7 +112,7 @@ export const TagVisualStyleSchema = z.object({
 
 export type TagVisualStyle = z.infer<typeof TagVisualStyleSchema>;
 
-export const TagStyleMapSchema = z.record(TagVisualStyleSchema).default({});
+export const TagStyleMapSchema = z.record(z.string(), TagVisualStyleSchema).default({});
 
 export type TagStyleMap = z.infer<typeof TagStyleMapSchema>;
 

@@ -112,7 +112,7 @@ export async function downloadFile(key: string): Promise<Buffer> {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     }
 
-    const buffer = Buffer.concat(chunks);
+    const buffer = Buffer.concat(chunks.map(c => new Uint8Array(c)));
 
     logger.debug('File downloaded from S3', {
       key,

@@ -65,7 +65,7 @@ async function saveGeneratedImage(
   try {
     // Decode base64 to buffer
     const buffer = Buffer.from(imageData, 'base64');
-    const sha256 = createHash('sha256').update(buffer).digest('hex');
+    const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
 
     // Generate original filename
     const ext = mimeType.split('/')[1] || 'png';

@@ -10669,6 +10669,9 @@ var OpenRouterEmbeddingProvider = class {
       model,
       dimensions: options?.dimensions
     });
+    if (typeof response === "string") {
+      throw new Error(`OpenRouter returned an error: ${response}`);
+    }
     const embeddingData = response.data[0]?.embedding;
     if (!embeddingData) {
       throw new Error("No embedding returned from OpenRouter");
@@ -10724,6 +10727,9 @@ var OpenRouterEmbeddingProvider = class {
       model,
       dimensions: options?.dimensions
     });
+    if (typeof response === "string") {
+      throw new Error(`OpenRouter returned an error: ${response}`);
+    }
     const results = [];
     for (const data of response.data) {
       const embeddingData = data.embedding;

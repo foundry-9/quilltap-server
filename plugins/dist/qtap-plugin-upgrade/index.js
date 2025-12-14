@@ -566,7 +566,10 @@ var require_package = __commonJS({
         zod: "^3.23.0"
       },
       devDependencies: {
+        "@anthropic-ai/sdk": "^0.71.0",
+        "@google/generative-ai": "^0.24.1",
         "@jest/globals": "^30.2.0",
+        "@openrouter/sdk": "^0.2.9",
         "@playwright/test": "^1.49.0",
         "@tailwindcss/postcss": "^4.1.17",
         "@testing-library/jest-dom": "^6.9.1",
@@ -586,6 +589,7 @@ var require_package = __commonJS({
         eslint: "^9.39.2",
         "eslint-config-next": "^16.0.5",
         jest: "^30.2.0",
+        openai: "^6.9.0",
         "jest-environment-jsdom": "^30.2.0",
         postcss: "^8.4.0",
         tailwindcss: "^4.1.17",
@@ -65093,7 +65097,7 @@ var TimestampSchema = import_zod4.z.string().datetime().or(import_zod4.z.date())
   if (d4 instanceof Date) return d4.toISOString();
   return d4;
 });
-var JsonSchema = import_zod4.z.record(import_zod4.z.unknown());
+var JsonSchema = import_zod4.z.record(import_zod4.z.string(), import_zod4.z.unknown());
 var EncryptedFieldSchema = import_zod4.z.object({
   ciphertext: import_zod4.z.string(),
   iv: import_zod4.z.string(),
@@ -65134,7 +65138,7 @@ var TagVisualStyleSchema = import_zod4.z.object({
   italic: import_zod4.z.boolean().default(false),
   strikethrough: import_zod4.z.boolean().default(false)
 });
-var TagStyleMapSchema = import_zod4.z.record(TagVisualStyleSchema).default({});
+var TagStyleMapSchema = import_zod4.z.record(import_zod4.z.string(), TagVisualStyleSchema).default({});
 var CheapLLMStrategyEnum = import_zod4.z.enum(["USER_DEFINED", "PROVIDER_CHEAPEST", "LOCAL_FIRST"]);
 var EmbeddingProviderEnum = import_zod4.z.enum(["SAME_PROVIDER", "OPENAI", "LOCAL"]);
 var CheapLLMSettingsSchema = import_zod4.z.object({

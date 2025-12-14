@@ -72,7 +72,7 @@ export function encryptApiKey(apiKey: string, userId: string) {
 
   const key = deriveUserKey(userId)
   const iv = crypto.randomBytes(IV_LENGTH)
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv)
+  const cipher = crypto.createCipheriv(ALGORITHM, new Uint8Array(key), new Uint8Array(iv))
 
   let encrypted = cipher.update(apiKey, 'utf8', 'hex')
   encrypted += cipher.final('hex')
@@ -111,11 +111,11 @@ export function decryptApiKey(
     const key = deriveUserKey(userId)
     const decipher = crypto.createDecipheriv(
       ALGORITHM,
-      key,
-      Buffer.from(iv, 'hex')
+      new Uint8Array(key),
+      new Uint8Array(Buffer.from(iv, 'hex'))
     )
 
-    decipher.setAuthTag(Buffer.from(authTag, 'hex'))
+    decipher.setAuthTag(new Uint8Array(Buffer.from(authTag, 'hex')))
 
     let decrypted = decipher.update(encrypted, 'hex', 'utf8')
     decrypted += decipher.final('utf8')

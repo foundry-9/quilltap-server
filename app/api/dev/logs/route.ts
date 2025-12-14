@@ -268,11 +268,11 @@ async function readNewContent(
       return { content: '', newPosition: newSize };
     }
 
-    const buffer = Buffer.alloc(bytesToRead);
+    const buffer = new Uint8Array(bytesToRead);
     await fileHandle.read(buffer, 0, bytesToRead, startPosition);
 
     return {
-      content: buffer.toString('utf8'),
+      content: new TextDecoder().decode(buffer),
       newPosition: newSize
     };
   } finally {

@@ -50,7 +50,7 @@ async function downloadAndHash(s3Client: S3Client, key: string): Promise<string>
   const buffer = Buffer.concat(chunks);
 
   // Calculate SHA256 hash
-  const hash = createHash('sha256').update(buffer).digest('hex');
+  const hash = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
   return hash;
 }
 
