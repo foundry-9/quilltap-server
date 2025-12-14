@@ -4,6 +4,7 @@
 
 ### 2.3-dev
 
+- fix: Docker build failure from esbuild platform mismatch (exclude plugin node_modules, fix ENV format)
 - fix: CI build now runs `npm run build` instead of `npx next build` to include plugin builds
 - fix: integration test failure attempt to fix for Github Actions
 - feat: Increase max_tokens limit and add dynamic model-based constraints
