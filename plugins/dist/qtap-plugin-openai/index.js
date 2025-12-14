@@ -7333,7 +7333,7 @@ var OpenAIProvider = class {
     const requestParams = {
       model: params.model,
       messages,
-      max_completion_tokens: params.maxTokens ?? 1e3
+      max_completion_tokens: params.maxTokens ?? 4096
     };
     if (!isReasoning) {
       requestParams.top_p = params.topP ?? 1;
@@ -7384,7 +7384,7 @@ var OpenAIProvider = class {
     const requestParams = {
       model: params.model,
       messages,
-      max_completion_tokens: params.maxTokens ?? 1e3,
+      max_completion_tokens: params.maxTokens ?? 4096,
       stream: true,
       stream_options: { include_usage: true }
     };

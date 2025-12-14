@@ -5136,7 +5136,7 @@ var AnthropicProvider = class {
     const requestParams = {
       model: params.model,
       messages,
-      max_tokens: params.maxTokens ?? 1e3
+      max_tokens: params.maxTokens ?? 4096
     };
     if (systemMessage?.content) {
       if (profileParams?.enableCacheBreakpoints) {
@@ -5207,7 +5207,7 @@ var AnthropicProvider = class {
     const requestParams = {
       model: params.model,
       messages,
-      max_tokens: params.maxTokens ?? 1e3,
+      max_tokens: params.maxTokens ?? 4096,
       stream: true
     };
     if (systemMessage?.content) {

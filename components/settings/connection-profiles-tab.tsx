@@ -69,7 +69,7 @@ export default function ConnectionProfilesTab() {
     baseUrl: '',
     modelName: 'gpt-3.5-turbo',
     temperature: 1,
-    maxTokens: 1000,
+    maxTokens: 4096,
     topP: 1,
     isDefault: false,
     isCheap: false,
@@ -283,7 +283,7 @@ export default function ConnectionProfilesTab() {
       baseUrl: '',
       modelName: 'gpt-3.5-turbo',
       temperature: 1,
-      maxTokens: 1000,
+      maxTokens: 4096,
       topP: 1,
       isDefault: false,
       isCheap: false,
@@ -460,6 +460,19 @@ export default function ConnectionProfilesTab() {
       setError(err instanceof Error ? err.message : 'An error occurred')
     }
   }
+
+  // Helper to get the selected model's info (including maxOutputTokens)
+  const getSelectedModelInfo = useCallback(() => {
+    if (!formData.modelName || fetchedModelsWithInfo.length === 0) return null
+    return fetchedModelsWithInfo.find(m => m.id === formData.modelName) || null
+  }, [formData.modelName, fetchedModelsWithInfo])
+
+  // Get max tokens limit for the selected model (default to 128000 if not known)
+  const getMaxTokensLimit = useCallback(() => {
+    const modelInfo = getSelectedModelInfo()
+    // Use model's maxOutputTokens if known, otherwise default to 128000
+    return modelInfo?.maxOutputTokens || 128000
+  }, [getSelectedModelInfo])
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -1029,9 +1042,14 @@ export default function ConnectionProfilesTab() {
                     value={formData.maxTokens}
                     onChange={handleChange}
                     min="1"
-                    max="4000"
+                    max={getMaxTokensLimit()}
                     className="qt-input"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {getSelectedModelInfo()?.maxOutputTokens
+                      ? `Model limit: ${getSelectedModelInfo()?.maxOutputTokens?.toLocaleString()} tokens`
+                      : 'Max output tokens for responses'}
+                  </p>
                 </div>
 
                 <div>

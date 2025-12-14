@@ -506,7 +506,7 @@ var require_package = __commonJS({
   "../../../package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "2.3.0-dev.24",
+      version: "2.3.0-dev.27",
       private: true,
       author: {
         name: "Charles Sebold",
@@ -566,8 +566,6 @@ var require_package = __commonJS({
         zod: "^3.23.0"
       },
       devDependencies: {
-        "@anthropic-ai/sdk": "^0.71.0",
-        "@google/generative-ai": "^0.24.1",
         "@jest/globals": "^30.2.0",
         "@openrouter/sdk": "^0.2.9",
         "@playwright/test": "^1.49.0",
@@ -589,7 +587,6 @@ var require_package = __commonJS({
         eslint: "^9.39.2",
         "eslint-config-next": "^16.0.5",
         jest: "^30.2.0",
-        openai: "^6.9.0",
         "jest-environment-jsdom": "^30.2.0",
         postcss: "^8.4.0",
         tailwindcss: "^4.1.17",

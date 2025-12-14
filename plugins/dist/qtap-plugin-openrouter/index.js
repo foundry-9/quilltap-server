@@ -10305,7 +10305,7 @@ var OpenRouterProvider = class {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
-      maxTokens: params.maxTokens ?? 1e3,
+      maxTokens: params.maxTokens ?? 4096,
       topP: params.topP ?? 1,
       stop: params.stop,
       stream: false
@@ -10417,7 +10417,7 @@ var OpenRouterProvider = class {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
-      maxTokens: params.maxTokens ?? 1e3,
+      maxTokens: params.maxTokens ?? 4096,
       topP: params.topP ?? 1,
       stream: true,
       streamOptions: { includeUsage: true }

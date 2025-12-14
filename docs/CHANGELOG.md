@@ -4,6 +4,12 @@
 
 ### 2.3-dev
 
+- feat: Increase max_tokens limit and add dynamic model-based constraints
+  - Increased default max_tokens from 1000 to 4096 for longer LLM responses
+  - UI max limit increased from 4000 to 128000 (or model's maxOutputTokens if known)
+  - Added maxOutputTokens and contextWindow fields to ModelMetadata interface
+  - API now returns model token limits from plugin getModelInfo() for dynamic UI constraints
+  - Connection profile form shows model's max output token limit when available
 - refactor: Decouple tests from LLM SDK dependencies
   - Added Jest mocks for openai, @anthropic-ai/sdk, @google/generative-ai SDKs
   - Updated jest.config.ts and jest.integration.config.ts with moduleNameMapper entries
