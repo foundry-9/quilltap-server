@@ -8,8 +8,7 @@ const nextConfig = {
   // don't need to be listed here. Only packages used directly by the main app
   // (not plugins) need to be in serverExternalPackages.
   serverExternalPackages: [
-    'openai',           // Used by lib/image-gen/openai.ts
-    '@openrouter/sdk',  // Used by lib/embedding/embedding-service.ts, lib/llm/pricing-fetcher.ts
+    '@openrouter/sdk',  // Used by lib/llm/pricing-fetcher.ts (dynamically imported, optional)
     'zod',              // Used throughout the app
   ],
 
@@ -18,7 +17,6 @@ const nextConfig = {
   // to include packages that the main app uses directly.
   outputFileTracingIncludes: {
     '/*': [
-      './node_modules/openai/**/*',
       './node_modules/@openrouter/**/*',
       './node_modules/zod/**/*',
       './node_modules/next-auth/**/*',

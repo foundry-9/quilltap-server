@@ -4,6 +4,13 @@
 
 ### 2.3-dev
 
+- refactor: Decouple tests from LLM SDK dependencies
+  - Added Jest mocks for openai, @anthropic-ai/sdk, @google/generative-ai SDKs
+  - Updated jest.config.ts and jest.integration.config.ts with moduleNameMapper entries
+  - Removed unused legacy lib/image-gen/openai.ts (OpenAI image generation now handled by plugin)
+  - Refactored lib/llm/pricing-fetcher.ts to use dynamic import for @openrouter/sdk
+  - Removed @anthropic-ai/sdk, @google/generative-ai, and openai from top-level devDependencies
+  - Kept @openrouter/sdk for embedding service types (used via dynamic import at runtime)
 - refactor: Migrate plugins to self-contained builds with per-plugin `npm run build`
   - Each plugin now has its own esbuild.config.mjs and package.json with build script
   - Removed centralized plugin-transpiler.ts in favor of per-plugin builds
