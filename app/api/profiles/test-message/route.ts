@@ -62,7 +62,27 @@ export async function POST(req: NextRequest) {
 
     const repos = getRepositories()
 
-    // Ensure plugin system is initialized
+    // Get API key if provided
+    let decryptedKey = ''
+    if (apiKeyId) {
+      const apiKey = await repos.connections.findApiKeyById(apiKeyId)
+
+      if (!apiKey) {
+        return NextResponse.json(
+          { error: 'API key not found' },
+          { status: 404 }
+        )
+      }
+
+      decryptedKey = decryptApiKey(
+        apiKey.ciphertext,
+        apiKey.iv,
+        apiKey.authTag,
+        session.user.id
+      )
+    }
+
+    // Ensure plugin system is initialized (after cheap validations)
     // Check both the plugin system AND the provider registry specifically
     const pluginSystemInitialized = isPluginSystemInitialized()
     const providerRegistryInitialized = providerRegistry.isInitialized()
@@ -102,26 +122,6 @@ export async function POST(req: NextRequest) {
           { status: 500 }
         )
       }
-    }
-
-    // Get API key if provided
-    let decryptedKey = ''
-    if (apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId)
-
-      if (!apiKey) {
-        return NextResponse.json(
-          { error: 'API key not found' },
-          { status: 404 }
-        )
-      }
-
-      decryptedKey = decryptApiKey(
-        apiKey.ciphertext,
-        apiKey.iv,
-        apiKey.authTag,
-        session.user.id
-      )
     }
 
     // Validate requirements using centralized provider config validation

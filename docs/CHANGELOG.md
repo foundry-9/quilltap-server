@@ -4,6 +4,7 @@
 
 ### 2.3-dev
 
+- fix: integration test failure attempt to fix for Github Actions
 - feat: Increase max_tokens limit and add dynamic model-based constraints
   - Increased default max_tokens from 1000 to 4096 for longer LLM responses
   - UI max limit increased from 4000 to 128000 (or model's maxOutputTokens if known)
