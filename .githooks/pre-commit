@@ -274,7 +274,6 @@ if [ -f ./plugins/dist/qtap-plugin-template/schemas/plugin-manifest.json ]; then
   npm run generate:schemas
   npm run build:plugins
   git add ./plugins/dist/qtap-plugin-template/schemas/plugin-manifest.json
-  git add ./plugins/dist/qtap-plugin-upgrade/index.js
   git add ./plugins
 fi
 

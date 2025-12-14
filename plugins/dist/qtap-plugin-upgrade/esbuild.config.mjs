@@ -54,6 +54,11 @@ const EXTERNAL_PACKAGES = [
   'node:os',
   'node:child_process',
   'node:module',
+  // App package.json - read at runtime to avoid bundling version changes
+  '@/package.json',
+  // Also handle resolved path (alias resolves before external check)
+  '../../../package.json',
+  '*/package.json',
 ];
 
 async function build() {

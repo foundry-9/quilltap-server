@@ -501,109 +501,6 @@ var init_logger = __esm({
   }
 });
 
-// ../../../package.json
-var require_package = __commonJS({
-  "../../../package.json"(exports2, module2) {
-    module2.exports = {
-      name: "quilltap",
-      version: "2.3.0-dev.30",
-      private: true,
-      author: {
-        name: "Charles Sebold",
-        email: "charles@sebold.tech",
-        url: "https://foundry-9.com"
-      },
-      description: "A chat client application for hosted AI models designed for role play",
-      license: "MIT",
-      repository: {
-        type: "git",
-        url: "https://github.com/foundry-9/quilltap.git"
-      },
-      scripts: {
-        dev: "next dev",
-        devssl: "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
-        build: "npm run build:plugins && next build",
-        "build:plugins": "tsx scripts/build-plugins.ts",
-        start: "next start",
-        lint: "eslint .",
-        "lint:fix": "eslint . --fix",
-        test: "LOG_LEVEL=error npm run test:all",
-        "test:unit": "LOG_LEVEL=error jest",
-        "test:integration": "LOG_LEVEL=error jest --config jest.integration.config.ts",
-        "test:all": "LOG_LEVEL=error jest && LOG_LEVEL=error jest --config jest.integration.config.ts",
-        "test:watch": "jest --watch",
-        "test:coverage": "jest --coverage",
-        "test:e2e": "playwright test",
-        "test:e2e:ui": "playwright test --ui",
-        "test:e2e:headed": "playwright test --headed",
-        "migrate-files": "tsx scripts/migrate-files.ts",
-        "migrate-files:dry-run": "tsx scripts/migrate-files.ts --dry-run",
-        "consolidate-images": "tsx scripts/consolidate-images.ts",
-        "consolidate-images:dry-run": "tsx scripts/consolidate-images.ts --dry-run",
-        "cleanup-old-files": "tsx scripts/cleanup-old-files.ts",
-        "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts",
-        "deploy:dev": "./cicd/deploy.sh"
-      },
-      dependencies: {
-        "@aws-sdk/client-s3": "^3.943.0",
-        "@aws-sdk/s3-request-presigner": "^3.943.0",
-        "adm-zip": "^0.5.16",
-        archiver: "^7.0.1",
-        bcrypt: "^5.1.1",
-        "jest-fetch-mock": "^3.0.3",
-        mongodb: "^6.21.0",
-        next: "^16.0.5",
-        "next-auth": "^4.24.7",
-        "node-fetch": "^3.3.2",
-        qrcode: "^1.5.4",
-        react: "^19.2.0",
-        "react-dom": "^19.2.0",
-        "react-markdown": "^10.1.0",
-        "react-syntax-highlighter": "^16.1.0",
-        "rehype-raw": "^7.0.0",
-        "remark-gfm": "^4.0.1",
-        speakeasy: "^2.0.0",
-        zod: "^3.23.0"
-      },
-      devDependencies: {
-        "@jest/globals": "^30.2.0",
-        "@openrouter/sdk": "^0.2.9",
-        "@playwright/test": "^1.49.0",
-        "@tailwindcss/postcss": "^4.1.17",
-        "@testing-library/jest-dom": "^6.9.1",
-        "@testing-library/react": "^16.3.0",
-        "@types/adm-zip": "^0.5.7",
-        "@types/archiver": "^7.0.0",
-        "@types/bcrypt": "^5.0.2",
-        "@types/jest": "^30.0.0",
-        "@types/node": "~22.0.0",
-        "@types/qrcode": "^1.5.6",
-        "@types/react": "^19.2.5",
-        "@types/react-dom": "^19.2.3",
-        "@types/react-syntax-highlighter": "^15.5.13",
-        "@types/speakeasy": "^2.0.10",
-        autoprefixer: "^10.4.22",
-        dotenv: "^17.2.3",
-        eslint: "^9.39.2",
-        "eslint-config-next": "^16.0.5",
-        jest: "^30.2.0",
-        "jest-environment-jsdom": "^30.2.0",
-        postcss: "^8.4.0",
-        tailwindcss: "^4.1.17",
-        "ts-jest": "^29.4.5",
-        "ts-node": "^10.9.2",
-        tsx: "^4.7.0",
-        typescript: "^5.6.0",
-        "zod-to-json-schema": "^3.25.0"
-      },
-      overrides: {
-        glob: "^12.0.0",
-        cookie: "^0.7.0"
-      }
-    };
-  }
-});
-
 // ../../../node_modules/bson/lib/bson.cjs
 var require_bson = __commonJS({
   "../../../node_modules/bson/lib/bson.cjs"(exports2) {
@@ -11666,190 +11563,6 @@ var require_mongo_credentials = __commonJS({
   }
 });
 
-// ../../../node_modules/mongodb/package.json
-var require_package2 = __commonJS({
-  "../../../node_modules/mongodb/package.json"(exports2, module2) {
-    module2.exports = {
-      name: "mongodb",
-      version: "6.21.0",
-      description: "The official MongoDB driver for Node.js",
-      main: "lib/index.js",
-      files: [
-        "lib",
-        "src",
-        "etc/prepare.js",
-        "mongodb.d.ts",
-        "tsconfig.json"
-      ],
-      types: "mongodb.d.ts",
-      repository: {
-        type: "git",
-        url: "git@github.com:mongodb/node-mongodb-native.git"
-      },
-      keywords: [
-        "mongodb",
-        "driver",
-        "official"
-      ],
-      author: {
-        name: "The MongoDB NodeJS Team",
-        email: "dbx-node@mongodb.com"
-      },
-      dependencies: {
-        "@mongodb-js/saslprep": "^1.3.0",
-        bson: "^6.10.4",
-        "mongodb-connection-string-url": "^3.0.2"
-      },
-      peerDependencies: {
-        "@aws-sdk/credential-providers": "^3.188.0",
-        "@mongodb-js/zstd": "^1.1.0 || ^2.0.0",
-        "gcp-metadata": "^5.2.0",
-        kerberos: "^2.0.1",
-        "mongodb-client-encryption": ">=6.0.0 <7",
-        snappy: "^7.3.2",
-        socks: "^2.7.1"
-      },
-      peerDependenciesMeta: {
-        "@aws-sdk/credential-providers": {
-          optional: true
-        },
-        "@mongodb-js/zstd": {
-          optional: true
-        },
-        kerberos: {
-          optional: true
-        },
-        snappy: {
-          optional: true
-        },
-        "mongodb-client-encryption": {
-          optional: true
-        },
-        "gcp-metadata": {
-          optional: true
-        },
-        socks: {
-          optional: true
-        }
-      },
-      devDependencies: {
-        "@aws-sdk/credential-providers": "^3.876.0",
-        "@iarna/toml": "^2.2.5",
-        "@istanbuljs/nyc-config-typescript": "^1.0.2",
-        "@microsoft/api-extractor": "^7.52.11",
-        "@microsoft/tsdoc-config": "^0.17.1",
-        "@mongodb-js/zstd": "^2.0.1",
-        "@types/chai": "^4.3.17",
-        "@types/chai-subset": "^1.3.5",
-        "@types/express": "^5.0.3",
-        "@types/kerberos": "^1.1.5",
-        "@types/mocha": "^10.0.9",
-        "@types/node": "^22.15.3",
-        "@types/saslprep": "^1.0.3",
-        "@types/semver": "^7.7.0",
-        "@types/sinon": "^17.0.4",
-        "@types/sinon-chai": "^4.0.0",
-        "@types/whatwg-url": "^13.0.0",
-        "@typescript-eslint/eslint-plugin": "^8.41.0",
-        "@typescript-eslint/parser": "^8.31.1",
-        chai: "^4.4.1",
-        "chai-subset": "^1.6.0",
-        chalk: "^4.1.2",
-        eslint: "^9.34.0",
-        "eslint-config-prettier": "^10.1.8",
-        "eslint-plugin-mocha": "^10.4.1",
-        "eslint-plugin-prettier": "^5.5.4",
-        "eslint-plugin-simple-import-sort": "^12.1.1",
-        "eslint-plugin-tsdoc": "^0.4.0",
-        "eslint-plugin-unused-imports": "^4.2.0",
-        express: "^5.1.0",
-        "gcp-metadata": "^5.3.0",
-        "js-yaml": "^4.1.0",
-        mocha: "^11.7.1",
-        "mocha-sinon": "^2.1.2",
-        "mongodb-client-encryption": "^6.5.0",
-        "mongodb-legacy": "^6.1.3",
-        nyc: "^15.1.0",
-        prettier: "^3.6.2",
-        semver: "^7.7.2",
-        sinon: "^18.0.1",
-        "sinon-chai": "^3.7.0",
-        snappy: "^7.3.2",
-        socks: "^2.8.7",
-        "source-map-support": "^0.5.21",
-        "ts-node": "^10.9.2",
-        tsd: "^0.33.0",
-        typescript: "5.8.3",
-        "typescript-cached-transpile": "^0.0.6",
-        "v8-heapsnapshot": "^1.3.1",
-        yargs: "^18.0.0"
-      },
-      license: "Apache-2.0",
-      engines: {
-        node: ">=16.20.1"
-      },
-      bugs: {
-        url: "https://jira.mongodb.org/projects/NODE/issues/"
-      },
-      homepage: "https://github.com/mongodb/node-mongodb-native",
-      scripts: {
-        "build:evergreen": "node .evergreen/generate_evergreen_tasks.js",
-        "build:ts": "node ./node_modules/typescript/bin/tsc",
-        "build:dts": "npm run build:ts && api-extractor run && node etc/clean_definition_files.cjs && ESLINT_USE_FLAT_CONFIG=false eslint --no-ignore --fix mongodb.d.ts lib/beta.d.ts",
-        "build:docs": "./etc/docs/build.ts",
-        "build:typedoc": "typedoc",
-        "build:nightly": "node ./.github/scripts/nightly.mjs",
-        "check:bench": "npm --prefix test/benchmarks/driver_bench start",
-        "check:coverage": "nyc npm run test:all",
-        "check:integration-coverage": "nyc npm run check:test",
-        "check:lambda": "nyc mocha --config test/mocha_lambda.js test/integration/node-specific/examples/handler.test.js",
-        "check:lambda:aws": "nyc mocha --config test/mocha_lambda.js test/integration/node-specific/examples/aws_handler.test.js",
-        "check:lint": "npm run build:dts && npm run check:dts && npm run check:eslint && npm run check:tsd",
-        "check:eslint": "npm run build:dts && ESLINT_USE_FLAT_CONFIG=false eslint -v && ESLINT_USE_FLAT_CONFIG=false eslint --max-warnings=0 --ext '.js,.ts' src test",
-        "check:tsd": "tsd --version && tsd",
-        "check:dependencies": "mocha test/action/dependency.test.ts",
-        "check:dts": "node ./node_modules/typescript/bin/tsc --noEmit mongodb.d.ts && tsd",
-        "check:search-indexes": "nyc mocha --config test/mocha_mongodb.js test/manual/search-index-management.prose.test.ts",
-        "check:test": "mocha --config test/mocha_mongodb.js test/integration",
-        "check:unit": "nyc mocha test/unit",
-        "check:ts": "node ./node_modules/typescript/bin/tsc -v && node ./node_modules/typescript/bin/tsc --noEmit",
-        "check:atlas": "nyc mocha --config test/manual/mocharc.js test/manual/atlas_connectivity.test.ts",
-        "check:resource-management": "nyc mocha --config test/manual/mocharc.js test/manual/resource_management.test.ts",
-        "check:drivers-atlas-testing": "nyc mocha --config test/mocha_mongodb.js test/atlas/drivers_atlas_testing.test.ts",
-        "check:adl": "nyc mocha --config test/mocha_mongodb.js test/manual/atlas-data-lake-testing",
-        "check:aws": "nyc mocha --config test/mocha_mongodb.js test/integration/auth/mongodb_aws.test.ts",
-        "check:oidc-auth": "nyc mocha --config test/mocha_mongodb.js test/integration/auth/auth.spec.test.ts",
-        "check:oidc-test": "nyc mocha --config test/mocha_mongodb.js test/integration/auth/mongodb_oidc.prose.test.ts",
-        "check:oidc-azure": "nyc mocha --config test/mocha_mongodb.js test/integration/auth/mongodb_oidc_azure.prose.05.test.ts",
-        "check:oidc-gcp": "nyc mocha --config test/mocha_mongodb.js test/integration/auth/mongodb_oidc_gcp.prose.06.test.ts",
-        "check:oidc-k8s": "nyc mocha --config test/mocha_mongodb.js test/integration/auth/mongodb_oidc_k8s.prose.07.test.ts",
-        "check:kerberos": "nyc mocha --config test/manual/mocharc.js test/manual/kerberos.test.ts",
-        "check:tls": "nyc mocha --config test/manual/mocharc.js test/manual/tls_support.test.ts",
-        "check:ldap": "nyc mocha --config test/manual/mocharc.js test/manual/ldap.test.ts",
-        "check:socks5": "nyc mocha --config test/manual/mocharc.js test/manual/socks5.test.ts",
-        "check:csfle": "nyc mocha --config test/mocha_mongodb.js test/integration/client-side-encryption",
-        "check:snappy": "nyc mocha test/unit/assorted/snappy.test.js",
-        "check:x509": "nyc mocha test/manual/x509_auth.test.ts",
-        "fix:eslint": "npm run check:eslint -- --fix",
-        prepare: "node etc/prepare.js",
-        "preview:docs": "ts-node etc/docs/preview.ts",
-        test: "npm run check:lint && npm run test:all",
-        "test:all": "npm run check:unit && npm run check:test",
-        "update:docs": "npm run build:docs -- --yes"
-      },
-      tsd: {
-        directory: "test/types",
-        compilerOptions: {
-          strict: true,
-          target: "esnext",
-          module: "commonjs",
-          moduleResolution: "node"
-        }
-      }
-    };
-  }
-});
-
 // ../../../node_modules/mongodb/lib/cmap/handshake/client_metadata.js
 var require_client_metadata = __commonJS({
   "../../../node_modules/mongodb/lib/cmap/handshake/client_metadata.js"(exports2) {
@@ -11865,7 +11578,7 @@ var require_client_metadata = __commonJS({
     var bson_1 = require_bson2();
     var error_1 = require_error();
     var utils_1 = require_utils();
-    var NODE_DRIVER_VERSION = require_package2().version;
+    var NODE_DRIVER_VERSION = require("../../../package.json").version;
     function isDriverInfoEqual(info1, info2) {
       const nonEmptyCmp = (s1, s22) => {
         s1 ||= void 0;
@@ -32944,11 +32657,11 @@ var init_migrations_repository = __esm({
             logger.debug("No migration state found in MongoDB, returning empty state", {
               context: "MongoMigrationsRepository.loadState"
             });
-            const packageJson2 = await Promise.resolve().then(() => __toESM(require_package()));
+            const packageJson = await import("/Users/csebold/local_source/F9-Quilltap/package.json");
             return {
               completedMigrations: [],
               lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
-              quilltapVersion: packageJson2.version
+              quilltapVersion: packageJson.version
             };
           }
           const { _id, ...state2 } = doc;
@@ -32963,11 +32676,11 @@ var init_migrations_repository = __esm({
             context: "MongoMigrationsRepository.loadState",
             error: error2 instanceof Error ? error2.message : String(error2)
           });
-          const packageJson2 = await Promise.resolve().then(() => __toESM(require_package()));
+          const packageJson = await import("/Users/csebold/local_source/F9-Quilltap/package.json");
           return {
             completedMigrations: [],
             lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
-            quilltapVersion: packageJson2.version
+            quilltapVersion: packageJson.version
           };
         }
       }
@@ -33022,12 +32735,12 @@ var init_migrations_repository = __esm({
           });
           return state2;
         }
-        const packageJson2 = await Promise.resolve().then(() => __toESM(require_package()));
+        const packageJson = await import("/Users/csebold/local_source/F9-Quilltap/package.json");
         const updatedState = {
           ...state2,
           completedMigrations: [...state2.completedMigrations, record],
           lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
-          quilltapVersion: packageJson2.version
+          quilltapVersion: packageJson.version
         };
         await this.saveState(updatedState);
         return updatedState;
@@ -50244,137 +49957,6 @@ var require_httpAuthSchemeProvider = __commonJS({
   }
 });
 
-// ../../../node_modules/@aws-sdk/client-s3/package.json
-var require_package3 = __commonJS({
-  "../../../node_modules/@aws-sdk/client-s3/package.json"(exports2, module2) {
-    module2.exports = {
-      name: "@aws-sdk/client-s3",
-      description: "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
-      version: "3.948.0",
-      scripts: {
-        build: "concurrently 'yarn:build:cjs' 'yarn:build:es' 'yarn:build:types'",
-        "build:cjs": "node ../../scripts/compilation/inline client-s3",
-        "build:es": "tsc -p tsconfig.es.json",
-        "build:include:deps": "lerna run --scope $npm_package_name --include-dependencies build",
-        "build:types": "tsc -p tsconfig.types.json",
-        "build:types:downlevel": "downlevel-dts dist-types dist-types/ts3.4",
-        clean: "rimraf ./dist-* && rimraf *.tsbuildinfo",
-        "extract:docs": "api-extractor run --local",
-        "generate:client": "node ../../scripts/generate-clients/single-service --solo s3",
-        test: "yarn g:vitest run",
-        "test:browser": "node ./test/browser-build/esbuild && yarn g:vitest run -c vitest.config.browser.mts",
-        "test:browser:watch": "node ./test/browser-build/esbuild && yarn g:vitest watch -c vitest.config.browser.mts",
-        "test:e2e": "yarn g:vitest run -c vitest.config.e2e.mts && yarn test:browser",
-        "test:e2e:watch": "yarn g:vitest watch -c vitest.config.e2e.mts",
-        "test:index": "tsc --noEmit ./test/index-types.ts && node ./test/index-objects.spec.mjs",
-        "test:integration": "yarn g:vitest run -c vitest.config.integ.mts",
-        "test:integration:watch": "yarn g:vitest watch -c vitest.config.integ.mts",
-        "test:watch": "yarn g:vitest watch"
-      },
-      main: "./dist-cjs/index.js",
-      types: "./dist-types/index.d.ts",
-      module: "./dist-es/index.js",
-      sideEffects: false,
-      dependencies: {
-        "@aws-crypto/sha1-browser": "5.2.0",
-        "@aws-crypto/sha256-browser": "5.2.0",
-        "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.947.0",
-        "@aws-sdk/credential-provider-node": "3.948.0",
-        "@aws-sdk/middleware-bucket-endpoint": "3.936.0",
-        "@aws-sdk/middleware-expect-continue": "3.936.0",
-        "@aws-sdk/middleware-flexible-checksums": "3.947.0",
-        "@aws-sdk/middleware-host-header": "3.936.0",
-        "@aws-sdk/middleware-location-constraint": "3.936.0",
-        "@aws-sdk/middleware-logger": "3.936.0",
-        "@aws-sdk/middleware-recursion-detection": "3.948.0",
-        "@aws-sdk/middleware-sdk-s3": "3.947.0",
-        "@aws-sdk/middleware-ssec": "3.936.0",
-        "@aws-sdk/middleware-user-agent": "3.947.0",
-        "@aws-sdk/region-config-resolver": "3.936.0",
-        "@aws-sdk/signature-v4-multi-region": "3.947.0",
-        "@aws-sdk/types": "3.936.0",
-        "@aws-sdk/util-endpoints": "3.936.0",
-        "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.947.0",
-        "@smithy/config-resolver": "^4.4.3",
-        "@smithy/core": "^3.18.7",
-        "@smithy/eventstream-serde-browser": "^4.2.5",
-        "@smithy/eventstream-serde-config-resolver": "^4.3.5",
-        "@smithy/eventstream-serde-node": "^4.2.5",
-        "@smithy/fetch-http-handler": "^5.3.6",
-        "@smithy/hash-blob-browser": "^4.2.6",
-        "@smithy/hash-node": "^4.2.5",
-        "@smithy/hash-stream-node": "^4.2.5",
-        "@smithy/invalid-dependency": "^4.2.5",
-        "@smithy/md5-js": "^4.2.5",
-        "@smithy/middleware-content-length": "^4.2.5",
-        "@smithy/middleware-endpoint": "^4.3.14",
-        "@smithy/middleware-retry": "^4.4.14",
-        "@smithy/middleware-serde": "^4.2.6",
-        "@smithy/middleware-stack": "^4.2.5",
-        "@smithy/node-config-provider": "^4.3.5",
-        "@smithy/node-http-handler": "^4.4.5",
-        "@smithy/protocol-http": "^5.3.5",
-        "@smithy/smithy-client": "^4.9.10",
-        "@smithy/types": "^4.9.0",
-        "@smithy/url-parser": "^4.2.5",
-        "@smithy/util-base64": "^4.3.0",
-        "@smithy/util-body-length-browser": "^4.2.0",
-        "@smithy/util-body-length-node": "^4.2.1",
-        "@smithy/util-defaults-mode-browser": "^4.3.13",
-        "@smithy/util-defaults-mode-node": "^4.2.16",
-        "@smithy/util-endpoints": "^3.2.5",
-        "@smithy/util-middleware": "^4.2.5",
-        "@smithy/util-retry": "^4.2.5",
-        "@smithy/util-stream": "^4.5.6",
-        "@smithy/util-utf8": "^4.2.0",
-        "@smithy/util-waiter": "^4.2.5",
-        tslib: "^2.6.2"
-      },
-      devDependencies: {
-        "@aws-sdk/signature-v4-crt": "3.947.0",
-        "@tsconfig/node18": "18.2.4",
-        "@types/node": "^18.19.69",
-        concurrently: "7.0.0",
-        "downlevel-dts": "0.10.1",
-        rimraf: "3.0.2",
-        typescript: "~5.8.3"
-      },
-      engines: {
-        node: ">=18.0.0"
-      },
-      typesVersions: {
-        "<4.0": {
-          "dist-types/*": [
-            "dist-types/ts3.4/*"
-          ]
-        }
-      },
-      files: [
-        "dist-*/**"
-      ],
-      author: {
-        name: "AWS SDK for JavaScript Team",
-        url: "https://aws.amazon.com/javascript/"
-      },
-      license: "Apache-2.0",
-      browser: {
-        "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.browser"
-      },
-      "react-native": {
-        "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.native"
-      },
-      homepage: "https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-s3",
-      repository: {
-        type: "git",
-        url: "https://github.com/aws/aws-sdk-js-v3.git",
-        directory: "clients/client-s3"
-      }
-    };
-  }
-});
-
 // ../../../node_modules/@aws-sdk/credential-provider-env/dist-cjs/index.js
 var require_dist_cjs47 = __commonJS({
   "../../../node_modules/@aws-sdk/credential-provider-env/dist-cjs/index.js"(exports2) {
@@ -51042,140 +50624,6 @@ var init_EndpointParameters = __esm({
   }
 });
 
-// ../../../node_modules/@aws-sdk/nested-clients/package.json
-var package_default;
-var init_package = __esm({
-  "../../../node_modules/@aws-sdk/nested-clients/package.json"() {
-    package_default = {
-      name: "@aws-sdk/nested-clients",
-      version: "3.948.0",
-      description: "Nested clients for AWS SDK packages.",
-      main: "./dist-cjs/index.js",
-      module: "./dist-es/index.js",
-      types: "./dist-types/index.d.ts",
-      scripts: {
-        build: "yarn lint && concurrently 'yarn:build:cjs' 'yarn:build:es' 'yarn:build:types'",
-        "build:cjs": "node ../../scripts/compilation/inline nested-clients",
-        "build:es": "tsc -p tsconfig.es.json",
-        "build:include:deps": "lerna run --scope $npm_package_name --include-dependencies build",
-        "build:types": "tsc -p tsconfig.types.json",
-        "build:types:downlevel": "downlevel-dts dist-types dist-types/ts3.4",
-        clean: "rimraf ./dist-* && rimraf *.tsbuildinfo",
-        lint: "node ../../scripts/validation/submodules-linter.js --pkg nested-clients",
-        test: "yarn g:vitest run",
-        "test:watch": "yarn g:vitest watch"
-      },
-      engines: {
-        node: ">=18.0.0"
-      },
-      sideEffects: false,
-      author: {
-        name: "AWS SDK for JavaScript Team",
-        url: "https://aws.amazon.com/javascript/"
-      },
-      license: "Apache-2.0",
-      dependencies: {
-        "@aws-crypto/sha256-browser": "5.2.0",
-        "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.947.0",
-        "@aws-sdk/middleware-host-header": "3.936.0",
-        "@aws-sdk/middleware-logger": "3.936.0",
-        "@aws-sdk/middleware-recursion-detection": "3.948.0",
-        "@aws-sdk/middleware-user-agent": "3.947.0",
-        "@aws-sdk/region-config-resolver": "3.936.0",
-        "@aws-sdk/types": "3.936.0",
-        "@aws-sdk/util-endpoints": "3.936.0",
-        "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.947.0",
-        "@smithy/config-resolver": "^4.4.3",
-        "@smithy/core": "^3.18.7",
-        "@smithy/fetch-http-handler": "^5.3.6",
-        "@smithy/hash-node": "^4.2.5",
-        "@smithy/invalid-dependency": "^4.2.5",
-        "@smithy/middleware-content-length": "^4.2.5",
-        "@smithy/middleware-endpoint": "^4.3.14",
-        "@smithy/middleware-retry": "^4.4.14",
-        "@smithy/middleware-serde": "^4.2.6",
-        "@smithy/middleware-stack": "^4.2.5",
-        "@smithy/node-config-provider": "^4.3.5",
-        "@smithy/node-http-handler": "^4.4.5",
-        "@smithy/protocol-http": "^5.3.5",
-        "@smithy/smithy-client": "^4.9.10",
-        "@smithy/types": "^4.9.0",
-        "@smithy/url-parser": "^4.2.5",
-        "@smithy/util-base64": "^4.3.0",
-        "@smithy/util-body-length-browser": "^4.2.0",
-        "@smithy/util-body-length-node": "^4.2.1",
-        "@smithy/util-defaults-mode-browser": "^4.3.13",
-        "@smithy/util-defaults-mode-node": "^4.2.16",
-        "@smithy/util-endpoints": "^3.2.5",
-        "@smithy/util-middleware": "^4.2.5",
-        "@smithy/util-retry": "^4.2.5",
-        "@smithy/util-utf8": "^4.2.0",
-        tslib: "^2.6.2"
-      },
-      devDependencies: {
-        concurrently: "7.0.0",
-        "downlevel-dts": "0.10.1",
-        rimraf: "3.0.2",
-        typescript: "~5.8.3"
-      },
-      typesVersions: {
-        "<4.0": {
-          "dist-types/*": [
-            "dist-types/ts3.4/*"
-          ]
-        }
-      },
-      files: [
-        "./signin.d.ts",
-        "./signin.js",
-        "./sso-oidc.d.ts",
-        "./sso-oidc.js",
-        "./sts.d.ts",
-        "./sts.js",
-        "dist-*/**"
-      ],
-      browser: {
-        "./dist-es/submodules/signin/runtimeConfig": "./dist-es/submodules/signin/runtimeConfig.browser",
-        "./dist-es/submodules/sso-oidc/runtimeConfig": "./dist-es/submodules/sso-oidc/runtimeConfig.browser",
-        "./dist-es/submodules/sts/runtimeConfig": "./dist-es/submodules/sts/runtimeConfig.browser"
-      },
-      "react-native": {},
-      homepage: "https://github.com/aws/aws-sdk-js-v3/tree/main/packages/nested-clients",
-      repository: {
-        type: "git",
-        url: "https://github.com/aws/aws-sdk-js-v3.git",
-        directory: "packages/nested-clients"
-      },
-      exports: {
-        "./package.json": "./package.json",
-        "./sso-oidc": {
-          types: "./dist-types/submodules/sso-oidc/index.d.ts",
-          module: "./dist-es/submodules/sso-oidc/index.js",
-          node: "./dist-cjs/submodules/sso-oidc/index.js",
-          import: "./dist-es/submodules/sso-oidc/index.js",
-          require: "./dist-cjs/submodules/sso-oidc/index.js"
-        },
-        "./sts": {
-          types: "./dist-types/submodules/sts/index.d.ts",
-          module: "./dist-es/submodules/sts/index.js",
-          node: "./dist-cjs/submodules/sts/index.js",
-          import: "./dist-es/submodules/sts/index.js",
-          require: "./dist-cjs/submodules/sts/index.js"
-        },
-        "./signin": {
-          types: "./dist-types/submodules/signin/index.d.ts",
-          module: "./dist-es/submodules/signin/index.js",
-          node: "./dist-cjs/submodules/signin/index.js",
-          import: "./dist-es/submodules/signin/index.js",
-          require: "./dist-cjs/submodules/signin/index.js"
-        }
-      }
-    };
-  }
-});
-
 // ../../../node_modules/@aws-sdk/util-user-agent-node/dist-cjs/index.js
 var require_dist_cjs50 = __commonJS({
   "../../../node_modules/@aws-sdk/util-user-agent-node/dist-cjs/index.js"(exports2) {
@@ -51480,10 +50928,10 @@ var init_runtimeConfig_shared = __esm({
 });
 
 // ../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/runtimeConfig.js
-var import_util_user_agent_node, import_config_resolver, import_hash_node, import_middleware_retry, import_node_config_provider, import_node_http_handler, import_smithy_client9, import_util_body_length_node, import_util_defaults_mode_node, import_util_retry, getRuntimeConfig2;
+var import_package, import_util_user_agent_node, import_config_resolver, import_hash_node, import_middleware_retry, import_node_config_provider, import_node_http_handler, import_smithy_client9, import_util_body_length_node, import_util_defaults_mode_node, import_util_retry, getRuntimeConfig2;
 var init_runtimeConfig = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/runtimeConfig.js"() {
-    init_package();
+    import_package = __toESM(require("../../../package.json"));
     init_dist_es2();
     import_util_user_agent_node = __toESM(require_dist_cjs50());
     import_config_resolver = __toESM(require_dist_cjs37());
@@ -51513,7 +50961,7 @@ var init_runtimeConfig = __esm({
         defaultsMode,
         authSchemePreference: config?.authSchemePreference ?? (0, import_node_config_provider.loadConfig)(NODE_AUTH_SCHEME_PREFERENCE_OPTIONS, loaderConfig),
         bodyLengthChecker: config?.bodyLengthChecker ?? import_util_body_length_node.calculateBodyLength,
-        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: package_default.version }),
+        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: import_package.default.version }),
         maxAttempts: config?.maxAttempts ?? (0, import_node_config_provider.loadConfig)(import_middleware_retry.NODE_MAX_ATTEMPT_CONFIG_OPTIONS, config),
         region: config?.region ?? (0, import_node_config_provider.loadConfig)(import_config_resolver.NODE_REGION_CONFIG_OPTIONS, { ...import_config_resolver.NODE_REGION_CONFIG_FILE_OPTIONS, ...loaderConfig }),
         requestHandler: import_node_http_handler.NodeHttpHandler.create(config?.requestHandler ?? defaultConfigProvider),
@@ -52387,111 +51835,6 @@ var require_httpAuthSchemeProvider2 = __commonJS({
   }
 });
 
-// ../../../node_modules/@aws-sdk/client-sso/package.json
-var require_package4 = __commonJS({
-  "../../../node_modules/@aws-sdk/client-sso/package.json"(exports2, module2) {
-    module2.exports = {
-      name: "@aws-sdk/client-sso",
-      description: "AWS SDK for JavaScript Sso Client for Node.js, Browser and React Native",
-      version: "3.948.0",
-      scripts: {
-        build: "concurrently 'yarn:build:cjs' 'yarn:build:es' 'yarn:build:types'",
-        "build:cjs": "node ../../scripts/compilation/inline client-sso",
-        "build:es": "tsc -p tsconfig.es.json",
-        "build:include:deps": "lerna run --scope $npm_package_name --include-dependencies build",
-        "build:types": "tsc -p tsconfig.types.json",
-        "build:types:downlevel": "downlevel-dts dist-types dist-types/ts3.4",
-        clean: "rimraf ./dist-* && rimraf *.tsbuildinfo",
-        "extract:docs": "api-extractor run --local",
-        "generate:client": "node ../../scripts/generate-clients/single-service --solo sso",
-        "test:index": "tsc --noEmit ./test/index-types.ts && node ./test/index-objects.spec.mjs"
-      },
-      main: "./dist-cjs/index.js",
-      types: "./dist-types/index.d.ts",
-      module: "./dist-es/index.js",
-      sideEffects: false,
-      dependencies: {
-        "@aws-crypto/sha256-browser": "5.2.0",
-        "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.947.0",
-        "@aws-sdk/middleware-host-header": "3.936.0",
-        "@aws-sdk/middleware-logger": "3.936.0",
-        "@aws-sdk/middleware-recursion-detection": "3.948.0",
-        "@aws-sdk/middleware-user-agent": "3.947.0",
-        "@aws-sdk/region-config-resolver": "3.936.0",
-        "@aws-sdk/types": "3.936.0",
-        "@aws-sdk/util-endpoints": "3.936.0",
-        "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.947.0",
-        "@smithy/config-resolver": "^4.4.3",
-        "@smithy/core": "^3.18.7",
-        "@smithy/fetch-http-handler": "^5.3.6",
-        "@smithy/hash-node": "^4.2.5",
-        "@smithy/invalid-dependency": "^4.2.5",
-        "@smithy/middleware-content-length": "^4.2.5",
-        "@smithy/middleware-endpoint": "^4.3.14",
-        "@smithy/middleware-retry": "^4.4.14",
-        "@smithy/middleware-serde": "^4.2.6",
-        "@smithy/middleware-stack": "^4.2.5",
-        "@smithy/node-config-provider": "^4.3.5",
-        "@smithy/node-http-handler": "^4.4.5",
-        "@smithy/protocol-http": "^5.3.5",
-        "@smithy/smithy-client": "^4.9.10",
-        "@smithy/types": "^4.9.0",
-        "@smithy/url-parser": "^4.2.5",
-        "@smithy/util-base64": "^4.3.0",
-        "@smithy/util-body-length-browser": "^4.2.0",
-        "@smithy/util-body-length-node": "^4.2.1",
-        "@smithy/util-defaults-mode-browser": "^4.3.13",
-        "@smithy/util-defaults-mode-node": "^4.2.16",
-        "@smithy/util-endpoints": "^3.2.5",
-        "@smithy/util-middleware": "^4.2.5",
-        "@smithy/util-retry": "^4.2.5",
-        "@smithy/util-utf8": "^4.2.0",
-        tslib: "^2.6.2"
-      },
-      devDependencies: {
-        "@tsconfig/node18": "18.2.4",
-        "@types/node": "^18.19.69",
-        concurrently: "7.0.0",
-        "downlevel-dts": "0.10.1",
-        rimraf: "3.0.2",
-        typescript: "~5.8.3"
-      },
-      engines: {
-        node: ">=18.0.0"
-      },
-      typesVersions: {
-        "<4.0": {
-          "dist-types/*": [
-            "dist-types/ts3.4/*"
-          ]
-        }
-      },
-      files: [
-        "dist-*/**"
-      ],
-      author: {
-        name: "AWS SDK for JavaScript Team",
-        url: "https://aws.amazon.com/javascript/"
-      },
-      license: "Apache-2.0",
-      browser: {
-        "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.browser"
-      },
-      "react-native": {
-        "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.native"
-      },
-      homepage: "https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-sso",
-      repository: {
-        type: "git",
-        url: "https://github.com/aws/aws-sdk-js-v3.git",
-        directory: "clients/client-sso"
-      }
-    };
-  }
-});
-
 // ../../../node_modules/@aws-sdk/client-sso/dist-cjs/endpoint/ruleset.js
 var require_ruleset2 = __commonJS({
   "../../../node_modules/@aws-sdk/client-sso/dist-cjs/endpoint/ruleset.js"(exports2) {
@@ -52606,7 +51949,7 @@ var require_runtimeConfig = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getRuntimeConfig = void 0;
     var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
-    var package_json_1 = tslib_1.__importDefault(require_package4());
+    var package_json_1 = tslib_1.__importDefault(require("../package.json"));
     var core_1 = (init_dist_es2(), __toCommonJS(dist_es_exports2));
     var util_user_agent_node_1 = require_dist_cjs50();
     var config_resolver_1 = require_dist_cjs37();
@@ -53396,10 +52739,10 @@ var init_runtimeConfig_shared2 = __esm({
 });
 
 // ../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/runtimeConfig.js
-var import_util_user_agent_node2, import_config_resolver3, import_hash_node2, import_middleware_retry3, import_node_config_provider2, import_node_http_handler2, import_smithy_client16, import_util_body_length_node2, import_util_defaults_mode_node2, import_util_retry2, getRuntimeConfig4;
+var import_package2, import_util_user_agent_node2, import_config_resolver3, import_hash_node2, import_middleware_retry3, import_node_config_provider2, import_node_http_handler2, import_smithy_client16, import_util_body_length_node2, import_util_defaults_mode_node2, import_util_retry2, getRuntimeConfig4;
 var init_runtimeConfig2 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/runtimeConfig.js"() {
-    init_package();
+    import_package2 = __toESM(require("../../../package.json"));
     init_dist_es2();
     import_util_user_agent_node2 = __toESM(require_dist_cjs50());
     import_config_resolver3 = __toESM(require_dist_cjs37());
@@ -53429,7 +52772,7 @@ var init_runtimeConfig2 = __esm({
         defaultsMode,
         authSchemePreference: config?.authSchemePreference ?? (0, import_node_config_provider2.loadConfig)(NODE_AUTH_SCHEME_PREFERENCE_OPTIONS, loaderConfig),
         bodyLengthChecker: config?.bodyLengthChecker ?? import_util_body_length_node2.calculateBodyLength,
-        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node2.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: package_default.version }),
+        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node2.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: import_package2.default.version }),
         maxAttempts: config?.maxAttempts ?? (0, import_node_config_provider2.loadConfig)(import_middleware_retry3.NODE_MAX_ATTEMPT_CONFIG_OPTIONS, config),
         region: config?.region ?? (0, import_node_config_provider2.loadConfig)(import_config_resolver3.NODE_REGION_CONFIG_OPTIONS, { ...import_config_resolver3.NODE_REGION_CONFIG_FILE_OPTIONS, ...loaderConfig }),
         requestHandler: import_node_http_handler2.NodeHttpHandler.create(config?.requestHandler ?? defaultConfigProvider),
@@ -54319,10 +53662,10 @@ var init_runtimeConfig_shared3 = __esm({
 });
 
 // ../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/runtimeConfig.js
-var import_util_user_agent_node3, import_config_resolver5, import_hash_node3, import_middleware_retry5, import_node_config_provider3, import_node_http_handler3, import_smithy_client23, import_util_body_length_node3, import_util_defaults_mode_node3, import_util_retry3, getRuntimeConfig6;
+var import_package3, import_util_user_agent_node3, import_config_resolver5, import_hash_node3, import_middleware_retry5, import_node_config_provider3, import_node_http_handler3, import_smithy_client23, import_util_body_length_node3, import_util_defaults_mode_node3, import_util_retry3, getRuntimeConfig6;
 var init_runtimeConfig3 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/runtimeConfig.js"() {
-    init_package();
+    import_package3 = __toESM(require("../../../package.json"));
     init_dist_es2();
     import_util_user_agent_node3 = __toESM(require_dist_cjs50());
     import_config_resolver5 = __toESM(require_dist_cjs37());
@@ -54353,7 +53696,7 @@ var init_runtimeConfig3 = __esm({
         defaultsMode,
         authSchemePreference: config?.authSchemePreference ?? (0, import_node_config_provider3.loadConfig)(NODE_AUTH_SCHEME_PREFERENCE_OPTIONS, loaderConfig),
         bodyLengthChecker: config?.bodyLengthChecker ?? import_util_body_length_node3.calculateBodyLength,
-        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node3.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: package_default.version }),
+        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, import_util_user_agent_node3.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: import_package3.default.version }),
         httpAuthSchemes: config?.httpAuthSchemes ?? [
           {
             schemeId: "aws.auth#sigv4",
@@ -56601,7 +55944,7 @@ var require_runtimeConfig2 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getRuntimeConfig = void 0;
     var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
-    var package_json_1 = tslib_1.__importDefault(require_package3());
+    var package_json_1 = tslib_1.__importDefault(require("../package.json"));
     var core_1 = (init_dist_es2(), __toCommonJS(dist_es_exports2));
     var credential_provider_node_1 = require_dist_cjs62();
     var middleware_bucket_endpoint_1 = require_dist_cjs63();
@@ -64558,10 +63901,19 @@ init_logger();
 
 // migration-runner.ts
 var import_promises = __toESM(require("node:fs/promises"));
+var import_node_fs = __toESM(require("node:fs"));
 var import_node_path = __toESM(require("node:path"));
 init_logger();
-var import_package = __toESM(require_package());
 var MIGRATIONS_STATE_FILE = import_node_path.default.join(process.cwd(), "data", "settings", "migrations.json");
+function getQuilltapVersion() {
+  try {
+    const pkgPath = import_node_path.default.join(process.cwd(), "package.json");
+    const pkg = JSON.parse(import_node_fs.default.readFileSync(pkgPath, "utf-8"));
+    return pkg.version || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 function isMongoDBBackend() {
   const backend = process.env.DATA_BACKEND || "";
   return backend === "mongodb" || backend === "dual";
@@ -64589,7 +63941,7 @@ async function loadMigrationState() {
     return {
       completedMigrations: [],
       lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
-      quilltapVersion: import_package.default.version
+      quilltapVersion: getQuilltapVersion()
     };
   }
 }
@@ -64624,7 +63976,7 @@ async function recordCompletedMigration(state2, result) {
   const record = {
     id: result.id,
     completedAt: result.timestamp,
-    quilltapVersion: import_package.default.version,
+    quilltapVersion: getQuilltapVersion(),
     itemsAffected: result.itemsAffected,
     message: result.message
   };
@@ -64632,7 +63984,7 @@ async function recordCompletedMigration(state2, result) {
     ...state2,
     completedMigrations: [...state2.completedMigrations, record],
     lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
-    quilltapVersion: import_package.default.version
+    quilltapVersion: getQuilltapVersion()
   };
   await saveMigrationState(updatedState);
   return updatedState;
