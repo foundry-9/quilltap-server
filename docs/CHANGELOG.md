@@ -2,7 +2,12 @@
 
 ## Recent Changes
 
-### 2.3-dev
+### 2.4-dev
+
+- feat: Responsive navbar with dynamic collapse - menu items collapse into logo dropdown when space is limited
+- New development checkpoint
+
+### 2.3
 
 - feat: Add job-level controls to Tasks Queue - pause/resume, delete, and view buttons for each job with detail dialog
 - feat: Tasks Queue auto-start/stop - processor starts automatically when jobs are enqueued and stops when queue empties

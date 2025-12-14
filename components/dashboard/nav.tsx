@@ -16,6 +16,18 @@ import { SearchBar } from "@/components/search";
 import { NavThemeSelector } from "@/components/dashboard/nav-theme-selector";
 import { routeSupportsDebug } from "@/lib/navigation/route-flags";
 import { BrandLogo } from "@/components/ui/brand-logo";
+import { NavLogoMenu, type NavMenuItem } from "@/components/dashboard/nav-logo-menu";
+import { useNavbarCollapse } from "@/hooks/useNavbarCollapse";
+
+/** Menu items for the main navigation */
+const MENU_ITEMS: NavMenuItem[] = [
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/characters', label: 'Characters' },
+  { href: '/personas', label: 'Personas' },
+  { href: '/chats', label: 'Chats' },
+  { href: '/settings', label: 'Settings' },
+  { href: '/tools', label: 'Tools' },
+];
 
 interface DashboardNavProps {
   user: {
@@ -38,6 +50,9 @@ export default function DashboardNav({ user }: DashboardNavProps) {
   const quickHideRef = useRef<HTMLDivElement>(null);
   const hasAnyHidden = hiddenTagIds.size > 0;
   const singleQuickHideTag = quickHideTags.length === 1 ? quickHideTags[0] : null;
+
+  // Responsive navbar collapse detection
+  const { isCollapsed, containerRef, menuRef, rightRef } = useNavbarCollapse();
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -105,34 +120,35 @@ export default function DashboardNav({ user }: DashboardNavProps) {
 
   return (
     <nav className="qt-navbar nav-header">
-      <div className="qt-navbar-container">
+      <div className="qt-navbar-container" ref={containerRef}>
         <div className="qt-navbar-section">
-          <Link href="/dashboard" className="text-foreground">
-            <BrandLogo size="md" />
-          </Link>
-          <div className="hidden space-x-1 md:flex">
-            <Link href="/dashboard" className="qt-navbar-link">
-              Dashboard
-            </Link>
-            <Link href="/characters" className="qt-navbar-link">
-              Characters
-            </Link>
-            <Link href="/personas" className="qt-navbar-link">
-              Personas
-            </Link>
-            <Link href="/chats" className="qt-navbar-link">
-              Chats
-            </Link>
-            <Link href="/settings" className="qt-navbar-link">
-              Settings
-            </Link>
-            <Link href="/tools" className="qt-navbar-link">
-              Tools
-            </Link>
-          </div>
+          <NavLogoMenu isCollapsed={isCollapsed} menuItems={MENU_ITEMS} />
+          {!isCollapsed && (
+            <div className="flex space-x-1" ref={menuRef}>
+              {MENU_ITEMS.map((item) => (
+                <Link key={item.href} href={item.href} className="qt-navbar-link">
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          )}
+          {/* Hidden measurement div - used when collapsed to measure menu width */}
+          {isCollapsed && (
+            <div
+              ref={menuRef}
+              className="flex space-x-1 invisible absolute"
+              aria-hidden="true"
+            >
+              {MENU_ITEMS.map((item) => (
+                <span key={item.href} className="qt-navbar-link">
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="qt-navbar-section">
+        <div className="qt-navbar-section" ref={rightRef}>
             {/* Global search */}
             <SearchBar />
             {/* Theme selector (shown when enabled in settings) */}

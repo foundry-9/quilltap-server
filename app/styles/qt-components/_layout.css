@@ -133,6 +133,14 @@
     box-shadow: var(--qt-popover-shadow);
   }
 
+  /**
+   * Left-aligned dropdown variant (for logo menu)
+   */
+  .qt-navbar-dropdown-left {
+    @apply left-0;
+    right: auto;
+  }
+
   .qt-navbar-dropdown-section {
     @apply p-3 space-y-3;
   }
