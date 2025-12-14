@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.3.0-dev.29",
+  "version": "2.3.0-dev.30",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -16,7 +16,7 @@
   "scripts": {
     "dev": "next dev",
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
-    "build": "next build",
+    "build": "npm run build:plugins && next build",
     "build:plugins": "tsx scripts/build-plugins.ts",
     "start": "next start",
     "lint": "eslint .",
