@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 
 interface ToolPaletteProps {
@@ -10,10 +10,13 @@ interface ToolPaletteProps {
   onGenerateImageClick: () => void
   onSettingsClick: () => void
   onAddCharacterClick?: () => void
+  onDeleteChatMemoriesClick?: () => void
+  onReextractMemoriesClick?: () => void
   chatPhotoCount: number
   hasImageProfile: boolean
   showAddCharacter?: boolean // Show "Add Character" button for single-character chats
   chatId: string // Chat ID for export functionality
+  chatMemoryCount?: number // Number of memories associated with this chat
 }
 
 export default function ToolPalette({
@@ -23,10 +26,13 @@ export default function ToolPalette({
   onGenerateImageClick,
   onSettingsClick,
   onAddCharacterClick,
+  onDeleteChatMemoriesClick,
+  onReextractMemoriesClick,
   chatPhotoCount,
   hasImageProfile,
   showAddCharacter = false,
   chatId,
+  chatMemoryCount = 0,
 }: ToolPaletteProps) {
   const paletteRef = useRef<HTMLDivElement>(null)
 
@@ -95,18 +101,33 @@ export default function ToolPalette({
     onClose()
   }
 
+  const handleDeleteChatMemoriesClick = () => {
+    clientLogger.debug('[ToolPalette] Delete Chat Memories clicked', { chatId, chatMemoryCount })
+    onDeleteChatMemoriesClick?.()
+    onClose()
+  }
+
+  const handleReextractMemoriesClick = () => {
+    clientLogger.debug('[ToolPalette] Re-extract Memories clicked', { chatId })
+    onReextractMemoriesClick?.()
+    onClose()
+  }
+
   // Debug logging when palette opens
   useEffect(() => {
     if (isOpen) {
       clientLogger.debug('[ToolPalette] Opened', {
         showAddCharacter,
         hasAddCharacterCallback: !!onAddCharacterClick,
+        hasDeleteMemoriesCallback: !!onDeleteChatMemoriesClick,
+        hasReextractMemoriesCallback: !!onReextractMemoriesClick,
         chatPhotoCount,
         hasImageProfile,
         chatId,
+        chatMemoryCount,
       })
     }
-  }, [isOpen, showAddCharacter, onAddCharacterClick, chatPhotoCount, hasImageProfile, chatId])
+  }, [isOpen, showAddCharacter, onAddCharacterClick, onDeleteChatMemoriesClick, onReextractMemoriesClick, chatPhotoCount, hasImageProfile, chatId, chatMemoryCount])
 
   if (!isOpen) return null
 
@@ -120,7 +141,7 @@ export default function ToolPalette({
         <button
           type="button"
           onClick={handleGalleryClick}
-          className="w-full flex items-center gap-3 px-4 py-3 text-left text-foreground hover:bg-accent rounded-lg transition-colors"
+          className="qt-dropdown-item w-full gap-3 px-4 py-3 text-left text-foreground hover:bg-accent"
         >
           <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -137,7 +158,7 @@ export default function ToolPalette({
         <button
           type="button"
           onClick={handleGenerateImageClick}
-          className="w-full flex items-center gap-3 px-4 py-3 text-left text-foreground hover:bg-accent rounded-lg transition-colors"
+          className="qt-dropdown-item w-full gap-3 px-4 py-3 text-left text-foreground hover:bg-accent"
         >
           <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -154,7 +175,7 @@ export default function ToolPalette({
         <button
           type="button"
           onClick={handleAddCharacterClick}
-          className="w-full flex items-center gap-3 px-4 py-3 text-left text-foreground hover:bg-accent rounded-lg transition-colors"
+          className="qt-dropdown-item w-full gap-3 px-4 py-3 text-left text-foreground hover:bg-accent"
         >
           <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -170,7 +191,7 @@ export default function ToolPalette({
       <button
         type="button"
         onClick={handleSettingsClick}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left text-foreground hover:bg-accent rounded-lg transition-colors"
+        className="qt-dropdown-item w-full gap-3 px-4 py-3 text-left text-foreground hover:bg-accent"
       >
         <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -186,7 +207,7 @@ export default function ToolPalette({
       <button
         type="button"
         onClick={handleExportClick}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left text-foreground hover:bg-accent rounded-lg transition-colors"
+        className="qt-dropdown-item w-full gap-3 px-4 py-3 text-left text-foreground hover:bg-accent"
       >
         <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -196,6 +217,50 @@ export default function ToolPalette({
           <div className="text-xs text-muted-foreground">Download as JSONL</div>
         </div>
       </button>
+
+      {/* Memory Management Section - only shown when callbacks are provided */}
+      {(onDeleteChatMemoriesClick || onReextractMemoriesClick) && (
+        <>
+          {/* Divider */}
+          <div className="my-2 border-t border-border" />
+
+          {/* Re-extract Memories Button */}
+          {onReextractMemoriesClick && (
+            <button
+              type="button"
+              onClick={handleReextractMemoriesClick}
+              className="qt-dropdown-item w-full gap-3 px-4 py-3 text-left text-foreground hover:bg-accent"
+            >
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <div>
+                <div className="font-medium">Re-extract Memories</div>
+                <div className="text-xs text-muted-foreground">Queue memory jobs for chat</div>
+              </div>
+            </button>
+          )}
+
+          {/* Delete Chat Memories Button */}
+          {onDeleteChatMemoriesClick && (
+            <button
+              type="button"
+              onClick={handleDeleteChatMemoriesClick}
+              className="qt-dropdown-item w-full gap-3 px-4 py-3 text-left text-destructive hover:bg-destructive/10"
+            >
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <div>
+                <div className="font-medium">Delete Chat Memories</div>
+                <div className="text-xs text-muted-foreground">
+                  {chatMemoryCount > 0 ? `${chatMemoryCount} memories` : 'No memories'}
+                </div>
+              </div>
+            </button>
+          )}
+        </>
+      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from 'react';
 import { useDevConsoleOptional, DevConsoleTab } from '@/components/providers/dev-console-provider';
 import ServerLogsTab from './ServerLogsTab';
 import BrowserConsoleTab from './BrowserConsoleTab';
@@ -23,11 +24,25 @@ interface DevConsolePanelProps {
 export default function DevConsolePanel({ layout }: DevConsolePanelProps) {
   const devConsole = useDevConsoleOptional();
 
+  // Extract values with defaults for hook dependencies
+  const activeTab = devConsole?.activeTab ?? 'server';
+  const setActiveTab = devConsole?.setActiveTab;
+  const chatDebugAvailable = devConsole?.chatDebugAvailable ?? false;
+
+  // If current tab is unavailable, switch to a valid one
+  // This hook MUST be called before any early returns
+  useEffect(() => {
+    if (setActiveTab && activeTab === 'chat-debug' && !chatDebugAvailable) {
+      setActiveTab('server');
+    }
+  }, [activeTab, chatDebugAvailable, setActiveTab]);
+
   if (!devConsole) {
     return null;
   }
 
-  const { activeTab, setActiveTab, closePanel, chatDebugAvailable, serverLogs, consoleLogs } = devConsole;
+  // Re-extract setActiveTab with proper type (we know devConsole exists here)
+  const { setActiveTab: handleSetActiveTab, closePanel, serverLogs, consoleLogs } = devConsole;
 
   const tabs: TabConfig[] = [
     {
@@ -62,11 +77,6 @@ export default function DevConsolePanel({ layout }: DevConsolePanelProps) {
     },
   ];
 
-  // If current tab is unavailable, switch to a valid one
-  if (activeTab === 'chat-debug' && !chatDebugAvailable) {
-    setActiveTab('server');
-  }
-
   const renderTabContent = () => {
     switch (activeTab) {
       case 'server':
@@ -92,7 +102,7 @@ export default function DevConsolePanel({ layout }: DevConsolePanelProps) {
       {tabs.filter(t => t.available).map((tab) => (
         <button
           key={tab.id}
-          onClick={() => setActiveTab(tab.id)}
+          onClick={() => handleSetActiveTab(tab.id)}
           className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
             activeTab === tab.id
               ? 'bg-background text-foreground border-t border-l border-r border-border -mb-px rounded-t'

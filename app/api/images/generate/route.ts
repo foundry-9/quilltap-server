@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
         const ext = mimeTypeParts[1] === 'jpeg' ? 'jpg' : mimeTypeParts[1] || 'png'
 
         // Generate unique filename and hash
-        const sha256 = createHash('sha256').update(imageBuffer).digest('hex')
+        const sha256 = createHash('sha256').update(new Uint8Array(imageBuffer)).digest('hex')
         const shortHash = sha256.substring(0, 8)
         const filename = `generated_${Date.now()}_${index}_${shortHash}.${ext}`
 

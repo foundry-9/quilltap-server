@@ -151,10 +151,16 @@ export async function POST(req: NextRequest) {
       ? await llmProvider.getModelsWithMetadata(decryptedKey)
       : []
 
-    // Build response with model info including any warnings
+    // Get static model info from the plugin (includes maxOutputTokens, contextWindow)
+    const plugin = providerRegistry.getProvider(provider)
+    const staticModelInfo = plugin?.getModelInfo?.() || []
+
+    // Build response with model info including any warnings and token limits
     const modelsWithInfo = models.map(modelId => {
       const metadata = modelMetadata.find(m => m.id === modelId)
         || (llmProvider.getModelMetadata ? llmProvider.getModelMetadata(modelId) : undefined)
+      // Get static info (maxOutputTokens, contextWindow) from plugin
+      const staticInfo = staticModelInfo.find(m => m.id === modelId)
       return {
         id: modelId,
         displayName: metadata?.displayName,
@@ -162,6 +168,8 @@ export async function POST(req: NextRequest) {
         deprecated: metadata?.deprecated,
         experimental: metadata?.experimental,
         missingCapabilities: metadata?.missingCapabilities,
+        maxOutputTokens: staticInfo?.maxOutputTokens,
+        contextWindow: staticInfo?.contextWindow,
       }
     })
 

@@ -58,11 +58,11 @@ export function setupStdoutCapture(): void {
     }
   }
 
-  // Override stdout.write
+  // Override stdout.write - use type assertion to handle Node.js version differences
   process.stdout.write = function (
     chunk: string | Uint8Array,
-    encodingOrCallback?: BufferEncoding | ((err?: Error | null) => void),
-    callback?: (err?: Error | null) => void
+    encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
+    callback?: (err?: Error) => void
   ): boolean {
     writeToLog(chunk, 'stdout');
 
@@ -71,13 +71,13 @@ export function setupStdoutCapture(): void {
       return originalStdoutWrite(chunk, encodingOrCallback);
     }
     return originalStdoutWrite(chunk, encodingOrCallback, callback);
-  };
+  } as typeof process.stdout.write;
 
-  // Override stderr.write
+  // Override stderr.write - use type assertion to handle Node.js version differences
   process.stderr.write = function (
     chunk: string | Uint8Array,
-    encodingOrCallback?: BufferEncoding | ((err?: Error | null) => void),
-    callback?: (err?: Error | null) => void
+    encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
+    callback?: (err?: Error) => void
   ): boolean {
     writeToLog(chunk, 'stderr');
 
@@ -86,7 +86,7 @@ export function setupStdoutCapture(): void {
       return originalStderrWrite(chunk, encodingOrCallback);
     }
     return originalStderrWrite(chunk, encodingOrCallback, callback);
-  };
+  } as typeof process.stderr.write;
 }
 
 /**

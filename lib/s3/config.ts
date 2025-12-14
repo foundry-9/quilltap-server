@@ -93,28 +93,40 @@ function sanitizeEndpoint(endpoint?: string): string | undefined {
 
 /**
  * Validate required credentials
+ * Only requires explicit credentials when using a custom endpoint (MinIO/S3-compatible).
+ * For AWS S3 (no endpoint), credentials are optional - the SDK will use the default
+ * credential chain (IAM roles, environment variables, etc.)
+ *
  * @param accessKey - S3 access key
  * @param secretKey - S3 secret key
+ * @param endpoint - S3 endpoint (if using MinIO or S3-compatible service)
  * @param logger_inst - Logger instance
  * @returns Array of validation errors
  */
 function validateCredentials(
   accessKey: string | undefined,
   secretKey: string | undefined,
+  endpoint: string | undefined,
   logger_inst: ReturnType<typeof logger.child>
 ): string[] {
   const errors: string[] = [];
 
-  if (!accessKey) {
-    const errorMsg = 'S3_ACCESS_KEY is required';
-    logger_inst.warn(errorMsg);
-    errors.push(errorMsg);
-  }
+  // Only require explicit credentials when using a custom endpoint (MinIO)
+  // For AWS S3 (no endpoint), the SDK will use the default credential chain (IAM roles, etc.)
+  if (endpoint) {
+    if (!accessKey) {
+      const errorMsg = 'S3_ACCESS_KEY is required when using S3_ENDPOINT';
+      logger_inst.warn(errorMsg);
+      errors.push(errorMsg);
+    }
 
-  if (!secretKey) {
-    const errorMsg = 'S3_SECRET_KEY is required';
-    logger_inst.warn(errorMsg);
-    errors.push(errorMsg);
+    if (!secretKey) {
+      const errorMsg = 'S3_SECRET_KEY is required when using S3_ENDPOINT';
+      logger_inst.warn(errorMsg);
+      errors.push(errorMsg);
+    }
+  } else if (!accessKey && !secretKey) {
+    logger_inst.info('No explicit S3 credentials provided - using AWS SDK default credential chain');
   }
 
   return errors;
@@ -196,7 +208,7 @@ export function validateS3Config(): S3Config {
 
   // Perform custom validation checks
   errors.push(
-    ...validateCredentials(accessKey, secretKey, logger_inst),
+    ...validateCredentials(accessKey, secretKey, endpoint, logger_inst),
     ...validateRegionEndpoint(mode, endpoint, region, logger_inst)
   );
 
@@ -323,31 +335,25 @@ export async function testS3Connection(): Promise<{
     };
   }
 
-  // Ensure credentials are available
-  if (!config.accessKey || !config.secretKey) {
-    const errorMsg = 'S3 credentials are not available';
-    logger_inst.error(errorMsg);
-    return {
-      success: false,
-      message: errorMsg,
-    };
-  }
-
   try {
     logger_inst.debug('Creating S3 client for connection test', {
       endpoint: config.endpoint,
       region: config.region,
       bucket: config.bucket,
       forcePathStyle: config.forcePathStyle,
+      hasExplicitCredentials: !!(config.accessKey && config.secretKey),
     });
 
-    // Create S3 client with configuration
+    // Create S3 client with configuration - use explicit credentials if provided,
+    // otherwise let the SDK use the default credential chain
     const client = new S3Client({
       region: config.region,
-      credentials: {
-        accessKeyId: config.accessKey,
-        secretAccessKey: config.secretKey,
-      },
+      ...(config.accessKey && config.secretKey && {
+        credentials: {
+          accessKeyId: config.accessKey,
+          secretAccessKey: config.secretKey,
+        },
+      }),
       ...(config.endpoint && {
         endpoint: config.endpoint,
         forcePathStyle: config.forcePathStyle,

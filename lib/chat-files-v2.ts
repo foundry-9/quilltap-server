@@ -92,7 +92,7 @@ export async function uploadChatFile(
 
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
-  const sha256 = createHash('sha256').update(buffer).digest('hex');
+  const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
 
   // Determine category based on MIME type
   const category: FileCategory = file.type.startsWith('image/') ? 'IMAGE' : 'ATTACHMENT';

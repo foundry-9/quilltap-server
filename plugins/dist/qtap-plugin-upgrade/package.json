@@ -1,12 +1,12 @@
 {
   "name": "qtap-plugin-upgrade",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "Quilltap upgrade and migration manager plugin",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "build": "node esbuild.config.mjs",
+    "clean": "rm -f index.js"
   },
   "keywords": [
     "quilltap",
@@ -20,7 +20,10 @@
     "url": "https://foundry-9.com"
   },
   "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
   "peerDependencies": {
-    "zod": "^3.22.0"
+    "zod": ">=3.0.0"
   }
 }

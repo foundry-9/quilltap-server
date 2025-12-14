@@ -247,7 +247,7 @@ export async function createBackup(userId: string): Promise<{
     archive.finalize();
   });
 
-  const zipBuffer = Buffer.concat(chunks);
+  const zipBuffer = Buffer.concat(chunks.map(c => new Uint8Array(c)));
 
   moduleLogger.info('Backup creation completed', {
     userId,

@@ -13,6 +13,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { importSTChat } from '@/lib/sillytavern/chat'
 import { logger } from '@/lib/logger'
 import { generateContextSummaryAsync } from '@/lib/chat/context-summary'
+import { enqueueMemoryExtractionBatch, ensureProcessorRunning, type MessagePair } from '@/lib/background-jobs'
 import type { ChatParticipantBase, FileEntry, Character, Persona } from '@/lib/schemas/types'
 import type { SpeakerMapping } from '@/lib/sillytavern/multi-char-parser'
 
@@ -93,12 +94,13 @@ async function handleMultiCharacterImport(
     mappings: SpeakerMapping[]
     defaultConnectionProfileId: string
     triggerTitleGeneration?: boolean
+    createMemories?: boolean
     title?: string
   },
   userId: string,
   repos: ReturnType<typeof getRepositories>
 ) {
-  const { chatData, mappings, defaultConnectionProfileId, triggerTitleGeneration, title } = body
+  const { chatData, mappings, defaultConnectionProfileId, triggerTitleGeneration, createMemories, title } = body
 
   if (!chatData || !mappings || mappings.length === 0) {
     return NextResponse.json(
@@ -419,6 +421,62 @@ async function handleMultiCharacterImport(
     }
   }
 
+  // Queue memory extraction jobs if requested
+  let memoryJobCount = 0
+  if (createMemories) {
+    const firstCharacterParticipant = participants.find(p => p.type === 'CHARACTER' && p.characterId)
+    if (firstCharacterParticipant?.characterId && firstCharacterParticipant.connectionProfileId) {
+      // Get character name
+      const character = await repos.characters.findById(firstCharacterParticipant.characterId)
+      if (character) {
+        // Build message pairs from imported messages
+        const allImportedMessages = await repos.chats.getMessages(chat.id)
+        const messageList = allImportedMessages.filter(
+          (m): m is typeof m & { type: 'message'; role: 'USER' | 'ASSISTANT' } =>
+            m.type === 'message' && (m.role === 'USER' || m.role === 'ASSISTANT')
+        )
+
+        // Pair user messages with their subsequent assistant responses
+        const messagePairs: MessagePair[] = []
+        for (let i = 0; i < messageList.length - 1; i++) {
+          const current = messageList[i]
+          const next = messageList[i + 1]
+
+          if (current.role === 'USER' && next.role === 'ASSISTANT') {
+            messagePairs.push({
+              userMessageId: current.id,
+              assistantMessageId: next.id,
+              userContent: current.content,
+              assistantContent: next.content,
+            })
+          }
+        }
+
+        if (messagePairs.length > 0) {
+          logger.info('[Import] Queueing memory extraction jobs', {
+            chatId: chat.id,
+            characterId: character.id,
+            pairCount: messagePairs.length,
+          })
+
+          const jobIds = await enqueueMemoryExtractionBatch(
+            userId,
+            chat.id,
+            character.id,
+            character.name,
+            firstCharacterParticipant.connectionProfileId,
+            messagePairs,
+            { priority: 0 } // Low priority for bulk imports
+          )
+          memoryJobCount = jobIds.length
+
+          // Start the processor if not already running
+          ensureProcessorRunning()
+        }
+      }
+    }
+  }
+
   // Get complete chat data for response
   const allMessages = await repos.chats.getMessages(chat.id)
   const messageEvents = allMessages.filter(m => m.type === 'message')
@@ -495,6 +553,8 @@ async function handleMultiCharacterImport(
     // Include created entities for memory creation UI
     createdEntities,
     triggerTitleGeneration: triggerTitleGeneration || false,
+    // Include memory job count if memories were queued
+    memoryJobCount: memoryJobCount > 0 ? memoryJobCount : undefined,
   }
 
   return NextResponse.json(completeChat, { status: 201 })

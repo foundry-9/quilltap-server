@@ -109,8 +109,10 @@ export async function parseSTCharacterPNG(
 ): Promise<STCharacterV2 | null> {
   try {
     // Look for PNG tEXt chunk with chara data
-    const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
-    if (!buffer.slice(0, 8).equals(pngSignature)) {
+    const pngSignature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
+    const bufferHeader = new Uint8Array(buffer.buffer, buffer.byteOffset, 8)
+    if (pngSignature.length !== bufferHeader.length ||
+        !pngSignature.every((b, i) => b === bufferHeader[i])) {
       throw new Error('Invalid PNG file')
     }
 
@@ -181,18 +183,18 @@ export async function createSTCharacterPNG(
   const nullByte = Buffer.from([0])
   const dataBuffer = Buffer.from(jsonData, 'utf8')
 
-  const chunkData = Buffer.concat([keywordBuffer, nullByte, dataBuffer])
+  const chunkData = Buffer.concat([new Uint8Array(keywordBuffer), new Uint8Array(nullByte), new Uint8Array(dataBuffer)])
   const chunkLength = Buffer.alloc(4)
   chunkLength.writeUInt32BE(chunkData.length)
 
   const chunkType = Buffer.from('tEXt', 'ascii')
 
   // Calculate CRC32 for chunk (type + data)
-  const crc = calculateCRC32(Buffer.concat([chunkType, chunkData]))
+  const crc = calculateCRC32(Buffer.concat([new Uint8Array(chunkType), new Uint8Array(chunkData)]))
   const crcBuffer = Buffer.alloc(4)
   crcBuffer.writeUInt32BE(crc)
 
-  const textChunk = Buffer.concat([chunkLength, chunkType, chunkData, crcBuffer])
+  const textChunk = Buffer.concat([new Uint8Array(chunkLength), new Uint8Array(chunkType), new Uint8Array(chunkData), new Uint8Array(crcBuffer)])
 
   // Insert chunk after PNG header and IHDR chunk
   // Find the IHDR chunk end
@@ -202,9 +204,9 @@ export async function createSTCharacterPNG(
 
   // Construct new PNG with tEXt chunk inserted
   const result = Buffer.concat([
-    avatarBuffer.slice(0, insertOffset),
-    textChunk,
-    avatarBuffer.slice(insertOffset),
+    new Uint8Array(avatarBuffer.slice(0, insertOffset)),
+    new Uint8Array(textChunk),
+    new Uint8Array(avatarBuffer.slice(insertOffset)),
   ])
 
   return result

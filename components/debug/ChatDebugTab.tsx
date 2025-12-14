@@ -1,24 +1,15 @@
 "use client";
 
-import { useEffect } from 'react';
 import { useDebugOptional } from '@/components/providers/debug-provider';
 import DebugPanel from './DebugPanel';
 
 /**
  * Chat Debug Tab - wraps the existing DebugPanel component
  * Shows API traffic for LLM calls when in a chat conversation
- * Automatically enables debug mode when this tab is active
+ * Debug mode is automatically enabled when DevConsole is open (handled by DebugModeSync)
  */
 export default function ChatDebugTab() {
   const debug = useDebugOptional();
-
-  // Automatically enable debug mode when this tab is rendered
-  // This ensures API traffic is captured for display
-  useEffect(() => {
-    if (debug && !debug.isDebugMode) {
-      debug.toggleDebugMode();
-    }
-  }, [debug]);
 
   if (!debug) {
     return (

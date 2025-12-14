@@ -16,6 +16,9 @@ const config: Config = {
     '^@/(.*)$': '<rootDir>/$1',
     '^openid-client$': '<rootDir>/__mocks__/openid-client.ts',
     '^@openrouter/sdk$': '<rootDir>/__mocks__/@openrouter/sdk.ts',
+    '^openai$': '<rootDir>/__mocks__/openai.ts',
+    '^@anthropic-ai/sdk$': '<rootDir>/__mocks__/@anthropic-ai/sdk.ts',
+    '^@google/generative-ai$': '<rootDir>/__mocks__/@google/generative-ai.ts',
   },
   transformIgnorePatterns: [
     'node_modules/(?!(@openrouter/sdk)/)',

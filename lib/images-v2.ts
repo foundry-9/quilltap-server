@@ -107,7 +107,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   } = params;
 
   const repos = getRepositories();
-  const sha256 = createHash('sha256').update(buffer).digest('hex');
+  const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
 
   // Check for duplicate by hash
   const existingFiles = await repos.files.findBySha256(sha256);
@@ -385,5 +385,5 @@ export async function readImageBuffer(fileId: string): Promise<Buffer> {
  * Calculate SHA256 hash of buffer
  */
 export function calculateSha256(buffer: Buffer): string {
-  return createHash('sha256').update(buffer).digest('hex');
+  return createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
 }

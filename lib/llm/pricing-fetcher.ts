@@ -6,7 +6,6 @@
  * and pricing information, caching the results for cost-aware model selection.
  */
 
-import { OpenRouter } from '@openrouter/sdk'
 import { Provider, ConnectionProfile } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
@@ -38,9 +37,13 @@ function getUniqueProviders(profiles: ConnectionProfile[]): Provider[] {
 /**
  * Fetch pricing from OpenRouter API
  * OpenRouter is the only provider that exposes pricing via API
+ * Uses dynamic import to avoid requiring @openrouter/sdk at the top level
  */
 async function fetchOpenRouterPricing(apiKey: string): Promise<ModelPricing[]> {
   try {
+    // Dynamic import to make @openrouter/sdk optional
+    const { OpenRouter } = await import('@openrouter/sdk')
+
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
@@ -65,10 +68,10 @@ async function fetchOpenRouterPricing(apiKey: string): Promise<ModelPricing[]> {
         name: model.name,
         promptCostPer1M,
         completionCostPer1M,
-        contextLength: model.contextLength,
+        contextLength: model.contextLength ?? null,
         supportsVision: model.architecture?.modality?.includes('image') || false,
         supportsTools: model.supportedParameters?.some(
-          p => p === 'tools' || p === 'tool_choice'
+          (p: string) => p === 'tools' || p === 'tool_choice'
         ) || false,
         fetchedAt: new Date().toISOString(),
       })
@@ -76,7 +79,12 @@ async function fetchOpenRouterPricing(apiKey: string): Promise<ModelPricing[]> {
 
     return sortByCost(models)
   } catch (error) {
-    logger.error('Failed to fetch OpenRouter pricing', { context: 'fetchOpenRouterPricing' }, error instanceof Error ? error : undefined)
+    // Log appropriately - SDK might not be installed
+    if (error instanceof Error && error.message.includes('Cannot find module')) {
+      logger.warn('OpenRouter SDK not installed, skipping pricing fetch', { context: 'fetchOpenRouterPricing' })
+    } else {
+      logger.error('Failed to fetch OpenRouter pricing', { context: 'fetchOpenRouterPricing' }, error instanceof Error ? error : undefined)
+    }
     return []
   }
 }

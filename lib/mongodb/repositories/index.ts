@@ -22,6 +22,8 @@ export { MongoImageProfilesRepository } from './image-profiles.repository';
 export { EmbeddingProfilesRepository } from './embedding-profiles.repository';
 export { MemoriesRepository } from './memories.repository';
 export { FilesRepository } from './files.repository';
+export { BackgroundJobsRepository } from './background-jobs.repository';
+export { RoleplayTemplatesRepository } from './roleplay-templates.repository';
 
 // Import all repository classes
 import { MongoBaseRepository } from './base.repository';
@@ -35,6 +37,8 @@ import { MongoImageProfilesRepository } from './image-profiles.repository';
 import { EmbeddingProfilesRepository } from './embedding-profiles.repository';
 import { MemoriesRepository } from './memories.repository';
 import { FilesRepository } from './files.repository';
+import { BackgroundJobsRepository } from './background-jobs.repository';
+import { RoleplayTemplatesRepository } from './roleplay-templates.repository';
 
 /**
  * Container interface for all repository instances.
@@ -52,6 +56,8 @@ export interface RepositoryContainer {
   embeddingProfiles: EmbeddingProfilesRepository;
   memories: MemoriesRepository;
   files: FilesRepository; // For direct file access
+  backgroundJobs: BackgroundJobsRepository;
+  roleplayTemplates: RoleplayTemplatesRepository;
 }
 
 /**
@@ -81,6 +87,8 @@ export function createRepositories(): RepositoryContainer {
       embeddingProfiles: new EmbeddingProfilesRepository(),
       memories: new MemoriesRepository(),
       files: new FilesRepository(),
+      backgroundJobs: new BackgroundJobsRepository(),
+      roleplayTemplates: new RoleplayTemplatesRepository(),
     };
 
     logger.debug('Repository container created successfully', {

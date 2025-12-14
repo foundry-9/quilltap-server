@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -34,8 +34,13 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Build plugins first (transpile TypeScript to JavaScript)
+# SKIP_ENV_VALIDATION=true skips runtime env var validation during build
+RUN SKIP_ENV_VALIDATION=true npm run build:plugins
+
 # Build Next.js
-RUN npm run build
+# SKIP_ENV_VALIDATION=true skips runtime env var validation during build
+RUN SKIP_ENV_VALIDATION=true npm run build
 
 # Production stage
 FROM base AS production
@@ -52,11 +57,14 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Copy plugins (required for LLM providers, auth, themes, etc.)
+COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
+
 USER nextjs
 
 EXPOSE 3000
 
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"]

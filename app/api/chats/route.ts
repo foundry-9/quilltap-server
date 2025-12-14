@@ -135,6 +135,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
+    // Parse query parameters
+    const { searchParams } = new URL(req.url)
+    const excludeTagIdsParam = searchParams.get('excludeTagIds')
+    const limitParam = searchParams.get('limit')
+    const excludeTagIds = excludeTagIdsParam ? excludeTagIdsParam.split(',').filter(Boolean) : []
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined
+
+    logger.debug('Fetching chats', {
+      context: 'GET /api/chats',
+      userId: user.id,
+      excludeTagIds: excludeTagIds.length > 0 ? excludeTagIds : undefined,
+      limit,
+    })
+
     const chatMetadata = await repos.chats.findByUserId(user.id)
 
     // Sort by updatedAt descending
@@ -159,6 +173,17 @@ export async function GET(req: NextRequest) {
         // Get message count
         const messageCount = await repos.chats.getMessageCount(chat.id)
 
+        // Collect all tag IDs from chat, characters, and personas for filtering
+        const allTagIds: string[] = [...chat.tags]
+        for (const participant of participants) {
+          if (participant.character?.tags) {
+            allTagIds.push(...participant.character.tags)
+          }
+          if (participant.persona?.tags) {
+            allTagIds.push(...participant.persona.tags)
+          }
+        }
+
         return {
           id: chat.id,
           title: chat.title,
@@ -168,11 +193,36 @@ export async function GET(req: NextRequest) {
           participants,
           tags: tagData.filter(Boolean),
           _count: { messages: messageCount },
+          _allTagIds: allTagIds,
         }
       })
     )
 
-    return NextResponse.json({ chats })
+    // Filter out chats that have any excluded tags
+    let filteredChats = chats
+    if (excludeTagIds.length > 0) {
+      const excludeSet = new Set(excludeTagIds)
+      filteredChats = chats.filter(chat => {
+        const hasExcludedTag = chat._allTagIds.some(tagId => excludeSet.has(tagId))
+        return !hasExcludedTag
+      })
+      logger.debug('Filtered chats by excluded tags', {
+        context: 'GET /api/chats',
+        originalCount: chats.length,
+        filteredCount: filteredChats.length,
+        excludedCount: chats.length - filteredChats.length,
+      })
+    }
+
+    // Apply limit if specified
+    if (limit && limit > 0) {
+      filteredChats = filteredChats.slice(0, limit)
+    }
+
+    // Remove internal _allTagIds field before returning
+    const result = filteredChats.map(({ _allTagIds, ...chat }) => chat)
+
+    return NextResponse.json({ chats: result })
   } catch (error) {
     logger.error('Error fetching chats', { context: 'GET /api/chats' }, error instanceof Error ? error : undefined)
     return NextResponse.json({ error: 'Failed to fetch chats' }, { status: 500 })
@@ -466,6 +516,16 @@ export async function POST(req: NextRequest) {
       validatedData.scenario
     )
 
+    // Get user's default roleplay template to inherit for new chat
+    const chatSettings = await repos.users.getChatSettings(user.id)
+    const defaultRoleplayTemplateId = chatSettings?.defaultRoleplayTemplateId || null
+
+    logger.debug('Creating chat with roleplay template', {
+      context: 'POST /api/chats',
+      roleplayTemplateId: defaultRoleplayTemplateId,
+      inheritedFrom: 'user_default',
+    })
+
     const now = new Date().toISOString()
     // Use input type here - the schema validation will apply defaults
     const participantsWithTimestamps: ChatParticipantBaseInput[] = buildResult.participants.map(p => ({
@@ -481,6 +541,7 @@ export async function POST(req: NextRequest) {
       title: validatedData.title || `Chat with ${context.character.name}`,
       contextSummary: validatedData.scenario || null,
       tags: Array.from(buildResult.tags),
+      roleplayTemplateId: defaultRoleplayTemplateId,
       messageCount: 0,
       lastMessageAt: null,
       lastRenameCheckInterchange: 0,

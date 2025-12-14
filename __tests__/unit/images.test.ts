@@ -127,7 +127,7 @@ describe('Image Utilities', () => {
 
       expect(mockWriteFile).toHaveBeenCalledWith(
         expect.stringContaining(join('public', 'uploads', 'images', userId)),
-        expect.any(Buffer)
+        expect.any(Uint8Array)
       )
     })
 

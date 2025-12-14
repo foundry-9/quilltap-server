@@ -3,33 +3,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useDevConsole, ConsoleLogEntry } from '@/components/providers/dev-console-provider';
 
-// Log level colors
-const levelColors: Record<ConsoleLogEntry['level'], { bg: string; text: string; border: string }> = {
-  error: {
-    bg: 'bg-red-50/30',
-    text: 'text-red-700',
-    border: 'border-l-red-500',
-  },
-  warn: {
-    bg: 'bg-yellow-50/30',
-    text: 'text-yellow-700',
-    border: 'border-l-yellow-500',
-  },
-  info: {
-    bg: 'bg-blue-50/30',
-    text: 'text-blue-700',
-    border: 'border-l-blue-500',
-  },
-  log: {
-    bg: 'bg-muted/30',
-    text: 'text-muted-foreground',
-    border: 'border-l-muted-foreground',
-  },
-  debug: {
-    bg: 'bg-purple-50/30',
-    text: 'text-purple-700',
-    border: 'border-l-purple-400',
-  },
+// Map console levels to qt-devconsole CSS classes
+const levelEntryClasses: Record<ConsoleLogEntry['level'], string> = {
+  error: 'qt-log-entry-error',
+  warn: 'qt-log-entry-warn',
+  info: 'qt-log-entry-info',
+  log: 'qt-log-entry-log',
+  debug: 'qt-log-entry-debug',
+};
+
+const levelLabelClasses: Record<ConsoleLogEntry['level'], string> = {
+  error: 'qt-log-level-error',
+  warn: 'qt-log-level-warn',
+  info: 'qt-log-level-info',
+  log: 'qt-log-level-log',
+  debug: 'qt-log-level-debug',
 };
 
 function formatTimestamp(date: Date): string {
@@ -61,53 +49,54 @@ function isObjectArg(arg: unknown): boolean {
 }
 
 function ConsoleEntry({ entry }: { entry: ConsoleLogEntry }) {
-  const colors = levelColors[entry.level];
+  const entryClass = levelEntryClasses[entry.level];
+  const labelClass = levelLabelClasses[entry.level];
 
   // Check if any arg is an object (for expandable view)
   const hasObjectArgs = entry.args.some(isObjectArg);
 
   return (
-    <div className={`border-l-4 ${colors.border} ${colors.bg} px-3 py-2 border-b border-border`}>
-      <div className="flex items-start gap-2">
+    <div className={entryClass}>
+      <div className="qt-log-entry-row">
         {/* Timestamp */}
-        <span className="text-xs font-mono text-muted-foreground whitespace-nowrap flex-shrink-0">
+        <span className="qt-log-timestamp">
           {formatTimestamp(entry.timestamp)}
         </span>
 
         {/* Level badge */}
-        <span className={`text-xs font-semibold uppercase ${colors.text} flex-shrink-0 w-12`}>
+        <span className={labelClass}>
           {entry.level}
         </span>
 
         {/* Arguments */}
-        <div className="flex-1 min-w-0">
+        <div className="qt-log-message">
           {hasObjectArgs ? (
             <div className="space-y-1">
               {entry.args.map((arg, idx) => {
                 if (isObjectArg(arg)) {
                   return (
-                    <details key={idx} className="group">
-                      <summary className="text-sm text-foreground cursor-pointer hover:text-foreground">
+                    <details key={idx} className="qt-log-context">
+                      <summary>
                         {Array.isArray(arg)
                           ? `Array(${(arg as unknown[]).length})`
                           : `Object {${Object.keys(arg as object).slice(0, 3).join(', ')}${Object.keys(arg as object).length > 3 ? '...' : ''}}`
                         }
                       </summary>
-                      <pre className="mt-1 text-xs font-mono bg-muted p-2 rounded overflow-x-auto whitespace-pre-wrap">
+                      <pre className="whitespace-pre-wrap">
                         {formatArg(arg)}
                       </pre>
                     </details>
                   );
                 }
                 return (
-                  <span key={idx} className="text-sm text-foreground mr-2">
+                  <span key={idx} className="qt-log-message-text mr-2">
                     {formatArg(arg)}
                   </span>
                 );
               })}
             </div>
           ) : (
-            <span className="text-sm text-foreground whitespace-pre-wrap break-words">
+            <span className="qt-log-message-text whitespace-pre-wrap break-words">
               {entry.args.map(formatArg).join(' ')}
             </span>
           )}
@@ -185,11 +174,11 @@ export default function BrowserConsoleTab() {
   }, {} as Record<string, number>);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="qt-devconsole">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-background border-b border-border">
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
+      <div className="qt-devconsole-header">
+        <div className="qt-devconsole-status">
+          <span className="qt-devconsole-status-text">
             {filteredLogs.length}{filteredLogs.length !== consoleLogs.length ? `/${consoleLogs.length}` : ''} entries
           </span>
           {counts.error && (
@@ -212,12 +201,12 @@ export default function BrowserConsoleTab() {
       </div>
 
       {/* Logs container with scroll buttons */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="qt-devconsole-content">
         {/* Scroll to top button */}
         {!autoScroll && filteredLogs.length > 0 && (
           <button
             onClick={scrollToTop}
-            className="absolute top-2 right-2 z-10 qt-button qt-button-icon border border-border shadow-md"
+            className="qt-devconsole-scroll-btn qt-devconsole-scroll-top qt-button qt-button-icon border border-border shadow-md"
             title="Scroll to top"
           >
             <svg className="w-4 h-4 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -230,7 +219,7 @@ export default function BrowserConsoleTab() {
         {!autoScroll && filteredLogs.length > 0 && (
           <button
             onClick={scrollToBottom}
-            className="absolute bottom-2 right-2 z-10 qt-button qt-button-icon border border-border shadow-md flex items-center gap-1"
+            className="qt-devconsole-scroll-btn qt-devconsole-scroll-bottom qt-button qt-button-icon border border-border shadow-md flex items-center gap-1"
             title="Scroll to bottom and enable auto-scroll"
           >
             <svg className="w-4 h-4 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,7 +231,7 @@ export default function BrowserConsoleTab() {
 
         {/* Auto-scroll indicator when enabled */}
         {autoScroll && filteredLogs.length > 0 && (
-          <div className="absolute bottom-2 right-2 z-10 px-2 py-1 qt-alert-success">
+          <div className="qt-devconsole-autoscroll qt-alert-success">
             Auto-scroll
           </div>
         )}
@@ -251,12 +240,12 @@ export default function BrowserConsoleTab() {
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="h-full overflow-y-auto bg-background"
+          className="qt-devconsole-logs"
         >
           {filteredLogs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <div className="qt-devconsole-empty">
               <svg
-                className="w-12 h-12 mb-3 opacity-50"
+                className="qt-devconsole-empty-icon"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -268,8 +257,8 @@ export default function BrowserConsoleTab() {
                   d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              <p className="text-sm">{consoleLogs.length === 0 ? 'No console output yet' : 'No logs match filters'}</p>
-              <p className="text-xs mt-1">{consoleLogs.length === 0 ? 'Browser console.log/warn/error will appear here' : 'Try enabling more log levels'}</p>
+              <p className="qt-devconsole-empty-title">{consoleLogs.length === 0 ? 'No console output yet' : 'No logs match filters'}</p>
+              <p className="qt-devconsole-empty-description">{consoleLogs.length === 0 ? 'Browser console.log/warn/error will appear here' : 'Try enabling more log levels'}</p>
             </div>
           ) : (
             filteredLogs.map((entry) => (
@@ -280,67 +269,52 @@ export default function BrowserConsoleTab() {
       </div>
 
       {/* Footer - Level filters */}
-      <div className="px-4 py-2 bg-background border-t border-border">
-        <div className="flex items-center justify-center gap-2 text-xs">
-          <span className="text-muted-foreground mr-1">Filter:</span>
+      <div className="qt-devconsole-footer">
+        <div className="qt-log-filters">
+          <span className="qt-log-filters-label">Filter:</span>
           <button
             onClick={() => toggleLevel('error')}
-            className={`qt-button flex items-center gap-1 px-2 py-1 rounded transition-colors ${
-              enabledLevels.has('error')
-                ? 'qt-badge-destructive'
-                : 'bg-accent text-muted-foreground opacity-50'
-            }`}
+            className="qt-log-filter-error"
+            data-active={enabledLevels.has('error')}
             title={enabledLevels.has('error') ? 'Hide errors' : 'Show errors'}
           >
-            <span className={`w-2 h-2 rounded-full ${enabledLevels.has('error') ? 'bg-red-500' : 'bg-muted-foreground'}`} />
+            <span className="qt-log-filter-dot" />
             Error
           </button>
           <button
             onClick={() => toggleLevel('warn')}
-            className={`qt-button flex items-center gap-1 px-2 py-1 rounded transition-colors ${
-              enabledLevels.has('warn')
-                ? 'qt-badge-warning'
-                : 'bg-accent text-muted-foreground opacity-50'
-            }`}
+            className="qt-log-filter-warn"
+            data-active={enabledLevels.has('warn')}
             title={enabledLevels.has('warn') ? 'Hide warnings' : 'Show warnings'}
           >
-            <span className={`w-2 h-2 rounded-full ${enabledLevels.has('warn') ? 'bg-yellow-500' : 'bg-muted-foreground'}`} />
+            <span className="qt-log-filter-dot" />
             Warn
           </button>
           <button
             onClick={() => toggleLevel('info')}
-            className={`qt-button flex items-center gap-1 px-2 py-1 rounded transition-colors ${
-              enabledLevels.has('info')
-                ? 'qt-badge-info'
-                : 'bg-accent text-muted-foreground opacity-50'
-            }`}
+            className="qt-log-filter-info"
+            data-active={enabledLevels.has('info')}
             title={enabledLevels.has('info') ? 'Hide info' : 'Show info'}
           >
-            <span className={`w-2 h-2 rounded-full ${enabledLevels.has('info') ? 'bg-blue-500' : 'bg-muted-foreground'}`} />
+            <span className="qt-log-filter-dot" />
             Info
           </button>
           <button
             onClick={() => toggleLevel('log')}
-            className={`qt-button flex items-center gap-1 px-2 py-1 rounded transition-colors ${
-              enabledLevels.has('log')
-                ? 'bg-muted text-foreground'
-                : 'bg-accent text-muted-foreground opacity-50'
-            }`}
+            className="qt-log-filter-log"
+            data-active={enabledLevels.has('log')}
             title={enabledLevels.has('log') ? 'Hide log' : 'Show log'}
           >
-            <span className={`w-2 h-2 rounded-full ${enabledLevels.has('log') ? 'bg-muted-foreground' : 'bg-muted-foreground'}`} />
+            <span className="qt-log-filter-dot" />
             Log
           </button>
           <button
             onClick={() => toggleLevel('debug')}
-            className={`qt-button flex items-center gap-1 px-2 py-1 rounded transition-colors ${
-              enabledLevels.has('debug')
-                ? 'qt-badge-info'
-                : 'bg-accent text-muted-foreground opacity-50'
-            }`}
+            className="qt-log-filter-debug"
+            data-active={enabledLevels.has('debug')}
             title={enabledLevels.has('debug') ? 'Hide debug' : 'Show debug'}
           >
-            <span className={`w-2 h-2 rounded-full ${enabledLevels.has('debug') ? 'bg-purple-500' : 'bg-muted-foreground'}`} />
+            <span className="qt-log-filter-dot" />
             Debug
           </button>
         </div>

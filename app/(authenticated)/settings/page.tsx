@@ -9,6 +9,7 @@ import EmbeddingProfilesTab from '@/components/settings/embedding-profiles-tab'
 import PluginsTab from '@/components/settings/plugins-tab'
 import TagsTab from '@/components/settings/tags-tab'
 import AppearanceTab from '@/components/settings/appearance-tab'
+import RoleplayTemplatesTab from '@/components/settings/roleplay-templates-tab'
 import { EntityTabs, Tab } from '@/components/tabs'
 
 const SETTINGS_TABS: Tab[] = [
@@ -84,6 +85,15 @@ const SETTINGS_TABS: Tab[] = [
       </svg>
     ),
   },
+  {
+    id: 'templates',
+    label: 'RP Templates',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
 ]
 
 export default function SettingsPage() {
@@ -105,6 +115,8 @@ export default function SettingsPage() {
         return <PluginsTab />
       case 'tags':
         return <TagsTab />
+      case 'templates':
+        return <RoleplayTemplatesTab />
       default:
         return null
     }

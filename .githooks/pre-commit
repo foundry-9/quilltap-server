@@ -239,6 +239,8 @@ done < <(git log --format="%h" -- package.json 2>/dev/null)
 
 if [ -n "$BASE_VERSION_FIRST_COMMIT" ]; then
   COMMIT_COUNT=$(git rev-list --count "$BASE_VERSION_FIRST_COMMIT"..HEAD 2>/dev/null || echo "0")
+else
+  COMMIT_COUNT=0
 fi
 
 if [[ "$CURRENT_BRANCH" == "release" || "$CURRENT_BRANCH" == release/* ]]; then

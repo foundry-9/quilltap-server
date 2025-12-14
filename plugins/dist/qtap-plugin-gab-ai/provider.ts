@@ -58,7 +58,7 @@ export class GabAIProvider implements LLMProvider {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 1000,
+      max_tokens: params.maxTokens ?? 4096,
       top_p: params.topP ?? 1,
       stop: params.stop,
     });
@@ -109,7 +109,7 @@ export class GabAIProvider implements LLMProvider {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 1000,
+      max_tokens: params.maxTokens ?? 4096,
       top_p: params.topP ?? 1,
       stream: true,
       stream_options: { include_usage: true },

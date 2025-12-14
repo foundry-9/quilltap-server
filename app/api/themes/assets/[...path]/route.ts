@@ -156,7 +156,7 @@ export async function GET(
       });
 
       // Return the asset with appropriate headers
-      return new NextResponse(assetBuffer, {
+      return new NextResponse(new Uint8Array(assetBuffer), {
         status: 200,
         headers: {
           'Content-Type': mimeType,

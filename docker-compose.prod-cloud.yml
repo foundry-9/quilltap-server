@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Production Docker Compose configuration for Quilltap with external services
 # Uses MongoDB Atlas for database and AWS S3 for file storage
 # All configuration is provided via environment variables

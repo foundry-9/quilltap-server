@@ -6,9 +6,9 @@
  */
 
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import { logger } from '@/lib/logger';
-import packageJson from '@/package.json';
 import type {
   Migration,
   MigrationResult,
@@ -19,6 +19,21 @@ import type {
 
 // Path to store migration state (file-based)
 const MIGRATIONS_STATE_FILE = path.join(process.cwd(), 'data', 'settings', 'migrations.json');
+
+/**
+ * Get the Quilltap version at runtime from package.json
+ * This reads the file dynamically to avoid bundling the version at build time,
+ * which would cause the plugin bundle to change on every version bump.
+ */
+function getQuilltapVersion(): string {
+  try {
+    const pkgPath = path.join(process.cwd(), 'package.json');
+    const pkg = JSON.parse(fsSync.readFileSync(pkgPath, 'utf-8'));
+    return pkg.version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
 
 /**
  * Check if MongoDB backend is enabled
@@ -63,7 +78,7 @@ export async function loadMigrationState(): Promise<MigrationState> {
     return {
       completedMigrations: [],
       lastChecked: new Date().toISOString(),
-      quilltapVersion: packageJson.version,
+      quilltapVersion: getQuilltapVersion(),
     };
   }
 }
@@ -118,7 +133,7 @@ export async function recordCompletedMigration(
   const record: MigrationRecord = {
     id: result.id,
     completedAt: result.timestamp,
-    quilltapVersion: packageJson.version,
+    quilltapVersion: getQuilltapVersion(),
     itemsAffected: result.itemsAffected,
     message: result.message,
   };
@@ -127,7 +142,7 @@ export async function recordCompletedMigration(
     ...state,
     completedMigrations: [...state.completedMigrations, record],
     lastChecked: new Date().toISOString(),
-    quilltapVersion: packageJson.version,
+    quilltapVersion: getQuilltapVersion(),
   };
 
   await saveMigrationState(updatedState);

@@ -1,11 +1,21 @@
 {
   "name": "qtap-plugin-theme-earl-grey",
-  "version": "1.0.6",
+  "version": "1.0.9",
   "description": "Earl Grey theme plugin for Quilltap - A sophisticated dark theme with slate grays and blue accents",
   "main": "index.js",
   "types": "index.d.ts",
   "author": "Foundry-9",
   "license": "MIT",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "clean": "rm -f index.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
   "keywords": [
     "quilltap",
     "theme",

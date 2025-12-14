@@ -1,11 +1,21 @@
 {
   "name": "qtap-plugin-theme-ocean",
-  "version": "1.1.18",
+  "version": "1.1.21",
   "description": "Ocean theme plugin for Quilltap with layered gradients, glass panels, and custom typography",
   "main": "index.js",
   "types": "index.d.ts",
   "author": "Foundry-9",
   "license": "MIT",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "clean": "rm -f index.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
   "keywords": [
     "quilltap",
     "theme",

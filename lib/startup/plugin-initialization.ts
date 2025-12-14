@@ -2,7 +2,8 @@
  * Server-side plugin initialization
  *
  * Handles scanning and loading plugins on application startup.
- * TypeScript plugins are transpiled to JavaScript before loading.
+ * TypeScript plugins must be pre-built before the app starts
+ * (run `npm run build:plugins` to build all plugins).
  */
 
 import { logger } from '@/lib/logger';
@@ -10,13 +11,13 @@ import { scanPlugins, isPluginCompatible, validatePluginSecurity } from '@/lib/p
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { registerPluginRoutes, getPluginRouteRegistry, pluginRouteRegistry } from '@/lib/plugins/route-loader';
 import { initializeProviderRegistry } from '@/lib/plugins/provider-registry';
-import { transpileAllPlugins } from '@/lib/plugins/plugin-transpiler';
 import { registerAuthProvider, clearAuthProviders } from '@/lib/plugins/auth-provider-registry';
 import type { AuthProviderPluginExport } from '@/lib/plugins/interfaces/auth-provider-plugin';
 import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-registry';
 import packageJson from '@/package.json';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 
 // Create a require function that bypasses Next.js bundling for dynamic plugin loading
 const dynamicRequire = createRequire(import.meta.url || __filename);
@@ -232,44 +233,31 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       })),
     });
 
-    // Transpile TypeScript plugins to JavaScript BEFORE loading them
-    // This converts .ts files to .js files that can be require()'d at runtime
+    // Verify that TypeScript plugins have been pre-built
+    // Plugins must be built before starting the app (npm run build:plugins)
     const typescriptPlugins = validatedPlugins
-      .filter(p => p.manifest.typescript === true)
-      .map(p => ({
-        name: p.manifest.name,
-        pluginPath: p.pluginPath,
-        main: p.manifest.main || 'index.js',
-        typescript: true,
-      }));
+      .filter(p => p.manifest.typescript === true);
 
     if (typescriptPlugins.length > 0) {
-      logger.info('Transpiling TypeScript plugins', {
+      logger.debug('Checking TypeScript plugins are pre-built', {
         count: typescriptPlugins.length,
-        plugins: typescriptPlugins.map(p => p.name),
       });
 
-      const transpileResult = await transpileAllPlugins(typescriptPlugins);
+      for (const plugin of typescriptPlugins) {
+        const mainFile = plugin.manifest.main || 'index.js';
+        const jsPath = resolve(process.cwd(), plugin.pluginPath, mainFile);
 
-      if (!transpileResult.success) {
-        // Log failures but continue - some plugins may have succeeded
-        for (const failedResult of transpileResult.results.filter(r => !r.success)) {
+        if (!existsSync(jsPath)) {
           result.errors.push({
-            plugin: failedResult.pluginName,
-            error: `Failed to transpile: ${failedResult.error}`,
+            plugin: plugin.manifest.name,
+            error: `Plugin not built. Run 'npm run build:plugins' or build the plugin individually.`,
           });
-          logger.error('Plugin transpilation failed', {
-            plugin: failedResult.pluginName,
-            error: failedResult.error,
+          logger.error('Plugin not built - missing compiled JavaScript', {
+            plugin: plugin.manifest.name,
+            expectedPath: jsPath,
           });
         }
       }
-
-      logger.info('Plugin transpilation summary', {
-        compiled: transpileResult.stats.compiled,
-        cached: transpileResult.stats.cached,
-        failed: transpileResult.stats.failed,
-      });
     }
 
     // IMPORTANT: Force-enable the upgrade plugin and run migrations early
