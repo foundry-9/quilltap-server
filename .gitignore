@@ -159,5 +159,6 @@ plugins/*
 !plugins/*.md
 !plugins/dist/
 
-# Ignore node_modules everywhere under plugins, including under dist
+# Ignore node_modules and package-lock.json everywhere under plugins, including under dist
 plugins/**/node_modules/
+plugins/**/package-lock.json

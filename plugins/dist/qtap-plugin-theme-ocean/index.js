@@ -17,7 +17,7 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// plugins/dist/qtap-plugin-theme-ocean/index.ts
+// index.ts
 var index_exports = {};
 __export(index_exports, {
   default: () => index_default,
@@ -26,7 +26,7 @@ __export(index_exports, {
 });
 module.exports = __toCommonJS(index_exports);
 
-// lib/logging/transports/console.ts
+// ../../../lib/logging/transports/console.ts
 var ConsoleTransport = class {
   /**
    * Write a log entry to the console
@@ -53,7 +53,7 @@ var ConsoleTransport = class {
   }
 };
 
-// lib/logging/transports/file.ts
+// ../../../lib/logging/transports/file.ts
 var import_fs = require("fs");
 var import_path = require("path");
 var FileTransport = class {
@@ -169,7 +169,7 @@ var FileTransport = class {
   }
 };
 
-// lib/env.ts
+// ../../../lib/env.ts
 var import_zod = require("zod");
 var envSchema = import_zod.z.object({
   // Node environment
@@ -300,7 +300,7 @@ var isProduction = env.NODE_ENV === "production";
 var isDevelopment = env.NODE_ENV === "development";
 var isTest = env.NODE_ENV === "test";
 
-// lib/logger.ts
+// ../../../lib/logger.ts
 var LOG_LEVELS = {
   ["error" /* ERROR */]: 0,
   ["warn" /* WARN */]: 1,
@@ -449,7 +449,7 @@ var logger = new Logger({
   environment: process.env.NODE_ENV || "development"
 });
 
-// plugins/dist/qtap-plugin-theme-ocean/index.ts
+// index.ts
 function initialize() {
   logger.debug("Ocean theme plugin loaded", {
     plugin: "qtap-plugin-theme-ocean",

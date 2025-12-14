@@ -17,7 +17,7 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// plugins/dist/qtap-plugin-gab-ai/index.ts
+// index.ts
 var index_exports = {};
 __export(index_exports, {
   default: () => index_default,
@@ -6835,7 +6835,7 @@ OpenAI.Evals = Evals;
 OpenAI.Containers = Containers;
 OpenAI.Videos = Videos;
 
-// lib/logging/transports/console.ts
+// ../../../lib/logging/transports/console.ts
 var ConsoleTransport = class {
   /**
    * Write a log entry to the console
@@ -6862,7 +6862,7 @@ var ConsoleTransport = class {
   }
 };
 
-// lib/logging/transports/file.ts
+// ../../../lib/logging/transports/file.ts
 var import_fs = require("fs");
 var import_path33 = require("path");
 var FileTransport = class {
@@ -6978,7 +6978,7 @@ var FileTransport = class {
   }
 };
 
-// lib/env.ts
+// ../../../lib/env.ts
 var import_zod = require("zod");
 var envSchema = import_zod.z.object({
   // Node environment
@@ -7109,7 +7109,7 @@ var isProduction = env.NODE_ENV === "production";
 var isDevelopment = env.NODE_ENV === "development";
 var isTest = env.NODE_ENV === "test";
 
-// lib/logger.ts
+// ../../../lib/logger.ts
 var LOG_LEVELS = {
   ["error" /* ERROR */]: 0,
   ["warn" /* WARN */]: 1,
@@ -7258,7 +7258,7 @@ var logger = new Logger({
   environment: process.env.NODE_ENV || "development"
 });
 
-// plugins/dist/qtap-plugin-gab-ai/provider.ts
+// provider.ts
 var GabAIProvider = class {
   constructor() {
     this.baseUrl = "https://gab.ai/v1";
@@ -7424,7 +7424,7 @@ var GabAIProvider = class {
   }
 };
 
-// plugins/dist/qtap-plugin-gab-ai/icon.tsx
+// icon.tsx
 var import_jsx_runtime = require("react/jsx-runtime");
 function GabAIIcon({ className = "h-5 w-5" }) {
   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
@@ -7464,7 +7464,7 @@ function GabAIIcon({ className = "h-5 w-5" }) {
   );
 }
 
-// lib/llm/tool-formatting-utils.ts
+// ../../../lib/llm/tool-formatting-utils.ts
 function parseOpenAIToolCalls(response) {
   const toolCalls = [];
   try {
@@ -7492,7 +7492,7 @@ function parseOpenAIToolCalls(response) {
   return toolCalls;
 }
 
-// plugins/dist/qtap-plugin-gab-ai/index.ts
+// index.ts
 var metadata = {
   providerName: "GAB_AI",
   displayName: "Gab AI",

@@ -4,6 +4,12 @@
 
 ### 2.3-dev
 
+- refactor: Migrate plugins to self-contained builds with per-plugin `npm run build`
+  - Each plugin now has its own esbuild.config.mjs and package.json with build script
+  - Removed centralized plugin-transpiler.ts in favor of per-plugin builds
+  - SDK dependencies (anthropic, openai, google, openrouter) moved from main app to individual plugins
+  - Updated `npm run build:plugins` to iterate through plugins and run their build scripts
+  - Plugins must be pre-built before starting the app (no runtime transpilation)
 - feat: Add Tasks Queue tool card to view background job queue status, pending jobs, and estimated token usage
 - style: Add vertical scrolling to cloud backups and capabilities reports lists when more than 2 items
 - feat: Add delete button for cloud backups on Tools page with confirmation dialog

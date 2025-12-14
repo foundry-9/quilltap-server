@@ -17,7 +17,7 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// plugins/dist/qtap-plugin-google/index.ts
+// index.ts
 var index_exports = {};
 __export(index_exports, {
   default: () => index_default,
@@ -1032,7 +1032,7 @@ var GoogleGenerativeAI = class {
   }
 };
 
-// lib/logging/transports/console.ts
+// ../../../lib/logging/transports/console.ts
 var ConsoleTransport = class {
   /**
    * Write a log entry to the console
@@ -1059,7 +1059,7 @@ var ConsoleTransport = class {
   }
 };
 
-// lib/logging/transports/file.ts
+// ../../../lib/logging/transports/file.ts
 var import_fs = require("fs");
 var import_path = require("path");
 var FileTransport = class {
@@ -1175,7 +1175,7 @@ var FileTransport = class {
   }
 };
 
-// lib/env.ts
+// ../../../lib/env.ts
 var import_zod = require("zod");
 var envSchema = import_zod.z.object({
   // Node environment
@@ -1306,7 +1306,7 @@ var isProduction = env.NODE_ENV === "production";
 var isDevelopment = env.NODE_ENV === "development";
 var isTest = env.NODE_ENV === "test";
 
-// lib/logger.ts
+// ../../../lib/logger.ts
 var LOG_LEVELS = {
   ["error" /* ERROR */]: 0,
   ["warn" /* WARN */]: 1,
@@ -1455,7 +1455,7 @@ var logger = new Logger({
   environment: process.env.NODE_ENV || "development"
 });
 
-// plugins/dist/qtap-plugin-google/provider.ts
+// provider.ts
 var GOOGLE_SUPPORTED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -2034,7 +2034,7 @@ var GoogleProvider = class {
   }
 };
 
-// plugins/dist/qtap-plugin-google/image-provider.ts
+// image-provider.ts
 var GEMINI_IMAGE_MODELS = [
   "gemini-2.0-flash-exp",
   "gemini-2.5-flash-image",
@@ -2240,7 +2240,7 @@ var GoogleImagenProvider = class {
   }
 };
 
-// plugins/dist/qtap-plugin-google/icon.tsx
+// icon.tsx
 var import_jsx_runtime = require("react/jsx-runtime");
 function GoogleIcon({ className = "h-5 w-5" }) {
   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
@@ -2280,7 +2280,7 @@ function GoogleIcon({ className = "h-5 w-5" }) {
   );
 }
 
-// lib/llm/tool-formatting-utils.ts
+// ../../../lib/llm/tool-formatting-utils.ts
 function convertOpenAIToGoogleFormat(tool) {
   logger.debug("Converting tool to Google format", {
     context: "tool-formatting",
@@ -2321,7 +2321,7 @@ function parseGoogleToolCalls(response) {
   return toolCalls;
 }
 
-// plugins/dist/qtap-plugin-google/index.ts
+// index.ts
 var metadata = {
   providerName: "GOOGLE",
   displayName: "Google Gemini",
@@ -2649,6 +2649,23 @@ var index_default = plugin;
 /*! Bundled license information:
 
 @google/generative-ai/dist/index.mjs:
+  (**
+   * @license
+   * Copyright 2024 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+
 @google/generative-ai/dist/index.mjs:
   (**
    * @license
