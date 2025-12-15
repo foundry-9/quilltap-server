@@ -49,7 +49,8 @@ export function usePersonaDisplayName(): UsePersonaDisplayNameResult {
         }
 
         const data = await res.json()
-        const personas: PersonaBasic[] = data.personas || []
+        // API returns array directly, not wrapped in { personas: [] }
+        const personas: PersonaBasic[] = Array.isArray(data) ? data : (data.personas || [])
 
         // Count occurrences of each name
         const nameCounts = new Map<string, number>()

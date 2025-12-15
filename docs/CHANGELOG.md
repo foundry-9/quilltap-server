@@ -4,6 +4,9 @@
 
 ### 2.4-dev
 
+- fix: Persona display name disambiguation not working
+  - usePersonaDisplayName hook was expecting `data.personas` but API returns array directly
+  - Personas with duplicate names now correctly show titles in dropdowns
 - feat: Mobile-responsive chat footer with compact tool palette
   - Reduced input textarea to single line initial height on mobile
   - Simplified footer buttons: tool palette toggle (left), send + continue (right)
