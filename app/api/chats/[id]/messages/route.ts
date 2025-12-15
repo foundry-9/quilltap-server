@@ -702,6 +702,7 @@ export async function POST(
     const encoder = new TextEncoder()
     let fullResponse = ''
     let usage: { totalTokens?: number } | null = null
+    let cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null = null
     let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
     let rawResponse: unknown = null
     // Track thought signature from Gemini 3 thinking models (required for multi-turn function calling)
@@ -819,6 +820,9 @@ export async function POST(
               if (chunk.usage) {
                 usage = chunk.usage
               }
+              if (chunk.cacheUsage) {
+                cacheUsage = chunk.cacheUsage
+              }
               if (chunk.attachmentResults) {
                 attachmentResults = chunk.attachmentResults
               }
@@ -924,6 +928,9 @@ export async function POST(
               if (chunk.done) {
                 if (chunk.usage) {
                   usage = chunk.usage
+                }
+                if (chunk.cacheUsage) {
+                  cacheUsage = chunk.cacheUsage
                 }
                 if (chunk.attachmentResults) {
                   attachmentResults = chunk.attachmentResults
@@ -1049,6 +1056,7 @@ export async function POST(
                   done: true,
                   messageId: finalMessageId,
                   usage,
+                  cacheUsage,
                   attachmentResults,
                   toolsExecuted: toolMessages.length > 0,
                   // Multi-character turn management info
@@ -1160,6 +1168,7 @@ export async function POST(
                   done: true,
                   messageId: firstToolMessageId,
                   usage,
+                  cacheUsage,
                   attachmentResults,
                   toolsExecuted: true,
                 })}\n\n`
@@ -1175,6 +1184,7 @@ export async function POST(
                   done: true,
                   messageId: null,
                   usage,
+                  cacheUsage,
                   attachmentResults,
                   toolsExecuted: false,
                   emptyResponse: true,

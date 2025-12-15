@@ -80,7 +80,8 @@ export default function ConnectionProfilesTab() {
     providerOrder: [] as string[],
     // Anthropic-specific fields
     enableCacheBreakpoints: false,
-    cacheStrategy: 'system_only' as 'system_only' | 'system_and_long_context',
+    cacheStrategy: 'system_and_long_context' as 'system_only' | 'system_and_long_context',
+    cacheTTL: '5m' as '5m' | '1h',
   })
 
   // Connection testing states
@@ -294,7 +295,8 @@ export default function ConnectionProfilesTab() {
       providerOrder: [],
       // Anthropic-specific fields
       enableCacheBreakpoints: false,
-      cacheStrategy: 'system_only',
+      cacheStrategy: 'system_and_long_context',
+      cacheTTL: '5m',
     })
     setEditingId(null)
     // Reset connection states
@@ -324,7 +326,8 @@ export default function ConnectionProfilesTab() {
       providerOrder: profile.parameters?.providerPreferences?.order ?? [],
       // Anthropic-specific fields
       enableCacheBreakpoints: profile.parameters?.enableCacheBreakpoints ?? false,
-      cacheStrategy: profile.parameters?.cacheStrategy ?? 'system_only',
+      cacheStrategy: profile.parameters?.cacheStrategy ?? 'system_and_long_context',
+      cacheTTL: profile.parameters?.cacheTTL ?? '5m',
     })
     setEditingId(profile.id)
     setShowForm(true)
@@ -402,6 +405,7 @@ export default function ConnectionProfilesTab() {
       if (formData.provider === 'ANTHROPIC' && formData.enableCacheBreakpoints) {
         parameters.enableCacheBreakpoints = true
         parameters.cacheStrategy = formData.cacheStrategy
+        parameters.cacheTTL = formData.cacheTTL
       }
 
       const requestBody: any = {
@@ -1311,37 +1315,58 @@ export default function ConnectionProfilesTab() {
                     className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
                   />
                   <label htmlFor="enableCacheBreakpoints" className="text-sm">
-                    Enable Prompt Caching (Beta)
+                    Enable Prompt Caching
                   </label>
                 </div>
                 {formData.enableCacheBreakpoints && (
-                  <div className="space-y-2 pl-6 mb-3">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="cacheStrategy"
-                        value="system_only"
-                        checked={formData.cacheStrategy === 'system_only'}
-                        onChange={(e) => setFormData({ ...formData, cacheStrategy: e.target.value as any })}
-                        className="w-3 h-3"
-                      />
-                      <span className="text-sm">System message only</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="cacheStrategy"
-                        value="system_and_long_context"
-                        checked={formData.cacheStrategy === 'system_and_long_context'}
-                        onChange={(e) => setFormData({ ...formData, cacheStrategy: e.target.value as any })}
-                        className="w-3 h-3"
-                      />
-                      <span className="text-sm">System message + long context (character cards, RAG)</span>
-                    </label>
+                  <div className="space-y-3 pl-6 mb-3">
+                    {/* Cache Strategy */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Cache Strategy</p>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="cacheStrategy"
+                          value="system_only"
+                          checked={formData.cacheStrategy === 'system_only'}
+                          onChange={(e) => setFormData({ ...formData, cacheStrategy: e.target.value as any })}
+                          className="w-3 h-3"
+                        />
+                        <span className="text-sm">System message only</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="cacheStrategy"
+                          value="system_and_long_context"
+                          checked={formData.cacheStrategy === 'system_and_long_context'}
+                          onChange={(e) => setFormData({ ...formData, cacheStrategy: e.target.value as any })}
+                          className="w-3 h-3"
+                        />
+                        <span className="text-sm">System + tools + conversation (recommended)</span>
+                      </label>
+                    </div>
+
+                    {/* Cache TTL */}
+                    <div className="space-y-2">
+                      <label htmlFor="cacheTTL" className="text-xs font-medium text-muted-foreground">Cache Duration</label>
+                      <select
+                        id="cacheTTL"
+                        value={formData.cacheTTL}
+                        onChange={(e) => setFormData({ ...formData, cacheTTL: e.target.value as '5m' | '1h' })}
+                        className="qt-select text-sm"
+                      >
+                        <option value="5m">5 minutes (1.25x write cost)</option>
+                        <option value="1h">1 hour (2x write cost)</option>
+                      </select>
+                      <p className="text-xs text-muted-foreground/70">
+                        Cache reads are 10% of base input cost. 5m is auto-refreshed on use.
+                      </p>
+                    </div>
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Prompt caching can reduce costs by up to 90% for repeated context. Cached prompts have a 5-minute TTL.
+                  Prompt caching can reduce costs by up to 90% for repeated context. Caches tools, system prompts, and conversation history.
                 </p>
               </div>
             )}

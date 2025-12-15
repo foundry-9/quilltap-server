@@ -366,7 +366,7 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
 
       {/* Tool Invocations and Results */}
       {entry.toolResults && entry.toolResults.length > 0 && (
-        <div className="qt-debug-section-content" style={{ background: 'var(--qt-debug-purple-content-bg, rgba(250, 245, 255, 0.5))' }}>
+        <div className="qt-debug-section-content qt-debug-tool-results-bg">
           <div className="text-xs font-semibold mb-2 flex items-center gap-1">
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" clipRule="evenodd" />
@@ -404,7 +404,7 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
 
       {/* Memory Extraction Debug Logs - shown regardless of LLM Request Details */}
       {entry.debugMemoryLogs && entry.debugMemoryLogs.length > 0 && (
-        <div className="qt-debug-section-content" style={{ background: 'var(--qt-debug-indigo-bg)' }}>
+        <div className="qt-debug-section-content qt-debug-memory-section-bg">
           <div className="text-xs font-semibold mb-2 flex items-center gap-1">
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
@@ -424,7 +424,7 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
 
       {/* Final Event JSON (shown by default for completed streaming responses) */}
       {entry.finalEvent && (
-        <div className="qt-debug-section-content" style={{ background: 'var(--qt-debug-amber-bg, rgba(255, 251, 235, 1))' }}>
+        <div className="qt-debug-section-content qt-debug-final-response-bg">
           <div className="flex items-center gap-2 mb-2">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />

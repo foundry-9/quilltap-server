@@ -765,46 +765,46 @@
   }
 
   .qt-debug-badge-violet {
-    @apply bg-violet-200 text-violet-700;
+    @apply bg-violet-200 text-violet-700 dark:bg-violet-900/70 dark:text-violet-200;
   }
 
   .qt-debug-badge-purple {
-    @apply bg-purple-200 text-purple-700;
+    @apply bg-purple-200 text-purple-700 dark:bg-purple-900/70 dark:text-purple-200;
   }
 
   .qt-debug-badge-green {
-    @apply bg-green-200 text-green-700;
+    @apply bg-green-200 text-green-700 dark:bg-green-900/70 dark:text-green-200;
   }
 
   .qt-debug-badge-amber {
-    @apply bg-amber-200 text-amber-700;
+    @apply bg-amber-200 text-amber-700 dark:bg-amber-900/70 dark:text-amber-200;
   }
 
   .qt-debug-badge-orange {
-    @apply bg-orange-200 text-orange-700;
+    @apply bg-orange-200 text-orange-700 dark:bg-orange-900/70 dark:text-orange-200;
   }
 
   .qt-debug-badge-blue {
-    @apply bg-blue-200 text-blue-800;
+    @apply bg-blue-200 text-blue-800 dark:bg-blue-900/70 dark:text-blue-200;
   }
 
   .qt-debug-badge-yellow {
-    @apply bg-yellow-200 text-yellow-800;
+    @apply bg-yellow-200 text-yellow-800 dark:bg-yellow-900/70 dark:text-yellow-200;
   }
 
   /**
    * Role badges for messages
    */
   .qt-debug-role-system {
-    @apply bg-yellow-200 text-yellow-800;
+    @apply bg-yellow-200 text-yellow-800 dark:bg-yellow-900/70 dark:text-yellow-200;
   }
 
   .qt-debug-role-user {
-    @apply bg-blue-200 text-blue-800;
+    @apply bg-blue-200 text-blue-800 dark:bg-blue-900/70 dark:text-blue-200;
   }
 
   .qt-debug-role-assistant {
-    @apply bg-green-200 text-green-800;
+    @apply bg-green-200 text-green-800 dark:bg-green-900/70 dark:text-green-200;
   }
 
   /**
@@ -824,11 +824,11 @@
    * Tool result status badges
    */
   .qt-debug-tool-success {
-    @apply bg-green-200 text-green-700;
+    @apply bg-green-200 text-green-700 dark:bg-green-900/70 dark:text-green-200;
   }
 
   .qt-debug-tool-failed {
-    @apply bg-red-200 text-red-700;
+    @apply bg-red-200 text-red-700 dark:bg-red-900/70 dark:text-red-200;
   }
 
   /**
@@ -839,19 +839,19 @@
   }
 
   .qt-debug-nested-violet {
-    @apply bg-violet-100 border-violet-300;
+    @apply bg-violet-100 border-violet-300 dark:bg-violet-950/50 dark:border-violet-700;
   }
 
   .qt-debug-nested-green {
-    @apply bg-green-100 border-green-300;
+    @apply bg-green-100 border-green-300 dark:bg-green-950/50 dark:border-green-700;
   }
 
   .qt-debug-nested-yellow {
-    @apply bg-yellow-100 border-yellow-300;
+    @apply bg-yellow-100 border-yellow-300 dark:bg-yellow-950/50 dark:border-yellow-700;
   }
 
   .qt-debug-nested-indigo {
-    @apply bg-indigo-50 border-indigo-400;
+    @apply bg-indigo-50 border-indigo-400 dark:bg-indigo-950/50 dark:border-indigo-600;
   }
 
   /**
@@ -874,5 +874,42 @@
     background: var(--qt-debug-indigo-content-bg, theme('colors.indigo.50'));
     border-color: var(--qt-debug-indigo-border, theme('colors.indigo.400'));
     color: var(--qt-debug-indigo-fg, theme('colors.indigo.900'));
+  }
+
+  :root.dark .qt-debug-memory-log,
+  .dark .qt-debug-memory-log {
+    background: theme('colors.indigo.950/50');
+    border-color: theme('colors.indigo.600');
+    color: theme('colors.indigo.200');
+  }
+
+  /**
+   * Background colors for debug sections with proper dark mode support
+   */
+  .qt-debug-tool-results-bg {
+    background: var(--qt-debug-purple-content-bg, rgba(250, 245, 255, 0.5));
+  }
+
+  .qt-debug-memory-section-bg {
+    background: var(--qt-debug-indigo-bg, theme('colors.indigo.100'));
+  }
+
+  .qt-debug-final-response-bg {
+    background: var(--qt-debug-amber-bg, rgba(255, 251, 235, 1));
+  }
+
+  :root.dark .qt-debug-tool-results-bg,
+  .dark .qt-debug-tool-results-bg {
+    background: hsl(280 50% 10%);
+  }
+
+  :root.dark .qt-debug-memory-section-bg,
+  .dark .qt-debug-memory-section-bg {
+    background: hsl(239 50% 18%);
+  }
+
+  :root.dark .qt-debug-final-response-bg,
+  .dark .qt-debug-final-response-bg {
+    background: hsl(38 50% 12%);
   }
 }

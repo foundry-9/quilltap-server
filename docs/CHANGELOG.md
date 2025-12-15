@@ -4,6 +4,21 @@
 
 ### 2.4-dev
 
+- fix: Pass cache usage stats from Anthropic to client in SSE response
+  - Added `cacheUsage` field to final streaming response with `cacheCreationInputTokens` and `cacheReadInputTokens`
+  - Now you can verify prompt caching is working by checking for these fields in the response
+- fix: Chat debug panel contrast issues in dark mode
+  - Added dark mode variants for role badges (system/user/assistant)
+  - Added dark mode variants for all colored debug badges
+  - Added dark mode variants for nested content containers
+  - Fixed inline style backgrounds that didn't respect dark mode
+  - Memory extraction logs now readable in all themes
+- feat: Enhanced Anthropic prompt caching with comprehensive support
+  - Added tool caching (cache_control on last tool in the tools array)
+  - Implemented `system_and_long_context` strategy for conversation history caching
+  - Added TTL configuration (5 minutes default, 1 hour optional) in UI
+  - Updated default cache strategy to `system_and_long_context` for better cost savings
+  - Cache reads cost 10% of base input tokens, potentially saving up to 90% on repeated context
 - feat: Add About page with project info, links, and tech stack; simplify footer to version and copyright
 - fix: Robust error extraction in useAvatarDisplay hook - handles unusual error types and logs error type for debugging
 - feat: Responsive navbar with dynamic collapse - menu items collapse into logo dropdown when space is limited

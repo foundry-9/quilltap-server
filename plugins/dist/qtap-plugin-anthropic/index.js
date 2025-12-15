@@ -5068,13 +5068,35 @@ var AnthropicProvider = class {
     this.supportsImageGeneration = false;
     this.supportsWebSearch = false;
   }
-  formatMessagesWithAttachments(messages) {
+  /**
+   * Helper to build cache_control object with optional TTL
+   * TTL is only included if it's '1h' since '5m' is the default
+   */
+  buildCacheControl(ttl) {
+    if (ttl === "1h") {
+      return { type: "ephemeral", ttl: "1h" };
+    }
+    return { type: "ephemeral" };
+  }
+  formatMessagesWithAttachments(messages, cacheOptions) {
     const sent = [];
     const failed = [];
     const nonSystemMessages = messages.filter((m) => m.role !== "system");
-    const formattedMessages = nonSystemMessages.map((msg) => {
+    const lastUserMessageIndex = cacheOptions?.enableCaching && cacheOptions.strategy === "system_and_long_context" ? nonSystemMessages.findLastIndex((m) => m.role === "user") : -1;
+    const formattedMessages = nonSystemMessages.map((msg, index) => {
       const role = msg.role === "user" ? "user" : "assistant";
+      const isLastUserMessage = index === lastUserMessageIndex;
       if (!msg.attachments || msg.attachments.length === 0) {
+        if (isLastUserMessage) {
+          return {
+            role,
+            content: [{
+              type: "text",
+              text: msg.content,
+              cache_control: this.buildCacheControl(cacheOptions?.ttl)
+            }]
+          };
+        }
         return {
           role,
           content: msg.content
@@ -5120,6 +5142,13 @@ var AnthropicProvider = class {
         }
         sent.push(attachment.id);
       }
+      if (isLastUserMessage && content.length > 0) {
+        const lastBlock = content[content.length - 1];
+        content[content.length - 1] = {
+          ...lastBlock,
+          cache_control: this.buildCacheControl(cacheOptions?.ttl)
+        };
+      }
       return {
         role,
         content: content.length > 0 ? content : msg.content
@@ -5131,23 +5160,30 @@ var AnthropicProvider = class {
     logger.debug("Anthropic sendMessage called", { context: "AnthropicProvider.sendMessage", model: params.model });
     const client = new Anthropic({ apiKey });
     const systemMessage = params.messages.find((m) => m.role === "system");
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
     const profileParams = params.profileParameters;
+    const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false;
+    const cacheStrategy = profileParams?.cacheStrategy || "system_and_long_context";
+    const cacheTTL = profileParams?.cacheTTL;
+    const { messages, attachmentResults } = this.formatMessagesWithAttachments(
+      params.messages,
+      cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
+    );
     const requestParams = {
       model: params.model,
       messages,
       max_tokens: params.maxTokens ?? 4096
     };
     if (systemMessage?.content) {
-      if (profileParams?.enableCacheBreakpoints) {
+      if (cachingEnabled) {
         logger.debug("Enabling cache control for system message", {
           context: "AnthropicProvider.sendMessage",
-          cacheStrategy: profileParams.cacheStrategy || "system_only"
+          cacheStrategy,
+          cacheTTL: cacheTTL || "5m"
         });
         requestParams.system = [{
           type: "text",
           text: systemMessage.content,
-          cache_control: { type: "ephemeral" }
+          cache_control: this.buildCacheControl(cacheTTL)
         }];
       } else {
         requestParams.system = systemMessage.content;
@@ -5163,6 +5199,14 @@ var AnthropicProvider = class {
     const tools = params.tools ? [...params.tools] : [];
     if (tools.length > 0) {
       logger.debug("Adding tools to request", { context: "AnthropicProvider.sendMessage", toolCount: tools.length });
+      if (cachingEnabled) {
+        const lastTool = tools[tools.length - 1];
+        tools[tools.length - 1] = {
+          ...lastTool,
+          cache_control: this.buildCacheControl(cacheTTL)
+        };
+        logger.debug("Added cache control to last tool", { context: "AnthropicProvider.sendMessage" });
+      }
       requestParams.tools = tools;
     }
     const response = await client.messages.create(requestParams);
@@ -5202,8 +5246,14 @@ var AnthropicProvider = class {
     logger.debug("Anthropic streamMessage called", { context: "AnthropicProvider.streamMessage", model: params.model });
     const client = new Anthropic({ apiKey });
     const systemMessage = params.messages.find((m) => m.role === "system");
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
     const profileParams = params.profileParameters;
+    const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false;
+    const cacheStrategy = profileParams?.cacheStrategy || "system_and_long_context";
+    const cacheTTL = profileParams?.cacheTTL;
+    const { messages, attachmentResults } = this.formatMessagesWithAttachments(
+      params.messages,
+      cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
+    );
     const requestParams = {
       model: params.model,
       messages,
@@ -5211,15 +5261,16 @@ var AnthropicProvider = class {
       stream: true
     };
     if (systemMessage?.content) {
-      if (profileParams?.enableCacheBreakpoints) {
+      if (cachingEnabled) {
         logger.debug("Enabling cache control for streaming system message", {
           context: "AnthropicProvider.streamMessage",
-          cacheStrategy: profileParams.cacheStrategy || "system_only"
+          cacheStrategy,
+          cacheTTL: cacheTTL || "5m"
         });
         requestParams.system = [{
           type: "text",
           text: systemMessage.content,
-          cache_control: { type: "ephemeral" }
+          cache_control: this.buildCacheControl(cacheTTL)
         }];
       } else {
         requestParams.system = systemMessage.content;
@@ -5235,6 +5286,14 @@ var AnthropicProvider = class {
     const tools = params.tools ? [...params.tools] : [];
     if (tools.length > 0) {
       logger.debug("Adding tools to stream request", { context: "AnthropicProvider.streamMessage", toolCount: tools.length });
+      if (cachingEnabled) {
+        const lastTool = tools[tools.length - 1];
+        tools[tools.length - 1] = {
+          ...lastTool,
+          cache_control: this.buildCacheControl(cacheTTL)
+        };
+        logger.debug("Added cache control to last tool for streaming", { context: "AnthropicProvider.streamMessage" });
+      }
       requestParams.tools = tools;
     }
     const stream = await client.messages.create(requestParams);
