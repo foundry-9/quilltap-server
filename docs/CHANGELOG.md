@@ -4,6 +4,15 @@
 
 ### 2.4-dev
 
+- feat: Mobile-responsive multi-character participant UI
+  - Participant avatar buttons integrated into mobile message header row
+  - Left side: sticky speaker avatar and name (per message)
+  - Right side: compact participant control buttons (32px avatars) + continue button
+  - Tap avatar to open dropdown with talkativeness slider, nudge/queue/dequeue, remove
+  - Continue button moved from footer to header on mobile (right edge)
+  - Green glow indicates active turn, badge shows queue position
+  - Desktop ParticipantSidebar hidden on mobile
+  - Viewport-aware dropdown positioning (uses right alignment)
 - fix: Persona display name disambiguation not working
   - usePersonaDisplayName hook was expecting `data.personas` but API returns array directly
   - Personas with duplicate names now correctly show titles in dropdowns

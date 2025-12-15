@@ -85,7 +85,8 @@ export function ParticipantSidebar({
     return participants.filter(p => p.type === 'CHARACTER' && p.isActive).length
   }, [participants])
 
-  const sidebarClasses = ['qt-chat-sidebar']
+  // Include qt-desktop-only to hide sidebar on mobile (mobile uses inline participant controls in message header)
+  const sidebarClasses = ['qt-chat-sidebar', 'qt-desktop-only']
   if (className) {
     sidebarClasses.push(className)
   }

@@ -8,6 +8,7 @@ import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
+import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
 import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import {
@@ -41,6 +42,7 @@ import {
   removeFromQueue,
   findUserParticipant,
   isMultiCharacterChat,
+  getQueuePosition,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 
@@ -189,6 +191,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
   // Track which participant is currently responding during streaming (for correct avatar display)
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
+  // Mobile participant dropdown state (for inline participant controls in mobile message header)
+  const [mobileParticipantDropdownId, setMobileParticipantDropdownId] = useState<string | null>(null)
+  // Refs for mobile participant avatar buttons (for dropdown positioning)
+  const mobileParticipantRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map())
   // Track the last auto-triggered participant to prevent duplicate triggers
   const lastAutoTriggeredRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -1799,23 +1805,140 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 </div>
               )}
             <div className="qt-chat-message-body group">
-                {/* Mobile header - avatar and name in a row above the message */}
+                {/* Mobile header - speaker avatar/name on left, participant controls on right */}
                 {shouldShowAvatars() && messageAvatar && (
                   <div className="qt-chat-message-mobile-header">
-                    <div className="qt-chat-message-mobile-avatar">
-                      {getAvatarSrc(messageAvatar) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={getAvatarSrc(messageAvatar)!}
-                          alt={messageAvatar.name}
-                        />
-                      ) : (
-                        <div className="qt-chat-message-mobile-avatar-initial">
-                          {messageAvatar.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
+                    {/* Left side: current message speaker */}
+                    <div className="qt-chat-message-mobile-speaker">
+                      <div className="qt-chat-message-mobile-avatar">
+                        {getAvatarSrc(messageAvatar) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={getAvatarSrc(messageAvatar)!}
+                            alt={messageAvatar.name}
+                          />
+                        ) : (
+                          <div className="qt-chat-message-mobile-avatar-initial">
+                            {messageAvatar.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <span className="qt-chat-message-mobile-name">{messageAvatar.name}</span>
                     </div>
-                    <span className="qt-chat-message-mobile-name">{messageAvatar.name}</span>
+
+                    {/* Right side: participant controls for multi-char chats */}
+                    {isMultiChar && (
+                      <div className="qt-mobile-participant-controls">
+                        {(() => {
+                          // Sort participants: user on right, characters on left
+                          const activeParticipants = participantData
+                            .filter(p => p.isActive)
+                            .sort((a, b) => {
+                              if (a.type === 'PERSONA' && b.type !== 'PERSONA') return 1
+                              if (b.type === 'PERSONA' && a.type !== 'PERSONA') return -1
+                              return b.displayOrder - a.displayOrder
+                            })
+                          const activeCharCount = activeParticipants.filter(p => p.type === 'CHARACTER').length
+
+                          return activeParticipants.map((participant) => {
+                            const entity = participant.type === 'CHARACTER' ? participant.character : participant.persona
+                            if (!entity) return null
+
+                            const isCurrentTurn = turnState.currentTurnParticipantId === participant.id
+                            const queuePos = getQueuePosition(turnState, participant.id)
+                            const isSelected = mobileParticipantDropdownId === participant.id
+
+                            // Get avatar source
+                            const pAvatarSrc = entity.defaultImage
+                              ? (entity.defaultImage.url || entity.defaultImage.filepath).replace(/^(?!\/)/, '/')
+                              : entity.avatarUrl || null
+
+                            const avatarClasses = [
+                              'qt-mobile-participant-avatar',
+                              isCurrentTurn ? 'qt-mobile-participant-avatar-active' : '',
+                              isSelected ? 'qt-mobile-participant-avatar-selected' : '',
+                            ].filter(Boolean).join(' ')
+
+                            return (
+                              <button
+                                key={participant.id}
+                                ref={(el) => { mobileParticipantRefs.current.set(participant.id, el) }}
+                                className={avatarClasses}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setMobileParticipantDropdownId(
+                                    mobileParticipantDropdownId === participant.id ? null : participant.id
+                                  )
+                                }}
+                                title={entity.name}
+                              >
+                                {pAvatarSrc ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={pAvatarSrc} alt={entity.name} />
+                                ) : (
+                                  <span className="qt-mobile-participant-avatar-initial">
+                                    {entity.name.charAt(0).toUpperCase()}
+                                  </span>
+                                )}
+                                {queuePos > 0 && (
+                                  <span className="qt-mobile-participant-queue-badge">{queuePos}</span>
+                                )}
+                                {isCurrentTurn && <span className="qt-mobile-participant-turn-dot" />}
+                              </button>
+                            )
+                          })
+                        })()}
+
+                        {/* Dropdown for selected participant */}
+                        {mobileParticipantDropdownId && (() => {
+                          const selectedParticipant = participantData.find(p => p.id === mobileParticipantDropdownId)
+                          if (!selectedParticipant) return null
+                          const activeCharCount = participantData.filter(p => p.type === 'CHARACTER' && p.isActive).length
+
+                          return (
+                            <MobileParticipantDropdown
+                              participant={selectedParticipant}
+                              isOpen={true}
+                              anchorRef={{ current: mobileParticipantRefs.current.get(mobileParticipantDropdownId) ?? null }}
+                              isCurrentTurn={turnState.currentTurnParticipantId === mobileParticipantDropdownId}
+                              queuePosition={getQueuePosition(turnState, mobileParticipantDropdownId)}
+                              isGenerating={streaming || waitingForResponse}
+                              isUserParticipant={mobileParticipantDropdownId === userParticipantId}
+                              canRemove={activeCharCount > 1}
+                              onClose={() => setMobileParticipantDropdownId(null)}
+                              onNudge={handleNudge}
+                              onQueue={handleQueue}
+                              onDequeue={handleDequeue}
+                              onTalkativenessChange={handleTalkativenessChange}
+                              onRemove={handleRemoveCharacter}
+                            />
+                          )
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Mobile continue button - to the right of participant avatars */}
+                    {isMultiChar && hasActiveCharacters && (
+                      <button
+                        type="button"
+                        onClick={handleContinue}
+                        disabled={
+                          streaming ||
+                          waitingForResponse ||
+                          turnSelectionResult?.nextSpeakerId !== null
+                        }
+                        className="qt-mobile-continue-button"
+                        title={
+                          turnSelectionResult?.nextSpeakerId !== null
+                            ? "It's not your turn"
+                            : "Pass turn to next character"
+                        }
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -2539,7 +2662,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
-              {/* Continue button - Phase 7: Pass turn to next character */}
+              {/* Continue button - Phase 7: Pass turn to next character (desktop only, mobile uses header button) */}
               {isMultiChar && hasActiveCharacters && (
                 <button
                   type="button"
@@ -2549,7 +2672,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     waitingForResponse ||
                     turnSelectionResult?.nextSpeakerId !== null
                   }
-                  className="qt-chat-toolbar-button qt-chat-continue-button"
+                  className="qt-chat-toolbar-button qt-chat-continue-button qt-desktop-only"
                   title={
                     turnSelectionResult?.nextSpeakerId !== null
                       ? "It's not your turn"
