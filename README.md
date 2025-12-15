@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.0--dev.10-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.4.0--dev.11-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -521,6 +521,13 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./features/comfy_ui_local_image.md))
 - [ ] Arcadia "art deco" theme to show off what the theme system can really do
 - [ ] Fully mobile-capable media breakpoints
+  - [X] Dashboard
+  - [ ] Chat
+  - [ ] Characters
+  - [ ] Personas
+  - [ ] Settings
+  - [ ] Tools
+  - [ ] About
 - [ ] Character checkpointing (backups of a character at a certain point in time)
 - [ ] Setup wizard
   - [ ] Default assistant, editable
@@ -529,7 +536,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
 - [ ] Character build-out wizard
   - Uses LLM of choice to fill out gaps in character fields or physical descriptions
-- [X] Prompt caching (see https://platform.claude.com/docs/en/build-with-claude/prompt-caching )
+- [X] Prompt caching (see [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching))
 - [ ] Make roleplay templates besides the default one into plugins (start with "Quilltap RP")
 
 ## Acknowledgments

@@ -4,6 +4,14 @@
 
 ### 2.4-dev
 
+- feat: Mobile-responsive chat conversation UI
+  - On mobile (< 768px), messages display with avatar/name header above message card
+  - Character messages: avatar on left, user messages: avatar on right
+  - Message cards stretch to 80% of screen width on mobile
+  - Replaced hover-based copy/view-source actions with persistent icon bar at bottom of messages
+  - Icon bar includes: copy, view source, edit (user only), delete, regenerate (assistant only), swipe controls
+  - Timestamp shown in action bar on mobile instead of separate line
+  - Desktop layout preserved with side-by-side avatar layout and hover actions
 - feat: Mobile-responsive dashboard for phone portrait mode
   - Favorites section: header shows "Favorites" on mobile, compact 2-column horizontal cards
   - Dashboard cards: Characters/Chats shown as compact 2-column grid, Personas hidden on mobile

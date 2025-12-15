@@ -611,6 +611,71 @@
     color: var(--qt-status-danger-fg);
   }
 
+  /* ==========================================================================
+     MOBILE MESSAGE LAYOUT
+     ========================================================================== */
+
+  /**
+   * Mobile message header - shows avatar and name in a row
+   * Hidden on desktop, shown on mobile via media query
+   */
+  .qt-chat-message-mobile-header {
+    @apply hidden items-center gap-2 mb-2;
+  }
+
+  .qt-chat-message-mobile-avatar {
+    @apply w-10 h-10 bg-muted flex-shrink-0 overflow-hidden;
+  }
+
+  .qt-chat-message-mobile-avatar img {
+    @apply w-full h-full object-cover;
+  }
+
+  .qt-chat-message-mobile-avatar-initial {
+    @apply w-full h-full flex items-center justify-center text-lg font-bold text-muted-foreground;
+  }
+
+  .qt-chat-message-mobile-name {
+    @apply text-sm font-semibold text-foreground truncate;
+  }
+
+  /**
+   * Message action bar - shows action icons at bottom of message
+   * Persistent on mobile, replaces hover-based actions
+   */
+  .qt-chat-message-action-bar {
+    @apply flex items-center gap-3 mt-2 pt-2;
+    border-top: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  }
+
+  .qt-chat-message-action-bar-icons {
+    @apply flex items-center gap-1;
+  }
+
+  .qt-chat-message-action-icon {
+    @apply p-1.5 rounded transition-colors;
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+  }
+
+  .qt-chat-message-action-icon:hover {
+    color: var(--color-foreground);
+    background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+  }
+
+  .qt-chat-message-action-icon-danger:hover {
+    color: var(--qt-status-danger-fg);
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 50%, transparent);
+  }
+
+  .qt-chat-message-action-icon svg {
+    @apply w-4 h-4;
+  }
+
+  .qt-chat-message-action-timestamp {
+    @apply text-xs text-muted-foreground ml-auto;
+  }
+
   /**
    * Chat sidebar (participants)
    */
@@ -656,5 +721,131 @@
     padding: 1rem;
     color: var(--qt-chat-sidebar-muted);
     @apply text-xs;
+  }
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVE CHAT LAYOUT
+   These styles are outside @layer to ensure they have proper specificity
+   ========================================================================== */
+
+/* Always hide old hover actions and text buttons - replaced by icon action bar */
+.qt-chat-desktop-hover-actions {
+  display: none !important;
+}
+
+.qt-chat-message-desktop-actions {
+  display: none !important;
+}
+
+.qt-chat-desktop-timestamp {
+  display: none !important;
+}
+
+/* Always show the icon action bar */
+.qt-chat-message-action-bar {
+  display: flex !important;
+}
+
+/* Mobile: show mobile header, hide desktop avatars */
+@media (max-width: 768px) {
+  /* Prevent horizontal scroll on mobile - use clip to preserve sticky positioning */
+  .qt-chat-layout,
+  .qt-chat-main {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
+  }
+
+  /* Messages container keeps overflow-y: auto for scrolling, clip horizontal */
+  .qt-chat-messages {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
+  }
+
+  .qt-chat-messages-list,
+  .qt-chat-composer,
+  .qt-chat-composer-content {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
+  }
+
+  /* Constrain the roleplay annotation toolbar */
+  .qt-rp-annotation-toolbar {
+    overflow-x: auto;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
+  /* Remove top padding from messages container so sticky header goes to top */
+  .qt-chat-messages {
+    padding-top: 0 !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+
+  /* Hide desktop avatar columns on mobile */
+  .qt-chat-desktop-avatar {
+    display: none !important;
+  }
+
+  /* Show mobile header - sticky so it stays visible while scrolling long messages */
+  .qt-chat-message-mobile-header {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--qt-content-bg);
+    padding: 0.5rem 0.75rem;
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    margin-top: 0;
+  }
+
+  /* User messages: header aligned to right */
+  .qt-chat-message-row-user .qt-chat-message-mobile-header {
+    flex-direction: row-reverse;
+  }
+
+  /* Message rows take most of width on mobile but don't overflow */
+  .qt-chat-message-row {
+    width: 90% !important;
+    max-width: calc(100vw - 1rem) !important;
+  }
+
+  /* Stack message body vertically on mobile */
+  .qt-chat-message-body {
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  /* Ensure message content doesn't overflow */
+  .qt-chat-message-user,
+  .qt-chat-message-assistant {
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  /* Ensure action bar wraps if needed */
+  .qt-chat-message-action-bar {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .qt-chat-message-action-bar-icons {
+    flex-wrap: wrap;
+  }
+}
+
+/* Desktop: hide mobile header, show desktop avatars */
+@media (min-width: 769px) {
+  /* Hide mobile header on desktop */
+  .qt-chat-message-mobile-header {
+    display: none !important;
   }
 }
