@@ -4,6 +4,7 @@ import { useMemo, useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { clientLogger } from '@/lib/client-logger'
@@ -106,6 +107,7 @@ function transformApiChatToRecentChat(apiChat: any): RecentChat {
 
 export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionProps) {
   const { style } = useAvatarDisplay()
+  const { formatPersonaName } = usePersonaDisplayName()
   const { hiddenTagIds, loading: quickHideLoading } = useQuickHide()
   const [chats, setChats] = useState<RecentChat[]>(initialChats)
   const [loading, setLoading] = useState(false)
@@ -180,8 +182,8 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
   const visibleChats = chats
 
   return (
-    <div className="mt-8 flex-1 flex flex-col min-h-0">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="mt-8 sm:flex-1 sm:flex sm:flex-col sm:min-h-0">
+      <div className="flex items-center gap-2 mb-4 justify-end sm:justify-start">
         <h3 className="text-xl font-semibold text-foreground">
           Recent Chats
         </h3>
@@ -192,7 +194,7 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
         )}
       </div>
       {visibleChats.length > 0 ? (
-        <div className="space-y-3 flex-1 overflow-y-auto pb-4">
+        <div className="space-y-3 pb-4 sm:flex-1 sm:overflow-y-auto">
           {visibleChats.map((chat) => {
             const characters = chat.characters
             const characterNames = formatCharacterNames(characters)
@@ -292,40 +294,83 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
               )
             }
 
+            // Get first character avatar for mobile
+            const firstChar = characters[0]
+            const firstAvatarSrc = firstChar ? getCharacterAvatarSrc(firstChar) : null
+
             return (
-              <Link
-                key={chat.id}
-                href={`/chats/${chat.id}`}
-                className="block qt-card-interactive"
-              >
-                <div className="flex items-stretch justify-between gap-3">
-                  <div className="flex items-stretch gap-4 flex-grow">
-                    {renderAvatars()}
-                    <div className="flex-grow min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-semibold text-foreground truncate">
-                          {chat.title}
-                        </h4>
-                        <span className="inline-block text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0 qt-badge-primary">
-                          {chat.messageCount}
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1 truncate">
-                        with {characterNames}
-                        {chat.persona && ` as ${chat.persona.name}${chat.persona.title ? ` - ${chat.persona.title}` : ''}`}
-                      </p>
-                      {chat.tags.length > 0 && (
-                        <div className="mt-2">
-                          <TagDisplay tags={chat.tags.map(ct => ct.tag)} />
-                        </div>
-                      )}
+              <div key={chat.id}>
+                {/* Mobile: compact horizontal card */}
+                <Link
+                  href={`/chats/${chat.id}`}
+                  className="flex sm:hidden items-center gap-2 p-2 rounded-lg border border-border bg-card hover:border-primary hover:shadow-md transition-all"
+                >
+                  {firstAvatarSrc ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={firstAvatarSrc}
+                      alt={firstChar?.name || 'Chat'}
+                      width={40}
+                      height={40}
+                      className={`${getAvatarClasses(style, 'sm').imageClass} flex-shrink-0`}
+                    />
+                  ) : (
+                    <div className={`${getAvatarClasses(style, 'sm').wrapperClass} flex-shrink-0`} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5', width: '40px' } : undefined}>
+                      <span className={getAvatarClasses(style, 'sm').fallbackClass}>
+                        {firstChar?.name?.charAt(0).toUpperCase() || '?'}
+                      </span>
                     </div>
+                  )}
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-xs font-semibold text-foreground truncate">
+                        {chat.title}
+                      </h4>
+                      <span className="inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 qt-badge-primary">
+                        {chat.messageCount}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {characterNames}
+                      {chat.persona && ` with ${formatPersonaName(chat.persona)}`}
+                    </p>
                   </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
-                    {dateFormatter.format(new Date(chat.updatedAt))}
-                  </span>
-                </div>
-              </Link>
+                </Link>
+
+                {/* Desktop: full card */}
+                <Link
+                  href={`/chats/${chat.id}`}
+                  className="hidden sm:block qt-card-interactive"
+                >
+                  <div className="flex items-stretch justify-between gap-3">
+                    <div className="flex items-stretch gap-4 flex-grow">
+                      {renderAvatars()}
+                      <div className="flex-grow min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-semibold text-foreground truncate">
+                            {chat.title}
+                          </h4>
+                          <span className="inline-block text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0 qt-badge-primary">
+                            {chat.messageCount}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1 truncate">
+                          {characterNames}
+                          {chat.persona && ` with ${formatPersonaName(chat.persona)}`}
+                        </p>
+                        {chat.tags.length > 0 && (
+                          <div className="mt-2">
+                            <TagDisplay tags={chat.tags.map(ct => ct.tag)} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                      {dateFormatter.format(new Date(chat.updatedAt))}
+                    </span>
+                  </div>
+                </Link>
+              </div>
             )
           })}
         </div>

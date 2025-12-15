@@ -7,6 +7,7 @@ import { showErrorToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
@@ -68,6 +69,7 @@ export default function ChatsPage() {
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
   const { style } = useAvatarDisplay()
+  const { formatPersonaName } = usePersonaDisplayName()
   const { shouldHideByIds } = useQuickHide()
 
   const visibleChats = useMemo(
@@ -416,7 +418,7 @@ export default function ChatsPage() {
                           </div>
                           <p className="text-sm text-muted-foreground">
                             {characterNames}
-                            {persona && ` (${persona.name}${persona.title ? ` - ${persona.title}` : ''})`}
+                            {persona && ` with ${formatPersonaName(persona)}`}
                             {' \u2022 '}
                             {new Date(chat.updatedAt).toLocaleDateString()}
                           </p>

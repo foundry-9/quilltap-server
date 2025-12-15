@@ -13,6 +13,7 @@ import { EmbeddedPhotoGallery } from '@/components/images/EmbeddedPhotoGallery'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { clientLogger } from '@/lib/client-logger'
+import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 
 interface Character {
   id: string
@@ -140,6 +141,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   })
   const [originalDefaultPersonaId, setOriginalDefaultPersonaId] = useState<string>('')
   const [avatarRefreshKey, setAvatarRefreshKey] = useState(0)
+  const { formatPersonaName } = usePersonaDisplayName()
 
   const fetchCharacter = useCallback(async () => {
     try {
@@ -580,7 +582,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                           >
                             <option value="">No default persona</option>
                             {personas.map((persona) => {
-                              const displayName = persona.title ? `${persona.name} (${persona.title})` : persona.name
+                              const displayName = formatPersonaName(persona)
                               const tagCount = persona.matchingTagCount
                               const plural = tagCount === 1 ? '' : 's'
                               const tagSuffix = tagCount ? ` — ${tagCount} shared tag${plural}` : ''

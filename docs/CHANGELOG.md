@@ -4,6 +4,21 @@
 
 ### 2.4-dev
 
+- feat: Mobile-responsive dashboard for phone portrait mode
+  - Favorites section: header shows "Favorites" on mobile, compact 2-column horizontal cards
+  - Dashboard cards: Characters/Chats shown as compact 2-column grid, Personas hidden on mobile
+  - Recent Chats: compact horizontal cards with single avatar, no tags
+  - Section headers (Favorites, Recent Chats) right-aligned on mobile
+  - Full-page scrolling on mobile (nav/footer fixed, no separate scroll areas)
+- feat: Smart persona display name disambiguation
+  - New usePersonaDisplayName hook tracks duplicate persona names
+  - Persona titles only shown when needed to distinguish between personas with same name
+  - Applied across all persona dropdowns and chat displays
+- fix: Improved useAvatarDisplay hook error handling
+  - Network errors (offline, CORS) now logged at debug level instead of error
+  - JSON parse errors handled separately with graceful fallback
+  - Update function properly reverts to previous style on error instead of toggling
+  - Reduced console noise for expected error scenarios
 - fix: User menu mobile responsiveness
   - Sign Out button now uses NavUserMenuItem with icon, shrinks to icon-only on mobile
   - Dropdown auto-sizes to content on mobile instead of fixed 14rem width

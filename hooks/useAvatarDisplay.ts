@@ -25,9 +25,29 @@ export function useAvatarDisplay() {
           }
           throw new Error(`Failed to fetch chat settings: ${res.status} ${res.statusText}`)
         }
-        const data = await res.json()
+
+        // Parse JSON separately to catch parse errors
+        let data
+        try {
+          data = await res.json()
+        } catch (parseErr) {
+          clientLogger.warn('Failed to parse chat settings response as JSON, using defaults')
+          setStyle('CIRCULAR')
+          return
+        }
+
         setStyle((data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle)
       } catch (err) {
+        // Network errors (like CORS, offline, etc.) are expected in some cases
+        // Don't log them at error level to avoid console noise
+        if (err instanceof TypeError && err.message.includes('fetch')) {
+          clientLogger.debug('Network error fetching avatar display style, using defaults', {
+            message: err.message
+          })
+          setStyle('CIRCULAR')
+          return
+        }
+
         // Robust error extraction - handle various error types
         let errorMessage = 'Unknown error'
         if (err instanceof Error) {
@@ -42,7 +62,7 @@ export function useAvatarDisplay() {
             errorMessage = String(err) || 'Unstringifiable error'
           }
         }
-        clientLogger.error('Error fetching avatar display style', {
+        clientLogger.warn('Error fetching avatar display style', {
           error: errorMessage,
           errorType: err?.constructor?.name || typeof err
         })
@@ -58,6 +78,7 @@ export function useAvatarDisplay() {
   }, [])
 
   const updateAvatarDisplayStyle = async (newStyle: AvatarDisplayStyle) => {
+    const previousStyle = style
     try {
       setStyle(newStyle)
       const res = await fetch('/api/chat-settings', {
@@ -67,10 +88,19 @@ export function useAvatarDisplay() {
       })
 
       if (!res.ok) {
-        throw new Error('Failed to update avatar display style')
+        throw new Error(`Failed to update avatar display style: ${res.status} ${res.statusText}`)
       }
 
-      const data = await res.json()
+      // Parse JSON separately to catch parse errors
+      let data
+      try {
+        data = await res.json()
+      } catch {
+        // Update succeeded but response parse failed - keep the optimistic update
+        clientLogger.warn('Failed to parse update response, keeping optimistic style')
+        return
+      }
+
       setStyle((data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle)
     } catch (err) {
       // Robust error extraction - handle various error types
@@ -89,11 +119,12 @@ export function useAvatarDisplay() {
       }
       clientLogger.error('Error updating avatar display style', {
         error: errorMessage,
-        errorType: err?.constructor?.name || typeof err
+        errorType: err?.constructor?.name || typeof err,
+        attemptedStyle: newStyle
       })
       setError(errorMessage)
       // Revert to previous style on error
-      setStyle(style === 'CIRCULAR' ? 'RECTANGULAR' : 'CIRCULAR')
+      setStyle(previousStyle)
     }
   }
 

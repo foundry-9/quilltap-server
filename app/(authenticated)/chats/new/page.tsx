@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 
 interface Character {
@@ -51,6 +52,7 @@ interface SelectedCharacter {
 export default function NewChatPage() {
   const router = useRouter()
   const { style } = useAvatarDisplay()
+  const { formatPersonaName } = usePersonaDisplayName()
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const [characters, setCharacters] = useState<Character[]>([])
@@ -423,7 +425,7 @@ export default function NewChatPage() {
                 >
                   <option value="">No persona</option>
                   {personas.map((persona) => (
-                    <option key={persona.id} value={persona.id}>{persona.name}{persona.title ? ' (' + persona.title + ')' : ''}</option>
+                    <option key={persona.id} value={persona.id}>{formatPersonaName(persona)}</option>
                   ))}
                 </select>
               </div>

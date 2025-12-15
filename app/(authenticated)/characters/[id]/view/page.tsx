@@ -9,6 +9,7 @@ import { clientLogger } from '@/lib/client-logger'
 import MessageContent from '@/components/chat/MessageContent'
 import { CharacterConversationsTab } from '@/components/character/character-conversations-tab'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TagBadge } from '@/components/tags/tag-badge'
@@ -158,6 +159,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const [replacingTemplate, setReplacingTemplate] = useState<'char' | 'user' | null>(null)
   const { style } = useAvatarDisplay()
+  const { formatPersonaName } = usePersonaDisplayName()
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
   const quickHideActive = hiddenTagIds.size > 0
   const characterTagIds = character?.tags || []
@@ -781,7 +783,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   <option value="">No default persona</option>
                   {personas.map((persona) => (
                     <option key={persona.id} value={persona.id}>
-                      {persona.title ? `${persona.name} (${persona.title})` : persona.name}
+                      {formatPersonaName(persona)}
                     </option>
                   ))}
                 </select>
@@ -973,7 +975,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                     <option value="">Use character defaults</option>
                     {personas.map((persona) => (
                       <option key={persona.id} value={persona.id}>
-                        {persona.title ? `${persona.name} (${persona.title})` : persona.name}
+                        {formatPersonaName(persona)}
                       </option>
                     ))}
                   </select>

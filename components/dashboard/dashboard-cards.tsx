@@ -47,7 +47,7 @@ export function DashboardCards({ characters, chats, personas }: DashboardCardsPr
               {visibleCounts.characters}
             </span>
           </div>
-          <p className="qt-card-description flex-1">
+          <p className="qt-card-description flex-1 hidden sm:block">
             Create and manage your AI characters
           </p>
         </div>
@@ -62,14 +62,14 @@ export function DashboardCards({ characters, chats, personas }: DashboardCardsPr
               {visibleCounts.chats}
             </span>
           </div>
-          <p className="qt-card-description flex-1">
+          <p className="qt-card-description flex-1 hidden sm:block">
             Start conversations with your characters
           </p>
         </div>
       </Link>
 
-      {/* Personas Card */}
-      <Link href="/personas">
+      {/* Personas Card - hidden on mobile */}
+      <Link href="/personas" className="hidden sm:block">
         <div className="qt-card-interactive dashboard-card h-full flex flex-col">
           <div className="qt-card-header">
             <h2 className="qt-card-title">Personas</h2>

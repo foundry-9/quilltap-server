@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 
 interface Message {
   id: string
@@ -48,6 +49,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
   const { shouldHideByIds } = useQuickHide()
+  const { formatPersonaName } = usePersonaDisplayName()
   const visibleChats = useMemo(
     () => chats.filter(chat => !shouldHideByIds((chat.tags || []).map(ct => ct.tag.id))),
     [chats, shouldHideByIds]
@@ -290,7 +292,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                 <p className="text-sm text-muted-foreground">
                   {chat.persona && (
                     <>
-                      as {chat.persona.title ? `${chat.persona.name} (${chat.persona.title})` : chat.persona.name}
+                      with {formatPersonaName(chat.persona)}
                       {' \u2022 '}
                     </>
                   )}
