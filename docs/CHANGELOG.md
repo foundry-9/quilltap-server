@@ -4,6 +4,13 @@
 
 ### 2.4-dev
 
+- fix: User menu mobile responsiveness
+  - Sign Out button now uses NavUserMenuItem with icon, shrinks to icon-only on mobile
+  - Dropdown auto-sizes to content on mobile instead of fixed 14rem width
+  - Header (name/email) truncates with ellipsis on mobile to prevent width overflow
+  - Submenus appear below trigger on mobile (< 768px) instead of flying off to the left
+  - Submenus align to right edge on mobile to stay within viewport
+  - Reduced padding on menu items for mobile
 - feat: Navbar restructuring - consolidate controls into User menu
   - Moved Theme selector, Quick-hide, and DevConsole buttons into User menu dropdown as submenu items
   - Theme and Quick-hide show flyout menus to the left with their respective options

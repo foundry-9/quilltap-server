@@ -122,15 +122,25 @@
 
   /**
    * Navbar dropdown/panel shell
+   * Responsive: compact on mobile, wider on desktop
    */
   .qt-navbar-dropdown {
     @apply absolute right-0 mt-2 z-50;
-    min-width: 14rem;
+    width: auto;
+    min-width: fit-content;
+    max-width: calc(100vw - 2rem);
     border-radius: var(--qt-popover-radius);
     background: var(--qt-popover-bg);
     color: var(--qt-popover-fg);
     border: 1px solid var(--qt-popover-border);
     box-shadow: var(--qt-popover-shadow);
+  }
+
+  @media (min-width: 768px) {
+    .qt-navbar-dropdown {
+      min-width: 14rem;
+      max-width: none;
+    }
   }
 
   /**
@@ -142,7 +152,7 @@
   }
 
   .qt-navbar-dropdown-section {
-    @apply p-3 space-y-3;
+    @apply p-2 space-y-2 sm:p-3 sm:space-y-3;
   }
 
   .qt-navbar-dropdown-label {
@@ -154,6 +164,20 @@
 
   .qt-navbar-dropdown-header {
     @apply text-right text-sm font-medium;
+  }
+
+  .qt-navbar-dropdown-header p {
+    /* Truncate long names/emails on mobile */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 8rem;
+  }
+
+  @media (min-width: 768px) {
+    .qt-navbar-dropdown-header p {
+      max-width: none;
+    }
   }
 
   .qt-navbar-dropdown-subtext {
@@ -183,13 +207,18 @@
 
   /**
    * Submenu - flyout positioned to the left of parent dropdown
+   * On mobile: appears below the trigger, aligned right
+   * On desktop (768px+): flies out to the left
    */
   .qt-navbar-submenu {
     @apply absolute z-[60];
-    right: 100%;
-    top: 0;
-    margin-right: 0.5rem;
-    min-width: 14rem;
+    /* Mobile: position below, align to right edge */
+    left: auto;
+    right: 0;
+    top: 100%;
+    margin-top: 0.25rem;
+    min-width: fit-content;
+    max-width: calc(100vw - 2rem);
     border-radius: var(--qt-popover-radius);
     background: var(--qt-popover-bg);
     color: var(--qt-popover-fg);
@@ -197,14 +226,38 @@
     box-shadow: var(--qt-popover-shadow);
   }
 
+  @media (min-width: 768px) {
+    .qt-navbar-submenu {
+      /* Desktop: fly out to the left */
+      right: 100%;
+      top: 0;
+      margin-top: 0;
+      margin-right: 0.5rem;
+      min-width: 14rem;
+      max-width: none;
+    }
+  }
+
   /**
    * Submenu item - triggers a submenu flyout, shows arrow indicator
    */
   .qt-navbar-submenu-item {
-    @apply flex items-center justify-between gap-2;
-    @apply w-full px-3 py-2 rounded-md text-sm;
+    @apply flex items-center gap-1;
+    @apply px-2 py-1.5 rounded-md text-sm;
+    /* On mobile: auto width, pack right. On desktop: full width, spread */
+    width: auto;
+    margin-left: auto;
     cursor: pointer;
     transition: background 150ms ease, color 150ms ease;
+  }
+
+  @media (min-width: 768px) {
+    .qt-navbar-submenu-item {
+      @apply gap-2 px-3 py-2;
+      width: 100%;
+      margin-left: 0;
+      justify-content: space-between;
+    }
   }
 
   .qt-navbar-submenu-item:hover {

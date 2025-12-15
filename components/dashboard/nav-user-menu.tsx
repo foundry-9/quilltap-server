@@ -33,6 +33,27 @@ interface NavUserMenuProps {
 }
 
 /**
+ * Sign out icon (door with arrow)
+ */
+function SignOutIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  )
+}
+
+/**
  * Wrench/tool icon for DevConsole menu item
  */
 function DevConsoleIcon({ className }: { className?: string }) {
@@ -151,7 +172,7 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="qt-navbar-dropdown w-56">
+        <div className="qt-navbar-dropdown">
           <div className="qt-navbar-dropdown-section space-y-2">
             {/* User Info */}
             <div className="qt-navbar-dropdown-header">
@@ -202,13 +223,13 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
               <div className="qt-navbar-dropdown-divider" />
             )}
 
-            {/* Sign Out Button */}
-            <button
+            {/* Sign Out */}
+            <NavUserMenuItem
+              icon={<SignOutIcon className="w-4 h-4" />}
+              label="Sign Out"
               onClick={handleSignOut}
-              className="qt-button qt-button-destructive w-full justify-center"
-            >
-              Sign Out
-            </button>
+              testId="user-menu-sign-out"
+            />
           </div>
         </div>
       )}
