@@ -4,6 +4,11 @@
 
 ### 2.4-dev
 
+- fix: Anthropic provider not detecting tool_use blocks during streaming
+  - Tool calls (image generation, memory search, web search) were silently failing with Anthropic models
+  - Root cause: streaming code only captured text deltas, ignoring content_block_start events for tool_use
+  - Now properly tracks all content blocks including tool_use with input JSON parsing
+  - Added debug logging for tool use block start, input deltas, and parsed results
 - fix: Roleplay syntax styling now respects active template
   - Standard template: `*actions*`, `"dialogue"`, `((OOC))`
   - Quilltap RP template: `[actions]`, `{thoughts}`, `// OOC`

@@ -372,15 +372,91 @@ export class AnthropicProvider implements LLMProvider {
     let cacheCreationInputTokens: number | undefined
     let cacheReadInputTokens: number | undefined
 
+    // Track all content blocks (text and tool_use) for proper tool call detection
+    const contentBlocks: Array<{
+      type: 'text' | 'tool_use'
+      text?: string
+      id?: string
+      name?: string
+      input?: Record<string, unknown>
+      partialJson?: string
+    }> = []
+
     for await (const event of stream) {
+      // Handle content_block_start - initializes a new content block
+      if (event.type === 'content_block_start') {
+        const block = event.content_block
+        if (block.type === 'text') {
+          contentBlocks[event.index] = { type: 'text', text: block.text || '' }
+        } else if (block.type === 'tool_use') {
+          logger.debug('Tool use block started', {
+            context: 'AnthropicProvider.streamMessage',
+            index: event.index,
+            toolName: block.name,
+            toolId: block.id,
+          })
+          contentBlocks[event.index] = {
+            type: 'tool_use',
+            id: block.id,
+            name: block.name,
+            input: {},
+            partialJson: '',
+          }
+        }
+      }
+
+      // Handle content_block_delta - updates an existing content block
       if (event.type === 'content_block_delta') {
-        if (event.delta?.type === 'text_delta' && event.delta?.text) {
-          logger.debug('Stream text delta', { context: 'AnthropicProvider.streamMessage', textLength: event.delta.text.length })
-          fullContent += event.delta.text
+        const delta = event.delta
+        const blockIndex = event.index
+
+        if (delta?.type === 'text_delta' && delta?.text) {
+          logger.debug('Stream text delta', { context: 'AnthropicProvider.streamMessage', textLength: delta.text.length })
+          fullContent += delta.text
+          // Update the content block
+          if (contentBlocks[blockIndex]) {
+            contentBlocks[blockIndex].text = (contentBlocks[blockIndex].text || '') + delta.text
+          }
           yield {
-            content: event.delta.text,
+            content: delta.text,
             done: false,
           }
+        } else if (delta?.type === 'input_json_delta' && delta?.partial_json) {
+          // Accumulate partial JSON for tool_use blocks
+          if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === 'tool_use') {
+            contentBlocks[blockIndex].partialJson = (contentBlocks[blockIndex].partialJson || '') + delta.partial_json
+            logger.debug('Tool use input delta', {
+              context: 'AnthropicProvider.streamMessage',
+              index: blockIndex,
+              chunkLength: delta.partial_json.length,
+            })
+          }
+        }
+      }
+
+      // Handle content_block_stop - finalize the content block
+      if (event.type === 'content_block_stop') {
+        const blockIndex = event.index
+        const block = contentBlocks[blockIndex]
+        // Parse accumulated JSON for tool_use blocks
+        if (block && block.type === 'tool_use' && block.partialJson) {
+          try {
+            block.input = JSON.parse(block.partialJson)
+            logger.debug('Tool use input parsed', {
+              context: 'AnthropicProvider.streamMessage',
+              index: blockIndex,
+              toolName: block.name,
+              inputKeys: Object.keys(block.input || {}),
+            })
+          } catch (e) {
+            logger.error('Failed to parse tool use input JSON', {
+              context: 'AnthropicProvider.streamMessage',
+              index: blockIndex,
+              partialJson: block.partialJson,
+            }, e instanceof Error ? e : undefined)
+          }
+          // Clean up partialJson field as it's not part of the API response format
+          delete block.partialJson
         }
       }
 
@@ -413,20 +489,26 @@ export class AnthropicProvider implements LLMProvider {
             }
           : undefined
 
+        // Count tool_use blocks for logging
+        const toolUseCount = contentBlocks.filter(b => b.type === 'tool_use').length
+
         logger.debug('Stream completed', {
           context: 'AnthropicProvider.streamMessage',
           promptTokens: totalInputTokens,
           completionTokens: totalOutputTokens,
           cacheCreationInputTokens,
           cacheReadInputTokens,
+          contentBlockCount: contentBlocks.length,
+          toolUseCount,
         })
 
         // Build the full message object for tool call detection
+        // Use the tracked content blocks which include both text and tool_use
         const fullMessage = {
           id: messageId,
           type: 'message' as const,
           role: 'assistant' as const,
-          content: [{ type: 'text' as const, text: fullContent }],
+          content: contentBlocks.length > 0 ? contentBlocks : [{ type: 'text' as const, text: fullContent }],
           model: model,
           stop_reason: stopReason,
           usage: {
