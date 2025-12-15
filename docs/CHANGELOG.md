@@ -4,6 +4,16 @@
 
 ### 2.4-dev
 
+- feat: Unified desktop tool palette matching mobile design
+  - Simplified footer to single-line textarea with tool palette button (left) and send (right)
+  - New full-width tool palette bar above composer when opened
+  - Left section: Attach, Settings, Export, Gallery, Generate Image, Add Character
+  - Center section: Roleplay annotation buttons (no "Insert" label)
+  - Right section: Re-extract, Delete memories, Preview toggle
+  - Removed separate attach file, preview, and continue buttons from footer
+  - Continue/skip functionality moved to participant sidebar for user personas
+  - User participants now show "Queue" and "Skip" buttons side by side
+  - Skip button triggers continue mode (passes turn to next character)
 - feat: Mobile-responsive multi-character participant UI
   - Participant avatar buttons integrated into mobile message header row
   - Left side: sticky speaker avatar and name (per message)

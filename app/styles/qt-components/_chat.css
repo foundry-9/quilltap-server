@@ -239,6 +239,63 @@
   }
 
   /* ==========================================================================
+     DESKTOP TOOL PALETTE BAR
+     ========================================================================== */
+
+  /**
+   * Tool palette bar - full-width bar above the composer textarea
+   * Positioned absolutely above the composer inner form
+   */
+  .qt-tool-palette-bar {
+    @apply flex items-center gap-2;
+    padding: 0.5rem 0.75rem;
+    background: var(--qt-chat-composer-bg);
+    border-bottom: 1px solid var(--qt-chat-composer-border);
+    animation: qt-slide-up 150ms ease-out;
+  }
+
+  .qt-tool-palette-section {
+    @apply flex items-center gap-1.5;
+  }
+
+  .qt-tool-palette-section-left {
+    @apply flex-wrap;
+  }
+
+  .qt-tool-palette-section-center {
+    @apply flex-1 justify-center flex-wrap;
+  }
+
+  .qt-tool-palette-section-right {
+    @apply flex-wrap justify-end;
+  }
+
+  .qt-tool-palette-button {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md;
+    @apply transition-colors duration-150;
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+
+  .qt-tool-palette-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-muted) 70%, black);
+  }
+
+  .qt-tool-palette-button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .qt-tool-palette-button-danger {
+    color: var(--qt-status-danger-fg);
+  }
+
+  .qt-tool-palette-button-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 50%, transparent);
+  }
+
+  /* ==========================================================================
      ROLEPLAY ANNOTATION STYLES
      ========================================================================== */
 

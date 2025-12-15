@@ -28,6 +28,7 @@ interface ParticipantSidebarProps {
   onNudge: (participantId: string) => void
   onQueue: (participantId: string) => void
   onDequeue: (participantId: string) => void
+  onSkip?: () => void // Skip turn (for user participants in multi-char chat)
   onTalkativenessChange?: (participantId: string, value: number) => void
   onAddCharacter?: () => void
   onRemoveCharacter?: (participantId: string) => void // Phase 6: Remove character from chat
@@ -43,6 +44,7 @@ export function ParticipantSidebar({
   onNudge,
   onQueue,
   onDequeue,
+  onSkip,
   onTalkativenessChange,
   onAddCharacter,
   onRemoveCharacter,
@@ -149,6 +151,8 @@ export function ParticipantSidebar({
           const queuePos = getQueuePosition(turnState, participant.id)
           // Can remove if there's more than one active character
           const canRemove = activeCharacterCount > 1
+          // Can skip when it's the user's turn (nextSpeakerId is null means it's user's turn)
+          const canSkip = turnSelectionResult?.nextSpeakerId === null && !isGenerating
 
           return (
             <ParticipantCard
@@ -161,9 +165,11 @@ export function ParticipantSidebar({
               onNudge={onNudge}
               onQueue={onQueue}
               onDequeue={onDequeue}
+              onSkip={isUserParticipant ? onSkip : undefined}
               onTalkativenessChange={onTalkativenessChange}
               onRemove={onRemoveCharacter}
               canRemove={canRemove}
+              canSkip={canSkip}
             />
           )
         })}

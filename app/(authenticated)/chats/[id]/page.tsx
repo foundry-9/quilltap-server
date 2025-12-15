@@ -23,7 +23,6 @@ import { safeJsonParse } from '@/lib/fetch-helpers'
 import { clientLogger } from '@/lib/client-logger'
 import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
-import RoleplayAnnotationButtons from '@/components/chat/RoleplayAnnotationButtons'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDebugOptional } from '@/components/providers/debug-provider'
@@ -2513,9 +2512,26 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               ))}
             </div>
           )}
-          {/* Roleplay annotation buttons - desktop only, moved to palette on mobile */}
+          {/* Desktop tool palette bar - shows above the composer when open */}
           <div className="qt-desktop-only">
-            <RoleplayAnnotationButtons
+            <ToolPalette
+              isOpen={toolPaletteOpen}
+              onClose={() => setToolPaletteOpen(false)}
+              onGalleryClick={() => setGalleryOpen(true)}
+              onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
+              onSettingsClick={() => setChatSettingsModalOpen(true)}
+              onAddCharacterClick={handleAddCharacter}
+              onDeleteChatMemoriesClick={handleDeleteChatMemories}
+              onReextractMemoriesClick={handleReextractMemories}
+              chatPhotoCount={chatPhotoCount}
+              hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
+              showAddCharacter={isSingleCharacterChat}
+              chatId={id}
+              chatMemoryCount={chatMemoryCount}
+              onAttachFileClick={() => fileInputRef.current?.click()}
+              uploadingFile={uploadingFile}
+              showPreview={showPreview}
+              onTogglePreview={() => setShowPreview(!showPreview)}
               roleplayTemplateId={chat?.roleplayTemplateId}
               inputRef={inputRef}
               input={input}
@@ -2532,7 +2548,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
               className="hidden"
             />
-            {/* Buttons column - left side */}
+            {/* Tool palette toggle button - left side */}
             <div className="qt-chat-toolbar">
               {/* Mobile: Tool palette toggle button */}
               <button
@@ -2549,55 +2565,20 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              {/* Desktop: Attach file button */}
+              {/* Desktop: Tool palette toggle button */}
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={sending || uploadingFile}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setToolPaletteOpen(!toolPaletteOpen)
+                }}
                 className="qt-button qt-chat-toolbar-button qt-desktop-only"
-                title="Attach file"
+                title="Tools"
               >
-                {uploadingFile ? (
-                  <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                  </svg>
-                )}
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
               </button>
-              {/* Desktop: Tools button - opens palette with gallery and settings */}
-              <div className="relative qt-desktop-only">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setToolPaletteOpen(!toolPaletteOpen)
-                  }}
-                  className="qt-button qt-chat-toolbar-button"
-                  title="Tools menu"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
-                <ToolPalette
-                  isOpen={toolPaletteOpen}
-                  onClose={() => setToolPaletteOpen(false)}
-                  onGalleryClick={() => setGalleryOpen(true)}
-                  onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
-                  onSettingsClick={() => setChatSettingsModalOpen(true)}
-                  onAddCharacterClick={handleAddCharacter}
-                  onDeleteChatMemoriesClick={handleDeleteChatMemories}
-                  onReextractMemoriesClick={handleReextractMemories}
-                  chatPhotoCount={chatPhotoCount}
-                  hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
-                  showAddCharacter={isSingleCharacterChat}
-                  chatId={id}
-                  chatMemoryCount={chatMemoryCount}
-                />
-              </div>
             </div>
             {showPreview ? (
               <div className="qt-chat-composer-input overflow-y-auto"
@@ -2649,60 +2630,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 }}
               />
             )}
-            {/* Buttons column - right side */}
-            <div className="qt-chat-toolbar">
-              {/* Send button */}
-              <button
-                type="submit"
-                disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
-                className="qt-chat-composer-send"
-                title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </button>
-              {/* Continue button - Phase 7: Pass turn to next character (desktop only, mobile uses header button) */}
-              {isMultiChar && hasActiveCharacters && (
-                <button
-                  type="button"
-                  onClick={handleContinue}
-                  disabled={
-                    streaming ||
-                    waitingForResponse ||
-                    turnSelectionResult?.nextSpeakerId !== null
-                  }
-                  className="qt-chat-toolbar-button qt-chat-continue-button qt-desktop-only"
-                  title={
-                    turnSelectionResult?.nextSpeakerId !== null
-                      ? "It's not your turn"
-                      : "Pass turn to next character"
-                  }
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-              )}
-              {/* Desktop: Toggle Preview button - moved to palette on mobile */}
-              <button
-                type="button"
-                onClick={() => setShowPreview(!showPreview)}
-                className="qt-chat-toolbar-button qt-desktop-only"
-                title="Toggle preview"
-              >
-                {showPreview ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                )}
-              </button>
-            </div>
+            {/* Send button - right side */}
+            <button
+              type="submit"
+              disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
+              className="qt-chat-composer-send"
+              title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
           </form>
         </div>
       </div>
@@ -2817,6 +2755,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onNudge={handleNudge}
           onQueue={handleQueue}
           onDequeue={handleDequeue}
+          onSkip={handleContinue}
           onTalkativenessChange={handleTalkativenessChange}
           onAddCharacter={handleAddCharacter}
           onRemoveCharacter={handleRemoveCharacter}
