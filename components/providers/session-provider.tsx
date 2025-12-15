@@ -5,6 +5,7 @@ import { SessionProvider } from "next-auth/react";
 import { DebugProvider, useDebugOptional } from "./debug-provider";
 import { TagStyleProvider } from "./tag-style-provider";
 import { QuickHideProvider } from "./quick-hide-provider";
+import { ContentWidthProvider } from "./content-width-provider";
 import { DevConsoleProvider, useDevConsoleOptional } from "./dev-console-provider";
 import { ThemeProvider } from "./theme-provider";
 
@@ -42,7 +43,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <DebugModeSync />
             <TagStyleProvider>
               <QuickHideProvider>
-                {children}
+                <ContentWidthProvider>
+                  {children}
+                </ContentWidthProvider>
               </QuickHideProvider>
             </TagStyleProvider>
           </DebugProvider>

@@ -4,6 +4,15 @@
 
 ### 2.4-dev
 
+- feat: Navbar restructuring - consolidate controls into User menu
+  - Moved Theme selector, Quick-hide, and DevConsole buttons into User menu dropdown as submenu items
+  - Theme and Quick-hide show flyout menus to the left with their respective options
+  - Added content width toggle button (expand/compress arrows) between search and user menu
+  - Content width toggle only visible on viewports >= 1000px, switches between 800px and full-width layouts
+  - Content width preference persisted in localStorage
+  - New components: NavUserMenu, NavUserMenuItem, NavUserMenuTheme, NavUserMenuQuickHide, NavContentWidthToggle
+  - New provider: ContentWidthProvider for managing width state and CSS variable injection
+  - Simplified nav.tsx by extracting functionality into dedicated components
 - fix: Anthropic provider not detecting tool_use blocks during streaming
   - Tool calls (image generation, memory search, web search) were silently failing with Anthropic models
   - Root cause: streaming code only captured text deltas, ignoring content_block_start events for tool_use
