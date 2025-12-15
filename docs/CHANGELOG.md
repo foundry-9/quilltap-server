@@ -4,6 +4,20 @@
 
 ### 2.4-dev
 
+- fix: Skip button now properly advances turn in multi-character chats
+  - When user skips their turn, the cycle now resets so characters can speak again
+  - Added `resetCycleForUserSkip()` function to turn-manager
+  - Previously "Skip" would show "All characters have spoken" if cycle was complete
+- fix: OpenRouter fallback model limit validation
+  - Added max 2 fallback models limit in UI (OpenRouter supports 3 total: 1 primary + 2 fallbacks)
+  - Disabled checkboxes when limit reached with amber warning message
+  - Updated labels to show limit and count (e.g., "Selected fallbacks (2/2)")
+- fix: Duplicate name prefixes in multi-character chat messages
+  - Messages were showing repeated `[Name] [Name] [Name]` patterns
+  - formatMessagesForProvider now checks if content already has the name prefix before adding it
+  - Added debug logging when duplicate prefix is detected and skipped
+- fix: Reduced SSE parse error noise in console
+  - Better filtering of benign empty SSE data chunks
 - feat: Unified desktop tool palette matching mobile design
   - Simplified footer to single-line textarea with tool palette button (left) and send (right)
   - New full-width tool palette bar above composer when opened

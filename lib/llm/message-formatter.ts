@@ -205,7 +205,20 @@ export function formatMessagesForProvider(
     // Fallback: prefix content with [Name]
     // Only add prefix if it's a multi-character scenario (i.e., the name matters)
     const displayName = formatDisplayName(msg.name)
-    const prefixedContent = `[${displayName}] ${msg.content}`
+
+    // Check if content already has this name prefix to avoid duplication
+    // Pattern: content starts with [Name] where Name matches (case-insensitive)
+    const existingPrefixPattern = new RegExp(`^\\[${displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\s*`, 'i')
+    const alreadyPrefixed = existingPrefixPattern.test(msg.content)
+
+    const prefixedContent = alreadyPrefixed ? msg.content : `[${displayName}] ${msg.content}`
+
+    if (alreadyPrefixed) {
+      logger.debug('[MessageFormatter] Skipping duplicate name prefix', {
+        name: displayName,
+        contentPreview: msg.content.slice(0, 50),
+      })
+    }
 
     return {
       role: roleForProvider,

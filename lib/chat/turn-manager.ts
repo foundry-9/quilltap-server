@@ -483,6 +483,24 @@ export function nudgeParticipant(
   }
 }
 
+/**
+ * Resets the turn cycle when user skips their turn.
+ * This clears the spokenSinceUserTurn list so characters become eligible again.
+ * Unlike a user message which fully resets, this preserves the queue.
+ */
+export function resetCycleForUserSkip(currentState: TurnState): TurnState {
+  logger.debug('[Turn Manager] Resetting cycle for user skip', {
+    previousSpokenCount: currentState.spokenSinceUserTurn.length,
+  })
+
+  return {
+    ...currentState,
+    spokenSinceUserTurn: [],
+    // Keep lastSpeakerId to avoid immediate repeat
+    // Keep queue intact
+  }
+}
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================

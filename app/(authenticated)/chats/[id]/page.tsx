@@ -42,6 +42,7 @@ import {
   findUserParticipant,
   isMultiCharacterChat,
   getQueuePosition,
+  resetCycleForUserSkip,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 
@@ -681,7 +682,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
 
     // Get the next character to speak
-    const result = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
+    let result = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
+
+    // If cycle is complete (all characters have spoken), reset and try again
+    if (result.cycleComplete && !result.nextSpeakerId) {
+      clientLogger.debug('[Chat] Cycle complete, resetting for user skip')
+      const resetState = resetCycleForUserSkip(turnState)
+      setTurnState(resetState)
+      // Select speaker with the reset state
+      result = selectNextSpeaker(participantsAsBase, charactersMap, resetState, userParticipantId)
+    }
+
     if (result.nextSpeakerId && result.nextSpeakerId !== userParticipantId) {
       clientLogger.debug('[Chat] Selected next speaker for continue', {
         participantId: result.nextSpeakerId,
@@ -693,8 +704,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         nextSpeakerId: result.nextSpeakerId,
         reason: result.reason,
       })
-      // User-friendly message for edge case 3
-      showInfoToast('All characters have spoken. Send a message to continue the conversation.')
+      // This shouldn't happen after reset, but handle gracefully
+      showInfoToast('No characters available to speak. Try adding or activating a character.')
     }
   }, [participantsAsBase, charactersMap, turnState, userParticipantId, triggerContinueMode, hasActiveCharacters])
 
@@ -1352,10 +1363,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 throw new Error(data.error)
               }
             } catch (parseError) {
-              // Only log if it's a real parse error, not an empty JSON object
+              // Only log if it's a real parse error, not noise from SSE chunking
               const errorMessage = parseError instanceof Error ? parseError.message : String(parseError)
-              if (errorMessage && errorMessage !== 'undefined' && errorMessage !== '[object Object]') {
-                clientLogger.error('Failed to parse SSE data:', { error: errorMessage, raw: line.slice(6).substring(0, 100) })
+              const rawData = line.slice(6).trim()
+              // Skip logging for:
+              // - Empty data (SSE chunking artifact)
+              // - Empty JSON object (benign)
+              // - Generic stringified objects
+              const shouldSkip = !rawData ||
+                rawData === '{}' ||
+                !errorMessage ||
+                errorMessage === 'undefined' ||
+                errorMessage === '[object Object]' ||
+                errorMessage === '{}'
+              if (!shouldSkip) {
+                clientLogger.error('Failed to parse SSE data:', { error: errorMessage, raw: rawData.substring(0, 100) })
               }
             }
           }

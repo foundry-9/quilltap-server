@@ -1162,42 +1162,60 @@ export default function ConnectionProfilesTab() {
                 {/* Fallback Models */}
                 {fetchedModels.length > 0 && (
                   <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">Fallback Models (Optional)</label>
+                    <label className="block text-sm font-medium mb-2">Fallback Models (Optional, max 2)</label>
                     <p className="text-xs text-muted-foreground mb-2">
                       If the primary model fails or is unavailable, OpenRouter will try these models in order.
+                      OpenRouter supports up to 3 total models (1 primary + 2 fallbacks).
                     </p>
+                    {formData.fallbackModels.length >= 2 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
+                        Maximum fallback models reached. Remove one to add a different model.
+                      </p>
+                    )}
                     <div className="space-y-1 max-h-32 overflow-y-auto border border-border rounded p-2 bg-background">
                       {fetchedModels
                         .filter(model => model !== formData.modelName)
                         .slice(0, 50)
-                        .map(model => (
-                          <label key={model} className="flex items-center gap-2 cursor-pointer hover:bg-muted p-1 rounded">
-                            <input
-                              type="checkbox"
-                              checked={formData.fallbackModels.includes(model)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setFormData({
-                                    ...formData,
-                                    fallbackModels: [...formData.fallbackModels, model],
-                                  })
-                                } else {
-                                  setFormData({
-                                    ...formData,
-                                    fallbackModels: formData.fallbackModels.filter(m => m !== model),
-                                  })
-                                }
-                              }}
-                              className="w-3 h-3 rounded"
-                            />
-                            <span className="text-xs text-foreground truncate">{model}</span>
-                          </label>
-                        ))}
+                        .map(model => {
+                          const isSelected = formData.fallbackModels.includes(model)
+                          const isDisabled = !isSelected && formData.fallbackModels.length >= 2
+                          return (
+                            <label
+                              key={model}
+                              className={`flex items-center gap-2 p-1 rounded ${
+                                isDisabled
+                                  ? 'cursor-not-allowed opacity-50'
+                                  : 'cursor-pointer hover:bg-muted'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                disabled={isDisabled}
+                                onChange={(e) => {
+                                  if (e.target.checked && formData.fallbackModels.length < 2) {
+                                    setFormData({
+                                      ...formData,
+                                      fallbackModels: [...formData.fallbackModels, model],
+                                    })
+                                  } else if (!e.target.checked) {
+                                    setFormData({
+                                      ...formData,
+                                      fallbackModels: formData.fallbackModels.filter(m => m !== model),
+                                    })
+                                  }
+                                }}
+                                className="w-3 h-3 rounded"
+                              />
+                              <span className="text-xs text-foreground truncate">{model}</span>
+                            </label>
+                          )
+                        })}
                     </div>
                     {formData.fallbackModels.length > 0 && (
                       <div className="mt-2">
                         <p className="text-xs text-muted-foreground mb-1">
-                          Selected fallbacks ({formData.fallbackModels.length}):
+                          Selected fallbacks ({formData.fallbackModels.length}/2):
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {formData.fallbackModels.map((model, idx) => (
