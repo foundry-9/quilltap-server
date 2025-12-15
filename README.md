@@ -529,6 +529,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
 - [ ] Character build-out wizard
   - Uses LLM of choice to fill out gaps in character fields or physical descriptions
+- [ ] Prompt caching (see https://platform.claude.com/docs/en/build-with-claude/prompt-caching )
 
 ## Acknowledgments
 
