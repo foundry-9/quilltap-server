@@ -27,6 +27,7 @@ const MENU_ITEMS: NavMenuItem[] = [
   { href: '/chats', label: 'Chats' },
   { href: '/settings', label: 'Settings' },
   { href: '/tools', label: 'Tools' },
+  { href: '/about', label: 'About' },
 ];
 
 interface DashboardNavProps {

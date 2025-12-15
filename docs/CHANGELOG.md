@@ -4,7 +4,8 @@
 
 ### 2.4-dev
 
-- fix: Error message extraction in useAvatarDisplay hook - operator precedence fix ensures fallback to 'Unknown error'
+- feat: Add About page with project info, links, and tech stack; simplify footer to version and copyright
+- fix: Robust error extraction in useAvatarDisplay hook - handles unusual error types and logs error type for debugging
 - feat: Responsive navbar with dynamic collapse - menu items collapse into logo dropdown when space is limited
 - New development checkpoint
 

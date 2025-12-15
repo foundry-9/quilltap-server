@@ -28,8 +28,24 @@ export function useAvatarDisplay() {
         const data = await res.json()
         setStyle((data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle)
       } catch (err) {
-        const errorMessage = (err instanceof Error ? err.message : String(err)) || 'Unknown error'
-        clientLogger.error('Error fetching avatar display style', { error: errorMessage })
+        // Robust error extraction - handle various error types
+        let errorMessage = 'Unknown error'
+        if (err instanceof Error) {
+          errorMessage = err.message || err.name || 'Error (no message)'
+        } else if (typeof err === 'string') {
+          errorMessage = err || 'Empty string error'
+        } else if (err !== null && err !== undefined) {
+          try {
+            const stringified = JSON.stringify(err)
+            errorMessage = stringified !== '{}' ? stringified : 'Empty object error'
+          } catch {
+            errorMessage = String(err) || 'Unstringifiable error'
+          }
+        }
+        clientLogger.error('Error fetching avatar display style', {
+          error: errorMessage,
+          errorType: err?.constructor?.name || typeof err
+        })
         setError(errorMessage)
         // Default to circular on error
         setStyle('CIRCULAR')
@@ -57,8 +73,24 @@ export function useAvatarDisplay() {
       const data = await res.json()
       setStyle((data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle)
     } catch (err) {
-      const errorMessage = (err instanceof Error ? err.message : String(err)) || 'Unknown error'
-      clientLogger.error('Error updating avatar display style:', { error: errorMessage })
+      // Robust error extraction - handle various error types
+      let errorMessage = 'Unknown error'
+      if (err instanceof Error) {
+        errorMessage = err.message || err.name || 'Error (no message)'
+      } else if (typeof err === 'string') {
+        errorMessage = err || 'Empty string error'
+      } else if (err !== null && err !== undefined) {
+        try {
+          const stringified = JSON.stringify(err)
+          errorMessage = stringified !== '{}' ? stringified : 'Empty object error'
+        } catch {
+          errorMessage = String(err) || 'Unstringifiable error'
+        }
+      }
+      clientLogger.error('Error updating avatar display style', {
+        error: errorMessage,
+        errorType: err?.constructor?.name || typeof err
+      })
       setError(errorMessage)
       // Revert to previous style on error
       setStyle(style === 'CIRCULAR' ? 'RECTANGULAR' : 'CIRCULAR')
