@@ -722,6 +722,111 @@
     color: var(--qt-chat-sidebar-muted);
     @apply text-xs;
   }
+
+  /* ==========================================================================
+     MOBILE TOOL PALETTE
+     ========================================================================== */
+
+  /**
+   * Mobile tool palette - full-width drawer above footer
+   * Only visible on mobile via media query
+   */
+  .qt-mobile-tool-palette {
+    @apply hidden;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% - 1px); /* Flush with footer, overlap border */
+    background: var(--qt-mobile-tool-palette-bg);
+    border-top: 1px solid var(--qt-mobile-tool-palette-border);
+    z-index: 40;
+    animation: qt-slide-up 200ms ease-out;
+  }
+
+  @keyframes qt-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .qt-mobile-tool-palette-section {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--qt-mobile-tool-palette-border);
+  }
+
+  .qt-mobile-tool-palette-section:last-child {
+    border-bottom: none;
+  }
+
+  .qt-mobile-tool-palette-section-header {
+    @apply text-xs font-medium uppercase tracking-wider mb-1.5;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-mobile-tool-palette-grid {
+    @apply grid gap-1.5;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .qt-mobile-tool-palette-button {
+    @apply flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm;
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    transition: background 150ms ease;
+  }
+
+  .qt-mobile-tool-palette-button:hover {
+    background: color-mix(in srgb, var(--color-muted) 80%, black);
+  }
+
+  .qt-mobile-tool-palette-button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .qt-mobile-tool-palette-button svg {
+    @apply w-5 h-5 flex-shrink-0;
+  }
+
+  .qt-mobile-tool-palette-button-label {
+    @apply truncate;
+  }
+
+  /* Danger variant for destructive actions */
+  .qt-mobile-tool-palette-button-danger {
+    color: var(--qt-status-danger-fg);
+  }
+
+  .qt-mobile-tool-palette-button-danger:hover {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 80%, transparent);
+  }
+
+  /* Split layout for bottom section (Quick Actions | Roleplay) */
+  .qt-mobile-tool-palette-split {
+    @apply flex gap-3;
+  }
+
+  .qt-mobile-tool-palette-split-column {
+    @apply flex-1 min-w-0;
+  }
+
+  /* RP Insert section uses existing annotation button styles */
+  .qt-mobile-tool-palette-rp-buttons {
+    @apply flex flex-wrap items-start gap-1.5;
+  }
+
+  /* Utility classes for mobile/desktop visibility */
+  .qt-mobile-only {
+    @apply hidden;
+  }
+
+  .qt-desktop-only {
+    @apply block;
+  }
 }
 
 /* ==========================================================================
@@ -839,6 +944,47 @@
 
   .qt-chat-message-action-bar-icons {
     flex-wrap: wrap;
+  }
+
+  /* ==========================================================================
+     MOBILE CHAT COMPOSER STYLES
+     ========================================================================== */
+
+  /* Make composer position relative for absolute positioned palette */
+  .qt-chat-composer {
+    position: relative;
+  }
+
+  /* Show mobile tool palette on mobile when it has the 'open' class */
+  .qt-mobile-tool-palette.qt-mobile-tool-palette-open {
+    display: block !important;
+  }
+
+  /* Single-line initial height for textarea on mobile */
+  .qt-chat-composer-input {
+    min-height: var(--qt-mobile-composer-input-min-height) !important;
+    /* Reserve space for palette even when closed */
+    max-height: calc(100vh - var(--qt-navbar-height) - var(--qt-mobile-tool-palette-max-height) - 6rem) !important;
+  }
+
+  /* Hide desktop-only buttons on mobile */
+  .qt-chat-toolbar .qt-desktop-only {
+    display: none !important;
+  }
+
+  /* Show mobile-only elements */
+  .qt-mobile-only {
+    display: flex !important;
+  }
+
+  /* Hide desktop-only elements */
+  .qt-desktop-only {
+    display: none !important;
+  }
+
+  /* Hide roleplay annotation toolbar on mobile - moved to palette */
+  .qt-rp-annotation-toolbar.qt-desktop-only {
+    display: none !important;
   }
 }
 

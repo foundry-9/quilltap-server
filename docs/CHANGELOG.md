@@ -4,6 +4,15 @@
 
 ### 2.4-dev
 
+- feat: Mobile-responsive chat footer with compact tool palette
+  - Reduced input textarea to single line initial height on mobile
+  - Simplified footer buttons: tool palette toggle (left), send + continue (right)
+  - New MobileToolPalette component: full-width drawer above footer
+  - Palette sections: Quick Actions (attach file, preview toggle), Chat Tools, Memory, RP Insert
+  - Attach file, preview toggle, and desktop tool palette hidden on mobile
+  - Roleplay annotation buttons moved into palette on mobile
+  - Textarea max height reserves space for palette even when closed
+  - Palette closes on toggle button click or tap outside
 - feat: Mobile-responsive chat conversation UI
   - On mobile (< 768px), messages display with avatar/name header above message card
   - Character messages: avatar on left, user messages: avatar on right

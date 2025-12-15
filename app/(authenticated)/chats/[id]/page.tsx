@@ -4,6 +4,7 @@ import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
+import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
@@ -174,6 +175,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [roleplayTemplateName, setRoleplayTemplateName] = useState<string | null>(null)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
+  const [mobileToolPaletteOpen, setMobileToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
@@ -192,6 +194,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const chatContext = useChatContext()
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
   const quickHideActive = hiddenTagIds.size > 0
@@ -207,8 +210,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const getTextareaMaxHeight = useCallback(() => {
     if (typeof globalThis === 'undefined' || !globalThis.window) return 200
     const windowHeight = globalThis.window.innerHeight
-    const isMobilePortrait = globalThis.window.matchMedia('(max-width: 640px) and (orientation: portrait)').matches
-    return isMobilePortrait ? windowHeight / 2 : windowHeight / 3
+    const isMobile = globalThis.window.matchMedia('(max-width: 768px)').matches
+
+    if (isMobile) {
+      // On mobile, reserve space for: navbar (4rem = 64px) + tool palette (50vh) + composer chrome (~6rem = 96px)
+      const navbarHeight = 64
+      const paletteReserved = windowHeight * 0.5
+      const composerChrome = 96
+      return Math.max(40, windowHeight - navbarHeight - paletteReserved - composerChrome)
+    }
+
+    // Desktop: use 1/3 of window height
+    return windowHeight / 3
   }, [])
 
   const resizeTextarea = useCallback((textarea: HTMLTextAreaElement) => {
@@ -2267,6 +2280,32 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
       {/* Input */}
       <div className="qt-chat-composer">
+        {/* Mobile Tool Palette - positioned absolutely above the composer */}
+        <MobileToolPalette
+          isOpen={mobileToolPaletteOpen}
+          onClose={() => setMobileToolPaletteOpen(false)}
+          toggleButtonRef={mobileToolPaletteToggleRef}
+          onAttachFileClick={() => fileInputRef.current?.click()}
+          uploadingFile={uploadingFile}
+          showPreview={showPreview}
+          onTogglePreview={() => setShowPreview(!showPreview)}
+          onGalleryClick={() => setGalleryOpen(true)}
+          chatPhotoCount={chatPhotoCount}
+          onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
+          hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
+          onAddCharacterClick={handleAddCharacter}
+          showAddCharacter={isSingleCharacterChat}
+          onSettingsClick={() => setChatSettingsModalOpen(true)}
+          chatId={id}
+          onDeleteChatMemoriesClick={handleDeleteChatMemories}
+          onReextractMemoriesClick={handleReextractMemories}
+          chatMemoryCount={chatMemoryCount}
+          roleplayTemplateId={chat?.roleplayTemplateId}
+          inputRef={inputRef}
+          input={input}
+          setInput={setInput}
+          disabled={sending || !hasActiveCharacters}
+        />
         {/* Phase 7: Edge Case 1 - No active characters warning */}
         {!hasActiveCharacters && messages.length > 0 && (
           <div className="qt-alert qt-alert-warning flex items-center gap-3">
@@ -2351,14 +2390,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               ))}
             </div>
           )}
-          {/* Roleplay annotation buttons */}
-          <RoleplayAnnotationButtons
-            roleplayTemplateId={chat?.roleplayTemplateId}
-            inputRef={inputRef}
-            input={input}
-            setInput={setInput}
-            disabled={sending || !hasActiveCharacters}
-          />
+          {/* Roleplay annotation buttons - desktop only, moved to palette on mobile */}
+          <div className="qt-desktop-only">
+            <RoleplayAnnotationButtons
+              roleplayTemplateId={chat?.roleplayTemplateId}
+              inputRef={inputRef}
+              input={input}
+              setInput={setInput}
+              disabled={sending || !hasActiveCharacters}
+            />
+          </div>
           <form onSubmit={sendMessage} className="qt-chat-composer-inner">
             {/* Hidden file input */}
             <input
@@ -2368,14 +2409,29 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
               className="hidden"
             />
-            {/* Buttons column */}
+            {/* Buttons column - left side */}
             <div className="qt-chat-toolbar">
-              {/* Attach file button */}
+              {/* Mobile: Tool palette toggle button */}
+              <button
+                ref={mobileToolPaletteToggleRef}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMobileToolPaletteOpen(!mobileToolPaletteOpen)
+                }}
+                className="qt-button qt-chat-toolbar-button qt-mobile-only"
+                title="Tools"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              {/* Desktop: Attach file button */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending || uploadingFile}
-                className="qt-button qt-chat-toolbar-button"
+                className="qt-button qt-chat-toolbar-button qt-desktop-only"
                 title="Attach file"
               >
                 {uploadingFile ? (
@@ -2388,8 +2444,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   </svg>
                 )}
               </button>
-              {/* Tools button - opens palette with gallery and settings */}
-              <div className="relative">
+              {/* Desktop: Tools button - opens palette with gallery and settings */}
+              <div className="relative qt-desktop-only">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -2505,11 +2561,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   </svg>
                 </button>
               )}
-              {/* Toggle Preview button */}
+              {/* Desktop: Toggle Preview button - moved to palette on mobile */}
               <button
                 type="button"
                 onClick={() => setShowPreview(!showPreview)}
-                className="qt-chat-toolbar-button"
+                className="qt-chat-toolbar-button qt-desktop-only"
                 title="Toggle preview"
               >
                 {showPreview ? (

@@ -186,6 +186,12 @@
   --qt-chat-sidebar-muted: var(--color-muted-foreground);
   --qt-chat-sidebar-heading: var(--color-foreground);
 
+  /* Mobile chat composer variables */
+  --qt-mobile-composer-input-min-height: 2.5rem;
+  --qt-mobile-tool-palette-max-height: 50vh;
+  --qt-mobile-tool-palette-bg: var(--color-background);
+  --qt-mobile-tool-palette-border: var(--color-border);
+
   --qt-participant-card-radius: var(--radius-lg);
   --qt-participant-card-bg: var(--color-card);
   --qt-participant-card-border: var(--color-border);
