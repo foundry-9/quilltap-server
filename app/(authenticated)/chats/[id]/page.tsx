@@ -171,6 +171,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
   const [chatPhotoCount, setChatPhotoCount] = useState(0)
   const [chatMemoryCount, setChatMemoryCount] = useState(0)
+  const [roleplayTemplateName, setRoleplayTemplateName] = useState<string | null>(null)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
@@ -960,6 +961,41 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     fetchChatPhotoCount()
     fetchChatMemoryCount()
   }, [fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount])
+
+  // Fetch roleplay template name when the chat's template ID changes
+  useEffect(() => {
+    const fetchTemplateName = async () => {
+      if (!chat?.roleplayTemplateId) {
+        setRoleplayTemplateName(null)
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/roleplay-templates/${chat.roleplayTemplateId}`)
+        if (res.ok) {
+          const template = await res.json()
+          setRoleplayTemplateName(template.name)
+          clientLogger.debug('[Chat] Fetched roleplay template name', {
+            templateId: chat.roleplayTemplateId,
+            templateName: template.name,
+          })
+        } else {
+          clientLogger.warn('[Chat] Failed to fetch roleplay template', {
+            templateId: chat.roleplayTemplateId,
+            status: res.status,
+          })
+          setRoleplayTemplateName(null)
+        }
+      } catch (err) {
+        clientLogger.error('[Chat] Error fetching roleplay template', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+        setRoleplayTemplateName(null)
+      }
+    }
+
+    fetchTemplateName()
+  }, [chat?.roleplayTemplateId])
 
   useEffect(() => {
     scrollToBottom()
@@ -1786,7 +1822,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                           {message.content}
                         </div>
                       ) : (
-                        <MessageContent content={getDisplayContent(message.content)} />
+                        <MessageContent content={getDisplayContent(message.content)} roleplayTemplateName={roleplayTemplateName} />
                       )}
                       {/* Image attachment thumbnails */}
                       {getImageAttachments(message).length > 0 && (
@@ -2028,7 +2064,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               </div>
             )}
             <div className="flex-1 min-w-0 px-4 py-3 rounded-lg bg-card border border-border text-foreground">
-              <MessageContent content={streamingContent} />
+              <MessageContent content={streamingContent} roleplayTemplateName={roleplayTemplateName} />
               <QuillAnimation size="sm" className="inline-block ml-2 text-muted-foreground" />
             </div>
           </div>
@@ -2199,7 +2235,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   lineHeight: '1.5'
                 }}
               >
-                <MessageContent content={input} />
+                <MessageContent content={input} roleplayTemplateName={roleplayTemplateName} />
               </div>
             ) : (
               <textarea

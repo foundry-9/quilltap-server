@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useLayoutEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 
 interface ToolPaletteProps {
@@ -19,6 +19,13 @@ interface ToolPaletteProps {
   chatMemoryCount?: number // Number of memories associated with this chat
 }
 
+interface PalettePosition {
+  top?: number
+  bottom?: number
+  left?: number
+  right?: number
+}
+
 export default function ToolPalette({
   isOpen,
   onClose,
@@ -35,6 +42,74 @@ export default function ToolPalette({
   chatMemoryCount = 0,
 }: ToolPaletteProps) {
   const paletteRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState<PalettePosition>({ bottom: 80, right: 0 })
+
+  // Calculate viewport-aware position when palette opens
+  useLayoutEffect(() => {
+    if (!isOpen || !paletteRef.current) return
+
+    const palette = paletteRef.current
+    const parent = palette.parentElement
+    if (!parent) return
+
+    const paletteRect = palette.getBoundingClientRect()
+    const parentRect = parent.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const padding = 8 // Minimum padding from viewport edge
+
+    const newPosition: PalettePosition = {}
+
+    // Horizontal positioning: prefer right-aligned, but switch to left if overflowing
+    const rightEdge = parentRect.right
+    const leftEdge = parentRect.left
+    const paletteWidth = paletteRect.width
+
+    if (rightEdge - paletteWidth < padding) {
+      // Would overflow left edge, align to left of parent instead
+      newPosition.left = 0
+      clientLogger.debug('[ToolPalette] Adjusted horizontal position: left-aligned', {
+        rightEdge,
+        paletteWidth,
+        viewportWidth,
+      })
+    } else if (leftEdge + paletteWidth > viewportWidth - padding) {
+      // Would overflow right edge, keep right-aligned
+      newPosition.right = 0
+    } else {
+      // Default: right-aligned
+      newPosition.right = 0
+    }
+
+    // Vertical positioning: prefer above (bottom: 80), but switch to below if overflowing top
+    const buttonBottom = parentRect.bottom
+    const paletteHeight = paletteRect.height
+    const spaceAbove = parentRect.top - padding
+    const spaceBelow = viewportHeight - buttonBottom - padding
+
+    if (spaceAbove < paletteHeight && spaceBelow > paletteHeight) {
+      // Not enough space above, but enough below - position below the button
+      newPosition.top = parent.offsetHeight + 8
+      clientLogger.debug('[ToolPalette] Adjusted vertical position: below button', {
+        spaceAbove,
+        spaceBelow,
+        paletteHeight,
+      })
+    } else if (spaceAbove < paletteHeight) {
+      // Not enough space above or below - constrain to available space above
+      newPosition.bottom = Math.min(80, spaceAbove)
+      clientLogger.debug('[ToolPalette] Constrained vertical position', {
+        spaceAbove,
+        newBottom: newPosition.bottom,
+      })
+    } else {
+      // Enough space above - use default position
+      newPosition.bottom = 80
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Necessary for DOM measurement before paint
+    setPosition(newPosition)
+  }, [isOpen])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -131,10 +206,22 @@ export default function ToolPalette({
 
   if (!isOpen) return null
 
+  // Build dynamic style from position state
+  const positionStyle: React.CSSProperties = {
+    position: 'absolute',
+    ...(position.top !== undefined && { top: position.top }),
+    ...(position.bottom !== undefined && { bottom: position.bottom }),
+    ...(position.left !== undefined && { left: position.left }),
+    ...(position.right !== undefined && { right: position.right }),
+    maxHeight: 'calc(100vh - 100px)', // Ensure palette doesn't exceed viewport
+    overflowY: 'auto',
+  }
+
   return (
     <div
       ref={paletteRef}
-      className="absolute bottom-20 right-0 bg-background border border-border rounded-lg shadow-lg p-2 w-48 z-50"
+      className="bg-background border border-border rounded-lg shadow-lg p-2 w-48 z-50"
+      style={positionStyle}
     >
       {/* Gallery Button */}
       {chatPhotoCount > 0 && (

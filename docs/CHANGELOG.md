@@ -4,6 +4,11 @@
 
 ### 2.4-dev
 
+- fix: Roleplay syntax styling now respects active template
+  - Standard template: `*actions*`, `"dialogue"`, `((OOC))`
+  - Quilltap RP template: `[actions]`, `{thoughts}`, `// OOC`
+  - Removed incorrect single-parentheses OOC styling
+- fix: ToolPalette viewport overflow - palette now detects viewport boundaries and adjusts position to stay on screen
 - fix: Pass cache usage stats from Anthropic to client in SSE response
   - Added `cacheUsage` field to final streaming response with `cacheCreationInputTokens` and `cacheReadInputTokens`
   - Now you can verify prompt caching is working by checking for these fields in the response
