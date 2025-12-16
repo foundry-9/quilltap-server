@@ -202,7 +202,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // =========================================================================
     const characterFields: (keyof typeof character)[] = [
       'name', 'title', 'description', 'personality', 'scenario',
-      'firstMessage', 'exampleDialogues', 'systemPrompt'
+      'firstMessage', 'exampleDialogues'
     ];
 
     const characterUpdates: Record<string, string> = {};
@@ -236,7 +236,52 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // =========================================================================
-    // 2. Process Physical Descriptions
+    // 2. Process System Prompts
+    // =========================================================================
+    const systemPrompts = character.systemPrompts || [];
+    const updatedSystemPrompts = [...systemPrompts];
+    let systemPromptsChanged = false;
+
+    for (let i = 0; i < updatedSystemPrompts.length; i++) {
+      const prompt = updatedSystemPrompts[i];
+      const promptFields: (keyof typeof prompt)[] = ['name', 'content'];
+
+      for (const field of promptFields) {
+        const value = prompt[field];
+        if (typeof value !== 'string') continue;
+
+        let currentValue = value;
+        let fieldChanged = false;
+
+        for (const pair of allReplacements) {
+          const { result, changed, matches } = performReplacement(currentValue, pair);
+          if (changed && result) {
+            replacements.push({
+              field: `systemPrompt.${field}`,
+              location: `System Prompt: ${prompt.name}`,
+              oldText: pair.oldValue,
+              newText: pair.newValue,
+              context: getContext(currentValue, pair.oldValue),
+            });
+            currentValue = result;
+            fieldChanged = true;
+            summary.characterFields += matches;
+          }
+        }
+
+        if (fieldChanged) {
+          (updatedSystemPrompts[i] as any)[field] = currentValue;
+          systemPromptsChanged = true;
+        }
+      }
+    }
+
+    if (systemPromptsChanged) {
+      characterUpdates.systemPrompts = updatedSystemPrompts as any;
+    }
+
+    // =========================================================================
+    // 3. Process Physical Descriptions
     // =========================================================================
     const physicalDescriptions = character.physicalDescriptions || [];
     const updatedDescriptions = [...physicalDescriptions];

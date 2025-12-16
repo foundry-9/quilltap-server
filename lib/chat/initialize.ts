@@ -4,6 +4,13 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { processCharacterTemplates } from '@/lib/templates/processor'
 
+interface CharacterSystemPrompt {
+  id: string
+  name: string
+  content: string
+  isDefault: boolean
+}
+
 interface Character {
   id: string
   name: string
@@ -12,7 +19,7 @@ interface Character {
   scenario?: string | null
   firstMessage?: string | null
   exampleDialogues?: string | null
-  systemPrompt?: string | null
+  systemPrompts?: CharacterSystemPrompt[]
 }
 
 interface Persona {
@@ -60,11 +67,15 @@ export async function buildChatContext(
     scenario: customScenario || character.scenario || undefined,
   })
 
+  // Get the default system prompt content for template processing
+  const defaultSystemPrompt = getDefaultSystemPrompt(character)
+
   // Process first message with templates
   const processedCharacter = processCharacterTemplates({
     character,
     persona: persona || undefined,
     scenario: customScenario || character.scenario || undefined,
+    systemPrompt: defaultSystemPrompt,
   })
   const firstMessage = processedCharacter.firstMessage
 
@@ -76,6 +87,17 @@ export async function buildChatContext(
   }
 }
 
+/**
+ * Get the default system prompt content from a character's systemPrompts array
+ */
+function getDefaultSystemPrompt(character: Character): string {
+  if (!character.systemPrompts || character.systemPrompts.length === 0) {
+    return ''
+  }
+  const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
+  return defaultPrompt?.content || character.systemPrompts[0]?.content || ''
+}
+
 function buildSystemPrompt({
   character,
   persona,
@@ -85,11 +107,15 @@ function buildSystemPrompt({
   persona?: Persona
   scenario?: string | null
 }): string {
+  // Get the default system prompt content
+  const systemPromptContent = getDefaultSystemPrompt(character)
+
   // Process all character templates with the current context
   const processedCharacter = processCharacterTemplates({
     character,
     persona,
     scenario,
+    systemPrompt: systemPromptContent,
   })
 
   let prompt = processedCharacter.systemPrompt || ''

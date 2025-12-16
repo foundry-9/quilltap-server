@@ -16,6 +16,7 @@ import { migrateFilesToS3Migration } from './migrate-files-to-s3';
 // Data integrity migrations
 import { ensureUserUsernamesMigration } from './ensure-user-usernames';
 import { inheritFileTagsMigration } from './inherit-file-tags';
+import { migrateCharacterSystemPromptsMigration } from './migrate-character-system-prompts';
 
 /**
  * All available migrations.
@@ -32,6 +33,7 @@ export const migrations: Migration[] = [
   // Data integrity migrations
   ensureUserUsernamesMigration,
   inheritFileTagsMigration,
+  migrateCharacterSystemPromptsMigration,
 ];
 
 export {
@@ -45,4 +47,5 @@ export {
   // Data integrity migrations
   ensureUserUsernamesMigration,
   inheritFileTagsMigration,
+  migrateCharacterSystemPromptsMigration,
 };

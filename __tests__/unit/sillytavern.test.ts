@@ -23,6 +23,7 @@ describe('SillyTavern Character Import/Export', () => {
     tags: ['test', 'example'],
   }
 
+  const now = new Date().toISOString()
   const mockInternalCharacter = {
     id: '123',
     userId: 'user-456',
@@ -32,7 +33,14 @@ describe('SillyTavern Character Import/Export', () => {
     scenario: 'Testing scenario',
     firstMessage: 'Hello, I am Test Character!',
     exampleDialogues: '<START>\n{{char}}: Example dialogue\n{{user}}: Example response',
-    systemPrompt: 'You are Test Character',
+    systemPrompts: [{
+      id: 'prompt-1',
+      name: 'Default',
+      content: 'You are Test Character',
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    }],
     avatarUrl: null,
     sillyTavernData: mockSTCharacter,
     createdAt: new Date(),
@@ -49,7 +57,9 @@ describe('SillyTavern Character Import/Export', () => {
       expect(result.scenario).toBe('Testing scenario')
       expect(result.firstMessage).toBe('Hello, I am Test Character!')
       expect(result.exampleDialogues).toBe('<START>\n{{char}}: Example dialogue\n{{user}}: Example response')
-      expect(result.systemPrompt).toBe('You are Test Character')
+      expect(result.systemPrompts).toHaveLength(1)
+      expect(result.systemPrompts[0].content).toBe('You are Test Character')
+      expect(result.systemPrompts[0].isDefault).toBe(true)
       expect(result.sillyTavernData).toEqual(mockSTCharacter)
     })
 
@@ -80,7 +90,7 @@ describe('SillyTavern Character Import/Export', () => {
 
       expect(result.name).toBe('Minimal')
       expect(result.exampleDialogues).toBe('')
-      expect(result.systemPrompt).toBe('')
+      expect(result.systemPrompts).toHaveLength(0)
     })
   })
 

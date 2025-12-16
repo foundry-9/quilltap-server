@@ -4,6 +4,16 @@
 
 ### 2.4-dev
 
+- chore: Remove deprecated systemPrompt field from Character schema
+  - Characters now exclusively use `systemPrompts` array for system prompt storage
+  - Removed single `systemPrompt` field from Character type and schema
+  - Added migration `migrate-character-system-prompts-v1` to move existing systemPrompt values to the systemPrompts array
+  - Updated SillyTavern import/export to use systemPrompts array
+  - Updated template processor to accept systemPrompt as separate parameter
+  - Updated context-manager to not use legacy fallback
+  - Updated character rename route to process systemPrompts array
+  - Added "System Prompts" tab to character view page showing all prompts
+  - Details tab now shows compact indicator of active system prompt with link to full list
 - feat: Multiple system prompts per character
   - Characters can now have multiple named system prompts with one marked as default
   - New "System Prompts" tab on character edit page with SystemPromptsEditor component

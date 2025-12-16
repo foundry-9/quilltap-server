@@ -46,6 +46,15 @@ interface ImageProfile {
   isDefault: boolean
 }
 
+interface CharacterSystemPrompt {
+  id: string
+  name: string
+  content: string
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 interface Character {
   id: string
   name: string
@@ -55,7 +64,7 @@ interface Character {
   scenario?: string | null
   firstMessage?: string | null
   exampleDialogues?: string | null
-  systemPrompt?: string
+  systemPrompts?: CharacterSystemPrompt[]
   avatarUrl?: string
   defaultImageId?: string
   defaultConnectionProfileId?: string
@@ -74,6 +83,15 @@ const CHARACTER_TABS: Tab[] = [
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'system-prompts',
+    label: 'System Prompts',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
     ),
   },
@@ -168,6 +186,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const defaultPersona = personas.find(p => p.id === defaultPersonaId)
   const defaultPersonaName = defaultPersona?.name || null
 
+  // Get the default system prompt content for template highlighting
+  const defaultSystemPrompt = character?.systemPrompts?.find(p => p.isDefault) || character?.systemPrompts?.[0]
+  const defaultSystemPromptContent = defaultSystemPrompt?.content || null
+
   // Count template replacement opportunities in fields that support templates
   const templateFields = {
     description: character?.description,
@@ -175,7 +197,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     scenario: character?.scenario,
     firstMessage: character?.firstMessage,
     exampleDialogues: character?.exampleDialogues,
-    systemPrompt: character?.systemPrompt,
+    systemPrompt: defaultSystemPromptContent,
   }
 
   const templateCounts = character
@@ -218,10 +240,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         const replaced = replaceWithTemplate(character.exampleDialogues, nameToReplace, template)
         if (replaced !== character.exampleDialogues) updates.exampleDialogues = replaced
       }
-      if (character.systemPrompt) {
-        const replaced = replaceWithTemplate(character.systemPrompt, nameToReplace, template)
-        if (replaced !== character.systemPrompt) updates.systemPrompt = replaced
-      }
+      // Note: System prompts are managed separately via the systemPrompts array
+      // Template replacement for system prompts should be done in the edit page
 
       if (Object.keys(updates).length === 0) {
         showSuccessToast('No replacements needed')
@@ -671,29 +691,111 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 </div>
               )}
 
-              {character?.systemPrompt && (
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground mb-2">
-                    System Prompt
-                    {(templateCounts.fieldCounts.systemPrompt?.char > 0 || templateCounts.fieldCounts.systemPrompt?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
-                        (template replacements available)
+              {/* Active System Prompt Indicator */}
+              {character?.systemPrompts && character.systemPrompts.length > 0 && (
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span className="text-sm font-medium text-foreground">Active System Prompt:</span>
+                      <span className="text-sm text-muted-foreground">
+                        {defaultSystemPrompt?.name || 'None'}
                       </span>
-                    )}
-                  </h2>
-                  <pre className="my-2 overflow-hidden rounded-md bg-muted/80 p-4 text-sm text-foreground">
-                    <code className="text-sm whitespace-pre-wrap break-words">
-                      <TemplateHighlighter
-                        content={character.systemPrompt}
-                        characterName={character.name}
-                        personaName={defaultPersonaName}
-                        showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
-                      />
-                    </code>
-                  </pre>
+                      {character.systemPrompts.length > 1 && (
+                        <span className="text-xs text-muted-foreground">
+                          (+{character.systemPrompts.length - 1} more)
+                        </span>
+                      )}
+                    </div>
+                    <Link
+                      href={`/characters/${id}/view?tab=system-prompts`}
+                      className="text-sm text-primary hover:text-primary/80"
+                    >
+                      View all →
+                    </Link>
+                  </div>
                 </div>
               )}
             </div>
+          </div>
+        )
+
+      case 'system-prompts':
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">
+                  System Prompts
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Named system prompts for this character. The default prompt is used when starting new chats.
+                </p>
+              </div>
+              <Link
+                href={`/characters/${id}/edit?tab=system-prompts`}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition hover:bg-primary/90"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit Prompts
+              </Link>
+            </div>
+
+            {character?.systemPrompts && character.systemPrompts.length > 0 ? (
+              <div className="space-y-4">
+                {character.systemPrompts.map((prompt) => (
+                  <div
+                    key={prompt.id}
+                    className={`rounded-lg border p-4 ${
+                      prompt.isDefault
+                        ? 'border-primary/40 bg-primary/5'
+                        : 'border-border bg-card'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <h3 className="font-medium text-foreground">{prompt.name}</h3>
+                      {prompt.isDefault && (
+                        <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
+                          Default
+                        </span>
+                      )}
+                    </div>
+                    <pre className="overflow-hidden rounded-md bg-muted/80 p-4 text-sm text-foreground">
+                      <code className="text-sm whitespace-pre-wrap break-words">
+                        <TemplateHighlighter
+                          content={prompt.content}
+                          characterName={character.name}
+                          personaName={defaultPersonaName}
+                          showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
+                        />
+                      </code>
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border bg-muted/30 p-8 text-center">
+                <svg className="mx-auto h-12 w-12 text-muted-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  No system prompts defined for this character.
+                </p>
+                <Link
+                  href={`/characters/${id}/edit?tab=system-prompts`}
+                  className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add a system prompt
+                </Link>
+              </div>
+            )}
           </div>
         )
 

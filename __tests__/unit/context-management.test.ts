@@ -284,16 +284,24 @@ describe('Context Manager', () => {
   })
 
   describe('buildSystemPrompt', () => {
+    const now = new Date().toISOString()
     const character = {
       id: 'test-char-id',
       userId: 'test-user-id',
       name: 'Test Character',
-      systemPrompt: 'You are a helpful assistant.',
+      systemPrompts: [{
+        id: 'prompt-1',
+        name: 'Default',
+        content: 'You are a helpful assistant.',
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      }],
       personality: 'Friendly and helpful',
       scenario: 'A typical chat scenario',
       exampleDialogues: 'User: Hello\nAssistant: Hi there!',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     }
 
     it('should build prompt from character data', () => {
@@ -544,7 +552,7 @@ describe('Context Manager', () => {
         scenario: null,
         firstMessage: null,
         exampleDialogues: null,
-        systemPrompt: null,
+        systemPrompts: [],
         avatarUrl: null,
         defaultImageId: null,
         defaultConnectionProfileId: null,
@@ -568,7 +576,7 @@ describe('Context Manager', () => {
         scenario: null,
         firstMessage: null,
         exampleDialogues: null,
-        systemPrompt: null,
+        systemPrompts: [],
         avatarUrl: null,
         defaultImageId: null,
         defaultConnectionProfileId: null,
@@ -711,7 +719,14 @@ describe('Context Manager', () => {
       scenario: null,
       firstMessage: null,
       exampleDialogues: null,
-      systemPrompt: 'Stay focused',
+      systemPrompts: [{
+        id: 'prompt-a',
+        name: 'Default',
+        content: 'Stay focused',
+        isDefault: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }],
       avatarUrl: null,
       defaultImageId: null,
       defaultConnectionProfileId: null,

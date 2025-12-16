@@ -31,7 +31,6 @@ const createCharacterSchema = z.object({
   scenario: z.string().optional(),
   firstMessage: z.string().optional(),
   exampleDialogues: z.string().optional(),
-  systemPrompt: z.string().optional(),
   avatarUrl: z.string().url().optional().or(z.literal('')),
   defaultConnectionProfileId: z.string().uuid().optional(),
 })
@@ -131,7 +130,6 @@ export async function POST(req: NextRequest) {
       scenario: validatedData.scenario || null,
       firstMessage: validatedData.firstMessage || null,
       exampleDialogues: validatedData.exampleDialogues || null,
-      systemPrompt: validatedData.systemPrompt || null,
       avatarUrl: validatedData.avatarUrl || null,
       defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
       isFavorite: false,

@@ -269,15 +269,6 @@ export function buildSystemPrompt(
       }
     }
 
-    // Final fallback to legacy systemPrompt field
-    if (!systemPromptContent && character.systemPrompt) {
-      systemPromptContent = character.systemPrompt
-      logger.debug('[ContextManager] Using legacy systemPrompt field', {
-        characterId: character.id,
-        contentLength: character.systemPrompt.length,
-      })
-    }
-
     if (systemPromptContent) {
       parts.push(systemPromptContent)
     } else {
@@ -285,7 +276,6 @@ export function buildSystemPrompt(
         characterId: character.id,
         selectedSystemPromptId,
         hasSystemPrompts: !!(character.systemPrompts && character.systemPrompts.length > 0),
-        hasLegacySystemPrompt: !!character.systemPrompt,
       })
     }
   }

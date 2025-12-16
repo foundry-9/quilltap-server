@@ -27,7 +27,7 @@ const makeCharacter = (id: string, overrides: Partial<Character> = {}): Characte
   scenario: null,
   firstMessage: null,
   exampleDialogues: null,
-  systemPrompt: null,
+  systemPrompts: [],
   avatarUrl: null,
   defaultImageId: null,
   defaultConnectionProfileId: null,

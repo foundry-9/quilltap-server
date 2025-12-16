@@ -174,7 +174,6 @@ async function handleMultiCharacterImport(
         scenario: null,
         firstMessage: null,
         exampleDialogues: null,
-        systemPrompt: null,
         avatarUrl: null,
         defaultConnectionProfileId: mapping.connectionProfileId || defaultConnectionProfileId || null,
         isFavorite: false,

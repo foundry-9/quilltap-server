@@ -311,7 +311,6 @@ export const CharacterSchema = z.object({
   scenario: z.string().nullable().optional(),
   firstMessage: z.string().nullable().optional(),
   exampleDialogues: z.string().nullable().optional(),
-  systemPrompt: z.string().nullable().optional(),  // @deprecated - use systemPrompts array instead
   systemPrompts: z.array(CharacterSystemPromptSchema).default([]),  // Named system prompts array
   avatarUrl: z.string().nullable().optional(),
   defaultImageId: UUIDSchema.nullable().optional(),

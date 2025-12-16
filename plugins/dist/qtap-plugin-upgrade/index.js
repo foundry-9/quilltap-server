@@ -69454,6 +69454,173 @@ var inheritFileTagsMigration = {
   }
 };
 
+// migrations/migrate-character-system-prompts.ts
+init_logger();
+function isMongoDBBackendEnabled4() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase5() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible4() {
+  try {
+    const db = await getMongoDatabase5();
+    await db.admin().ping();
+    return true;
+  } catch (error2) {
+    logger.warn("MongoDB is not accessible for character system prompts migration", {
+      context: "migration.migrate-character-system-prompts",
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return false;
+  }
+}
+async function getCharactersNeedingMigration() {
+  try {
+    const db = await getMongoDatabase5();
+    const charactersCollection = db.collection("characters");
+    const characters = await charactersCollection.find({
+      systemPrompt: { $exists: true, $nin: [null, ""] },
+      $or: [
+        { systemPrompts: { $exists: false } },
+        { systemPrompts: { $size: 0 } }
+      ]
+    }).toArray();
+    return characters.map((c4) => ({
+      id: c4.id,
+      name: c4.name,
+      systemPrompt: c4.systemPrompt,
+      systemPrompts: c4.systemPrompts
+    }));
+  } catch (error2) {
+    logger.error("Error checking for characters needing system prompt migration", {
+      context: "migration.migrate-character-system-prompts",
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return [];
+  }
+}
+var migrateCharacterSystemPromptsMigration = {
+  id: "migrate-character-system-prompts-v1",
+  description: "Migrate characters from deprecated systemPrompt field to systemPrompts array",
+  introducedInVersion: "2.2.0",
+  dependsOn: ["migrate-json-to-mongodb-v1"],
+  // Run after data migration to MongoDB
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled4()) {
+      logger.debug("MongoDB not enabled, skipping character system prompts migration", {
+        context: "migration.migrate-character-system-prompts"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible4()) {
+      logger.debug("MongoDB not accessible, deferring character system prompts migration", {
+        context: "migration.migrate-character-system-prompts"
+      });
+      return false;
+    }
+    const charactersNeedingMigration = await getCharactersNeedingMigration();
+    logger.debug("Checked for characters needing system prompt migration", {
+      context: "migration.migrate-character-system-prompts",
+      count: charactersNeedingMigration.length
+    });
+    return charactersNeedingMigration.length > 0;
+  },
+  async run() {
+    const startTime = Date.now();
+    const migratedCharacters = [];
+    const errors = [];
+    logger.info("Starting character system prompts migration", {
+      context: "migration.migrate-character-system-prompts"
+    });
+    try {
+      const db = await getMongoDatabase5();
+      const charactersCollection = db.collection("characters");
+      const charactersNeedingMigration = await getCharactersNeedingMigration();
+      logger.info("Found characters needing system prompt migration", {
+        context: "migration.migrate-character-system-prompts",
+        count: charactersNeedingMigration.length
+      });
+      for (const character of charactersNeedingMigration) {
+        try {
+          if (!character.systemPrompt) {
+            continue;
+          }
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          const newSystemPrompt = {
+            id: crypto.randomUUID(),
+            name: "Default",
+            content: character.systemPrompt,
+            isDefault: true,
+            createdAt: now,
+            updatedAt: now
+          };
+          const result = await charactersCollection.updateOne(
+            { id: character.id },
+            {
+              $set: {
+                systemPrompts: [newSystemPrompt],
+                systemPrompt: null,
+                updatedAt: now
+              }
+            }
+          );
+          if (result.modifiedCount > 0) {
+            migratedCharacters.push(character.id);
+            logger.info("Migrated character system prompt", {
+              context: "migration.migrate-character-system-prompts",
+              characterId: character.id,
+              characterName: character.name,
+              newPromptId: newSystemPrompt.id
+            });
+          }
+        } catch (error2) {
+          const errorMessage = error2 instanceof Error ? error2.message : String(error2);
+          errors.push({
+            characterId: character.id,
+            characterName: character.name,
+            error: errorMessage
+          });
+          logger.error("Failed to migrate character system prompt", {
+            context: "migration.migrate-character-system-prompts",
+            characterId: character.id,
+            characterName: character.name,
+            error: errorMessage
+          });
+        }
+      }
+    } catch (error2) {
+      const errorMessage = error2 instanceof Error ? error2.message : String(error2);
+      logger.error("Character system prompts migration failed", {
+        context: "migration.migrate-character-system-prompts",
+        error: errorMessage
+      });
+      return {
+        id: "migrate-character-system-prompts-v1",
+        success: false,
+        itemsAffected: migratedCharacters.length,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const success = errors.length === 0;
+    const durationMs = Date.now() - startTime;
+    return {
+      id: "migrate-character-system-prompts-v1",
+      success,
+      itemsAffected: migratedCharacters.length,
+      message: success ? `Migrated ${migratedCharacters.length} characters to new system prompts structure` : `Migrated ${migratedCharacters.length} characters with ${errors.length} errors`,
+      error: errors.length > 0 ? `Failed characters: ${errors.map((e4) => `${e4.characterName} (${e4.characterId}): ${e4.error}`).join("; ")}` : void 0,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
 // migrations/index.ts
 var migrations = [
   convertOpenRouterProfilesMigration,
@@ -69465,7 +69632,8 @@ var migrations = [
   migrateFilesToS3Migration,
   // Data integrity migrations
   ensureUserUsernamesMigration,
-  inheritFileTagsMigration
+  inheritFileTagsMigration,
+  migrateCharacterSystemPromptsMigration
 ];
 
 // index.ts

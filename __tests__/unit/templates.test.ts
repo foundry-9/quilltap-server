@@ -144,7 +144,6 @@ describe('Template Processing', () => {
         personality: 'Courageous and kind',
         scenario: 'In a medieval castle',
         exampleDialogues: 'Example dialogue',
-        systemPrompt: 'System prompt',
       }
 
       const persona = {
@@ -155,6 +154,7 @@ describe('Template Processing', () => {
       const context = buildTemplateContext({
         character,
         persona,
+        systemPrompt: 'System prompt',
       })
 
       expect(context.char).toBe('Alice')
@@ -174,12 +174,12 @@ describe('Template Processing', () => {
         personality: 'Courageous and kind',
         scenario: 'In a medieval castle',
         exampleDialogues: null,
-        systemPrompt: null,
       }
 
       const context = buildTemplateContext({
         character,
         persona: null,
+        systemPrompt: null,
       })
 
       expect(context.char).toBe('Alice')
@@ -194,12 +194,12 @@ describe('Template Processing', () => {
         personality: 'Courageous and kind',
         scenario: 'In a medieval castle',
         exampleDialogues: null,
-        systemPrompt: null,
       }
 
       const context = buildTemplateContext({
         character,
         scenario: 'In a modern city',
+        systemPrompt: null,
       })
 
       expect(context.scenario).toBe('In a modern city')
@@ -215,7 +215,6 @@ describe('Template Processing', () => {
         scenario: '{{char}} meets {{user}} in a medieval castle.',
         firstMessage: 'Hello {{user}}, I am {{char}}!',
         exampleDialogues: '<START>\n{{char}}: Example dialogue\n{{user}}: Example response',
-        systemPrompt: 'You are {{char}}, talking to {{user}}.',
       }
 
       const persona = {
@@ -226,6 +225,7 @@ describe('Template Processing', () => {
       const result = processCharacterTemplates({
         character,
         persona,
+        systemPrompt: 'You are {{char}}, talking to {{user}}.',
       })
 
       expect(result.description).toBe('I am Alice, a brave warrior.')
@@ -244,12 +244,12 @@ describe('Template Processing', () => {
         scenario: null,
         firstMessage: null,
         exampleDialogues: null,
-        systemPrompt: null,
       }
 
       const result = processCharacterTemplates({
         character,
         persona: null,
+        systemPrompt: null,
       })
 
       expect(result.description).toBe('')
@@ -268,7 +268,6 @@ describe('Template Processing', () => {
         scenario: '{{char}} meets {{user}} who is {{persona}}',
         firstMessage: null,
         exampleDialogues: null,
-        systemPrompt: null,
       }
 
       const persona = {
@@ -279,6 +278,7 @@ describe('Template Processing', () => {
       const result = processCharacterTemplates({
         character,
         persona,
+        systemPrompt: null,
       })
 
       expect(result.description).toBe('Alice is a brave warrior')
