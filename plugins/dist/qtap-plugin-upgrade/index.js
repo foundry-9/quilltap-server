@@ -41129,6 +41129,12 @@ var require_dist_cjs20 = __commonJS({
       handlers;
       constructor(config) {
         this.config = config;
+        const { protocol, protocolSettings } = config;
+        if (protocolSettings) {
+          if (typeof protocol === "function") {
+            config.protocol = new protocol(protocolSettings);
+          }
+        }
       }
       send(command, optionsOrCb, cb) {
         const options = typeof optionsOrCb !== "function" ? optionsOrCb : void 0;
@@ -48602,9 +48608,16 @@ var require_dist_cjs42 = __commonJS({
       }
       return isValidArn;
     };
-    var createConfigValueProvider = (configKey, canonicalEndpointParamKey, config) => {
+    var createConfigValueProvider = (configKey, canonicalEndpointParamKey, config, isClientContextParam = false) => {
       const configProvider = async () => {
-        const configValue = config[configKey] ?? config[canonicalEndpointParamKey];
+        let configValue;
+        if (isClientContextParam) {
+          const clientContextParams = config.clientContextParams;
+          const nestedValue = clientContextParams?.[configKey];
+          configValue = nestedValue ?? config[configKey] ?? config[canonicalEndpointParamKey];
+        } else {
+          configValue = config[configKey] ?? config[canonicalEndpointParamKey];
+        }
         if (typeof configValue === "function") {
           return configValue();
         }
@@ -48686,7 +48699,7 @@ var require_dist_cjs42 = __commonJS({
             break;
           case "clientContextParams":
           case "builtInParams":
-            endpointParams[name] = await createConfigValueProvider(instruction.name, name, clientConfig)();
+            endpointParams[name] = await createConfigValueProvider(instruction.name, name, clientConfig, instruction.type !== "builtInParams")();
             break;
           case "operationContextParams":
             endpointParams[name] = instruction.get(commandInput);
@@ -51632,9 +51645,9 @@ var require_dist_cjs55 = __commonJS({
     };
     var EXPIRE_WINDOW_MS = 5 * 60 * 1e3;
     var REFRESH_MESSAGE = `To refresh this SSO session run 'aws sso login' with the corresponding profile.`;
-    var getSsoOidcClient = async (ssoRegion, init = {}) => {
+    var getSsoOidcClient = async (ssoRegion, init = {}, callerClientConfig) => {
       const { SSOOIDCClient: SSOOIDCClient2 } = await Promise.resolve().then(() => (init_sso_oidc(), sso_oidc_exports));
-      const coalesce = (prop) => init.clientConfig?.[prop] ?? init.parentClientConfig?.[prop];
+      const coalesce = (prop) => init.clientConfig?.[prop] ?? init.parentClientConfig?.[prop] ?? callerClientConfig?.[prop];
       const ssoOidcClient = new SSOOIDCClient2(Object.assign({}, init.clientConfig ?? {}, {
         region: ssoRegion ?? init.clientConfig?.region,
         logger: coalesce("logger"),
@@ -51642,9 +51655,9 @@ var require_dist_cjs55 = __commonJS({
       }));
       return ssoOidcClient;
     };
-    var getNewSsoOidcToken = async (ssoToken, ssoRegion, init = {}) => {
+    var getNewSsoOidcToken = async (ssoToken, ssoRegion, init = {}, callerClientConfig) => {
       const { CreateTokenCommand: CreateTokenCommand2 } = await Promise.resolve().then(() => (init_sso_oidc(), sso_oidc_exports));
-      const ssoOidcClient = await getSsoOidcClient(ssoRegion, init);
+      const ssoOidcClient = await getSsoOidcClient(ssoRegion, init, callerClientConfig);
       return ssoOidcClient.send(new CreateTokenCommand2({
         clientId: ssoToken.clientId,
         clientSecret: ssoToken.clientSecret,
@@ -51669,14 +51682,7 @@ var require_dist_cjs55 = __commonJS({
       return writeFile3(tokenFilepath, tokenString);
     };
     var lastRefreshAttemptTime = /* @__PURE__ */ new Date(0);
-    var fromSso = (_init = {}) => async ({ callerClientConfig } = {}) => {
-      const init = {
-        ..._init,
-        parentClientConfig: {
-          ...callerClientConfig,
-          ..._init.parentClientConfig
-        }
-      };
+    var fromSso = (init = {}) => async ({ callerClientConfig } = {}) => {
       init.logger?.debug("@aws-sdk/token-providers - fromSso");
       const profiles = await sharedIniFileLoader.parseKnownFiles(init);
       const profileName = sharedIniFileLoader.getProfileName({
@@ -51723,7 +51729,7 @@ var require_dist_cjs55 = __commonJS({
       validateTokenKey("refreshToken", ssoToken.refreshToken, true);
       try {
         lastRefreshAttemptTime.setTime(Date.now());
-        const newSsoOidcToken = await getNewSsoOidcToken(ssoToken, ssoRegion, init);
+        const newSsoOidcToken = await getNewSsoOidcToken(ssoToken, ssoRegion, init, callerClientConfig);
         validateTokenKey("accessToken", newSsoOidcToken.accessToken);
         validateTokenKey("expiresIn", newSsoOidcToken.expiresIn);
         const newTokenExpiration = new Date(Date.now() + newSsoOidcToken.expiresIn * 1e3);
@@ -52395,7 +52401,7 @@ var require_dist_cjs57 = __commonJS({
     var tokenProviders = require_dist_cjs55();
     var isSsoProfile = (arg) => arg && (typeof arg.sso_start_url === "string" || typeof arg.sso_account_id === "string" || typeof arg.sso_session === "string" || typeof arg.sso_region === "string" || typeof arg.sso_role_name === "string");
     var SHOULD_FAIL_CREDENTIAL_CHAIN = false;
-    var resolveSSOCredentials = async ({ ssoStartUrl, ssoSession, ssoAccountId, ssoRegion, ssoRoleName, ssoClient, clientConfig, parentClientConfig, profile, filepath, configFilepath, ignoreCache, logger: logger3 }) => {
+    var resolveSSOCredentials = async ({ ssoStartUrl, ssoSession, ssoAccountId, ssoRegion, ssoRoleName, ssoClient, clientConfig, parentClientConfig, callerClientConfig, profile, filepath, configFilepath, ignoreCache, logger: logger3 }) => {
       let token;
       const refreshMessage = `To refresh this SSO session run aws sso login with the corresponding profile.`;
       if (ssoSession) {
@@ -52437,9 +52443,9 @@ var require_dist_cjs57 = __commonJS({
         return require_loadSso_CVy8iqsZ();
       });
       const sso = ssoClient || new SSOClient(Object.assign({}, clientConfig ?? {}, {
-        logger: clientConfig?.logger ?? parentClientConfig?.logger,
+        logger: clientConfig?.logger ?? callerClientConfig?.logger ?? parentClientConfig?.logger,
         region: clientConfig?.region ?? ssoRegion,
-        userAgentAppId: clientConfig?.userAgentAppId ?? parentClientConfig?.userAgentAppId
+        userAgentAppId: clientConfig?.userAgentAppId ?? callerClientConfig?.userAgentAppId ?? parentClientConfig?.userAgentAppId
       }));
       let ssoResp;
       try {
@@ -52531,6 +52537,7 @@ Reference: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.ht
           ssoClient,
           clientConfig: init.clientConfig,
           parentClientConfig: init.parentClientConfig,
+          callerClientConfig: init.callerClientConfig,
           profile: profileName,
           filepath: init.filepath,
           configFilepath: init.configFilepath,
@@ -52549,6 +52556,7 @@ Reference: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.ht
           ssoClient,
           clientConfig: init.clientConfig,
           parentClientConfig: init.parentClientConfig,
+          callerClientConfig: init.callerClientConfig,
           profile: profileName,
           filepath: init.filepath,
           configFilepath: init.configFilepath,
@@ -54217,9 +54225,10 @@ var init_defaultStsRoleAssumers = __esm({
     resolveRegion = async (_region, _parentRegion, credentialProviderLogger, loaderConfig = {}) => {
       const region = typeof _region === "function" ? await _region() : _region;
       const parentRegion = typeof _parentRegion === "function" ? await _parentRegion() : _parentRegion;
-      const stsDefaultRegion = await (0, import_region_config_resolver4.stsRegionDefaultResolver)(loaderConfig)();
+      let stsDefaultRegion = "";
+      const resolvedRegion = region ?? parentRegion ?? (stsDefaultRegion = await (0, import_region_config_resolver4.stsRegionDefaultResolver)(loaderConfig)());
       credentialProviderLogger?.debug?.("@aws-sdk/client-sts::resolveRegion", "accepting first of:", `${region} (credential provider clientConfig)`, `${parentRegion} (contextual client)`, `${stsDefaultRegion} (STS default: AWS_REGION, profile region, or us-east-1)`);
-      return region ?? parentRegion ?? stsDefaultRegion;
+      return resolvedRegion;
     };
     getDefaultRoleAssumer = (stsOptions, STSClient2) => {
       let stsClient;
@@ -54628,7 +54637,7 @@ var require_dist_cjs61 = __commonJS({
       }
       return withProviderProfile;
     };
-    var resolveAssumeRoleCredentials = async (profileName, profiles, options, visitedProfiles = {}, resolveProfileData2) => {
+    var resolveAssumeRoleCredentials = async (profileName, profiles, options, callerClientConfig, visitedProfiles = {}, resolveProfileData2) => {
       options.logger?.debug("@aws-sdk/credential-provider-ini - resolveAssumeRoleCredentials (STS)");
       const profileData = profiles[profileName];
       const { source_profile, region } = profileData;
@@ -54638,8 +54647,9 @@ var require_dist_cjs61 = __commonJS({
           ...options.clientConfig,
           credentialProviderLogger: options.logger,
           parentClientConfig: {
+            ...callerClientConfig,
             ...options?.parentClientConfig,
-            region: region ?? options?.parentClientConfig?.region
+            region: region ?? options?.parentClientConfig?.region ?? callerClientConfig?.region
           }
         }, options.clientPlugins);
       }
@@ -54647,7 +54657,7 @@ var require_dist_cjs61 = __commonJS({
         throw new propertyProvider.CredentialsProviderError(`Detected a cycle attempting to resolve credentials for profile ${sharedIniFileLoader.getProfileName(options)}. Profiles visited: ` + Object.keys(visitedProfiles).join(", "), { logger: options.logger });
       }
       options.logger?.debug(`@aws-sdk/credential-provider-ini - finding credential resolver using ${source_profile ? `source_profile=[${source_profile}]` : `profile=[${profileName}]`}`);
-      const sourceCredsProvider = source_profile ? resolveProfileData2(source_profile, profiles, options, {
+      const sourceCredsProvider = source_profile ? resolveProfileData2(source_profile, profiles, options, callerClientConfig, {
         ...visitedProfiles,
         [source_profile]: true
       }, isCredentialSourceWithoutRoleArn(profiles[source_profile] ?? {})) : (await resolveCredentialSource(profileData.credential_source, profileName, options.logger)(options))();
@@ -54678,11 +54688,11 @@ var require_dist_cjs61 = __commonJS({
     var isLoginProfile = (data2) => {
       return Boolean(data2 && data2.login_session);
     };
-    var resolveLoginCredentials = async (profileName, options) => {
+    var resolveLoginCredentials = async (profileName, options, callerClientConfig) => {
       const credentials = await credentialProviderLogin.fromLoginCredentials({
         ...options,
         profile: profileName
-      })();
+      })({ callerClientConfig });
       return client.setCredentialFeature(credentials, "CREDENTIALS_PROFILE_LOGIN", "AC");
     };
     var isProcessProfile = (arg) => Boolean(arg) && typeof arg === "object" && typeof arg.credential_process === "string";
@@ -54690,14 +54700,16 @@ var require_dist_cjs61 = __commonJS({
       ...options,
       profile
     })().then((creds) => client.setCredentialFeature(creds, "CREDENTIALS_PROFILE_PROCESS", "v")));
-    var resolveSsoCredentials = async (profile, profileData, options = {}) => {
+    var resolveSsoCredentials = async (profile, profileData, options = {}, callerClientConfig) => {
       const { fromSSO } = await Promise.resolve().then(() => __toESM(require_dist_cjs57()));
       return fromSSO({
         profile,
         logger: options.logger,
         parentClientConfig: options.parentClientConfig,
         clientConfig: options.clientConfig
-      })().then((creds) => {
+      })({
+        callerClientConfig
+      }).then((creds) => {
         if (profileData.sso_session) {
           return client.setCredentialFeature(creds, "CREDENTIALS_PROFILE_SSO", "r");
         } else {
@@ -54719,52 +54731,47 @@ var require_dist_cjs61 = __commonJS({
       return client.setCredentialFeature(credentials, "CREDENTIALS_PROFILE", "n");
     };
     var isWebIdentityProfile = (arg) => Boolean(arg) && typeof arg === "object" && typeof arg.web_identity_token_file === "string" && typeof arg.role_arn === "string" && ["undefined", "string"].indexOf(typeof arg.role_session_name) > -1;
-    var resolveWebIdentityCredentials = async (profile, options) => Promise.resolve().then(() => __toESM(require_dist_cjs60())).then(({ fromTokenFile }) => fromTokenFile({
+    var resolveWebIdentityCredentials = async (profile, options, callerClientConfig) => Promise.resolve().then(() => __toESM(require_dist_cjs60())).then(({ fromTokenFile }) => fromTokenFile({
       webIdentityTokenFile: profile.web_identity_token_file,
       roleArn: profile.role_arn,
       roleSessionName: profile.role_session_name,
       roleAssumerWithWebIdentity: options.roleAssumerWithWebIdentity,
       logger: options.logger,
       parentClientConfig: options.parentClientConfig
-    })().then((creds) => client.setCredentialFeature(creds, "CREDENTIALS_PROFILE_STS_WEB_ID_TOKEN", "q")));
-    var resolveProfileData = async (profileName, profiles, options, visitedProfiles = {}, isAssumeRoleRecursiveCall = false) => {
+    })({
+      callerClientConfig
+    }).then((creds) => client.setCredentialFeature(creds, "CREDENTIALS_PROFILE_STS_WEB_ID_TOKEN", "q")));
+    var resolveProfileData = async (profileName, profiles, options, callerClientConfig, visitedProfiles = {}, isAssumeRoleRecursiveCall = false) => {
       const data2 = profiles[profileName];
       if (Object.keys(visitedProfiles).length > 0 && isStaticCredsProfile(data2)) {
         return resolveStaticCredentials(data2, options);
       }
       if (isAssumeRoleRecursiveCall || isAssumeRoleProfile(data2, { profile: profileName, logger: options.logger })) {
-        return resolveAssumeRoleCredentials(profileName, profiles, options, visitedProfiles, resolveProfileData);
+        return resolveAssumeRoleCredentials(profileName, profiles, options, callerClientConfig, visitedProfiles, resolveProfileData);
       }
       if (isStaticCredsProfile(data2)) {
         return resolveStaticCredentials(data2, options);
       }
       if (isWebIdentityProfile(data2)) {
-        return resolveWebIdentityCredentials(data2, options);
+        return resolveWebIdentityCredentials(data2, options, callerClientConfig);
       }
       if (isProcessProfile(data2)) {
         return resolveProcessCredentials(options, profileName);
       }
       if (isSsoProfile(data2)) {
-        return await resolveSsoCredentials(profileName, data2, options);
+        return await resolveSsoCredentials(profileName, data2, options, callerClientConfig);
       }
       if (isLoginProfile(data2)) {
-        return resolveLoginCredentials(profileName, options);
+        return resolveLoginCredentials(profileName, options, callerClientConfig);
       }
       throw new propertyProvider.CredentialsProviderError(`Could not resolve credentials using profile: [${profileName}] in configuration/credentials file(s).`, { logger: options.logger });
     };
-    var fromIni = (_init = {}) => async ({ callerClientConfig } = {}) => {
-      const init = {
-        ..._init,
-        parentClientConfig: {
-          ...callerClientConfig,
-          ..._init.parentClientConfig
-        }
-      };
+    var fromIni = (init = {}) => async ({ callerClientConfig } = {}) => {
       init.logger?.debug("@aws-sdk/credential-provider-ini - fromIni");
       const profiles = await sharedIniFileLoader.parseKnownFiles(init);
       return resolveProfileData(sharedIniFileLoader.getProfileName({
-        profile: _init.profile ?? callerClientConfig?.profile
-      }), profiles, init);
+        profile: init.profile ?? callerClientConfig?.profile
+      }), profiles, init, callerClientConfig);
     };
     exports2.fromIni = fromIni;
   }
@@ -63460,6 +63467,7 @@ var require_dist_cjs71 = __commonJS({
       IntelligentTieringAccessTier: "IntelligentTieringAccessTier",
       IsMultipartUploaded: "IsMultipartUploaded",
       LastModifiedDate: "LastModifiedDate",
+      LifecycleExpirationDate: "LifecycleExpirationDate",
       ObjectAccessControlList: "ObjectAccessControlList",
       ObjectLockLegalHoldStatus: "ObjectLockLegalHoldStatus",
       ObjectLockMode: "ObjectLockMode",

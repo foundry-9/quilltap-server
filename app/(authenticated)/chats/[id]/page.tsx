@@ -201,6 +201,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
+  // AbortController for cancelling streaming responses
+  const abortControllerRef = useRef<AbortController | null>(null)
+  // Flag to prevent auto-triggering after user stops streaming
+  const userStoppedStreamRef = useRef<boolean>(false)
   const chatContext = useChatContext()
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
   const quickHideActive = hiddenTagIds.size > 0
@@ -438,6 +442,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     clientLogger.debug('[Chat] Set responding participant for streaming', { participantId })
 
     try {
+      // Create AbortController for this request
+      abortControllerRef.current = new AbortController()
+      const { signal } = abortControllerRef.current
+
       const res = await fetch(`/api/chats/${id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -445,6 +453,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           continueMode: true,
           respondingParticipantId: participantId,
         }),
+        signal,
       })
 
       if (!res.ok) {
@@ -514,15 +523,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         }
       }
     } catch (err) {
-      clientLogger.error('[Chat] Continue mode error:', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-      showErrorToast(err instanceof Error ? err.message : 'Failed to generate response')
+      // Check if this was an abort (user stopped the response)
+      const isAbort = err instanceof Error && err.name === 'AbortError'
+      if (isAbort) {
+        clientLogger.debug('[Chat] Continue mode aborted by user')
+      } else {
+        clientLogger.error('[Chat] Continue mode error:', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+        showErrorToast(err instanceof Error ? err.message : 'Failed to generate response')
+      }
     } finally {
       setStreaming(false)
       setWaitingForResponse(false)
       setStreamingContent('')
       setRespondingParticipantId(null)
+      abortControllerRef.current = null
       scrollToBottom()
     }
   }, [id, streaming, waitingForResponse, participantsAsBase, hasActiveCharacters])
@@ -533,6 +549,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     // Only auto-trigger in multi-character mode
     if (!isMultiChar) {
       clientLogger.debug('[Chat] Auto-trigger skipped - not multi-character mode')
+      return
+    }
+
+    // Don't trigger if user stopped streaming (they get to speak next)
+    if (userStoppedStreamRef.current) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - user stopped streaming, waiting for user input')
       return
     }
 
@@ -1103,12 +1125,44 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setAttachedFiles((prev) => prev.filter((f) => f.id !== fileId))
   }
 
+  // Stop streaming response
+  const stopStreaming = useCallback(() => {
+    clientLogger.debug('[Chat] Stopping streaming response')
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    // Reset streaming state
+    setStreaming(false)
+    setWaitingForResponse(false)
+    setSending(false)
+    setRespondingParticipantId(null)
+    setPendingToolCalls([])
+    setToolExecutionStatus(null)
+    // In multi-character chats, set flag to prevent auto-triggering
+    // This ensures no other character speaks until user yields the floor
+    if (isMultiChar) {
+      clientLogger.debug('[Chat] Setting userStoppedStreamRef to prevent auto-triggering')
+      userStoppedStreamRef.current = true
+    }
+    // Keep the partial content that was received
+    if (streamingContent) {
+      clientLogger.debug('[Chat] Streaming stopped with partial content', {
+        contentLength: streamingContent.length,
+      })
+      showInfoToast('Response stopped - your turn to speak')
+    }
+    setStreamingContent('')
+  }, [streamingContent, isMultiChar])
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if ((!input.trim() && attachedFiles.length === 0) || sending) return
 
     // Reset auto-trigger ref when user sends a message (new turn cycle starts)
     lastAutoTriggeredRef.current = null
+    // Clear the user-stopped flag - user is engaging, so auto-trigger can resume
+    userStoppedStreamRef.current = false
 
     const userMessage = input.trim()
     const fileIds = attachedFiles.map((f) => f.id)
@@ -1191,10 +1245,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
 
     try {
+      // Create AbortController for this request
+      abortControllerRef.current = new AbortController()
+      const { signal } = abortControllerRef.current
+
       const res = await fetch(`/api/chats/${id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestPayload),
+        signal,
       })
 
       // Debug: Mark request as complete
@@ -1389,27 +1448,49 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         }
       }
     } catch (err) {
-      clientLogger.error('Error sending message:', { error: err instanceof Error ? err.message : String(err) })
-      showErrorToast(err instanceof Error ? err.message : 'Failed to send message')
+      // Check if this was an abort (user stopped the response)
+      const isAbort = err instanceof Error && err.name === 'AbortError'
 
-      // Debug: Mark entries as error
-      if (debug?.isDebugMode) {
-        if (debugEntryId) {
-          debug.updateEntry(debugEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+      if (isAbort) {
+        clientLogger.debug('[Chat] Streaming aborted by user')
+        // Debug: Mark entries as aborted
+        if (debug?.isDebugMode) {
+          if (debugEntryId) {
+            debug.updateEntry(debugEntryId, { status: 'complete', error: 'Aborted by user' })
+          }
+          if (responseEntryId) {
+            debug.updateEntry(responseEntryId, { status: 'complete', error: 'Aborted by user' })
+          }
         }
-        if (responseEntryId) {
-          debug.updateEntry(responseEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+        // Don't remove user message or show error for abort
+        setStreamingContent('')
+        setStreaming(false)
+        setWaitingForResponse(false)
+        setRespondingParticipantId(null)
+      } else {
+        clientLogger.error('Error sending message:', { error: err instanceof Error ? err.message : String(err) })
+        showErrorToast(err instanceof Error ? err.message : 'Failed to send message')
+
+        // Debug: Mark entries as error
+        if (debug?.isDebugMode) {
+          if (debugEntryId) {
+            debug.updateEntry(debugEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+          }
+          if (responseEntryId) {
+            debug.updateEntry(responseEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+          }
         }
+
+        // Remove the temporary user message on error
+        setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
+        setStreamingContent('')
+        setStreaming(false)
+        setWaitingForResponse(false)
+        setRespondingParticipantId(null)
       }
-
-      // Remove the temporary user message on error
-      setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
-      setStreamingContent('')
-      setStreaming(false)
-      setWaitingForResponse(false)
-      setRespondingParticipantId(null)
     } finally {
       setSending(false)
+      abortControllerRef.current = null
       setTimeout(() => {
         inputRef.current?.focus()
       }, 0)
@@ -2413,6 +2494,20 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     })()}
                   </div>
                   <span className="qt-chat-message-mobile-name">{getRespondingCharacter()?.name || 'AI'}</span>
+                  {/* Mobile: Stop button - positioned to the right of the avatar/name */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      stopStreaming()
+                    }}
+                    className="qt-button qt-chat-stop-button-mobile"
+                    title="Stop generating"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <rect x="6" y="6" width="12" height="12" rx="1" />
+                    </svg>
+                  </button>
                 </div>
               )}
               <div className="flex-1 min-w-0 px-4 py-3 rounded-lg bg-card border border-border text-foreground">
@@ -2577,6 +2672,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             />
             {/* Tool palette toggle button - left side */}
             <div className="qt-chat-toolbar">
+              {/* Desktop: Stop button - only shown during streaming/waiting */}
+              {(streaming || waitingForResponse) && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    stopStreaming()
+                  }}
+                  className="qt-button qt-chat-toolbar-button qt-chat-stop-button qt-desktop-only"
+                  title="Stop generating"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="1" />
+                  </svg>
+                </button>
+              )}
               {/* Mobile: Tool palette toggle button */}
               <button
                 ref={mobileToolPaletteToggleRef}

@@ -4,6 +4,12 @@
 
 ### 2.4-dev
 
+- feat: Stop streaming response button
+  - Desktop: Stop button appears to the left of the tool palette toggle when streaming
+  - Mobile: Stop button appears in the sticky streaming header to the right of the avatar
+  - Uses AbortController to cancel the fetch request cleanly
+  - In multi-character chats, stopping a response resets to user's turn
+  - Displays "Response stopped" toast when content was partially received
 - feat: Pseudo-tool support for models without native function calling
   - Auto-detects when model doesn't support native tools (via OpenRouter pricing cache)
   - Injects text-based tool instructions into system prompt using `[TOOL:name]...[/TOOL]` syntax

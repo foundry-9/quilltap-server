@@ -183,6 +183,38 @@
   }
 
   /**
+   * Stop button - stops streaming response (desktop)
+   */
+  .qt-chat-stop-button {
+    background: var(--qt-status-danger-bg);
+    color: var(--qt-status-danger-fg);
+    border: 1px solid var(--qt-status-danger-border);
+  }
+
+  .qt-chat-stop-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 70%, black);
+  }
+
+  /**
+   * Stop button - mobile version (in streaming header)
+   */
+  .qt-chat-stop-button-mobile {
+    @apply inline-flex items-center justify-center flex-shrink-0 ml-auto;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    background: var(--qt-status-danger-bg);
+    color: var(--qt-status-danger-fg);
+    border: 1px solid var(--qt-status-danger-border);
+    cursor: pointer;
+    transition: background 150ms ease;
+  }
+
+  .qt-chat-stop-button-mobile:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 70%, black);
+  }
+
+  /**
    * Composer input area
    * Uses flex-grow to fill available space in the composer-inner container.
    * The min-h-12 ensures a minimum height, max-h-48 caps growth.
