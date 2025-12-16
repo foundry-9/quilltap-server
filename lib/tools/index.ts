@@ -77,3 +77,26 @@ export {
   buildToolsForProvider,
   type BuildToolsOptions,
 } from './plugin-tool-builder';
+
+// Pseudo-Tool Support (for models without native function calling)
+export {
+  checkModelSupportsTools,
+  shouldUsePseudoTools,
+  buildPseudoToolConfig,
+  type PseudoToolConfig,
+  type ToolMode,
+} from './pseudo-tool-support';
+
+export {
+  buildPseudoToolInstructions,
+  type PseudoToolOptions,
+} from './pseudo-tool-prompt';
+
+export {
+  parsePseudoToolCalls,
+  convertToToolCallRequest,
+  stripPseudoToolMarkers,
+  hasPseudoToolMarkers,
+  type ParsedPseudoTool,
+  type ToolCallRequest,
+} from './pseudo-tool-parser';

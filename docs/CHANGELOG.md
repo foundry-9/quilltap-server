@@ -4,6 +4,20 @@
 
 ### 2.4-dev
 
+- feat: Pseudo-tool support for models without native function calling
+  - Auto-detects when model doesn't support native tools (via OpenRouter pricing cache)
+  - Injects text-based tool instructions into system prompt using `[TOOL:name]...[/TOOL]` syntax
+  - Supported pseudo-tools: memory search, image generation, web search
+  - Parses markers from LLM responses and executes through existing tool pipeline
+  - Strips markers from displayed/stored response for clean output
+  - Continues conversation with tool results for natural flow
+  - New files: pseudo-tool-support.ts, pseudo-tool-prompt.ts, pseudo-tool-parser.ts
+- feat: OpenRouter custom model ID support
+  - Added "Use Custom Model ID" toggle in OpenRouter Options section
+  - When enabled, shows text input for arbitrary model IDs not in the fetched list
+  - Datalist autocomplete still shows fetched models as suggestions
+  - Existing "Test Message" button can be used to verify custom models work
+  - Custom model preference is saved with connection profile
 - fix: Skip button now properly advances turn in multi-character chats
   - When user skips their turn, the cycle now resets so characters can speak again
   - Added `resetCycleForUserSkip()` function to turn-manager
@@ -18,6 +32,7 @@
   - Added debug logging when duplicate prefix is detected and skipped
 - fix: Reduced SSE parse error noise in console
   - Better filtering of benign empty SSE data chunks
+  - Skip `[DONE]` markers sent by OpenAI-compatible APIs (OpenRouter)
 - feat: Unified desktop tool palette matching mobile design
   - Simplified footer to single-line textarea with tool palette button (left) and send (right)
   - New full-width tool palette bar above composer when opened

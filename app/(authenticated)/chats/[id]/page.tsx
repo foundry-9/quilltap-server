@@ -469,8 +469,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
+            const rawData = line.slice(6).trim()
+            // Skip SSE markers that aren't JSON (OpenAI/OpenRouter use [DONE] to signal end of stream)
+            if (!rawData || rawData === '[DONE]' || rawData === '{}') {
+              continue
+            }
             try {
-              const data = JSON.parse(line.slice(6))
+              const data = JSON.parse(rawData)
 
               if (data.content) {
                 fullContent += data.content
@@ -1232,8 +1237,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
+            const rawData = line.slice(6).trim()
+            // Skip SSE markers that aren't JSON (OpenAI/OpenRouter use [DONE] to signal end of stream)
+            if (!rawData || rawData === '[DONE]' || rawData === '{}') {
+              continue
+            }
             try {
-              const data = JSON.parse(line.slice(6))
+              const data = JSON.parse(rawData)
 
               if (data.content) {
                 fullContent += data.content
@@ -1364,15 +1374,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               }
             } catch (parseError) {
               // Only log if it's a real parse error, not noise from SSE chunking
+              // Note: rawData is already trimmed and we've skipped empty/[DONE]/{} before try block
               const errorMessage = parseError instanceof Error ? parseError.message : String(parseError)
-              const rawData = line.slice(6).trim()
-              // Skip logging for:
-              // - Empty data (SSE chunking artifact)
-              // - Empty JSON object (benign)
-              // - Generic stringified objects
-              const shouldSkip = !rawData ||
-                rawData === '{}' ||
-                !errorMessage ||
+              // Skip logging for generic stringified objects or empty error messages
+              const shouldSkip = !errorMessage ||
                 errorMessage === 'undefined' ||
                 errorMessage === '[object Object]' ||
                 errorMessage === '{}'

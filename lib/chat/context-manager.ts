@@ -153,6 +153,13 @@ export interface BuildContextOptions {
   participantPersonas?: Map<string, Persona>
   /** Extended messages with participantId for attribution */
   messagesWithParticipants?: MessageWithParticipant[]
+
+  // ============================================================================
+  // Pseudo-Tool Support (for models without native function calling)
+  // ============================================================================
+
+  /** Instructions for text-based pseudo-tools (when model doesn't support native tools) */
+  pseudoToolInstructions?: string
 }
 
 /**
@@ -194,7 +201,9 @@ export function buildSystemPrompt(
   /** For multi-character chats: info about other participants */
   otherParticipants?: OtherParticipantInfo[],
   /** Roleplay template to prepend (formatting instructions) */
-  roleplayTemplate?: { systemPrompt: string } | null
+  roleplayTemplate?: { systemPrompt: string } | null,
+  /** Pseudo-tool instructions for models without native function calling */
+  pseudoToolInstructions?: string
 ): string {
   const parts: string[] = []
 
@@ -204,6 +213,15 @@ export function buildSystemPrompt(
       templatePromptLength: roleplayTemplate.systemPrompt.length,
     })
     parts.push(roleplayTemplate.systemPrompt)
+  }
+
+  // Pseudo-tool instructions (for models without native function calling)
+  // Added after roleplay template so tool usage instructions are seen early
+  if (pseudoToolInstructions) {
+    logger.debug('[ContextManager] Adding pseudo-tool instructions', {
+      instructionsLength: pseudoToolInstructions.length,
+    })
+    parts.push(pseudoToolInstructions)
   }
 
   // Base system prompt from character or override
@@ -679,6 +697,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     participantCharacters,
     participantPersonas,
     messagesWithParticipants,
+    // Pseudo-tool support
+    pseudoToolInstructions,
   } = options
 
   const warnings: string[] = []
@@ -712,7 +732,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     )
   }
 
-  const systemPrompt = buildSystemPrompt(character, persona, systemPromptOverride, otherParticipantsInfo, roleplayTemplate)
+  const systemPrompt = buildSystemPrompt(character, persona, systemPromptOverride, otherParticipantsInfo, roleplayTemplate, pseudoToolInstructions)
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 
   // Check if system prompt exceeds budget
