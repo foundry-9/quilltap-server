@@ -4,6 +4,10 @@
 
 ### 2.4-dev
 
+- chore: Remove obsolete Prisma/PostgreSQL artifacts
+  - Deleted `__mocks__/@auth/prisma-adapter.ts` (orphaned mock, nothing imported it)
+  - Deleted `docker/scripts/` directory containing PostgreSQL backup/restore scripts
+  - Project uses MongoDB with native driver, not Prisma or PostgreSQL
 - fix: ToolPalette toggle button on desktop now properly closes when clicked again
   - Added `toggleButtonRef` prop to ToolPalette component (matching MobileToolPalette)
   - Click outside handler now ignores clicks on the toggle button
