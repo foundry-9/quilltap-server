@@ -4,6 +4,15 @@
 
 ### 2.4-dev
 
+- feat: Persist turn state in multi-character chats
+  - Added `lastTurnParticipantId` field to chat metadata
+  - Turn state is saved when it changes (whose turn it is)
+  - When returning to a chat, restores the turn state from when you left
+  - New PATCH `/api/chats/:id/turn` endpoint to persist turn state
+- fix: Participant sidebar now highlights correct character during streaming
+  - Was using `turnState.lastSpeakerId` (calculated from persisted messages)
+  - Now uses `respondingParticipantId` (set before streaming starts)
+  - Main chat window already showed correct character, sidebar was out of sync
 - feat: Stop streaming response button
   - Desktop: Stop button appears to the left of the tool palette toggle when streaming
   - Mobile: Stop button appears in the sticky streaming header to the right of the avatar

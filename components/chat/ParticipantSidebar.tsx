@@ -25,6 +25,7 @@ interface ParticipantSidebarProps {
   turnSelectionResult: TurnSelectionResult | null
   isGenerating: boolean
   userParticipantId: string | null
+  respondingParticipantId?: string | null // The participant currently streaming a response
   onNudge: (participantId: string) => void
   onQueue: (participantId: string) => void
   onDequeue: (participantId: string) => void
@@ -41,6 +42,7 @@ export function ParticipantSidebar({
   turnSelectionResult,
   isGenerating,
   userParticipantId,
+  respondingParticipantId,
   onNudge,
   onQueue,
   onDequeue,
@@ -56,9 +58,10 @@ export function ParticipantSidebar({
       participantCount: participants.length,
       queueLength: turnState.queue.length,
       nextSpeakerId: turnSelectionResult?.nextSpeakerId,
+      respondingParticipantId,
       isGenerating,
     })
-  }, [participants.length, turnState.queue.length, turnSelectionResult?.nextSpeakerId, isGenerating])
+  }, [participants.length, turnState.queue.length, turnSelectionResult?.nextSpeakerId, respondingParticipantId, isGenerating])
 
   // Sort participants: personas first (the user), then characters by displayOrder
   const sortedParticipants = useMemo(() => {
@@ -75,12 +78,19 @@ export function ParticipantSidebar({
 
   // Get the current speaker (either from selection result or currently generating)
   const currentSpeakerId = useMemo(() => {
-    if (isGenerating && turnState.lastSpeakerId) {
-      // If generating, the last speaker is the current one
-      return turnState.lastSpeakerId
+    if (isGenerating) {
+      // If generating, use the responding participant ID (set before streaming starts)
+      // This is more accurate than lastSpeakerId which is calculated from persisted messages
+      if (respondingParticipantId) {
+        return respondingParticipantId
+      }
+      // Fallback to lastSpeakerId for backwards compatibility
+      if (turnState.lastSpeakerId) {
+        return turnState.lastSpeakerId
+      }
     }
     return turnSelectionResult?.nextSpeakerId ?? null
-  }, [isGenerating, turnState.lastSpeakerId, turnSelectionResult?.nextSpeakerId])
+  }, [isGenerating, respondingParticipantId, turnState.lastSpeakerId, turnSelectionResult?.nextSpeakerId])
 
   // Count active characters (not including personas)
   const activeCharacterCount = useMemo(() => {

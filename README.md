@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.0--dev.21-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.4.0--dev.22-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -543,6 +543,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [X] Add in the capability to stop a runaway response
 - [ ] Make the system capable of importing chats that it exports
 - [ ] Maintain a settings tab of basic system prompts with suggestions built-in
+- [ ] Get rid of any trace of "prisma"
 
 ## Acknowledgments
 

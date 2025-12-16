@@ -139,6 +139,8 @@ interface Chat {
     image?: string | null
   }
   messages: Message[]
+  /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
+  lastTurnParticipantId?: string | null
 }
 
 interface ChatSettings {
@@ -205,6 +207,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const abortControllerRef = useRef<AbortController | null>(null)
   // Flag to prevent auto-triggering after user stops streaming
   const userStoppedStreamRef = useRef<boolean>(false)
+  // Track if we've restored turn state from persisted value on initial load
+  const hasRestoredTurnStateRef = useRef<boolean>(false)
   const chatContext = useChatContext()
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
   const quickHideActive = hiddenTagIds.size > 0
@@ -391,12 +395,49 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setTurnState(newTurnState)
 
     // Calculate next speaker
-    const result = selectNextSpeaker(
+    let result = selectNextSpeaker(
       participantsAsBase,
       charactersMap,
       newTurnState,
       userParticipantId
     )
+
+    // On initial load, use persisted turn state if available
+    // This preserves the turn state from when the user left the chat
+    if (!hasRestoredTurnStateRef.current && chat?.lastTurnParticipantId !== undefined) {
+      hasRestoredTurnStateRef.current = true
+      const persistedParticipantId = chat.lastTurnParticipantId
+
+      // Validate the persisted participant is still active
+      if (persistedParticipantId === null) {
+        // null means it was user's turn - check if algorithm agrees or override
+        if (result.nextSpeakerId !== null) {
+          clientLogger.debug('[Chat] Restoring persisted turn state: user\'s turn', {
+            calculatedNextSpeaker: result.nextSpeakerId,
+          })
+          result = {
+            ...result,
+            nextSpeakerId: null,
+            reason: 'user_turn',
+          }
+        }
+      } else {
+        const persistedParticipant = participantsAsBase.find(
+          p => p.id === persistedParticipantId && p.isActive
+        )
+        if (persistedParticipant && result.nextSpeakerId !== persistedParticipantId) {
+          clientLogger.debug('[Chat] Restoring persisted turn state', {
+            persistedParticipantId,
+            calculatedNextSpeaker: result.nextSpeakerId,
+          })
+          result = {
+            ...result,
+            nextSpeakerId: persistedParticipantId,
+            reason: 'queue', // Treat as if queued since we're overriding the calculation
+          }
+        }
+      }
+    }
 
     setTurnSelectionResult(result)
 
@@ -405,7 +446,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       reason: result.reason,
       cycleComplete: result.cycleComplete,
     })
-  }, [messages, participantsAsBase, userParticipantId, charactersMap])
+  }, [messages, participantsAsBase, userParticipantId, charactersMap, chat?.lastTurnParticipantId])
 
   // Phase 5: Trigger character response without user message (for nudge action)
   // Phase 7: Enhanced with edge case validation
@@ -829,6 +870,34 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       clientLogger.error('Failed to fetch chat memory count:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [id])
+
+  // Persist turn state to backend when it changes (for restoring on return)
+  const persistTurnState = useCallback(async (lastTurnParticipantId: string | null) => {
+    try {
+      clientLogger.debug('[Chat] Persisting turn state', { chatId: id, lastTurnParticipantId })
+      const res = await fetch(`/api/chats/${id}/turn`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lastTurnParticipantId }),
+      })
+      if (!res.ok) {
+        clientLogger.warn('[Chat] Failed to persist turn state', { status: res.status })
+      }
+    } catch (err) {
+      clientLogger.error('[Chat] Error persisting turn state', { error: err instanceof Error ? err.message : String(err) })
+    }
+  }, [id])
+
+  // Effect to persist turn state when it changes (for restoring on return to chat)
+  // Only persist for multi-character chats when not streaming
+  useEffect(() => {
+    if (!isMultiChar) return
+    if (streaming || waitingForResponse) return
+    if (turnSelectionResult === null) return
+
+    // Persist the next speaker (null means user's turn)
+    persistTurnState(turnSelectionResult.nextSpeakerId)
+  }, [isMultiChar, streaming, waitingForResponse, turnSelectionResult, persistTurnState])
 
   // Handle deleting all memories for this chat
   const handleDeleteChatMemories = useCallback(async () => {
@@ -2890,6 +2959,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           turnSelectionResult={turnSelectionResult}
           isGenerating={streaming || waitingForResponse}
           userParticipantId={userParticipantId}
+          respondingParticipantId={respondingParticipantId}
           onNudge={handleNudge}
           onQueue={handleQueue}
           onDequeue={handleDequeue}

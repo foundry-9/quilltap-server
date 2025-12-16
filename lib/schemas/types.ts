@@ -481,6 +481,8 @@ export const ChatMetadataSchema = z.object({
   tags: z.array(UUIDSchema).default([]),
   /** Roleplay template for this chat (inherited from user default on creation) */
   roleplayTemplateId: UUIDSchema.nullable().optional(),
+  /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
+  lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
@@ -504,6 +506,8 @@ export const ChatMetadataBaseSchema = z.object({
   tags: z.array(UUIDSchema).default([]),
   /** Roleplay template for this chat (inherited from user default on creation) */
   roleplayTemplateId: UUIDSchema.nullable().optional(),
+  /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
+  lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),

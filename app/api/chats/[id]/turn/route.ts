@@ -34,6 +34,11 @@ const turnActionSchema = z.object({
   participantId: z.string().uuid(),
 })
 
+// Validation schema for PATCH request (persist turn state)
+const persistTurnSchema = z.object({
+  lastTurnParticipantId: z.string().uuid().nullable(),
+})
+
 /**
  * GET /api/chats/:id/turn
  *
@@ -304,6 +309,84 @@ export async function POST(
     logger.error('[Turn API] Error processing turn action:', {}, error as Error)
     return NextResponse.json(
       { error: 'Failed to process turn action' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * PATCH /api/chats/:id/turn
+ *
+ * Persists the current turn state to the chat metadata.
+ * Called after each turn completes to remember whose turn it is.
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const session = await getServerSession()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const repos = getRepositories()
+
+    // Get chat metadata to verify ownership
+    const chat = await repos.chats.findById(id)
+    if (!chat || chat.userId !== session.user.id) {
+      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+    }
+
+    // Parse and validate request body
+    const body = await req.json()
+    const { lastTurnParticipantId } = persistTurnSchema.parse(body)
+
+    logger.debug('[Turn API] Persisting turn state', {
+      chatId: id,
+      lastTurnParticipantId,
+    })
+
+    // If a participant ID is provided, verify it exists and is active
+    if (lastTurnParticipantId !== null) {
+      const participant = chat.participants.find(p => p.id === lastTurnParticipantId)
+      if (!participant) {
+        return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
+      }
+      if (!participant.isActive) {
+        // If the participant is no longer active, set to null (user's turn)
+        logger.debug('[Turn API] Participant inactive, setting to user turn', {
+          participantId: lastTurnParticipantId,
+        })
+      }
+    }
+
+    // Update the chat metadata with the turn state
+    await repos.chats.update(id, {
+      lastTurnParticipantId,
+    })
+
+    logger.debug('[Turn API] Turn state persisted', {
+      chatId: id,
+      lastTurnParticipantId,
+    })
+
+    return NextResponse.json({
+      success: true,
+      lastTurnParticipantId,
+    })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation error', details: error.errors },
+        { status: 400 }
+      )
+    }
+
+    logger.error('[Turn API] Error persisting turn state:', {}, error as Error)
+    return NextResponse.json(
+      { error: 'Failed to persist turn state' },
       { status: 500 }
     )
   }
