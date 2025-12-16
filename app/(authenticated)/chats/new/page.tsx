@@ -21,6 +21,11 @@ interface Character {
     url?: string
   } | null
   defaultConnectionProfileId?: string | null
+  systemPrompts?: Array<{
+    id: string
+    name: string
+    isDefault: boolean
+  }>
 }
 
 interface ConnectionProfile {
@@ -47,6 +52,7 @@ interface SelectedCharacter {
   character: Character
   connectionProfileId: string
   imageProfileId?: string | null
+  selectedSystemPromptId?: string | null
 }
 
 export default function NewChatPage() {
@@ -144,13 +150,17 @@ export default function NewChatPage() {
     } else {
       const connectionProfileId =
         character.defaultConnectionProfileId || profiles[0]?.id || ''
+      // Find default or first system prompt
+      const defaultPrompt = character.systemPrompts?.find(p => p.isDefault) || character.systemPrompts?.[0]
+      const selectedSystemPromptId = defaultPrompt?.id || null
       clientLogger.debug('[NewChat] Selecting character', {
         characterId: character.id,
         connectionProfileId,
+        selectedSystemPromptId,
       })
       setSelectedCharacters((prev) => [
         ...prev,
-        { character, connectionProfileId, imageProfileId: null },
+        { character, connectionProfileId, imageProfileId: null, selectedSystemPromptId },
       ])
     }
   }
@@ -169,6 +179,15 @@ export default function NewChatPage() {
     setSelectedCharacters((prev) =>
       prev.map((sc) =>
         sc.character.id === characterId ? { ...sc, imageProfileId: profileId } : sc
+      )
+    )
+  }
+
+  const handleSystemPromptChange = (characterId: string, promptId: string | null) => {
+    clientLogger.debug('[NewChat] Changing system prompt', { characterId, promptId })
+    setSelectedCharacters((prev) =>
+      prev.map((sc) =>
+        sc.character.id === characterId ? { ...sc, selectedSystemPromptId: promptId } : sc
       )
     )
   }
@@ -219,11 +238,13 @@ export default function NewChatPage() {
         personaId?: string
         connectionProfileId?: string
         imageProfileId?: string
+        selectedSystemPromptId?: string
       }> = selectedCharacters.map((sc) => ({
         type: 'CHARACTER' as const,
         characterId: sc.character.id,
         connectionProfileId: sc.connectionProfileId,
         imageProfileId: sc.imageProfileId || undefined,
+        selectedSystemPromptId: sc.selectedSystemPromptId || undefined,
       }))
 
       if (selectedPersonaId) {
@@ -396,6 +417,23 @@ export default function NewChatPage() {
                                   <option value="">No image profile</option>
                                   {imageProfiles.map((profile) => (
                                     <option key={profile.id} value={profile.id}>{profile.name} ({profile.provider})</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            {sc.character.systemPrompts && sc.character.systemPrompts.length > 0 && (
+                              <div className="mt-2">
+                                <label className="mb-1 block text-xs font-medium text-muted-foreground">System Prompt</label>
+                                <select
+                                  value={sc.selectedSystemPromptId || ''}
+                                  onChange={(e) => handleSystemPromptChange(sc.character.id, e.target.value || null)}
+                                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                                >
+                                  <option value="">Use Default</option>
+                                  {sc.character.systemPrompts.map((prompt) => (
+                                    <option key={prompt.id} value={prompt.id}>
+                                      {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
+                                    </option>
                                   ))}
                                 </select>
                               </div>

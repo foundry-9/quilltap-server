@@ -4,6 +4,16 @@
 
 ### 2.4-dev
 
+- feat: Multiple system prompts per character
+  - Characters can now have multiple named system prompts with one marked as default
+  - New "System Prompts" tab on character edit page with SystemPromptsEditor component
+  - New "Prompts" tab in Settings for managing reusable prompt templates
+  - Sample prompts loaded from `prompts/` directory (read-only, can be imported)
+  - Prompt selection available at chat creation and in chat settings modal
+  - Context manager uses selected prompt with fallback chain: override > selected > default > legacy
+  - New API endpoints: `/api/prompt-templates`, `/api/characters/[id]/prompts`, `/api/sample-prompts`
+- fix: Balance chat composer vertical padding on desktop
+  - Reduced top padding and increased bottom padding for visual balance
 - chore: Remove obsolete Prisma/PostgreSQL artifacts
   - Deleted `__mocks__/@auth/prisma-adapter.ts` (orphaned mock, nothing imported it)
   - Deleted `docker/scripts/` directory containing PostgreSQL backup/restore scripts

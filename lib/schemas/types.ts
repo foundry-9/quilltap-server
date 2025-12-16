@@ -274,6 +274,18 @@ export type ConnectionProfile = z.infer<typeof ConnectionProfileSchema>;
 // CHARACTER & PERSONA
 // ============================================================================
 
+// Character System Prompt (embedded in Character) - named system prompts for characters
+export const CharacterSystemPromptSchema = z.object({
+  id: UUIDSchema,
+  name: z.string().min(1).max(100),
+  content: z.string().min(1),
+  isDefault: z.boolean().default(false),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type CharacterSystemPrompt = z.infer<typeof CharacterSystemPromptSchema>;
+
 // Physical Description for image generation prompts
 export const PhysicalDescriptionSchema = z.object({
   id: UUIDSchema,
@@ -299,7 +311,8 @@ export const CharacterSchema = z.object({
   scenario: z.string().nullable().optional(),
   firstMessage: z.string().nullable().optional(),
   exampleDialogues: z.string().nullable().optional(),
-  systemPrompt: z.string().nullable().optional(),
+  systemPrompt: z.string().nullable().optional(),  // @deprecated - use systemPrompts array instead
+  systemPrompts: z.array(CharacterSystemPromptSchema).default([]),  // Named system prompts array
   avatarUrl: z.string().nullable().optional(),
   defaultImageId: UUIDSchema.nullable().optional(),
   defaultConnectionProfileId: UUIDSchema.nullable().optional(),
@@ -417,6 +430,7 @@ export const ChatParticipantSchema = z.object({
 
   // Per-chat customization
   systemPromptOverride: z.string().nullable().optional(),  // Custom scenario/context for this chat
+  selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
 
   // Display and state
   displayOrder: z.number().default(0),   // For ordering in UI
@@ -455,6 +469,7 @@ export const ChatParticipantBaseSchema = z.object({
   imageProfileId: UUIDSchema.nullable().optional(),
   roleplayTemplateId: UUIDSchema.nullable().optional(),  // Roleplay template override for this chat
   systemPromptOverride: z.string().nullable().optional(),
+  selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
   displayOrder: z.number().default(0),
   isActive: z.boolean().default(true),
   hasHistoryAccess: z.boolean().default(false),
@@ -760,6 +775,27 @@ export const RoleplayTemplateSchema = z.object({
 });
 
 export type RoleplayTemplate = z.infer<typeof RoleplayTemplateSchema>;
+
+// ============================================================================
+// PROMPT TEMPLATES
+// ============================================================================
+
+// User-created prompt templates (stored in MongoDB) for reusable system prompts
+export const PromptTemplateSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema.nullable().optional(),   // null for built-in sample prompts
+  name: z.string().min(1).max(100),
+  content: z.string().min(1),                 // The prompt content (markdown)
+  description: z.string().max(500).nullable().optional(),
+  isBuiltIn: z.boolean().default(false),      // True for sample prompts from prompts/ directory
+  category: z.string().nullable().optional(), // e.g., "COMPANION", "ROMANTIC" from filename
+  modelHint: z.string().nullable().optional(), // e.g., "CLAUDE", "GPT-4O" from filename
+  tags: z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type PromptTemplate = z.infer<typeof PromptTemplateSchema>;
 
 // ============================================================================
 // BACKGROUND JOBS

@@ -23,6 +23,11 @@ interface Character {
   id: string
   name: string
   title?: string | null
+  systemPrompts?: Array<{
+    id: string
+    name: string
+    isDefault: boolean
+  }>
 }
 
 interface Persona {
@@ -37,6 +42,7 @@ interface Participant {
   displayOrder: number
   isActive: boolean
   systemPromptOverride?: string | null
+  selectedSystemPromptId?: string | null
   character?: Character | null
   persona?: Persona | null
   connectionProfile?: {
@@ -81,6 +87,7 @@ interface ParticipantUpdate {
   connectionProfileId?: string
   imageProfileId?: string | null
   systemPromptOverride?: string | null
+  selectedSystemPromptId?: string | null
   isActive?: boolean
 }
 
@@ -99,6 +106,7 @@ function ParticipantEditor({
   // Generate unique IDs for form controls
   const connectionProfileId = `connection-profile-${participant.id}`
   const imageProfileId = `image-profile-${participant.id}`
+  const systemPromptSelectId = `system-prompt-select-${participant.id}`
   const systemPromptId = `system-prompt-${participant.id}`
   const activeCheckboxId = `active-${participant.id}`
 
@@ -107,6 +115,9 @@ function ParticipantEditor({
   )
   const [selectedImageProfileId, setSelectedImageProfileId] = useState(
     participant.imageProfile?.id || ''
+  )
+  const [selectedSystemPromptId, setSelectedSystemPromptId] = useState(
+    participant.selectedSystemPromptId || ''
   )
   const [systemPromptOverride, setSystemPromptOverride] = useState(
     participant.systemPromptOverride || ''
@@ -122,6 +133,17 @@ function ParticipantEditor({
 
     if (selectedImageProfileId !== (participant.imageProfile?.id || '')) {
       updates.imageProfileId = selectedImageProfileId || null
+    }
+
+    if (isCharacter && participant.character?.systemPrompts) {
+      if (selectedSystemPromptId !== (participant.selectedSystemPromptId || '')) {
+        clientLogger.debug('System prompt selection changed', {
+          participantId: participant.id,
+          oldPromptId: participant.selectedSystemPromptId,
+          newPromptId: selectedSystemPromptId || null,
+        })
+        updates.selectedSystemPromptId = selectedSystemPromptId || null
+      }
     }
 
     if (systemPromptOverride !== (participant.systemPromptOverride || '')) {
@@ -203,6 +225,31 @@ function ParticipantEditor({
               ))}
             </select>
           </div>
+
+          {participant.character?.systemPrompts && participant.character.systemPrompts.length > 0 && (
+            <div className="mb-3">
+              <label htmlFor={systemPromptSelectId} className="block text-sm font-medium text-foreground mb-1">
+                System Prompt
+              </label>
+              <select
+                id={systemPromptSelectId}
+                value={selectedSystemPromptId}
+                onChange={(e) => setSelectedSystemPromptId(e.target.value)}
+                disabled={loading}
+                className="qt-select text-sm"
+              >
+                <option value="">Use Default</option>
+                {participant.character.systemPrompts.map((prompt) => (
+                  <option key={prompt.id} value={prompt.id}>
+                    {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Select which of the character&apos;s system prompts to use
+              </p>
+            </div>
+          )}
         </>
       )}
 

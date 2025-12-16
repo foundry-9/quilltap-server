@@ -10,6 +10,7 @@ import PluginsTab from '@/components/settings/plugins-tab'
 import TagsTab from '@/components/settings/tags-tab'
 import AppearanceTab from '@/components/settings/appearance-tab'
 import RoleplayTemplatesTab from '@/components/settings/roleplay-templates-tab'
+import PromptsTab from '@/components/settings/prompts-tab'
 import { EntityTabs, Tab } from '@/components/tabs'
 
 const SETTINGS_TABS: Tab[] = [
@@ -94,6 +95,15 @@ const SETTINGS_TABS: Tab[] = [
       </svg>
     ),
   },
+  {
+    id: 'prompts',
+    label: 'Prompts',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+      </svg>
+    ),
+  },
 ]
 
 export default function SettingsPage() {
@@ -117,6 +127,8 @@ export default function SettingsPage() {
         return <TagsTab />
       case 'templates':
         return <RoleplayTemplatesTab />
+      case 'prompts':
+        return <PromptsTab />
       default:
         return null
     }

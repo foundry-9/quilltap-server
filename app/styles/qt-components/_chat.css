@@ -1394,4 +1394,10 @@
   .qt-mobile-participant-controls {
     display: none !important;
   }
+
+  /* Balance composer vertical padding on desktop - less above textarea, more below */
+  .qt-chat-composer {
+    padding-top: 0.625rem;
+    padding-bottom: 1.25rem;
+  }
 }

@@ -203,7 +203,9 @@ export function buildSystemPrompt(
   /** Roleplay template to prepend (formatting instructions) */
   roleplayTemplate?: { systemPrompt: string } | null,
   /** Pseudo-tool instructions for models without native function calling */
-  pseudoToolInstructions?: string
+  pseudoToolInstructions?: string,
+  /** Selected system prompt ID from character's systemPrompts array */
+  selectedSystemPromptId?: string | null
 ): string {
   const parts: string[] = []
 
@@ -224,11 +226,68 @@ export function buildSystemPrompt(
     parts.push(pseudoToolInstructions)
   }
 
-  // Base system prompt from character or override
+  // Base system prompt - priority: override > selected prompt > default systemPrompt
   if (systemPromptOverride) {
+    logger.debug('[ContextManager] Using system prompt override', {
+      overrideLength: systemPromptOverride.length,
+    })
     parts.push(systemPromptOverride)
-  } else if (character.systemPrompt) {
-    parts.push(character.systemPrompt)
+  } else {
+    // Check for selected system prompt from character's prompts array
+    let systemPromptContent: string | null = null
+
+    if (selectedSystemPromptId && character.systemPrompts) {
+      const selectedPrompt = character.systemPrompts.find(p => p.id === selectedSystemPromptId)
+      if (selectedPrompt) {
+        systemPromptContent = selectedPrompt.content
+        logger.debug('[ContextManager] Using selected system prompt', {
+          characterId: character.id,
+          promptId: selectedSystemPromptId,
+          promptName: selectedPrompt.name,
+          contentLength: selectedPrompt.content.length,
+        })
+      } else {
+        logger.debug('[ContextManager] Selected system prompt not found in character prompts', {
+          characterId: character.id,
+          selectedPromptId: selectedSystemPromptId,
+          availablePromptCount: character.systemPrompts.length,
+        })
+      }
+    }
+
+    // Fall back to default prompt in array, then legacy systemPrompt field
+    if (!systemPromptContent && character.systemPrompts) {
+      const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
+      if (defaultPrompt) {
+        systemPromptContent = defaultPrompt.content
+        logger.debug('[ContextManager] Using default system prompt from array', {
+          characterId: character.id,
+          promptId: defaultPrompt.id,
+          promptName: defaultPrompt.name,
+          contentLength: defaultPrompt.content.length,
+        })
+      }
+    }
+
+    // Final fallback to legacy systemPrompt field
+    if (!systemPromptContent && character.systemPrompt) {
+      systemPromptContent = character.systemPrompt
+      logger.debug('[ContextManager] Using legacy systemPrompt field', {
+        characterId: character.id,
+        contentLength: character.systemPrompt.length,
+      })
+    }
+
+    if (systemPromptContent) {
+      parts.push(systemPromptContent)
+    } else {
+      logger.debug('[ContextManager] No system prompt found for character', {
+        characterId: character.id,
+        selectedSystemPromptId,
+        hasSystemPrompts: !!(character.systemPrompts && character.systemPrompts.length > 0),
+        hasLegacySystemPrompt: !!character.systemPrompt,
+      })
+    }
   }
 
   // Character personality
@@ -732,7 +791,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     )
   }
 
-  const systemPrompt = buildSystemPrompt(character, persona, systemPromptOverride, otherParticipantsInfo, roleplayTemplate, pseudoToolInstructions)
+  // Get the selectedSystemPromptId from the responding participant
+  const selectedSystemPromptId = respondingParticipant?.selectedSystemPromptId
+
+  const systemPrompt = buildSystemPrompt(
+    character,
+    persona,
+    systemPromptOverride,
+    otherParticipantsInfo,
+    roleplayTemplate,
+    pseudoToolInstructions,
+    selectedSystemPromptId
+  )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 
   // Check if system prompt exceeds budget
