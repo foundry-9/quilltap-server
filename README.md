@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.0--dev.18-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.4.0--dev.19-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -538,6 +538,8 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - Uses LLM of choice to fill out gaps in character fields or physical descriptions
 - [X] Prompt caching (see [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching))
 - [ ] Make roleplay templates besides the default one into plugins (start with "Quilltap RP")
+- [ ] Create web-only version that uses IndexedDB for everything
+- [ ] Stop using NextAuth
 
 ## Acknowledgments
 
