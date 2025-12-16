@@ -4,6 +4,11 @@
 
 ### 2.4-dev
 
+- fix: SystemPromptsEditor buttons causing form submission redirect
+  - Added `type="button"` to all buttons in SystemPromptsEditor component
+  - Buttons inside parent form no longer trigger form submission unexpectedly
+  - Updated all buttons and inputs to use qt-* theme utility classes for consistent theming
+  - Updated "Edit Prompts" button and "Default" badge on character view page to use qt-* classes
 - chore: Remove deprecated systemPrompt field from Character schema
   - Characters now exclusively use `systemPrompts` array for system prompt storage
   - Removed single `systemPrompt` field from Character type and schema

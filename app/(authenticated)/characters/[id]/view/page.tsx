@@ -736,7 +736,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
               </div>
               <Link
                 href={`/characters/${id}/edit?tab=system-prompts`}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition hover:bg-primary/90"
+                className="qt-button-primary"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -759,7 +759,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                     <div className="flex items-center gap-2 mb-3">
                       <h3 className="font-medium text-foreground">{prompt.name}</h3>
                       {prompt.isDefault && (
-                        <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
+                        <span className="qt-badge-primary">
                           Default
                         </span>
                       )}

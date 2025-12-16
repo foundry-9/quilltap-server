@@ -284,14 +284,16 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
         </div>
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={openImportModal}
-            className="px-3 py-2 text-sm font-medium border border-border rounded-lg hover:bg-accent/50 transition"
+            className="qt-button-secondary"
           >
             Import Template
           </button>
           <button
+            type="button"
             onClick={openCreateModal}
-            className="px-3 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition"
+            className="qt-button-primary"
           >
             + Add Prompt
           </button>
@@ -300,32 +302,34 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
 
       {/* Messages */}
       {error && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/40 text-destructive text-sm">
+        <div className="qt-alert-error">
           {error}
         </div>
       )}
       {success && (
-        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/40 text-green-600 dark:text-green-400 text-sm">
+        <div className="qt-alert-success">
           {success}
         </div>
       )}
 
       {/* Prompts List */}
       {prompts.length === 0 ? (
-        <div className="p-6 rounded-lg border border-border bg-muted/50 text-center">
+        <div className="qt-card text-center">
           <p className="text-muted-foreground mb-4">
             No system prompts yet. Add your first prompt or import from a template.
           </p>
           <div className="flex justify-center gap-2">
             <button
+              type="button"
               onClick={openImportModal}
-              className="px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-accent/50 transition"
+              className="qt-button-secondary"
             >
               Import Template
             </button>
             <button
+              type="button"
               onClick={openCreateModal}
-              className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition"
+              className="qt-button-primary"
             >
               Create First Prompt
             </button>
@@ -336,14 +340,14 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
           {prompts.map((prompt) => (
             <div
               key={prompt.id}
-              className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition"
+              className="qt-card hover:bg-accent/50 transition"
             >
               <div className="flex justify-between items-start">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="font-medium text-foreground truncate">{prompt.name}</h4>
                     {prompt.isDefault && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded-full">
+                      <span className="qt-badge-primary">
                         Default
                       </span>
                     )}
@@ -354,8 +358,9 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                 </div>
                 <div className="flex items-center gap-1 ml-4">
                   <button
+                    type="button"
                     onClick={() => setPreviewPrompt(prompt)}
-                    className="p-2 text-muted-foreground hover:text-foreground rounded transition"
+                    className="qt-button-icon qt-button-ghost"
                     title="Preview"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -364,8 +369,9 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                     </svg>
                   </button>
                   <button
+                    type="button"
                     onClick={() => openEditModal(prompt)}
-                    className="p-2 text-muted-foreground hover:text-foreground rounded transition"
+                    className="qt-button-icon qt-button-ghost"
                     title="Edit"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -374,8 +380,9 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                   </button>
                   {!prompt.isDefault && (
                     <button
+                      type="button"
                       onClick={() => handleSetDefault(prompt.id)}
-                      className="p-2 text-muted-foreground hover:text-primary rounded transition"
+                      className="qt-button-icon qt-button-ghost hover:text-primary"
                       title="Set as default"
                       disabled={saving}
                     >
@@ -386,8 +393,9 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                   )}
                   <div className="relative">
                     <button
+                      type="button"
                       onClick={() => setDeleteConfirm(deleteConfirm === prompt.id ? null : prompt.id)}
-                      className="p-2 text-muted-foreground hover:text-destructive rounded transition"
+                      className="qt-button-icon qt-button-ghost hover:text-destructive"
                       title="Delete"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -399,15 +407,17 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                         <p className="text-sm text-foreground mb-2">Delete this prompt?</p>
                         <div className="flex gap-2">
                           <button
+                            type="button"
                             onClick={() => handleDelete(prompt.id)}
                             disabled={saving}
-                            className="flex-1 px-3 py-1.5 text-sm bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 disabled:opacity-50"
+                            className="qt-button-destructive qt-button-sm flex-1"
                           >
                             Delete
                           </button>
                           <button
+                            type="button"
                             onClick={() => setDeleteConfirm(null)}
-                            className="flex-1 px-3 py-1.5 text-sm border border-border rounded hover:bg-accent/50"
+                            className="qt-button-secondary qt-button-sm flex-1"
                           >
                             Cancel
                           </button>
@@ -425,15 +435,16 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
       {/* Create/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
+          <div className="qt-dialog w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-foreground">
                   {editingPrompt ? 'Edit Prompt' : 'Create Prompt'}
                 </h3>
                 <button
+                  type="button"
                   onClick={closeModal}
-                  className="p-2 text-muted-foreground hover:text-foreground rounded transition"
+                  className="qt-button-icon qt-button-ghost"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -443,7 +454,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
+                  <label className="qt-label">
                     Name *
                   </label>
                   <input
@@ -451,19 +462,19 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="e.g., Romantic, Companion, Professional"
-                    className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="qt-input"
                   />
                 </div>
 
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="block text-sm font-medium text-foreground">
+                    <label className="qt-label">
                       Content *
                     </label>
                     <button
                       type="button"
                       onClick={() => setShowPreview(!showPreview)}
-                      className="text-xs text-primary hover:underline"
+                      className="qt-link text-xs"
                     >
                       {showPreview ? 'Edit' : 'Preview'}
                     </button>
@@ -478,7 +489,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                       onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                       placeholder="Enter the system prompt content (Markdown supported)"
                       rows={10}
-                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
+                      className="qt-textarea font-mono"
                     />
                   )}
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -492,7 +503,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                     id="isDefault"
                     checked={formData.isDefault}
                     onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
-                    className="rounded border-border"
+                    className="qt-checkbox"
                   />
                   <label htmlFor="isDefault" className="text-sm text-foreground">
                     Set as default prompt
@@ -502,15 +513,17 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
 
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-border">
                 <button
+                  type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-accent/50 transition"
+                  className="qt-button-secondary"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={handleSave}
                   disabled={saving || !formData.name || !formData.content}
-                  className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  className="qt-button-primary"
                 >
                   {saving ? 'Saving...' : editingPrompt ? 'Update' : 'Create'}
                 </button>
@@ -523,15 +536,16 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
       {/* Import Modal */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
+          <div className="qt-dialog w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-foreground">
                   Import from Template
                 </h3>
                 <button
+                  type="button"
                   onClick={() => setShowImportModal(false)}
-                  className="p-2 text-muted-foreground hover:text-foreground rounded transition"
+                  className="qt-button-icon qt-button-ghost"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -550,19 +564,22 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                       <div className="space-y-2 max-h-60 overflow-y-auto">
                         {samplePrompts.map((sample) => (
                           <button
+                            type="button"
                             key={sample.filename}
                             onClick={() => handleImport(sample.content, sample.name)}
-                            className="w-full p-3 text-left border border-border rounded-lg hover:bg-accent/50 transition"
+                            className="qt-button-ghost w-full p-3 text-left justify-start"
                           >
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-foreground">{sample.name}</span>
-                              <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
-                                {sample.modelHint}
-                              </span>
+                            <div className="w-full">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium text-foreground">{sample.name}</span>
+                                <span className="qt-badge">
+                                  {sample.modelHint}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {sample.category} prompt
+                              </p>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {sample.category} prompt
-                            </p>
                           </button>
                         ))}
                       </div>
@@ -578,16 +595,19 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                       <div className="space-y-2 max-h-60 overflow-y-auto">
                         {templates.filter(t => !t.isBuiltIn).map((template) => (
                           <button
+                            type="button"
                             key={template.id}
                             onClick={() => handleImport(template.content, template.name)}
-                            className="w-full p-3 text-left border border-border rounded-lg hover:bg-accent/50 transition"
+                            className="qt-button-ghost w-full p-3 text-left justify-start"
                           >
-                            <span className="font-medium text-foreground">{template.name}</span>
-                            {template.description && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {template.description}
-                              </p>
-                            )}
+                            <div className="w-full">
+                              <span className="font-medium text-foreground">{template.name}</span>
+                              {template.description && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {template.description}
+                                </p>
+                              )}
+                            </div>
                           </button>
                         ))}
                       </div>
@@ -609,20 +629,21 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
       {/* Preview Modal */}
       {previewPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
+          <div className="qt-dialog w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-semibold text-foreground">{previewPrompt.name}</h3>
                   {previewPrompt.isDefault && (
-                    <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded-full">
+                    <span className="qt-badge-primary">
                       Default
                     </span>
                   )}
                 </div>
                 <button
+                  type="button"
                   onClick={() => setPreviewPrompt(null)}
-                  className="p-2 text-muted-foreground hover:text-foreground rounded transition"
+                  className="qt-button-icon qt-button-ghost"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -634,17 +655,19 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
               </div>
               <div className="flex justify-end gap-3 mt-4">
                 <button
+                  type="button"
                   onClick={() => setPreviewPrompt(null)}
-                  className="px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-accent/50 transition"
+                  className="qt-button-secondary"
                 >
                   Close
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     openEditModal(previewPrompt)
                     setPreviewPrompt(null)
                   }}
-                  className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition"
+                  className="qt-button-primary"
                 >
                   Edit
                 </button>
