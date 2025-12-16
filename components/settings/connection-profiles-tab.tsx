@@ -78,6 +78,7 @@ export default function ConnectionProfilesTab() {
     fallbackModels: [] as string[],
     enableZDR: false,
     providerOrder: [] as string[],
+    useCustomModel: false,
     // Anthropic-specific fields
     enableCacheBreakpoints: false,
     cacheStrategy: 'system_and_long_context' as 'system_only' | 'system_and_long_context',
@@ -293,6 +294,7 @@ export default function ConnectionProfilesTab() {
       fallbackModels: [],
       enableZDR: false,
       providerOrder: [],
+      useCustomModel: false,
       // Anthropic-specific fields
       enableCacheBreakpoints: false,
       cacheStrategy: 'system_and_long_context',
@@ -324,6 +326,7 @@ export default function ConnectionProfilesTab() {
       fallbackModels: profile.parameters?.fallbackModels ?? [],
       enableZDR: profile.parameters?.providerPreferences?.dataCollection === 'deny',
       providerOrder: profile.parameters?.providerPreferences?.order ?? [],
+      useCustomModel: profile.parameters?.useCustomModel ?? false,
       // Anthropic-specific fields
       enableCacheBreakpoints: profile.parameters?.enableCacheBreakpoints ?? false,
       cacheStrategy: profile.parameters?.cacheStrategy ?? 'system_and_long_context',
@@ -398,6 +401,10 @@ export default function ConnectionProfilesTab() {
         }
         if (Object.keys(providerPreferences).length > 0) {
           parameters.providerPreferences = providerPreferences
+        }
+        // Save custom model preference
+        if (formData.useCustomModel) {
+          parameters.useCustomModel = true
         }
       }
 
@@ -982,7 +989,36 @@ export default function ConnectionProfilesTab() {
               <label htmlFor="modelName" className="block text-sm font-medium mb-2">
                 Model *
               </label>
-              {fetchedModels.length > 0 ? (
+              {/* Show text input for custom model (OpenRouter only) or when models haven't been fetched */}
+              {(formData.provider === 'OPENROUTER' && formData.useCustomModel) ? (
+                <>
+                  <input
+                    type="text"
+                    id="modelName"
+                    name="modelName"
+                    value={formData.modelName}
+                    onChange={handleChange}
+                    placeholder="e.g., openai/gpt-4-turbo or anthropic/claude-3-opus"
+                    list="modelSuggestions"
+                    required
+                    className="qt-input"
+                  />
+                  <datalist id="modelSuggestions">
+                    {fetchedModels.length > 0 ? (
+                      fetchedModels.map(model => (
+                        <option key={model} value={model} />
+                      ))
+                    ) : (
+                      getModelSuggestions(formData.provider).map(model => (
+                        <option key={model} value={model} />
+                      ))
+                    )}
+                  </datalist>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Enter any OpenRouter model ID. Use &quot;Test Message&quot; to verify.
+                  </p>
+                </>
+              ) : fetchedModels.length > 0 ? (
                 <ModelSelector
                   models={fetchedModels}
                   modelsWithInfo={fetchedModelsWithInfo}
@@ -1155,6 +1191,25 @@ export default function ConnectionProfilesTab() {
                     </label>
                     <p className="text-xs text-muted-foreground">
                       When enabled, providers will not store or log your prompts and responses. May limit available providers.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Custom Model Toggle */}
+                <div className="flex items-center gap-2 mb-4">
+                  <input
+                    type="checkbox"
+                    id="useCustomModel"
+                    checked={formData.useCustomModel}
+                    onChange={(e) => setFormData({ ...formData, useCustomModel: e.target.checked })}
+                    className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+                  />
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="useCustomModel" className="text-sm">
+                      Use Custom Model ID
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Enable this to enter an arbitrary model ID not in the fetched list. Use the &quot;Test Message&quot; button to verify the model works.
                     </p>
                   </div>
                 </div>
