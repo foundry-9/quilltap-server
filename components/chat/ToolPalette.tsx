@@ -6,6 +6,7 @@ import { clientLogger } from '@/lib/client-logger'
 interface ToolPaletteProps {
   isOpen: boolean
   onClose: () => void
+  toggleButtonRef?: React.RefObject<HTMLButtonElement | null>
   onGalleryClick: () => void
   onGenerateImageClick: () => void
   onSettingsClick: () => void
@@ -63,6 +64,7 @@ const QUILLTAP_RP_ANNOTATIONS: AnnotationConfig[] = [
 export default function ToolPalette({
   isOpen,
   onClose,
+  toggleButtonRef,
   onGalleryClick,
   onGenerateImageClick,
   onSettingsClick,
@@ -194,12 +196,12 @@ export default function ToolPalette({
         return
       }
 
-      // Check if click is on the parent div (which contains the button)
-      if (paletteRef.current.parentElement?.contains(target)) {
+      // Don't close if clicking the toggle button (it handles its own toggle)
+      if (toggleButtonRef?.current?.contains(target)) {
         return
       }
 
-      // Click is outside both palette and parent container
+      // Click is outside both palette and toggle button
       onClose()
     }
 
@@ -218,7 +220,7 @@ export default function ToolPalette({
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, toggleButtonRef])
 
   const handleGalleryClick = () => {
     onGalleryClick()

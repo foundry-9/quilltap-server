@@ -128,7 +128,7 @@
    * Composer inner wrapper
    */
   .qt-chat-composer-inner {
-    @apply flex items-end;
+    @apply flex items-center;
     gap: var(--qt-chat-toolbar-gap);
     @apply max-w-4xl mx-auto;
   }
@@ -151,12 +151,17 @@
 
   /**
    * Toolbar button - used for attachment/tools/continue controls
+   * Self-contained styles so qt-button class is not needed
    */
   .qt-chat-toolbar-button {
     @apply inline-flex items-center justify-center;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply disabled:pointer-events-none disabled:opacity-50;
     cursor: pointer;
     width: 2.75rem;
     height: 2.75rem;
+    padding: 0;
+    gap: 0;
     border-radius: var(--qt-button-radius);
     border: 1px solid var(--qt-chat-toolbar-button-border);
     background: var(--qt-chat-toolbar-button-bg);
@@ -980,8 +985,10 @@
     @apply hidden;
   }
 
+  /* Note: qt-desktop-only doesn't set display - elements keep their natural display type.
+     The mobile media query below will hide them with display:none !important */
   .qt-desktop-only {
-    @apply block;
+    /* visible by default - inherits element's natural display */
   }
 
   /* ==========================================================================

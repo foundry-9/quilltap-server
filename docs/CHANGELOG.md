@@ -4,6 +4,13 @@
 
 ### 2.4-dev
 
+- fix: ToolPalette toggle button on desktop now properly closes when clicked again
+  - Added `toggleButtonRef` prop to ToolPalette component (matching MobileToolPalette)
+  - Click outside handler now ignores clicks on the toggle button
+  - Previously clicking the button while palette was open would close then immediately reopen it
+- fix: Toolbar button icons now properly centered
+  - Added explicit `padding: 0` to `qt-chat-toolbar-button` CSS
+  - The `qt-button` class was adding padding that offset the icon from center
 - feat: Persist turn state in multi-character chats
   - Added `lastTurnParticipantId` field to chat metadata
   - Turn state is saved when it changes (whose turn it is)

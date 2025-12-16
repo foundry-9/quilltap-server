@@ -203,6 +203,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
+  const desktopToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   // AbortController for cancelling streaming responses
   const abortControllerRef = useRef<AbortController | null>(null)
   // Flag to prevent auto-triggering after user stops streaming
@@ -2708,6 +2709,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             <ToolPalette
               isOpen={toolPaletteOpen}
               onClose={() => setToolPaletteOpen(false)}
+              toggleButtonRef={desktopToolPaletteToggleRef}
               onGalleryClick={() => setGalleryOpen(true)}
               onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
               onSettingsClick={() => setChatSettingsModalOpen(true)}
@@ -2749,7 +2751,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     e.stopPropagation()
                     stopStreaming()
                   }}
-                  className="qt-button qt-chat-toolbar-button qt-chat-stop-button qt-desktop-only"
+                  className="qt-chat-toolbar-button qt-chat-stop-button qt-desktop-only"
                   title="Stop generating"
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -2765,7 +2767,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   e.stopPropagation()
                   setMobileToolPaletteOpen(!mobileToolPaletteOpen)
                 }}
-                className="qt-button qt-chat-toolbar-button qt-mobile-only"
+                className="qt-chat-toolbar-button qt-mobile-only"
                 title="Tools"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2774,12 +2776,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               </button>
               {/* Desktop: Tool palette toggle button */}
               <button
+                ref={desktopToolPaletteToggleRef}
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   setToolPaletteOpen(!toolPaletteOpen)
                 }}
-                className="qt-button qt-chat-toolbar-button qt-desktop-only"
+                className="qt-chat-toolbar-button qt-desktop-only"
                 title="Tools"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
