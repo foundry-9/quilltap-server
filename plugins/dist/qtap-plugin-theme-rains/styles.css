@@ -1003,6 +1003,240 @@
 
   /* Divider matches active tab border */
   --qt-tab-divider-color: hsl(var(--border-300) / 0.35);
+
+  /* ==========================================================================
+     NAVBAR VARIABLES - Warm earthy navigation
+     ========================================================================== */
+  --qt-navbar-height: 4rem;
+  --qt-navbar-bg: hsl(var(--bg-200) / 0.95);
+  --qt-navbar-border: hsl(var(--border-300) / 0.35);
+  --qt-navbar-blur: blur(14px);
+  --qt-navbar-shadow: 0 20px 50px -40px hsl(var(--always-black) / 0.8);
+
+  --qt-navbar-link-padding-x: 0.75rem;
+  --qt-navbar-link-padding-y: 0.5rem;
+  --qt-navbar-link-radius: 0.5rem;
+  --qt-navbar-link-fg: hsl(var(--text-100));
+  --qt-navbar-link-hover-bg: hsl(var(--bg-000) / 0.6);
+  --qt-navbar-link-active-bg: hsl(var(--accent-brand) / 0.15);
+
+  /* ==========================================================================
+     BADGE VARIABLES - Warm color variants
+     ========================================================================== */
+  --qt-badge-radius: 9999px;
+  --qt-badge-padding-x: 0.75rem;
+  --qt-badge-padding-y: 0.25rem;
+  --qt-badge-font-size: 0.875rem;
+  --qt-badge-font-weight: 600;
+
+  --qt-badge-primary-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.9), hsl(var(--accent-main-000)));
+  --qt-badge-primary-fg: hsl(var(--oncolor-100));
+
+  --qt-badge-secondary-bg: hsl(var(--bg-200));
+  --qt-badge-secondary-fg: hsl(var(--text-200));
+  --qt-badge-secondary-border: var(--stroke-soft);
+
+  --qt-badge-outline-bg: transparent;
+  --qt-badge-outline-fg: hsl(var(--text-100));
+  --qt-badge-outline-border: hsl(var(--border-300) / 0.5);
+
+  /* ==========================================================================
+     DEVCONSOLE VARIABLES - Earthy log colors
+     ========================================================================== */
+  --qt-devconsole-bg: hsl(var(--bg-100));
+  --qt-devconsole-header-bg: hsl(var(--bg-200));
+  --qt-devconsole-tabs-bg: hsl(var(--bg-300));
+  --qt-devconsole-content-bg: hsl(var(--bg-100));
+  --qt-devconsole-footer-bg: hsl(var(--bg-200));
+  --qt-devconsole-border: hsl(var(--border-300) / 0.4);
+
+  /* Log colors with warm undertones */
+  --qt-log-error-bg: hsl(0 40% 12%);
+  --qt-log-error-fg: hsl(var(--danger-000));
+  --qt-log-error-border: hsl(var(--danger-100));
+  --qt-log-error-details-bg: hsl(0 35% 10%);
+  --qt-log-error-stack-fg: hsl(var(--danger-000) / 0.85);
+
+  --qt-log-warn-bg: hsl(38 40% 12%);
+  --qt-log-warn-fg: hsl(var(--warning-000));
+  --qt-log-warn-border: hsl(var(--warning-100));
+
+  --qt-log-info-bg: hsl(210 40% 12%);
+  --qt-log-info-fg: hsl(var(--accent-secondary-000));
+  --qt-log-info-border: hsl(var(--accent-secondary-100));
+
+  --qt-log-debug-bg: hsl(var(--bg-200));
+  --qt-log-debug-fg: hsl(var(--text-400));
+  --qt-log-debug-border: hsl(var(--border-300) / 0.5);
+
+  --qt-log-default-bg: hsl(var(--bg-200) / 0.5);
+  --qt-log-default-fg: hsl(var(--text-300));
+  --qt-log-default-border: hsl(var(--border-300) / 0.4);
+
+  /* Debug panel colors with earthy tones */
+  --qt-debug-outgoing-bg: hsl(210 35% 14%);
+  --qt-debug-outgoing-border: hsl(var(--accent-secondary-100));
+  --qt-debug-outgoing-fg: hsl(var(--accent-secondary-000));
+  --qt-debug-incoming-bg: hsl(97 35% 12%);
+  --qt-debug-incoming-border: hsl(var(--success-100));
+  --qt-debug-incoming-fg: hsl(var(--success-000));
+
+  /* Debug panel - Cyan theme (LLM Request Details) with warm undertones */
+  --qt-debug-cyan-bg: hsl(187 35% 12%);
+  --qt-debug-cyan-fg: hsl(187 80% 70%);
+  --qt-debug-cyan-hover: hsl(187 35% 16%);
+  --qt-debug-cyan-border: hsl(187 40% 28%);
+  --qt-debug-cyan-content-bg: hsl(187 35% 9%);
+  --qt-debug-cyan-meta: hsl(187 80% 65%);
+
+  /* Debug panel - Violet theme (Context Management) */
+  --qt-debug-violet-bg: hsl(var(--accent-pro-900) / 0.8);
+  --qt-debug-violet-fg: hsl(var(--accent-pro-000));
+  --qt-debug-violet-hover: hsl(251 35% 18%);
+  --qt-debug-violet-border: hsl(251 40% 32%);
+  --qt-debug-violet-content-bg: hsl(251 35% 10%);
+  --qt-debug-violet-meta: hsl(var(--accent-pro-000) / 0.9);
+
+  /* Debug panel - Emerald theme (Stitched Response) */
+  --qt-debug-emerald-bg: hsl(152 35% 12%);
+  --qt-debug-emerald-fg: hsl(152 70% 65%);
+  --qt-debug-emerald-hover: hsl(152 35% 16%);
+  --qt-debug-emerald-border: hsl(152 40% 28%);
+  --qt-debug-emerald-content-bg: hsl(152 35% 9%);
+  --qt-debug-emerald-meta: hsl(152 70% 60%);
+
+  /* Debug panel - Amber theme (Final Response) with brand warmth */
+  --qt-debug-amber-bg: hsl(var(--warning-900) / 0.6);
+  --qt-debug-amber-fg: hsl(var(--warning-000));
+  --qt-debug-amber-hover: hsl(38 40% 16%);
+  --qt-debug-amber-border: hsl(38 45% 28%);
+  --qt-debug-amber-content-bg: hsl(38 35% 9%);
+  --qt-debug-amber-meta: hsl(var(--warning-000) / 0.9);
+
+  /* Debug panel - Purple theme (Tool Executions) */
+  --qt-debug-purple-bg: hsl(280 35% 14%);
+  --qt-debug-purple-fg: hsl(280 75% 75%);
+  --qt-debug-purple-hover: hsl(280 35% 18%);
+  --qt-debug-purple-border: hsl(280 40% 32%);
+  --qt-debug-purple-content-bg: hsl(280 35% 10%);
+  --qt-debug-purple-meta: hsl(280 75% 70%);
+
+  /* Debug panel - Indigo theme (Memory Extraction) */
+  --qt-debug-indigo-bg: hsl(239 35% 16%);
+  --qt-debug-indigo-fg: hsl(239 70% 78%);
+  --qt-debug-indigo-hover: hsl(239 35% 22%);
+  --qt-debug-indigo-border: hsl(239 45% 45%);
+  --qt-debug-indigo-content-bg: hsl(239 35% 11%);
+  --qt-debug-indigo-meta: hsl(239 70% 68%);
+
+  /* ==========================================================================
+     SIDEBAR VARIABLES - Warm gradient sidebar
+     ========================================================================== */
+  --qt-sidebar-width: 16rem;
+  --qt-sidebar-bg: linear-gradient(180deg, hsl(var(--bg-200) / 0.95), hsl(var(--bg-300) / 0.9));
+  --qt-sidebar-border: hsl(var(--border-300) / 0.25);
+
+  --qt-sidebar-item-padding-x: 0.75rem;
+  --qt-sidebar-item-padding-y: 0.5rem;
+  --qt-sidebar-item-radius: 0.5rem;
+  --qt-sidebar-item-hover-bg: hsl(var(--bg-200) / 0.65);
+  --qt-sidebar-item-active-bg: hsl(var(--accent-brand) / 0.14);
+  --qt-sidebar-item-active-border: hsl(var(--accent-brand));
+
+  /* ==========================================================================
+     PANEL/DIALOG/POPOVER VARIABLES
+     ========================================================================== */
+  --qt-panel-radius: 0.75rem;
+  --qt-panel-bg: var(--surface-raised);
+  --qt-panel-border: var(--stroke-soft);
+  --qt-panel-shadow: var(--card-shadow);
+
+  /* Dialog Variables - Warm modal styling */
+  --qt-dialog-radius: 1.25rem;
+  --qt-dialog-bg: linear-gradient(170deg, hsl(var(--bg-200)), hsl(var(--bg-100)));
+  --qt-dialog-border: hsl(var(--border-300) / 0.4);
+  --qt-dialog-shadow: 0 50px 140px -80px hsl(var(--always-black) / 0.95);
+  --qt-dialog-backdrop: hsl(var(--always-black) / 0.7);
+
+  /* Popover Variables */
+  --qt-popover-radius: 0.75rem;
+  --qt-popover-bg: var(--surface-raised);
+  --qt-popover-fg: hsl(var(--text-000));
+  --qt-popover-border: hsl(var(--border-300) / 0.4);
+  --qt-popover-shadow: var(--card-shadow);
+
+  /* ==========================================================================
+     FOOTER VARIABLES
+     ========================================================================== */
+  --qt-footer-bg: hsl(var(--bg-200));
+  --qt-footer-border: hsl(var(--border-300) / 0.35);
+  --qt-footer-fg: hsl(var(--text-300));
+  --qt-footer-link-hover: hsl(var(--text-000));
+
+  /* ==========================================================================
+     AVATAR VARIABLES
+     ========================================================================== */
+  --qt-avatar-radius: 9999px;
+  --qt-avatar-size: 2.5rem;
+  --qt-avatar-size-sm: 2rem;
+  --qt-avatar-size-lg: 3rem;
+  --qt-avatar-size-xl: 4rem;
+  --qt-avatar-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--pictogram-200)));
+  --qt-avatar-fg: hsl(var(--text-000));
+  --qt-avatar-border: hsl(var(--border-300) / 0.4);
+
+  /* ==========================================================================
+     CODE BLOCK VARIABLES
+     ========================================================================== */
+  --qt-code-radius: 0.5rem;
+  --qt-code-bg: hsl(var(--pictogram-200));
+  --qt-code-fg: hsl(var(--text-000));
+  --qt-code-border: hsl(var(--border-200) / 0.35);
+  --qt-code-font: var(--font-mono);
+
+  /* ==========================================================================
+     LINK VARIABLES
+     ========================================================================== */
+  --qt-link-color: hsl(var(--accent-secondary-100));
+  --qt-link-hover-color: hsl(var(--accent-secondary-000));
+  --qt-link-decoration: none;
+  --qt-link-decoration-hover: underline;
+
+  /* ==========================================================================
+     CONTENT AREA VARIABLES
+     ========================================================================== */
+  --qt-content-bg: var(--surface-raised);
+  --qt-content-fg: hsl(var(--text-000));
+  --qt-content-scroll-bg: var(--surface-base);
+
+  /* ==========================================================================
+     TYPOGRAPHY VARIABLES
+     ========================================================================== */
+  --qt-text-secondary-fg: hsl(var(--text-300));
+
+  /* ==========================================================================
+     EMPTY STATE VARIABLES
+     ========================================================================== */
+  --qt-empty-state-icon-color: hsl(var(--text-400));
+  --qt-empty-state-title-color: hsl(var(--text-100));
+  --qt-empty-state-description-color: hsl(var(--text-300));
+
+  /* ==========================================================================
+     PARTICIPANT CARD VARIABLES
+     ========================================================================== */
+  --qt-participant-card-radius: 0.75rem;
+  --qt-participant-card-bg: hsl(var(--bg-200) / 0.8);
+  --qt-participant-card-border: hsl(var(--border-300) / 0.35);
+  --qt-participant-card-active-border: hsl(var(--accent-brand) / 0.6);
+  --qt-participant-card-active-shadow: 0 0 15px hsl(var(--accent-brand) / 0.25);
+
+  /* ==========================================================================
+     MOBILE TOOL PALETTE VARIABLES
+     ========================================================================== */
+  --qt-mobile-composer-input-min-height: 2.5rem;
+  --qt-mobile-tool-palette-max-height: 50vh;
+  --qt-mobile-tool-palette-bg: hsl(var(--bg-200));
+  --qt-mobile-tool-palette-border: hsl(var(--border-300) / 0.4);
 }
 
 /* Button override - Rains primary button gradient */
@@ -1067,4 +1301,642 @@
 [data-theme="rains"] .qt-tab-active {
   border-bottom-color: transparent;
   box-shadow: 0 -2px 8px -4px hsl(var(--always-black) / 0.3);
+}
+
+/* ============================================================================
+   NAVBAR OVERRIDES - Warm backdrop blur styling
+   ============================================================================ */
+[data-theme="rains"] .qt-navbar {
+  background: linear-gradient(180deg, hsl(var(--bg-200) / 0.9), hsl(var(--bg-200) / 0.75));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid hsl(var(--border-300) / 0.35);
+  box-shadow: 0 20px 50px -40px hsl(var(--always-black) / 0.8);
+}
+
+[data-theme="rains"] .qt-navbar-toggle,
+[data-theme="rains"] .qt-navbar-button {
+  background: hsl(var(--bg-200) / 0.6);
+  border: 1px solid hsl(var(--border-300) / 0.3);
+  color: hsl(var(--text-100));
+}
+
+[data-theme="rains"] .qt-navbar-toggle:hover,
+[data-theme="rains"] .qt-navbar-button:hover {
+  background: hsl(var(--bg-000) / 0.7);
+  border-color: hsl(var(--border-300) / 0.5);
+}
+
+[data-theme="rains"] .qt-navbar-toggle-active {
+  background: hsl(var(--accent-brand) / 0.2);
+  border-color: hsl(var(--accent-brand) / 0.4);
+  color: hsl(var(--accent-brand));
+}
+
+[data-theme="rains"] .qt-navbar-dropdown {
+  background: var(--surface-raised);
+  border: 1px solid hsl(var(--border-300) / 0.4);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="rains"] .qt-navbar-dropdown-item:hover {
+  background: hsl(var(--bg-200) / 0.65);
+}
+
+[data-theme="rains"] .qt-navbar-dropdown-item-active {
+  background: hsl(var(--accent-brand) / 0.12);
+  color: hsl(var(--accent-brand));
+}
+
+[data-theme="rains"] .qt-navbar-chip-button {
+  background: hsl(var(--bg-200) / 0.7);
+  border: 1px solid hsl(var(--border-300) / 0.35);
+  color: hsl(var(--text-200));
+}
+
+[data-theme="rains"] .qt-navbar-chip-button:hover {
+  background: hsl(var(--bg-000) / 0.6);
+  border-color: hsl(var(--border-300) / 0.5);
+  color: hsl(var(--text-000));
+}
+
+[data-theme="rains"] .qt-navbar-chip-button-active {
+  background: hsl(var(--accent-brand) / 0.15);
+  border-color: hsl(var(--accent-brand) / 0.4);
+  color: hsl(var(--accent-brand));
+}
+
+/* ============================================================================
+   BADGE TYPE OVERRIDES - Warm earthy badge colors
+   ============================================================================ */
+
+/* Primary badge with gradient */
+[data-theme="rains"] .qt-badge-primary {
+  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.9), hsl(var(--accent-main-000)));
+  color: hsl(var(--oncolor-100));
+  border: none;
+}
+
+/* Secondary badge */
+[data-theme="rains"] .qt-badge-secondary {
+  background: hsl(var(--bg-200));
+  color: hsl(var(--text-200));
+  border: 1px solid var(--stroke-soft);
+}
+
+/* Outline badge */
+[data-theme="rains"] .qt-badge-outline {
+  background: transparent;
+  color: hsl(var(--text-100));
+  border: 1px solid hsl(var(--border-300) / 0.5);
+}
+
+/* Status badges with warm undertones */
+[data-theme="rains"] .qt-badge-success {
+  background: hsl(var(--success-900) / 0.4);
+  color: hsl(var(--success-000));
+  border: 1px solid hsl(var(--success-100) / 0.5);
+}
+
+[data-theme="rains"] .qt-badge-warning {
+  background: hsl(var(--warning-900) / 0.4);
+  color: hsl(var(--warning-000));
+  border: 1px solid hsl(var(--warning-100) / 0.5);
+}
+
+[data-theme="rains"] .qt-badge-destructive {
+  background: hsl(var(--danger-900) / 0.4);
+  color: hsl(var(--danger-000));
+  border: 1px solid hsl(var(--danger-100) / 0.5);
+}
+
+[data-theme="rains"] .qt-badge-info {
+  background: hsl(var(--accent-secondary-900) / 0.4);
+  color: hsl(var(--accent-secondary-000));
+  border: 1px solid hsl(var(--accent-secondary-100) / 0.5);
+}
+
+/* Entity type badges - warm variations */
+[data-theme="rains"] .qt-badge-character {
+  background: hsl(210 35% 15%);
+  color: hsl(var(--accent-secondary-000));
+  border: 1px solid hsl(var(--accent-secondary-100) / 0.4);
+}
+
+[data-theme="rains"] .qt-badge-persona {
+  background: hsl(var(--accent-pro-900) / 0.7);
+  color: hsl(var(--accent-pro-000));
+  border: 1px solid hsl(var(--accent-pro-100) / 0.4);
+}
+
+[data-theme="rains"] .qt-badge-chat {
+  background: hsl(var(--success-900) / 0.5);
+  color: hsl(var(--success-000));
+  border: 1px solid hsl(var(--success-100) / 0.4);
+}
+
+[data-theme="rains"] .qt-badge-tag {
+  background: hsl(25 40% 14%);
+  color: hsl(var(--accent-brand));
+  border: 1px solid hsl(var(--accent-brand) / 0.4);
+}
+
+[data-theme="rains"] .qt-badge-memory {
+  background: hsl(330 35% 14%);
+  color: hsl(330 80% 75%);
+  border: 1px solid hsl(330 60% 50% / 0.4);
+}
+
+/* Dashboard count badges */
+[data-theme="rains"] .qt-badge-characters {
+  background: hsl(210 35% 15%);
+  color: hsl(var(--accent-secondary-000));
+}
+
+[data-theme="rains"] .qt-badge-chats {
+  background: hsl(var(--success-900) / 0.5);
+  color: hsl(var(--success-000));
+}
+
+[data-theme="rains"] .qt-badge-personas {
+  background: hsl(var(--accent-pro-900) / 0.7);
+  color: hsl(var(--accent-pro-000));
+}
+
+/* Source badges */
+[data-theme="rains"] .qt-badge-enabled {
+  background: hsl(var(--success-900) / 0.4);
+  color: hsl(var(--success-000));
+}
+
+[data-theme="rains"] .qt-badge-disabled {
+  background: hsl(var(--bg-300));
+  color: hsl(var(--text-400));
+}
+
+[data-theme="rains"] .qt-badge-source-included {
+  background: hsl(var(--accent-pro-900) / 0.6);
+  color: hsl(var(--accent-pro-000));
+}
+
+[data-theme="rains"] .qt-badge-source-npm {
+  background: hsl(0 40% 14%);
+  color: hsl(var(--danger-000));
+}
+
+[data-theme="rains"] .qt-badge-source-git {
+  background: hsl(25 40% 14%);
+  color: hsl(var(--accent-brand));
+}
+
+[data-theme="rains"] .qt-badge-source-manual {
+  background: hsl(var(--bg-300));
+  color: hsl(var(--text-300));
+}
+
+[data-theme="rains"] .qt-badge-capability {
+  background: hsl(210 35% 15%);
+  color: hsl(var(--accent-secondary-000));
+}
+
+[data-theme="rains"] .qt-badge-version {
+  background: hsl(var(--bg-300));
+  color: hsl(var(--text-400));
+}
+
+/* ============================================================================
+   SIDEBAR OVERRIDES - Warm gradient styling
+   ============================================================================ */
+[data-theme="rains"] .qt-sidebar {
+  background: linear-gradient(180deg, hsl(var(--bg-200) / 0.95), hsl(var(--bg-300) / 0.9));
+  border-right: 1px solid hsl(var(--border-300) / 0.25);
+}
+
+[data-theme="rains"] .qt-sidebar-item {
+  border-radius: 0.5rem;
+  transition: all 150ms ease;
+}
+
+[data-theme="rains"] .qt-sidebar-item:hover {
+  background: hsl(var(--bg-200) / 0.65);
+}
+
+[data-theme="rains"] .qt-sidebar-item-active {
+  background: hsl(var(--accent-brand) / 0.14);
+  border-left: 3px solid hsl(var(--accent-brand));
+  color: hsl(var(--text-000));
+}
+
+[data-theme="rains"] .qt-sidebar-title {
+  color: hsl(var(--text-400));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+}
+
+/* ============================================================================
+   DIALOG/MODAL OVERRIDES - Warm modal styling
+   ============================================================================ */
+[data-theme="rains"] .qt-dialog-overlay {
+  background: hsl(var(--always-black) / 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+[data-theme="rains"] .qt-dialog {
+  background: linear-gradient(170deg, hsl(var(--bg-200)), hsl(var(--bg-100)));
+  border: 1px solid hsl(var(--border-300) / 0.4);
+  border-radius: 1.25rem;
+  box-shadow: 0 50px 140px -80px hsl(var(--always-black) / 0.95);
+}
+
+[data-theme="rains"] .qt-dialog-header {
+  border-bottom: 1px solid hsl(var(--border-300) / 0.3);
+}
+
+[data-theme="rains"] .qt-dialog-title {
+  color: hsl(var(--text-000));
+  font-family: Georgia, "Times New Roman", Times, serif;
+}
+
+[data-theme="rains"] .qt-dialog-description {
+  color: hsl(var(--text-300));
+}
+
+[data-theme="rains"] .qt-dialog-footer {
+  border-top: 1px solid hsl(var(--border-300) / 0.3);
+}
+
+/* ============================================================================
+   POPOVER/DROPDOWN OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-popover,
+[data-theme="rains"] .qt-dropdown {
+  background: var(--surface-raised);
+  border: 1px solid hsl(var(--border-300) / 0.4);
+  box-shadow: var(--card-shadow);
+  border-radius: 0.75rem;
+}
+
+[data-theme="rains"] .qt-dropdown-item {
+  border-radius: 0.375rem;
+  transition: all 150ms ease;
+}
+
+[data-theme="rains"] .qt-dropdown-item:hover {
+  background: hsl(var(--bg-200) / 0.65);
+}
+
+[data-theme="rains"] .qt-dropdown-separator {
+  background: hsl(var(--border-300) / 0.3);
+}
+
+[data-theme="rains"] .qt-tooltip {
+  background: hsl(var(--bg-300));
+  color: hsl(var(--text-000));
+  border: 1px solid hsl(var(--border-300) / 0.3);
+  box-shadow: 0 8px 24px -8px hsl(var(--always-black) / 0.6);
+}
+
+/* ============================================================================
+   EMPTY STATE OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-empty-state {
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+[data-theme="rains"] .qt-empty-state-icon {
+  color: hsl(var(--text-400));
+  opacity: 0.6;
+}
+
+[data-theme="rains"] .qt-empty-state-title {
+  color: hsl(var(--text-100));
+  font-family: Georgia, "Times New Roman", Times, serif;
+}
+
+[data-theme="rains"] .qt-empty-state-description {
+  color: hsl(var(--text-300));
+}
+
+[data-theme="rains"] .qt-empty-state-action .qt-button-primary {
+  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.95), hsl(var(--accent-main-000)));
+}
+
+/* ============================================================================
+   FOOTER OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-footer {
+  background: hsl(var(--bg-200));
+  border-top: 1px solid hsl(var(--border-300) / 0.35);
+}
+
+[data-theme="rains"] .qt-footer-container {
+  color: hsl(var(--text-300));
+}
+
+[data-theme="rains"] .qt-footer-separator {
+  color: hsl(var(--text-400));
+}
+
+/* ============================================================================
+   PANEL OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-panel {
+  background: var(--surface-raised);
+  border: 1px solid var(--stroke-soft);
+  box-shadow: var(--card-shadow);
+  border-radius: 0.75rem;
+}
+
+[data-theme="rains"] .qt-panel-elevated {
+  box-shadow: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+}
+
+/* ============================================================================
+   PARTICIPANT CARD OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-participant-card {
+  background: hsl(var(--bg-200) / 0.8);
+  border: 1px solid hsl(var(--border-300) / 0.35);
+  border-radius: 0.75rem;
+  transition: all 200ms ease;
+}
+
+[data-theme="rains"] .qt-participant-card:hover {
+  border-color: hsl(var(--border-300) / 0.55);
+  box-shadow: 0 12px 30px -18px hsl(var(--always-black) / 0.6);
+}
+
+[data-theme="rains"] .qt-participant-card-active {
+  border-color: hsl(var(--accent-brand) / 0.6);
+  box-shadow: 0 0 15px hsl(var(--accent-brand) / 0.25);
+}
+
+[data-theme="rains"] .qt-participant-card-name {
+  color: hsl(var(--text-000));
+  font-weight: 500;
+}
+
+[data-theme="rains"] .qt-participant-card-status {
+  color: hsl(var(--text-400));
+}
+
+[data-theme="rains"] .qt-participant-turn-dot {
+  background: hsl(var(--accent-brand));
+  box-shadow: 0 0 8px hsl(var(--accent-brand) / 0.6);
+}
+
+[data-theme="rains"] .qt-participant-turn-indicator {
+  background: hsl(var(--accent-brand) / 0.15);
+  color: hsl(var(--accent-brand));
+  border: 1px solid hsl(var(--accent-brand) / 0.3);
+}
+
+[data-theme="rains"] .qt-participant-queue-badge {
+  background: hsl(var(--bg-300));
+  color: hsl(var(--text-200));
+}
+
+/* ============================================================================
+   CODE BLOCK OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-code-inline {
+  background: hsl(var(--pictogram-200));
+  color: hsl(var(--text-000));
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+
+[data-theme="rains"] .qt-code-block {
+  background: hsl(var(--pictogram-200));
+  border: 1px solid hsl(var(--border-200) / 0.35);
+  border-radius: 0.5rem;
+}
+
+[data-theme="rains"] .qt-code-header {
+  background: hsl(var(--bg-300) / 0.5);
+  border-bottom: 1px solid hsl(var(--border-300) / 0.3);
+  color: hsl(var(--text-300));
+}
+
+/* ============================================================================
+   AVATAR OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-avatar {
+  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--pictogram-200)));
+  border: 1px solid hsl(var(--border-300) / 0.4);
+}
+
+[data-theme="rains"] .qt-avatar-fallback {
+  color: hsl(var(--text-000));
+  font-weight: 500;
+}
+
+/* ============================================================================
+   INPUT OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-input,
+[data-theme="rains"] .qt-textarea,
+[data-theme="rains"] .qt-select {
+  background: hsl(var(--bg-000) / 0.95);
+  border: 1px solid hsl(var(--border-300) / 0.45);
+  color: hsl(var(--text-000));
+  border-radius: var(--qt-input-radius, 0.5rem);
+}
+
+[data-theme="rains"] .qt-input:focus,
+[data-theme="rains"] .qt-textarea:focus,
+[data-theme="rains"] .qt-select:focus {
+  border-color: hsl(var(--accent-secondary-100));
+  box-shadow: 0 0 0 3px hsl(var(--accent-secondary-000) / 0.2);
+  outline: none;
+}
+
+[data-theme="rains"] .qt-input::placeholder,
+[data-theme="rains"] .qt-textarea::placeholder {
+  color: hsl(var(--text-400));
+}
+
+[data-theme="rains"] .qt-label {
+  color: hsl(var(--text-100));
+  font-weight: 500;
+}
+
+[data-theme="rains"] .qt-hint {
+  color: hsl(var(--text-400));
+}
+
+/* ============================================================================
+   ALERT OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-alert {
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+[data-theme="rains"] .qt-alert-success {
+  background: hsl(var(--success-900) / 0.35);
+  border: 1px solid hsl(var(--success-100) / 0.5);
+  color: hsl(var(--success-000));
+}
+
+[data-theme="rains"] .qt-alert-warning {
+  background: hsl(var(--warning-900) / 0.35);
+  border: 1px solid hsl(var(--warning-100) / 0.5);
+  color: hsl(var(--warning-000));
+}
+
+[data-theme="rains"] .qt-alert-error {
+  background: hsl(var(--danger-900) / 0.35);
+  border: 1px solid hsl(var(--danger-100) / 0.5);
+  color: hsl(var(--danger-000));
+}
+
+[data-theme="rains"] .qt-alert-info {
+  background: hsl(var(--accent-secondary-900) / 0.35);
+  border: 1px solid hsl(var(--accent-secondary-100) / 0.5);
+  color: hsl(var(--accent-secondary-000));
+}
+
+/* ============================================================================
+   MOBILE TOOL PALETTE OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-mobile-tool-palette {
+  background: hsl(var(--bg-200));
+  border-top: 1px solid hsl(var(--border-300) / 0.4);
+}
+
+[data-theme="rains"] .qt-mobile-tool-palette-section-header {
+  color: hsl(var(--text-400));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+}
+
+[data-theme="rains"] .qt-mobile-tool-palette-button {
+  background: hsl(var(--bg-300) / 0.6);
+  border: 1px solid hsl(var(--border-300) / 0.35);
+  color: hsl(var(--text-100));
+  border-radius: 0.5rem;
+}
+
+[data-theme="rains"] .qt-mobile-tool-palette-button:hover {
+  background: hsl(var(--bg-000) / 0.5);
+  border-color: hsl(var(--border-300) / 0.5);
+}
+
+[data-theme="rains"] .qt-mobile-tool-palette-button-danger {
+  background: hsl(var(--danger-900) / 0.4);
+  border-color: hsl(var(--danger-100) / 0.4);
+  color: hsl(var(--danger-000));
+}
+
+/* ============================================================================
+   MOBILE PARTICIPANT BAR OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-mobile-participant-bar {
+  background: hsl(var(--bg-200) / 0.9);
+  border-bottom: 1px solid hsl(var(--border-300) / 0.35);
+}
+
+[data-theme="rains"] .qt-mobile-participant-avatar {
+  border: 2px solid hsl(var(--border-300) / 0.4);
+}
+
+[data-theme="rains"] .qt-mobile-participant-avatar-active {
+  border-color: hsl(var(--accent-brand) / 0.7);
+  box-shadow: 0 0 8px hsl(var(--accent-brand) / 0.4);
+}
+
+[data-theme="rains"] .qt-mobile-participant-dropdown {
+  background: var(--surface-raised);
+  border: 1px solid hsl(var(--border-300) / 0.4);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="rains"] .qt-mobile-participant-dropdown-name {
+  color: hsl(var(--text-000));
+  font-weight: 500;
+}
+
+[data-theme="rains"] .qt-mobile-participant-dropdown-title {
+  color: hsl(var(--text-400));
+}
+
+[data-theme="rains"] .qt-mobile-participant-dropdown-you-badge {
+  background: hsl(var(--accent-brand) / 0.15);
+  color: hsl(var(--accent-brand));
+}
+
+/* ============================================================================
+   SPINNER/LOADING OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-spinner {
+  border-color: hsl(var(--border-300) / 0.3);
+  border-top-color: hsl(var(--accent-brand));
+}
+
+/* ============================================================================
+   SKELETON OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--bg-200)) 25%,
+    hsl(var(--bg-000) / 0.5) 50%,
+    hsl(var(--bg-200)) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ============================================================================
+   AUTH PAGE OVERRIDES
+   ============================================================================ */
+[data-theme="rains"] .qt-auth-page {
+  background: linear-gradient(135deg, hsl(var(--bg-100)), hsl(var(--bg-200)));
+}
+
+[data-theme="rains"] .qt-auth-card {
+  background: linear-gradient(170deg, hsl(var(--bg-200)), hsl(var(--bg-100)));
+  border: 1px solid hsl(var(--border-300) / 0.4);
+  box-shadow: 0 50px 140px -80px hsl(var(--always-black) / 0.95);
+  border-radius: 1.25rem;
+}
+
+[data-theme="rains"] .qt-auth-title {
+  color: hsl(var(--text-000));
+  font-family: Georgia, "Times New Roman", Times, serif;
+}
+
+[data-theme="rains"] .qt-auth-subtitle {
+  color: hsl(var(--text-300));
+}
+
+[data-theme="rains"] .qt-auth-divider-line {
+  background: hsl(var(--border-300) / 0.4);
+}
+
+[data-theme="rains"] .qt-auth-divider-text {
+  color: hsl(var(--text-400));
+  background: hsl(var(--bg-100));
+}
+
+[data-theme="rains"] .qt-auth-footer {
+  color: hsl(var(--text-300));
 }

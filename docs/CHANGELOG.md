@@ -4,6 +4,24 @@
 
 ### 2.4-dev
 
+- style: Major Rains theme enhancement with full qt-* utility class support (v1.0.12)
+  - Added 100+ new CSS variable overrides for comprehensive theming
+  - Navbar: Warm backdrop blur styling with earthy gradients
+  - Badges: Full support for all badge variants (character, persona, chat, tag, memory, status, source types)
+  - DevConsole: Earthy log colors with warm undertones for error, warning, info, debug levels
+  - Sidebar: Warm gradient styling with brand-colored active states
+  - Dialog/Modal: Warm gradient backgrounds with deep shadows
+  - Popover/Dropdown: Consistent surface styling
+  - Participant cards: Brand-accented active states with glow effects
+  - Empty states: Theme-aware icon and text colors
+  - Footer: Earthy background with consistent borders
+  - Avatars: Gradient backgrounds with brand warmth
+  - Code blocks: Consistent monospace styling
+  - Inputs: Focus states with blue accent ring
+  - Alerts: Status-colored backgrounds with warm undertones
+  - Mobile tool palette: Full mobile styling support
+  - Skeleton loading: Warm shimmer animation
+  - Auth pages: Gradient backgrounds and styled cards
 - feat: Enhanced template display in character view mode
   - Added `TemplateDisplay` component combining template replacement with hard-coded name detection
   - `{{char}}` templates are replaced with character name (blue highlight, solid border)
