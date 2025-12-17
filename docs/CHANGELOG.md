@@ -4,6 +4,9 @@
 
 ### 2.4-dev
 
+- fix: Avatar display style (circular/rectangular) now consistent across all avatars in chat
+  - Created AvatarDisplayProvider context to share avatar style setting globally
+  - Prevents race condition where different Avatar components could have different styles
 - fix: Chat gradual renaming now properly replaces generic titles like "Chat with [Name]"
 - fix: Restore sendMessage functionality after refactor (chat send button/enter key not working)
 - fix: Remove duplicate avatar display during waiting-for-response state

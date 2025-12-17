@@ -5,6 +5,7 @@
 import { describe, it, expect, afterEach } from '@jest/globals'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { AvatarDisplayProvider } from '@/components/providers/avatar-display-provider'
 
 function jsonResponse(data: any, ok = true, status = 200) {
   return Promise.resolve({
@@ -13,6 +14,11 @@ function jsonResponse(data: any, ok = true, status = 200) {
     json: async () => data,
   } as Response)
 }
+
+// Wrapper component that provides the AvatarDisplayProvider context
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <AvatarDisplayProvider>{children}</AvatarDisplayProvider>
+)
 
 describe('useAvatarDisplay', () => {
   afterEach(() => {
@@ -24,7 +30,7 @@ describe('useAvatarDisplay', () => {
       jsonResponse({ avatarDisplayStyle: 'RECTANGULAR' })
     )
 
-    const { result } = renderHook(() => useAvatarDisplay())
+    const { result } = renderHook(() => useAvatarDisplay(), { wrapper })
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false)
@@ -38,7 +44,7 @@ describe('useAvatarDisplay', () => {
       jsonResponse({}, false, 401)
     )
 
-    const { result } = renderHook(() => useAvatarDisplay())
+    const { result } = renderHook(() => useAvatarDisplay(), { wrapper })
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false)
@@ -52,7 +58,7 @@ describe('useAvatarDisplay', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ avatarDisplayStyle: 'CIRCULAR' }))
     fetchMock.mockResolvedValueOnce(jsonResponse({ avatarDisplayStyle: 'RECTANGULAR' }))
 
-    const { result } = renderHook(() => useAvatarDisplay())
+    const { result } = renderHook(() => useAvatarDisplay(), { wrapper })
 
     await waitFor(() => expect(result.current.loading).toBe(false))
 
@@ -70,4 +76,3 @@ describe('useAvatarDisplay', () => {
     expect(result.current.style).toBe('RECTANGULAR')
   })
 })
-

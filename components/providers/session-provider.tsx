@@ -6,6 +6,7 @@ import { DebugProvider, useDebugOptional } from "./debug-provider";
 import { TagStyleProvider } from "./tag-style-provider";
 import { QuickHideProvider } from "./quick-hide-provider";
 import { ContentWidthProvider } from "./content-width-provider";
+import { AvatarDisplayProvider } from "./avatar-display-provider";
 import { DevConsoleProvider, useDevConsoleOptional } from "./dev-console-provider";
 import { ThemeProvider } from "./theme-provider";
 
@@ -44,7 +45,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <TagStyleProvider>
               <QuickHideProvider>
                 <ContentWidthProvider>
-                  {children}
+                  <AvatarDisplayProvider>
+                    {children}
+                  </AvatarDisplayProvider>
                 </ContentWidthProvider>
               </QuickHideProvider>
             </TagStyleProvider>
