@@ -324,7 +324,7 @@ export function EmbeddedPhotoGallery({
           {onAvatarChange && currentAvatarId && (
             <button
               onClick={handleClearAvatar}
-              className="px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+              className="px-3 py-1 qt-text-label-xs text-destructive hover:bg-destructive/10 rounded-md transition-colors"
             >
               Clear Avatar
             </button>
@@ -341,7 +341,7 @@ export function EmbeddedPhotoGallery({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
             </svg>
           </button>
-          <span className="qt-text-xs w-12 text-center">
+          <span className="qt-text-label-xs w-12 text-center">
             {thumbnailSize}px
           </span>
           <button
@@ -378,7 +378,7 @@ export function EmbeddedPhotoGallery({
               : 'No photos in your library'
             }
           </p>
-          <p className="qt-text-xs mt-1">
+          <p className="qt-text-label-xs mt-1">
             {showOnlyTagged
               ? 'Uncheck "Show only tagged" to see all photos and tag them'
               : `Generate or upload images to get started`

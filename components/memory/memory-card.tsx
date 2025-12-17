@@ -57,12 +57,12 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-foreground font-medium line-clamp-2">
+          <p className="qt-text-label line-clamp-2">
             {memory.summary}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className={`text-xs font-medium ${importanceColor}`} title={`Importance: ${(memory.importance * 100).toFixed(0)}%`}>
+          <span className={`qt-text-label-xs ${importanceColor}`} title={`Importance: ${(memory.importance * 100).toFixed(0)}%`}>
             {importanceLabel}
           </span>
           <span className={`text-xs px-2 py-0.5 rounded-full ${

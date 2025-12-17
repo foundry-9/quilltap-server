@@ -394,7 +394,7 @@ export default function EmbeddingProfilesTab() {
                 onChange={e => setFormData(prev => ({ ...prev, isDefault: e.target.checked }))}
                 className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
               />
-              <label htmlFor="isDefault" className="ml-2 block text-sm text-foreground">
+              <label htmlFor="isDefault" className="ml-2 block qt-text-label text-foreground">
                 Set as default embedding profile
               </label>
             </div>

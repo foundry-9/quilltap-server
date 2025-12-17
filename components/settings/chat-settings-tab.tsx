@@ -328,7 +328,7 @@ export default function ChatSettingsTab() {
         <div className="space-y-4">
           {/* Strategy Selection */}
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="block qt-text-label mb-2">
               Strategy
             </label>
             <div className="space-y-2">
@@ -364,7 +364,7 @@ export default function ChatSettingsTab() {
           {/* User Defined Profile Selection */}
           {settings?.cheapLLMSettings.strategy === 'USER_DEFINED' && (
             <div>
-              <label className="block text-sm font-medium mb-2">
+              <label className="block qt-text-label mb-2">
                 Select Cheap LLM Profile
               </label>
               <select
@@ -390,7 +390,7 @@ export default function ChatSettingsTab() {
 
           {/* Default Cheap Profile (Global Override) */}
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="block qt-text-label mb-2">
               Global Default Cheap LLM (Optional Override)
             </label>
             <p className="qt-text-xs mb-2">
@@ -430,7 +430,7 @@ export default function ChatSettingsTab() {
 
           {/* Embedding Provider */}
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="block qt-text-label mb-2">
               Embedding Provider
             </label>
             <div className="space-y-2">
@@ -465,7 +465,7 @@ export default function ChatSettingsTab() {
 
           {/* Embedding Profile Selection */}
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="block qt-text-label mb-2">
               Embedding Profile (Optional)
             </label>
             <p className="qt-text-xs mb-2">
@@ -503,7 +503,7 @@ export default function ChatSettingsTab() {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="block qt-text-label mb-2">
               Image Description Profile
             </label>
             <p className="qt-text-xs mb-2">

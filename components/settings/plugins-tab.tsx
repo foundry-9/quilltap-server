@@ -204,18 +204,18 @@ export default function PluginsTab() {
                       <h3 className="text-lg qt-text-primary truncate">
                         {plugin.title}
                       </h3>
-                      <span className="px-2 py-0.5 qt-text-xs font-medium bg-muted rounded">
+                      <span className="px-2 py-0.5 qt-text-label-xs bg-muted rounded">
                         v{plugin.version}
                       </span>
-                      <span className={`px-2 py-0.5 text-xs font-medium rounded ${getSourceBadge(plugin.source).className}`}>
+                      <span className={`px-2 py-0.5 qt-text-label-xs rounded ${getSourceBadge(plugin.source).className}`}>
                         {getSourceBadge(plugin.source).label}
                       </span>
                       {plugin.enabled ? (
-                        <span className="px-2 py-0.5 text-xs font-medium rounded qt-badge-enabled">
+                        <span className="px-2 py-0.5 qt-text-label-xs rounded qt-badge-enabled">
                           Enabled
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 text-xs font-medium rounded qt-badge-disabled">
+                        <span className="px-2 py-0.5 qt-text-label-xs rounded qt-badge-disabled">
                           Disabled
                         </span>
                       )}
@@ -228,7 +228,7 @@ export default function PluginsTab() {
                         {plugin.capabilities.map((cap) => (
                           <span
                             key={cap}
-                            className="px-2 py-0.5 qt-text-xs rounded qt-badge-capability"
+                            className="px-2 py-0.5 qt-text-label-xs rounded qt-badge-capability"
                           >
                             {cap}
                           </span>
@@ -282,7 +282,7 @@ export default function PluginsTab() {
             />
           </svg>
           <div>
-            <h4 className="text-sm font-medium text-amber-900 dark:text-amber-200">
+            <h4 className="qt-text-label text-amber-900 dark:text-amber-200">
               Note about plugin changes
             </h4>
             <p className="qt-text-small text-amber-700 dark:text-amber-300 mt-1">

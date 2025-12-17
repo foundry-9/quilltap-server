@@ -332,6 +332,30 @@
     color: var(--qt-text-primary-fg, var(--color-foreground));
   }
 
+  /**
+   * Label text - standard form labels (text-sm font-medium)
+   */
+  .qt-text-label {
+    @apply text-sm font-medium;
+    color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  /**
+   * Extra-small label text - compact form labels (text-xs font-medium)
+   */
+  .qt-text-label-xs {
+    @apply text-xs font-medium;
+    color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  /**
+   * Section heading text - larger section titles (text-lg font-medium)
+   */
+  .qt-text-section {
+    @apply text-lg font-medium;
+    color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
   /* ==========================================================================
      EMPTY STATES
      ========================================================================== */

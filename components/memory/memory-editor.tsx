@@ -122,7 +122,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="summary" className="block text-sm font-medium mb-1 text-foreground">
+              <label htmlFor="summary" className="block qt-text-label mb-1">
                 Summary *
               </label>
               <input
@@ -141,7 +141,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
             </div>
 
             <div>
-              <label htmlFor="content" className="block text-sm font-medium mb-1 text-foreground">
+              <label htmlFor="content" className="block qt-text-label mb-1">
                 Full Content *
               </label>
               <textarea
@@ -160,7 +160,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
             </div>
 
             <div>
-              <label htmlFor="keywords" className="block text-sm font-medium mb-1 text-foreground">
+              <label htmlFor="keywords" className="block qt-text-label mb-1">
                 Keywords
               </label>
               <input
@@ -178,7 +178,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
             </div>
 
             <div>
-              <label htmlFor="importance" className="block text-sm font-medium mb-1 text-foreground">
+              <label htmlFor="importance" className="block qt-text-label mb-1">
                 Importance: {importanceLabel} ({Math.round(formData.importance * 100)}%)
               </label>
               <input

@@ -207,7 +207,7 @@ export function ImportWizard({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm qt-text-primary mb-2">
+              <label className="block qt-text-label mb-2">
                 Select SillyTavern chat file (JSON or JSONL)
               </label>
               <input

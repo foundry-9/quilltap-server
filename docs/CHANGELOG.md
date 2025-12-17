@@ -4,6 +4,11 @@
 
 ### 2.4-dev
 
+- refactor: Consolidate text styling and add new label utility classes
+  - Added `qt-text-label` (text-sm font-medium), `qt-text-label-xs` (text-xs font-medium), `qt-text-section` (text-lg font-medium) to `_content.css`
+  - Fixed redundant/conflicting class combinations (e.g., `text-xs qt-text-xs`, `text-sm font-medium qt-text-xs`)
+  - Consolidated ~60 instances of `text-sm font-medium` and `text-xs font-medium` patterns across 18 files
+  - Affected files: personas pages, settings tabs, memory components, tag-dropdown, physical-description-card, ToolMessage, and more
 - refactor: Remove redundant flex utilities from qt-button elements
   - qt-button base class already includes `inline-flex items-center justify-center gap-2`
   - Removed 14 redundant `flex items-center gap-2` / `inline-flex items-center gap-2` instances

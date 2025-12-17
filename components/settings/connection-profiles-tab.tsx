@@ -813,7 +813,7 @@ export default function ConnectionProfilesTab() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium mb-2">
+                <label htmlFor="name" className="block qt-text-label mb-2">
                   Name *
                 </label>
                 <input
@@ -829,7 +829,7 @@ export default function ConnectionProfilesTab() {
               </div>
 
               <div>
-                <label htmlFor="provider" className="block text-sm font-medium mb-2">
+                <label htmlFor="provider" className="block qt-text-label mb-2">
                   Provider *
                 </label>
                 <select
@@ -876,7 +876,7 @@ export default function ConnectionProfilesTab() {
                 <div className={showBoth ? "grid grid-cols-2 gap-4" : ""}>
                   {showApiKey && (
                     <div>
-                      <label htmlFor="apiKeyId" className="block text-sm font-medium mb-2">
+                      <label htmlFor="apiKeyId" className="block qt-text-label mb-2">
                         API Key *
                       </label>
                       <select
@@ -901,7 +901,7 @@ export default function ConnectionProfilesTab() {
 
                   {showBaseUrl && (
                     <div>
-                      <label htmlFor="baseUrl" className="block text-sm font-medium mb-2">
+                      <label htmlFor="baseUrl" className="block qt-text-label mb-2">
                         Base URL *
                       </label>
                       <input
@@ -986,7 +986,7 @@ export default function ConnectionProfilesTab() {
             </div>
 
             <div>
-              <label htmlFor="modelName" className="block text-sm font-medium mb-2">
+              <label htmlFor="modelName" className="block qt-text-label mb-2">
                 Model *
               </label>
               {/* Show text input for custom model (OpenRouter only) or when models haven't been fetched */}
@@ -1054,7 +1054,7 @@ export default function ConnectionProfilesTab() {
               <h4 className="font-medium text-sm mb-3">Model Parameters (Optional)</h4>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label htmlFor="temperature" className="block text-sm font-medium mb-2">
+                  <label htmlFor="temperature" className="block qt-text-label mb-2">
                     Temperature ({formData.temperature})
                   </label>
                   <input
@@ -1072,7 +1072,7 @@ export default function ConnectionProfilesTab() {
                 </div>
 
                 <div>
-                  <label htmlFor="maxTokens" className="block text-sm font-medium mb-2">
+                  <label htmlFor="maxTokens" className="block qt-text-label mb-2">
                     Max Tokens
                   </label>
                   <input
@@ -1093,7 +1093,7 @@ export default function ConnectionProfilesTab() {
                 </div>
 
                 <div>
-                  <label htmlFor="topP" className="block text-sm font-medium mb-2">
+                  <label htmlFor="topP" className="block qt-text-label mb-2">
                     Top P ({formData.topP})
                   </label>
                   <input
@@ -1217,7 +1217,7 @@ export default function ConnectionProfilesTab() {
                 {/* Fallback Models */}
                 {fetchedModels.length > 0 && (
                   <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">Fallback Models (Optional, max 2)</label>
+                    <label className="block qt-text-label mb-2">Fallback Models (Optional, max 2)</label>
                     <p className="qt-text-xs mb-2">
                       If the primary model fails or is unavailable, OpenRouter will try these models in order.
                       OpenRouter supports up to 3 total models (1 primary + 2 fallbacks).
@@ -1299,7 +1299,7 @@ export default function ConnectionProfilesTab() {
 
                 {/* Provider Order */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">Provider Order (Optional)</label>
+                  <label className="block qt-text-label mb-2">Provider Order (Optional)</label>
                   <p className="qt-text-xs mb-2">
                     Specify which infrastructure providers to prefer when routing requests.
                   </p>
@@ -1322,10 +1322,10 @@ export default function ConnectionProfilesTab() {
                   </div>
                   {formData.providerOrder.length > 0 && (
                     <div className="space-y-1 border border-border rounded p-2 bg-background">
-                      <p className="qt-text-xs font-medium mb-1">Priority order:</p>
+                      <p className="qt-text-label-xs mb-1">Priority order:</p>
                       {formData.providerOrder.map((provider, idx) => (
                         <div key={provider} className="flex items-center gap-2 bg-primary/5 rounded px-2 py-1">
-                          <span className="qt-text-xs font-medium w-4">{idx + 1}.</span>
+                          <span className="qt-text-label-xs w-4">{idx + 1}.</span>
                           <span className="qt-text-xs flex-1">{provider}</span>
                           <button
                             type="button"
@@ -1395,7 +1395,7 @@ export default function ConnectionProfilesTab() {
                   <div className="space-y-3 pl-6 mb-3">
                     {/* Cache Strategy */}
                     <div className="space-y-2">
-                      <p className="qt-text-xs font-medium">Cache Strategy</p>
+                      <p className="qt-text-label-xs">Cache Strategy</p>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
@@ -1422,7 +1422,7 @@ export default function ConnectionProfilesTab() {
 
                     {/* Cache TTL */}
                     <div className="space-y-2">
-                      <label htmlFor="cacheTTL" className="qt-text-xs font-medium">Cache Duration</label>
+                      <label htmlFor="cacheTTL" className="qt-text-label-xs">Cache Duration</label>
                       <select
                         id="cacheTTL"
                         value={formData.cacheTTL}

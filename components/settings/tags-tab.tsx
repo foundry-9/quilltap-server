@@ -277,7 +277,7 @@ export default function TagsTab() {
                 return (
                   <div key={tagId} className="border border-border rounded-lg p-4 bg-card shadow-sm flex flex-col">
                     <div className="flex-1">
-                      <div className="qt-text-primary text-sm">{label}</div>
+                      <div className="qt-text-primary">{label}</div>
                       <div className="qt-text-xs mt-2">Preview:</div>
                       <div className="mt-2 mb-4">
                         <TagBadge tag={{ id: tagId, name: label }} styleOverride={mergedStyle} />
@@ -285,7 +285,7 @@ export default function TagsTab() {
                     </div>
 
                     <div className="space-y-3">
-                      <label className="block text-sm text-foreground">
+                      <label className="block qt-text-label text-foreground">
                         Emoji
                         <input
                           type="text"
@@ -299,7 +299,7 @@ export default function TagsTab() {
                       </label>
 
                       <div className="space-y-2 pt-1">
-                        <label className="flex items-center gap-2 text-sm text-foreground">
+                        <label className="flex items-center gap-2 qt-text-label text-foreground">
                           <input
                             type="checkbox"
                             checked={mergedStyle.emojiOnly ?? false}
@@ -310,7 +310,7 @@ export default function TagsTab() {
                           <span>Show emoji only</span>
                         </label>
 
-                        <label className="flex items-center gap-2 text-sm text-foreground">
+                        <label className="flex items-center gap-2 qt-text-label text-foreground">
                           <input
                             type="checkbox"
                             checked={mergedStyle.bold ?? false}
@@ -321,7 +321,7 @@ export default function TagsTab() {
                           <span className="font-bold">Bold</span>
                         </label>
 
-                        <label className="flex items-center gap-2 text-sm text-foreground">
+                        <label className="flex items-center gap-2 qt-text-label text-foreground">
                           <input
                             type="checkbox"
                             checked={mergedStyle.italic ?? false}
@@ -332,7 +332,7 @@ export default function TagsTab() {
                           <span className="italic">Italic</span>
                         </label>
 
-                        <label className="flex items-center gap-2 text-sm text-foreground">
+                        <label className="flex items-center gap-2 qt-text-label text-foreground">
                           <input
                             type="checkbox"
                             checked={mergedStyle.strikethrough ?? false}
@@ -344,7 +344,7 @@ export default function TagsTab() {
                         </label>
 
                         <div className="pt-2 mt-2 border-t border-dashed border-border">
-                          <label className="flex items-center gap-2 text-sm text-foreground">
+                          <label className="flex items-center gap-2 qt-text-label text-foreground">
                             <input
                               type="checkbox"
                               checked={quickHideEnabled}
@@ -360,7 +360,7 @@ export default function TagsTab() {
                         </div>
                       </div>
 
-                      <label className="block text-sm text-foreground">
+                      <label className="block qt-text-label text-foreground">
                         Border + Font Color
                         <input
                           type="color"
@@ -371,7 +371,7 @@ export default function TagsTab() {
                         />
                       </label>
 
-                      <label className="block text-sm text-foreground">
+                      <label className="block qt-text-label text-foreground">
                         Background Color
                         <input
                           type="color"

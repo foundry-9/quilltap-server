@@ -70,7 +70,7 @@ export default function NewPersonaPage() {
     <div>
      <label
       htmlFor="name"
-      className="block text-sm font-medium qt-text-xs mb-2"
+      className="block qt-text-label-xs mb-2"
      >
       Name *
      </label>
@@ -87,7 +87,7 @@ export default function NewPersonaPage() {
     <div>
      <label
       htmlFor="title"
-      className="block text-sm font-medium qt-text-xs mb-2"
+      className="block qt-text-label-xs mb-2"
      >
       Title
      </label>
@@ -103,7 +103,7 @@ export default function NewPersonaPage() {
     <div>
      <label
       htmlFor="description"
-      className="block text-sm font-medium qt-text-xs mb-2"
+      className="block qt-text-label-xs mb-2"
      >
       Description *
      </label>
@@ -120,7 +120,7 @@ export default function NewPersonaPage() {
     <div>
      <label
       htmlFor="personalityTraits"
-      className="block text-sm font-medium qt-text-xs mb-2"
+      className="block qt-text-label-xs mb-2"
      >
       Personality Traits
      </label>

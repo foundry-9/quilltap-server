@@ -314,7 +314,7 @@ export default function RoleplayTemplatesTab() {
                       </p>
                     )}
                   </div>
-                  <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded">
+                  <span className="px-2 py-0.5 qt-text-label-xs bg-primary/10 text-primary rounded">
                     Built-in
                   </span>
                 </div>
@@ -526,7 +526,7 @@ export default function RoleplayTemplatesTab() {
                   )}
                 </div>
                 {previewTemplate.isBuiltIn && (
-                  <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded">
+                  <span className="px-2 py-0.5 qt-text-label-xs bg-primary/10 text-primary rounded">
                     Built-in
                   </span>
                 )}

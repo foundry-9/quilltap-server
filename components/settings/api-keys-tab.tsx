@@ -201,7 +201,7 @@ export default function ApiKeysTab() {
           <h3 className="text-lg font-semibold mb-4">Add New API Key</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="label" className="block text-sm font-medium mb-2">
+              <label htmlFor="label" className="block qt-text-label mb-2">
                 Label *
               </label>
               <input
@@ -218,7 +218,7 @@ export default function ApiKeysTab() {
             </div>
 
             <div>
-              <label htmlFor="provider" className="block text-sm font-medium mb-2">
+              <label htmlFor="provider" className="block qt-text-label mb-2">
                 Provider *
               </label>
               <select
@@ -240,7 +240,7 @@ export default function ApiKeysTab() {
             </div>
 
             <div>
-              <label htmlFor="apiKey" className="block text-sm font-medium mb-2">
+              <label htmlFor="apiKey" className="block qt-text-label mb-2">
                 API Key *
               </label>
               <input

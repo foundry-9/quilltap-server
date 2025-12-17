@@ -103,7 +103,7 @@ export function PhysicalDescriptionCard({
         <div className="mt-4 space-y-4 border-t border-border pt-4">
           {description.shortPrompt && (
             <div>
-              <h4 className="qt-text-xs font-medium uppercase tracking-wide mb-1">
+              <h4 className="qt-text-label-xs uppercase tracking-wide mb-1">
                 Short (≤350)
               </h4>
               <p className="qt-text-small">{description.shortPrompt}</p>
@@ -111,7 +111,7 @@ export function PhysicalDescriptionCard({
           )}
           {description.mediumPrompt && (
             <div>
-              <h4 className="qt-text-xs font-medium uppercase tracking-wide mb-1">
+              <h4 className="qt-text-label-xs uppercase tracking-wide mb-1">
                 Medium (≤500)
               </h4>
               <p className="qt-text-small">{description.mediumPrompt}</p>
@@ -119,7 +119,7 @@ export function PhysicalDescriptionCard({
           )}
           {description.longPrompt && (
             <div>
-              <h4 className="qt-text-xs font-medium uppercase tracking-wide mb-1">
+              <h4 className="qt-text-label-xs uppercase tracking-wide mb-1">
                 Long (≤750)
               </h4>
               <p className="qt-text-small">{description.longPrompt}</p>
@@ -127,7 +127,7 @@ export function PhysicalDescriptionCard({
           )}
           {description.completePrompt && (
             <div>
-              <h4 className="qt-text-xs font-medium uppercase tracking-wide mb-1">
+              <h4 className="qt-text-label-xs uppercase tracking-wide mb-1">
                 Complete (≤1000)
               </h4>
               <p className="qt-text-small">{description.completePrompt}</p>
@@ -135,7 +135,7 @@ export function PhysicalDescriptionCard({
           )}
           {description.fullDescription && (
             <div>
-              <h4 className="qt-text-xs font-medium uppercase tracking-wide mb-1">
+              <h4 className="qt-text-label-xs uppercase tracking-wide mb-1">
                 Full Description
               </h4>
               <div className="qt-text-small prose dark:prose-invert prose-sm max-w-none">

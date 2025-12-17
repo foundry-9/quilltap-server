@@ -125,12 +125,12 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
                 {showCharacterName && (
-                  <span className="qt-text-xs font-semibold">
+                  <span className="qt-text-label-xs">
                     {character?.name} requested
                   </span>
                 )}
                 {toolData.initiatedBy === 'user' && (
-                  <span className="qt-text-xs font-semibold">
+                  <span className="qt-text-label-xs">
                     You requested
                   </span>
                 )}
@@ -140,7 +140,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
               </div>
             </div>
             <span
-              className={`inline-block px-2 py-0.5 text-xs font-medium rounded ml-auto ${
+              className={`inline-block px-2 py-0.5 qt-text-label-xs rounded ml-auto ${
                 toolData.success
                   ? 'qt-badge-success'
                   : 'qt-badge-destructive'
@@ -164,7 +164,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                   }
                   setShowRequest(!showRequest)
                 }}
-                className="qt-text-xs hover:text-foreground transition-colors"
+                className="qt-text-label-xs hover:text-foreground transition-colors"
                 type="button"
               >
                 {showRequest ? '▼' : '▶'} Tool Request
@@ -197,7 +197,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                   }
                   setShowResponse(!showResponse)
                 }}
-                className="qt-text-xs hover:text-foreground transition-colors"
+                className="qt-text-label-xs hover:text-foreground transition-colors"
                 type="button"
               >
                 {showResponse ? '▼' : '▶'} Tool Response

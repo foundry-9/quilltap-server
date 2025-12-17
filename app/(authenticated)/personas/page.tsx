@@ -248,7 +248,7 @@ export default function PersonasPage() {
 
                 {persona.characters.length > 0 && (
                   <div className="mb-4">
-                    <p className="mb-2 text-xs qt-text-primary qt-text-xs">Linked to:</p>
+                    <p className="mb-2 qt-text-primary">Linked to:</p>
                     <div className="flex flex-wrap gap-1">
                       {persona.characters.map((link) => (
                         <span
@@ -264,7 +264,7 @@ export default function PersonasPage() {
 
                 {persona.tags.length > 0 && (
                   <div className="mb-4">
-                    <p className="mb-2 text-xs qt-text-primary qt-text-xs">Tags:</p>
+                    <p className="mb-2 qt-text-primary">Tags:</p>
                     <div className="flex flex-wrap gap-1">
                       {persona.tags.map((tagLink) => (
                         <TagBadge
@@ -322,7 +322,7 @@ export default function PersonasPage() {
             </h3>
             <form onSubmit={handleImport}>
               <div className="mb-4">
-                <label className="mb-2 block text-sm qt-text-primary">
+                <label className="mb-2 block qt-text-label">
                   Select SillyTavern persona JSON file
                 </label>
                 <input
