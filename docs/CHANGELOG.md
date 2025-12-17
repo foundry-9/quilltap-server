@@ -4,6 +4,11 @@
 
 ### 2.4-dev
 
+- fix: Restore sendMessage functionality after refactor (chat send button/enter key not working)
+- fix: Remove duplicate avatar display during waiting-for-response state
+- fix: Textarea auto-resize now properly shrinks when deleting content
+- fix: Roleplay bracket segments now render correctly when containing markdown (e.g., `[narration with *emphasis*]`)
+- fix: Remove duplicate attach file button from chat composer toolbar
 - refactor: Major component file breakup for maintainability
   - Split 18 large components (500+ lines) into modular structures under 500 lines each
   - Extracted types, hooks, and sub-components into dedicated files

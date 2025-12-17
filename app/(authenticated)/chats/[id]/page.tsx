@@ -52,7 +52,7 @@ import {
   useFileAttachments,
   type SwipeState,
 } from './hooks'
-import type { Chat, ChatSettings, Message, Participant, CharacterData } from './types'
+import type { Chat, ChatSettings, Message, MessageAttachment, Participant, CharacterData } from './types'
 import {
   StreamingMessage,
   MessageRow,
@@ -144,7 +144,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [])
 
   const resizeTextarea = useCallback((textarea: HTMLTextAreaElement) => {
-    textarea.style.height = 'auto'
+    // Set to 0 first to force browser to recalculate scrollHeight for shrinking
+    textarea.style.height = '0'
     const maxHeight = getTextareaMaxHeight()
     const newHeight = Math.min(textarea.scrollHeight, maxHeight)
     textarea.style.height = newHeight + 'px'
@@ -809,6 +810,349 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return () => globalThis.window?.removeEventListener('resize', handleResize)
   }, [resizeTextarea])
 
+  // Main sendMessage function
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if ((!input.trim() && attachedFiles.length === 0) || sending) return
+
+    // Reset auto-trigger ref when user sends a message (new turn cycle starts)
+    lastAutoTriggeredRef.current = null
+    // Clear the user-stopped flag - user is engaging, so auto-trigger can resume
+    userStoppedStreamRef.current = false
+
+    const userMessage = input.trim()
+    const fileIds = attachedFiles.map((f) => f.id)
+    // Capture attachments before clearing state
+    const messageAttachments: MessageAttachment[] = attachedFiles.map((f) => ({
+      id: f.id,
+      filename: f.filename,
+      filepath: f.filepath,
+      mimeType: f.mimeType,
+    }))
+    setInput('')
+    setAttachedFiles([])
+    setSending(true)
+    setWaitingForResponse(true)
+    setStreaming(false)
+    setStreamingContent('')
+    // Set the responding participant for correct avatar display during streaming
+    // For normal messages, the server uses the first active character
+    const firstCharParticipant = getFirstCharacterParticipant()
+    setRespondingParticipantId(firstCharParticipant?.id || null)
+    clientLogger.debug('[Chat] Set responding participant for streaming', {
+      participantId: firstCharParticipant?.id,
+      characterName: firstCharParticipant?.character?.name,
+    })
+    // Reset textarea to minimum height (single line)
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+    }
+
+    // Build display content with file indicators
+    const displayContent = messageAttachments.length > 0
+      ? `${userMessage}${userMessage ? '\n' : ''}[Attached: ${messageAttachments.map(f => f.filename).join(', ')}]`
+      : userMessage
+
+    // Add user message to UI
+    const tempUserMessageId = `temp-user-${Date.now()}`
+    const tempUserMessage: Message = {
+      id: tempUserMessageId,
+      role: 'USER',
+      content: displayContent,
+      createdAt: new Date().toISOString(),
+      attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
+    }
+    setMessages((prev) => [...prev, tempUserMessage])
+
+    // Debug: Log outgoing request
+    const requestPayload = { content: userMessage || 'Please look at the attached file(s).', fileIds }
+    let debugEntryId: string | undefined
+    const connectionProfile = getFirstConnectionProfile()
+    const debugProviderName = connectionProfile?.name || 'LLM Provider'
+    const debugProviderType = (connectionProfile?.apiKey?.provider || 'UNKNOWN') as import('@/components/providers/debug-provider').LLMProviderType
+    const debugModel = connectionProfile?.modelName
+
+    if (debug?.isDebugMode) {
+      debugEntryId = debug.addEntry({
+        direction: 'outgoing',
+        provider: debugProviderName,
+        providerType: debugProviderType,
+        model: debugModel,
+        endpoint: `/api/chats/${id}/messages`,
+        status: 'pending',
+        data: JSON.stringify(requestPayload, null, 2),
+        contentType: 'application/json',
+      })
+    }
+
+    // Debug: Prepare response entry
+    let responseEntryId: string | undefined
+    if (debug?.isDebugMode) {
+      responseEntryId = debug.addEntry({
+        direction: 'incoming',
+        provider: debugProviderName,
+        providerType: debugProviderType,
+        model: debugModel,
+        endpoint: `/api/chats/${id}/messages`,
+        status: 'streaming',
+        data: '',
+        contentType: 'text/event-stream',
+      })
+    }
+
+    try {
+      // Create AbortController for this request
+      abortControllerRef.current = new AbortController()
+      const { signal } = abortControllerRef.current
+
+      const res = await fetch(`/api/chats/${id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestPayload),
+        signal,
+      })
+
+      // Debug: Mark request as complete
+      if (debug?.isDebugMode && debugEntryId) {
+        debug.updateEntry(debugEntryId, { status: 'complete' })
+      }
+
+      if (!res.ok) {
+        // Try to get error details from response
+        let errorMessage = 'Failed to send message'
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.error || errorData.message || errorMessage
+        } catch {
+          // If JSON parsing fails, use status text
+          errorMessage = res.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
+      }
+
+      // Handle streaming response
+      const reader = res.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) throw new Error('No response body')
+
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+
+        // Debug: Append raw chunk to response entry
+        if (debug?.isDebugMode && responseEntryId) {
+          debug.appendToEntry(responseEntryId, chunk)
+        }
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const rawData = line.slice(6).trim()
+            // Skip SSE markers that aren't JSON (OpenAI/OpenRouter use [DONE] to signal end of stream)
+            if (!rawData || rawData === '[DONE]' || rawData === '{}') {
+              continue
+            }
+            try {
+              const data = JSON.parse(rawData)
+
+              if (data.content) {
+                fullContent += data.content
+                setWaitingForResponse(false)
+                setStreaming(true)
+                setStreamingContent(fullContent)
+              }
+
+              // Handle tool detection - create pending entries for each tool
+              if (data.toolsDetected && data.toolNames) {
+                const toolNames = data.toolNames as string[]
+                const toolArgs = (data.toolArguments || []) as Record<string, unknown>[]
+                setPendingToolCalls(toolNames.map((name, idx) => ({
+                  id: `tool-${idx}`,
+                  name,
+                  status: 'pending' as const,
+                  arguments: toolArgs[idx],
+                })))
+                // Only show image generation status for generate_image tool
+                if (toolNames.includes('generate_image')) {
+                  setToolExecutionStatus({
+                    tool: 'generate_image',
+                    status: 'pending',
+                    message: `Generating image...`,
+                  })
+                }
+              }
+
+              // Handle tool results
+              if (data.toolResult) {
+                const { index, name, success, result } = data.toolResult
+                // Update pending tool call status by index (more reliable) or fall back to name
+                setPendingToolCalls(prev => prev.map((tc, idx) =>
+                  (index !== undefined && idx === index) || (index === undefined && tc.name === name)
+                    ? { ...tc, status: success ? 'success' : 'error', result }
+                    : tc
+                ))
+                // Only show toast/status for image generation
+                if (name === 'generate_image') {
+                  if (success) {
+                    const imageCount = result?.images?.length || 1
+                    setToolExecutionStatus({
+                      tool: name,
+                      status: 'success',
+                      message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
+                    })
+                    showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
+                  } else {
+                    setToolExecutionStatus({
+                      tool: name,
+                      status: 'error',
+                      message: result?.error || 'Failed to generate image',
+                    })
+                    showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
+                  }
+                }
+              }
+
+              // Handle memory debug logs (arrive after done event)
+              if (data.debugMemoryLogs && debug?.isDebugMode && responseEntryId) {
+                debug.updateEntry(responseEntryId, { debugMemoryLogs: data.debugMemoryLogs })
+              }
+
+              if (data.done) {
+                // Debug: Finalize streaming entry with stitched content
+                if (debug?.isDebugMode && responseEntryId) {
+                  debug.finalizeStreamingEntry(responseEntryId)
+                }
+
+                // Check for empty response (known Gemini API issue)
+                if (data.emptyResponse) {
+                  showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
+                  setStreamingContent('')
+                  setStreaming(false)
+                  setWaitingForResponse(false)
+                  setSending(false)
+                  setRespondingParticipantId(null)
+                  return
+                }
+
+                // Add assistant message to messages list
+                const assistantMessage: Message = {
+                  id: data.messageId,
+                  role: 'ASSISTANT',
+                  content: fullContent,
+                  createdAt: new Date().toISOString(),
+                }
+                setMessages((prev) => [...prev, assistantMessage])
+                setStreamingContent('')
+                setStreaming(false)
+                setRespondingParticipantId(null)
+                // Refresh chat to get tool messages and memory debug logs
+                await fetchChat()
+                // Update debug entry with memory logs from the fetched chat (with polling)
+                if (debug?.isDebugMode && responseEntryId) {
+                  let pollCount = 0
+                  const maxPolls = 20 // Poll for up to 20 seconds (1 second intervals)
+                  const pollInterval = setInterval(async () => {
+                    pollCount++
+                    try {
+                      const chatRes = await fetch(`/api/chats/${id}`)
+                      if (chatRes.ok) {
+                        const chatData = await chatRes.json()
+                        const fetchedMessage = chatData.chat.messages.find((m: Message) => m.id === data.messageId)
+                        if (fetchedMessage?.debugMemoryLogs) {
+                          debug.updateEntry(responseEntryId, { debugMemoryLogs: fetchedMessage.debugMemoryLogs })
+                          clearInterval(pollInterval)
+                        } else if (pollCount >= maxPolls) {
+                          clearInterval(pollInterval)
+                        }
+                      }
+                    } catch {
+                      if (pollCount >= maxPolls) {
+                        clearInterval(pollInterval)
+                      }
+                    }
+                  }, 1000)
+                }
+                // Clear tool status after a short delay
+                setTimeout(() => {
+                  setToolExecutionStatus(null)
+                  setPendingToolCalls([])
+                }, 3000)
+              }
+
+              if (data.error) {
+                throw new Error(data.error)
+              }
+            } catch (parseError) {
+              // Only log if it's a real parse error, not noise from SSE chunking
+              // Note: rawData is already trimmed and we've skipped empty/[DONE]/{} before try block
+              const errorMessage = getErrorMessage(parseError)
+              // Skip logging for generic stringified objects or empty error messages
+              const shouldSkip = !errorMessage ||
+                errorMessage === 'undefined' ||
+                errorMessage === '[object Object]' ||
+                errorMessage === '{}'
+              if (!shouldSkip) {
+                clientLogger.error('Failed to parse SSE data:', { error: errorMessage, raw: rawData.substring(0, 100) })
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      // Check if this was an abort (user stopped the response)
+      const isAbort = err instanceof Error && err.name === 'AbortError'
+
+      if (isAbort) {
+        clientLogger.debug('[Chat] Streaming aborted by user')
+        // Debug: Mark entries as aborted
+        if (debug?.isDebugMode) {
+          if (debugEntryId) {
+            debug.updateEntry(debugEntryId, { status: 'complete', error: 'Aborted by user' })
+          }
+          if (responseEntryId) {
+            debug.updateEntry(responseEntryId, { status: 'complete', error: 'Aborted by user' })
+          }
+        }
+        // Don't remove user message or show error for abort
+        setStreamingContent('')
+        setStreaming(false)
+        setWaitingForResponse(false)
+        setRespondingParticipantId(null)
+      } else {
+        clientLogger.error('Error sending message:', { error: err instanceof Error ? err.message : String(err) })
+        showErrorToast(err instanceof Error ? err.message : 'Failed to send message')
+
+        // Debug: Mark entries as error
+        if (debug?.isDebugMode) {
+          if (debugEntryId) {
+            debug.updateEntry(debugEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+          }
+          if (responseEntryId) {
+            debug.updateEntry(responseEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+          }
+        }
+
+        // Remove the temporary user message on error
+        setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
+        setStreamingContent('')
+        setStreaming(false)
+        setWaitingForResponse(false)
+        setRespondingParticipantId(null)
+      }
+    } finally {
+      setSending(false)
+      abortControllerRef.current = null
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 0)
+    }
+  }
+
   // UI helper functions
   const shouldShowAvatars = () => {
     if (!chatSettings) return true
@@ -981,50 +1325,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               )
             })}
 
-            {/* Waiting for response - show large quill animation */}
-            {waitingForResponse && !streaming && (
-              <div className="qt-chat-message-row qt-chat-message-row-assistant items-center">
-                {shouldShowAvatars() && (
-                  <div className="flex-shrink-0 qt-chat-desktop-avatar">
-                    <Avatar
-                      name={getRespondingCharacter()?.name || 'AI'}
-                      title={null}
-                      src={getRespondingCharacter()}
-                      size="chat"
-                      showName
-                      showTitle
-                      className="flex flex-col items-center w-32 gap-1"
-                    />
-                  </div>
-                )}
-                <div className="qt-chat-message-body">
-                  {shouldShowAvatars() && (
-                    <div className="qt-chat-message-mobile-header">
-                      <div className="qt-chat-message-mobile-avatar">
-                        {(() => {
-                          const char = getRespondingCharacter()
-                          const avatarSrc = char?.avatarUrl || (char?.defaultImage?.url || char?.defaultImage?.filepath)
-                          const normalizedSrc = avatarSrc && (avatarSrc.startsWith('/') ? avatarSrc : `/${avatarSrc}`)
-                          return normalizedSrc ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={normalizedSrc} alt={char?.name || 'AI'} />
-                          ) : (
-                            <div className="qt-chat-message-mobile-avatar-initial">
-                              {(char?.name || 'AI').charAt(0).toUpperCase()}
-                            </div>
-                          )
-                        })()}
-                      </div>
-                      <span className="qt-chat-message-mobile-name">{getRespondingCharacter()?.name || 'AI'}</span>
-                    </div>
-                  )}
-                  <div className="text-muted-foreground">
-                    <QuillAnimation size="lg" />
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Pending tool calls */}
             <PendingToolCalls pendingToolCalls={pendingToolCalls} />
 
@@ -1075,12 +1375,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
           isSingleCharacterChat={isSingleCharacterChat}
           roleplayTemplateId={chat?.roleplayTemplateId}
-          onSubmit={(e) => {
-            e.preventDefault()
-            // sendMessage function would be implemented here
-            // For now, this is a placeholder - the actual sendMessage logic needs to stay in the page
-            clientLogger.debug('[Chat] Send message submitted')
-          }}
+          onSubmit={sendMessage}
           onFileSelect={handleFileSelect}
           onAttachFileClick={() => {
             // File input ref will be created in component

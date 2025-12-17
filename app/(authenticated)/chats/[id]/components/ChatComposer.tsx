@@ -47,7 +47,8 @@ interface ChatComposerProps {
 }
 
 const resizeTextarea = (textarea: HTMLTextAreaElement, maxHeight: number) => {
-  textarea.style.height = 'auto'
+  // Set to 0 first to force browser to recalculate scrollHeight for shrinking
+  textarea.style.height = '0'
   const newHeight = Math.min(textarea.scrollHeight, maxHeight)
   textarea.style.height = newHeight + 'px'
 }
@@ -297,22 +298,6 @@ export function ChatComposer({
                 </svg>
               </button>
             )}
-
-            {/* File attach button - triggers the hidden file input */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                fileInputRef.current?.click()
-              }}
-              className="qt-chat-toolbar-button qt-desktop-only"
-              disabled={uploadingFile}
-              title={uploadingFile ? "Uploading..." : "Attach file"}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </button>
 
             {/* Mobile: Tool palette toggle button */}
             <button

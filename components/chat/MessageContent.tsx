@@ -55,6 +55,46 @@ function getPatternsForTemplate(templateName?: string | null): RoleplayPattern[]
 }
 
 /**
+ * Escape markdown syntax characters inside roleplay brackets to prevent
+ * ReactMarkdown from breaking up the segments before we can style them.
+ * This handles cases like [narration with *emphasis* inside]
+ */
+function escapeMarkdownInBrackets(content: string, templateName?: string | null): string {
+  // Characters that trigger markdown parsing
+  const markdownChars = /([*_~`])/g
+
+  let result = content
+
+  // Escape inside [...] (Quilltap RP narration, or fallback)
+  if (!templateName || templateName === 'Quilltap RP') {
+    result = result.replace(/\[([^\]]+)\](?!\()/g, (match, inner) => {
+      // Escape markdown characters with backslash
+      const escaped = inner.replace(markdownChars, '\\$1')
+      return `[${escaped}]`
+    })
+
+    // Escape inside {...} (Quilltap RP internal monologue)
+    result = result.replace(/\{([^}]+)\}/g, (match, inner) => {
+      const escaped = inner.replace(markdownChars, '\\$1')
+      return `{${escaped}}`
+    })
+  }
+
+  // Escape inside *...* for Standard template (single asterisks for narration)
+  // Be careful not to double-escape or break bold **...**
+  if (templateName === 'Standard') {
+    // Match single asterisk pairs that aren't bold
+    result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (match, inner) => {
+      // Only escape if there are nested markdown chars (unlikely but safe)
+      const escaped = inner.replace(/([_~`])/g, '\\$1')
+      return `*${escaped}*`
+    })
+  }
+
+  return result
+}
+
+/**
  * Process roleplay syntax in a string and return React elements
  * Applies patterns based on the active roleplay template
  */
@@ -136,6 +176,12 @@ function processChildren(children: ReactNode, templateName?: string | null): Rea
 
 
 export default function MessageContent({ content, className = '', roleplayTemplateName }: MessageContentProps) {
+  // Pre-process content to escape markdown inside roleplay brackets
+  const processedContent = useMemo(
+    () => escapeMarkdownInBrackets(content, roleplayTemplateName),
+    [content, roleplayTemplateName]
+  )
+
   const components: Components = {
     // Code blocks with syntax highlighting
     code({ className, children, ...props }) {
@@ -299,7 +345,7 @@ export default function MessageContent({ content, className = '', roleplayTempla
           remarkPlugins={[remarkGfm]}
           components={components}
         >
-          {content}
+          {processedContent}
         </ReactMarkdown>
       </div>
     </>
