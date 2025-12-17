@@ -10,6 +10,9 @@
   - Templates are remapped correctly in new-account mode restore
   - Delete-all-data feature now also deletes user-created templates
   - Added templates count to backup manifest and restore summary
+- test: Expand coverage for template flows and pseudo-tools
+  - Added unit tests for pseudo-tool config/prompt/parser modules, TemplateDisplay UI, context manager template replacement, turn skip cycle resets, and delete-all preview template counts
+  - Added integration tests for `/api/characters/[id]/prompts`, `/api/prompt-templates`, and `/api/roleplay-templates` to exercise multi-system prompt workflows end-to-end
 - style: Major Earl Grey theme enhancement with full qt-* utility class support (v1.0.10)
   - Added 140+ new CSS variable overrides for comprehensive theming
   - Tabs: Full tab styling with transparent inactive states and raised active states

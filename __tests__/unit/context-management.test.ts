@@ -322,6 +322,71 @@ describe('Context Manager', () => {
       const prompt = buildSystemPrompt(character as any, null, override)
       expect(prompt).toContain(override)
     })
+
+    it('processes template variables across roleplay, override, and persona sections', () => {
+      const persona = { name: 'Alex', description: 'A curious tester' }
+      const roleplayTemplate = { systemPrompt: 'Stay in {{char}} mindset when talking to {{user}}.' }
+      const pseudoToolInstructions = 'Tools should mention {{char}} assisting {{user}}.'
+      const prompt = buildSystemPrompt(
+        {
+          ...character,
+          personality: '{{char}} is thoughtful',
+          scenario: '{{char}} meets {{user}} under the stars',
+          exampleDialogues: '{{char}}: Hello {{user}}',
+        } as any,
+        persona,
+        '{{char}} override for {{user}}',
+        undefined,
+        roleplayTemplate,
+        pseudoToolInstructions
+      )
+
+      expect(prompt).toContain('Stay in Test Character mindset when talking to Alex.')
+      expect(prompt).toContain('Test Character override for Alex')
+      expect(prompt).toContain('Test Character is thoughtful')
+      expect(prompt).toContain('Test Character meets Alex under the stars')
+      expect(prompt).toContain('Tools should mention Test Character assisting Alex.')
+      expect(prompt).not.toContain('{{char}}')
+      expect(prompt).not.toContain('{{user}}')
+    })
+
+    it('uses the selected system prompt when provided and processes templates', () => {
+      const persona = { name: 'Jordan', description: 'An analyst' }
+      const multiPromptCharacter = {
+        ...character,
+        systemPrompts: [
+          {
+            id: 'prompt-default',
+            name: 'Default',
+            content: 'Default prompt for {{char}}',
+            isDefault: true,
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: 'prompt-alt',
+            name: 'Battle Plan',
+            content: '{{char}} must protect {{user}} at all costs.',
+            isDefault: false,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      }
+
+      const prompt = buildSystemPrompt(
+        multiPromptCharacter as any,
+        persona,
+        null,
+        undefined,
+        null,
+        undefined,
+        'prompt-alt'
+      )
+
+      expect(prompt).toContain('Test Character must protect Jordan at all costs.')
+      expect(prompt).not.toContain('Default prompt')
+    })
   })
 
   describe('formatMemoriesForContext', () => {
