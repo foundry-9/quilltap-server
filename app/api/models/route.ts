@@ -173,6 +173,37 @@ export async function POST(req: NextRequest) {
       }
     })
 
+    // Cache the fetched models in the database
+    try {
+      await repos.providerModels.upsertModelsForProvider(
+        provider,
+        modelsWithInfo.map(m => ({
+          modelId: m.id,
+          displayName: m.displayName,
+          contextWindow: m.contextWindow,
+          maxOutputTokens: m.maxOutputTokens,
+          deprecated: m.deprecated,
+          experimental: m.experimental,
+        })),
+        'chat', // Model type for chat models
+        baseUrl
+      )
+      logger.debug('Cached chat models in database', {
+        provider,
+        count: models.length,
+        modelType: 'chat',
+        baseUrl,
+        context: 'POST /api/models',
+      })
+    } catch (cacheError) {
+      // Don't fail the request if caching fails, just log
+      logger.warn('Failed to cache models in database', {
+        provider,
+        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+        context: 'POST /api/models',
+      })
+    }
+
     return NextResponse.json({
       provider,
       models,

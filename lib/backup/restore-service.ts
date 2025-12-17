@@ -33,6 +33,7 @@ import type {
   PhysicalDescription,
   PromptTemplate,
   RoleplayTemplate,
+  ProviderModel,
 } from '@/lib/schemas/types';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
@@ -96,6 +97,8 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
   // Templates are optional for backwards compatibility with older backups
   const promptTemplates = readJsonOptional<PromptTemplate[]>('data/prompt-templates.json', []);
   const roleplayTemplates = readJsonOptional<RoleplayTemplate[]>('data/roleplay-templates.json', []);
+  // Provider models are optional for backwards compatibility with older backups
+  const providerModels = readJsonOptional<ProviderModel[]>('data/provider-models.json', []);
 
   moduleLogger.info('Parsed backup ZIP', {
     version: manifest.version,
@@ -116,6 +119,7 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
     files,
     promptTemplates,
     roleplayTemplates,
+    providerModels,
   };
 }
 
@@ -175,6 +179,7 @@ export function previewRestore(zipBuffer: Buffer): RestoreSummary {
       prompt: data.promptTemplates.length,
       roleplay: data.roleplayTemplates.length,
     },
+    providerModels: data.providerModels.length,
     warnings: [],
   };
 }
@@ -564,6 +569,9 @@ function remapBackupData(
     userId: targetUserId,
   })) as RoleplayTemplate[];
 
+  // Provider models are global and don't need remapping, just copy them
+  const remappedProviderModels = data.providerModels;
+
   return {
     manifest: data.manifest,
     characters: remappedCharacters,
@@ -577,6 +585,7 @@ function remapBackupData(
     files: remappedFiles as FileEntry[],
     promptTemplates: remappedPromptTemplates,
     roleplayTemplates: remappedRoleplayTemplates,
+    providerModels: remappedProviderModels,
   };
 }
 
@@ -824,6 +833,20 @@ export async function restore(
     }
   }
 
+  // 12. Provider Models (global cache)
+  moduleLogger.debug('Restoring provider models', { count: data.providerModels.length });
+  let providerModelsRestored = 0;
+  for (const model of data.providerModels) {
+    try {
+      const { id, createdAt, updatedAt, ...modelData } = model;
+      await globalRepos.providerModels.upsertModel(modelData);
+      providerModelsRestored++;
+    } catch (error) {
+      warnings.push(`Failed to restore provider model "${model.modelId}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore provider model', { modelId: model.modelId, error });
+    }
+  }
+
   const summary: RestoreSummary = {
     characters: data.characters.length,
     personas: data.personas.length,
@@ -841,6 +864,7 @@ export async function restore(
       prompt: promptTemplatesRestored,
       roleplay: roleplayTemplatesRestored,
     },
+    providerModels: providerModelsRestored,
     warnings,
   };
 

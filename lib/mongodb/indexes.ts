@@ -145,6 +145,23 @@ export const INDEX_DEFINITIONS: Record<string, IndexDefinition[]> = {
       key: { sha256: 1 },
     },
   ],
+
+  // Provider models collection indexes (global cache of available models)
+  provider_models: [
+    {
+      key: { provider: 1 },
+    },
+    {
+      key: { modelType: 1 },
+    },
+    {
+      key: { provider: 1, modelType: 1, modelId: 1, baseUrl: 1 },
+      options: { unique: true, name: 'provider_models_provider_type_modelId_baseUrl_unique' },
+    },
+    {
+      key: { fetchedAt: 1 },
+    },
+  ],
 };
 
 /**

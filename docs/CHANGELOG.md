@@ -2,8 +2,23 @@
 
 ## Recent Changes
 
-### 2.4-dev
+### 2.4
 
+- feat: Provider models database caching system
+  - Added `modelType` field to ProviderModel schema to distinguish chat, image, and embedding models
+  - Updated MongoDB indexes to include modelType in unique constraint
+  - Chat models cached when fetched via /api/models endpoint
+  - Image models cached when fetched via /api/image-profiles/models endpoint
+  - Embedding models cached when fetched via /api/embedding-profiles/models endpoint
+  - Capabilities Report now uses cached models from database (falls back to API calls)
+  - Capabilities Report now reads plugin versions from package.json instead of manifest.json
+- feat: Add provider models to backup/restore system
+  - Provider models are now collected during backup creation from globalRepos.providerModels
+  - Added debug logging for provider model collection, counts, and archiving
+  - Provider models included in backup manifest counts for validation and progress tracking
+  - Provider models exported to data/provider-models.json in backup archives
+  - Restore system now imports provider models with proper error handling and warnings
+  - RestoreSummary now tracks count of restored provider models
 - fix: Improved SSE error handling for cleaner error messages
   - Server now properly formats Zod validation errors (e.g., from provider SDKs)
   - Client now shows full error details in toast messages instead of truncated JSON

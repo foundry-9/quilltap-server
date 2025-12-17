@@ -80,13 +80,14 @@ export default function ConnectionProfilesTab() {
   // Test message states
   const [testMessageResult, setTestMessageResult] = useState<string | null>(null)
 
-  // Initialize data on mount
+  // Initialize data on mount - only run once
   useEffect(() => {
     fetchProfiles()
     fetchApiKeys()
     fetchProviders()
     fetchChatSettings()
-  }, [fetchProfiles, fetchApiKeys, fetchProviders, fetchChatSettings])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleResetForm = useCallback(() => {
     resetForm()

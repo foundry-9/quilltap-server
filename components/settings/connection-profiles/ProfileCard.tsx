@@ -76,8 +76,8 @@ export function ProfileCard({
           </div>
           {profile.tags && profile.tags.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
-              {profile.tags.map((tag) => (
-                <TagBadge key={tag.id} tag={tag} size="sm" />
+              {profile.tags.map((tag, index) => (
+                <TagBadge key={tag.id || `tag-${index}`} tag={tag} size="sm" />
               ))}
             </div>
           )}

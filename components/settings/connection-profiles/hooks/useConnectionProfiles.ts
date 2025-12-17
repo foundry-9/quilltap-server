@@ -110,37 +110,13 @@ export function useConnectionProfiles() {
 
       const data = result.data || []
 
-      // Fetch tags for each profile
-      const profilesWithTags = await Promise.all(
-        data.map(async (profile: ConnectionProfile) => {
-          try {
-            const tagsResult = await fetchJson<{ tags: Tag[] }>(`/api/profiles/${profile.id}/tags`)
-            if (tagsResult.ok) {
-              return { ...profile, tags: tagsResult.data?.tags || [] }
-            }
-          } catch (err) {
-            clientLogger.error(`Error fetching tags for profile ${profile.id}`, {
-              error: getErrorMessage(err),
-            })
-          }
-          return profile
-        })
-      )
-
-      // Count messages per profile
-      const messageCounts = await countMessagesPerProfile(profilesWithTags)
-
-      // Attach message counts to profiles
-      const profilesWithCounts = profilesWithTags.map((profile) => ({
-        ...profile,
-        messageCount: messageCounts[profile.id] || 0,
-      }))
-
-      setProfiles(profilesWithCounts)
-      clientLogger.debug('Profiles loaded successfully', { count: profilesWithCounts.length })
-      return profilesWithCounts
+      // Tags are already included in the profile response from /api/profiles
+      // No need to fetch them separately
+      setProfiles(data)
+      clientLogger.debug('Profiles loaded successfully', { count: data.length })
+      return data
     })
-  }, [fetchOp, countMessagesPerProfile])
+  }, [fetchOp])
 
   const fetchApiKeys = useCallback(async () => {
     try {

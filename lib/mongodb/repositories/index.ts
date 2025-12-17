@@ -25,6 +25,7 @@ export { FilesRepository } from './files.repository';
 export { BackgroundJobsRepository } from './background-jobs.repository';
 export { RoleplayTemplatesRepository } from './roleplay-templates.repository';
 export { PromptTemplatesRepository } from './prompt-templates.repository';
+export { ProviderModelsRepository } from './provider-models.repository';
 
 // Import all repository classes
 import { MongoBaseRepository } from './base.repository';
@@ -41,6 +42,7 @@ import { FilesRepository } from './files.repository';
 import { BackgroundJobsRepository } from './background-jobs.repository';
 import { RoleplayTemplatesRepository } from './roleplay-templates.repository';
 import { PromptTemplatesRepository } from './prompt-templates.repository';
+import { ProviderModelsRepository } from './provider-models.repository';
 
 /**
  * Container interface for all repository instances.
@@ -61,6 +63,7 @@ export interface RepositoryContainer {
   backgroundJobs: BackgroundJobsRepository;
   roleplayTemplates: RoleplayTemplatesRepository;
   promptTemplates: PromptTemplatesRepository;
+  providerModels: ProviderModelsRepository;
 }
 
 /**
@@ -93,6 +96,7 @@ export function createRepositories(): RepositoryContainer {
       backgroundJobs: new BackgroundJobsRepository(),
       roleplayTemplates: new RoleplayTemplatesRepository(),
       promptTemplates: new PromptTemplatesRepository(),
+      providerModels: new ProviderModelsRepository(),
     };
 
     logger.debug('Repository container created successfully', {

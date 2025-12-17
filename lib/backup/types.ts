@@ -18,6 +18,7 @@ import type {
   MessageEvent,
   PromptTemplate,
   RoleplayTemplate,
+  ProviderModel,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -70,6 +71,8 @@ export interface BackupManifest {
     promptTemplates: number;
     /** Number of RoleplayTemplate entities (user-created only) */
     roleplayTemplates: number;
+    /** Number of ProviderModel entities */
+    providerModels: number;
   };
 }
 
@@ -120,6 +123,9 @@ export interface BackupData {
 
   /** Array of user-created RoleplayTemplate entities (excludes built-in templates) */
   roleplayTemplates: RoleplayTemplate[];
+
+  /** Array of ProviderModel entities */
+  providerModels: ProviderModel[];
 }
 
 // ============================================================================
@@ -209,6 +215,9 @@ export interface RestoreSummary {
     /** Number of RoleplayTemplate entities restored */
     roleplay: number;
   };
+
+  /** Number of ProviderModel entities restored */
+  providerModels: number;
 
   /**
    * Array of warning messages for issues that occurred during restore

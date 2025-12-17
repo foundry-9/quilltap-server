@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.0--dev.53-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.4.0--dev.54-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -505,15 +505,10 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 ## Roadmap
 
 - [ ] Finish authentication changes
-  - [X] Convert Google OAuth to plugin (`qtap-plugin-auth-google`)
-  - [X] Create auth provider plugin interface and registry
-  - [X] Implement lazy initialization pattern for NextAuth
-  - [X] Centralize session handling in `lib/auth/session.ts`
   - [X] Make a default no-auth option (`AUTH_DISABLED=true` env var)
   - [ ] Retain site-installed plugins in `plugins/`, controlled by environment variables
   - [ ] Move user-installed plugins to `plugins/users/[login-uuid]/`
   - [ ] Add Apple, GitHub OAuth plugins
-- [X] Enhanced roleplay options using more complex templates (v2.3)
 - [ ] "Visual Novel" options?
 - [ ] Worldbook/Lore
 - [ ] General SSE-based MCP support
@@ -522,7 +517,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [ ] Arcadia "art deco" theme to show off what the theme system can really do
 - [ ] Fully mobile-capable media breakpoints
   - [X] Dashboard
-  - [ ] Chat
+  - [ ] Chat (partially done in v2.4)
   - [ ] Characters
   - [ ] Personas
   - [ ] Settings
@@ -536,19 +531,10 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
 - [ ] Character build-out wizard
   - Uses LLM of choice to fill out gaps in character fields or physical descriptions
-- [X] Prompt caching (see [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching))
 - [ ] Make roleplay templates besides the default one into plugins (start with "Quilltap RP")
 - [ ] Create web-only version that uses IndexedDB for everything
 - [ ] Stop using NextAuth
-- [X] Add in the capability to stop a runaway response
-- [X] Make the system capable of importing chats that it exports
-- [X] Maintain a settings tab of basic system prompts with suggestions built-in
-- [X] Get rid of any trace of "prisma"
 - [ ] Create a native Quilltap import/export for everything
-- [X] Add ad-hoc NPC addition to chats, with minimal setup, and optional conversion to a real character
-- [X] Bug: selecting "Physical Descriptions" tab on `/characters/[id]` repeatedly hits the API until it errors out (also true on the "Settings --> NPC --> Physical Descriptions" tab)
-- [X] Bug: "Default Connection Profile" on "Associated Profiles" tab on `characters/[id]/edit?tab=profiles` does not list any profiles
-- [X] Bug: editing a character on the main character page doesn't seem to work, errors out
 - [ ] Add "Pause" to the turn system; if a chat is marked "Pause" then nobody ever gets to talk until the user nudges somebody again, or "un-pauses" it
 - [ ] Add a "Rename" to a chat, and if the user has renamed it, never try to rename it again unless something is toggled indicating that renaming can be automatic again
 
