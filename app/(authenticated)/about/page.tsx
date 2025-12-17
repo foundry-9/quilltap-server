@@ -71,11 +71,15 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Image generation</strong> &ndash; Google Imagen, Grok, OpenAI, and OpenRouter profiles</span>
+            <span><strong>Image generation</strong> &ndash; Google Gemini/Imagen 4, Grok, OpenAI, and OpenRouter profiles</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
             <span><strong>Secure by design</strong> &ndash; AES-256-GCM encrypted API keys, OAuth + local auth, optional TOTP 2FA</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Mobile-responsive</strong> &ndash; optimized dashboard and chat UI for phone portrait mode</span>
           </li>
         </ul>
       </div>

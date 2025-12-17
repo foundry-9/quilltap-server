@@ -1,68 +1,233 @@
-# Development Progress
+# Development Guide
 
-This document tracks the development progress of the future Quilltap.
+This document covers the development setup and project structure for Quilltap.
 
 ## Project Structure
 
 ```text
 quilltap/
 ├── app/                      # Next.js App Router entry point
-│   ├── (authenticated)/      # Protected experience (characters, chats, personas, settings)
-│   ├── api/                  # Route handlers for auth, json-store, migrations, tooling, etc.
+│   ├── (authenticated)/      # Protected routes (characters, chats, personas, settings, about, tools)
+│   ├── api/                  # API route handlers (auth, chats, characters, providers, backups, etc.)
 │   ├── auth/                 # NextAuth flows (sign-in, error, callback)
-│   ├── dashboard/            # Marketing/onboarding shell
-│   ├── globals.css           # Root styles
+│   ├── dashboard/            # Dashboard page
+│   ├── styles/               # Qt-* utility class stylesheets
+│   ├── globals.css           # Root styles and Tailwind imports
 │   ├── layout.tsx            # Root layout (providers, themes, fonts)
 │   └── page.tsx              # Public landing page
-├── components/               # Reusable UI (chat, character, memory, tags, providers, nav, etc.)
-├── lib/                      # Domain logic (auth, chat, llm, json-store, migrations, tools, startup helpers)
-├── data/                     # JSON-backed persistence (auth, chats, characters, personas, tags, settings)
-├── __tests__/                # Jest + Playwright specs (unit/ integration)
-├── __mocks__/                # Test doubles for auth, OpenRouter, Google, etc.
-├── docs/                     # Engineering docs, deployment runbooks, migration notes
-├── features/                 # Living roadmap & spec notes (memory, auth, Gemini, etc.)
-├── hooks/                    # React hooks (custom avatar rendering, etc.)
-├── types/                    # Project-level type augmentations (NextAuth module declarations)
-├── public/                   # Static assets (uploads, icons, manifest)
-├── docker/                   # Container assets (nginx config, scripts, cert helpers)
-├── docker-compose*.yml       # Local/test/prod compose orchestration
-├── Dockerfile                # Multi-stage runtime builder
-├── backups/                  # Database snapshots/seeds
-├── certs/                    # Dev TLS certificates
+├── components/               # Reusable UI components
+│   ├── chat/                 # Chat-related components
+│   ├── character/            # Character management components
+│   ├── persona/              # Persona management components
+│   ├── memory/               # Memory system components
+│   ├── settings/             # Settings tab components
+│   ├── tags/                 # Tag system components
+│   ├── nav/                  # Navigation components
+│   ├── providers/            # React context providers
+│   └── ui/                   # Generic UI components (Avatar, Badge, Button, etc.)
+├── lib/                      # Domain logic and utilities
+│   ├── auth/                 # Authentication (session, adapters, post-login migrations)
+│   ├── chat/                 # Chat logic (context-manager, turn-manager, tool execution)
+│   ├── llm/                  # LLM utilities (formatting, pricing, streaming)
+│   ├── memory/               # Memory and embedding logic
+│   ├── mongodb/              # MongoDB repositories and connection
+│   ├── plugins/              # Plugin registry and loader
+│   ├── s3/                   # S3 storage utilities
+│   ├── sillytavern/          # SillyTavern import/export
+│   ├── tools/                # Tool definitions (image generation, web search, memory)
+│   └── backup/               # Backup and restore logic
+├── plugins/                  # Plugin source code
+│   ├── dist/                 # Built plugins (loaded at runtime)
+│   └── src/                  # Plugin source files
+├── prompts/                  # Sample system prompt templates
+├── hooks/                    # Custom React hooks
+├── types/                    # TypeScript type augmentations
+├── __tests__/                # Jest test files (unit and integration)
+├── __mocks__/                # Test mocks for auth, providers, etc.
+├── docs/                     # Documentation (API, deployment, backup guides)
+├── features/                 # Feature roadmap and spec documents
+│   └── complete/             # Completed feature specifications
+├── docker/                   # Docker configuration (nginx, scripts, cert helpers)
+├── scripts/                  # Utility scripts (migrations, cleanup, builds)
+├── public/                   # Static assets (icons, manifest)
+├── website/                  # Website assets (images, splash graphics)
+├── certs/                    # Development TLS certificates
+├── logs/                     # Application log files (when LOG_OUTPUT includes file)
+├── docker-compose*.yml       # Docker Compose configurations
+├── Dockerfile                # Production Docker build
 ├── proxy.ts                  # Local HTTPS proxy helper for dev
-├── project configs           # jest.config.ts, tailwind.config.ts, eslint.config.mjs, playwright.config.ts
-└── package.json              # Workspace metadata, scripts, dependencies
+├── jest.config.ts            # Jest unit test configuration
+├── jest.integration.config.ts # Jest integration test configuration
+├── tailwind.config.ts        # Tailwind CSS configuration
+├── eslint.config.mjs         # ESLint configuration
+├── tsconfig.json             # TypeScript configuration
+└── package.json              # Dependencies and npm scripts
 ```
 
 ## Development Workflow
 
-1. Make changes to the code
-2. Next.js hot reload will update automatically
-3. Data is automatically persisted to JSON files in the `data/` directory
+### Prerequisites
 
-## Future Enhancements (Post-1.0)
+- **Node.js 20+**
+- **MongoDB** (local or via Docker)
+- **MinIO or S3-compatible storage** (embedded MinIO for development)
 
-The following features are planned for future releases:
+### Running Locally
 
-- [ ] World Book/Lorebook support
-- [ ] Redis caching for LLM responses
-- [ ] Apple and GitHub OAuth providers
-- [ ] Advanced prompt templates
-- [ ] Chat folders/organization
-- [X] Image generation integration
-- [ ] Voice/TTS integration
-- [ ] Mobile-responsive PWA
-- [ ] Multi-user shared chats
-- [ ] Admin dashboard
-- [ ] Usage analytics
-- [ ] Export to other formats (Character.AI, etc.)
-- [ ] PNG character card format support (importing/exporting JSON embedded in PNG files)
-- [ ] S3 support for all files (important for public hosting)
+```bash
+# Install dependencies
+npm install
+
+# Build plugins (required before first run)
+npm run build:plugins
+
+# Start MongoDB and MinIO via Docker (recommended)
+docker-compose -f docker-compose.dev-mongo.yml up -d mongo minio createbuckets
+
+# Start the development server with HTTPS
+npm run devssl
+
+# Or plain HTTP
+npm run dev
+```
+
+The application will be available at [https://localhost:3000](https://localhost:3000)
+
+### Running with Docker
+
+```bash
+# Start everything (app + MongoDB + MinIO)
+docker-compose -f docker-compose.dev-mongo.yml up
+
+# View logs
+docker-compose -f docker-compose.dev-mongo.yml logs -f app
+```
+
+### Testing
+
+```bash
+# Run all tests (unit + integration)
+npm test
+
+# Run unit tests only
+npm run test:unit
+
+# Run integration tests only
+npm run test:integration
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run E2E tests with Playwright
+npm run test:e2e
+```
+
+### Type Checking
+
+```bash
+# Check for TypeScript errors (faster than full build)
+npx tsc
+
+# Full build including plugins
+npm run build
+```
+
+### Linting
+
+```bash
+# Check for lint errors
+npm run lint
+
+# Fix auto-fixable lint errors
+npm run lint:fix
+```
+
+### Building Plugins
+
+Plugins must be built before running the application:
+
+```bash
+# Build all plugins
+npm run build:plugins
+```
+
+When making changes to a plugin, bump the patch version in its `package.json` and rebuild.
+
+## Data Storage
+
+### MongoDB (Required)
+
+All application data is stored in MongoDB:
+
+- **users** - User accounts and authentication
+- **api_keys** - Encrypted provider API keys
+- **characters** - Character definitions and metadata
+- **personas** - User persona definitions
+- **chats** - Chat metadata and message history
+- **files** - File metadata (actual files in S3)
+- **tags** - Tag definitions
+- **memories** - Character memory data
+- **connectionProfiles** - LLM connection configurations
+- **embeddingProfiles** - Embedding provider configurations
+- **imageProfiles** - Image generation configurations
+- **promptTemplates** - User-created system prompt templates
+- **roleplayTemplates** - Roleplay format templates
+- **providerModels** - Cached provider model lists
+
+### S3 Storage (Required)
+
+All files are stored in S3-compatible storage:
+
+- `users/{userId}/files/` - User-uploaded files
+- `users/{userId}/images/` - Generated and uploaded images
+- `users/{userId}/backups/` - Full-account backups
+
+For development, Docker Compose provides embedded MinIO with auto-created buckets.
+
+## Plugin Development
+
+Plugins are self-contained modules in `plugins/src/` that provide:
+
+- **LLM Providers** - Connect to AI services (OpenAI, Anthropic, Google, etc.)
+- **Auth Providers** - Authentication methods (Google OAuth, no-auth)
+- **Themes** - Visual theme packs
+- **Upgrade Scripts** - Data migration utilities
+
+See [plugins/README.md](plugins/README.md) for the plugin developer guide.
+
+## Logging
+
+The application uses a centralized logging system configurable via environment variables:
+
+- `LOG_LEVEL` - `error`, `warn`, `info`, `debug` (default: `info`)
+- `LOG_OUTPUT` - `console`, `file`, or `both` (default: `console`)
+- `LOG_FILE_PATH` - Directory for log files (default: `./logs`)
+
+In development, logs can be viewed in the DevConsole (accessible from the user menu).
+
+## Testing Your Changes
+
+1. Check for TypeScript errors: `npx tsc`
+2. Run relevant tests: `npm run test:unit`
+3. Test the UI manually at `https://localhost:3000`
+4. Check application logs in `logs/combined.log`
 
 ## Contributing
 
-This is currently a personal project, but contributions are welcome! Please open an issue first to discuss major changes.
+1. Open an issue first to discuss major changes
+2. Fork the repository
+3. Create a feature branch
+4. Make your changes
+5. Run tests and type checking
+6. Submit a pull request
 
-## Acknowledgments
+## Additional Documentation
 
-See [ROADMAP.md](features/ROADMAP.md) for the complete development plan and technical architecture details.
+- [API Documentation](docs/API.md) - REST endpoints and authentication
+- [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment patterns
+- [Backup & Restore Guide](docs/BACKUP-RESTORE.md) - Data backup procedures
+- [Plugin Developer Guide](plugins/README.md) - Creating plugins
+- [Theme Utility Classes](features/complete/theme-utility-classes.md) - Qt-* CSS system

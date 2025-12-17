@@ -4,6 +4,13 @@
 
 ### 2.4
 
+- doc: Major documentation refresh
+  - Updated `DEVELOPMENT.md` with accurate project structure, MongoDB/S3 requirements, and current development workflow
+  - Updated `docs/API.md` from v1.0 to v2.4 with all new endpoints (embedding profiles, image profiles, memories, templates, NPCs, background jobs, themes, etc.)
+  - Added all 8 LLM providers to API docs (OPENAI, ANTHROPIC, GOOGLE, GROK, GAB_AI, OLLAMA, OPENROUTER, OPENAI_COMPATIBLE)
+  - Updated About page with mobile-responsive feature and Google Gemini/Imagen 4 image generation
+  - Removed outdated references to JSON storage and added current MongoDB collections
+
 - feat: Provider models database caching system
   - Added `modelType` field to ProviderModel schema to distinguish chat, image, and embedding models
   - Updated MongoDB indexes to include modelType in unique constraint
