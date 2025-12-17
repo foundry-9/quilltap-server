@@ -173,7 +173,7 @@ function ParticipantEditor({
           </span>
           <h4 className="font-medium text-foreground">{name}</h4>
         </div>
-        <label htmlFor={activeCheckboxId} className="flex items-center gap-2 text-sm text-muted-foreground">
+        <label htmlFor={activeCheckboxId} className="flex items-center gap-2 qt-text-small">
           <input
             id={activeCheckboxId}
             type="checkbox"
@@ -246,7 +246,7 @@ function ParticipantEditor({
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="qt-text-xs mt-1">
                 Select which of the character&apos;s system prompts to use
               </p>
             </div>
@@ -424,7 +424,7 @@ export default function ChatSettingsModal({
 
         {/* Roleplay Template Section */}
         <div className="mb-6">
-          <h3 className="text-sm font-medium text-muted-foreground mb-3">
+          <h3 className="qt-text-small font-medium mb-3">
             Roleplay Template
           </h3>
           <div className="qt-card">
@@ -445,7 +445,7 @@ export default function ChatSettingsModal({
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground mt-2">
+            <p className="qt-text-xs mt-2">
               Controls how the AI formats dialogue, actions, and thoughts in this chat.
               {roleplayTemplateSaving && <span className="ml-2">Saving...</span>}
             </p>
@@ -453,7 +453,7 @@ export default function ChatSettingsModal({
         </div>
 
         <div className="mb-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-3">
+          <h3 className="qt-text-small font-medium mb-3">
             Participants ({participants.length})
           </h3>
 

@@ -278,7 +278,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
       <div className="flex justify-between items-center">
         <div>
           <h3 className="text-lg font-semibold text-foreground">System Prompts</h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="qt-text-small">
             Manage multiple system prompts for {characterName}. Select which one to use when creating or configuring a chat.
           </p>
         </div>
@@ -315,7 +315,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
       {/* Prompts List */}
       {prompts.length === 0 ? (
         <div className="qt-card text-center">
-          <p className="text-muted-foreground mb-4">
+          <p className="qt-text-small mb-4">
             No system prompts yet. Add your first prompt or import from a template.
           </p>
           <div className="flex justify-center gap-2">
@@ -352,7 +352,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
+                  <p className="qt-text-small line-clamp-2">
                     {prompt.content.slice(0, 150)}...
                   </p>
                 </div>
@@ -492,7 +492,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                       className="qt-textarea font-mono"
                     />
                   )}
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 qt-text-xs">
                     Supports Markdown formatting. Use {'{{char}}'} and {'{{user}}'} for character/user name substitution.
                   </p>
                 </div>
@@ -576,7 +576,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                                   {sample.modelHint}
                                 </span>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-1">
+                              <p className="qt-text-xs mt-1">
                                 {sample.category} prompt
                               </p>
                             </div>
@@ -603,7 +603,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                             <div className="w-full">
                               <span className="font-medium text-foreground">{template.name}</span>
                               {template.description && (
-                                <p className="text-xs text-muted-foreground mt-1">
+                                <p className="qt-text-xs mt-1">
                                   {template.description}
                                 </p>
                               )}

@@ -43,7 +43,7 @@ export function ImageProfileParameters({
               <option value="standard">Standard</option>
               <option value="hd">HD (Higher detail and consistency)</option>
             </select>
-            <p className="text-xs text-muted-foreground mt-1">HD quality produces finer details</p>
+            <p className="qt-text-xs mt-1">HD quality produces finer details</p>
           </div>
 
           {/* Style */}
@@ -59,7 +59,7 @@ export function ImageProfileParameters({
               <option value="vivid">Vivid (Dramatic, hyper-real)</option>
               <option value="natural">Natural (Realistic, less exaggerated)</option>
             </select>
-            <p className="text-xs text-muted-foreground mt-1">Controls the aesthetic style of generated images</p>
+            <p className="qt-text-xs mt-1">Controls the aesthetic style of generated images</p>
           </div>
 
           {/* Size */}
@@ -76,7 +76,7 @@ export function ImageProfileParameters({
               <option value="1792x1024">Landscape (1792x1024)</option>
               <option value="1024x1792">Portrait (1024x1792)</option>
             </select>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Default image dimensions for generation</p>
+            <p className="qt-text-xs mt-1">Default image dimensions for generation</p>
           </div>
         </div>
       )
@@ -103,7 +103,7 @@ export function ImageProfileParameters({
               <option value="4:3">Standard (4:3)</option>
               <option value="3:2">Photo (3:2)</option>
             </select>
-            <p className="text-xs text-muted-foreground mt-1">Default aspect ratio for image generation</p>
+            <p className="qt-text-xs mt-1">Default aspect ratio for image generation</p>
           </div>
 
           {/* Negative Prompt */}
@@ -118,7 +118,7 @@ export function ImageProfileParameters({
               className="qt-textarea"
               rows={2}
             />
-            <p className="text-xs text-muted-foreground mt-1">Things to avoid in generated images</p>
+            <p className="qt-text-xs mt-1">Things to avoid in generated images</p>
           </div>
         </div>
       )
@@ -126,7 +126,7 @@ export function ImageProfileParameters({
     case 'GROK':
       return (
         <div className="border-t border-border pt-4">
-          <p className="text-sm text-muted-foreground">
+          <p className="qt-text-small">
             Grok supports basic text-to-image generation with minimal parameters.
             Configuration is handled through the main prompt.
           </p>

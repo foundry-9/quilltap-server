@@ -103,7 +103,7 @@ export default function ImageProfilesTab() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Image Generation Profiles</h2>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="qt-text-small mt-1">
             Manage profiles for different image generation providers
           </p>
         </div>
@@ -169,14 +169,14 @@ export default function ImageProfilesTab() {
                         </span>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
+                    <div className="grid grid-cols-2 gap-4 qt-text-small">
                       <div>
-                        <p className="text-xs text-muted-foreground/70 uppercase">Model</p>
+                        <p className="qt-text-xs uppercase">Model</p>
                         <p className="font-mono text-sm text-foreground">{profile.modelName}</p>
                       </div>
                       {profile.apiKey && (
                         <div>
-                          <p className="text-xs text-muted-foreground/70 uppercase">API Key</p>
+                          <p className="qt-text-xs uppercase">API Key</p>
                           <p className="text-sm text-foreground">{profile.apiKey.label}</p>
                         </div>
                       )}
@@ -185,10 +185,10 @@ export default function ImageProfilesTab() {
                     {/* Parameters Display */}
                     {Object.keys(profile.parameters).length > 0 && (
                       <div className="mt-3 pt-3 border-t border-border">
-                        <p className="text-xs text-muted-foreground/70 uppercase mb-2">Parameters</p>
+                        <p className="qt-text-xs uppercase mb-2">Parameters</p>
                         <div className="space-y-1">
                           {Object.entries(profile.parameters).map(([key, value]) => (
-                            <div key={key} className="text-xs text-muted-foreground">
+                            <div key={key} className="qt-text-xs">
                               <span className="font-mono">{key}:</span>{' '}
                               <span className="text-foreground">
                                 {typeof value === 'string' ? value : JSON.stringify(value)}

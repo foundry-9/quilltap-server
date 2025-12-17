@@ -133,7 +133,7 @@ export function NavUserMenuThemeContent({ onThemeSelected }: NavUserMenuThemeCon
 
   if (isLoading) {
     return (
-      <div className="p-3 text-sm text-muted-foreground">
+      <div className="p-3 qt-text-small">
         Loading themes...
       </div>
     )
@@ -167,7 +167,7 @@ export function NavUserMenuThemeContent({ onThemeSelected }: NavUserMenuThemeCon
 
       {/* Hint when no plugin themes */}
       {themes.length === 0 && (
-        <div className="px-3 py-2 text-xs text-muted-foreground">
+        <div className="px-3 py-2 qt-text-xs">
           Install theme plugins for more options
         </div>
       )}

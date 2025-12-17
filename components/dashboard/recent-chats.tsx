@@ -179,7 +179,7 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
           Recent Chats
         </h3>
         {loading && (
-          <span className="text-sm text-muted-foreground animate-pulse">
+          <span className="qt-text-small animate-pulse">
             updating...
           </span>
         )}
@@ -238,7 +238,7 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
                             {chat.messageCount}
                           </span>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-1 truncate">
+                        <p className="qt-text-small mt-1 truncate">
                           {characterNames}
                           {chat.persona && ` with ${formatPersonaName(chat.persona)}`}
                         </p>
@@ -249,7 +249,7 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
                         )}
                       </div>
                     </div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                    <span className="qt-text-xs whitespace-nowrap flex-shrink-0">
                       {dateFormatter.format(new Date(chat.updatedAt))}
                     </span>
                   </div>

@@ -255,7 +255,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
               d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
             />
           </svg>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 qt-text-small">
             {searchQuery
               ? `No conversations found matching "${searchQuery}"`
               : `No conversations with ${characterName} yet`
@@ -289,7 +289,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                     {chat._count?.messages ?? chat.messages.length}
                   </span>
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="qt-text-small">
                   {chat.persona && (
                     <>
                       with {formatPersonaName(chat.persona)}
@@ -298,7 +298,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                   )}
                   {formatDate(chat.updatedAt)}
                 </p>
-                <p className="text-sm text-muted-foreground line-clamp-1 mt-2">
+                <p className="qt-text-small line-clamp-1 mt-2">
                   {getPreviewText(chat.messages)}
                 </p>
                 {chat.tags && chat.tags.length > 0 && (
@@ -342,7 +342,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
               </div>
             )}
             {!hasMore && visibleChats.length > 0 && (
-              <p className="text-center text-sm text-muted-foreground">
+              <p className="text-center qt-text-small">
                 No more conversations
               </p>
             )}

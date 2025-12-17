@@ -579,7 +579,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                           </option>
                         ))}
                       </select>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="mt-1 qt-text-xs">
                         Can be overridden for individual chats
                       </p>
                     </div>
@@ -590,7 +590,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                         Default Persona (Optional)
                       </label>
                       {loadingPersonas ? (
-                        <p className="text-sm text-muted-foreground">Loading personas...</p>
+                        <p className="qt-text-small">Loading personas...</p>
                       ) : personas.length > 0 ? (
                         <>
                           <select
@@ -612,12 +612,12 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                               )
                             })}
                           </select>
-                          <p className="mt-1 text-xs text-muted-foreground">
+                          <p className="mt-1 qt-text-xs">
                             Personas are sorted by number of tags shared with this character
                           </p>
                         </>
                       ) : (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="qt-text-small">
                           No personas available. Create a persona first.
                         </p>
                       )}

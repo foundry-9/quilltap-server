@@ -77,7 +77,7 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
 
       {/* Content Preview / Full Content */}
       <div className="mb-3">
-        <p className={`text-sm text-muted-foreground ${expanded ? '' : 'line-clamp-3'}`}>
+        <p className={`qt-text-small ${expanded ? '' : 'line-clamp-3'}`}>
           {memory.content}
         </p>
         {memory.content.length > 150 && (
@@ -96,7 +96,7 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
           {memory.keywords.map((keyword, index) => (
             <span
               key={index}
-              className="text-xs px-2 py-0.5 bg-accent text-muted-foreground rounded"
+              className="qt-text-xs px-2 py-0.5 bg-accent rounded"
             >
               {keyword}
             </span>
@@ -115,7 +115,7 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-2 border-t border-border">
-        <span className="text-xs text-muted-foreground">
+        <span className="qt-text-xs">
           {formatDate(memory.createdAt)}
         </span>
         <div className="flex gap-2">

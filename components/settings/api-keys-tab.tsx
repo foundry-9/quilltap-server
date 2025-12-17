@@ -158,11 +158,11 @@ export default function ApiKeysTab() {
                   <div className="flex items-center gap-3">
                     <div>
                       <p className="font-medium text-foreground">{key.label}</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="qt-text-small">
                         {key.provider} • {key.keyPreview}
                       </p>
                       {key.lastUsed && (
-                        <p className="text-xs text-muted-foreground/70">
+                        <p className="qt-text-xs">
                           Last used: {new Date(key.lastUsed).toLocaleDateString()}
                         </p>
                       )}
@@ -214,7 +214,7 @@ export default function ApiKeysTab() {
                 required
                 className="qt-input"
               />
-              <p className="text-xs text-muted-foreground mt-1">A friendly name to identify this key</p>
+              <p className="qt-text-xs mt-1">A friendly name to identify this key</p>
             </div>
 
             <div>
@@ -253,7 +253,7 @@ export default function ApiKeysTab() {
                 required
                 className="qt-input"
               />
-              <p className="text-xs text-muted-foreground mt-1">Your key is encrypted and never exposed</p>
+              <p className="qt-text-xs mt-1">Your key is encrypted and never exposed</p>
             </div>
 
             <div className="flex gap-3 pt-2">

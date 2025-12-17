@@ -170,7 +170,7 @@ export function SearchBar() {
                   onResultClick={handleResultClick}
                 />
               ) : (
-                <div className="p-4 text-center text-muted-foreground text-sm">
+                <div className="p-4 text-center qt-text-small">
                   Type at least 2 characters to search
                 </div>
               )}

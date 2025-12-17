@@ -305,7 +305,8 @@
    * Text styles
    */
   .qt-text-lead {
-    @apply text-xl text-muted-foreground;
+    @apply text-xl;
+    color: var(--qt-text-secondary-fg);
   }
 
   .qt-text-large {
@@ -313,11 +314,17 @@
   }
 
   .qt-text-small {
-    @apply text-sm text-muted-foreground;
+    @apply text-sm;
+    color: var(--qt-text-secondary-fg);
+  }
+
+  .qt-text-xs {
+    @apply text-xs;
+    color: var(--qt-text-secondary-fg);
   }
 
   .qt-text-muted {
-    @apply text-muted-foreground;
+    color: var(--qt-text-secondary-fg);
   }
 
   /* ==========================================================================

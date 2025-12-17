@@ -233,12 +233,12 @@ export default function PromptsTab() {
       {/* Sample Prompts Section */}
       <section>
         <h2 className="text-xl font-semibold mb-2">Sample Prompts</h2>
-        <p className="text-muted-foreground text-sm mb-4">
+        <p className="qt-text-small mb-4">
           These prompts are provided by Quilltap and cannot be modified. You can preview them or copy them to create your own version.
         </p>
 
         {builtInTemplates.length === 0 ? (
-          <div className="text-sm text-muted-foreground border border-dashed border-border rounded-lg p-4">
+          <div className="qt-text-small border border-dashed border-border rounded-lg p-4">
             No sample prompts available.
           </div>
         ) : (
@@ -252,7 +252,7 @@ export default function PromptsTab() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-foreground truncate">{template.name}</h3>
                     {template.description && (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                      <p className="qt-text-small mt-1 line-clamp-2">
                         {template.description}
                       </p>
                     )}
@@ -264,12 +264,12 @@ export default function PromptsTab() {
                 {(template.category || template.modelHint) && (
                   <div className="flex gap-2 mb-3 flex-wrap">
                     {template.category && (
-                      <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded">
+                      <span className="px-2 py-0.5 qt-text-xs bg-muted rounded">
                         {template.category}
                       </span>
                     )}
                     {template.modelHint && (
-                      <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded">
+                      <span className="px-2 py-0.5 qt-text-xs bg-muted rounded">
                         {template.modelHint}
                       </span>
                     )}
@@ -309,7 +309,7 @@ export default function PromptsTab() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-semibold">My Prompts</h2>
-            <p className="text-muted-foreground text-sm mt-1">
+            <p className="qt-text-small mt-1">
               Custom prompt templates you&apos;ve created for reuse across characters and chats.
             </p>
           </div>
@@ -323,7 +323,7 @@ export default function PromptsTab() {
         </div>
 
         {userTemplates.length === 0 ? (
-          <div className="text-sm text-muted-foreground border border-dashed border-border rounded-lg p-4">
+          <div className="qt-text-small border border-dashed border-border rounded-lg p-4">
             No custom prompts yet. Create one to build your own reusable prompt templates.
           </div>
         ) : (
@@ -336,7 +336,7 @@ export default function PromptsTab() {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium text-foreground truncate">{template.name}</h3>
                   {template.description && (
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                    <p className="qt-text-small mt-1 line-clamp-2">
                       {template.description}
                     </p>
                   )}
@@ -419,7 +419,7 @@ export default function PromptsTab() {
                     placeholder="My Custom Prompt"
                     className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="qt-text-xs mt-1">
                     {formData.name.length}/100 characters
                   </p>
                 </div>
@@ -436,7 +436,7 @@ export default function PromptsTab() {
                     placeholder="A brief description of what this prompt does"
                     className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="qt-text-xs mt-1">
                     {formData.description.length}/500 characters
                   </p>
                 </div>
@@ -468,7 +468,7 @@ export default function PromptsTab() {
                       className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
                     />
                   )}
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="qt-text-xs mt-1">
                     Markdown formatting is supported. Use the Preview button to see how it will render.
                   </p>
                 </div>
@@ -506,19 +506,19 @@ export default function PromptsTab() {
                 <div>
                   <h2 className="text-xl font-semibold">{previewTemplate.name}</h2>
                   {previewTemplate.description && (
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="qt-text-small mt-1">
                       {previewTemplate.description}
                     </p>
                   )}
                   {(previewTemplate.category || previewTemplate.modelHint) && (
                     <div className="flex gap-2 mt-2">
                       {previewTemplate.category && (
-                        <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded">
+                        <span className="px-2 py-0.5 qt-text-xs bg-muted rounded">
                           {previewTemplate.category}
                         </span>
                       )}
                       {previewTemplate.modelHint && (
-                        <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded">
+                        <span className="px-2 py-0.5 qt-text-xs bg-muted rounded">
                           {previewTemplate.modelHint}
                         </span>
                       )}

@@ -312,7 +312,7 @@ export default function AddCharacterDialog({
                                 {character.name}
                               </div>
                               {character.title && (
-                                <div className="text-xs text-muted-foreground italic truncate">
+                                <div className="qt-text-xs italic truncate">
                                   {character.title}
                                 </div>
                               )}
@@ -374,7 +374,7 @@ export default function AddCharacterDialog({
                     <label htmlFor="hasHistoryAccess" className="text-sm font-medium text-foreground cursor-pointer">
                       Include chat history in context
                     </label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="qt-text-xs mt-0.5">
                       If checked, this character will see messages from before they joined. If unchecked, they will only see messages from their join point onward.
                     </p>
                   </div>
@@ -396,7 +396,7 @@ export default function AddCharacterDialog({
                     disabled={isAdding}
                     className="qt-textarea"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="qt-text-xs mt-1">
                     This text will be included in the character&apos;s context to explain how they joined the conversation.
                   </p>
                 </div>

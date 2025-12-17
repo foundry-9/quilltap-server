@@ -46,7 +46,7 @@ export function PhysicalDescriptionCard({
           <h3 className="font-medium text-foreground truncate">
             {description.name}
           </h3>
-          <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 mt-1 qt-text-small">
             <span>{promptCount} prompt{promptCount !== 1 ? 's' : ''}</span>
             {hasFullDescription && (
               <>
@@ -103,42 +103,42 @@ export function PhysicalDescriptionCard({
         <div className="mt-4 space-y-4 border-t border-border pt-4">
           {description.shortPrompt && (
             <div>
-              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+              <h4 className="qt-text-xs font-medium uppercase tracking-wide mb-1">
                 Short (≤350)
               </h4>
-              <p className="text-sm text-foreground">{description.shortPrompt}</p>
+              <p className="qt-text-small">{description.shortPrompt}</p>
             </div>
           )}
           {description.mediumPrompt && (
             <div>
-              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+              <h4 className="qt-text-xs font-medium uppercase tracking-wide mb-1">
                 Medium (≤500)
               </h4>
-              <p className="text-sm text-foreground">{description.mediumPrompt}</p>
+              <p className="qt-text-small">{description.mediumPrompt}</p>
             </div>
           )}
           {description.longPrompt && (
             <div>
-              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+              <h4 className="qt-text-xs font-medium uppercase tracking-wide mb-1">
                 Long (≤750)
               </h4>
-              <p className="text-sm text-foreground">{description.longPrompt}</p>
+              <p className="qt-text-small">{description.longPrompt}</p>
             </div>
           )}
           {description.completePrompt && (
             <div>
-              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+              <h4 className="qt-text-xs font-medium uppercase tracking-wide mb-1">
                 Complete (≤1000)
               </h4>
-              <p className="text-sm text-foreground">{description.completePrompt}</p>
+              <p className="qt-text-small">{description.completePrompt}</p>
             </div>
           )}
           {description.fullDescription && (
             <div>
-              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+              <h4 className="qt-text-xs font-medium uppercase tracking-wide mb-1">
                 Full Description
               </h4>
-              <div className="text-sm text-foreground prose dark:prose-invert prose-sm max-w-none">
+              <div className="qt-text-small prose dark:prose-invert prose-sm max-w-none">
                 <MessageContent content={description.fullDescription} />
               </div>
             </div>

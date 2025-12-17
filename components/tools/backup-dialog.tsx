@@ -121,7 +121,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                 </svg>
               </button>
             </div>
-            <p className="qt-dialog-description">
+            <p className="qt-dialog-description qt-text-small">
               Back up your data to restore it later
             </p>
           </div>
@@ -153,7 +153,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                     <p className="text-sm font-medium text-foreground">
                       Download to Computer
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="qt-text-xs mt-0.5">
                       Save backup as a ZIP file to your device
                     </p>
                   </div>
@@ -177,7 +177,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                     <p className="text-sm font-medium text-foreground">
                       Save to Cloud Storage (S3)
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="qt-text-xs mt-0.5">
                       Store backup in your configured cloud storage
                     </p>
                   </div>
@@ -199,7 +199,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                   placeholder="backup-2025-12-07"
                   className="qt-input"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 qt-text-xs">
                   Leave empty to use default name with timestamp
                 </p>
               </div>

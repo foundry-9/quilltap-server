@@ -137,7 +137,7 @@ export default function DevConsolePanel({ layout }: DevConsolePanelProps) {
 
           {/* Controls */}
           <div className="flex items-center gap-2 ml-auto">
-            <span className="text-xs text-muted-foreground">
+            <span className="qt-text-xs">
               Ctrl+Shift+D
             </span>
             <button
@@ -172,7 +172,7 @@ export default function DevConsolePanel({ layout }: DevConsolePanelProps) {
 
         {/* Controls */}
         <div className="flex items-center gap-2 ml-auto">
-          <span className="text-xs text-muted-foreground">
+          <span className="qt-text-xs">
             Ctrl+Shift+D
           </span>
           <button

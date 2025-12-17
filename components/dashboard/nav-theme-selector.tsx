@@ -211,7 +211,7 @@ export function NavThemeSelector() {
 
             {/* Hint when no plugin themes */}
             {themes.length === 0 && (
-              <div className="px-3 py-2 text-xs text-muted-foreground">
+              <div className="px-3 py-2 qt-text-xs">
                 Install theme plugins for more options
               </div>
             )}

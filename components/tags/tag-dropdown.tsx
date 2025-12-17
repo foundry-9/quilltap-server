@@ -109,7 +109,7 @@ export function TagDropdown({
             {/* Tags List */}
             {tagCount > 0 ? (
               <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <h3 className="qt-text-xs font-semibold uppercase tracking-wider">
                   Tags ({tagCount})
                 </h3>
                 <div className="flex flex-wrap gap-2">
@@ -125,7 +125,7 @@ export function TagDropdown({
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground italic">
+              <p className="qt-text-xs italic">
                 No tags yet
               </p>
             )}
@@ -138,7 +138,7 @@ export function TagDropdown({
               <button
                 onClick={() => setShowAddInput(true)}
                 disabled={loading}
-                className="w-full px-2 py-1.5 text-xs font-medium text-left text-foreground hover:bg-accent rounded transition-colors disabled:opacity-50"
+                className="w-full px-2 py-1.5 qt-text-xs font-medium text-left text-foreground hover:bg-accent rounded transition-colors disabled:opacity-50"
               >
                 + Add Tag
               </button>
@@ -152,13 +152,13 @@ export function TagDropdown({
                   onKeyDown={handleKeyDown}
                   placeholder="Enter tag name..."
                   disabled={loading}
-                  className="w-full px-2 py-1.5 text-xs border border-input rounded focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground disabled:opacity-50"
+                  className="w-full px-2 py-1.5 qt-text-xs border border-input rounded focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground disabled:opacity-50"
                 />
                 <div className="flex gap-1.5">
                   <button
                     onClick={handleAddTag}
                     disabled={loading || !inputValue.trim()}
-                    className="flex-1 px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="flex-1 px-2 py-1 qt-text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Add
                   </button>
@@ -168,7 +168,7 @@ export function TagDropdown({
                       setInputValue('');
                     }}
                     disabled={loading}
-                    className="flex-1 px-2 py-1 text-xs font-medium bg-muted text-foreground rounded hover:bg-accent disabled:opacity-50 transition-colors"
+                    className="flex-1 px-2 py-1 qt-text-xs font-medium bg-muted text-foreground rounded hover:bg-accent disabled:opacity-50 transition-colors"
                   >
                     Cancel
                   </button>

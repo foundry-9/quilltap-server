@@ -178,7 +178,7 @@ export function Avatar({
         </div>
       )}
       {showTitle && title && (
-        <div className="text-xs italic text-muted-foreground line-clamp-2">
+        <div className="qt-text-xs italic line-clamp-2">
           {title}
         </div>
       )}

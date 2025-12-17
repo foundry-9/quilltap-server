@@ -135,19 +135,19 @@ export default function PluginsTab() {
         <div className="bg-accent rounded-lg p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <p className="text-sm text-muted-foreground">Total Plugins</p>
+              <p className="qt-text-small">Total Plugins</p>
               <p className="text-2xl font-bold text-foreground">{stats.total}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Enabled</p>
+              <p className="qt-text-small">Enabled</p>
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.enabled}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Disabled</p>
+              <p className="qt-text-small">Disabled</p>
               <p className="text-2xl font-bold text-muted-foreground">{stats.disabled}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Errors</p>
+              <p className="qt-text-small">Errors</p>
               <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.errors}</p>
             </div>
           </div>
@@ -159,7 +159,7 @@ export default function PluginsTab() {
         <h2 className="text-lg font-semibold text-foreground mb-2">
           Plugin Management
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="qt-text-small">
           Manage installed plugins and their status. Enable or disable plugins to control which
           features are available in <BrandName />.
         </p>
@@ -184,7 +184,7 @@ export default function PluginsTab() {
           <h3 className="mt-4 text-lg font-medium text-foreground">
             No Plugins Found
           </h3>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 qt-text-small">
             No plugins are currently installed. Add plugins to the plugins directory to extend
             <BrandName />&apos;s functionality.
           </p>
@@ -204,7 +204,7 @@ export default function PluginsTab() {
                       <h3 className="text-lg font-semibold text-foreground truncate">
                         {plugin.title}
                       </h3>
-                      <span className="px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded">
+                      <span className="px-2 py-0.5 qt-text-xs font-medium bg-muted rounded">
                         v{plugin.version}
                       </span>
                       <span className={`px-2 py-0.5 text-xs font-medium rounded ${getSourceBadge(plugin.source).className}`}>
@@ -220,7 +220,7 @@ export default function PluginsTab() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground mb-2">
+                    <p className="qt-text-small mb-2">
                       {plugin.name}
                     </p>
                     {plugin.capabilities.length > 0 && (
@@ -228,7 +228,7 @@ export default function PluginsTab() {
                         {plugin.capabilities.map((cap) => (
                           <span
                             key={cap}
-                            className="px-2 py-0.5 text-xs rounded qt-badge-capability"
+                            className="px-2 py-0.5 qt-text-xs rounded qt-badge-capability"
                           >
                             {cap}
                           </span>
@@ -285,7 +285,7 @@ export default function PluginsTab() {
             <h4 className="text-sm font-medium text-amber-900 dark:text-amber-200">
               Note about plugin changes
             </h4>
-            <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+            <p className="qt-text-small text-amber-700 dark:text-amber-300 mt-1">
               Changes to plugin status take effect immediately, but some features may require a page
               refresh or application restart to fully apply.
             </p>

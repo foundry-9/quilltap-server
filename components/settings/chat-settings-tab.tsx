@@ -277,7 +277,7 @@ export default function ChatSettingsTab() {
               />
               <div className="flex-1">
                 <div className="font-medium">{mode.label}</div>
-                <div className="text-sm text-muted-foreground">
+                <div className="qt-text-small">
                   {mode.description}
                 </div>
               </div>
@@ -309,7 +309,7 @@ export default function ChatSettingsTab() {
               />
               <div className="flex-1">
                 <div className="font-medium">{style.label}</div>
-                <div className="text-sm text-muted-foreground">
+                <div className="qt-text-small">
                   {style.description}
                 </div>
               </div>
@@ -352,7 +352,7 @@ export default function ChatSettingsTab() {
                   />
                   <div className="flex-1">
                     <div className="font-medium text-sm">{strategy.label}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="qt-text-xs">
                       {strategy.description}
                     </div>
                   </div>
@@ -381,7 +381,7 @@ export default function ChatSettingsTab() {
                 ))}
               </select>
               {connectionProfiles.length === 0 && !loadingProfiles && (
-                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                <p className="mt-1 qt-text-xs text-amber-600 dark:text-amber-400">
                   No connection profiles found. Create one in the Connection Profiles tab first.
                 </p>
               )}
@@ -393,7 +393,7 @@ export default function ChatSettingsTab() {
             <label className="block text-sm font-medium mb-2">
               Global Default Cheap LLM (Optional Override)
             </label>
-            <p className="text-xs text-muted-foreground mb-2">
+            <p className="qt-text-xs mb-2">
               If set, this profile will always be used regardless of strategy
             </p>
             <select
@@ -422,7 +422,7 @@ export default function ChatSettingsTab() {
             />
             <div className="flex-1">
               <div className="font-medium text-sm">Fallback to Local</div>
-              <div className="text-xs text-muted-foreground">
+              <div className="qt-text-xs">
                 Use local Ollama models as fallback if configured strategy is unavailable
               </div>
             </div>
@@ -454,7 +454,7 @@ export default function ChatSettingsTab() {
                   />
                   <div className="flex-1">
                     <div className="font-medium text-sm">{provider.label}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="qt-text-xs">
                       {provider.description}
                     </div>
                   </div>
@@ -468,7 +468,7 @@ export default function ChatSettingsTab() {
             <label className="block text-sm font-medium mb-2">
               Embedding Profile (Optional)
             </label>
-            <p className="text-xs text-muted-foreground mb-2">
+            <p className="qt-text-xs mb-2">
               Specific embedding profile to use. Leave blank to use the default for the selected embedding provider.
             </p>
             <select
@@ -506,7 +506,7 @@ export default function ChatSettingsTab() {
             <label className="block text-sm font-medium mb-2">
               Image Description Profile
             </label>
-            <p className="text-xs text-muted-foreground mb-2">
+            <p className="qt-text-xs mb-2">
               Select a vision-capable profile (like gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash) to describe images.
               If not set, the system will automatically use any available vision-capable profile.
             </p>

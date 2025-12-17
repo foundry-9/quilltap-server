@@ -225,7 +225,7 @@ export default function GenerateImageDialog({
           <div className="flex gap-4">
             {/* Left side - Quick buttons */}
             <div className="w-48 flex-shrink-0 space-y-2">
-              <div className="text-sm font-medium text-muted-foreground mb-3">
+              <div className="qt-text-small font-medium mb-3">
                 Quick Insert
               </div>
 
@@ -298,7 +298,7 @@ export default function GenerateImageDialog({
                         </button>
                       ))}
                       {filteredEntities.length === 0 && (
-                        <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                        <div className="px-3 py-4 qt-text-small text-center">
                           No matches found
                         </div>
                       )}
@@ -322,7 +322,7 @@ export default function GenerateImageDialog({
                 className="qt-textarea h-64"
                 disabled={isGenerating}
               />
-              <div className="mt-2 text-xs text-muted-foreground">
+              <div className="mt-2 qt-text-xs">
                 Click buttons on the left or type {'{{name}}'} to insert placeholders
               </div>
             </div>

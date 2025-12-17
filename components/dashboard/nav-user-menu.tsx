@@ -156,7 +156,7 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
             {/* User Info */}
             <div className="qt-navbar-dropdown-header">
               <p className="text-sm font-medium text-foreground">{user.name}</p>
-              <p className="text-xs text-muted-foreground">{user.email}</p>
+              <p className="qt-text-xs">{user.email}</p>
             </div>
 
             {/* Divider */}

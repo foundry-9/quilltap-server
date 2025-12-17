@@ -198,11 +198,11 @@ export function MemoryList({ characterId }: MemoryListProps) {
       {/* Empty State */}
       {!loading && memories.length === 0 && (
         <div className="text-center py-8 bg-muted/50 rounded-lg">
-          <p className="text-muted-foreground mb-2">
+          <p className="qt-text-small mb-2">
             {search ? 'No memories match your search' : 'No memories yet'}
           </p>
           {!search && (
-            <p className="text-sm text-muted-foreground/70">
+            <p className="qt-text-xs">
               Memories will be created automatically during conversations, or you can add them manually.
             </p>
           )}

@@ -4,6 +4,11 @@
 
 ### 2.4-dev
 
+- feat: Added theme-overridable secondary text utility classes
+  - Added `--qt-text-secondary-fg` CSS variable to `_variables.css`
+  - Updated `qt-text-lead`, `qt-text-small`, `qt-text-muted` to use the variable
+  - Added new `qt-text-xs` class for extra-small secondary text
+  - Themes can now override secondary text color independently
 - feat: Updated OpenAI plugin with new GPT-Image models (v1.0.5)
   - Added `gpt-image-1.5` (newest, recommended)
   - Added `gpt-image-1-mini` (cost-effective option)

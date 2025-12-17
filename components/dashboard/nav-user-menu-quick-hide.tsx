@@ -26,7 +26,7 @@ export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenu
 
   if (loading) {
     return (
-      <div className="p-3 text-sm text-muted-foreground">
+      <div className="p-3 qt-text-small">
         Loading tags...
       </div>
     )
@@ -34,7 +34,7 @@ export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenu
 
   if (quickHideTags.length === 0) {
     return (
-      <div className="p-3 text-sm text-muted-foreground">
+      <div className="p-3 qt-text-small">
         No quick-hide tags configured
       </div>
     )

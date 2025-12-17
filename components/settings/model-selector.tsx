@@ -259,7 +259,7 @@ export function ModelSelector({
               ))}
             </ul>
           ) : (
-            <div className="px-3 py-2 text-sm text-muted-foreground">
+            <div className="px-3 py-2 qt-text-small">
               No models match &quot;{searchInput}&quot;
             </div>
           )}
@@ -267,7 +267,7 @@ export function ModelSelector({
       )}
 
       {showFetchedCount && models.length > 0 && (
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="qt-text-xs mt-1">
           Showing {models.length} fetched models from provider
         </p>
       )}

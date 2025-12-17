@@ -289,7 +289,7 @@ export function EmbeddedPhotoGallery({
       {/* Controls Row */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-4">
-          <p className="text-sm text-muted-foreground">
+          <p className="qt-text-small">
             {showOnlyTagged
               ? `${taggedCount} tagged photo${taggedCount !== 1 ? 's' : ''}`
               : `${images.length} photo${images.length !== 1 ? 's' : ''} (${taggedCount} tagged)`
@@ -341,7 +341,7 @@ export function EmbeddedPhotoGallery({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
             </svg>
           </button>
-          <span className="text-xs text-muted-foreground w-12 text-center">
+          <span className="qt-text-xs w-12 text-center">
             {thumbnailSize}px
           </span>
           <button
@@ -372,13 +372,13 @@ export function EmbeddedPhotoGallery({
               d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 qt-text-small">
             {showOnlyTagged
               ? `No photos tagged to ${entityName}`
               : 'No photos in your library'
             }
           </p>
-          <p className="text-xs text-muted-foreground/70 mt-1">
+          <p className="qt-text-xs mt-1">
             {showOnlyTagged
               ? 'Uncheck "Show only tagged" to see all photos and tag them'
               : `Generate or upload images to get started`

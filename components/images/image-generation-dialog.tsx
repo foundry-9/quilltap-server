@@ -212,7 +212,7 @@ export function ImageGenerationDialog({
                 Provider
               </label>
               {loadingProfiles ? (
-                <div className="text-sm text-muted-foreground">Loading providers...</div>
+                <div className="qt-text-small">Loading providers...</div>
               ) : profiles.length === 0 ? (
                 <div className="qt-alert-warning">
                   <p className="text-sm">
@@ -247,7 +247,7 @@ export function ImageGenerationDialog({
                 maxLength={4000}
                 className="qt-textarea resize-none"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 qt-text-xs">
                 {prompt.length}/4000 characters
               </p>
             </div>
@@ -260,7 +260,7 @@ export function ImageGenerationDialog({
                 {/* Number of Images */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-foreground mb-1">
+                    <label className="block qt-text-xs font-medium text-foreground mb-1">
                       Number of Images
                     </label>
                     <select
@@ -278,7 +278,7 @@ export function ImageGenerationDialog({
 
                   {/* Image Size */}
                   <div>
-                    <label className="block text-xs font-medium text-foreground mb-1">
+                    <label className="block qt-text-xs font-medium text-foreground mb-1">
                       Size
                     </label>
                     <select
@@ -299,7 +299,7 @@ export function ImageGenerationDialog({
                 {isOpenAI && (
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-foreground mb-1">
+                      <label className="block qt-text-xs font-medium text-foreground mb-1">
                         Quality
                       </label>
                       <select
@@ -313,7 +313,7 @@ export function ImageGenerationDialog({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-foreground mb-1">
+                      <label className="block qt-text-xs font-medium text-foreground mb-1">
                         Style
                       </label>
                       <select
@@ -331,7 +331,7 @@ export function ImageGenerationDialog({
                 {/* Gemini Specific Options */}
                 {isGemini && (
                   <div>
-                    <label className="block text-xs font-medium text-foreground mb-1">
+                    <label className="block qt-text-xs font-medium text-foreground mb-1">
                       Aspect Ratio
                     </label>
                     <select
@@ -375,7 +375,7 @@ export function ImageGenerationDialog({
                       />
                       {img.revisedPrompt && (
                         <div className="px-3 py-2 border-t border-border mt-2">
-                          <p className="text-xs text-muted-foreground">
+                          <p className="qt-text-xs">
                             <span className="font-semibold">Revised:</span> {img.revisedPrompt}
                           </p>
                         </div>
@@ -389,7 +389,7 @@ export function ImageGenerationDialog({
             {/* Error */}
             {error && (
               <div className="qt-alert-error">
-                <p className="text-sm">{error}</p>
+                <p className="qt-text-small">{error}</p>
               </div>
             )}
           </div>

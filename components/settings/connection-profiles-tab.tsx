@@ -665,7 +665,7 @@ export default function ConnectionProfilesTab() {
       {apiKeys.length === 0 && (
         <div className="qt-alert-warning mb-6">
           <p className="font-medium">No API keys found</p>
-          <p className="text-sm">Add an API key in the &quot;API Keys&quot; tab before creating a connection profile.</p>
+          <p className="qt-text-small">Add an API key in the &quot;API Keys&quot; tab before creating a connection profile.</p>
         </div>
       )}
 
@@ -726,10 +726,10 @@ export default function ConnectionProfilesTab() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="qt-text-small mt-1">
                       {profile.provider} • {profile.modelName}
                     </p>
-                    <p className="text-xs text-muted-foreground/70 mt-1">
+                    <p className="qt-text-xs mt-1">
                       {getAttachmentSupportDescription(profile.provider as any, profile.baseUrl ?? undefined)}
                     </p>
                     {profile.messageCount !== undefined && (
@@ -738,16 +738,16 @@ export default function ConnectionProfilesTab() {
                       </p>
                     )}
                     {profile.apiKey && (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="qt-text-small">
                         API Key: {profile.apiKey.label}
                       </p>
                     )}
                     {profile.baseUrl && (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="qt-text-small">
                         Base URL: {profile.baseUrl}
                       </p>
                     )}
-                    <div className="text-xs text-muted-foreground/60 mt-2">
+                    <div className="qt-text-xs mt-2">
                       Temperature: {profile.parameters?.temperature ?? 0.7} •
                       Max Tokens: {profile.parameters?.max_tokens ?? 1000} •
                       Top P: {profile.parameters?.top_p ?? 1}
@@ -860,7 +860,7 @@ export default function ConnectionProfilesTab() {
                     </>
                   )}
                 </select>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="qt-text-xs mt-1">
                   File attachments: {getAttachmentSupportDescription(formData.provider as any, formData.baseUrl || undefined)}
                 </p>
               </div>
@@ -895,7 +895,7 @@ export default function ConnectionProfilesTab() {
                             </option>
                           ))}
                       </select>
-                      <p className="text-xs text-muted-foreground mt-1">Required for this provider</p>
+                      <p className="qt-text-xs mt-1">Required for this provider</p>
                     </div>
                   )}
 
@@ -913,7 +913,7 @@ export default function ConnectionProfilesTab() {
                         placeholder="http://localhost:11434"
                         className="qt-input"
                       />
-                      <p className="text-xs text-muted-foreground mt-1">Required for this provider</p>
+                      <p className="qt-text-xs mt-1">Required for this provider</p>
                     </div>
                   )}
                 </div>
@@ -980,7 +980,7 @@ export default function ConnectionProfilesTab() {
                 </div>
               )}
 
-              <p className="text-xs text-muted-foreground mt-2">
+              <p className="qt-text-xs mt-2">
                 1. Click Connect to test the connection • 2. Fetch Models (enabled after connection) • 3. Test Message to verify API functionality
               </p>
             </div>
@@ -1014,7 +1014,7 @@ export default function ConnectionProfilesTab() {
                       ))
                     )}
                   </datalist>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="qt-text-xs mt-1">
                     Enter any OpenRouter model ID. Use &quot;Test Message&quot; to verify.
                   </p>
                 </>
@@ -1068,7 +1068,7 @@ export default function ConnectionProfilesTab() {
                     onChange={handleChange}
                     className="w-full"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">0 = deterministic, 2 = creative</p>
+                  <p className="qt-text-xs mt-1">0 = deterministic, 2 = creative</p>
                 </div>
 
                 <div>
@@ -1085,7 +1085,7 @@ export default function ConnectionProfilesTab() {
                     max={getMaxTokensLimit()}
                     className="qt-input"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="qt-text-xs mt-1">
                     {getSelectedModelInfo()?.maxOutputTokens
                       ? `Model limit: ${getSelectedModelInfo()?.maxOutputTokens?.toLocaleString()} tokens`
                       : 'Max output tokens for responses'}
@@ -1107,7 +1107,7 @@ export default function ConnectionProfilesTab() {
                     onChange={handleChange}
                     className="w-full"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Nucleus sampling (0-1)</p>
+                  <p className="qt-text-xs mt-1">Nucleus sampling (0-1)</p>
                 </div>
               </div>
             </div>
@@ -1157,11 +1157,11 @@ export default function ConnectionProfilesTab() {
                         Allow Web Search
                       </label>
                       {supportsWebSearch ? (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="qt-text-xs">
                           Enable the LLM to search the web for real-time information when responding to queries
                         </p>
                       ) : (
-                        <p className="text-xs text-muted-foreground/70">
+                        <p className="qt-text-xs">
                           This provider does not support web search
                         </p>
                       )}
@@ -1189,7 +1189,7 @@ export default function ConnectionProfilesTab() {
                     <label htmlFor="enableZDR" className="text-sm">
                       Enable Zero Data Retention (ZDR)
                     </label>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="qt-text-xs">
                       When enabled, providers will not store or log your prompts and responses. May limit available providers.
                     </p>
                   </div>
@@ -1208,7 +1208,7 @@ export default function ConnectionProfilesTab() {
                     <label htmlFor="useCustomModel" className="text-sm">
                       Use Custom Model ID
                     </label>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="qt-text-xs">
                       Enable this to enter an arbitrary model ID not in the fetched list. Use the &quot;Test Message&quot; button to verify the model works.
                     </p>
                   </div>
@@ -1218,12 +1218,12 @@ export default function ConnectionProfilesTab() {
                 {fetchedModels.length > 0 && (
                   <div className="mb-4">
                     <label className="block text-sm font-medium mb-2">Fallback Models (Optional, max 2)</label>
-                    <p className="text-xs text-muted-foreground mb-2">
+                    <p className="qt-text-xs mb-2">
                       If the primary model fails or is unavailable, OpenRouter will try these models in order.
                       OpenRouter supports up to 3 total models (1 primary + 2 fallbacks).
                     </p>
                     {formData.fallbackModels.length >= 2 && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
+                      <p className="qt-text-xs text-amber-600 dark:text-amber-400 mb-2">
                         Maximum fallback models reached. Remove one to add a different model.
                       </p>
                     )}
@@ -1262,14 +1262,14 @@ export default function ConnectionProfilesTab() {
                                 }}
                                 className="w-3 h-3 rounded"
                               />
-                              <span className="text-xs text-foreground truncate">{model}</span>
+                              <span className="qt-text-xs text-foreground truncate">{model}</span>
                             </label>
                           )
                         })}
                     </div>
                     {formData.fallbackModels.length > 0 && (
                       <div className="mt-2">
-                        <p className="text-xs text-muted-foreground mb-1">
+                        <p className="qt-text-xs mb-1">
                           Selected fallbacks ({formData.fallbackModels.length}/2):
                         </p>
                         <div className="flex flex-wrap gap-1">
@@ -1300,7 +1300,7 @@ export default function ConnectionProfilesTab() {
                 {/* Provider Order */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Provider Order (Optional)</label>
-                  <p className="text-xs text-muted-foreground mb-2">
+                  <p className="qt-text-xs mb-2">
                     Specify which infrastructure providers to prefer when routing requests.
                   </p>
                   <div className="grid grid-cols-3 gap-1 mb-2">
@@ -1322,11 +1322,11 @@ export default function ConnectionProfilesTab() {
                   </div>
                   {formData.providerOrder.length > 0 && (
                     <div className="space-y-1 border border-border rounded p-2 bg-background">
-                      <p className="text-xs font-medium mb-1">Priority order:</p>
+                      <p className="qt-text-xs font-medium mb-1">Priority order:</p>
                       {formData.providerOrder.map((provider, idx) => (
                         <div key={provider} className="flex items-center gap-2 bg-primary/5 rounded px-2 py-1">
-                          <span className="text-xs font-medium w-4">{idx + 1}.</span>
-                          <span className="text-xs flex-1">{provider}</span>
+                          <span className="qt-text-xs font-medium w-4">{idx + 1}.</span>
+                          <span className="qt-text-xs flex-1">{provider}</span>
                           <button
                             type="button"
                             onClick={() => {
@@ -1351,7 +1351,7 @@ export default function ConnectionProfilesTab() {
                               }
                             }}
                             disabled={idx === formData.providerOrder.length - 1}
-                            className="px-1 text-xs disabled:opacity-30 hover:bg-muted rounded"
+                            className="px-1 qt-text-xs disabled:opacity-30 hover:bg-muted rounded"
                           >
                             ↓
                           </button>
@@ -1361,7 +1361,7 @@ export default function ConnectionProfilesTab() {
                               ...formData,
                               providerOrder: formData.providerOrder.filter(p => p !== provider),
                             })}
-                            className="px-1 text-xs text-destructive hover:bg-destructive/10 rounded"
+                            className="px-1 qt-text-xs text-destructive hover:bg-destructive/10 rounded"
                           >
                             ×
                           </button>
@@ -1395,7 +1395,7 @@ export default function ConnectionProfilesTab() {
                   <div className="space-y-3 pl-6 mb-3">
                     {/* Cache Strategy */}
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">Cache Strategy</p>
+                      <p className="qt-text-xs font-medium">Cache Strategy</p>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
@@ -1422,7 +1422,7 @@ export default function ConnectionProfilesTab() {
 
                     {/* Cache TTL */}
                     <div className="space-y-2">
-                      <label htmlFor="cacheTTL" className="text-xs font-medium text-muted-foreground">Cache Duration</label>
+                      <label htmlFor="cacheTTL" className="qt-text-xs font-medium">Cache Duration</label>
                       <select
                         id="cacheTTL"
                         value={formData.cacheTTL}
@@ -1432,13 +1432,13 @@ export default function ConnectionProfilesTab() {
                         <option value="5m">5 minutes (1.25x write cost)</option>
                         <option value="1h">1 hour (2x write cost)</option>
                       </select>
-                      <p className="text-xs text-muted-foreground/70">
+                      <p className="qt-text-xs">
                         Cache reads are 10% of base input cost. 5m is auto-refreshed on use.
                       </p>
                     </div>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="qt-text-xs">
                   Prompt caching can reduce costs by up to 90% for repeated context. Caches tools, system prompts, and conversation history.
                 </p>
               </div>

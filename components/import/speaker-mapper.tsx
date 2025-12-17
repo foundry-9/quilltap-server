@@ -88,7 +88,7 @@ export function SpeakerMapper({
           <span className="font-medium text-foreground">
             &ldquo;{speaker.name}&rdquo;
           </span>
-          <span className="text-sm text-muted-foreground">
+          <span className="qt-text-small">
             ({speaker.messageCount} message{speaker.messageCount !== 1 ? 's' : ''})
           </span>
         </div>
@@ -166,7 +166,7 @@ export function SpeakerMapper({
                   })}
                   className="mt-1"
                 />
-                <span className="text-sm text-muted-foreground">
+                <span className="qt-text-small">
                   Skip (messages will be imported without persona)
                 </span>
               </label>
@@ -211,7 +211,7 @@ export function SpeakerMapper({
                         ))}
                       </select>
                       <div className="mt-2">
-                        <span className="text-xs text-muted-foreground">
+                        <span className="qt-text-xs">
                           Connection Profile (optional override):
                         </span>
                         <select
@@ -250,7 +250,7 @@ export function SpeakerMapper({
                   </span>
                   {mapping.mappingType === 'create_character' && (
                     <div className="mt-2">
-                      <span className="text-xs text-muted-foreground">
+                      <span className="qt-text-xs">
                         Connection Profile:
                       </span>
                       <select
@@ -283,7 +283,7 @@ export function SpeakerMapper({
                   })}
                   className="mt-1"
                 />
-                <span className="text-sm text-muted-foreground">
+                <span className="qt-text-small">
                   Skip (messages from this speaker will be discarded)
                 </span>
               </label>
@@ -301,7 +301,7 @@ export function SpeakerMapper({
         <label className="block text-sm font-medium text-foreground mb-2">
           Default Connection Profile
         </label>
-        <p className="text-xs text-muted-foreground mb-2">
+        <p className="qt-text-xs mb-2">
           This profile will be used for any characters that don&apos;t have a specific profile assigned.
         </p>
         <select

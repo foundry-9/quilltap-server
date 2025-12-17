@@ -268,7 +268,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
                           type="button"
                           onClick={() => addTag(tag.name)}
                           disabled={loading}
-                          className="w-full px-4 py-2 text-left hover:bg-accent text-foreground disabled:opacity-50 whitespace-nowrap"
+                          className="w-full px-4 py-2 text-left qt-text-small hover:bg-accent text-foreground disabled:opacity-50 whitespace-nowrap"
                         >
                           {tag.name}
                         </button>
@@ -281,7 +281,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
                       type="button"
                       onClick={() => addTag(inputValue)}
                       disabled={loading}
-                      className="text-left text-primary hover:text-primary/80 disabled:opacity-50 whitespace-nowrap"
+                      className="text-left qt-text-small text-primary hover:text-primary/80 disabled:opacity-50 whitespace-nowrap"
                     >
                       Create &quot;{inputValue.trim()}&quot;
                     </button>
@@ -294,7 +294,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       </div>
 
       {isAddingTag && (
-        <p className="text-xs text-muted-foreground">
+        <p className="qt-text-xs">
           Press Enter to add a tag, or select from suggestions. Press Esc to cancel.
         </p>
       )}

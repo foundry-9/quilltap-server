@@ -160,7 +160,7 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
             </span>
           )}
         </div>
-        <span className="text-xs text-muted-foreground">
+        <span className="qt-text-xs">
           {entry.timestamp.toLocaleTimeString()}
         </span>
       </div>
@@ -176,7 +176,7 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
                 Has Tools
               </span>
             )}
-            <span className="qt-debug-section-meta">
+            <span className="qt-debug-section-meta qt-text-xs">
               {entry.llmRequestDetails.messageCount} messages
             </span>
             <div className="qt-debug-copy-container">
@@ -201,7 +201,7 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
             {/* Message summary */}
             {entry.llmRequestDetails.messages && (
               <div className="mb-2">
-                <div className="text-xs font-semibold text-muted-foreground mb-1">Messages:</div>
+                <div className="qt-text-xs font-semibold mb-1">Messages:</div>
                 <div className="flex flex-wrap gap-1">
                   {entry.llmRequestDetails.messages.map((msg, idx) => (
                     <span
@@ -350,7 +350,7 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
             {entry.llmRequestDetails.tools && entry.llmRequestDetails.tools.length > 0 && (
               <div className="group/tools">
                 <div className="flex items-center justify-between mb-1">
-                  <div className="text-xs font-semibold text-muted-foreground">Tools:</div>
+                  <div className="qt-text-xs font-semibold">Tools:</div>
                   <div className="qt-debug-copy-container">
                     <CopyButton content={JSON.stringify(entry.llmRequestDetails.tools, null, 2)} />
                   </div>
@@ -454,7 +454,7 @@ function DebugEntryCard({ entry }: { entry: DebugEntry }) {
           <summary>
             <ChevronIcon />
             <span className="qt-debug-section-title">Stitched Response Content</span>
-            <span className="qt-debug-section-meta">
+            <span className="qt-debug-section-meta qt-text-xs">
               {entry.stitchedContent?.length || 0} chars
             </span>
             <div className="qt-debug-copy-container">
@@ -546,7 +546,7 @@ export default function DebugPanel() {
           <h2 className="text-sm font-semibold text-foreground">
             API Debug
           </h2>
-          <span className="text-xs text-muted-foreground">
+          <span className="qt-text-xs">
             ({entries.length} entries)
           </span>
         </div>

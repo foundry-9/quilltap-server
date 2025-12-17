@@ -220,7 +220,7 @@ export default function EmbeddingProfilesTab() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Embedding Profiles</h2>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="qt-text-small mt-1">
             Manage text embedding connections for semantic search (OpenAI or Ollama)
           </p>
         </div>
@@ -304,7 +304,7 @@ export default function EmbeddingProfilesTab() {
                   ))}
                 </select>
                 {filteredApiKeys.length === 0 && (
-                  <p className="mt-1 text-xs text-amber-600">
+                  <p className="mt-1 qt-text-xs text-amber-600">
                     No OpenAI API keys found. Add one in the API Keys tab first.
                   </p>
                 )}
@@ -324,7 +324,7 @@ export default function EmbeddingProfilesTab() {
                   className="qt-input"
                   placeholder="http://localhost:11434"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 qt-text-xs">
                   Leave empty for default Ollama URL (http://localhost:11434)
                 </p>
               </div>
@@ -350,7 +350,7 @@ export default function EmbeddingProfilesTab() {
                     ))}
                   </select>
                   {formData.modelName && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="qt-text-xs">
                       {currentModels.find(m => m.id === formData.modelName)?.description}
                     </p>
                   )}
@@ -380,7 +380,7 @@ export default function EmbeddingProfilesTab() {
                 placeholder="1536"
                 min="1"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 qt-text-xs">
                 Leave empty to use the model&apos;s default dimensions
               </p>
             </div>
@@ -426,7 +426,7 @@ export default function EmbeddingProfilesTab() {
           {profiles.length === 0 ? (
             <div className="text-center py-8 bg-muted rounded-lg border border-border">
               <p className="text-muted-foreground mb-2">No embedding profiles yet</p>
-              <p className="text-sm text-muted-foreground/70 mb-4">
+              <p className="qt-text-small mb-4">
                 Embedding profiles are used for semantic search in memories
               </p>
               <button
@@ -453,26 +453,26 @@ export default function EmbeddingProfilesTab() {
                         </span>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
+                    <div className="grid grid-cols-2 gap-4 qt-text-small">
                       <div>
-                        <p className="text-xs text-muted-foreground/70 uppercase">Model</p>
+                        <p className="qt-text-xs uppercase">Model</p>
                         <p className="font-mono text-sm text-foreground">{profile.modelName}</p>
                       </div>
                       {profile.dimensions && (
                         <div>
-                          <p className="text-xs text-muted-foreground/70 uppercase">Dimensions</p>
+                          <p className="qt-text-xs uppercase">Dimensions</p>
                           <p className="text-sm text-foreground">{profile.dimensions}</p>
                         </div>
                       )}
                       {profile.apiKey && (
                         <div>
-                          <p className="text-xs text-muted-foreground/70 uppercase">API Key</p>
+                          <p className="qt-text-xs uppercase">API Key</p>
                           <p className="text-sm text-foreground">{profile.apiKey.label}</p>
                         </div>
                       )}
                       {profile.baseUrl && (
                         <div>
-                          <p className="text-xs text-muted-foreground/70 uppercase">Base URL</p>
+                          <p className="qt-text-xs uppercase">Base URL</p>
                           <p className="text-sm text-foreground">{profile.baseUrl}</p>
                         </div>
                       )}

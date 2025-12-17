@@ -135,7 +135,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 placeholder="Brief summary of this memory"
                 className="qt-input"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 qt-text-xs">
                 A short description that will be shown in lists and used for context injection.
               </p>
             </div>
@@ -154,7 +154,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 placeholder="The complete memory content..."
                 className="qt-textarea"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 qt-text-xs">
                 The full details of what this character should remember.
               </p>
             </div>
@@ -172,7 +172,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 placeholder="keyword1, keyword2, keyword3"
                 className="qt-input"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 qt-text-xs">
                 Comma-separated keywords for text-based search.
               </p>
             </div>
@@ -192,12 +192,12 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 onChange={handleImportanceChange}
                 className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
               />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <div className="flex justify-between qt-text-xs mt-1">
                 <span>Low</span>
                 <span>Medium</span>
                 <span>High</span>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 qt-text-xs">
                 Higher importance memories are prioritized when building context.
               </p>
             </div>

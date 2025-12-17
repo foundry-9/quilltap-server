@@ -214,7 +214,7 @@ export function ParticipantCard({
           {/* Talkativeness slider for characters */}
           {isCharacter && !isUserParticipant && (
             <div className="mt-2">
-              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+              <div className="flex items-center justify-between qt-text-xs mb-1">
                 <span>Talkativeness</span>
                 <span>{(localTalkativeness * 100).toFixed(0)}%</span>
               </div>
@@ -233,7 +233,7 @@ export function ParticipantCard({
           {/* Talkativeness indicator for personas (greyed out) */}
           {isUserParticipant && (
             <div className="mt-2 opacity-50">
-              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+              <div className="flex items-center justify-between qt-text-xs mb-1">
                 <span>Talkativeness</span>
                 <span>N/A</span>
               </div>

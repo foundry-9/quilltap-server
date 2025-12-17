@@ -278,7 +278,7 @@ export default function TagsTab() {
                   <div key={tagId} className="border border-border rounded-lg p-4 bg-card shadow-sm flex flex-col">
                     <div className="flex-1">
                       <div className="font-medium text-foreground text-sm">{label}</div>
-                      <div className="text-xs text-muted-foreground mt-2">Preview:</div>
+                      <div className="qt-text-xs mt-2">Preview:</div>
                       <div className="mt-2 mb-4">
                         <TagBadge tag={{ id: tagId, name: label }} styleOverride={mergedStyle} />
                       </div>
@@ -354,7 +354,7 @@ export default function TagsTab() {
                             />
                             <span>Enable quick-hide button</span>
                           </label>
-                          <p className="text-xs text-muted-foreground mt-1">
+                          <p className="qt-text-xs mt-1">
                             Adds this tag to the navbar quick-hide controls.
                           </p>
                         </div>
@@ -396,7 +396,7 @@ export default function TagsTab() {
               })}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground border border-dashed border-border rounded-lg p-4">
+            <div className="qt-text-small border border-dashed border-border rounded-lg p-4">
               No custom tag styles yet. Select a tag above to add an emoji and colors.
             </div>
           )}

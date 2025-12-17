@@ -230,9 +230,9 @@ export default function CharactersPage() {
                   <div className="flex-grow">
                     <h2 className="text-xl font-semibold text-foreground">{character.name}</h2>
                     {character.title && (
-                      <p className="text-sm text-muted-foreground">{character.title}</p>
+                      <p className="qt-text-small">{character.title}</p>
                     )}
-                    <p className="text-sm text-muted-foreground">
+                    <p className="qt-text-small">
                       {character._count.chats} chat{character._count.chats !== 1 ? 's' : ''}
                     </p>
                   </div>
@@ -246,7 +246,7 @@ export default function CharactersPage() {
                 </button>
               </div>
 
-              <p className="line-clamp-3 text-sm text-muted-foreground">
+              <p className="line-clamp-3 qt-text-small">
                 {character.description}
               </p>
 
@@ -313,7 +313,7 @@ export default function CharactersPage() {
                   name="file"
                   accept=".png,.json"
                   required
-                  className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:bg-primary/30"
+                  className="block w-full qt-text-small file:mr-4 file:rounded-md file:border-0 file:bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:bg-primary/30"
                 />
               </div>
               <div className="flex gap-2 justify-end">

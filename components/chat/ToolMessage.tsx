@@ -125,12 +125,12 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
                 {showCharacterName && (
-                  <span className="text-xs font-semibold text-muted-foreground">
+                  <span className="qt-text-xs font-semibold">
                     {character?.name} requested
                   </span>
                 )}
                 {toolData.initiatedBy === 'user' && (
-                  <span className="text-xs font-semibold text-muted-foreground">
+                  <span className="qt-text-xs font-semibold">
                     You requested
                   </span>
                 )}
@@ -164,7 +164,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                   }
                   setShowRequest(!showRequest)
                 }}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="qt-text-xs hover:text-foreground transition-colors"
                 type="button"
               >
                 {showRequest ? '▼' : '▶'} Tool Request
@@ -197,7 +197,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                   }
                   setShowResponse(!showResponse)
                 }}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="qt-text-xs hover:text-foreground transition-colors"
                 type="button"
               >
                 {showResponse ? '▼' : '▶'} Tool Response
@@ -356,7 +356,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
           )}
 
           {/* Timestamp */}
-          <div className="text-xs text-muted-foreground mt-2">
+          <div className="qt-text-xs mt-2">
             {formatMessageTime(message.createdAt)}
           </div>
         </div>

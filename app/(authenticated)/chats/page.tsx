@@ -269,7 +269,7 @@ export default function ChatsPage() {
 
       {visibleChats.length === 0 ? (
         <div className="chat-empty-state mt-12 rounded-2xl border border-dashed border-border/70 bg-card/80 px-8 py-12 text-center shadow-sm">
-          <p className="mb-4 text-lg text-muted-foreground">No chats yet</p>
+          <p className="mb-4 text-lg qt-text-small">No chats yet</p>
           <Link
             href="/chats/new"
             className="font-medium text-primary hover:text-primary/80"
@@ -307,7 +307,7 @@ export default function ChatsPage() {
                               {chat._count.messages}
                             </span>
                           </div>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="qt-text-small">
                             {characterNames}
                             {persona && ` with ${formatPersonaName(persona)}`}
                             {' \u2022 '}

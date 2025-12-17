@@ -2234,7 +2234,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                                 </svg>
                               </button>
-                              <span className="text-muted-foreground text-xs px-1">
+                              <span className="qt-text-xs px-1">
                                 {swipeState.current + 1}/{swipeState.total}
                               </span>
                               <button
@@ -2256,7 +2256,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       </div>
 
                       {/* Desktop timestamp - hidden on mobile */}
-                      <div className="text-xs text-muted-foreground mt-2 qt-chat-desktop-timestamp">
+                      <div className="qt-text-xs mt-2 qt-chat-desktop-timestamp">
                         {formatMessageTime(message.createdAt)}
                       </div>
                     </>
@@ -2348,7 +2348,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                             >
                               ←
                             </button>
-                            <span className="text-muted-foreground text-xs">
+                            <span className="qt-text-xs">
                               {swipeState.current + 1} / {swipeState.total}
                             </span>
                             <button
@@ -2471,7 +2471,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 </summary>
                 <div className="mt-2 px-4 py-2 rounded-lg bg-muted border border-border">
                   {pendingToolCalls.map((tc) => (
-                    <div key={tc.id} className="text-xs text-muted-foreground">
+                    <div key={tc.id} className="qt-text-xs">
                       <span className="font-medium">{tc.name}</span>
                       {tc.arguments && Object.keys(tc.arguments).length > 0 && (
                         <span className="ml-2 text-muted-foreground/70">

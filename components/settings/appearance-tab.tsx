@@ -197,7 +197,7 @@ function ThemeCard({ theme, isActive, onSelect, disabled }: ThemeCardProps) {
 
       {/* Theme Description */}
       {description && (
-        <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
+        <div className="qt-text-small mt-1 line-clamp-2">
           {description}
         </div>
       )}
@@ -205,7 +205,7 @@ function ThemeCard({ theme, isActive, onSelect, disabled }: ThemeCardProps) {
       {/* Dark Mode Support Badge */}
       {!isDefault && theme.supportsDarkMode && (
         <div className="mt-2">
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+          <span className="inline-flex items-center px-2 py-0.5 rounded qt-text-xs font-medium bg-muted">
             <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -314,7 +314,7 @@ function ColorModeSelector({
           {/* Label and Description */}
           <div className="flex-1">
             <div className="font-medium text-foreground">{option.label}</div>
-            <div className="text-sm text-muted-foreground">
+            <div className="qt-text-small">
               {option.description}
               {option.value === 'system' && (
                 <span className="ml-1 text-xs">
@@ -474,7 +474,7 @@ export default function AppearanceTab() {
             </div>
             <div>
               <div className="font-medium text-foreground">Show theme selector in navigation</div>
-              <div className="text-sm text-muted-foreground">
+              <div className="qt-text-small">
                 Quickly switch themes from the navigation bar
               </div>
             </div>
@@ -525,7 +525,7 @@ export default function AppearanceTab() {
         <p className="text-muted-foreground mb-4">
           Select a theme to customize the colors and appearance of <BrandName />.
           {themes.length === 0 && (
-            <span className="block mt-1 text-sm">
+            <span className="block mt-1 qt-text-small">
               Install theme plugins to see more options here.
             </span>
           )}
@@ -570,7 +570,7 @@ export default function AppearanceTab() {
                 />
               </svg>
               <div>
-                <p className="text-sm text-muted-foreground">
+                <p className="qt-text-small">
                   Additional themes can be added by installing theme plugins from the{' '}
                   <span className="font-medium">Plugins</span> tab.
                 </p>
@@ -587,7 +587,7 @@ export default function AppearanceTab() {
             <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
               Debug: Current Theme State
             </summary>
-            <div className="mt-2 p-3 bg-muted rounded-lg font-mono text-xs space-y-2">
+            <div className="mt-2 p-3 bg-muted rounded-lg font-mono qt-text-xs space-y-2">
               <div>Active Theme ID: {activeThemeId ?? 'default'}</div>
               <div>Color Mode: {colorMode}</div>
               <div>Resolved Mode: {resolvedColorMode}</div>
@@ -595,7 +595,7 @@ export default function AppearanceTab() {
 
               {/* Visual test: These boxes use CSS variables directly */}
               <div className="mt-4 pt-4 border-t border-border">
-                <div className="text-xs font-semibold mb-2">CSS Variable Test (should change with theme):</div>
+                <div className="qt-text-xs font-semibold mb-2">CSS Variable Test (should change with theme):</div>
                 <div className="flex gap-2">
                   <div
                     className="w-12 h-12 rounded border"
@@ -618,7 +618,7 @@ export default function AppearanceTab() {
                     title="--theme-accent"
                   />
                 </div>
-                <div className="text-xs mt-1 text-muted-foreground">
+                <div className="qt-text-xs mt-1">
                   bg / primary / secondary / accent
                 </div>
               </div>

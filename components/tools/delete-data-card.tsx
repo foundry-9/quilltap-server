@@ -133,7 +133,7 @@ export function DeleteDataCard() {
             <h2 className="text-2xl font-bold text-foreground mb-1">
               Delete All Data
             </h2>
-            <p className="text-muted-foreground">
+            <p className="qt-text-small">
               Permanently delete all your data including characters, personas, chats, files, API keys, and backups. This action cannot be undone.
             </p>
           </div>
@@ -215,7 +215,7 @@ export function DeleteDataCard() {
                       </div>
                     ) : preview ? (
                       <div className="space-y-4">
-                        <p className="text-sm text-muted-foreground">
+                        <p className="qt-text-small">
                           The following data will be permanently deleted:
                         </p>
                         <div className="bg-muted rounded-lg p-4 space-y-2 text-sm">
@@ -286,7 +286,7 @@ export function DeleteDataCard() {
 
                 {step === 'confirm' && (
                   <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="qt-text-small">
                       To confirm deletion, please type <span className="font-mono font-semibold text-destructive">DELETE</span> below:
                     </p>
                     <input
@@ -311,7 +311,7 @@ export function DeleteDataCard() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    <p className="text-sm text-muted-foreground">Deleting all data...</p>
+                    <p className="qt-text-small">Deleting all data...</p>
                   </div>
                 )}
 
@@ -324,10 +324,10 @@ export function DeleteDataCard() {
                         </svg>
                       </div>
                     </div>
-                    <p className="text-center text-sm text-muted-foreground">
+                    <p className="text-center qt-text-small">
                       Successfully deleted {getTotalCount(deleteSummary)} items from your account.
                     </p>
-                    <p className="text-center text-xs text-muted-foreground">
+                    <p className="text-center qt-text-xs">
                       Your account is now clean. You can start fresh or restore from a backup.
                     </p>
                   </div>

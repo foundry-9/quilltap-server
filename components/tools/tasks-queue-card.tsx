@@ -353,7 +353,7 @@ export function TasksQueueCard() {
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
           <h2 className="text-2xl font-bold text-foreground mb-1">Tasks Queue</h2>
-          <p className="text-muted-foreground">
+          <p className="qt-text-small">
             Background job queue for memory extraction and other LLM tasks
           </p>
         </div>
@@ -498,7 +498,7 @@ export function TasksQueueCard() {
           Stop Queue
         </button>
 
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+        <label className="flex items-center gap-2 qt-text-small cursor-pointer">
           <input
             type="checkbox"
             checked={autoRefresh}
@@ -510,7 +510,7 @@ export function TasksQueueCard() {
 
         {/* Processor Status Indicator */}
         {data && (
-          <span className={`text-sm flex items-center gap-1.5 ml-auto ${data.processorStatus?.running ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+          <span className={`qt-text-small flex items-center gap-1.5 ml-auto ${data.processorStatus?.running ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
             <span className={`w-2 h-2 rounded-full ${data.processorStatus?.running ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
             {data.processorStatus?.running ? 'Queue Running' : 'Queue Stopped'}
           </span>
@@ -524,26 +524,26 @@ export function TasksQueueCard() {
             <div className="text-2xl font-bold text-foreground">
               {data.stats.activeTotal}
             </div>
-            <div className="text-xs text-muted-foreground">Active Jobs</div>
+            <div className="qt-text-xs">Active Jobs</div>
           </div>
           <div className="qt-card p-3 text-center">
             <div className="text-2xl font-bold text-foreground">
               ~{formatTokens(data.totalEstimatedTokens)}
             </div>
-            <div className="text-xs text-muted-foreground">Est. Tokens</div>
+            <div className="qt-text-xs">Est. Tokens</div>
           </div>
           <div className="qt-card p-3 text-center">
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">
               {data.stats.completed}
             </div>
-            <div className="text-xs text-muted-foreground">Completed</div>
+            <div className="qt-text-xs">Completed</div>
           </div>
         </div>
       )}
 
       {/* Detailed Stats Row */}
       {data && (
-        <div className="flex flex-wrap gap-4 text-sm mb-4 text-muted-foreground">
+        <div className="flex flex-wrap gap-4 qt-text-small mb-4">
           <span>
             <span className="text-blue-600 dark:text-blue-400 font-medium">
               {data.stats.processing}
@@ -642,7 +642,7 @@ export function TasksQueueCard() {
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
+                      <div className="qt-text-xs mt-0.5">
                         {job.characterName && (
                           <span className="mr-2">Character: {job.characterName}</span>
                         )}
@@ -661,7 +661,7 @@ export function TasksQueueCard() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="text-right text-xs text-muted-foreground whitespace-nowrap">
+                    <div className="text-right qt-text-xs whitespace-nowrap">
                       ~{formatTokens(job.estimatedTokens)} tokens
                     </div>
                     {/* Job Action Buttons */}
@@ -739,7 +739,7 @@ export function TasksQueueCard() {
             <div className="flex items-center justify-between p-4 border-b">
               <div>
                 <h3 className="text-lg font-semibold text-foreground">Job Details</h3>
-                <p className="text-sm text-muted-foreground">{selectedJob.type}</p>
+                <p className="qt-text-small">{selectedJob.type}</p>
               </div>
               <button
                 onClick={() => setShowJobDialog(false)}
@@ -756,28 +756,28 @@ export function TasksQueueCard() {
               {/* Status and metadata */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <span className="text-xs text-muted-foreground">Status</span>
+                  <span className="qt-text-xs">Status</span>
                   <div className={`font-medium ${getStatusColor(selectedJob.status)}`}>
                     {selectedJob.status}
                   </div>
                 </div>
                 <div>
-                  <span className="text-xs text-muted-foreground">Priority</span>
+                  <span className="qt-text-xs">Priority</span>
                   <div className="font-medium">{selectedJob.priority}</div>
                 </div>
                 <div>
-                  <span className="text-xs text-muted-foreground">Attempts</span>
+                  <span className="qt-text-xs">Attempts</span>
                   <div className="font-medium">{selectedJob.attempts} / {selectedJob.maxAttempts}</div>
                 </div>
                 <div>
-                  <span className="text-xs text-muted-foreground">Scheduled</span>
+                  <span className="qt-text-xs">Scheduled</span>
                   <div className="font-medium text-sm">{formatDate(selectedJob.scheduledAt)}</div>
                 </div>
               </div>
 
               {selectedJob.lastError && (
                 <div className="mb-4">
-                  <span className="text-xs text-muted-foreground">Last Error</span>
+                  <span className="qt-text-xs">Last Error</span>
                   <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded mt-1">
                     {selectedJob.lastError}
                   </div>
@@ -786,7 +786,7 @@ export function TasksQueueCard() {
 
               {/* Payload (what will be sent to LLM) */}
               <div>
-                <span className="text-xs text-muted-foreground">Job Payload (sent to LLM)</span>
+                <span className="qt-text-xs">Job Payload (sent to LLM)</span>
                 <pre className="mt-1 p-3 bg-muted rounded text-xs overflow-x-auto whitespace-pre-wrap break-words">
                   {JSON.stringify(selectedJob.payload, null, 2)}
                 </pre>

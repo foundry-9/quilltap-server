@@ -261,7 +261,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
           <svg className="w-12 h-12 mx-auto text-muted-foreground mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          <p className="text-sm text-muted-foreground">
+          <p className="qt-text-small">
             Click to select or drag and drop a backup file
           </p>
           {selectedFile && (
@@ -310,7 +310,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                   <p className="text-sm font-medium text-foreground">
                     {backup.filename}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="qt-text-xs mt-0.5">
                     {new Date(backup.createdAt).toLocaleString()} ({Math.round(backup.size / 1024 / 1024)} MB)
                   </p>
                 </div>
@@ -338,27 +338,27 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-muted p-4 rounded-lg">
             <p className="text-2xl font-bold text-foreground">{preview.characters}</p>
-            <p className="text-xs text-muted-foreground mt-1">Characters</p>
+            <p className="qt-text-xs mt-1">Characters</p>
           </div>
           <div className="bg-muted p-4 rounded-lg">
             <p className="text-2xl font-bold text-foreground">{preview.personas}</p>
-            <p className="text-xs text-muted-foreground mt-1">Personas</p>
+            <p className="qt-text-xs mt-1">Personas</p>
           </div>
           <div className="bg-muted p-4 rounded-lg">
             <p className="text-2xl font-bold text-foreground">{preview.chats}</p>
-            <p className="text-xs text-muted-foreground mt-1">Chats</p>
+            <p className="qt-text-xs mt-1">Chats</p>
           </div>
           <div className="bg-muted p-4 rounded-lg">
             <p className="text-2xl font-bold text-foreground">{preview.messages}</p>
-            <p className="text-xs text-muted-foreground mt-1">Messages</p>
+            <p className="qt-text-xs mt-1">Messages</p>
           </div>
           <div className="bg-muted p-4 rounded-lg">
             <p className="text-2xl font-bold text-foreground">{preview.tags}</p>
-            <p className="text-xs text-muted-foreground mt-1">Tags</p>
+            <p className="qt-text-xs mt-1">Tags</p>
           </div>
           <div className="bg-muted p-4 rounded-lg">
             <p className="text-2xl font-bold text-foreground">{preview.memories}</p>
-            <p className="text-xs text-muted-foreground mt-1">Memories</p>
+            <p className="qt-text-xs mt-1">Memories</p>
           </div>
         </div>
       ) : (
@@ -393,7 +393,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
             <p className="text-sm font-medium text-foreground">
               Replace Existing Data
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="qt-text-xs mt-1">
               Delete all your current data and replace with backup
             </p>
           </div>
@@ -417,7 +417,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
             <p className="text-sm font-medium text-foreground">
               Import as New Data
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="qt-text-xs mt-1">
               Keep your existing data and import backup with regenerated IDs
             </p>
           </div>
@@ -462,7 +462,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
           </div>
-          <p className="mt-4 text-sm text-muted-foreground">
+          <p className="mt-4 qt-text-small">
             Restoring your backup...
           </p>
         </div>
@@ -477,27 +477,27 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-muted p-4 rounded-lg">
               <p className="text-2xl font-bold text-foreground">{restoreSummary.characters}</p>
-              <p className="text-xs text-muted-foreground mt-1">Characters</p>
+              <p className="qt-text-xs mt-1">Characters</p>
             </div>
             <div className="bg-muted p-4 rounded-lg">
               <p className="text-2xl font-bold text-foreground">{restoreSummary.personas}</p>
-              <p className="text-xs text-muted-foreground mt-1">Personas</p>
+              <p className="qt-text-xs mt-1">Personas</p>
             </div>
             <div className="bg-muted p-4 rounded-lg">
               <p className="text-2xl font-bold text-foreground">{restoreSummary.chats}</p>
-              <p className="text-xs text-muted-foreground mt-1">Chats</p>
+              <p className="qt-text-xs mt-1">Chats</p>
             </div>
             <div className="bg-muted p-4 rounded-lg">
               <p className="text-2xl font-bold text-foreground">{restoreSummary.messages}</p>
-              <p className="text-xs text-muted-foreground mt-1">Messages</p>
+              <p className="qt-text-xs mt-1">Messages</p>
             </div>
             <div className="bg-muted p-4 rounded-lg">
               <p className="text-2xl font-bold text-foreground">{restoreSummary.profiles.connection}</p>
-              <p className="text-xs text-muted-foreground mt-1">API Keys</p>
+              <p className="qt-text-xs mt-1">API Keys</p>
             </div>
             <div className="bg-muted p-4 rounded-lg">
               <p className="text-2xl font-bold text-foreground">{restoreSummary.files}</p>
-              <p className="text-xs text-muted-foreground mt-1">Files</p>
+              <p className="qt-text-xs mt-1">Files</p>
             </div>
           </div>
 

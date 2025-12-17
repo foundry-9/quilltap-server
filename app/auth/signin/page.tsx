@@ -258,7 +258,7 @@ function SignInForm() {
                     onChange={(e) => setRememberDevice(e.target.checked)}
                     className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                   />
-                  <label htmlFor="rememberDevice" className="ml-2 text-sm text-muted-foreground">
+                  <label htmlFor="rememberDevice" className="ml-2 qt-text-small">
                     Remember this device for 30 days
                   </label>
                 </div>

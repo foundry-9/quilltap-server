@@ -591,12 +591,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   <h2 className="text-lg font-semibold text-foreground mb-2">
                     Description
                     {(templateCounts.fieldCounts.description?.char > 0 || templateCounts.fieldCounts.description?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      <span className="ml-2 text-xs font-normal qt-text-xs">
                         (template replacements available)
                       </span>
                     )}
                   </h2>
-                  <div className="text-muted-foreground">
+                  <div className="qt-text-small">
                     <TemplateHighlighter
                       content={character.description}
                       characterName={character.name}
@@ -612,12 +612,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   <h2 className="text-lg font-semibold text-foreground mb-2">
                     Personality
                     {(templateCounts.fieldCounts.personality?.char > 0 || templateCounts.fieldCounts.personality?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      <span className="ml-2 text-xs font-normal qt-text-xs">
                         (template replacements available)
                       </span>
                     )}
                   </h2>
-                  <div className="text-muted-foreground">
+                  <div className="qt-text-small">
                     <TemplateHighlighter
                       content={character.personality}
                       characterName={character.name}
@@ -633,12 +633,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   <h2 className="text-lg font-semibold text-foreground mb-2">
                     Scenario
                     {(templateCounts.fieldCounts.scenario?.char > 0 || templateCounts.fieldCounts.scenario?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      <span className="ml-2 text-xs font-normal qt-text-xs">
                         (template replacements available)
                       </span>
                     )}
                   </h2>
-                  <div className="text-muted-foreground">
+                  <div className="qt-text-small">
                     <TemplateHighlighter
                       content={character.scenario}
                       characterName={character.name}
@@ -654,12 +654,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   <h2 className="text-lg font-semibold text-foreground mb-2">
                     First Message
                     {(templateCounts.fieldCounts.firstMessage?.char > 0 || templateCounts.fieldCounts.firstMessage?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      <span className="ml-2 text-xs font-normal qt-text-xs">
                         (template replacements available)
                       </span>
                     )}
                   </h2>
-                  <div className="text-muted-foreground">
+                  <div className="qt-text-small">
                     <TemplateHighlighter
                       content={character.firstMessage}
                       characterName={character.name}
@@ -675,12 +675,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   <h2 className="text-lg font-semibold text-foreground mb-2">
                     Example Dialogues
                     {(templateCounts.fieldCounts.exampleDialogues?.char > 0 || templateCounts.fieldCounts.exampleDialogues?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      <span className="ml-2 text-xs font-normal qt-text-xs">
                         (template replacements available)
                       </span>
                     )}
                   </h2>
-                  <div className="text-muted-foreground">
+                  <div className="qt-text-small">
                     <TemplateHighlighter
                       content={character.exampleDialogues}
                       characterName={character.name}
@@ -700,11 +700,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                       <span className="text-sm font-medium text-foreground">Active System Prompt:</span>
-                      <span className="text-sm text-muted-foreground">
+                      <span className="qt-text-small">
                         {defaultSystemPrompt?.name || 'None'}
                       </span>
                       {character.systemPrompts.length > 1 && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="qt-text-xs">
                           (+{character.systemPrompts.length - 1} more)
                         </span>
                       )}
@@ -730,7 +730,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 <h2 className="text-lg font-semibold text-foreground">
                   System Prompts
                 </h2>
-                <p className="text-sm text-muted-foreground">
+                <p className="qt-text-small">
                   Named system prompts for this character. The default prompt is used when starting new chats.
                 </p>
               </div>
@@ -782,7 +782,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 <svg className="mx-auto h-12 w-12 text-muted-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <p className="mt-4 text-sm text-muted-foreground">
+                <p className="mt-4 qt-text-small">
                   No system prompts defined for this character.
                 </p>
                 <Link
@@ -817,7 +817,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 <h2 className="text-lg font-semibold text-foreground">
                   Character Tags
                 </h2>
-                <p className="text-sm text-muted-foreground">
+                <p className="qt-text-small">
                   Tags help organize and categorize this character. They can also be used for filtering and searching.
                 </p>
               </div>
@@ -836,7 +836,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
               <h2 className="text-lg font-semibold text-foreground mb-2">
                 Default Connection Profile
               </h2>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="qt-text-small mb-4">
                 The default AI provider and model to use when chatting with this character. Can be overridden per chat.
               </p>
               <div className="flex items-center gap-3">
@@ -854,7 +854,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   ))}
                 </select>
                 {savingConnectionProfile && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 qt-text-small">
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
                     Saving...
                   </div>
@@ -872,7 +872,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
               <h2 className="text-lg font-semibold text-foreground mb-2">
                 Default Persona
               </h2>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="qt-text-small mb-4">
                 The default persona to use when chatting with this character. Represents &quot;you&quot; in the conversation.
               </p>
               <div className="flex items-center gap-3">
@@ -890,7 +890,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   ))}
                 </select>
                 {savingPersona && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 qt-text-small">
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
                     Saving...
                   </div>
@@ -908,7 +908,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
               <h2 className="text-lg font-semibold text-foreground mb-2">
                 Image Generation Profile
               </h2>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="qt-text-small mb-4">
                 The default image generation profile for creating images during chats. Optional.
               </p>
               <ImageProfilePicker
@@ -1013,7 +1013,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 {character?.name || 'Loading...'}
               </h1>
               {character?.title && (
-                <p className="text-sm text-muted-foreground">{character.title}</p>
+                <p className="qt-text-small">{character.title}</p>
               )}
             </div>
           </div>

@@ -55,7 +55,7 @@ export default function NewPersonaPage() {
      ← Back to personas
     </Link>
     <h1 className="text-3xl font-semibold text-foreground">Create New Persona</h1>
-    <p className="mt-2 text-sm text-muted-foreground">
+    <p className="mt-2 qt-text-small">
      Create a user persona to represent yourself in roleplay chats
     </p>
    </div>
@@ -70,7 +70,7 @@ export default function NewPersonaPage() {
     <div>
      <label
       htmlFor="name"
-      className="block text-sm font-medium text-muted-foreground mb-2"
+      className="block text-sm font-medium qt-text-xs mb-2"
      >
       Name *
      </label>
@@ -87,7 +87,7 @@ export default function NewPersonaPage() {
     <div>
      <label
       htmlFor="title"
-      className="block text-sm font-medium text-muted-foreground mb-2"
+      className="block text-sm font-medium qt-text-xs mb-2"
      >
       Title
      </label>
@@ -103,7 +103,7 @@ export default function NewPersonaPage() {
     <div>
      <label
       htmlFor="description"
-      className="block text-sm font-medium text-muted-foreground mb-2"
+      className="block text-sm font-medium qt-text-xs mb-2"
      >
       Description *
      </label>
@@ -120,7 +120,7 @@ export default function NewPersonaPage() {
     <div>
      <label
       htmlFor="personalityTraits"
-      className="block text-sm font-medium text-muted-foreground mb-2"
+      className="block text-sm font-medium qt-text-xs mb-2"
      >
       Personality Traits
      </label>
@@ -143,7 +143,7 @@ export default function NewPersonaPage() {
      </button>
      <Link
       href="/personas"
-      className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-sm transition hover:bg-muted"
+      className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium qt-text-small shadow-sm transition hover:bg-muted"
      >
       Cancel
      </Link>

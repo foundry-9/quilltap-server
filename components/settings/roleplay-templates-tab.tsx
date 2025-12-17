@@ -259,7 +259,7 @@ export default function RoleplayTemplatesTab() {
       {/* Default Template Section */}
       <section className="border border-border rounded-lg p-4 bg-card">
         <h2 className="text-lg font-semibold mb-2">Default Template</h2>
-        <p className="text-muted-foreground text-sm mb-4">
+        <p className="qt-text-small mb-4">
           This template will be applied to all new chats by default. You can override it per-character or per-chat.
         </p>
         <div className="flex flex-wrap items-end gap-3">
@@ -282,7 +282,7 @@ export default function RoleplayTemplatesTab() {
             </select>
           </div>
           {defaultSaving && (
-            <span className="text-sm text-muted-foreground">Saving...</span>
+            <span className="qt-text-small">Saving...</span>
           )}
         </div>
       </section>
@@ -290,12 +290,12 @@ export default function RoleplayTemplatesTab() {
       {/* Built-in Templates Section */}
       <section>
         <h2 className="text-xl font-semibold mb-2">Built-in Templates</h2>
-        <p className="text-muted-foreground text-sm mb-4">
+        <p className="qt-text-small mb-4">
           These templates are provided by Quilltap and cannot be modified. You can copy them to create your own version.
         </p>
 
         {builtInTemplates.length === 0 ? (
-          <div className="text-sm text-muted-foreground border border-dashed border-border rounded-lg p-4">
+          <div className="qt-text-small border border-dashed border-border rounded-lg p-4">
             No built-in templates available.
           </div>
         ) : (
@@ -309,7 +309,7 @@ export default function RoleplayTemplatesTab() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-foreground truncate">{template.name}</h3>
                     {template.description && (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                      <p className="qt-text-small mt-1 line-clamp-2">
                         {template.description}
                       </p>
                     )}
@@ -345,7 +345,7 @@ export default function RoleplayTemplatesTab() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-semibold">My Templates</h2>
-            <p className="text-muted-foreground text-sm mt-1">
+            <p className="qt-text-small mt-1">
               Custom templates you&apos;ve created for your roleplay sessions.
             </p>
           </div>
@@ -359,7 +359,7 @@ export default function RoleplayTemplatesTab() {
         </div>
 
         {userTemplates.length === 0 ? (
-          <div className="text-sm text-muted-foreground border border-dashed border-border rounded-lg p-4">
+          <div className="qt-text-small border border-dashed border-border rounded-lg p-4">
             No custom templates yet. Create one to define your own roleplay formatting style.
           </div>
         ) : (
@@ -372,7 +372,7 @@ export default function RoleplayTemplatesTab() {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium text-foreground truncate">{template.name}</h3>
                   {template.description && (
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                    <p className="qt-text-small mt-1 line-clamp-2">
                       {template.description}
                     </p>
                   )}
@@ -448,7 +448,7 @@ export default function RoleplayTemplatesTab() {
                     placeholder="My Custom RP Style"
                     className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="qt-text-xs mt-1">
                     {formData.name.length}/100 characters
                   </p>
                 </div>
@@ -465,7 +465,7 @@ export default function RoleplayTemplatesTab() {
                     placeholder="A brief description of what this template does"
                     className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="qt-text-xs mt-1">
                     {formData.description.length}/500 characters
                   </p>
                 </div>
@@ -481,7 +481,7 @@ export default function RoleplayTemplatesTab() {
                     placeholder="Enter the formatting instructions that will be prepended to character system prompts..."
                     className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="qt-text-xs mt-1">
                     This will be prepended to the character&apos;s system prompt when this template is selected.
                     You can use placeholders like {'{{char}}'} and {'{{user}}'}.
                   </p>
@@ -520,7 +520,7 @@ export default function RoleplayTemplatesTab() {
                 <div>
                   <h2 className="text-xl font-semibold">{previewTemplate.name}</h2>
                   {previewTemplate.description && (
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="qt-text-small mt-1">
                       {previewTemplate.description}
                     </p>
                   )}
@@ -533,7 +533,7 @@ export default function RoleplayTemplatesTab() {
               </div>
 
               <div className="border border-border rounded-lg p-4 bg-muted/30">
-                <h3 className="text-sm font-medium text-muted-foreground mb-2">System Prompt</h3>
+                <h3 className="qt-text-small font-medium mb-2">System Prompt</h3>
                 <pre className="whitespace-pre-wrap text-sm text-foreground font-mono">
                   {previewTemplate.systemPrompt}
                 </pre>

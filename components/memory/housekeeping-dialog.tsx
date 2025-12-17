@@ -139,7 +139,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 max={10000}
                 className="qt-input"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 qt-text-xs">
                 Hard cap on total memories
               </p>
             </div>
@@ -156,7 +156,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 max={120}
                 className="qt-input"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 qt-text-xs">
                 Delete old low-importance memories
               </p>
             </div>
@@ -175,7 +175,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
               step={0.1}
               className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
             />
-            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+            <div className="flex justify-between qt-text-xs mt-1">
               <span>0%</span>
               <span>Threshold for deletion</span>
               <span>70%</span>
@@ -200,7 +200,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <p className="text-muted-foreground">Loading preview...</p>
+              <p className="qt-text-small">Loading preview...</p>
             </div>
           ) : error ? (
             <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded">
@@ -242,7 +242,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                       .map((detail) => (
                         <div
                           key={detail.memoryId}
-                          className={`p-3 rounded-lg text-sm ${
+                          className={`p-3 rounded-lg qt-text-small ${
                             detail.action === 'deleted'
                               ? 'bg-destructive/10 border border-destructive/30'
                               : 'bg-yellow-500/10 border border-yellow-600/30'
@@ -251,7 +251,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                           <p className="font-medium text-foreground line-clamp-1">
                             {detail.summary || 'Untitled memory'}
                           </p>
-                          <p className="text-muted-foreground text-xs mt-1">
+                          <p className="qt-text-xs mt-1">
                             {detail.reason}
                           </p>
                         </div>
@@ -259,9 +259,9 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-8 qt-text-small">
                   <p>No memories to clean up with current settings.</p>
-                  <p className="text-sm mt-1">All memories are within retention policy.</p>
+                  <p className="qt-text-xs mt-1">All memories are within retention policy.</p>
                 </div>
               )}
             </div>

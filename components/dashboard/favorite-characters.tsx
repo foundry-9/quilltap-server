@@ -58,7 +58,7 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
                 {character.name}
               </h3>
               {character.title && (
-                <p className="text-[10px] text-muted-foreground truncate">
+                <p className="text-[10px] truncate">
                   {character.title}
                 </p>
               )}
@@ -83,7 +83,7 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
               {character.name}
             </h3>
             {character.title && (
-              <p className="text-xs text-muted-foreground text-center truncate w-full px-1">
+              <p className="qt-text-xs text-center truncate w-full px-1">
                 {character.title}
               </p>
             )}
