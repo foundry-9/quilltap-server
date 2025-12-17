@@ -4,6 +4,20 @@
 
 ### 2.4-dev
 
+- fix: Physical Descriptions tab API loop bug
+  - Clicking Physical Descriptions tab on character view or Settings → NPCs repeatedly hit the API in infinite loop
+  - Fixed by using refs in useListManager hook to prevent fetchFn recreation causing infinite loop
+- fix: Default Connection Profile dropdown empty on character edit page
+  - Profiles weren't mapping to correct structure, now explicitly maps to {id, name}
+- fix: Character editing error (setState during render)
+  - Moved debug logging from render to useEffect to avoid state updates during render
+- fix: Avatar display style (circular/rectangular) now applies via CSS variable
+  - AvatarDisplayProvider now sets --qt-avatar-radius CSS variable based on user preference
+  - Chat avatars now use this variable for consistent styling
+- fix: NPC view and edit pages now show "Back to NPCs" breadcrumb and navigate to Settings → NPCs
+- fix: Settings page now supports URL tab parameter (e.g., /settings?tab=npcs)
+- feat: Added "Convert to NPC" / "Convert to Character" toggle button on character view page
+
 - feat: Ad-hoc NPC character system
   - Added `npc` boolean flag to Character schema for distinguishing NPCs from regular characters
   - New CreateNPCDialog for quick NPC creation directly from chat character selection

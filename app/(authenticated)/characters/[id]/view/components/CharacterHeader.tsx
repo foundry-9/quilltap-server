@@ -9,6 +9,8 @@ interface CharacterHeaderProps {
   style: AvatarDisplayStyle
   avatarRefreshKey: number
   onStartChat: () => void
+  onToggleNpc: () => void
+  togglingNpc?: boolean
 }
 
 export function CharacterHeader({
@@ -16,6 +18,8 @@ export function CharacterHeader({
   style,
   avatarRefreshKey,
   onStartChat,
+  onToggleNpc,
+  togglingNpc = false,
 }: CharacterHeaderProps) {
   const getAvatarSrc = () => {
     let src = null
@@ -61,12 +65,19 @@ export function CharacterHeader({
           )}
         </div>
       </div>
-      <div className="flex flex-shrink-0 gap-2">
+      <div className="flex flex-shrink-0 flex-col gap-2">
         <button
           onClick={onStartChat}
-          className="inline-flex items-center rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow hover:bg-success/90"
+          className="inline-flex items-center justify-center rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow hover:bg-success/90"
         >
           Start Chat
+        </button>
+        <button
+          onClick={onToggleNpc}
+          disabled={togglingNpc}
+          className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted disabled:opacity-50"
+        >
+          {togglingNpc ? 'Converting...' : character?.npc ? 'Convert to Character' : 'Convert to NPC'}
         </button>
       </div>
     </div>

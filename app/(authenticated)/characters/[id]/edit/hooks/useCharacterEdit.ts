@@ -161,11 +161,18 @@ export function useCharacterEdit(id: string) {
       const res = await fetch('/api/profiles')
       if (res.ok) {
         const data = await res.json()
+        // Map to ConnectionProfile type to ensure consistent structure
+        const profiles = data.map((p: { id: string; name: string }) => ({
+          id: p.id,
+          name: p.name,
+        }))
         setState((prev) => ({
           ...prev,
-          profiles: data,
+          profiles,
         }))
-        clientLogger.debug('Connection profiles fetched', { count: data.length })
+        clientLogger.debug('Connection profiles fetched', { count: profiles.length })
+      } else {
+        clientLogger.warn('Failed to fetch profiles, non-OK response', { status: res.status })
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
@@ -286,6 +293,7 @@ export function useCharacterEdit(id: string) {
 
   /**
    * Handle cancel/back navigation
+   * Navigates to NPCs settings if character is an NPC, otherwise to character view
    */
   const handleCancel = async () => {
     if (hasChanges) {
@@ -308,8 +316,18 @@ export function useCharacterEdit(id: string) {
       // If 'Discard', continue to navigation
       clientLogger.debug('User chose to discard changes', { characterId: id })
     }
-    router.push(`/characters/${id}/view`)
+    // Navigate to appropriate location based on character type
+    if (state.character?.npc) {
+      router.push('/settings?tab=npcs')
+    } else {
+      router.push(`/characters/${id}/view`)
+    }
   }
+
+  /**
+   * Check if character is an NPC
+   */
+  const isNpc = state.character?.npc ?? false
 
   /**
    * Set character avatar
@@ -404,6 +422,9 @@ export function useCharacterEdit(id: string) {
   return {
     // State
     ...state,
+
+    // Computed
+    isNpc,
 
     // Methods
     handleChange,

@@ -154,7 +154,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <EntityTabs tabs={SETTINGS_TABS} defaultTab="keys" persistToUrl={false}>
+      <EntityTabs tabs={SETTINGS_TABS} defaultTab="keys">
         {renderTabContent}
       </EntityTabs>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { use } from 'react'
+import { use, useEffect } from 'react'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { EntityTabs, Tab } from '@/components/tabs'
@@ -104,9 +104,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     clearAvatar,
     fetchCharacter,
     hasChanges,
+    isNpc,
   } = useCharacterEdit(id)
 
-  clientLogger.debug('Rendering EditCharacterPage', { characterId: id, loading })
+  // Debug logging moved to useEffect to avoid state updates during render
+  useEffect(() => {
+    clientLogger.debug('EditCharacterPage mounted', { characterId: id })
+  }, [id])
 
   if (loading) {
     return (
@@ -126,7 +130,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           onClick={handleCancel}
           className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
         >
-          ← Back
+          {isNpc ? '← Back to NPCs' : '← Back'}
         </button>
         <div className="flex items-center gap-4">
           {/* Avatar Display */}

@@ -46,6 +46,7 @@ export interface Character {
   avatarUrl?: string
   defaultImageId?: string
   defaultConnectionProfileId?: string
+  npc?: boolean
   defaultImage?: {
     id: string
     filepath: string

@@ -729,6 +729,7 @@
 
   .qt-chat-message-mobile-avatar {
     @apply w-10 h-10 bg-muted flex-shrink-0 overflow-hidden;
+    border-radius: var(--qt-avatar-radius);
   }
 
   .qt-chat-message-mobile-avatar img {
@@ -1030,7 +1031,7 @@
     @apply overflow-hidden;
     width: 44px;
     height: 44px;
-    border-radius: var(--radius-md);
+    border-radius: var(--qt-avatar-radius);
     background: var(--color-muted);
     border: 2px solid transparent;
     cursor: pointer;

@@ -60,6 +60,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     handleTemplateReplace,
     handleSaveConnectionProfile,
     handleSaveDefaultPersona,
+    handleToggleNpc,
+    togglingNpc,
   } = useCharacterView(id)
 
   const { creatingChat, handleCreateChat } = useChatCreation()
@@ -262,10 +264,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     <div className="character-view min-h-screen px-4 py-8 text-foreground">
       <div className="mx-auto max-w-5xl">
         <Link
-          href="/characters"
+          href={character?.npc ? '/settings?tab=npcs' : '/characters'}
           className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
         >
-          ← Back to Characters
+          {character?.npc ? '← Back to NPCs' : '← Back to Characters'}
         </Link>
 
         <CharacterHeader
@@ -273,6 +275,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           style={style}
           avatarRefreshKey={avatarRefreshKey}
           onStartChat={handleStartChat}
+          onToggleNpc={handleToggleNpc}
+          togglingNpc={togglingNpc}
         />
 
         {/* Tabbed Content */}

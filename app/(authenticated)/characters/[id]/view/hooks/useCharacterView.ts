@@ -26,6 +26,7 @@ interface UseCharacterViewReturn {
   avatarRefreshKey: number
   templateCounts: TemplateCounts
   replacingTemplate: 'char' | 'user' | null
+  togglingNpc: boolean
   fetchCharacter: () => Promise<void>
   fetchTags: () => Promise<void>
   fetchProfiles: () => Promise<void>
@@ -39,6 +40,7 @@ interface UseCharacterViewReturn {
   handleTemplateReplace: (type: 'char' | 'user') => Promise<void>
   handleSaveConnectionProfile: (profileId: string) => Promise<void>
   handleSaveDefaultPersona: (personaId: string) => Promise<void>
+  handleToggleNpc: () => Promise<void>
 }
 
 export function useCharacterView(characterId: string): UseCharacterViewReturn {
@@ -54,6 +56,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [replacingTemplate, setReplacingTemplate] = useState<'char' | 'user' | null>(null)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
   const [savingPersona, setSavingPersona] = useState(false)
+  const [togglingNpc, setTogglingNpc] = useState(false)
 
   // Get the default persona for template highlighting
   const defaultPersona = personas.find(p => p.id === defaultPersonaId)
@@ -291,6 +294,32 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleToggleNpc = async () => {
+    if (!character) return
+    setTogglingNpc(true)
+    try {
+      const newNpcValue = !character.npc
+      const res = await fetch(`/api/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ npc: newNpcValue }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update character')
+      }
+      // Update local state
+      setCharacter({ ...character, npc: newNpcValue })
+      showSuccessToast(newNpcValue ? 'Converted to NPC' : 'Converted to Character')
+      clientLogger.info('Character NPC status toggled', { characterId, npc: newNpcValue })
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle NPC status')
+      clientLogger.error('Failed to toggle NPC status', { error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setTogglingNpc(false)
+    }
+  }
+
   return {
     loading,
     error,
@@ -303,6 +332,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     avatarRefreshKey,
     templateCounts,
     replacingTemplate,
+    togglingNpc,
     fetchCharacter,
     fetchTags,
     fetchProfiles,
@@ -316,5 +346,6 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleTemplateReplace,
     handleSaveConnectionProfile,
     handleSaveDefaultPersona,
+    handleToggleNpc,
   }
 }

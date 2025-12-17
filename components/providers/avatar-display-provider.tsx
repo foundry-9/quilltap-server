@@ -33,6 +33,15 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Update CSS variable when style changes
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const radius = style === 'RECTANGULAR' ? 'var(--radius-md)' : '9999px'
+      document.documentElement.style.setProperty('--qt-avatar-radius', radius)
+      clientLogger.debug('AvatarDisplayProvider: Updated CSS variable', { style, radius })
+    }
+  }, [style])
+
   // Fetch avatar display style on mount
   useEffect(() => {
     const fetchAvatarDisplayStyle = async () => {

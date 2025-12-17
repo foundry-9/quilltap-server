@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.0--dev.50-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.4.0--dev.51-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -546,9 +546,9 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [X] Get rid of any trace of "prisma"
 - [ ] Create a native Quilltap import/export for everything
 - [X] Add ad-hoc NPC addition to chats, with minimal setup, and optional conversion to a real character
-- [ ] Bug: selecting "Physical Descriptions" tab on `/characters/[id]` repeatedly hits the API until it errors out
-- [ ] Bug: "Default Connection Profile" on "Associated Profiles" tab on `characters/[id]/edit?tab=profiles` does not list any profiles
-- [ ] Bug: editing a character on the main character page doesn't seem to work, errors out
+- [X] Bug: selecting "Physical Descriptions" tab on `/characters/[id]` repeatedly hits the API until it errors out (also true on the "Settings --> NPC --> Physical Descriptions" tab)
+- [X] Bug: "Default Connection Profile" on "Associated Profiles" tab on `characters/[id]/edit?tab=profiles` does not list any profiles
+- [X] Bug: editing a character on the main character page doesn't seem to work, errors out
 - [ ] Add "Pause" to the turn system; if a chat is marked "Pause" then nobody ever gets to talk until the user nudges somebody again, or "un-pauses" it
 - [ ] Add a "Rename" to a chat, and if the user has renamed it, never try to rename it again unless something is toggled indicating that renaming can be automatic again
 

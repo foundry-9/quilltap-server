@@ -55,8 +55,18 @@ describe('useAvatarDisplay', () => {
 
   it('updates avatar style via PUT request', async () => {
     const fetchMock = jest.spyOn(global as any, 'fetch')
-    fetchMock.mockResolvedValueOnce(jsonResponse({ avatarDisplayStyle: 'CIRCULAR' }))
-    fetchMock.mockResolvedValueOnce(jsonResponse({ avatarDisplayStyle: 'RECTANGULAR' }))
+    // Use mockImplementation to handle multiple calls by URL
+    fetchMock.mockImplementation((url: string, options?: RequestInit) => {
+      if (url === '/api/chat-settings') {
+        if (options?.method === 'PUT') {
+          return jsonResponse({ avatarDisplayStyle: 'RECTANGULAR' })
+        }
+        // GET request
+        return jsonResponse({ avatarDisplayStyle: 'CIRCULAR' })
+      }
+      // Return 404 for any other URLs (like logger endpoints)
+      return jsonResponse({}, false, 404)
+    })
 
     const { result } = renderHook(() => useAvatarDisplay(), { wrapper })
 

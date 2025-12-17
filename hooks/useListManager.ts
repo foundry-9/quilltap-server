@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { getErrorMessage } from '@/lib/error-utils'
 import { clientLogger } from '@/lib/client-logger'
 import { showConfirmation } from '@/lib/alert'
@@ -114,12 +114,23 @@ export function useListManager<T extends Record<string, any>>(
   const [editingItem, setEditingItem] = useState<T | null>(null)
   const [showEditor, setShowEditor] = useState(false)
 
+  // Use refs to store functions to avoid dependency array issues that cause infinite loops
+  const fetchFnRef = useRef(fetchFn)
+  const deleteFnRef = useRef(deleteFn)
+  const hasFetchedRef = useRef(false)
+
+  // Keep refs up to date
+  useEffect(() => {
+    fetchFnRef.current = fetchFn
+    deleteFnRef.current = deleteFn
+  }, [fetchFn, deleteFn])
+
   const refetch = useCallback(async () => {
     try {
       clientLogger.debug('useListManager: Fetching items')
       setLoading(true)
       setError(null)
-      const data = await fetchFn()
+      const data = await fetchFnRef.current()
       setItems(data)
       clientLogger.debug('useListManager: Fetched items', { count: data.length })
     } catch (err) {
@@ -129,16 +140,17 @@ export function useListManager<T extends Record<string, any>>(
     } finally {
       setLoading(false)
     }
-  }, [fetchFn])
+  }, [])
 
   useEffect(() => {
-    if (autoFetch) {
+    if (autoFetch && !hasFetchedRef.current) {
+      hasFetchedRef.current = true
       refetch()
     }
   }, [autoFetch, refetch])
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!deleteFn) {
+    if (!deleteFnRef.current) {
       clientLogger.warn('useListManager: No deleteFn provided, skipping delete')
       return
     }
@@ -152,7 +164,7 @@ export function useListManager<T extends Record<string, any>>(
     setDeletingId(id)
     try {
       clientLogger.debug('useListManager: Deleting item', { id })
-      await deleteFn(id)
+      await deleteFnRef.current(id)
       setItems(prev => prev.filter(item => String(item[idField]) !== id))
       showSuccessToast(deleteSuccessMessage)
       clientLogger.debug('useListManager: Item deleted successfully', { id })
@@ -163,7 +175,7 @@ export function useListManager<T extends Record<string, any>>(
     } finally {
       setDeletingId(null)
     }
-  }, [deleteFn, deleteConfirmMessage, deleteSuccessMessage, idField])
+  }, [deleteConfirmMessage, deleteSuccessMessage, idField])
 
   const handleEdit = useCallback((item: T) => {
     clientLogger.debug('useListManager: Opening editor for item', { id: item[idField] })
