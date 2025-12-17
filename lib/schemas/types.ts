@@ -318,6 +318,7 @@ export const CharacterSchema = z.object({
   defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),  // Default roleplay template for this character
   sillyTavernData: JsonSchema.nullable().optional(),
   isFavorite: z.boolean().default(false),
+  npc: z.boolean().default(false),  // NPC flag - true for ad-hoc NPCs created in chat
   talkativeness: z.number().min(0.1).max(1.0).default(0.5),
 
   // Relationships

@@ -8,6 +8,7 @@
 import * as esbuild from 'esbuild';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync, writeFileSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -97,9 +98,40 @@ async function build() {
     if (result.warnings.length > 0) {
       console.warn('Warnings:', result.warnings);
     }
+
+    // Post-build patch: Fix @openrouter/sdk bug where tool_calls[].id doesn't accept null
+    // The SDK schema has `id: z.string().optional()` but some models return null for id
+    // This patch changes it to `id: z.nullable(z.string()).optional()`
+    // See: https://github.com/openrouter/sdk issue (upstream bug)
+    applyOpenRouterSdkPatch(resolve(__dirname, 'index.js'));
+
   } catch (error) {
     console.error('Build failed:', error);
     process.exit(1);
+  }
+}
+
+/**
+ * Patches the bundled index.js to fix @openrouter/sdk streaming schema bug.
+ * The SDK doesn't accept null for tool_calls[].id but some models return null.
+ */
+function applyOpenRouterSdkPatch(filePath) {
+  try {
+    let content = readFileSync(filePath, 'utf-8');
+
+    // Pattern: ChatStreamingMessageToolCall schema with non-nullable id
+    const oldPattern = /var ChatStreamingMessageToolCall\$inboundSchema = (z\d+)\.object\(\{\s*index: \1\.number\(\),\s*id: \1\.string\(\)\.optional\(\),/g;
+    const newPattern = 'var ChatStreamingMessageToolCall$inboundSchema = $1.object({\n  index: $1.number(),\n  id: $1.nullable($1.string()).optional(),';
+
+    if (oldPattern.test(content)) {
+      content = content.replace(oldPattern, newPattern);
+      writeFileSync(filePath, content, 'utf-8');
+      console.log('Applied OpenRouter SDK patch: tool_calls[].id now accepts null');
+    } else {
+      console.log('OpenRouter SDK patch: pattern not found (may already be fixed upstream)');
+    }
+  } catch (error) {
+    console.warn('Warning: Could not apply OpenRouter SDK patch:', error.message);
   }
 }
 

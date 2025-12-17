@@ -17,6 +17,7 @@ import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import CreateNPCDialog from './CreateNPCDialog'
 
 interface CharacterOption {
   id: string
@@ -24,6 +25,7 @@ interface CharacterOption {
   title?: string | null
   avatarUrl?: string | null
   defaultConnectionProfileId?: string | null
+  npc?: boolean
   defaultImage?: {
     id: string
     filepath: string
@@ -62,6 +64,7 @@ export default function AddCharacterDialog({
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
+  const [isCreateNPCOpen, setIsCreateNPCOpen] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -84,6 +87,7 @@ export default function AddCharacterDialog({
       setHasHistoryAccess(false)
       setJoinScenario('')
       setSearchTerm('')
+      setIsCreateNPCOpen(false)
     }
   }, [isOpen])
 
@@ -144,26 +148,36 @@ export default function AddCharacterDialog({
   }
 
   // Filter out characters already in the chat and apply search
-  const availableCharacters = useMemo(() => {
+  const { regularCharacters, npcCharacters } = useMemo(() => {
     const existingSet = new Set(existingCharacterIds)
-    return characters
+    const filtered = characters
       .filter(c => !existingSet.has(c.id))
       .filter(c =>
         searchTerm === '' ||
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (c.title && c.title.toLowerCase().includes(searchTerm.toLowerCase()))
       )
+
+    // Separate into regular and NPC characters
+    const regular = filtered
+      .filter(c => c.npc !== true)
       .sort((a, b) => a.name.localeCompare(b.name))
+
+    const npcs = filtered
+      .filter(c => c.npc === true)
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    return { regularCharacters: regular, npcCharacters: npcs }
   }, [characters, existingCharacterIds, searchTerm])
 
   const selectedCharacter = useMemo(() => {
     return characters.find(c => c.id === selectedCharacterId)
   }, [characters, selectedCharacterId])
 
-  // Handle click outside to close
+  // Handle click outside to close (disabled when NPC dialog is open)
   useClickOutside(modalRef, () => { if (!isAdding) onClose() }, {
-    enabled: isOpen,
-    onEscape: () => { if (!isAdding) onClose() },
+    enabled: isOpen && !isCreateNPCOpen,
+    onEscape: () => { if (!isAdding && !isCreateNPCOpen) onClose() },
   })
 
   const handleAddCharacter = async () => {
@@ -221,6 +235,21 @@ export default function AddCharacterDialog({
     }
   }
 
+  const handleNPCCreated = async (characterId: string) => {
+    clientLogger.debug('[AddCharacterDialog] NPC created, refreshing list and auto-selecting', {
+      characterId,
+    })
+
+    // Refresh the character list
+    await loadData()
+
+    // Auto-select the new NPC
+    setSelectedCharacterId(characterId)
+
+    // Close the create NPC dialog
+    setIsCreateNPCOpen(false)
+  }
+
   if (!isOpen) return null
 
   return (
@@ -275,59 +304,150 @@ export default function AddCharacterDialog({
 
                 {/* Character grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-64 overflow-y-auto p-1">
-                  {availableCharacters.length === 0 ? (
+                  {regularCharacters.length === 0 && npcCharacters.length === 0 ? (
                     <div className="col-span-full text-center py-8 text-muted-foreground">
                       {searchTerm ? 'No matching characters found' : 'All your characters are already in this chat'}
                     </div>
                   ) : (
-                    availableCharacters.map((character) => {
-                      const isSelected = selectedCharacterId === character.id
+                    <>
+                      {/* Regular Characters */}
+                      {regularCharacters.map((character) => {
+                        const isSelected = selectedCharacterId === character.id
 
-                      return (
-                        <button
-                          key={character.id}
-                          onClick={() => setSelectedCharacterId(character.id)}
-                          disabled={isAdding}
-                          className={`
-                            p-3 rounded-lg border text-left transition-all
-                            ${isSelected
-                              ? 'border-primary bg-primary/10 ring-2 ring-primary'
-                              : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                            }
-                            disabled:opacity-50 disabled:cursor-not-allowed
-                          `}
-                        >
-                          <div className="flex items-center gap-3">
-                            {/* Avatar */}
-                            <Avatar
-                              name={character.name}
-                              src={character}
-                              size="md"
-                              styleOverride="RECTANGULAR"
-                            />
+                        return (
+                          <button
+                            key={character.id}
+                            onClick={() => setSelectedCharacterId(character.id)}
+                            disabled={isAdding}
+                            className={`
+                              p-3 rounded-lg border text-left transition-all
+                              ${isSelected
+                                ? 'border-primary bg-primary/10 ring-2 ring-primary'
+                                : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                              }
+                              disabled:opacity-50 disabled:cursor-not-allowed
+                            `}
+                          >
+                            <div className="flex items-center gap-3">
+                              {/* Avatar */}
+                              <Avatar
+                                name={character.name}
+                                src={character}
+                                size="md"
+                                styleOverride="RECTANGULAR"
+                              />
 
-                            {/* Info */}
-                            <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-foreground truncate">
-                                {character.name}
-                              </div>
-                              {character.title && (
-                                <div className="qt-text-xs italic truncate">
-                                  {character.title}
+                              {/* Info */}
+                              <div className="min-w-0 flex-1">
+                                <div className="font-semibold text-foreground truncate">
+                                  {character.name}
                                 </div>
+                                {character.title && (
+                                  <div className="qt-text-xs italic truncate">
+                                    {character.title}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Selected indicator */}
+                              {isSelected && (
+                                <svg className="w-5 h-5 text-primary flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
                               )}
                             </div>
+                          </button>
+                        )
+                      })}
 
-                            {/* Selected indicator */}
-                            {isSelected && (
-                              <svg className="w-5 h-5 text-primary flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                            )}
+                      {/* NPCs Section */}
+                      {npcCharacters.length > 0 && (
+                        <>
+                          {/* Divider */}
+                          <div className="col-span-full flex items-center gap-2 my-2">
+                            <div className="flex-1 border-t border-border"></div>
+                            <span className="qt-text-xs text-muted-foreground font-medium">NPCs</span>
+                            <div className="flex-1 border-t border-border"></div>
                           </div>
-                        </button>
-                      )
-                    })
+
+                          {/* NPC Characters */}
+                          {npcCharacters.map((character) => {
+                            const isSelected = selectedCharacterId === character.id
+
+                            return (
+                              <button
+                                key={character.id}
+                                onClick={() => setSelectedCharacterId(character.id)}
+                                disabled={isAdding}
+                                className={`
+                                  p-3 rounded-lg border text-left transition-all
+                                  ${isSelected
+                                    ? 'border-primary bg-primary/10 ring-2 ring-primary'
+                                    : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                                  }
+                                  disabled:opacity-50 disabled:cursor-not-allowed
+                                `}
+                              >
+                                <div className="flex items-center gap-3">
+                                  {/* Avatar */}
+                                  <Avatar
+                                    name={character.name}
+                                    src={character}
+                                    size="md"
+                                    styleOverride="RECTANGULAR"
+                                  />
+
+                                  {/* Info */}
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-semibold text-foreground truncate">
+                                      {character.name}
+                                    </div>
+                                    {character.title && (
+                                      <div className="qt-text-xs italic truncate">
+                                        {character.title}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Selected indicator */}
+                                  {isSelected && (
+                                    <svg className="w-5 h-5 text-primary flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                    </svg>
+                                  )}
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </>
+                      )}
+
+                      {/* Create New NPC Button */}
+                      <button
+                        onClick={() => setIsCreateNPCOpen(true)}
+                        disabled={isAdding}
+                        className="p-3 rounded-lg border border-dashed border-border hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* User Plus Icon */}
+                          <div className="w-10 h-10 flex items-center justify-center rounded bg-primary/10 text-primary flex-shrink-0">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                            </svg>
+                          </div>
+
+                          {/* Text */}
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-primary truncate">
+                              Create New NPC
+                            </div>
+                            <div className="qt-text-xs text-muted-foreground truncate">
+                              Add an ad-hoc character
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -438,6 +558,14 @@ export default function AddCharacterDialog({
           </button>
         </div>
       </div>
+
+      {/* Create NPC Dialog */}
+      <CreateNPCDialog
+        isOpen={isCreateNPCOpen}
+        onClose={() => setIsCreateNPCOpen(false)}
+        chatId={chatId}
+        onNPCCreated={handleNPCCreated}
+      />
     </div>
   )
 }

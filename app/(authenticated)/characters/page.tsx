@@ -73,7 +73,8 @@ export default function CharactersPage() {
 
   const fetchCharacters = async () => {
     try {
-      const res = await fetch('/api/characters')
+      clientLogger.debug('Characters page: fetching non-NPC characters only')
+      const res = await fetch('/api/characters?npc=false')
       if (!res.ok) throw new Error('Failed to fetch characters')
       const data = await res.json()
       setCharacters(data.characters)

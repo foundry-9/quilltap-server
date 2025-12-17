@@ -33,9 +33,31 @@ const createCharacterSchema = z.object({
   exampleDialogues: z.string().optional(),
   avatarUrl: z.string().url().optional().or(z.literal('')),
   defaultConnectionProfileId: z.string().uuid().optional(),
+  npc: z.boolean().optional(),  // NPC flag for ad-hoc characters
+  systemPrompts: z.array(z.object({
+    id: z.string().uuid(),
+    name: z.string().min(1).max(100),
+    content: z.string().min(1),
+    isDefault: z.boolean().default(false),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })).optional(),
+  physicalDescriptions: z.array(z.object({
+    id: z.string().uuid(),
+    name: z.string().min(1),
+    shortPrompt: z.string().max(350).nullable().optional(),
+    mediumPrompt: z.string().max(500).nullable().optional(),
+    longPrompt: z.string().max(750).nullable().optional(),
+    completePrompt: z.string().max(1000).nullable().optional(),
+    fullDescription: z.string().nullable().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })).optional(),
 })
 
 // GET /api/characters - List all characters
+// Query params:
+//   - npc: 'true' to get only NPCs, 'false' to get only non-NPCs, omit for all
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession()
@@ -50,7 +72,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const characters = await repos.characters.findByUserId(user.id)
+    let characters = await repos.characters.findByUserId(user.id)
+
+    // Filter by NPC status if specified
+    const { searchParams } = new URL(req.url)
+    const npcFilter = searchParams.get('npc')
+    if (npcFilter === 'true') {
+      characters = characters.filter(c => c.npc === true)
+      logger.debug('Filtering characters to NPCs only', { count: characters.length })
+    } else if (npcFilter === 'false') {
+      // Include characters without npc field (backwards compatibility)
+      characters = characters.filter(c => !c.npc)
+      logger.debug('Filtering characters to non-NPCs only', { count: characters.length })
+    }
 
     // Sort by createdAt descending
     characters.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -83,6 +117,7 @@ export async function GET(req: NextRequest) {
           defaultImageId: character.defaultImageId,
           defaultImage,
           isFavorite: character.isFavorite,
+          npc: character.npc ?? false,
           createdAt: character.createdAt,
           tags: character.tags || [],
           updatedAt: character.updatedAt,
@@ -133,11 +168,19 @@ export async function POST(req: NextRequest) {
       avatarUrl: validatedData.avatarUrl || null,
       defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
       isFavorite: false,
+      npc: validatedData.npc ?? false,
       tags: [] as string[],
       personaLinks: [] as { personaId: string; isDefault: boolean }[],
       avatarOverrides: [] as { chatId: string; imageId: string }[],
       defaultImageId: null,
-      physicalDescriptions: [],
+      physicalDescriptions: validatedData.physicalDescriptions || [],
+      systemPrompts: validatedData.systemPrompts || [],
+    })
+
+    logger.info('Character created', {
+      characterId: character.id,
+      name: character.name,
+      npc: character.npc
     })
 
     return NextResponse.json({ character }, { status: 201 })

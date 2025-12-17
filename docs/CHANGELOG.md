@@ -4,6 +4,20 @@
 
 ### 2.4-dev
 
+- feat: Ad-hoc NPC character system
+  - Added `npc` boolean flag to Character schema for distinguishing NPCs from regular characters
+  - New CreateNPCDialog for quick NPC creation directly from chat character selection
+  - NPCs can be created with: name, description, physical description, scenario, system prompt, and avatar
+  - AddCharacterDialog now shows regular characters first, then NPCs, with "Create New NPC" option at bottom
+  - New Settings → NPCs tab for managing NPC characters (view, edit, delete, convert to regular character)
+  - Characters page now filters to show only non-NPCs
+  - API supports `?npc=true|false` query parameter for filtering characters
+
+- fix: OpenRouter plugin streaming error with tool calls (v1.0.5)
+  - Updated @openrouter/sdk to 0.3.1
+  - Added post-build patch for SDK bug where `tool_calls[].id` doesn't accept null values
+  - Some models return null for tool call IDs in streaming chunks, causing "Failed to parse SSE data" errors
+
 - fix: Avatar display style (circular/rectangular) now consistent across all avatars in chat
   - Created AvatarDisplayProvider context to share avatar style setting globally
   - Prevents race condition where different Avatar components could have different styles
