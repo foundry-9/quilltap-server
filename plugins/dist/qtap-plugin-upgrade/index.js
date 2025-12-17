@@ -32265,7 +32265,7 @@ var require_lib3 = __commonJS({
   }
 });
 
-// ../../../lib/errors.ts
+// ../../../lib/error-utils.ts
 function getErrorMessage(error2, fallback = "Unknown error") {
   if (error2 instanceof Error) {
     return error2.message;
@@ -32281,12 +32281,20 @@ function getErrorMessage(error2, fallback = "Unknown error") {
   }
   return fallback;
 }
+var init_error_utils = __esm({
+  "../../../lib/error-utils.ts"() {
+    "use strict";
+  }
+});
+
+// ../../../lib/errors.ts
 var import_server;
 var init_errors = __esm({
   "../../../lib/errors.ts"() {
     "use strict";
     import_server = require("next/server");
     init_logger();
+    init_error_utils();
   }
 });
 

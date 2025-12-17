@@ -4,7 +4,7 @@
  *
  * This plugin provides:
  * - Chat completion using GPT-4, GPT-4o, GPT-3.5 Turbo and other OpenAI models
- * - Image generation using DALL-E 2, DALL-E 3, and GPT-Image-1
+ * - Image generation using GPT-Image models (1.5, 1, 1-mini) and legacy DALL-E 2/3
  * - Vision capabilities (image analysis)
  * - Function calling / tool use
  * - Web search integration

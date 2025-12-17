@@ -4,6 +4,10 @@
 
 ### 2.4-dev
 
+- feat: Updated OpenAI plugin with new GPT-Image models (v1.0.5)
+  - Added `gpt-image-1.5` (newest, recommended)
+  - Added `gpt-image-1-mini` (cost-effective option)
+  - Note: DALL-E 2 and DALL-E 3 are deprecated (support ends 05/12/2026)
 - refactor: Consolidated click-outside detection into `useClickOutside` hook
   - Created `hooks/useClickOutside.ts` with options for `enabled`, `excludeRefs`, and `onEscape`
   - Updated 14 components across search, tags, dashboard, chat, and settings
