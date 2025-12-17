@@ -4,6 +4,28 @@
 
 ### 2.4-dev
 
+- style: Major Earl Grey theme enhancement with full qt-* utility class support (v1.0.10)
+  - Added 140+ new CSS variable overrides for comprehensive theming
+  - Tabs: Full tab styling with transparent inactive states and raised active states
+  - DevConsole: Complete log level styling with blue-gray undertones (error, warning, info, debug)
+  - Debug panel: All six color themes (cyan, violet, emerald, amber, purple, indigo) for debug sections
+  - Badges: Enhanced entity type badges (character, persona, chat, tag, memory) with Earl Grey palette
+  - Navbar: Backdrop blur with gradient background and dropdown styling
+  - Sidebar: Extended padding/radius variables with brand-colored active states
+  - Dialog/Modal/Popover: Explicit radius and consistent surface styling
+  - Participant cards: Enhanced hover and active states with accent glow
+  - Chat sidebar: Cohesive background and border styling
+  - Empty states: Theme-aware icon, title, and description colors
+  - Footer: Consistent background and link hover states
+  - Avatars: Gradient background with accent colors
+  - Inputs: Enhanced focus states with accent ring
+  - Code blocks: Consistent pictogram-based styling
+  - Mobile tool palette: Full mobile button and palette styling
+  - Mobile participant bar/dropdown: Complete mobile chat styling
+  - Chat toolbar: Enhanced button hover states
+  - Link decoration: Clean underline-on-hover style
+  - Typography: Secondary text foreground variable
+  - Content area: Theme-aware background and scroll area colors
 - fix: Add template variable processing to LLM context building
   - Fixed `{{char}}` and `{{user}}` template variables not being replaced in system prompts sent to LLMs
   - Roleplay templates, character system prompts, personality, scenario, and example dialogues now have templates processed
