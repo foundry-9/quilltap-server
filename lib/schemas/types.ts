@@ -274,6 +274,18 @@ export type ConnectionProfile = z.infer<typeof ConnectionProfileSchema>;
 // CHARACTER & PERSONA
 // ============================================================================
 
+// Character System Prompt (embedded in Character) - named system prompts for characters
+export const CharacterSystemPromptSchema = z.object({
+  id: UUIDSchema,
+  name: z.string().min(1).max(100),
+  content: z.string().min(1),
+  isDefault: z.boolean().default(false),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type CharacterSystemPrompt = z.infer<typeof CharacterSystemPromptSchema>;
+
 // Physical Description for image generation prompts
 export const PhysicalDescriptionSchema = z.object({
   id: UUIDSchema,
@@ -299,13 +311,14 @@ export const CharacterSchema = z.object({
   scenario: z.string().nullable().optional(),
   firstMessage: z.string().nullable().optional(),
   exampleDialogues: z.string().nullable().optional(),
-  systemPrompt: z.string().nullable().optional(),
+  systemPrompts: z.array(CharacterSystemPromptSchema).default([]),  // Named system prompts array
   avatarUrl: z.string().nullable().optional(),
   defaultImageId: UUIDSchema.nullable().optional(),
   defaultConnectionProfileId: UUIDSchema.nullable().optional(),
   defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),  // Default roleplay template for this character
   sillyTavernData: JsonSchema.nullable().optional(),
   isFavorite: z.boolean().default(false),
+  npc: z.boolean().default(false),  // NPC flag - true for ad-hoc NPCs created in chat
   talkativeness: z.number().min(0.1).max(1.0).default(0.5),
 
   // Relationships
@@ -417,6 +430,7 @@ export const ChatParticipantSchema = z.object({
 
   // Per-chat customization
   systemPromptOverride: z.string().nullable().optional(),  // Custom scenario/context for this chat
+  selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
 
   // Display and state
   displayOrder: z.number().default(0),   // For ordering in UI
@@ -455,6 +469,7 @@ export const ChatParticipantBaseSchema = z.object({
   imageProfileId: UUIDSchema.nullable().optional(),
   roleplayTemplateId: UUIDSchema.nullable().optional(),  // Roleplay template override for this chat
   systemPromptOverride: z.string().nullable().optional(),
+  selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
   displayOrder: z.number().default(0),
   isActive: z.boolean().default(true),
   hasHistoryAccess: z.boolean().default(false),
@@ -481,6 +496,8 @@ export const ChatMetadataSchema = z.object({
   tags: z.array(UUIDSchema).default([]),
   /** Roleplay template for this chat (inherited from user default on creation) */
   roleplayTemplateId: UUIDSchema.nullable().optional(),
+  /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
+  lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
@@ -504,6 +521,8 @@ export const ChatMetadataBaseSchema = z.object({
   tags: z.array(UUIDSchema).default([]),
   /** Roleplay template for this chat (inherited from user default on creation) */
   roleplayTemplateId: UUIDSchema.nullable().optional(),
+  /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
+  lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
@@ -758,6 +777,27 @@ export const RoleplayTemplateSchema = z.object({
 export type RoleplayTemplate = z.infer<typeof RoleplayTemplateSchema>;
 
 // ============================================================================
+// PROMPT TEMPLATES
+// ============================================================================
+
+// User-created prompt templates (stored in MongoDB) for reusable system prompts
+export const PromptTemplateSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema.nullable().optional(),   // null for built-in sample prompts
+  name: z.string().min(1).max(100),
+  content: z.string().min(1),                 // The prompt content (markdown)
+  description: z.string().max(500).nullable().optional(),
+  isBuiltIn: z.boolean().default(false),      // True for sample prompts from prompts/ directory
+  category: z.string().nullable().optional(), // e.g., "COMPANION", "ROMANTIC" from filename
+  modelHint: z.string().nullable().optional(), // e.g., "CLAUDE", "GPT-4O" from filename
+  tags: z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type PromptTemplate = z.infer<typeof PromptTemplateSchema>;
+
+// ============================================================================
 // BACKGROUND JOBS
 // ============================================================================
 
@@ -797,6 +837,30 @@ export const BackgroundJobSchema = z.object({
 });
 
 export type BackgroundJob = z.infer<typeof BackgroundJobSchema>;
+
+// ============================================================================
+// PROVIDER MODELS
+// ============================================================================
+
+export const ModelTypeEnum = z.enum(['chat', 'image', 'embedding']);
+export type ModelType = z.infer<typeof ModelTypeEnum>;
+
+export const ProviderModelSchema = z.object({
+  id: UUIDSchema,
+  provider: ProviderEnum,
+  modelId: z.string().min(1),
+  modelType: ModelTypeEnum.default('chat'),               // Type of model (chat, image, embedding)
+  displayName: z.string(),
+  baseUrl: z.string().nullable().optional(),              // For custom endpoints
+  contextWindow: z.number().nullable().optional(),        // Max context size in tokens
+  maxOutputTokens: z.number().nullable().optional(),      // Max generation tokens
+  deprecated: z.boolean().default(false),                 // Is this model deprecated
+  experimental: z.boolean().default(false),               // Is this model experimental
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type ProviderModel = z.infer<typeof ProviderModelSchema>;
 
 // ============================================================================
 // COMPOUND OBJECTS

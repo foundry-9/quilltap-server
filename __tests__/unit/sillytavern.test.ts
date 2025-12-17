@@ -8,7 +8,8 @@ import {
   STCharacterV2,
 } from '@/lib/sillytavern/character'
 import { importSTPersona, exportSTPersona } from '@/lib/sillytavern/persona'
-import { importSTChat, exportSTChat } from '@/lib/sillytavern/chat'
+import { importSTChat, exportSTChat, exportSTChatAsJSONL } from '@/lib/sillytavern/chat'
+import { parseSTFile } from '@/lib/sillytavern/multi-char-parser'
 
 describe('SillyTavern Character Import/Export', () => {
   const mockSTCharacter: STCharacterV2 = {
@@ -23,6 +24,7 @@ describe('SillyTavern Character Import/Export', () => {
     tags: ['test', 'example'],
   }
 
+  const now = new Date().toISOString()
   const mockInternalCharacter = {
     id: '123',
     userId: 'user-456',
@@ -32,7 +34,14 @@ describe('SillyTavern Character Import/Export', () => {
     scenario: 'Testing scenario',
     firstMessage: 'Hello, I am Test Character!',
     exampleDialogues: '<START>\n{{char}}: Example dialogue\n{{user}}: Example response',
-    systemPrompt: 'You are Test Character',
+    systemPrompts: [{
+      id: 'prompt-1',
+      name: 'Default',
+      content: 'You are Test Character',
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    }],
     avatarUrl: null,
     sillyTavernData: mockSTCharacter,
     createdAt: new Date(),
@@ -49,7 +58,9 @@ describe('SillyTavern Character Import/Export', () => {
       expect(result.scenario).toBe('Testing scenario')
       expect(result.firstMessage).toBe('Hello, I am Test Character!')
       expect(result.exampleDialogues).toBe('<START>\n{{char}}: Example dialogue\n{{user}}: Example response')
-      expect(result.systemPrompt).toBe('You are Test Character')
+      expect(result.systemPrompts).toHaveLength(1)
+      expect(result.systemPrompts[0].content).toBe('You are Test Character')
+      expect(result.systemPrompts[0].isDefault).toBe(true)
       expect(result.sillyTavernData).toEqual(mockSTCharacter)
     })
 
@@ -80,7 +91,7 @@ describe('SillyTavern Character Import/Export', () => {
 
       expect(result.name).toBe('Minimal')
       expect(result.exampleDialogues).toBe('')
-      expect(result.systemPrompt).toBe('')
+      expect(result.systemPrompts).toHaveLength(0)
     })
   })
 
@@ -317,6 +328,142 @@ describe('SillyTavern Chat Import/Export', () => {
       const result = exportSTChat(mockInternalChat, messagesWithSystem as any, 'Character', 'User')
 
       expect(result.messages.every((m) => !m.mes.includes('System prompt'))).toBe(true)
+    })
+  })
+
+  describe('exportSTChatAsJSONL', () => {
+    it('should export chat as JSONL with header on first line', () => {
+      const result = exportSTChatAsJSONL(mockInternalChat, mockMessages, 'Character', 'User')
+
+      const lines = result.split('\n')
+      expect(lines.length).toBeGreaterThan(1)
+
+      // First line should be header with metadata
+      const header = JSON.parse(lines[0])
+      expect(header.user_name).toBe('User')
+      expect(header.character_name).toBe('Character')
+      expect(header.chat_metadata).toBeDefined()
+      expect(header.create_date).toBeDefined()
+    })
+
+    it('should have individual messages on subsequent lines', () => {
+      const result = exportSTChatAsJSONL(mockInternalChat, mockMessages, 'Character', 'User')
+
+      const lines = result.split('\n')
+      // Header + messages (3 messages, but 2 are swipes so should be 2 message lines)
+      expect(lines.length).toBeGreaterThanOrEqual(2)
+
+      // Each line after header should be a valid message object
+      for (let i = 1; i < lines.length; i++) {
+        const msg = JSON.parse(lines[i])
+        expect(msg.name).toBeDefined()
+        expect(msg.mes).toBeDefined()
+        expect(typeof msg.is_user).toBe('boolean')
+      }
+    })
+
+    it('should produce output that can be re-imported via parseSTFile', () => {
+      const jsonlContent = exportSTChatAsJSONL(mockInternalChat, mockMessages, 'Character', 'User')
+
+      // This should now work since parseSTFile handles JSONL properly
+      const parsed = parseSTFile(jsonlContent, 'test.jsonl')
+
+      expect(parsed.messages.length).toBeGreaterThan(0)
+      expect(parsed.metadata.characterName).toBe('Character')
+      expect(parsed.metadata.userName).toBe('User')
+    })
+  })
+})
+
+describe('SillyTavern File Format Detection', () => {
+  describe('parseSTFile', () => {
+    it('should parse JSON file with messages array', () => {
+      const jsonContent = JSON.stringify({
+        messages: [
+          { name: 'User', is_user: true, mes: 'Hello!', send_date: Date.now() },
+          { name: 'Bot', is_user: false, mes: 'Hi!', send_date: Date.now() },
+        ],
+        character_name: 'Bot',
+        user_name: 'User',
+      })
+
+      const result = parseSTFile(jsonContent, 'test.json')
+
+      expect(result.messages).toHaveLength(2)
+      expect(result.metadata.characterName).toBe('Bot')
+      expect(result.metadata.userName).toBe('User')
+    })
+
+    it('should parse JSON file even with .jsonl extension (Quilltap export format)', () => {
+      // This simulates a Quilltap export which is JSON but has .jsonl extension
+      const jsonContent = JSON.stringify({
+        messages: [
+          { name: 'User', is_user: true, mes: 'Hello!', send_date: Date.now() },
+          { name: 'Character', is_user: false, mes: 'Hi there!', send_date: Date.now() },
+        ],
+        chat_metadata: { note_prompt: 'Test' },
+        character_name: 'Character',
+        user_name: 'User',
+        create_date: Date.now(),
+      }, null, 2) // Pretty-printed like Quilltap exports
+
+      const result = parseSTFile(jsonContent, 'Character_chat_1234567890.jsonl')
+
+      expect(result.messages).toHaveLength(2)
+      expect(result.metadata.characterName).toBe('Character')
+      expect(result.metadata.userName).toBe('User')
+      expect(result.speakers).toHaveLength(2)
+    })
+
+    it('should parse actual JSONL format (line-delimited)', () => {
+      const jsonlContent = [
+        JSON.stringify({ chat_metadata: { note: 'test' }, character_name: 'Bot', user_name: 'User' }),
+        JSON.stringify({ name: 'User', is_user: true, mes: 'Hello!', send_date: Date.now() }),
+        JSON.stringify({ name: 'Bot', is_user: false, mes: 'Hi!', send_date: Date.now() }),
+      ].join('\n')
+
+      const result = parseSTFile(jsonlContent, 'chat.jsonl')
+
+      expect(result.messages).toHaveLength(2)
+      expect(result.metadata.characterName).toBe('Bot')
+    })
+
+    it('should parse array of messages format', () => {
+      const arrayContent = JSON.stringify([
+        { name: 'User', is_user: true, mes: 'Hello!', send_date: Date.now() },
+        { name: 'Bot', is_user: false, mes: 'Hi!', send_date: Date.now() },
+      ])
+
+      const result = parseSTFile(arrayContent, 'test.json')
+
+      expect(result.messages).toHaveLength(2)
+    })
+
+    it('should extract unique speakers correctly', () => {
+      const jsonContent = JSON.stringify({
+        messages: [
+          { name: 'Alice', is_user: true, mes: 'Hello!', send_date: Date.now() },
+          { name: 'Bob', is_user: false, mes: 'Hi!', send_date: Date.now() },
+          { name: 'Alice', is_user: true, mes: 'How are you?', send_date: Date.now() },
+          { name: 'Bob', is_user: false, mes: 'Good!', send_date: Date.now() },
+        ],
+      })
+
+      const result = parseSTFile(jsonContent, 'test.json')
+
+      expect(result.speakers).toHaveLength(2)
+      expect(result.speakers.find(s => s.name === 'Alice')?.messageCount).toBe(2)
+      expect(result.speakers.find(s => s.name === 'Bob')?.messageCount).toBe(2)
+    })
+
+    it('should throw error for empty files', () => {
+      expect(() => parseSTFile('', 'test.json')).toThrow()
+    })
+
+    it('should throw error for files with no messages', () => {
+      const noMessages = JSON.stringify({ chat_metadata: {} })
+
+      expect(() => parseSTFile(noMessages, 'test.json')).toThrow('No messages found')
     })
   })
 })

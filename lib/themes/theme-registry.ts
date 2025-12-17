@@ -17,6 +17,7 @@ import type { ThemeTokens, ThemeManifest } from './types';
 import { safeValidateThemeTokens } from './types';
 import { DEFAULT_THEME_TOKENS, DEFAULT_THEME_METADATA } from './default-tokens';
 import { mergeThemeTokens, themeTokensToCSS } from './utils';
+import { getErrorMessage } from '@/lib/errors';
 
 // ============================================================================
 // TYPES
@@ -148,7 +149,7 @@ class ThemeRegistry {
       try {
         await this.loadThemeFromPlugin(plugin);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage = getErrorMessage(error);
         logger.error('Failed to load theme from plugin', {
           plugin: plugin.manifest.name,
           error: errorMessage,
@@ -232,14 +233,14 @@ class ThemeRegistry {
     try {
       tokensData = await fs.readFile(tokensPath, 'utf-8');
     } catch (error) {
-      throw new Error(`Failed to read tokens file at ${tokensPath}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to read tokens file at ${tokensPath}: ${getErrorMessage(error)}`);
     }
 
     let rawTokens: unknown;
     try {
       rawTokens = JSON.parse(tokensData);
     } catch (error) {
-      throw new Error(`Invalid JSON in tokens file: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Invalid JSON in tokens file: ${getErrorMessage(error)}`);
     }
 
     // Validate tokens
@@ -286,7 +287,7 @@ class ThemeRegistry {
         logger.warn('Failed to load theme CSS overrides', {
           themeId,
           path: stylesPath,
-          error: error instanceof Error ? error.message : String(error),
+          error: getErrorMessage(error),
         });
       }
     }

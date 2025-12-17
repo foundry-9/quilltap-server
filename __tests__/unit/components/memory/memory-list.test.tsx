@@ -10,6 +10,15 @@ jest.mock('@/lib/alert', () => ({
   showConfirmation: jest.fn().mockResolvedValue(true),
 }))
 
+jest.mock('@/lib/client-logger', () => ({
+  clientLogger: {
+    debug: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+  },
+}))
+
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
     push: jest.fn(),
@@ -21,6 +30,16 @@ describe('MemoryList', () => {
   const mockFetch = global.fetch as jest.Mock
 
   const flushPromises = () => new Promise(resolve => setTimeout(resolve, 0))
+
+  // Helper to create mock response that works with fetchJson (which uses response.text())
+  function createMockResponse(data: unknown, ok = true, status = 200) {
+    return {
+      ok,
+      status,
+      text: async () => JSON.stringify(data),
+      json: async () => data,
+    } as Response
+  }
 
   async function renderMemoryList(overrides: Partial<{ characterId: string }> = {}) {
     const props = { characterId: mockCharacterId, ...overrides }
@@ -35,10 +54,7 @@ describe('MemoryList', () => {
   }
 
   beforeEach(() => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ memories: [] }),
-    } as Response)
+    mockFetch.mockResolvedValue(createMockResponse({ memories: [] }))
   })
 
   afterEach(() => {
@@ -57,46 +73,47 @@ describe('MemoryList', () => {
   })
 
   it('fetches memories and displays the count', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        memories: [
-          {
-            id: '1',
-            characterId: mockCharacterId,
-            content: 'Alpha',
-            summary: 'Alpha',
-            keywords: [],
-            tags: [],
-            importance: 0.5,
-            source: 'AUTO',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: '2',
-            characterId: mockCharacterId,
-            content: 'Beta',
-            summary: 'Beta',
-            keywords: [],
-            tags: [],
-            importance: 0.7,
-            source: 'MANUAL',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-      }),
-    } as Response)
+    // Use mockResolvedValue since useListManager and useEffect may trigger multiple fetches
+    mockFetch.mockResolvedValue(createMockResponse({
+      memories: [
+        {
+          id: '1',
+          characterId: mockCharacterId,
+          content: 'Alpha',
+          summary: 'Alpha',
+          keywords: [],
+          tags: [],
+          importance: 0.5,
+          source: 'AUTO',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: '2',
+          characterId: mockCharacterId,
+          content: 'Beta',
+          summary: 'Beta',
+          keywords: [],
+          tags: [],
+          importance: 0.7,
+          source: 'MANUAL',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    }))
 
     await renderMemoryList()
 
-    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining(`/api/characters/${mockCharacterId}/memories`))
-    expect(screen.getByText(/Memories \(2\)/i)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText(/Memories \(2\)/i)).toBeInTheDocument()
+    })
+
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining(`/api/characters/${mockCharacterId}/memories`), undefined)
   })
 
   it('shows an error message if the fetch fails', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, json: async () => ({}) } as Response)
+    mockFetch.mockResolvedValueOnce(createMockResponse({ error: 'Failed to fetch memories' }, false, 500))
 
     await renderMemoryList()
 
@@ -119,27 +136,30 @@ describe('MemoryList', () => {
   })
 
   it('opens housekeeping dialog when cleanup is clicked', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        memories: [
-          {
-            id: '1',
-            characterId: mockCharacterId,
-            content: 'Alpha',
-            summary: 'Alpha',
-            keywords: [],
-            tags: [],
-            importance: 0.5,
-            source: 'AUTO',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-      }),
-    } as Response)
+    // Use mockResolvedValue (not mockResolvedValueOnce) since multiple fetch calls may occur
+    mockFetch.mockResolvedValue(createMockResponse({
+      memories: [
+        {
+          id: '1',
+          characterId: mockCharacterId,
+          content: 'Alpha',
+          summary: 'Alpha',
+          keywords: [],
+          tags: [],
+          importance: 0.5,
+          source: 'AUTO',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    }))
 
     await renderMemoryList()
+
+    // Wait for memories to be loaded
+    await waitFor(() => {
+      expect(screen.getByText(/Memories \(1\)/i)).toBeInTheDocument()
+    })
 
     fireEvent.click(screen.getByRole('button', { name: /cleanup/i }))
 

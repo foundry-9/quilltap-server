@@ -218,9 +218,9 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                 onResultClick={handleResultClick}
               />
             ) : (
-              <div className="p-6 text-center text-muted-foreground">
+              <div className="p-6 text-center qt-text-small">
                 <p>Type at least 2 characters to search</p>
-                <p className="text-sm mt-1">
+                <p className="qt-text-xs mt-1">
                   Search across your chats, characters, personas, tags, and memories
                 </p>
               </div>
@@ -228,7 +228,7 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
           </div>
 
           {/* Footer with keyboard shortcuts */}
-          <div className="px-4 py-2 border-t border-border bg-muted text-xs text-muted-foreground flex justify-between">
+          <div className="px-4 py-2 border-t border-border bg-muted qt-text-xs flex justify-between">
             <span>
               <kbd className="px-1.5 py-0.5 bg-accent rounded">↵</kbd> to search
             </span>

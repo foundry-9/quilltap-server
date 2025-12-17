@@ -15,6 +15,7 @@
 
 import { useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import Avatar from '@/components/ui/Avatar'
 
 export interface ParticipantData {
   id: string
@@ -60,10 +61,12 @@ interface ParticipantCardProps {
   onNudge: (participantId: string) => void
   onQueue: (participantId: string) => void
   onDequeue: (participantId: string) => void
+  onSkip?: () => void // Skip turn (for user participants in multi-char chat)
   onTalkativenessChange?: (participantId: string, value: number) => void
   onRemove?: (participantId: string) => void // Phase 6: Remove character from chat
   isUserParticipant?: boolean // True if this is the user's persona
   canRemove?: boolean // True if this character can be removed (not the only character)
+  canSkip?: boolean // True if user can skip their turn (next speaker is null = user's turn)
 }
 
 export function ParticipantCard({
@@ -74,10 +77,12 @@ export function ParticipantCard({
   onNudge,
   onQueue,
   onDequeue,
+  onSkip,
   onTalkativenessChange,
   onRemove,
   isUserParticipant = false,
   canRemove = true,
+  canSkip = false,
 }: ParticipantCardProps) {
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
@@ -95,16 +100,6 @@ export function ParticipantCard({
   const title = entity.title
   const talkativeness = participant.character?.talkativeness ?? 0.5
 
-  // Get avatar source
-  const getAvatarSrc = () => {
-    if (entity.defaultImage) {
-      const filepath = entity.defaultImage.url || entity.defaultImage.filepath
-      return filepath.startsWith('/') ? filepath : `/${filepath}`
-    }
-    return entity.avatarUrl || null
-  }
-
-  const avatarSrc = getAvatarSrc()
 
   // Handle nudge/queue button click
   const handleActionClick = () => {
@@ -181,26 +176,13 @@ export function ParticipantCard({
       <div className="qt-participant-card-header">
         {/* Avatar */}
         <div className="flex-shrink-0">
-          <div
-            className={`
-              qt-participant-card-avatar overflow-hidden bg-muted flex items-center justify-center
-              ${isCurrentTurn ? 'ring-2 ring-primary ring-offset-1 ring-offset-card' : ''}
-            `}
-            style={{ width: '48px', height: '60px', borderRadius: 'var(--radius-md)' }}
-          >
-            {avatarSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarSrc}
-                alt={name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-lg font-bold text-muted-foreground">
-                {name.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
+          <Avatar
+            name={name}
+            src={entity}
+            size="md"
+            isActive={isCurrentTurn}
+            styleOverride="RECTANGULAR"
+          />
         </div>
 
         {/* Info */}
@@ -232,7 +214,7 @@ export function ParticipantCard({
           {/* Talkativeness slider for characters */}
           {isCharacter && !isUserParticipant && (
             <div className="mt-2">
-              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+              <div className="flex items-center justify-between qt-text-xs mb-1">
                 <span>Talkativeness</span>
                 <span>{(localTalkativeness * 100).toFixed(0)}%</span>
               </div>
@@ -251,7 +233,7 @@ export function ParticipantCard({
           {/* Talkativeness indicator for personas (greyed out) */}
           {isUserParticipant && (
             <div className="mt-2 opacity-50">
-              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+              <div className="flex items-center justify-between qt-text-xs mb-1">
                 <span>Talkativeness</span>
                 <span>N/A</span>
               </div>
@@ -271,22 +253,54 @@ export function ParticipantCard({
 
       {/* Action buttons */}
       <div className="qt-participant-card-actions">
-        <button
-          onClick={handleActionClick}
-          disabled={isActionDisabled}
-          className={`
-            flex-1
-            ${queuePosition > 0
-              ? 'qt-badge-info hover:bg-info/20'
-              : isCurrentTurn
-                ? 'qt-participant-turn-indicator cursor-default'
-                : 'qt-button qt-button-secondary qt-button-sm'
-            }
-            disabled:opacity-50 disabled:cursor-not-allowed
-          `}
-        >
-          {getActionButtonLabel()}
-        </button>
+        {/* User participant: show Queue and Skip buttons side by side */}
+        {isUserParticipant && onSkip ? (
+          <>
+            <button
+              onClick={handleActionClick}
+              disabled={isActionDisabled}
+              className={`
+                flex-1
+                ${queuePosition > 0
+                  ? 'qt-badge-info hover:bg-info/20'
+                  : 'qt-button qt-button-secondary qt-button-sm'
+                }
+                disabled:opacity-50 disabled:cursor-not-allowed
+              `}
+            >
+              {queuePosition > 0 ? 'Dequeue' : 'Queue'}
+            </button>
+            <button
+              onClick={() => {
+                clientLogger.debug('[ParticipantCard] Skip clicked')
+                onSkip()
+              }}
+              disabled={isGenerating || !canSkip}
+              className="flex-1 qt-button qt-button-sm qt-chat-continue-button disabled:opacity-50 disabled:cursor-not-allowed"
+              title={canSkip ? 'Skip your turn and let a character respond' : "It's not your turn to skip"}
+            >
+              Skip
+            </button>
+          </>
+        ) : (
+          /* Character participants: normal single button */
+          <button
+            onClick={handleActionClick}
+            disabled={isActionDisabled}
+            className={`
+              flex-1
+              ${queuePosition > 0
+                ? 'qt-badge-info hover:bg-info/20'
+                : isCurrentTurn
+                  ? 'qt-participant-turn-indicator cursor-default'
+                  : 'qt-button qt-button-secondary qt-button-sm'
+              }
+              disabled:opacity-50 disabled:cursor-not-allowed
+            `}
+          >
+            {getActionButtonLabel()}
+          </button>
+        )}
 
         {/* Remove button - only for characters, not user personas */}
         {isCharacter && !isUserParticipant && onRemove && canRemove && (

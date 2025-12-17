@@ -1,7 +1,8 @@
 /**
  * OpenAI Image Generation Provider Implementation for Quilltap Plugin
  *
- * Supports DALL-E 2, DALL-E 3, and gpt-image-1 models
+ * Supports GPT-Image models (1.5, 1, 1-mini) and legacy DALL-E models
+ * Note: DALL-E 2 and DALL-E 3 are deprecated and will stop being supported on 05/12/2026
  * Handles model-specific parameter validation and normalization
  */
 
@@ -11,11 +12,18 @@ import { logger } from '../../../lib/logger';
 
 export class OpenAIImageProvider implements ImageGenProviderBase {
   readonly provider = 'OPENAI';
-  readonly supportedModels = ['gpt-image-1', 'dall-e-3', 'dall-e-2'];
+  readonly supportedModels = ['gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini', 'dall-e-3', 'dall-e-2'];
+
+  /**
+   * Check if a model is a GPT-Image model (1.5, 1, or 1-mini)
+   */
+  private isGptImageModel(model: string): boolean {
+    return model.startsWith('gpt-image-');
+  }
 
   /**
    * Validate and normalize size for OpenAI API
-   * gpt-image-1: 1024x1024, 1024x1536, 1536x1024, auto
+   * gpt-image models: 1024x1024, 1024x1536, 1536x1024, auto
    * dall-e-3: 1024x1024, 1024x1792, 1792x1024
    * dall-e-2: 256x256, 512x512, 1024x1024
    */
@@ -24,16 +32,14 @@ export class OpenAIImageProvider implements ImageGenProviderBase {
       return '1024x1024';
     }
 
-    const isGptImage = model === 'gpt-image-1';
-
-    if (isGptImage) {
-      // gpt-image-1 supports: 1024x1024, 1024x1536, 1536x1024, auto
+    if (this.isGptImageModel(model)) {
+      // gpt-image models support: 1024x1024, 1024x1536, 1536x1024, auto
       const gptImageSizes = ['1024x1024', '1024x1536', '1536x1024', 'auto'];
       if (gptImageSizes.includes(size)) {
         return size;
       }
       // Map unsupported sizes to nearest valid size
-      logger.debug('Normalizing size for gpt-image-1', { context: 'OpenAIImageProvider.validateAndNormalizeSize', originalSize: size, normalizedSize: '1024x1024' });
+      logger.debug('Normalizing size for gpt-image model', { context: 'OpenAIImageProvider.validateAndNormalizeSize', model, originalSize: size, normalizedSize: '1024x1024' });
       return '1024x1024';
     }
 
@@ -67,8 +73,8 @@ export class OpenAIImageProvider implements ImageGenProviderBase {
 
     const client = new OpenAI({ apiKey });
 
-    // gpt-image-1 has different parameter support than DALL-E models
-    const isGptImage = params.model === 'gpt-image-1';
+    // gpt-image models have different parameter support than DALL-E models
+    const isGptImage = this.isGptImageModel(params.model ?? '');
 
     const requestParams: any = {
       model: params.model,

@@ -90,7 +90,7 @@ export function CharacterDeleteDialog({
           </h2>
 
           {loading ? (
-            <div className="py-8 text-center text-muted-foreground">
+            <div className="py-8 text-center qt-text-small">
               Loading...
             </div>
           ) : error ? (
@@ -99,7 +99,7 @@ export function CharacterDeleteDialog({
             </div>
           ) : (
             <>
-              <p className="text-muted-foreground mb-4">
+              <p className="qt-text-small mb-4">
                 Are you sure you want to delete <strong className="text-foreground">{characterName}</strong>?
               </p>
 
@@ -171,7 +171,7 @@ export function CharacterDeleteDialog({
               )}
 
               {!hasExclusiveData && (
-                <p className="text-muted-foreground text-sm mb-4">
+                <p className="qt-text-small mb-4">
                   This character has no exclusive chats or images that would be deleted.
                 </p>
               )}

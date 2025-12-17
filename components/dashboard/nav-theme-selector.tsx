@@ -13,6 +13,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useTheme, type ThemeSummary } from '@/components/providers/theme-provider'
 import { clientLogger } from '@/lib/client-logger'
 import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 // Default theme preview colors
 const DEFAULT_PREVIEW_COLORS = {
@@ -88,7 +89,7 @@ function ThemeOption({ theme, isActive, onSelect, resolvedColorMode }: ThemeOpti
       </div>
 
       {/* Theme name */}
-      <span className="text-sm font-medium text-foreground truncate flex-1">
+      <span className="text-sm qt-text-primary truncate flex-1">
         {name}
       </span>
 
@@ -119,33 +120,11 @@ export function NavThemeSelector() {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isOpen])
-
-  // Close dropdown on escape key
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsOpen(false)
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape)
-      return () => document.removeEventListener('keydown', handleEscape)
-    }
-  }, [isOpen])
+  // Close dropdown when clicking outside or pressing escape
+  useClickOutside(dropdownRef, () => setIsOpen(false), {
+    enabled: isOpen,
+    onEscape: () => setIsOpen(false),
+  })
 
   // Don't render if the setting is disabled
   if (!showNavThemeSelector) {
@@ -232,7 +211,7 @@ export function NavThemeSelector() {
 
             {/* Hint when no plugin themes */}
             {themes.length === 0 && (
-              <div className="px-3 py-2 text-xs text-muted-foreground">
+              <div className="px-3 py-2 qt-text-xs">
                 Install theme plugins for more options
               </div>
             )}

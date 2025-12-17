@@ -159,7 +159,7 @@ export default function RoleplayAnnotationButtons({
 
   return (
     <div className="qt-rp-annotation-toolbar">
-      <span className="text-xs text-muted-foreground mr-2">Insert:</span>
+      <span className="qt-text-xs mr-2">Insert:</span>
       {annotations.map((config) => (
         <button
           key={config.type}

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
-import { exportSTChat } from '@/lib/sillytavern/chat'
+import { exportSTChatAsJSONL } from '@/lib/sillytavern/chat'
 import { logger } from '@/lib/logger'
 
 export async function GET(
@@ -70,22 +70,23 @@ export async function GET(
       rawResponse: msg.rawResponse || null,
     }))
 
-    // Create a chat object compatible with exportSTChat
+    // Create a chat object compatible with exportSTChatAsJSONL
     const chatForExport = {
       ...chat,
       createdAt: new Date(chat.createdAt),
       updatedAt: new Date(chat.updatedAt),
     }
 
-    const stChat = exportSTChat(chatForExport, formattedMessages, character.name, userName)
+    // Export as proper JSONL format (one JSON object per line)
+    const jsonlContent = exportSTChatAsJSONL(chatForExport, formattedMessages, character.name, userName)
 
-    // Return as JSON with download headers
+    // Return as JSONL with download headers
     const chatCreatedTime = new Date(chat.createdAt).getTime()
     const filename = `${character.name}_chat_${chatCreatedTime}.jsonl`
 
-    return new NextResponse(JSON.stringify(stChat, null, 2), {
+    return new NextResponse(jsonlContent, {
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-ndjson',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })

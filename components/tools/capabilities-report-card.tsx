@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
+import { getErrorMessage } from '@/lib/error-utils'
 import { CapabilitiesReportDialog } from './capabilities-report-dialog'
 
 interface ReportInfo {
@@ -88,7 +89,7 @@ export function CapabilitiesReportCard() {
       // Refresh the list
       await fetchReports()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       setError(errorMessage)
       clientLogger.error('Failed to generate capabilities report', { error: errorMessage })
       showErrorToast(errorMessage)
@@ -113,7 +114,7 @@ export function CapabilitiesReportCard() {
       })
       setShowDialog(true)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       clientLogger.error('Failed to view report', { error: errorMessage })
       showErrorToast('Failed to load report')
     } finally {
@@ -140,7 +141,7 @@ export function CapabilitiesReportCard() {
       showSuccessToast('Report deleted')
       await fetchReports()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       clientLogger.error('Failed to delete report', { error: errorMessage })
       showErrorToast('Failed to delete report')
     }
@@ -176,7 +177,7 @@ export function CapabilitiesReportCard() {
           <h2 className="text-2xl font-bold text-foreground mb-1">
             Capabilities Report
           </h2>
-          <p className="text-muted-foreground">
+          <p className="qt-text-small">
             Generate a comprehensive report of your system configuration
           </p>
         </div>
@@ -299,7 +300,7 @@ export function CapabilitiesReportCard() {
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            <p className="text-muted-foreground">
+            <p className="qt-text-small">
               No reports yet. Generate one to get started.
             </p>
           </div>
@@ -311,10 +312,10 @@ export function CapabilitiesReportCard() {
                 className="qt-card p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-foreground truncate">
+                  <p className="qt-text-primary truncate">
                     {report.filename}
                   </p>
-                  <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
+                  <div className="flex gap-4 mt-1 qt-text-small">
                     <span>{formatDate(report.createdAt)}</span>
                     <span>{formatFileSize(report.size)}</span>
                   </div>

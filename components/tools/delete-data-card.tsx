@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { getErrorMessage } from '@/lib/error-utils'
 
 interface DeleteSummary {
   characters: number
@@ -48,7 +49,7 @@ export function DeleteDataCard() {
       setPreview(data.summary)
       clientLogger.info('Delete preview loaded', { summary: data.summary })
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load preview'
+      const errorMessage = getErrorMessage(err, 'Failed to load preview')
       setError(errorMessage)
       clientLogger.error('Failed to load delete preview', { error: errorMessage })
     } finally {
@@ -98,7 +99,7 @@ export function DeleteDataCard() {
       clientLogger.info('Complete data deletion finished', { summary: data.summary })
       showSuccessToast('All data has been deleted')
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to delete data'
+      const errorMessage = getErrorMessage(err, 'Failed to delete data')
       setError(errorMessage)
       setStep('confirm')
       clientLogger.error('Data deletion failed', { error: errorMessage })
@@ -132,7 +133,7 @@ export function DeleteDataCard() {
             <h2 className="text-2xl font-bold text-foreground mb-1">
               Delete All Data
             </h2>
-            <p className="text-muted-foreground">
+            <p className="qt-text-small">
               Permanently delete all your data including characters, personas, chats, files, API keys, and backups. This action cannot be undone.
             </p>
           </div>
@@ -214,53 +215,53 @@ export function DeleteDataCard() {
                       </div>
                     ) : preview ? (
                       <div className="space-y-4">
-                        <p className="text-sm text-muted-foreground">
+                        <p className="qt-text-small">
                           The following data will be permanently deleted:
                         </p>
                         <div className="bg-muted rounded-lg p-4 space-y-2 text-sm">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Characters</span>
-                            <span className="font-medium text-foreground">{preview.characters}</span>
+                            <span className="qt-text-primary">{preview.characters}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Personas</span>
-                            <span className="font-medium text-foreground">{preview.personas}</span>
+                            <span className="qt-text-primary">{preview.personas}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Chats</span>
-                            <span className="font-medium text-foreground">{preview.chats}</span>
+                            <span className="qt-text-primary">{preview.chats}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Tags</span>
-                            <span className="font-medium text-foreground">{preview.tags}</span>
+                            <span className="qt-text-primary">{preview.tags}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Files</span>
-                            <span className="font-medium text-foreground">{preview.files}</span>
+                            <span className="qt-text-primary">{preview.files}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Memories</span>
-                            <span className="font-medium text-foreground">{preview.memories}</span>
+                            <span className="qt-text-primary">{preview.memories}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">API Keys</span>
-                            <span className="font-medium text-foreground">{preview.apiKeys}</span>
+                            <span className="qt-text-primary">{preview.apiKeys}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Backups</span>
-                            <span className="font-medium text-foreground">{preview.backups}</span>
+                            <span className="qt-text-primary">{preview.backups}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Connection Profiles</span>
-                            <span className="font-medium text-foreground">{preview.profiles.connection}</span>
+                            <span className="qt-text-primary">{preview.profiles.connection}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Image Profiles</span>
-                            <span className="font-medium text-foreground">{preview.profiles.image}</span>
+                            <span className="qt-text-primary">{preview.profiles.image}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Embedding Profiles</span>
-                            <span className="font-medium text-foreground">{preview.profiles.embedding}</span>
+                            <span className="qt-text-primary">{preview.profiles.embedding}</span>
                           </div>
                           <div className="border-t border-border pt-2 mt-2">
                             <div className="flex justify-between font-semibold">
@@ -285,7 +286,7 @@ export function DeleteDataCard() {
 
                 {step === 'confirm' && (
                   <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="qt-text-small">
                       To confirm deletion, please type <span className="font-mono font-semibold text-destructive">DELETE</span> below:
                     </p>
                     <input
@@ -310,7 +311,7 @@ export function DeleteDataCard() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    <p className="text-sm text-muted-foreground">Deleting all data...</p>
+                    <p className="qt-text-small">Deleting all data...</p>
                   </div>
                 )}
 
@@ -323,10 +324,10 @@ export function DeleteDataCard() {
                         </svg>
                       </div>
                     </div>
-                    <p className="text-center text-sm text-muted-foreground">
+                    <p className="text-center qt-text-small">
                       Successfully deleted {getTotalCount(deleteSummary)} items from your account.
                     </p>
-                    <p className="text-center text-xs text-muted-foreground">
+                    <p className="text-center qt-text-xs">
                       Your account is now clean. You can start fresh or restore from a backup.
                     </p>
                   </div>

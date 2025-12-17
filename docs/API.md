@@ -1,20 +1,32 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v1.0.
+Complete API reference for Quilltap v2.4.
 
 ## Table of Contents
 
 - [Authentication](#authentication)
 - [Rate Limiting](#rate-limiting)
 - [Error Handling](#error-handling)
+- [Providers](#providers)
 - [Endpoints](#endpoints)
   - [Health](#health)
   - [API Keys](#api-keys)
   - [Connection Profiles](#connection-profiles)
+  - [Embedding Profiles](#embedding-profiles)
+  - [Image Profiles](#image-profiles)
   - [Characters](#characters)
+  - [NPCs](#npcs)
   - [Personas](#personas)
   - [Chats](#chats)
   - [Messages](#messages)
+  - [Memories](#memories)
+  - [Tags](#tags)
+  - [Files & Images](#files--images)
+  - [Templates](#templates)
+  - [Tools & Backup](#tools--backup)
+  - [Themes](#themes)
+  - [Search](#search)
+  - [Background Jobs](#background-jobs)
 
 ## Authentication
 
@@ -22,9 +34,13 @@ All API endpoints (except `/api/health`) require authentication via NextAuth.js 
 
 ### Session Cookie
 
-- Automatically set after Google OAuth login
-- httpOnly, secure (in production)
-- Include credentials in requests:
+Authentication is handled through NextAuth.js sessions, which support:
+
+- **Google OAuth** (if Google plugin is enabled)
+- **Email/password login** (local accounts)
+- **No-auth mode** (`AUTH_DISABLED=true` for local/offline deployments)
+
+Include credentials in requests:
 
 ```javascript
 fetch('/api/characters', {
@@ -52,12 +68,11 @@ Rate limits are enforced on all endpoints:
 |--------------|-------|--------|
 | Auth endpoints | 5 requests | 60 seconds |
 | Chat streaming | 20 messages | 60 seconds |
+| Settings endpoints | 30 requests | 60 seconds |
 | API endpoints | 100 requests | 10 seconds |
 | General | 100 requests | 60 seconds |
 
 ### Rate Limit Headers
-
-All responses include rate limit information:
 
 ```
 X-RateLimit-Limit: 100
@@ -84,7 +99,7 @@ Status code: `429 Too Many Requests`
 {
   "error": "Error Type",
   "message": "Human-readable error message",
-  "details": {} // Optional additional details
+  "details": {}
 }
 ```
 
@@ -99,6 +114,21 @@ Status code: `429 Too Many Requests`
 - `429` - Too Many Requests
 - `500` - Internal Server Error
 - `503` - Service Unavailable
+
+## Providers
+
+Quilltap uses a plugin-based provider system. Available providers depend on which plugins are enabled via `SITE_PLUGINS_ENABLED`:
+
+| Provider ID | Plugin | Capabilities |
+|-------------|--------|--------------|
+| `OPENAI` | qtap-plugin-openai | Chat, embeddings, image generation, tool calling |
+| `ANTHROPIC` | qtap-plugin-anthropic | Chat, image understanding, tool calling, prompt caching |
+| `GOOGLE` | qtap-plugin-google | Chat, image generation (Imagen 4), multimodal inputs |
+| `GROK` | qtap-plugin-grok | Chat, image generation, web search, multimodal |
+| `GAB_AI` | qtap-plugin-gab-ai | Chat (OpenAI-compatible) |
+| `OLLAMA` | qtap-plugin-ollama | Chat, embeddings (local models) |
+| `OPENROUTER` | qtap-plugin-openrouter | Chat, embeddings, image generation (200+ models) |
+| `OPENAI_COMPATIBLE` | qtap-plugin-openai-compatible | Chat (any OpenAI-format API) |
 
 ## Endpoints
 
@@ -122,19 +152,6 @@ Check application health status.
 }
 ```
 
-**Unhealthy Response**: `503 Service Unavailable`
-
-```json
-{
-  "status": "unhealthy",
-  "timestamp": "2025-01-19T12:00:00.000Z",
-  "uptime": 86400,
-  "environment": "production",
-  "database": "disconnected",
-  "error": "Connection refused"
-}
-```
-
 ---
 
 ### API Keys
@@ -154,8 +171,7 @@ List all API keys for authenticated user.
     "keyMasked": "sk-...1234",
     "isActive": true,
     "lastUsed": "2025-01-19T10:00:00.000Z",
-    "createdAt": "2025-01-15T12:00:00.000Z",
-    "updatedAt": "2025-01-19T10:00:00.000Z"
+    "createdAt": "2025-01-15T12:00:00.000Z"
   }
 ]
 ```
@@ -175,85 +191,27 @@ Create a new API key.
 ```
 
 **Validation**:
-- `provider`: Required, one of: OPENAI, ANTHROPIC, OLLAMA, OPENROUTER, OPENAI_COMPATIBLE
+- `provider`: Required, provider ID from enabled plugins
 - `label`: Required, 1-100 characters
-- `apiKey`: Required, will be encrypted
+- `apiKey`: Required, will be encrypted with AES-256-GCM
 
 **Response**: `201 Created`
-
-```json
-{
-  "id": "key-uuid",
-  "provider": "OPENAI",
-  "label": "My OpenAI Key",
-  "keyMasked": "sk-...1234",
-  "isActive": true,
-  "createdAt": "2025-01-19T12:00:00.000Z"
-}
-```
 
 #### `GET /api/keys/[id]`
 
 Get a specific API key (masked).
 
-**Response**: `200 OK`
-
-```json
-{
-  "id": "key-uuid",
-  "provider": "OPENAI",
-  "label": "My OpenAI Key",
-  "keyMasked": "sk-...1234",
-  "isActive": true,
-  "lastUsed": "2025-01-19T10:00:00.000Z",
-  "createdAt": "2025-01-15T12:00:00.000Z"
-}
-```
-
 #### `PUT /api/keys/[id]`
 
-Update an API key.
-
-**Request Body**:
-
-```json
-{
-  "label": "Updated Label",
-  "isActive": false
-}
-```
-
-**Response**: `200 OK`
+Update an API key's label or active status.
 
 #### `DELETE /api/keys/[id]`
 
 Delete an API key.
 
-**Response**: `204 No Content`
-
 #### `POST /api/keys/[id]/test`
 
-Test an API key connection.
-
-**Response**: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "Connection successful",
-  "provider": "OPENAI"
-}
-```
-
-**Error Response**: `400 Bad Request`
-
-```json
-{
-  "success": false,
-  "message": "Invalid API key",
-  "provider": "OPENAI"
-}
-```
+Test an API key connection with the provider.
 
 ---
 
@@ -261,7 +219,7 @@ Test an API key connection.
 
 #### `GET /api/profiles`
 
-List all connection profiles.
+List all LLM connection profiles.
 
 **Response**: `200 OK`
 
@@ -272,14 +230,13 @@ List all connection profiles.
     "name": "GPT-4 Profile",
     "provider": "OPENAI",
     "apiKeyId": "key-uuid",
-    "baseUrl": null,
-    "modelName": "gpt-4",
+    "modelName": "gpt-4o",
     "parameters": {
       "temperature": 0.7,
-      "max_tokens": 1000,
-      "top_p": 1
+      "max_tokens": 4096
     },
     "isDefault": true,
+    "isCheap": false,
     "createdAt": "2025-01-15T12:00:00.000Z"
   }
 ]
@@ -293,49 +250,115 @@ Create a connection profile.
 
 ```json
 {
-  "name": "GPT-4 Profile",
-  "provider": "OPENAI",
+  "name": "Claude Profile",
+  "provider": "ANTHROPIC",
   "apiKeyId": "key-uuid",
-  "modelName": "gpt-4",
+  "modelName": "claude-sonnet-4-20250514",
   "parameters": {
     "temperature": 0.7,
-    "max_tokens": 1000
+    "max_tokens": 4096
   },
-  "isDefault": false
+  "isDefault": false,
+  "isCheap": false
 }
 ```
-
-**For Ollama/OpenAI-compatible**:
-
-```json
-{
-  "name": "Local Ollama",
-  "provider": "OLLAMA",
-  "baseUrl": "http://localhost:11434",
-  "modelName": "llama2",
-  "parameters": {}
-}
-```
-
-**Response**: `201 Created`
 
 #### `GET /api/profiles/[id]`
 
 Get a specific profile.
 
-**Response**: `200 OK`
-
 #### `PUT /api/profiles/[id]`
 
 Update a profile.
-
-**Response**: `200 OK`
 
 #### `DELETE /api/profiles/[id]`
 
 Delete a profile.
 
-**Response**: `204 No Content`
+#### `POST /api/profiles/test-connection`
+
+Test a profile connection.
+
+#### `POST /api/profiles/test-message`
+
+Send a test message using a profile.
+
+---
+
+### Embedding Profiles
+
+#### `GET /api/embedding-profiles`
+
+List embedding profiles.
+
+#### `POST /api/embedding-profiles`
+
+Create an embedding profile.
+
+**Supported Providers**: `OPENAI`, `OLLAMA`, `OPENROUTER`
+
+#### `GET /api/embedding-profiles/[id]`
+
+Get a specific embedding profile.
+
+#### `PUT /api/embedding-profiles/[id]`
+
+Update an embedding profile.
+
+#### `DELETE /api/embedding-profiles/[id]`
+
+Delete an embedding profile.
+
+#### `GET /api/embedding-profiles/models`
+
+Get available embedding models for a provider.
+
+---
+
+### Image Profiles
+
+#### `GET /api/image-profiles`
+
+List image generation profiles.
+
+#### `POST /api/image-profiles`
+
+Create an image profile.
+
+**Request Body**:
+
+```json
+{
+  "name": "DALL-E Profile",
+  "provider": "OPENAI",
+  "apiKeyId": "key-uuid",
+  "model": "gpt-image-1.5",
+  "settings": {
+    "size": "1024x1024",
+    "quality": "high"
+  }
+}
+```
+
+#### `GET /api/image-profiles/[id]`
+
+Get a specific image profile.
+
+#### `PUT /api/image-profiles/[id]`
+
+Update an image profile.
+
+#### `DELETE /api/image-profiles/[id]`
+
+Delete an image profile.
+
+#### `POST /api/image-profiles/[id]/generate`
+
+Generate an image using a profile.
+
+#### `GET /api/image-profiles/models`
+
+Get available image generation models for a provider.
 
 ---
 
@@ -345,6 +368,9 @@ Delete a profile.
 
 List all characters.
 
+**Query Parameters**:
+- `npc=true|false` - Filter by NPC status (omit for regular characters)
+
 **Response**: `200 OK`
 
 ```json
@@ -352,22 +378,13 @@ List all characters.
   {
     "id": "char-uuid",
     "name": "Alice",
+    "title": "The Curious",
     "description": "A friendly AI assistant",
-    "personality": "Helpful and kind",
-    "scenario": "You're chatting with Alice",
-    "firstMessage": "Hello! How can I help you today?",
-    "avatarUrl": null,
-    "createdAt": "2025-01-15T12:00:00.000Z",
-    "personas": [
-      {
-        "personaId": "persona-uuid",
-        "isDefault": true,
-        "persona": {
-          "id": "persona-uuid",
-          "name": "User"
-        }
-      }
-    ]
+    "npc": false,
+    "isFavorite": true,
+    "chatCount": 5,
+    "avatarUrl": "/api/files/avatar-uuid",
+    "createdAt": "2025-01-15T12:00:00.000Z"
   }
 ]
 ```
@@ -381,108 +398,93 @@ Create a character.
 ```json
 {
   "name": "Alice",
+  "title": "The Curious",
   "description": "A friendly AI assistant",
   "personality": "Helpful and kind",
   "scenario": "You're chatting with Alice",
-  "firstMessage": "Hello! How can I help you today?",
+  "firstMessage": "Hello! How can I help?",
   "exampleDialogues": "<START>\nUser: Hi\nAlice: Hello!\n<END>",
-  "systemPrompt": "You are Alice, a helpful assistant."
+  "systemPrompts": [
+    {
+      "name": "Default",
+      "content": "You are Alice, a helpful assistant.",
+      "isActive": true,
+      "isDefault": true
+    }
+  ]
 }
 ```
-
-**Response**: `201 Created`
 
 #### `GET /api/characters/[id]`
 
 Get a character with linked personas.
 
-**Response**: `200 OK`
-
 #### `PUT /api/characters/[id]`
 
 Update a character.
-
-**Response**: `200 OK`
 
 #### `DELETE /api/characters/[id]`
 
 Delete a character.
 
-**Response**: `204 No Content`
+**Query Parameters**:
+- `deleteChats=true` - Also delete related chats
+- `deleteImages=true` - Also delete related images
 
-#### `POST /api/characters/import`
+#### `POST /api/characters/[id]/favorite`
 
-Import a SillyTavern character (PNG or JSON).
+Toggle character favorite status.
 
-**Request**: `multipart/form-data`
+#### `POST /api/characters/[id]/rename`
 
-```
-file: <character.png or character.json>
-```
-
-**Response**: `201 Created`
-
-```json
-{
-  "id": "char-uuid",
-  "name": "Imported Character",
-  "message": "Character imported successfully"
-}
-```
-
-#### `GET /api/characters/[id]/export`
-
-Export character as SillyTavern JSON.
-
-**Response**: `200 OK`
-
-```json
-{
-  "name": "Alice",
-  "description": "...",
-  "personality": "...",
-  "scenario": "...",
-  "first_mes": "...",
-  "mes_example": "...",
-  "creator": "Quilltap",
-  "character_version": "1.0"
-}
-```
-
-#### `GET /api/characters/[id]/personas`
-
-Get personas linked to character.
-
-**Response**: `200 OK`
-
-```json
-[
-  {
-    "personaId": "persona-uuid",
-    "isDefault": true,
-    "persona": {
-      "id": "persona-uuid",
-      "name": "User",
-      "description": "Default user persona"
-    }
-  }
-]
-```
-
-#### `POST /api/characters/[id]/personas`
-
-Link a persona to character.
+Rename character and update references.
 
 **Request Body**:
 
 ```json
 {
-  "personaId": "persona-uuid",
-  "isDefault": false
+  "newName": "Alice Updated",
+  "searchReplace": true
 }
 ```
 
-**Response**: `201 Created`
+#### `GET /api/characters/[id]/cascade-preview`
+
+Preview what will be deleted when cascading.
+
+#### `POST /api/characters/import`
+
+Import a SillyTavern character (JSON format only).
+
+**Request**: `multipart/form-data`
+
+```
+file: <character.json>
+```
+
+**Note**: PNG character card format (JSON embedded in PNG) is not supported. Use JSON export format.
+
+#### `GET /api/characters/[id]/export`
+
+Export character as SillyTavern-compatible JSON.
+
+#### `POST /api/characters/quick-create`
+
+Quick-create a minimal character.
+
+---
+
+### NPCs
+
+NPCs are characters with `npc: true`. They appear in Settings > NPCs and can be created directly from chat.
+
+#### `GET /api/characters?npc=true`
+
+List all NPCs.
+
+#### `POST /api/characters` with `npc: true`
+
+Create an NPC character.
 
 ---
 
@@ -492,20 +494,6 @@ Link a persona to character.
 
 List all personas.
 
-**Response**: `200 OK`
-
-```json
-[
-  {
-    "id": "persona-uuid",
-    "name": "User",
-    "description": "Default user persona",
-    "personalityTraits": "Curious, friendly",
-    "createdAt": "2025-01-15T12:00:00.000Z"
-  }
-]
-```
-
 #### `POST /api/personas`
 
 Create a persona.
@@ -514,49 +502,37 @@ Create a persona.
 
 ```json
 {
-  "name": "User",
-  "description": "Default user persona",
+  "name": "My Persona",
+  "displayName": "Display Name",
+  "title": "Optional Title",
+  "description": "Persona description",
   "personalityTraits": "Curious, friendly"
 }
 ```
-
-**Response**: `201 Created`
 
 #### `GET /api/personas/[id]`
 
 Get a specific persona.
 
-**Response**: `200 OK`
-
 #### `PUT /api/personas/[id]`
 
 Update a persona.
-
-**Response**: `200 OK`
 
 #### `DELETE /api/personas/[id]`
 
 Delete a persona.
 
-**Response**: `204 No Content`
-
 #### `POST /api/personas/import`
 
 Import a SillyTavern persona.
-
-**Request**: `multipart/form-data`
-
-```
-file: <persona.json>
-```
-
-**Response**: `201 Created`
 
 #### `GET /api/personas/[id]/export`
 
 Export persona as SillyTavern JSON.
 
-**Response**: `200 OK`
+#### `POST /api/personas/quick-create`
+
+Quick-create a minimal persona.
 
 ---
 
@@ -576,16 +552,9 @@ List all chats for authenticated user.
     "characterId": "char-uuid",
     "personaId": "persona-uuid",
     "connectionProfileId": "profile-uuid",
+    "participants": [],
     "createdAt": "2025-01-19T10:00:00.000Z",
-    "updatedAt": "2025-01-19T12:00:00.000Z",
-    "character": {
-      "id": "char-uuid",
-      "name": "Alice"
-    },
-    "connectionProfile": {
-      "id": "profile-uuid",
-      "name": "GPT-4 Profile"
-    }
+    "updatedAt": "2025-01-19T12:00:00.000Z"
   }
 ]
 ```
@@ -606,74 +575,21 @@ Create a new chat.
 }
 ```
 
-**Response**: `201 Created`
-
-```json
-{
-  "id": "chat-uuid",
-  "title": "Chat with Alice",
-  "characterId": "char-uuid",
-  "messages": [
-    {
-      "id": "msg-uuid",
-      "role": "ASSISTANT",
-      "content": "Hello! How can I help you today?",
-      "createdAt": "2025-01-19T12:00:00.000Z"
-    }
-  ]
-}
-```
-
 #### `GET /api/chats/[id]`
 
 Get a chat with full message history.
 
-**Response**: `200 OK`
-
-```json
-{
-  "id": "chat-uuid",
-  "title": "Chat with Alice",
-  "messages": [
-    {
-      "id": "msg-uuid",
-      "role": "SYSTEM",
-      "content": "System prompt...",
-      "createdAt": "2025-01-19T10:00:00.000Z"
-    },
-    {
-      "id": "msg-uuid-2",
-      "role": "ASSISTANT",
-      "content": "Hello!",
-      "createdAt": "2025-01-19T10:00:01.000Z"
-    }
-  ]
-}
-```
-
 #### `PUT /api/chats/[id]`
 
-Update a chat.
-
-**Request Body**:
-
-```json
-{
-  "title": "Updated Title"
-}
-```
-
-**Response**: `200 OK`
+Update chat metadata.
 
 #### `DELETE /api/chats/[id]`
 
 Delete a chat (cascades to messages).
 
-**Response**: `204 No Content`
-
 #### `POST /api/chats/import`
 
-Import a SillyTavern chat.
+Import a SillyTavern chat (JSONL format).
 
 **Request**: `multipart/form-data`
 
@@ -683,13 +599,21 @@ characterId: <char-uuid>
 connectionProfileId: <profile-uuid>
 ```
 
-**Response**: `201 Created`
-
 #### `GET /api/chats/[id]/export`
 
-Export chat as SillyTavern JSONL.
+Export chat as SillyTavern JSONL format.
 
-**Response**: `200 OK`
+#### `GET /api/chats/[id]/participants`
+
+Get/manage multi-character chat participants.
+
+#### `PATCH /api/chats/[id]/turn`
+
+Update turn state for multi-character chat.
+
+#### `POST /api/chats/[id]/queue-memories`
+
+Queue memory extraction as background job.
 
 ---
 
@@ -703,7 +627,8 @@ Send a message and get streaming response.
 
 ```json
 {
-  "content": "Hello, how are you?"
+  "content": "Hello, how are you?",
+  "attachments": []
 }
 ```
 
@@ -714,62 +639,313 @@ data: {"type":"start"}
 
 data: {"type":"token","content":"I"}
 
-data: {"type":"token","content":"'m"}
-
-data: {"type":"token","content":" doing"}
-
-data: {"type":"token","content":" well"}
+data: {"type":"token","content":"'m doing well"}
 
 data: {"type":"done","messageId":"msg-uuid"}
 ```
 
-**Error during streaming**:
+**Tool Calls**:
+
+When tools are called (image generation, memory search, web search):
 
 ```
-data: {"type":"error","message":"API request failed"}
+data: {"type":"tool_call","name":"generate_image","arguments":{...}}
+
+data: {"type":"tool_result","name":"generate_image","result":{...}}
 ```
 
 #### `PUT /api/messages/[id]`
 
 Edit a message.
 
-**Request Body**:
-
-```json
-{
-  "content": "Updated message content"
-}
-```
-
-**Response**: `200 OK`
-
-```json
-{
-  "id": "msg-uuid",
-  "content": "Updated message content",
-  "updatedAt": "2025-01-19T12:05:00.000Z"
-}
-```
-
 #### `DELETE /api/messages/[id]`
 
 Delete a message.
-
-**Response**: `204 No Content`
 
 #### `POST /api/messages/[id]/swipe`
 
 Generate alternative response (swipe).
 
-**Response**: Server-Sent Events (same format as chat messages)
+---
 
-Creates a new message in the same swipe group.
+### Memories
+
+#### `GET /api/characters/[id]/memories`
+
+Get all memories for a character.
+
+#### `POST /api/characters/[id]/memories`
+
+Create a memory.
+
+**Request Body**:
+
+```json
+{
+  "content": "Alice likes tea",
+  "importance": 0.8,
+  "tags": ["preference"]
+}
+```
+
+#### `PUT /api/characters/[id]/memories/[memoryId]`
+
+Update a memory.
+
+#### `DELETE /api/characters/[id]/memories/[memoryId]`
+
+Delete a memory.
+
+#### `POST /api/characters/[id]/memories/search`
+
+Search memories (uses embeddings if available, falls back to keyword).
+
+**Request Body**:
+
+```json
+{
+  "query": "what does Alice like",
+  "limit": 5
+}
+```
+
+#### `POST /api/characters/[id]/memories/housekeep`
+
+Run housekeeping (deduplication, summarization) on memories.
+
+#### `POST /api/characters/[id]/memories/embeddings`
+
+Generate embeddings for memories.
 
 ---
 
-## WebSocket Events (Future)
+### Tags
 
-WebSocket support for real-time features is planned for v2.0.
+#### `GET /api/tags`
+
+List all tags.
+
+#### `POST /api/tags`
+
+Create a tag.
+
+**Request Body**:
+
+```json
+{
+  "name": "Fantasy",
+  "color": "#ff6b6b",
+  "quickHide": false
+}
+```
+
+#### `GET /api/tags/[id]`
+
+Get a specific tag.
+
+#### `PUT /api/tags/[id]`
+
+Update a tag.
+
+#### `DELETE /api/tags/[id]`
+
+Delete a tag.
+
+---
+
+### Files & Images
+
+#### `GET /api/files/[id]`
+
+Download a file by ID.
+
+#### `GET /api/images`
+
+List user's images.
+
+#### `POST /api/images`
+
+Upload an image.
+
+**Request**: `multipart/form-data`
+
+#### `GET /api/images/[id]`
+
+Get image metadata.
+
+#### `DELETE /api/images/[id]`
+
+Delete an image.
+
+#### `POST /api/images/generate`
+
+Generate an image using configured profile.
+
+**Request Body**:
+
+```json
+{
+  "profileId": "image-profile-uuid",
+  "prompt": "A serene mountain landscape",
+  "chatId": "chat-uuid",
+  "characterId": "char-uuid"
+}
+```
+
+---
+
+### Templates
+
+#### Prompt Templates
+
+User-created system prompt templates.
+
+- `GET /api/prompt-templates` - List templates
+- `POST /api/prompt-templates` - Create template
+- `GET /api/prompt-templates/[id]` - Get template
+- `PUT /api/prompt-templates/[id]` - Update template
+- `DELETE /api/prompt-templates/[id]` - Delete template
+
+#### `GET /api/sample-prompts`
+
+Get built-in sample prompts (read-only, can be imported).
+
+#### Roleplay Templates
+
+Per-chat roleplay formatting templates.
+
+- `GET /api/roleplay-templates` - List templates
+- `POST /api/roleplay-templates` - Create template
+- `GET /api/roleplay-templates/[id]` - Get template
+- `PUT /api/roleplay-templates/[id]` - Update template
+- `DELETE /api/roleplay-templates/[id]` - Delete template
+
+---
+
+### Tools & Backup
+
+#### `POST /api/tools/backup/create`
+
+Create a full backup.
+
+**Request Body**:
+
+```json
+{
+  "destination": "local" | "cloud",
+  "includeImages": true
+}
+```
+
+#### `GET /api/tools/backup/list`
+
+List cloud backups.
+
+#### `GET /api/tools/backup/preview`
+
+Preview backup contents.
+
+#### `POST /api/tools/backup/restore`
+
+Restore from backup.
+
+#### `GET /api/tools/backup/download`
+
+Download a backup file.
+
+#### `DELETE /api/tools/backup/delete`
+
+Delete a cloud backup.
+
+#### `POST /api/tools/delete-data`
+
+Delete all user data.
+
+**Request Body**:
+
+```json
+{
+  "confirmed": true
+}
+```
+
+#### `POST /api/tools/capabilities-report/generate`
+
+Generate a capabilities report.
+
+#### `GET /api/tools/capabilities-report/list`
+
+List generated reports.
+
+#### `GET /api/tools/capabilities-report/[id]`
+
+Download a report.
+
+---
+
+### Themes
+
+#### `GET /api/themes`
+
+List available themes.
+
+#### `GET /api/themes/[themeId]/tokens`
+
+Get theme CSS tokens.
+
+#### `GET /api/themes/assets/[...path]`
+
+Serve theme assets.
+
+#### `GET /api/themes/fonts/[...path]`
+
+Serve theme fonts.
+
+#### `GET /api/theme-preference`
+
+Get user's theme preference.
+
+#### `PUT /api/theme-preference`
+
+Update theme preference.
+
+---
+
+### Search
+
+#### `GET /api/search?q=query`
+
+Global search across characters, personas, chats.
+
+**Query Parameters**:
+- `q` - Search query (required)
+- `type` - Filter by type: `characters`, `personas`, `chats`
+
+---
+
+### Background Jobs
+
+#### `GET /api/background-jobs`
+
+Get queue status and jobs.
+
+#### `POST /api/background-jobs/process`
+
+Trigger job processing.
+
+#### `GET /api/background-jobs/[id]`
+
+Get job details.
+
+#### `DELETE /api/background-jobs/[id]`
+
+Delete a job.
+
+#### `GET /api/tools/tasks-queue`
+
+Get tasks queue status (UI endpoint).
+
+---
 
 ## SDK Examples
 
@@ -800,7 +976,14 @@ async function sendMessage(chatId: string, content: string) {
     for (const line of lines) {
       if (line.startsWith('data: ')) {
         const data = JSON.parse(line.slice(6));
-        console.log(data);
+
+        if (data.type === 'token') {
+          process.stdout.write(data.content);
+        } else if (data.type === 'tool_call') {
+          console.log('Tool called:', data.name);
+        } else if (data.type === 'done') {
+          console.log('\nMessage ID:', data.messageId);
+        }
       }
     }
   }
@@ -822,9 +1005,9 @@ characters = response.json()
 
 ## Versioning
 
-Current API version: **v1.0**
+Current API version: **v2.4**
 
-Future versions will be available at `/api/v2/...` to maintain backwards compatibility.
+The API follows semantic versioning. Breaking changes are avoided where possible.
 
 ## Support
 

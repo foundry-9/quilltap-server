@@ -48,7 +48,6 @@ export async function POST(req: NextRequest) {
       scenario: null,
       firstMessage: null,
       exampleDialogues: null,
-      systemPrompt: null,
       avatarUrl: null,
       defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
       isFavorite: false,

@@ -305,7 +305,8 @@
    * Text styles
    */
   .qt-text-lead {
-    @apply text-xl text-muted-foreground;
+    @apply text-xl;
+    color: var(--qt-text-secondary-fg);
   }
 
   .qt-text-large {
@@ -313,11 +314,46 @@
   }
 
   .qt-text-small {
-    @apply text-sm text-muted-foreground;
+    @apply text-sm;
+    color: var(--qt-text-secondary-fg);
+  }
+
+  .qt-text-xs {
+    @apply text-xs;
+    color: var(--qt-text-secondary-fg);
   }
 
   .qt-text-muted {
-    @apply text-muted-foreground;
+    color: var(--qt-text-secondary-fg);
+  }
+
+  .qt-text-primary {
+    @apply font-medium;
+    color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  /**
+   * Label text - standard form labels (text-sm font-medium)
+   */
+  .qt-text-label {
+    @apply text-sm font-medium;
+    color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  /**
+   * Extra-small label text - compact form labels (text-xs font-medium)
+   */
+  .qt-text-label-xs {
+    @apply text-xs font-medium;
+    color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  /**
+   * Section heading text - larger section titles (text-lg font-medium)
+   */
+  .qt-text-section {
+    @apply text-lg font-medium;
+    color: var(--qt-text-primary-fg, var(--color-foreground));
   }
 
   /* ==========================================================================

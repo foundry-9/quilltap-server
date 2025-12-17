@@ -1,68 +1,55 @@
-import { useEffect, useState } from 'react'
+import { useAvatarDisplayContext, useAvatarDisplayContextOptional } from '@/components/providers/avatar-display-provider'
 import type { AvatarDisplayStyle } from '@/lib/avatar-styles'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
- * Hook to get the current avatar display style setting from the user's preferences
- * Fetches from the API on mount and provides the style preference
+ * Hook to get the current avatar display style setting from the user's preferences.
+ *
+ * This hook uses the AvatarDisplayContext to share state across all components,
+ * ensuring that the avatar style is consistent throughout the application and
+ * that only one API call is made to fetch the setting.
+ *
+ * Must be used within an AvatarDisplayProvider.
  */
 export function useAvatarDisplay() {
-  const [style, setStyle] = useState<AvatarDisplayStyle>('CIRCULAR')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const ctx = useAvatarDisplayContext()
 
-  useEffect(() => {
-    const fetchAvatarDisplayStyle = async () => {
-      try {
-        setLoading(true)
-        const res = await fetch('/api/chat-settings')
-        if (!res.ok) {
-          // 401 is expected when not logged in - don't log as error
-          if (res.status === 401) {
-            clientLogger.debug('Not authenticated, using default avatar display style')
-            setStyle('CIRCULAR')
-            return
-          }
-          throw new Error(`Failed to fetch chat settings: ${res.status} ${res.statusText}`)
-        }
-        const data = await res.json()
-        setStyle((data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle)
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err) || 'Unknown error'
-        clientLogger.error('Error fetching avatar display style', { error: errorMessage })
-        setError(errorMessage)
-        // Default to circular on error
-        setStyle('CIRCULAR')
-      } finally {
-        setLoading(false)
-      }
-    }
+  return {
+    style: ctx.style,
+    loading: ctx.loading,
+    error: ctx.error,
+    updateAvatarDisplayStyle: ctx.updateStyle,
+    syncAvatarDisplayStyle: ctx.syncStyle,
+  }
+}
 
-    fetchAvatarDisplayStyle()
-  }, [])
+/**
+ * Optional version that returns default values if used outside provider context.
+ * Useful for components that may be rendered before provider is mounted.
+ */
+export function useAvatarDisplayOptional(): {
+  style: AvatarDisplayStyle
+  loading: boolean
+  error: string | null
+  updateAvatarDisplayStyle: ((newStyle: AvatarDisplayStyle) => Promise<void>) | null
+  syncAvatarDisplayStyle: ((newStyle: AvatarDisplayStyle) => void) | null
+} {
+  const ctx = useAvatarDisplayContextOptional()
 
-  const updateAvatarDisplayStyle = async (newStyle: AvatarDisplayStyle) => {
-    try {
-      setStyle(newStyle)
-      const res = await fetch('/api/chat-settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ avatarDisplayStyle: newStyle }),
-      })
-
-      if (!res.ok) {
-        throw new Error('Failed to update avatar display style')
-      }
-
-      const data = await res.json()
-      setStyle((data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle)
-    } catch (err) {
-      clientLogger.error('Error updating avatar display style:', { error: err instanceof Error ? err.message : String(err) })
-      setError(err instanceof Error ? err.message : 'Unknown error')
-      // Revert to previous style on error
-      setStyle(style === 'CIRCULAR' ? 'RECTANGULAR' : 'CIRCULAR')
+  if (!ctx) {
+    return {
+      style: 'CIRCULAR',
+      loading: false,
+      error: null,
+      updateAvatarDisplayStyle: null,
+      syncAvatarDisplayStyle: null,
     }
   }
 
-  return { style, loading, error, updateAvatarDisplayStyle }
+  return {
+    style: ctx.style,
+    loading: ctx.loading,
+    error: ctx.error,
+    updateAvatarDisplayStyle: ctx.updateStyle,
+    syncAvatarDisplayStyle: ctx.syncStyle,
+  }
 }

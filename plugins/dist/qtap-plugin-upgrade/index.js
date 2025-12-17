@@ -32265,6 +32265,39 @@ var require_lib3 = __commonJS({
   }
 });
 
+// ../../../lib/error-utils.ts
+function getErrorMessage(error2, fallback = "Unknown error") {
+  if (error2 instanceof Error) {
+    return error2.message;
+  }
+  if (typeof error2 === "string") {
+    return error2;
+  }
+  if (error2 !== null && error2 !== void 0) {
+    const stringified = String(error2);
+    if (stringified !== "[object Object]") {
+      return stringified;
+    }
+  }
+  return fallback;
+}
+var init_error_utils = __esm({
+  "../../../lib/error-utils.ts"() {
+    "use strict";
+  }
+});
+
+// ../../../lib/errors.ts
+var import_server;
+var init_errors = __esm({
+  "../../../lib/errors.ts"() {
+    "use strict";
+    import_server = require("next/server");
+    init_logger();
+    init_error_utils();
+  }
+});
+
 // ../../../lib/mongodb/config.ts
 function sanitizeURI(uri) {
   try {
@@ -32324,7 +32357,7 @@ function validateMongoDBConfig() {
         errors: validationErrors
       });
     } else {
-      const errorMessage = error2 instanceof Error ? error2.message : "Unknown error";
+      const errorMessage = getErrorMessage(error2);
       errors.push(errorMessage);
       logger.error("MongoDB configuration validation error", {
         error: errorMessage
@@ -32389,7 +32422,7 @@ async function testMongoDBConnection() {
     };
   } catch (error2) {
     const latencyMs = Date.now() - startTime;
-    const errorMessage = error2 instanceof Error ? error2.message : "Unknown error";
+    const errorMessage = getErrorMessage(error2);
     logger.error("MongoDB connection test failed", {
       uri: sanitizeURI(config.uri),
       error: errorMessage,
@@ -32406,7 +32439,7 @@ async function testMongoDBConnection() {
         await client.close();
         logger.debug("MongoDB client connection closed");
       } catch (error2) {
-        const closeError = error2 instanceof Error ? error2.message : "Unknown error";
+        const closeError = getErrorMessage(error2);
         logger.warn("Error closing MongoDB connection", {
           error: closeError
         });
@@ -32421,6 +32454,7 @@ var init_config = __esm({
     import_zod2 = require("zod");
     import_mongodb = __toESM(require_lib3());
     init_logger();
+    init_errors();
     mongoDBConfigSchema = import_zod2.z.object({
       uri: import_zod2.z.string().min(1, "MongoDB URI is required"),
       database: import_zod2.z.string().min(1, "Database name is required"),
@@ -41129,6 +41163,12 @@ var require_dist_cjs20 = __commonJS({
       handlers;
       constructor(config) {
         this.config = config;
+        const { protocol, protocolSettings } = config;
+        if (protocolSettings) {
+          if (typeof protocol === "function") {
+            config.protocol = new protocol(protocolSettings);
+          }
+        }
       }
       send(command, optionsOrCb, cb) {
         const options = typeof optionsOrCb !== "function" ? optionsOrCb : void 0;
@@ -48602,9 +48642,16 @@ var require_dist_cjs42 = __commonJS({
       }
       return isValidArn;
     };
-    var createConfigValueProvider = (configKey, canonicalEndpointParamKey, config) => {
+    var createConfigValueProvider = (configKey, canonicalEndpointParamKey, config, isClientContextParam = false) => {
       const configProvider = async () => {
-        const configValue = config[configKey] ?? config[canonicalEndpointParamKey];
+        let configValue;
+        if (isClientContextParam) {
+          const clientContextParams = config.clientContextParams;
+          const nestedValue = clientContextParams?.[configKey];
+          configValue = nestedValue ?? config[configKey] ?? config[canonicalEndpointParamKey];
+        } else {
+          configValue = config[configKey] ?? config[canonicalEndpointParamKey];
+        }
         if (typeof configValue === "function") {
           return configValue();
         }
@@ -48686,7 +48733,7 @@ var require_dist_cjs42 = __commonJS({
             break;
           case "clientContextParams":
           case "builtInParams":
-            endpointParams[name] = await createConfigValueProvider(instruction.name, name, clientConfig)();
+            endpointParams[name] = await createConfigValueProvider(instruction.name, name, clientConfig, instruction.type !== "builtInParams")();
             break;
           case "operationContextParams":
             endpointParams[name] = instruction.get(commandInput);
@@ -51201,7 +51248,7 @@ var init_SSOOIDCServiceException = __esm({
 
 // ../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/models/errors.js
 var AccessDeniedException, AuthorizationPendingException, ExpiredTokenException, InternalServerException, InvalidClientException, InvalidGrantException, InvalidRequestException, InvalidScopeException, SlowDownException, UnauthorizedClientException, UnsupportedGrantTypeException;
-var init_errors = __esm({
+var init_errors2 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/models/errors.js"() {
     init_SSOOIDCServiceException();
     AccessDeniedException = class _AccessDeniedException extends SSOOIDCServiceException {
@@ -51392,7 +51439,7 @@ var _ADE, _APE, _AT, _CS, _CT, _CTR, _CTRr, _CV, _ETE, _ICE, _IGE, _IRE, _ISE, _
 var init_schemas_0 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/schemas/schemas_0.js"() {
     init_schema();
-    init_errors();
+    init_errors2();
     init_SSOOIDCServiceException();
     _ADE = "AccessDeniedException";
     _APE = "AuthorizationPendingException";
@@ -51603,7 +51650,7 @@ var init_sso_oidc = __esm({
     init_SSOOIDC();
     init_commands();
     init_enums();
-    init_errors();
+    init_errors2();
     init_SSOOIDCServiceException();
   }
 });
@@ -51632,9 +51679,9 @@ var require_dist_cjs55 = __commonJS({
     };
     var EXPIRE_WINDOW_MS = 5 * 60 * 1e3;
     var REFRESH_MESSAGE = `To refresh this SSO session run 'aws sso login' with the corresponding profile.`;
-    var getSsoOidcClient = async (ssoRegion, init = {}) => {
+    var getSsoOidcClient = async (ssoRegion, init = {}, callerClientConfig) => {
       const { SSOOIDCClient: SSOOIDCClient2 } = await Promise.resolve().then(() => (init_sso_oidc(), sso_oidc_exports));
-      const coalesce = (prop) => init.clientConfig?.[prop] ?? init.parentClientConfig?.[prop];
+      const coalesce = (prop) => init.clientConfig?.[prop] ?? init.parentClientConfig?.[prop] ?? callerClientConfig?.[prop];
       const ssoOidcClient = new SSOOIDCClient2(Object.assign({}, init.clientConfig ?? {}, {
         region: ssoRegion ?? init.clientConfig?.region,
         logger: coalesce("logger"),
@@ -51642,9 +51689,9 @@ var require_dist_cjs55 = __commonJS({
       }));
       return ssoOidcClient;
     };
-    var getNewSsoOidcToken = async (ssoToken, ssoRegion, init = {}) => {
+    var getNewSsoOidcToken = async (ssoToken, ssoRegion, init = {}, callerClientConfig) => {
       const { CreateTokenCommand: CreateTokenCommand2 } = await Promise.resolve().then(() => (init_sso_oidc(), sso_oidc_exports));
-      const ssoOidcClient = await getSsoOidcClient(ssoRegion, init);
+      const ssoOidcClient = await getSsoOidcClient(ssoRegion, init, callerClientConfig);
       return ssoOidcClient.send(new CreateTokenCommand2({
         clientId: ssoToken.clientId,
         clientSecret: ssoToken.clientSecret,
@@ -51669,14 +51716,7 @@ var require_dist_cjs55 = __commonJS({
       return writeFile3(tokenFilepath, tokenString);
     };
     var lastRefreshAttemptTime = /* @__PURE__ */ new Date(0);
-    var fromSso = (_init = {}) => async ({ callerClientConfig } = {}) => {
-      const init = {
-        ..._init,
-        parentClientConfig: {
-          ...callerClientConfig,
-          ..._init.parentClientConfig
-        }
-      };
+    var fromSso = (init = {}) => async ({ callerClientConfig } = {}) => {
       init.logger?.debug("@aws-sdk/token-providers - fromSso");
       const profiles = await sharedIniFileLoader.parseKnownFiles(init);
       const profileName = sharedIniFileLoader.getProfileName({
@@ -51723,7 +51763,7 @@ var require_dist_cjs55 = __commonJS({
       validateTokenKey("refreshToken", ssoToken.refreshToken, true);
       try {
         lastRefreshAttemptTime.setTime(Date.now());
-        const newSsoOidcToken = await getNewSsoOidcToken(ssoToken, ssoRegion, init);
+        const newSsoOidcToken = await getNewSsoOidcToken(ssoToken, ssoRegion, init, callerClientConfig);
         validateTokenKey("accessToken", newSsoOidcToken.accessToken);
         validateTokenKey("expiresIn", newSsoOidcToken.expiresIn);
         const newTokenExpiration = new Date(Date.now() + newSsoOidcToken.expiresIn * 1e3);
@@ -52395,7 +52435,7 @@ var require_dist_cjs57 = __commonJS({
     var tokenProviders = require_dist_cjs55();
     var isSsoProfile = (arg) => arg && (typeof arg.sso_start_url === "string" || typeof arg.sso_account_id === "string" || typeof arg.sso_session === "string" || typeof arg.sso_region === "string" || typeof arg.sso_role_name === "string");
     var SHOULD_FAIL_CREDENTIAL_CHAIN = false;
-    var resolveSSOCredentials = async ({ ssoStartUrl, ssoSession, ssoAccountId, ssoRegion, ssoRoleName, ssoClient, clientConfig, parentClientConfig, profile, filepath, configFilepath, ignoreCache, logger: logger3 }) => {
+    var resolveSSOCredentials = async ({ ssoStartUrl, ssoSession, ssoAccountId, ssoRegion, ssoRoleName, ssoClient, clientConfig, parentClientConfig, callerClientConfig, profile, filepath, configFilepath, ignoreCache, logger: logger3 }) => {
       let token;
       const refreshMessage = `To refresh this SSO session run aws sso login with the corresponding profile.`;
       if (ssoSession) {
@@ -52437,9 +52477,9 @@ var require_dist_cjs57 = __commonJS({
         return require_loadSso_CVy8iqsZ();
       });
       const sso = ssoClient || new SSOClient(Object.assign({}, clientConfig ?? {}, {
-        logger: clientConfig?.logger ?? parentClientConfig?.logger,
+        logger: clientConfig?.logger ?? callerClientConfig?.logger ?? parentClientConfig?.logger,
         region: clientConfig?.region ?? ssoRegion,
-        userAgentAppId: clientConfig?.userAgentAppId ?? parentClientConfig?.userAgentAppId
+        userAgentAppId: clientConfig?.userAgentAppId ?? callerClientConfig?.userAgentAppId ?? parentClientConfig?.userAgentAppId
       }));
       let ssoResp;
       try {
@@ -52531,6 +52571,7 @@ Reference: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.ht
           ssoClient,
           clientConfig: init.clientConfig,
           parentClientConfig: init.parentClientConfig,
+          callerClientConfig: init.callerClientConfig,
           profile: profileName,
           filepath: init.filepath,
           configFilepath: init.configFilepath,
@@ -52549,6 +52590,7 @@ Reference: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.ht
           ssoClient,
           clientConfig: init.clientConfig,
           parentClientConfig: init.parentClientConfig,
+          callerClientConfig: init.callerClientConfig,
           profile: profileName,
           filepath: init.filepath,
           configFilepath: init.configFilepath,
@@ -52922,7 +52964,7 @@ var init_SigninServiceException = __esm({
 
 // ../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/models/errors.js
 var AccessDeniedException3, InternalServerException3, TooManyRequestsError, ValidationException;
-var init_errors2 = __esm({
+var init_errors3 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/models/errors.js"() {
     init_SigninServiceException();
     AccessDeniedException3 = class _AccessDeniedException extends SigninServiceException {
@@ -52989,7 +53031,7 @@ var _ADE2, _AT2, _COAT, _COATR, _COATRB, _COATRBr, _COATRr, _ISE2, _RT2, _TMRE, 
 var init_schemas_02 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/schemas/schemas_0.js"() {
     init_schema();
-    init_errors2();
+    init_errors3();
     init_SigninServiceException();
     _ADE2 = "AccessDeniedException";
     _AT2 = "AccessToken";
@@ -53179,7 +53221,7 @@ var init_signin = __esm({
     init_Signin();
     init_commands2();
     init_enums2();
-    init_errors2();
+    init_errors3();
     init_SigninServiceException();
   }
 });
@@ -53858,7 +53900,7 @@ var init_STSServiceException = __esm({
 
 // ../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/models/errors.js
 var ExpiredTokenException3, MalformedPolicyDocumentException, PackedPolicyTooLargeException, RegionDisabledException, IDPRejectedClaimException, InvalidIdentityTokenException, IDPCommunicationErrorException;
-var init_errors3 = __esm({
+var init_errors4 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/models/errors.js"() {
     init_STSServiceException();
     ExpiredTokenException3 = class _ExpiredTokenException extends STSServiceException {
@@ -53953,7 +53995,7 @@ var _A, _AKI, _AR, _ARI, _ARR, _ARRs, _ARU, _ARWWI, _ARWWIR, _ARWWIRs, _Au, _C, 
 var init_schemas_03 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/schemas/schemas_0.js"() {
     init_schema();
-    init_errors3();
+    init_errors4();
     init_STSServiceException();
     _A = "Arn";
     _AKI = "AccessKeyId";
@@ -54217,9 +54259,10 @@ var init_defaultStsRoleAssumers = __esm({
     resolveRegion = async (_region, _parentRegion, credentialProviderLogger, loaderConfig = {}) => {
       const region = typeof _region === "function" ? await _region() : _region;
       const parentRegion = typeof _parentRegion === "function" ? await _parentRegion() : _parentRegion;
-      const stsDefaultRegion = await (0, import_region_config_resolver4.stsRegionDefaultResolver)(loaderConfig)();
+      let stsDefaultRegion = "";
+      const resolvedRegion = region ?? parentRegion ?? (stsDefaultRegion = await (0, import_region_config_resolver4.stsRegionDefaultResolver)(loaderConfig)());
       credentialProviderLogger?.debug?.("@aws-sdk/client-sts::resolveRegion", "accepting first of:", `${region} (credential provider clientConfig)`, `${parentRegion} (contextual client)`, `${stsDefaultRegion} (STS default: AWS_REGION, profile region, or us-east-1)`);
-      return region ?? parentRegion ?? stsDefaultRegion;
+      return resolvedRegion;
     };
     getDefaultRoleAssumer = (stsOptions, STSClient2) => {
       let stsClient;
@@ -54359,7 +54402,7 @@ var init_sts = __esm({
     init_STSClient();
     init_STS();
     init_commands3();
-    init_errors3();
+    init_errors4();
     init_defaultRoleAssumers();
     init_STSServiceException();
   }
@@ -54628,7 +54671,7 @@ var require_dist_cjs61 = __commonJS({
       }
       return withProviderProfile;
     };
-    var resolveAssumeRoleCredentials = async (profileName, profiles, options, visitedProfiles = {}, resolveProfileData2) => {
+    var resolveAssumeRoleCredentials = async (profileName, profiles, options, callerClientConfig, visitedProfiles = {}, resolveProfileData2) => {
       options.logger?.debug("@aws-sdk/credential-provider-ini - resolveAssumeRoleCredentials (STS)");
       const profileData = profiles[profileName];
       const { source_profile, region } = profileData;
@@ -54638,8 +54681,9 @@ var require_dist_cjs61 = __commonJS({
           ...options.clientConfig,
           credentialProviderLogger: options.logger,
           parentClientConfig: {
+            ...callerClientConfig,
             ...options?.parentClientConfig,
-            region: region ?? options?.parentClientConfig?.region
+            region: region ?? options?.parentClientConfig?.region ?? callerClientConfig?.region
           }
         }, options.clientPlugins);
       }
@@ -54647,7 +54691,7 @@ var require_dist_cjs61 = __commonJS({
         throw new propertyProvider.CredentialsProviderError(`Detected a cycle attempting to resolve credentials for profile ${sharedIniFileLoader.getProfileName(options)}. Profiles visited: ` + Object.keys(visitedProfiles).join(", "), { logger: options.logger });
       }
       options.logger?.debug(`@aws-sdk/credential-provider-ini - finding credential resolver using ${source_profile ? `source_profile=[${source_profile}]` : `profile=[${profileName}]`}`);
-      const sourceCredsProvider = source_profile ? resolveProfileData2(source_profile, profiles, options, {
+      const sourceCredsProvider = source_profile ? resolveProfileData2(source_profile, profiles, options, callerClientConfig, {
         ...visitedProfiles,
         [source_profile]: true
       }, isCredentialSourceWithoutRoleArn(profiles[source_profile] ?? {})) : (await resolveCredentialSource(profileData.credential_source, profileName, options.logger)(options))();
@@ -54678,11 +54722,11 @@ var require_dist_cjs61 = __commonJS({
     var isLoginProfile = (data2) => {
       return Boolean(data2 && data2.login_session);
     };
-    var resolveLoginCredentials = async (profileName, options) => {
+    var resolveLoginCredentials = async (profileName, options, callerClientConfig) => {
       const credentials = await credentialProviderLogin.fromLoginCredentials({
         ...options,
         profile: profileName
-      })();
+      })({ callerClientConfig });
       return client.setCredentialFeature(credentials, "CREDENTIALS_PROFILE_LOGIN", "AC");
     };
     var isProcessProfile = (arg) => Boolean(arg) && typeof arg === "object" && typeof arg.credential_process === "string";
@@ -54690,14 +54734,16 @@ var require_dist_cjs61 = __commonJS({
       ...options,
       profile
     })().then((creds) => client.setCredentialFeature(creds, "CREDENTIALS_PROFILE_PROCESS", "v")));
-    var resolveSsoCredentials = async (profile, profileData, options = {}) => {
+    var resolveSsoCredentials = async (profile, profileData, options = {}, callerClientConfig) => {
       const { fromSSO } = await Promise.resolve().then(() => __toESM(require_dist_cjs57()));
       return fromSSO({
         profile,
         logger: options.logger,
         parentClientConfig: options.parentClientConfig,
         clientConfig: options.clientConfig
-      })().then((creds) => {
+      })({
+        callerClientConfig
+      }).then((creds) => {
         if (profileData.sso_session) {
           return client.setCredentialFeature(creds, "CREDENTIALS_PROFILE_SSO", "r");
         } else {
@@ -54719,52 +54765,47 @@ var require_dist_cjs61 = __commonJS({
       return client.setCredentialFeature(credentials, "CREDENTIALS_PROFILE", "n");
     };
     var isWebIdentityProfile = (arg) => Boolean(arg) && typeof arg === "object" && typeof arg.web_identity_token_file === "string" && typeof arg.role_arn === "string" && ["undefined", "string"].indexOf(typeof arg.role_session_name) > -1;
-    var resolveWebIdentityCredentials = async (profile, options) => Promise.resolve().then(() => __toESM(require_dist_cjs60())).then(({ fromTokenFile }) => fromTokenFile({
+    var resolveWebIdentityCredentials = async (profile, options, callerClientConfig) => Promise.resolve().then(() => __toESM(require_dist_cjs60())).then(({ fromTokenFile }) => fromTokenFile({
       webIdentityTokenFile: profile.web_identity_token_file,
       roleArn: profile.role_arn,
       roleSessionName: profile.role_session_name,
       roleAssumerWithWebIdentity: options.roleAssumerWithWebIdentity,
       logger: options.logger,
       parentClientConfig: options.parentClientConfig
-    })().then((creds) => client.setCredentialFeature(creds, "CREDENTIALS_PROFILE_STS_WEB_ID_TOKEN", "q")));
-    var resolveProfileData = async (profileName, profiles, options, visitedProfiles = {}, isAssumeRoleRecursiveCall = false) => {
+    })({
+      callerClientConfig
+    }).then((creds) => client.setCredentialFeature(creds, "CREDENTIALS_PROFILE_STS_WEB_ID_TOKEN", "q")));
+    var resolveProfileData = async (profileName, profiles, options, callerClientConfig, visitedProfiles = {}, isAssumeRoleRecursiveCall = false) => {
       const data2 = profiles[profileName];
       if (Object.keys(visitedProfiles).length > 0 && isStaticCredsProfile(data2)) {
         return resolveStaticCredentials(data2, options);
       }
       if (isAssumeRoleRecursiveCall || isAssumeRoleProfile(data2, { profile: profileName, logger: options.logger })) {
-        return resolveAssumeRoleCredentials(profileName, profiles, options, visitedProfiles, resolveProfileData);
+        return resolveAssumeRoleCredentials(profileName, profiles, options, callerClientConfig, visitedProfiles, resolveProfileData);
       }
       if (isStaticCredsProfile(data2)) {
         return resolveStaticCredentials(data2, options);
       }
       if (isWebIdentityProfile(data2)) {
-        return resolveWebIdentityCredentials(data2, options);
+        return resolveWebIdentityCredentials(data2, options, callerClientConfig);
       }
       if (isProcessProfile(data2)) {
         return resolveProcessCredentials(options, profileName);
       }
       if (isSsoProfile(data2)) {
-        return await resolveSsoCredentials(profileName, data2, options);
+        return await resolveSsoCredentials(profileName, data2, options, callerClientConfig);
       }
       if (isLoginProfile(data2)) {
-        return resolveLoginCredentials(profileName, options);
+        return resolveLoginCredentials(profileName, options, callerClientConfig);
       }
       throw new propertyProvider.CredentialsProviderError(`Could not resolve credentials using profile: [${profileName}] in configuration/credentials file(s).`, { logger: options.logger });
     };
-    var fromIni = (_init = {}) => async ({ callerClientConfig } = {}) => {
-      const init = {
-        ..._init,
-        parentClientConfig: {
-          ...callerClientConfig,
-          ..._init.parentClientConfig
-        }
-      };
+    var fromIni = (init = {}) => async ({ callerClientConfig } = {}) => {
       init.logger?.debug("@aws-sdk/credential-provider-ini - fromIni");
       const profiles = await sharedIniFileLoader.parseKnownFiles(init);
       return resolveProfileData(sharedIniFileLoader.getProfileName({
-        profile: _init.profile ?? callerClientConfig?.profile
-      }), profiles, init);
+        profile: init.profile ?? callerClientConfig?.profile
+      }), profiles, init, callerClientConfig);
     };
     exports2.fromIni = fromIni;
   }
@@ -63460,6 +63501,7 @@ var require_dist_cjs71 = __commonJS({
       IntelligentTieringAccessTier: "IntelligentTieringAccessTier",
       IsMultipartUploaded: "IsMultipartUploaded",
       LastModifiedDate: "LastModifiedDate",
+      LifecycleExpirationDate: "LifecycleExpirationDate",
       ObjectAccessControlList: "ObjectAccessControlList",
       ObjectLockLegalHoldStatus: "ObjectLockLegalHoldStatus",
       ObjectLockMode: "ObjectLockMode",
@@ -66126,6 +66168,7 @@ var validateMongoDBConfigMigration = {
 var import_zod5 = require("zod");
 var import_client_s3 = __toESM(require_dist_cjs71());
 init_logger();
+init_errors();
 var s3ConfigSchema = import_zod5.z.object({
   mode: import_zod5.z.enum(["embedded", "external"]),
   endpoint: import_zod5.z.string().url().optional(),
@@ -66275,7 +66318,7 @@ function validateS3Config() {
         mode
       });
     } else {
-      const errorMessage = error2 instanceof Error ? error2.message : "Unknown error";
+      const errorMessage = getErrorMessage(error2);
       errors.push(errorMessage);
       logger_inst.error("S3 configuration validation error", {
         error: errorMessage,
@@ -66400,7 +66443,7 @@ async function testS3Connection() {
       client.destroy();
     }
   } catch (error2) {
-    const errorMsg = `Failed to initialize S3 client: ${error2 instanceof Error ? error2.message : "Unknown error"}`;
+    const errorMsg = `Failed to initialize S3 client: ${getErrorMessage(error2)}`;
     logger_inst.error(errorMsg, {}, error2 instanceof Error ? error2 : void 0);
     return {
       success: false,
@@ -69446,6 +69489,173 @@ var inheritFileTagsMigration = {
   }
 };
 
+// migrations/migrate-character-system-prompts.ts
+init_logger();
+function isMongoDBBackendEnabled4() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase5() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible4() {
+  try {
+    const db = await getMongoDatabase5();
+    await db.admin().ping();
+    return true;
+  } catch (error2) {
+    logger.warn("MongoDB is not accessible for character system prompts migration", {
+      context: "migration.migrate-character-system-prompts",
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return false;
+  }
+}
+async function getCharactersNeedingMigration() {
+  try {
+    const db = await getMongoDatabase5();
+    const charactersCollection = db.collection("characters");
+    const characters = await charactersCollection.find({
+      systemPrompt: { $exists: true, $nin: [null, ""] },
+      $or: [
+        { systemPrompts: { $exists: false } },
+        { systemPrompts: { $size: 0 } }
+      ]
+    }).toArray();
+    return characters.map((c4) => ({
+      id: c4.id,
+      name: c4.name,
+      systemPrompt: c4.systemPrompt,
+      systemPrompts: c4.systemPrompts
+    }));
+  } catch (error2) {
+    logger.error("Error checking for characters needing system prompt migration", {
+      context: "migration.migrate-character-system-prompts",
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return [];
+  }
+}
+var migrateCharacterSystemPromptsMigration = {
+  id: "migrate-character-system-prompts-v1",
+  description: "Migrate characters from deprecated systemPrompt field to systemPrompts array",
+  introducedInVersion: "2.2.0",
+  dependsOn: ["migrate-json-to-mongodb-v1"],
+  // Run after data migration to MongoDB
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled4()) {
+      logger.debug("MongoDB not enabled, skipping character system prompts migration", {
+        context: "migration.migrate-character-system-prompts"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible4()) {
+      logger.debug("MongoDB not accessible, deferring character system prompts migration", {
+        context: "migration.migrate-character-system-prompts"
+      });
+      return false;
+    }
+    const charactersNeedingMigration = await getCharactersNeedingMigration();
+    logger.debug("Checked for characters needing system prompt migration", {
+      context: "migration.migrate-character-system-prompts",
+      count: charactersNeedingMigration.length
+    });
+    return charactersNeedingMigration.length > 0;
+  },
+  async run() {
+    const startTime = Date.now();
+    const migratedCharacters = [];
+    const errors = [];
+    logger.info("Starting character system prompts migration", {
+      context: "migration.migrate-character-system-prompts"
+    });
+    try {
+      const db = await getMongoDatabase5();
+      const charactersCollection = db.collection("characters");
+      const charactersNeedingMigration = await getCharactersNeedingMigration();
+      logger.info("Found characters needing system prompt migration", {
+        context: "migration.migrate-character-system-prompts",
+        count: charactersNeedingMigration.length
+      });
+      for (const character of charactersNeedingMigration) {
+        try {
+          if (!character.systemPrompt) {
+            continue;
+          }
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          const newSystemPrompt = {
+            id: crypto.randomUUID(),
+            name: "Default",
+            content: character.systemPrompt,
+            isDefault: true,
+            createdAt: now,
+            updatedAt: now
+          };
+          const result = await charactersCollection.updateOne(
+            { id: character.id },
+            {
+              $set: {
+                systemPrompts: [newSystemPrompt],
+                systemPrompt: null,
+                updatedAt: now
+              }
+            }
+          );
+          if (result.modifiedCount > 0) {
+            migratedCharacters.push(character.id);
+            logger.info("Migrated character system prompt", {
+              context: "migration.migrate-character-system-prompts",
+              characterId: character.id,
+              characterName: character.name,
+              newPromptId: newSystemPrompt.id
+            });
+          }
+        } catch (error2) {
+          const errorMessage = error2 instanceof Error ? error2.message : String(error2);
+          errors.push({
+            characterId: character.id,
+            characterName: character.name,
+            error: errorMessage
+          });
+          logger.error("Failed to migrate character system prompt", {
+            context: "migration.migrate-character-system-prompts",
+            characterId: character.id,
+            characterName: character.name,
+            error: errorMessage
+          });
+        }
+      }
+    } catch (error2) {
+      const errorMessage = error2 instanceof Error ? error2.message : String(error2);
+      logger.error("Character system prompts migration failed", {
+        context: "migration.migrate-character-system-prompts",
+        error: errorMessage
+      });
+      return {
+        id: "migrate-character-system-prompts-v1",
+        success: false,
+        itemsAffected: migratedCharacters.length,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const success = errors.length === 0;
+    const durationMs = Date.now() - startTime;
+    return {
+      id: "migrate-character-system-prompts-v1",
+      success,
+      itemsAffected: migratedCharacters.length,
+      message: success ? `Migrated ${migratedCharacters.length} characters to new system prompts structure` : `Migrated ${migratedCharacters.length} characters with ${errors.length} errors`,
+      error: errors.length > 0 ? `Failed characters: ${errors.map((e4) => `${e4.characterName} (${e4.characterId}): ${e4.error}`).join("; ")}` : void 0,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
 // migrations/index.ts
 var migrations = [
   convertOpenRouterProfilesMigration,
@@ -69457,7 +69667,8 @@ var migrations = [
   migrateFilesToS3Migration,
   // Data integrity migrations
   ensureUserUsernamesMigration,
-  inheritFileTagsMigration
+  inheritFileTagsMigration,
+  migrateCharacterSystemPromptsMigration
 ];
 
 // index.ts

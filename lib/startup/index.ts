@@ -11,6 +11,7 @@ import { runAllMigrations } from '@/lib/mongodb/migrations';
 import { testS3Connection } from '@/lib/s3/client';
 import { validateS3Config } from '@/lib/s3/config';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errors';
 
 // Plugin initialization
 export {
@@ -98,7 +99,7 @@ export async function initializeMongoDBIfNeeded(): Promise<ServiceInitialization
     };
   } catch (error) {
     const latency = Date.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('MongoDB initialization failed', { error: errorMessage, latencyMs: latency });
 
     return {
@@ -155,7 +156,7 @@ export async function initializeS3IfNeeded(): Promise<ServiceInitializationResul
     };
   } catch (error) {
     const latency = Date.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('S3 initialization failed', { error: errorMessage, latencyMs: latency });
 
     return {
@@ -206,7 +207,7 @@ export async function initializeAllServices(): Promise<{
       plugins: pluginsResult,
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('Service initialization failed', { error: errorMessage });
     throw error;
   }

@@ -86,6 +86,33 @@ export async function GET(request: NextRequest) {
       models = imageProvider.supportedModels
     }
 
+    // Cache the fetched image models in the database
+    try {
+      const repos = getRepositories()
+      await repos.providerModels.upsertModelsForProvider(
+        provider,
+        models.map(modelId => ({
+          modelId,
+          displayName: modelId,
+        })),
+        'image', // Model type for image generation models
+        undefined // No baseUrl for image models
+      )
+      logger.debug('Cached image models in database', {
+        provider,
+        count: models.length,
+        modelType: 'image',
+        context: 'GET /api/image-profiles/models',
+      })
+    } catch (cacheError) {
+      // Don't fail the request if caching fails, just log
+      logger.warn('Failed to cache image models in database', {
+        provider,
+        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+        context: 'GET /api/image-profiles/models',
+      })
+    }
+
     return NextResponse.json({
       provider,
       models,

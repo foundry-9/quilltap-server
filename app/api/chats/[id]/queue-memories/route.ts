@@ -8,6 +8,7 @@ import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueMemoryExtractionBatch, ensureProcessorRunning, type MessagePair } from '@/lib/background-jobs';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errors';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       characterId,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('[QueueMemories] Error', { error: errorMessage });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

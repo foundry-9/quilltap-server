@@ -394,6 +394,8 @@ async function considerTitleUpdateAsync(
       logger.warn(`[Title Update] No cheap LLM available for chat ${chatId}`)
       return
     }
+
+    logger.debug(`[Title Update] Using cheap LLM for chat ${chatId}: provider=${cheapLLM.provider}, model=${cheapLLM.modelName}`)
     
     // Get messages for context
     const allMessages = await repos.chats.getMessages(chatId)
@@ -472,17 +474,21 @@ export async function checkAndGenerateSummaryIfNeeded(
 ): Promise<void> {
   const repos = getRepositories()
   const chat = await repos.chats.findById(chatId)
-  
+
   if (!chat) {
+    logger.debug(`[Title Update] Chat ${chatId} not found in checkAndGenerateSummaryIfNeeded`)
     return
   }
-  
+
   // Get all messages to calculate interchange count
   const allMessages = await repos.chats.getMessages(chatId)
   const currentInterchange = calculateInterchangeCount(allMessages)
-  
+
   // Check if we should consider updating the title
   const lastCheckedInterchange = chat.lastRenameCheckInterchange || 0
+
+  logger.debug(`[Title Update] Chat ${chatId}: currentInterchange=${currentInterchange}, lastChecked=${lastCheckedInterchange}, shouldCheck=${shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange)}`)
+
   if (shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange)) {
     logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for chat ${chatId}`)
 

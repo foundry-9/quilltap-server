@@ -5,6 +5,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BrandName } from "@/components/ui/brand-name";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface AuthProvider {
   id: string;
@@ -98,8 +99,7 @@ function SignInForm() {
         router.push("/dashboard");
       }
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "An error occurred";
-      setError(errorMessage);
+      setError(getErrorMessage(err, "An error occurred"));
     } finally {
       setLoading(false);
     }
@@ -258,7 +258,7 @@ function SignInForm() {
                     onChange={(e) => setRememberDevice(e.target.checked)}
                     className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                   />
-                  <label htmlFor="rememberDevice" className="ml-2 text-sm text-muted-foreground">
+                  <label htmlFor="rememberDevice" className="ml-2 qt-text-small">
                     Remember this device for 30 days
                   </label>
                 </div>

@@ -10,6 +10,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { getQueueStats, enqueueJob, ensureProcessorRunning, getProcessorStatus } from '@/lib/background-jobs';
 import { BackgroundJobTypeEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errors';
 
 /**
  * GET /api/background-jobs
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('[BackgroundJobs API] Error in GET', { error: errorMessage });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
@@ -113,7 +114,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ jobId, message: 'Job created successfully' }, { status: 201 });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('[BackgroundJobs API] Error in POST', { error: errorMessage });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

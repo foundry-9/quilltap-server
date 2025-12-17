@@ -175,7 +175,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                 {/* File Upload */}
                 {uploadMode === 'file' && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
+                    <label className="block text-sm qt-text-primary mb-2">
                       Select Image File
                     </label>
                     <input
@@ -186,7 +186,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                       className="block w-full text-sm text-foreground border border-input rounded-lg cursor-pointer bg-muted focus:outline-none"
                     />
                     {selectedFile && (
-                      <p className="mt-2 text-sm text-muted-foreground">
+                      <p className="mt-2 qt-text-small">
                         Selected: {selectedFile.name} ({Math.round(selectedFile.size / 1024)} KB)
                       </p>
                     )}
@@ -196,7 +196,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                 {/* URL Import */}
                 {uploadMode === 'url' && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Image URL</label>
+                    <label className="block text-sm qt-text-primary mb-2">Image URL</label>
                     <input
                       type="url"
                       value={imageUrl}
@@ -219,7 +219,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                 {/* Error */}
                 {error && (
                   <div className="qt-alert-error">
-                    <p className="text-sm">{error}</p>
+                    <p className="qt-text-small">{error}</p>
                   </div>
                 )}
               </div>

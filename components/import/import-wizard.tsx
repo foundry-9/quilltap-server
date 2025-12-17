@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { getErrorMessage } from '@/lib/error-utils'
 import { SpeakerMapper } from './speaker-mapper'
 import { MemoryCreationDialog } from './memory-creation-dialog'
 import {
@@ -107,7 +108,7 @@ export function ImportWizard({
         isGroupChat: result.isGroupChat,
       })
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to parse file'
+      const errorMessage = getErrorMessage(err, 'Failed to parse file')
       setError(errorMessage)
       setStep('file-select')
       clientLogger.error('Error analyzing file', { error: errorMessage })
@@ -178,7 +179,7 @@ export function ImportWizard({
         messageCount: imported._count?.messages,
       })
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to import chat'
+      const errorMessage = getErrorMessage(err, 'Failed to import chat')
       setError(errorMessage)
       setStep('mapping')
       showErrorToast(errorMessage)
@@ -206,19 +207,19 @@ export function ImportWizard({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
+              <label className="block qt-text-label mb-2">
                 Select SillyTavern chat file (JSON or JSONL)
               </label>
               <input
                 type="file"
                 accept=".json,.jsonl"
                 onChange={handleFileSelect}
-                className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-accent file:text-primary hover:file:bg-accent/80"
+                className="block w-full qt-text-small file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-accent file:text-primary hover:file:bg-accent/80"
               />
             </div>
 
             {selectedFile && (
-              <div className="text-sm text-muted-foreground">
+              <div className="qt-text-small">
                 Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
               </div>
             )}
@@ -261,7 +262,7 @@ export function ImportWizard({
         return (
           <div className="space-y-4">
             {parseResult && (
-              <div className="text-sm text-muted-foreground mb-4">
+              <div className="qt-text-small mb-4">
                 Found {parseResult.messages.length} messages from {parseResult.speakers.length} speaker(s)
                 {parseResult.isGroupChat && ' (Group Chat)'}
               </div>
@@ -288,8 +289,8 @@ export function ImportWizard({
                   className="mt-1"
                 />
                 <div>
-                  <div className="font-medium text-foreground">Analyze messages for memories</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="qt-text-primary">Analyze messages for memories</div>
+                  <div className="qt-text-small">
                     Queue each message for AI analysis to extract meaningful memories in the background
                   </div>
                 </div>
@@ -344,7 +345,7 @@ export function ImportWizard({
               <span className="text-lg font-medium">Import Complete!</span>
             </div>
 
-            <div className="text-sm text-muted-foreground">
+            <div className="qt-text-small">
               Imported {importedChat?._count?.messages || 0} messages
               {importedChat?.createdEntities?.characters?.length > 0 && (
                 <>, created {importedChat.createdEntities.characters.length} new character(s)</>
@@ -395,7 +396,7 @@ export function ImportWizard({
           </h3>
 
           {/* Step indicator */}
-          <div className="flex items-center gap-2 mb-6 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 mb-6 qt-text-small">
             <span className={step === 'file-select' ? 'text-primary font-medium' : ''}>
               1. Select File
             </span>

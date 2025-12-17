@@ -18,6 +18,7 @@ import {
   cleanupOldJobs,
 } from '@/lib/background-jobs';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errors';
 
 /**
  * POST /api/background-jobs/process
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('[BackgroundJobs Process] Error', { error: errorMessage });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
@@ -106,7 +107,7 @@ export async function GET() {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('[BackgroundJobs Process] Error in status check', { error: errorMessage });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

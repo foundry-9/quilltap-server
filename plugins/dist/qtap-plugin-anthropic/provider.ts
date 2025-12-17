@@ -20,10 +20,16 @@ const ANTHROPIC_SUPPORTED_MIME_TYPES = [
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
 
+// Cache control type for prompt caching
+// TTL: '5m' = 5 minutes (default, 1.25x write cost), '1h' = 1 hour (2x write cost)
+// Reads are always 0.1x the base input token cost
+type CacheControl = { type: 'ephemeral'; ttl?: '5m' | '1h' }
+
+// Content blocks with optional cache_control
 type AnthropicContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string } }
-  | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+  | { type: 'text'; text: string; cache_control?: CacheControl }
+  | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string }; cache_control?: CacheControl }
+  | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string }; cache_control?: CacheControl }
 
 interface AnthropicMessage {
   role: 'user' | 'assistant'
@@ -34,6 +40,7 @@ interface AnthropicMessage {
 interface AnthropicProfileParams {
   enableCacheBreakpoints?: boolean
   cacheStrategy?: 'system_only' | 'system_and_long_context'
+  cacheTTL?: '5m' | '1h'
 }
 
 export class AnthropicProvider implements LLMProvider {
@@ -42,8 +49,20 @@ export class AnthropicProvider implements LLMProvider {
   readonly supportsImageGeneration = false
   readonly supportsWebSearch = false
 
+  /**
+   * Helper to build cache_control object with optional TTL
+   * TTL is only included if it's '1h' since '5m' is the default
+   */
+  private buildCacheControl(ttl?: '5m' | '1h'): CacheControl {
+    if (ttl === '1h') {
+      return { type: 'ephemeral', ttl: '1h' }
+    }
+    return { type: 'ephemeral' }
+  }
+
   private formatMessagesWithAttachments(
-    messages: LLMMessage[]
+    messages: LLMMessage[],
+    cacheOptions?: { enableCaching: boolean; strategy: 'system_only' | 'system_and_long_context'; ttl?: '5m' | '1h' }
   ): { messages: AnthropicMessage[]; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } } {
     const sent: string[] = []
     const failed: { id: string; error: string }[] = []
@@ -51,11 +70,28 @@ export class AnthropicProvider implements LLMProvider {
     // Filter out system messages (handled separately in Anthropic)
     const nonSystemMessages = messages.filter(m => m.role !== 'system')
 
-    const formattedMessages: AnthropicMessage[] = nonSystemMessages.map((msg) => {
-      const role = msg.role === 'user' ? 'user' : 'assistant'
+    // Find last user message index for caching (used in system_and_long_context strategy)
+    const lastUserMessageIndex = cacheOptions?.enableCaching && cacheOptions.strategy === 'system_and_long_context'
+      ? nonSystemMessages.findLastIndex(m => m.role === 'user')
+      : -1
 
-      // If no attachments, return simple string content
+    const formattedMessages: AnthropicMessage[] = nonSystemMessages.map((msg, index) => {
+      const role = msg.role === 'user' ? 'user' : 'assistant'
+      const isLastUserMessage = index === lastUserMessageIndex
+
+      // If no attachments, check if we need to add cache control
       if (!msg.attachments || msg.attachments.length === 0) {
+        // For system_and_long_context, add cache_control to the last user message
+        if (isLastUserMessage) {
+          return {
+            role,
+            content: [{
+              type: 'text' as const,
+              text: msg.content,
+              cache_control: this.buildCacheControl(cacheOptions?.ttl),
+            }],
+          }
+        }
         return {
           role,
           content: msg.content,
@@ -112,6 +148,15 @@ export class AnthropicProvider implements LLMProvider {
         sent.push(attachment.id)
       }
 
+      // For system_and_long_context, add cache_control to the last content block of the last user message
+      if (isLastUserMessage && content.length > 0) {
+        const lastBlock = content[content.length - 1]
+        content[content.length - 1] = {
+          ...lastBlock,
+          cache_control: this.buildCacheControl(cacheOptions?.ttl),
+        } as AnthropicContentBlock
+      }
+
       return {
         role,
         content: content.length > 0 ? content : msg.content,
@@ -128,10 +173,18 @@ export class AnthropicProvider implements LLMProvider {
 
     // Anthropic requires system message separate from messages array
     const systemMessage = params.messages.find(m => m.role === 'system')
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
 
     // Extract profile parameters for cache control
     const profileParams = params.profileParameters as AnthropicProfileParams | undefined
+    const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false
+    const cacheStrategy = profileParams?.cacheStrategy || 'system_and_long_context'
+    const cacheTTL = profileParams?.cacheTTL
+
+    // Format messages with optional cache control
+    const { messages, attachmentResults } = this.formatMessagesWithAttachments(
+      params.messages,
+      cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : undefined
+    )
 
     const requestParams: any = {
       model: params.model,
@@ -141,17 +194,18 @@ export class AnthropicProvider implements LLMProvider {
 
     // Handle system message with optional cache control
     if (systemMessage?.content) {
-      if (profileParams?.enableCacheBreakpoints) {
+      if (cachingEnabled) {
         // Use array format with cache_control for prompt caching
         // This can reduce costs by 90% for repeated system prompts
         logger.debug('Enabling cache control for system message', {
           context: 'AnthropicProvider.sendMessage',
-          cacheStrategy: profileParams.cacheStrategy || 'system_only',
+          cacheStrategy,
+          cacheTTL: cacheTTL || '5m',
         })
         requestParams.system = [{
           type: 'text',
           text: systemMessage.content,
-          cache_control: { type: 'ephemeral' },
+          cache_control: this.buildCacheControl(cacheTTL),
         }]
       } else {
         // Standard string format
@@ -169,11 +223,23 @@ export class AnthropicProvider implements LLMProvider {
       requestParams.temperature = 1.0
     }
 
-    // Build tools array
+    // Build tools array with optional cache control on last tool
+    // Tools are cached first in Anthropic's hierarchy: tools → system → messages
     const tools: any[] = params.tools ? [...params.tools] : []
 
     if (tools.length > 0) {
       logger.debug('Adding tools to request', { context: 'AnthropicProvider.sendMessage', toolCount: tools.length })
+
+      // Add cache_control to the last tool when caching is enabled
+      if (cachingEnabled) {
+        const lastTool = tools[tools.length - 1]
+        tools[tools.length - 1] = {
+          ...lastTool,
+          cache_control: this.buildCacheControl(cacheTTL),
+        }
+        logger.debug('Added cache control to last tool', { context: 'AnthropicProvider.sendMessage' })
+      }
+
       requestParams.tools = tools
     }
 
@@ -225,10 +291,18 @@ export class AnthropicProvider implements LLMProvider {
     const client = new Anthropic({ apiKey })
 
     const systemMessage = params.messages.find(m => m.role === 'system')
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages)
 
     // Extract profile parameters for cache control
     const profileParams = params.profileParameters as AnthropicProfileParams | undefined
+    const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false
+    const cacheStrategy = profileParams?.cacheStrategy || 'system_and_long_context'
+    const cacheTTL = profileParams?.cacheTTL
+
+    // Format messages with optional cache control
+    const { messages, attachmentResults } = this.formatMessagesWithAttachments(
+      params.messages,
+      cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : undefined
+    )
 
     const requestParams: any = {
       model: params.model,
@@ -239,16 +313,17 @@ export class AnthropicProvider implements LLMProvider {
 
     // Handle system message with optional cache control
     if (systemMessage?.content) {
-      if (profileParams?.enableCacheBreakpoints) {
+      if (cachingEnabled) {
         // Use array format with cache_control for prompt caching
         logger.debug('Enabling cache control for streaming system message', {
           context: 'AnthropicProvider.streamMessage',
-          cacheStrategy: profileParams.cacheStrategy || 'system_only',
+          cacheStrategy,
+          cacheTTL: cacheTTL || '5m',
         })
         requestParams.system = [{
           type: 'text',
           text: systemMessage.content,
-          cache_control: { type: 'ephemeral' },
+          cache_control: this.buildCacheControl(cacheTTL),
         }]
       } else {
         // Standard string format
@@ -266,11 +341,23 @@ export class AnthropicProvider implements LLMProvider {
       requestParams.temperature = 1.0
     }
 
-    // Build tools array
+    // Build tools array with optional cache control on last tool
+    // Tools are cached first in Anthropic's hierarchy: tools → system → messages
     const tools: any[] = params.tools ? [...params.tools] : []
 
     if (tools.length > 0) {
       logger.debug('Adding tools to stream request', { context: 'AnthropicProvider.streamMessage', toolCount: tools.length })
+
+      // Add cache_control to the last tool when caching is enabled
+      if (cachingEnabled) {
+        const lastTool = tools[tools.length - 1]
+        tools[tools.length - 1] = {
+          ...lastTool,
+          cache_control: this.buildCacheControl(cacheTTL),
+        }
+        logger.debug('Added cache control to last tool for streaming', { context: 'AnthropicProvider.streamMessage' })
+      }
+
       requestParams.tools = tools
     }
 
@@ -285,15 +372,91 @@ export class AnthropicProvider implements LLMProvider {
     let cacheCreationInputTokens: number | undefined
     let cacheReadInputTokens: number | undefined
 
+    // Track all content blocks (text and tool_use) for proper tool call detection
+    const contentBlocks: Array<{
+      type: 'text' | 'tool_use'
+      text?: string
+      id?: string
+      name?: string
+      input?: Record<string, unknown>
+      partialJson?: string
+    }> = []
+
     for await (const event of stream) {
+      // Handle content_block_start - initializes a new content block
+      if (event.type === 'content_block_start') {
+        const block = event.content_block
+        if (block.type === 'text') {
+          contentBlocks[event.index] = { type: 'text', text: block.text || '' }
+        } else if (block.type === 'tool_use') {
+          logger.debug('Tool use block started', {
+            context: 'AnthropicProvider.streamMessage',
+            index: event.index,
+            toolName: block.name,
+            toolId: block.id,
+          })
+          contentBlocks[event.index] = {
+            type: 'tool_use',
+            id: block.id,
+            name: block.name,
+            input: {},
+            partialJson: '',
+          }
+        }
+      }
+
+      // Handle content_block_delta - updates an existing content block
       if (event.type === 'content_block_delta') {
-        if (event.delta?.type === 'text_delta' && event.delta?.text) {
-          logger.debug('Stream text delta', { context: 'AnthropicProvider.streamMessage', textLength: event.delta.text.length })
-          fullContent += event.delta.text
+        const delta = event.delta
+        const blockIndex = event.index
+
+        if (delta?.type === 'text_delta' && delta?.text) {
+          logger.debug('Stream text delta', { context: 'AnthropicProvider.streamMessage', textLength: delta.text.length })
+          fullContent += delta.text
+          // Update the content block
+          if (contentBlocks[blockIndex]) {
+            contentBlocks[blockIndex].text = (contentBlocks[blockIndex].text || '') + delta.text
+          }
           yield {
-            content: event.delta.text,
+            content: delta.text,
             done: false,
           }
+        } else if (delta?.type === 'input_json_delta' && delta?.partial_json) {
+          // Accumulate partial JSON for tool_use blocks
+          if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === 'tool_use') {
+            contentBlocks[blockIndex].partialJson = (contentBlocks[blockIndex].partialJson || '') + delta.partial_json
+            logger.debug('Tool use input delta', {
+              context: 'AnthropicProvider.streamMessage',
+              index: blockIndex,
+              chunkLength: delta.partial_json.length,
+            })
+          }
+        }
+      }
+
+      // Handle content_block_stop - finalize the content block
+      if (event.type === 'content_block_stop') {
+        const blockIndex = event.index
+        const block = contentBlocks[blockIndex]
+        // Parse accumulated JSON for tool_use blocks
+        if (block && block.type === 'tool_use' && block.partialJson) {
+          try {
+            block.input = JSON.parse(block.partialJson)
+            logger.debug('Tool use input parsed', {
+              context: 'AnthropicProvider.streamMessage',
+              index: blockIndex,
+              toolName: block.name,
+              inputKeys: Object.keys(block.input || {}),
+            })
+          } catch (e) {
+            logger.error('Failed to parse tool use input JSON', {
+              context: 'AnthropicProvider.streamMessage',
+              index: blockIndex,
+              partialJson: block.partialJson,
+            }, e instanceof Error ? e : undefined)
+          }
+          // Clean up partialJson field as it's not part of the API response format
+          delete block.partialJson
         }
       }
 
@@ -326,20 +489,26 @@ export class AnthropicProvider implements LLMProvider {
             }
           : undefined
 
+        // Count tool_use blocks for logging
+        const toolUseCount = contentBlocks.filter(b => b.type === 'tool_use').length
+
         logger.debug('Stream completed', {
           context: 'AnthropicProvider.streamMessage',
           promptTokens: totalInputTokens,
           completionTokens: totalOutputTokens,
           cacheCreationInputTokens,
           cacheReadInputTokens,
+          contentBlockCount: contentBlocks.length,
+          toolUseCount,
         })
 
         // Build the full message object for tool call detection
+        // Use the tracked content blocks which include both text and tool_use
         const fullMessage = {
           id: messageId,
           type: 'message' as const,
           role: 'assistant' as const,
-          content: [{ type: 'text' as const, text: fullContent }],
+          content: contentBlocks.length > 0 ? contentBlocks : [{ type: 'text' as const, text: fullContent }],
           model: model,
           stop_reason: stopReason,
           usage: {

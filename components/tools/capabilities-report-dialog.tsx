@@ -85,7 +85,7 @@ export function CapabilitiesReportDialog({
                 </svg>
               </button>
             </div>
-            <p className="qt-dialog-description text-sm text-muted-foreground">
+            <p className="qt-dialog-description qt-text-small">
               Capabilities Report
             </p>
           </div>
@@ -171,7 +171,7 @@ export function CapabilitiesReportDialog({
                   ),
                   // Emphasis styling
                   em: ({ children }) => (
-                    <em className="italic text-muted-foreground">{children}</em>
+                    <em className="italic qt-text-small">{children}</em>
                   ),
                 }}
               >
@@ -185,7 +185,7 @@ export function CapabilitiesReportDialog({
             <a
               href={`/api/tools/capabilities-report/${reportId}?download=true`}
               download={filename}
-              className="qt-button qt-button-secondary flex items-center gap-2"
+              className="qt-button qt-button-secondary"
             >
               <svg
                 className="w-4 h-4"

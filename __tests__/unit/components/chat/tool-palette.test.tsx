@@ -47,7 +47,8 @@ describe('ToolPalette memory controls', () => {
       onClose,
     })
 
-    const deleteButton = screen.getByRole('button', { name: /delete chat memories/i })
+    // Button text is now "Delete (3)" with title="Delete chat memories"
+    const deleteButton = screen.getByTitle(/delete chat memories/i)
     fireEvent.click(deleteButton)
 
     expect(deleteMemories).toHaveBeenCalled()
@@ -64,7 +65,8 @@ describe('ToolPalette memory controls', () => {
       onClose,
     })
 
-    const reextractButton = screen.getByRole('button', { name: /re-extract memories/i })
+    // Button text is now "Re-extract" with title="Re-extract memories"
+    const reextractButton = screen.getByTitle(/re-extract memories/i)
     fireEvent.click(reextractButton)
 
     expect(reextract).toHaveBeenCalled()

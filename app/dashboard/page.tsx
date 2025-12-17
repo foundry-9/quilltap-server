@@ -203,8 +203,8 @@ export default async function Dashboard() {
   const recentChats = allRecentChats.filter((chat) => chat !== null);
 
   return (
-    <div className="container mx-auto px-4 pt-4 pb-4 flex flex-col max-w-[800px] h-full overflow-hidden">
-      <div className="flex-1 flex flex-col min-h-0">
+    <div className="container mx-auto px-4 pt-4 pb-4 flex flex-col max-w-[800px] sm:h-full sm:overflow-hidden">
+      <div className="flex-1 flex flex-col sm:min-h-0">
         {/* 2FA Setup Prompt */}
         <TwoFactorPrompt />
 

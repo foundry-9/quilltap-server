@@ -245,4 +245,79 @@
     @apply w-4 h-4 border-border;
     @apply text-primary focus:ring-primary;
   }
+
+  /* ==========================================================================
+     TABS
+     ========================================================================== */
+
+  /**
+   * Tab group container - wraps the tab buttons
+   */
+  .qt-tab-group {
+    @apply flex flex-wrap;
+    gap: var(--qt-tab-group-gap);
+  }
+
+  /**
+   * Base tab button styles
+   */
+  .qt-tab {
+    @apply inline-flex items-center gap-2 min-w-fit;
+    @apply border border-b-0;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    padding: var(--qt-tab-padding-y) var(--qt-tab-padding-x);
+    border-radius: var(--qt-tab-radius);
+    font-size: var(--qt-tab-font-size);
+    font-weight: var(--qt-tab-font-weight);
+    transition: var(--qt-tab-transition);
+    cursor: pointer;
+
+    /* Default inactive state */
+    background: var(--qt-tab-bg);
+    color: var(--qt-tab-fg);
+    border-color: var(--qt-tab-border);
+  }
+
+  .qt-tab:hover:not(.qt-tab-active) {
+    background: var(--qt-tab-hover-bg);
+    color: var(--qt-tab-hover-fg);
+  }
+
+  /**
+   * Active tab state
+   */
+  .qt-tab-active,
+  .qt-tab.qt-tab-active {
+    background: var(--qt-tab-active-bg);
+    color: var(--qt-tab-active-fg);
+    border-color: var(--qt-tab-active-border);
+    position: relative;
+  }
+
+  /* Cover the divider line below the active tab */
+  .qt-tab-active::after,
+  .qt-tab.qt-tab-active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--qt-tab-active-bg);
+  }
+
+  /**
+   * Tab divider - the line below the tab group
+   */
+  .qt-tab-divider {
+    @apply w-full;
+    border-bottom: 1px solid var(--qt-tab-divider-color);
+  }
+
+  /**
+   * Tab icon wrapper - ensures consistent icon sizing
+   */
+  .qt-tab-icon {
+    @apply flex-shrink-0;
+  }
 }

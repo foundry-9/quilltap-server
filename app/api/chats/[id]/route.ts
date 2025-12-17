@@ -402,6 +402,7 @@ export async function GET(
       title: chatMetadata.title,
       contextSummary: chatMetadata.contextSummary,
       roleplayTemplateId: chatMetadata.roleplayTemplateId,
+      lastTurnParticipantId: chatMetadata.lastTurnParticipantId ?? null,
       updatedAt: chatMetadata.updatedAt,
       createdAt: chatMetadata.createdAt,
       participants: enrichedParticipants,

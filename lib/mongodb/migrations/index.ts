@@ -7,6 +7,7 @@
 
 import { Db } from 'mongodb';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errors';
 
 // Import all migrations
 import {
@@ -110,7 +111,7 @@ export async function runAllMigrations(db: Db): Promise<{
         result.errors.push(...migrationResult.errors);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       logger.error('Migration threw an exception', {
         migrationId: migration.id,
         migrationName: migration.name,

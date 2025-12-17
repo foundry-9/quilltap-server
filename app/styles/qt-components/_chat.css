@@ -128,7 +128,7 @@
    * Composer inner wrapper
    */
   .qt-chat-composer-inner {
-    @apply flex items-end;
+    @apply flex items-center;
     gap: var(--qt-chat-toolbar-gap);
     @apply max-w-4xl mx-auto;
   }
@@ -151,12 +151,17 @@
 
   /**
    * Toolbar button - used for attachment/tools/continue controls
+   * Self-contained styles so qt-button class is not needed
    */
   .qt-chat-toolbar-button {
     @apply inline-flex items-center justify-center;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply disabled:pointer-events-none disabled:opacity-50;
     cursor: pointer;
     width: 2.75rem;
     height: 2.75rem;
+    padding: 0;
+    gap: 0;
     border-radius: var(--qt-button-radius);
     border: 1px solid var(--qt-chat-toolbar-button-border);
     background: var(--qt-chat-toolbar-button-bg);
@@ -180,6 +185,38 @@
     background: var(--qt-status-info-bg);
     color: var(--qt-status-info-fg);
     border: 1px solid var(--qt-status-info-border);
+  }
+
+  /**
+   * Stop button - stops streaming response (desktop)
+   */
+  .qt-chat-stop-button {
+    background: var(--qt-status-danger-bg);
+    color: var(--qt-status-danger-fg);
+    border: 1px solid var(--qt-status-danger-border);
+  }
+
+  .qt-chat-stop-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 70%, black);
+  }
+
+  /**
+   * Stop button - mobile version (in streaming header)
+   */
+  .qt-chat-stop-button-mobile {
+    @apply inline-flex items-center justify-center flex-shrink-0 ml-auto;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    background: var(--qt-status-danger-bg);
+    color: var(--qt-status-danger-fg);
+    border: 1px solid var(--qt-status-danger-border);
+    cursor: pointer;
+    transition: background 150ms ease;
+  }
+
+  .qt-chat-stop-button-mobile:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 70%, black);
   }
 
   /**
@@ -236,6 +273,63 @@
 
   .qt-chat-composer-send:hover:not(:disabled) {
     background: var(--qt-button-primary-hover-bg);
+  }
+
+  /* ==========================================================================
+     DESKTOP TOOL PALETTE BAR
+     ========================================================================== */
+
+  /**
+   * Tool palette bar - full-width bar above the composer textarea
+   * Positioned absolutely above the composer inner form
+   */
+  .qt-tool-palette-bar {
+    @apply flex items-center gap-2;
+    padding: 0.5rem 0.75rem;
+    background: var(--qt-chat-composer-bg);
+    border-bottom: 1px solid var(--qt-chat-composer-border);
+    animation: qt-slide-up 150ms ease-out;
+  }
+
+  .qt-tool-palette-section {
+    @apply flex items-center gap-1.5;
+  }
+
+  .qt-tool-palette-section-left {
+    @apply flex-wrap;
+  }
+
+  .qt-tool-palette-section-center {
+    @apply flex-1 justify-center flex-wrap;
+  }
+
+  .qt-tool-palette-section-right {
+    @apply flex-wrap justify-end;
+  }
+
+  .qt-tool-palette-button {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md;
+    @apply transition-colors duration-150;
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+
+  .qt-tool-palette-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-muted) 70%, black);
+  }
+
+  .qt-tool-palette-button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .qt-tool-palette-button-danger {
+    color: var(--qt-status-danger-fg);
+  }
+
+  .qt-tool-palette-button-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 50%, transparent);
   }
 
   /* ==========================================================================
@@ -611,6 +705,139 @@
     color: var(--qt-status-danger-fg);
   }
 
+  /* ==========================================================================
+     MOBILE MESSAGE LAYOUT
+     ========================================================================== */
+
+  /**
+   * Mobile message header - shows avatar and name in a row
+   * Hidden on desktop, shown on mobile via media query
+   * Contains speaker info on left, participant controls on right
+   */
+  .qt-chat-message-mobile-header {
+    @apply hidden items-center mb-2;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  /**
+   * Speaker info container (left side of mobile header)
+   */
+  .qt-chat-message-mobile-speaker {
+    @apply flex items-center gap-2 min-w-0;
+  }
+
+  .qt-chat-message-mobile-avatar {
+    @apply w-10 h-10 bg-muted flex-shrink-0 overflow-hidden;
+    border-radius: var(--qt-avatar-radius);
+  }
+
+  .qt-chat-message-mobile-avatar img {
+    @apply w-full h-full object-cover;
+  }
+
+  .qt-chat-message-mobile-avatar-initial {
+    @apply w-full h-full flex items-center justify-center text-lg font-bold text-muted-foreground;
+  }
+
+  .qt-chat-message-mobile-name {
+    @apply text-sm font-semibold text-foreground truncate;
+  }
+
+  /**
+   * Participant controls container (right side of mobile header)
+   * Shows participant avatars for multi-character chats
+   */
+  .qt-mobile-participant-controls {
+    @apply flex items-center gap-1 flex-shrink-0;
+  }
+
+  /**
+   * Smaller participant avatars for inline header display
+   */
+  .qt-mobile-participant-controls .qt-mobile-participant-avatar {
+    width: 32px;
+    height: 32px;
+    border-width: 1.5px;
+  }
+
+  .qt-mobile-participant-controls .qt-mobile-participant-queue-badge {
+    @apply w-4 h-4 text-[10px];
+    top: -2px;
+    right: -2px;
+  }
+
+  .qt-mobile-participant-controls .qt-mobile-participant-turn-dot {
+    width: 8px;
+    height: 8px;
+    bottom: -1px;
+    right: -1px;
+  }
+
+  /**
+   * Mobile continue button - shown in header on mobile
+   */
+  .qt-mobile-continue-button {
+    @apply hidden items-center justify-center flex-shrink-0;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    background: var(--qt-status-info-bg);
+    color: var(--qt-status-info-fg);
+    border: 1px solid var(--qt-status-info-border);
+    cursor: pointer;
+    transition: background 150ms ease, opacity 150ms ease;
+  }
+
+  .qt-mobile-continue-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-info-bg) 80%, black);
+  }
+
+  .qt-mobile-continue-button:disabled {
+    @apply opacity-30 cursor-not-allowed;
+  }
+
+  .qt-mobile-continue-button svg {
+    @apply w-4 h-4;
+  }
+
+  /**
+   * Message action bar - shows action icons at bottom of message
+   * Persistent on mobile, replaces hover-based actions
+   */
+  .qt-chat-message-action-bar {
+    @apply flex items-center gap-3 mt-2 pt-2;
+    border-top: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  }
+
+  .qt-chat-message-action-bar-icons {
+    @apply flex items-center gap-1;
+  }
+
+  .qt-chat-message-action-icon {
+    @apply p-1.5 rounded transition-colors;
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+  }
+
+  .qt-chat-message-action-icon:hover {
+    color: var(--color-foreground);
+    background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+  }
+
+  .qt-chat-message-action-icon-danger:hover {
+    color: var(--qt-status-danger-fg);
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 50%, transparent);
+  }
+
+  .qt-chat-message-action-icon svg {
+    @apply w-4 h-4;
+  }
+
+  .qt-chat-message-action-timestamp {
+    @apply text-xs text-muted-foreground ml-auto;
+  }
+
   /**
    * Chat sidebar (participants)
    */
@@ -656,5 +883,522 @@
     padding: 1rem;
     color: var(--qt-chat-sidebar-muted);
     @apply text-xs;
+  }
+
+  /* ==========================================================================
+     MOBILE TOOL PALETTE
+     ========================================================================== */
+
+  /**
+   * Mobile tool palette - full-width drawer above footer
+   * Only visible on mobile via media query
+   */
+  .qt-mobile-tool-palette {
+    @apply hidden;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% - 1px); /* Flush with footer, overlap border */
+    background: var(--qt-mobile-tool-palette-bg);
+    border-top: 1px solid var(--qt-mobile-tool-palette-border);
+    z-index: 40;
+    animation: qt-slide-up 200ms ease-out;
+  }
+
+  @keyframes qt-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .qt-mobile-tool-palette-section {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--qt-mobile-tool-palette-border);
+  }
+
+  .qt-mobile-tool-palette-section:last-child {
+    border-bottom: none;
+  }
+
+  .qt-mobile-tool-palette-section-header {
+    @apply text-xs font-medium uppercase tracking-wider mb-1.5;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-mobile-tool-palette-grid {
+    @apply grid gap-1.5;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .qt-mobile-tool-palette-button {
+    @apply flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm;
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    transition: background 150ms ease;
+  }
+
+  .qt-mobile-tool-palette-button:hover {
+    background: color-mix(in srgb, var(--color-muted) 80%, black);
+  }
+
+  .qt-mobile-tool-palette-button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .qt-mobile-tool-palette-button svg {
+    @apply w-5 h-5 flex-shrink-0;
+  }
+
+  .qt-mobile-tool-palette-button-label {
+    @apply truncate;
+  }
+
+  /* Danger variant for destructive actions */
+  .qt-mobile-tool-palette-button-danger {
+    color: var(--qt-status-danger-fg);
+  }
+
+  .qt-mobile-tool-palette-button-danger:hover {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 80%, transparent);
+  }
+
+  /* Split layout for bottom section (Quick Actions | Roleplay) */
+  .qt-mobile-tool-palette-split {
+    @apply flex gap-3;
+  }
+
+  .qt-mobile-tool-palette-split-column {
+    @apply flex-1 min-w-0;
+  }
+
+  /* RP Insert section uses existing annotation button styles */
+  .qt-mobile-tool-palette-rp-buttons {
+    @apply flex flex-wrap items-start gap-1.5;
+  }
+
+  /* Utility classes for mobile/desktop visibility */
+  .qt-mobile-only {
+    @apply hidden;
+  }
+
+  /* Note: qt-desktop-only doesn't set display - elements keep their natural display type.
+     The mobile media query below will hide them with display:none !important */
+  .qt-desktop-only {
+    /* visible by default - inherits element's natural display */
+  }
+
+  /* ==========================================================================
+     MOBILE PARTICIPANT BAR
+     ========================================================================== */
+
+  /**
+   * Mobile participant bar - horizontal row of avatars at top of chat
+   * Only visible on mobile via qt-mobile-only class
+   */
+  .qt-mobile-participant-bar {
+    @apply hidden items-center gap-2 px-3 py-2;
+    background: var(--qt-content-bg);
+    border-bottom: 1px solid var(--qt-chat-sidebar-border);
+    /* Hide scrollbar but allow scrolling */
+    overflow-x: auto;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .qt-mobile-participant-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /**
+   * Inner container uses row-reverse to put user on right
+   */
+  .qt-mobile-participant-bar-inner {
+    @apply flex items-center gap-2;
+    flex-direction: row-reverse;
+  }
+
+  /**
+   * Individual participant avatar button
+   */
+  .qt-mobile-participant-avatar {
+    @apply relative flex-shrink-0;
+    @apply flex items-center justify-center;
+    @apply overflow-hidden;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--qt-avatar-radius);
+    background: var(--color-muted);
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: border-color 150ms ease, transform 150ms ease;
+  }
+
+  .qt-mobile-participant-avatar:hover {
+    transform: scale(1.05);
+  }
+
+  .qt-mobile-participant-avatar:focus {
+    outline: none;
+  }
+
+  .qt-mobile-participant-avatar img {
+    @apply w-full h-full object-cover;
+  }
+
+  .qt-mobile-participant-avatar-initial {
+    @apply text-base font-bold text-muted-foreground;
+  }
+
+  /**
+   * Active turn indicator - green border glow
+   */
+  .qt-mobile-participant-avatar-active {
+    border-color: var(--qt-status-success-fg);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--qt-status-success-fg) 30%, transparent);
+  }
+
+  /**
+   * Selected state when dropdown is open
+   */
+  .qt-mobile-participant-avatar-selected {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+
+  /**
+   * Queue position badge on avatar
+   */
+  .qt-mobile-participant-queue-badge {
+    @apply absolute -top-1 -right-1;
+    @apply w-5 h-5 text-xs font-bold;
+    @apply flex items-center justify-center;
+    @apply rounded-full;
+    background: var(--qt-status-info-bg);
+    color: var(--qt-status-info-fg);
+    border: 1px solid var(--qt-status-info-border);
+  }
+
+  /**
+   * Green dot indicator for active participant
+   */
+  .qt-mobile-participant-turn-dot {
+    @apply absolute rounded-full animate-pulse;
+    width: 10px;
+    height: 10px;
+    bottom: -2px;
+    right: -2px;
+    background: var(--qt-status-success-fg);
+    box-shadow: 0 0 0 2px var(--qt-content-bg);
+  }
+
+  /* ==========================================================================
+     MOBILE PARTICIPANT DROPDOWN
+     ========================================================================== */
+
+  /**
+   * Dropdown popover for participant controls
+   */
+  .qt-mobile-participant-dropdown {
+    @apply fixed z-50;
+    @apply p-3;
+    min-width: 200px;
+    max-width: calc(100vw - 1rem);
+    border-radius: var(--radius-lg);
+    background: var(--color-popover);
+    color: var(--color-popover-foreground);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 10px 38px -10px rgba(22, 23, 24, 0.35), 0 10px 20px -15px rgba(22, 23, 24, 0.2);
+    animation: qt-dropdown-slide-down 150ms ease-out;
+  }
+
+  @keyframes qt-dropdown-slide-down {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .qt-mobile-participant-dropdown-header {
+    @apply mb-3 pb-2;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .qt-mobile-participant-dropdown-name {
+    @apply font-semibold text-sm;
+  }
+
+  .qt-mobile-participant-dropdown-title {
+    @apply text-xs text-muted-foreground italic;
+  }
+
+  .qt-mobile-participant-dropdown-you-badge {
+    @apply inline-flex items-center ml-2 px-1.5 py-0.5 text-xs rounded;
+    background: var(--color-muted);
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-mobile-participant-dropdown-talkativeness {
+    @apply mb-3;
+  }
+
+  .qt-mobile-participant-dropdown-talkativeness-label {
+    @apply flex items-center justify-between text-xs text-muted-foreground mb-1;
+  }
+
+  .qt-mobile-participant-dropdown-slider {
+    @apply w-full h-1.5 rounded-lg appearance-none cursor-pointer;
+    background: var(--color-muted);
+  }
+
+  .qt-mobile-participant-dropdown-slider::-webkit-slider-thumb {
+    @apply appearance-none w-4 h-4 rounded-full cursor-pointer;
+    background: var(--color-primary);
+    border: none;
+  }
+
+  .qt-mobile-participant-dropdown-slider::-moz-range-thumb {
+    @apply w-4 h-4 rounded-full cursor-pointer;
+    background: var(--color-primary);
+    border: none;
+  }
+
+  .qt-mobile-participant-dropdown-slider:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .qt-mobile-participant-dropdown-actions {
+    @apply flex gap-2;
+  }
+
+  .qt-mobile-participant-dropdown-action-btn {
+    @apply flex-1 py-2 px-3 text-sm font-medium rounded-md;
+    @apply transition-colors duration-150;
+    @apply inline-flex items-center justify-center gap-1.5;
+    cursor: pointer;
+  }
+
+  .qt-mobile-participant-dropdown-action-btn-primary {
+    background: var(--qt-button-secondary-bg);
+    color: var(--qt-button-secondary-fg);
+    border: 1px solid var(--qt-button-secondary-border);
+  }
+
+  .qt-mobile-participant-dropdown-action-btn-primary:hover:not(:disabled) {
+    background: var(--qt-button-secondary-hover-bg);
+  }
+
+  .qt-mobile-participant-dropdown-action-btn-danger {
+    background: transparent;
+    color: var(--qt-status-danger-fg);
+    border: 1px solid var(--qt-status-danger-border);
+  }
+
+  .qt-mobile-participant-dropdown-action-btn-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 50%, transparent);
+  }
+
+  .qt-mobile-participant-dropdown-action-btn:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .qt-mobile-participant-dropdown-action-btn svg {
+    @apply w-4 h-4;
+  }
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVE CHAT LAYOUT
+   These styles are outside @layer to ensure they have proper specificity
+   ========================================================================== */
+
+/* Always hide old hover actions and text buttons - replaced by icon action bar */
+.qt-chat-desktop-hover-actions {
+  display: none !important;
+}
+
+.qt-chat-message-desktop-actions {
+  display: none !important;
+}
+
+.qt-chat-desktop-timestamp {
+  display: none !important;
+}
+
+/* Always show the icon action bar */
+.qt-chat-message-action-bar {
+  display: flex !important;
+}
+
+/* Mobile: show mobile header, hide desktop avatars */
+@media (max-width: 768px) {
+  /* Prevent horizontal scroll on mobile - use clip to preserve sticky positioning */
+  .qt-chat-layout,
+  .qt-chat-main {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
+  }
+
+  /* Messages container keeps overflow-y: auto for scrolling, clip horizontal */
+  .qt-chat-messages {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
+  }
+
+  .qt-chat-messages-list,
+  .qt-chat-composer,
+  .qt-chat-composer-content {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
+  }
+
+  /* Constrain the roleplay annotation toolbar */
+  .qt-rp-annotation-toolbar {
+    overflow-x: auto;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
+  /* Remove top padding from messages container so sticky header goes to top */
+  .qt-chat-messages {
+    padding-top: 0 !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+
+  /* Hide desktop avatar columns on mobile */
+  .qt-chat-desktop-avatar {
+    display: none !important;
+  }
+
+  /* Show mobile header - sticky so it stays visible while scrolling long messages */
+  .qt-chat-message-mobile-header {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--qt-content-bg);
+    padding: 0.5rem 0.75rem;
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    margin-top: 0;
+  }
+
+  /* User messages: header aligned to right */
+  .qt-chat-message-row-user .qt-chat-message-mobile-header {
+    flex-direction: row-reverse;
+  }
+
+  /* Message rows take most of width on mobile but don't overflow */
+  .qt-chat-message-row {
+    width: 90% !important;
+    max-width: calc(100vw - 1rem) !important;
+  }
+
+  /* Stack message body vertically on mobile */
+  .qt-chat-message-body {
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  /* Ensure message content doesn't overflow */
+  .qt-chat-message-user,
+  .qt-chat-message-assistant {
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  /* Ensure action bar wraps if needed */
+  .qt-chat-message-action-bar {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .qt-chat-message-action-bar-icons {
+    flex-wrap: wrap;
+  }
+
+  /* ==========================================================================
+     MOBILE CHAT COMPOSER STYLES
+     ========================================================================== */
+
+  /* Make composer position relative for absolute positioned palette */
+  .qt-chat-composer {
+    position: relative;
+  }
+
+  /* Show mobile tool palette on mobile when it has the 'open' class */
+  .qt-mobile-tool-palette.qt-mobile-tool-palette-open {
+    display: block !important;
+  }
+
+  /* Single-line initial height for textarea on mobile */
+  .qt-chat-composer-input {
+    min-height: var(--qt-mobile-composer-input-min-height) !important;
+    /* Reserve space for palette even when closed */
+    max-height: calc(100vh - var(--qt-navbar-height) - var(--qt-mobile-tool-palette-max-height) - 6rem) !important;
+  }
+
+  /* Hide desktop-only buttons on mobile */
+  .qt-chat-toolbar .qt-desktop-only {
+    display: none !important;
+  }
+
+  /* Show mobile-only elements */
+  .qt-mobile-only {
+    display: flex !important;
+  }
+
+  /* Hide desktop-only elements */
+  .qt-desktop-only {
+    display: none !important;
+  }
+
+  /* Hide roleplay annotation toolbar on mobile - moved to palette */
+  .qt-rp-annotation-toolbar.qt-desktop-only {
+    display: none !important;
+  }
+
+  /* Show participant controls in mobile header */
+  .qt-mobile-participant-controls {
+    display: flex !important;
+  }
+
+  /* Show mobile continue button */
+  .qt-mobile-continue-button {
+    display: flex !important;
+  }
+}
+
+/* Desktop: hide mobile header, show desktop avatars */
+@media (min-width: 769px) {
+  /* Hide mobile header on desktop */
+  .qt-chat-message-mobile-header {
+    display: none !important;
+  }
+
+  /* Hide mobile participant controls on desktop (sidebar handles this) */
+  .qt-mobile-participant-controls {
+    display: none !important;
+  }
+
+  /* Balance composer vertical padding on desktop - less above textarea, more below */
+  .qt-chat-composer {
+    padding-top: 0.625rem;
+    padding-bottom: 1.25rem;
   }
 }

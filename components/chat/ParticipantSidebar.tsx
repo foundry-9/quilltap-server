@@ -25,9 +25,11 @@ interface ParticipantSidebarProps {
   turnSelectionResult: TurnSelectionResult | null
   isGenerating: boolean
   userParticipantId: string | null
+  respondingParticipantId?: string | null // The participant currently streaming a response
   onNudge: (participantId: string) => void
   onQueue: (participantId: string) => void
   onDequeue: (participantId: string) => void
+  onSkip?: () => void // Skip turn (for user participants in multi-char chat)
   onTalkativenessChange?: (participantId: string, value: number) => void
   onAddCharacter?: () => void
   onRemoveCharacter?: (participantId: string) => void // Phase 6: Remove character from chat
@@ -40,9 +42,11 @@ export function ParticipantSidebar({
   turnSelectionResult,
   isGenerating,
   userParticipantId,
+  respondingParticipantId,
   onNudge,
   onQueue,
   onDequeue,
+  onSkip,
   onTalkativenessChange,
   onAddCharacter,
   onRemoveCharacter,
@@ -54,9 +58,10 @@ export function ParticipantSidebar({
       participantCount: participants.length,
       queueLength: turnState.queue.length,
       nextSpeakerId: turnSelectionResult?.nextSpeakerId,
+      respondingParticipantId,
       isGenerating,
     })
-  }, [participants.length, turnState.queue.length, turnSelectionResult?.nextSpeakerId, isGenerating])
+  }, [participants.length, turnState.queue.length, turnSelectionResult?.nextSpeakerId, respondingParticipantId, isGenerating])
 
   // Sort participants: personas first (the user), then characters by displayOrder
   const sortedParticipants = useMemo(() => {
@@ -73,19 +78,27 @@ export function ParticipantSidebar({
 
   // Get the current speaker (either from selection result or currently generating)
   const currentSpeakerId = useMemo(() => {
-    if (isGenerating && turnState.lastSpeakerId) {
-      // If generating, the last speaker is the current one
-      return turnState.lastSpeakerId
+    if (isGenerating) {
+      // If generating, use the responding participant ID (set before streaming starts)
+      // This is more accurate than lastSpeakerId which is calculated from persisted messages
+      if (respondingParticipantId) {
+        return respondingParticipantId
+      }
+      // Fallback to lastSpeakerId for backwards compatibility
+      if (turnState.lastSpeakerId) {
+        return turnState.lastSpeakerId
+      }
     }
     return turnSelectionResult?.nextSpeakerId ?? null
-  }, [isGenerating, turnState.lastSpeakerId, turnSelectionResult?.nextSpeakerId])
+  }, [isGenerating, respondingParticipantId, turnState.lastSpeakerId, turnSelectionResult?.nextSpeakerId])
 
   // Count active characters (not including personas)
   const activeCharacterCount = useMemo(() => {
     return participants.filter(p => p.type === 'CHARACTER' && p.isActive).length
   }, [participants])
 
-  const sidebarClasses = ['qt-chat-sidebar']
+  // Include qt-desktop-only to hide sidebar on mobile (mobile uses inline participant controls in message header)
+  const sidebarClasses = ['qt-chat-sidebar', 'qt-desktop-only']
   if (className) {
     sidebarClasses.push(className)
   }
@@ -148,6 +161,8 @@ export function ParticipantSidebar({
           const queuePos = getQueuePosition(turnState, participant.id)
           // Can remove if there's more than one active character
           const canRemove = activeCharacterCount > 1
+          // Can skip when it's the user's turn (nextSpeakerId is null means it's user's turn)
+          const canSkip = turnSelectionResult?.nextSpeakerId === null && !isGenerating
 
           return (
             <ParticipantCard
@@ -160,9 +175,11 @@ export function ParticipantSidebar({
               onNudge={onNudge}
               onQueue={onQueue}
               onDequeue={onDequeue}
+              onSkip={isUserParticipant ? onSkip : undefined}
               onTalkativenessChange={onTalkativenessChange}
               onRemove={onRemoveCharacter}
               canRemove={canRemove}
+              canSkip={canSkip}
             />
           )
         })}

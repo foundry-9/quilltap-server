@@ -11,6 +11,7 @@ import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema, type AvatarDisplayMode } from '@/lib/schemas/types'
+import { getErrorMessage } from '@/lib/errors'
 
 /**
  * Validate and update chat settings
@@ -160,7 +161,7 @@ async function handleSettingsUpdate(req: NextRequest) {
     return NextResponse.json(chatSettings)
   } catch (error) {
     logger.error('Error updating chat settings', { context: 'PUT/POST /api/chat-settings' }, error instanceof Error ? error : undefined)
-    const errorMessage = error instanceof Error ? error.message : 'Failed to update chat settings'
+    const errorMessage = getErrorMessage(error, 'Failed to update chat settings')
     const status = errorMessage.includes('Invalid') ? 400 : 500
     return NextResponse.json(
       { error: errorMessage },

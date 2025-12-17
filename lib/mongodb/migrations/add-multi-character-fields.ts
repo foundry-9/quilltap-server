@@ -14,6 +14,7 @@
 import { Db } from 'mongodb';
 import { logger } from '@/lib/logger';
 import { getMongoMigrationsRepository } from '@/lib/mongodb/repositories/migrations.repository';
+import { getErrorMessage } from '@/lib/errors';
 
 const MIGRATION_ID = 'add-multi-character-fields-v1';
 
@@ -142,7 +143,7 @@ export async function runMultiCharacterFieldsMigration(db: Db): Promise<Migratio
           }
         }
       } catch (chatError) {
-        const errorMessage = chatError instanceof Error ? chatError.message : String(chatError);
+        const errorMessage = getErrorMessage(chatError);
         logger.error('Error processing chat in migration', {
           chatId: chat.id,
           error: errorMessage,
@@ -166,7 +167,7 @@ export async function runMultiCharacterFieldsMigration(db: Db): Promise<Migratio
       ...result,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('Multi-character fields migration failed', {
       migrationId: MIGRATION_ID,
       error: errorMessage,

@@ -2,6 +2,11 @@
 
 import { useState } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { useFormState } from '@/hooks/useFormState'
+import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { fetchJson } from '@/lib/fetch-helpers'
+import { clientLogger } from '@/lib/client-logger'
+import FormActions from '@/components/ui/FormActions'
 import MessageContent from '@/components/chat/MessageContent'
 
 export interface PhysicalDescription {
@@ -33,7 +38,7 @@ export function PhysicalDescriptionEditor({
 }: PhysicalDescriptionEditorProps) {
   const isEditing = !!description
 
-  const [formData, setFormData] = useState({
+  const { formData, handleChange } = useFormState({
     name: description?.name || '',
     shortPrompt: description?.shortPrompt || '',
     mediumPrompt: description?.mediumPrompt || '',
@@ -41,20 +46,19 @@ export function PhysicalDescriptionEditor({
     completePrompt: description?.completePrompt || '',
     fullDescription: description?.fullDescription || '',
   })
-  const [saving, setSaving] = useState(false)
+
+  const { loading: saving, error: saveError, execute: executeSave, clearError } = useAsyncOperation<void>()
   const [showFullDescPreview, setShowFullDescPreview] = useState(false)
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target
-    setFormData({ ...formData, [name]: value })
-  }
-
   const handleSave = async () => {
-    setSaving(true)
+    clearError()
+    clientLogger.debug('Physical description save initiated', {
+      isEditing,
+      entityType,
+      entityId,
+    })
 
-    try {
+    await executeSave(async () => {
       const payload = {
         name: formData.name,
         shortPrompt: formData.shortPrompt || null,
@@ -69,25 +73,35 @@ export function PhysicalDescriptionEditor({
         : `/api/personas/${entityId}/descriptions`
 
       const url = isEditing ? `${baseUrl}/${description.id}` : baseUrl
+      const method = isEditing ? 'PUT' : 'POST'
 
-      const res = await fetch(url, {
-        method: isEditing ? 'PUT' : 'POST',
+      clientLogger.debug('Sending physical description request', {
+        url,
+        method,
+      })
+
+      const result = await fetchJson<{ id: string }>(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
 
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to save description')
+      if (!result.ok) {
+        const errorMessage = result.error || 'Failed to save description'
+        clientLogger.error('Physical description save failed', {
+          status: result.status,
+          error: errorMessage,
+        })
+        showErrorToast(errorMessage)
+        throw new Error(errorMessage)
       }
 
+      clientLogger.debug('Physical description saved successfully', {
+        isEditing,
+      })
       showSuccessToast(isEditing ? 'Description updated' : 'Description created')
       onSave()
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to save')
-    } finally {
-      setSaving(false)
-    }
+    })
   }
 
   const charCountClass = (current: number, max: number) => {
@@ -129,7 +143,7 @@ export function PhysicalDescriptionEditor({
           <div className="qt-dialog-body space-y-4 flex-1">
           {/* Name */}
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-foreground mb-1">
+            <label htmlFor="name" className="qt-label mb-1">
               Name *
             </label>
             <input
@@ -147,7 +161,7 @@ export function PhysicalDescriptionEditor({
           {/* Short Prompt */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="shortPrompt" className="block text-sm font-medium text-foreground">
+              <label htmlFor="shortPrompt" className="block text-sm qt-text-primary">
                 Short Prompt
               </label>
               <span className={`text-xs ${charCountClass(formData.shortPrompt.length, 350)}`}>
@@ -169,7 +183,7 @@ export function PhysicalDescriptionEditor({
           {/* Medium Prompt */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="mediumPrompt" className="block text-sm font-medium text-foreground">
+              <label htmlFor="mediumPrompt" className="block text-sm qt-text-primary">
                 Medium Prompt
               </label>
               <span className={`text-xs ${charCountClass(formData.mediumPrompt.length, 500)}`}>
@@ -191,7 +205,7 @@ export function PhysicalDescriptionEditor({
           {/* Long Prompt */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="longPrompt" className="block text-sm font-medium text-foreground">
+              <label htmlFor="longPrompt" className="block text-sm qt-text-primary">
                 Long Prompt
               </label>
               <span className={`text-xs ${charCountClass(formData.longPrompt.length, 750)}`}>
@@ -213,7 +227,7 @@ export function PhysicalDescriptionEditor({
           {/* Complete Prompt */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="completePrompt" className="block text-sm font-medium text-foreground">
+              <label htmlFor="completePrompt" className="block text-sm qt-text-primary">
                 Complete Prompt
               </label>
               <span className={`text-xs ${charCountClass(formData.completePrompt.length, 1000)}`}>
@@ -235,7 +249,7 @@ export function PhysicalDescriptionEditor({
           {/* Full Description (Markdown) */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="fullDescription" className="block text-sm font-medium text-foreground">
+              <label htmlFor="fullDescription" className="block text-sm qt-text-primary">
                 Full Description (Markdown)
               </label>
               <button
@@ -272,21 +286,14 @@ export function PhysicalDescriptionEditor({
 
         {/* Footer */}
         <div className="qt-dialog-footer flex-shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="qt-button qt-button-secondary"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || !formData.name.trim()}
-            className="qt-button qt-button-primary"
-          >
-            {saving ? 'Saving...' : isEditing ? 'Update' : 'Create'}
-          </button>
+          <FormActions
+            onCancel={onClose}
+            onSubmit={handleSave}
+            submitLabel={isEditing ? 'Update' : 'Create'}
+            cancelLabel="Cancel"
+            isLoading={saving}
+            isDisabled={!formData.name.trim()}
+          />
         </div>
         </div>
       </div>

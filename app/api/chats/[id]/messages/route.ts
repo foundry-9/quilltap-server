@@ -8,7 +8,15 @@ import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext } from '@/lib/chat/tool-executor'
-import { buildToolsForProvider } from '@/lib/tools'
+import {
+  buildToolsForProvider,
+  checkModelSupportsTools,
+  shouldUsePseudoTools,
+  buildPseudoToolInstructions,
+  parsePseudoToolCalls,
+  convertToToolCallRequest,
+  stripPseudoToolMarkers,
+} from '@/lib/tools'
 import { processMessageForMemoryAsync, processInterCharacterMemoryAsync } from '@/lib/memory'
 import { buildContext, type MessageWithParticipant } from '@/lib/chat/context-manager'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
@@ -600,6 +608,38 @@ export async function POST(
         .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
     }
 
+    // ========================================================================
+    // Pseudo-Tool Support: Check if model supports native function calling
+    // ========================================================================
+    const modelSupportsNativeTools = await checkModelSupportsTools(
+      connectionProfile.provider,
+      connectionProfile.modelName,
+      user.id
+    )
+    const usePseudoTools = shouldUsePseudoTools(modelSupportsNativeTools)
+
+    // Determine which tools are enabled for this chat
+    const enabledToolOptions = {
+      imageGeneration: !!imageProfileId,
+      memorySearch: true, // Always enable memory search
+      webSearch: connectionProfile.allowWebSearch,
+    }
+
+    // Build pseudo-tool instructions if model doesn't support native tools
+    const pseudoToolInstructions = usePseudoTools
+      ? buildPseudoToolInstructions(enabledToolOptions)
+      : undefined
+
+    if (usePseudoTools) {
+      logger.info('[Chat Messages] Using pseudo-tools (model does not support native function calling)', {
+        provider: connectionProfile.provider,
+        model: connectionProfile.modelName,
+        enabledTools: Object.entries(enabledToolOptions)
+          .filter(([_, enabled]) => enabled)
+          .map(([name]) => name),
+      })
+    }
+
     const builtContext = await buildContext({
       provider: connectionProfile.provider,
       modelName: connectionProfile.modelName,
@@ -621,6 +661,8 @@ export async function POST(
       participantCharacters: isMultiCharacter ? participantCharacters : undefined,
       participantPersonas: isMultiCharacter ? participantPersonas : undefined,
       messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
+      // Pseudo-tool support (for models without native function calling)
+      pseudoToolInstructions,
     })
 
     // Log context building results for debugging
@@ -702,6 +744,7 @@ export async function POST(
     const encoder = new TextEncoder()
     let fullResponse = ''
     let usage: { totalTokens?: number } | null = null
+    let cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null = null
     let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
     let rawResponse: unknown = null
     // Track thought signature from Gemini 3 thinking models (required for multi-turn function calling)
@@ -724,25 +767,35 @@ export async function POST(
           // Get tools for this chat (image generation if configured, memory search always enabled, web search conditional)
           // For providers that support native web search, we pass webSearchEnabled to the provider directly
           // and skip adding the web search tool here
+          // If using pseudo-tools, skip native tools entirely
           const useNativeWebSearch = connectionProfile.allowWebSearch && provider.supportsWebSearch
-          logger.debug('[Chat Messages] Building tools for provider', {
-            provider: connectionProfile.provider,
-            imageProfileId: !!imageProfileId,
-            imageProviderType: imageProfile?.provider,
-            memorySearchEnabled: true,
-            webSearchEnabled: connectionProfile.allowWebSearch && !useNativeWebSearch,
-            useNativeWebSearch,
-          })
-          const tools = buildToolsForProvider(connectionProfile.provider, {
-            imageGeneration: !!imageProfileId,
-            imageProviderType: imageProfile?.provider,
-            memorySearch: true, // Always enable memory search for characters
-            webSearch: connectionProfile.allowWebSearch && !useNativeWebSearch,
-          })
-          logger.debug('[Chat Messages] Tools built successfully', {
-            toolCount: tools.length,
-            tools: tools.map((t: any) => t.name || t.function?.name || 'unknown'),
-          })
+          let tools: unknown[] = []
+
+          if (!usePseudoTools) {
+            logger.debug('[Chat Messages] Building native tools for provider', {
+              provider: connectionProfile.provider,
+              imageProfileId: !!imageProfileId,
+              imageProviderType: imageProfile?.provider,
+              memorySearchEnabled: true,
+              webSearchEnabled: connectionProfile.allowWebSearch && !useNativeWebSearch,
+              useNativeWebSearch,
+            })
+            tools = buildToolsForProvider(connectionProfile.provider, {
+              imageGeneration: !!imageProfileId,
+              imageProviderType: imageProfile?.provider,
+              memorySearch: true, // Always enable memory search for characters
+              webSearch: connectionProfile.allowWebSearch && !useNativeWebSearch,
+            })
+            logger.debug('[Chat Messages] Native tools built successfully', {
+              toolCount: tools.length,
+              tools: tools.map((t: any) => t.name || t.function?.name || 'unknown'),
+            })
+          } else {
+            logger.debug('[Chat Messages] Skipping native tools (using pseudo-tools)', {
+              provider: connectionProfile.provider,
+              model: connectionProfile.modelName,
+            })
+          }
 
           // Send debug info about the actual LLM request (for debug panel)
           const llmRequestDetails = {
@@ -754,6 +807,11 @@ export async function POST(
             messageCount: messages.length,
             hasTools: tools.length > 0,
             tools: tools.length > 0 ? tools : undefined,
+            // Pseudo-tool info
+            usePseudoTools,
+            pseudoToolsEnabled: usePseudoTools ? Object.entries(enabledToolOptions)
+              .filter(([_, enabled]) => enabled)
+              .map(([name]) => name) : undefined,
             messages: messages.map((m) => ({
               role: m.role,
               contentLength: m.content.length,
@@ -818,6 +876,9 @@ export async function POST(
             if (chunk.done) {
               if (chunk.usage) {
                 usage = chunk.usage
+              }
+              if (chunk.cacheUsage) {
+                cacheUsage = chunk.cacheUsage
               }
               if (chunk.attachmentResults) {
                 attachmentResults = chunk.attachmentResults
@@ -925,6 +986,9 @@ export async function POST(
                 if (chunk.usage) {
                   usage = chunk.usage
                 }
+                if (chunk.cacheUsage) {
+                  cacheUsage = chunk.cacheUsage
+                }
                 if (chunk.attachmentResults) {
                   attachmentResults = chunk.attachmentResults
                 }
@@ -945,6 +1009,108 @@ export async function POST(
               iterations: toolIterations,
               chatId: id,
             })
+          }
+
+          // ================================================================
+          // Pseudo-Tool Processing: Parse text markers if using pseudo-tools
+          // ================================================================
+          if (usePseudoTools && fullResponse) {
+            const pseudoToolCalls = parsePseudoToolCalls(fullResponse)
+
+            if (pseudoToolCalls.length > 0) {
+              logger.info('[Chat Messages] Detected pseudo-tool markers in response', {
+                count: pseudoToolCalls.length,
+                tools: pseudoToolCalls.map(p => p.toolName),
+              })
+
+              // Convert pseudo-tool calls to standard format
+              const toolCallRequests = pseudoToolCalls.map(convertToToolCallRequest)
+
+              // Process through existing tool execution pipeline
+              const results = await processToolResults(
+                toolCallRequests,
+                toolContext,
+                controller,
+                encoder
+              )
+              toolMessages = [...toolMessages, ...results.toolMessages]
+              generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
+
+              // Strip pseudo-tool markers from response for storage/display
+              const strippedResponse = stripPseudoToolMarkers(fullResponse)
+              logger.debug('[Chat Messages] Stripped pseudo-tool markers from response', {
+                originalLength: fullResponse.length,
+                strippedLength: strippedResponse.length,
+              })
+
+              // Add the stripped response and tool results to conversation
+              currentMessages = [...messages]
+              if (strippedResponse.trim()) {
+                currentMessages.push({
+                  role: 'assistant' as const,
+                  content: strippedResponse,
+                  thoughtSignature,
+                  name: undefined,
+                })
+              }
+
+              // Add tool results as user messages
+              for (const toolMsg of results.toolMessages) {
+                currentMessages.push({
+                  role: 'user' as const,
+                  content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`,
+                  thoughtSignature: undefined,
+                  name: undefined,
+                })
+              }
+
+              // Continue conversation with tool results (one iteration only for pseudo-tools)
+              logger.debug('[Chat Messages] Continuing conversation after pseudo-tool execution', {
+                messageCount: currentMessages.length,
+              })
+
+              let continuationResponse = ''
+              for await (const chunk of provider.streamMessage(
+                {
+                  messages: currentMessages,
+                  model: connectionProfile.modelName,
+                  temperature: modelParams.temperature as number | undefined,
+                  maxTokens: modelParams.maxTokens as number | undefined,
+                  topP: modelParams.topP as number | undefined,
+                  // Don't pass tools for continuation - pseudo-tool models don't support them
+                  webSearchEnabled: useNativeWebSearch && !usePseudoTools,
+                },
+                decryptedKey
+              )) {
+                if (chunk.content) {
+                  continuationResponse += chunk.content
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ content: chunk.content })}\n\n`)
+                  )
+                }
+
+                if (chunk.done) {
+                  if (chunk.usage) {
+                    usage = chunk.usage
+                  }
+                  if (chunk.cacheUsage) {
+                    cacheUsage = chunk.cacheUsage
+                  }
+                  if (chunk.rawResponse) {
+                    rawResponse = chunk.rawResponse
+                  }
+                  if (chunk.thoughtSignature) {
+                    thoughtSignature = chunk.thoughtSignature
+                  }
+                }
+              }
+
+              // Update fullResponse with stripped original + continuation
+              fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
+
+              // Strip any additional pseudo-tool markers from continuation (shouldn't happen but be safe)
+              fullResponse = stripPseudoToolMarkers(fullResponse)
+            }
           }
 
           // Save assistant message only if there's actual content (not just a tool call)
@@ -1049,6 +1215,7 @@ export async function POST(
                   done: true,
                   messageId: finalMessageId,
                   usage,
+                  cacheUsage,
                   attachmentResults,
                   toolsExecuted: toolMessages.length > 0,
                   // Multi-character turn management info
@@ -1160,6 +1327,7 @@ export async function POST(
                   done: true,
                   messageId: firstToolMessageId,
                   usage,
+                  cacheUsage,
                   attachmentResults,
                   toolsExecuted: true,
                 })}\n\n`
@@ -1175,6 +1343,7 @@ export async function POST(
                   done: true,
                   messageId: null,
                   usage,
+                  cacheUsage,
                   attachmentResults,
                   toolsExecuted: false,
                   emptyResponse: true,
@@ -1192,11 +1361,31 @@ export async function POST(
           }
         } catch (error) {
           logger.error('Streaming error:', {}, error as Error)
+
+          // Format error message appropriately based on error type
+          let errorMessage = 'Unknown error'
+          let errorType = 'unknown'
+
+          if (error instanceof z.ZodError) {
+            // Zod validation errors (e.g., from provider SDK parsing)
+            // Extract the first error for a cleaner message
+            const firstError = error.errors[0]
+            errorMessage = firstError
+              ? `Validation error: ${firstError.message} at ${firstError.path.join('.')}`
+              : 'Response validation failed'
+            errorType = 'validation'
+            logger.debug('Zod validation error details:', { errors: error.errors })
+          } else if (error instanceof Error) {
+            errorMessage = error.message
+            errorType = error.name
+          }
+
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
                 error: 'Failed to generate response',
-                details: error instanceof Error ? error.message : 'Unknown error',
+                errorType,
+                details: errorMessage,
               })}\n\n`
             )
           )

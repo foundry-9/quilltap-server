@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface ConnectionProfile {
   id: string
@@ -23,6 +24,11 @@ interface Character {
   id: string
   name: string
   title?: string | null
+  systemPrompts?: Array<{
+    id: string
+    name: string
+    isDefault: boolean
+  }>
 }
 
 interface Persona {
@@ -37,6 +43,7 @@ interface Participant {
   displayOrder: number
   isActive: boolean
   systemPromptOverride?: string | null
+  selectedSystemPromptId?: string | null
   character?: Character | null
   persona?: Persona | null
   connectionProfile?: {
@@ -81,6 +88,7 @@ interface ParticipantUpdate {
   connectionProfileId?: string
   imageProfileId?: string | null
   systemPromptOverride?: string | null
+  selectedSystemPromptId?: string | null
   isActive?: boolean
 }
 
@@ -99,6 +107,7 @@ function ParticipantEditor({
   // Generate unique IDs for form controls
   const connectionProfileId = `connection-profile-${participant.id}`
   const imageProfileId = `image-profile-${participant.id}`
+  const systemPromptSelectId = `system-prompt-select-${participant.id}`
   const systemPromptId = `system-prompt-${participant.id}`
   const activeCheckboxId = `active-${participant.id}`
 
@@ -107,6 +116,9 @@ function ParticipantEditor({
   )
   const [selectedImageProfileId, setSelectedImageProfileId] = useState(
     participant.imageProfile?.id || ''
+  )
+  const [selectedSystemPromptId, setSelectedSystemPromptId] = useState(
+    participant.selectedSystemPromptId || ''
   )
   const [systemPromptOverride, setSystemPromptOverride] = useState(
     participant.systemPromptOverride || ''
@@ -122,6 +134,17 @@ function ParticipantEditor({
 
     if (selectedImageProfileId !== (participant.imageProfile?.id || '')) {
       updates.imageProfileId = selectedImageProfileId || null
+    }
+
+    if (isCharacter && participant.character?.systemPrompts) {
+      if (selectedSystemPromptId !== (participant.selectedSystemPromptId || '')) {
+        clientLogger.debug('System prompt selection changed', {
+          participantId: participant.id,
+          oldPromptId: participant.selectedSystemPromptId,
+          newPromptId: selectedSystemPromptId || null,
+        })
+        updates.selectedSystemPromptId = selectedSystemPromptId || null
+      }
     }
 
     if (systemPromptOverride !== (participant.systemPromptOverride || '')) {
@@ -148,9 +171,9 @@ function ParticipantEditor({
           }`}>
             {isCharacter ? 'Character' : 'Persona'}
           </span>
-          <h4 className="font-medium text-foreground">{name}</h4>
+          <h4 className="qt-text-primary">{name}</h4>
         </div>
-        <label htmlFor={activeCheckboxId} className="flex items-center gap-2 text-sm text-muted-foreground">
+        <label htmlFor={activeCheckboxId} className="flex items-center gap-2 qt-text-small">
           <input
             id={activeCheckboxId}
             type="checkbox"
@@ -165,7 +188,7 @@ function ParticipantEditor({
       {isCharacter && (
         <>
           <div className="mb-3">
-            <label htmlFor={connectionProfileId} className="block text-sm font-medium text-foreground mb-1">
+            <label htmlFor={connectionProfileId} className="qt-label mb-1">
               Chat Provider
             </label>
             <select
@@ -185,7 +208,7 @@ function ParticipantEditor({
           </div>
 
           <div className="mb-3">
-            <label htmlFor={imageProfileId} className="block text-sm font-medium text-foreground mb-1">
+            <label htmlFor={imageProfileId} className="qt-label mb-1">
               Image Provider (Optional)
             </label>
             <select
@@ -203,11 +226,36 @@ function ParticipantEditor({
               ))}
             </select>
           </div>
+
+          {participant.character?.systemPrompts && participant.character.systemPrompts.length > 0 && (
+            <div className="mb-3">
+              <label htmlFor={systemPromptSelectId} className="qt-label mb-1">
+                System Prompt
+              </label>
+              <select
+                id={systemPromptSelectId}
+                value={selectedSystemPromptId}
+                onChange={(e) => setSelectedSystemPromptId(e.target.value)}
+                disabled={loading}
+                className="qt-select text-sm"
+              >
+                <option value="">Use Default</option>
+                {participant.character.systemPrompts.map((prompt) => (
+                  <option key={prompt.id} value={prompt.id}>
+                    {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="qt-text-xs mt-1">
+                Select which of the character&apos;s system prompts to use
+              </p>
+            </div>
+          )}
         </>
       )}
 
       <div className="mb-3">
-        <label htmlFor={systemPromptId} className="block text-sm font-medium text-foreground mb-1">
+        <label htmlFor={systemPromptId} className="qt-label mb-1">
           System Prompt Override (Optional)
         </label>
         <textarea
@@ -262,29 +310,10 @@ export default function ChatSettingsModal({
     }
   }, [isOpen])
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
-        onClose()
-      }
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      document.addEventListener('keydown', handleKeyDown)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, onClose])
+  useClickOutside(modalRef, onClose, {
+    enabled: isOpen,
+    onEscape: onClose,
+  })
 
   const fetchProfiles = async () => {
     try {
@@ -395,11 +424,11 @@ export default function ChatSettingsModal({
 
         {/* Roleplay Template Section */}
         <div className="mb-6">
-          <h3 className="text-sm font-medium text-muted-foreground mb-3">
+          <h3 className="qt-text-small font-medium mb-3">
             Roleplay Template
           </h3>
           <div className="qt-card">
-            <label htmlFor="roleplay-template" className="block text-sm font-medium text-foreground mb-1">
+            <label htmlFor="roleplay-template" className="qt-label mb-1">
               Formatting Style
             </label>
             <select
@@ -416,7 +445,7 @@ export default function ChatSettingsModal({
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground mt-2">
+            <p className="qt-text-xs mt-2">
               Controls how the AI formats dialogue, actions, and thoughts in this chat.
               {roleplayTemplateSaving && <span className="ml-2">Saving...</span>}
             </p>
@@ -424,7 +453,7 @@ export default function ChatSettingsModal({
         </div>
 
         <div className="mb-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-3">
+          <h3 className="qt-text-small font-medium mb-3">
             Participants ({participants.length})
           </h3>
 

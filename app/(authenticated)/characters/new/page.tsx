@@ -247,7 +247,7 @@ export default function NewCharacterPage() {
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 qt-text-xs">
             Can be overridden for individual chats
           </p>
         </div>

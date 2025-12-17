@@ -6,6 +6,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
+import { useClickOutside } from '@/hooks/useClickOutside';
 import { Tag } from './tag-editor';
 import { TagBadge } from '@/components/tags/tag-badge';
 
@@ -32,23 +33,7 @@ export function TagDropdown({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        if (isOpen) {
-          onToggle();
-        }
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen, onToggle]);
+  useClickOutside(dropdownRef, onToggle, { enabled: isOpen });
 
   // Focus input when add mode is enabled
   useEffect(() => {
@@ -99,7 +84,7 @@ export function TagDropdown({
             d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
           />
         </svg>
-        <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded">
+        <span className="qt-text-label-xs bg-muted px-2 py-0.5 rounded">
           {tagCount}
         </span>
         <svg
@@ -124,7 +109,7 @@ export function TagDropdown({
             {/* Tags List */}
             {tagCount > 0 ? (
               <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <h3 className="qt-text-label-xs uppercase tracking-wider">
                   Tags ({tagCount})
                 </h3>
                 <div className="flex flex-wrap gap-2">
@@ -140,7 +125,7 @@ export function TagDropdown({
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground italic">
+              <p className="qt-text-xs italic">
                 No tags yet
               </p>
             )}
@@ -153,7 +138,7 @@ export function TagDropdown({
               <button
                 onClick={() => setShowAddInput(true)}
                 disabled={loading}
-                className="w-full px-2 py-1.5 text-xs font-medium text-left text-foreground hover:bg-accent rounded transition-colors disabled:opacity-50"
+                className="w-full px-2 py-1.5 qt-text-label-xs text-left text-foreground hover:bg-accent rounded transition-colors disabled:opacity-50"
               >
                 + Add Tag
               </button>
@@ -167,13 +152,13 @@ export function TagDropdown({
                   onKeyDown={handleKeyDown}
                   placeholder="Enter tag name..."
                   disabled={loading}
-                  className="w-full px-2 py-1.5 text-xs border border-input rounded focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground disabled:opacity-50"
+                  className="w-full px-2 py-1.5 qt-text-label-xs border border-input rounded focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground disabled:opacity-50"
                 />
                 <div className="flex gap-1.5">
                   <button
                     onClick={handleAddTag}
                     disabled={loading || !inputValue.trim()}
-                    className="flex-1 px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="flex-1 px-2 py-1 qt-text-label-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Add
                   </button>
@@ -183,7 +168,7 @@ export function TagDropdown({
                       setInputValue('');
                     }}
                     disabled={loading}
-                    className="flex-1 px-2 py-1 text-xs font-medium bg-muted text-foreground rounded hover:bg-accent disabled:opacity-50 transition-colors"
+                    className="flex-1 px-2 py-1 qt-text-label-xs bg-muted text-foreground rounded hover:bg-accent disabled:opacity-50 transition-colors"
                   >
                     Cancel
                   </button>

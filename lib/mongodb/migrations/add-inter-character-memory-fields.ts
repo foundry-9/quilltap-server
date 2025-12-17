@@ -10,6 +10,7 @@
 import { Db } from 'mongodb';
 import { logger } from '@/lib/logger';
 import { getMongoMigrationsRepository } from '@/lib/mongodb/repositories/migrations.repository';
+import { getErrorMessage } from '@/lib/errors';
 
 const MIGRATION_ID = 'add-inter-character-memory-fields-v1';
 
@@ -70,7 +71,7 @@ export async function runInterCharacterMemoryFieldsMigration(db: Db): Promise<Mi
       ...result,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('Inter-character memory fields migration failed', {
       migrationId: MIGRATION_ID,
       error: errorMessage,
