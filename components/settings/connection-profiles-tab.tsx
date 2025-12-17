@@ -2,10 +2,19 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import { useFormState } from '@/hooks/useFormState'
+import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { fetchJson } from '@/lib/fetch-helpers'
+import { getErrorMessage } from '@/lib/error-utils'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { ModelSelector, type ModelInfo } from './model-selector'
 import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
+import { SectionHeader } from '@/components/ui/SectionHeader'
+import { LoadingState } from '@/components/ui/LoadingState'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
 
 interface ApiKey {
   id: string
@@ -51,53 +60,60 @@ interface ConnectionProfile {
   messageCount?: number
 }
 
+const initialFormState = {
+  name: '',
+  provider: 'OPENAI',
+  apiKeyId: '',
+  baseUrl: '',
+  modelName: 'gpt-3.5-turbo',
+  temperature: 1,
+  maxTokens: 4096,
+  topP: 1,
+  isDefault: false,
+  isCheap: false,
+  allowWebSearch: false,
+  // OpenRouter-specific fields
+  fallbackModels: [] as string[],
+  enableZDR: false,
+  providerOrder: [] as string[],
+  useCustomModel: false,
+  // Anthropic-specific fields
+  enableCacheBreakpoints: false,
+  cacheStrategy: 'system_and_long_context' as 'system_only' | 'system_and_long_context',
+  cacheTTL: '5m' as '5m' | '1h',
+}
+
 export default function ConnectionProfilesTab() {
+  // Form state management using new hook
+  const form = useFormState(initialFormState)
+
+  // Async operation hooks
+  const fetchOp = useAsyncOperation<any>()
+  const saveOp = useAsyncOperation<any>()
+  const deleteOp = useAsyncOperation<any>()
+  const connectOp = useAsyncOperation<any>()
+  const fetchModelsOp = useAsyncOperation<any>()
+  const testMessageOp = useAsyncOperation<any>()
+
+  // Remaining UI state
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
   const [providers, setProviders] = useState<ProviderConfig[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [formLoading, setFormLoading] = useState(false)
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
   const [cheapDefaultProfileId, setCheapDefaultProfileId] = useState<string | null>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    provider: 'OPENAI',
-    apiKeyId: '',
-    baseUrl: '',
-    modelName: 'gpt-3.5-turbo',
-    temperature: 1,
-    maxTokens: 4096,
-    topP: 1,
-    isDefault: false,
-    isCheap: false,
-    allowWebSearch: false,
-    // OpenRouter-specific fields
-    fallbackModels: [] as string[],
-    enableZDR: false,
-    providerOrder: [] as string[],
-    useCustomModel: false,
-    // Anthropic-specific fields
-    enableCacheBreakpoints: false,
-    cacheStrategy: 'system_and_long_context' as 'system_only' | 'system_and_long_context',
-    cacheTTL: '5m' as '5m' | '1h',
-  })
 
   // Connection testing states
   const [isConnected, setIsConnected] = useState(false)
-  const [isConnecting, setIsConnecting] = useState(false)
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null)
 
   // Fetch models states
   const [fetchedModels, setFetchedModels] = useState<string[]>([])
   const [fetchedModelsWithInfo, setFetchedModelsWithInfo] = useState<ModelInfo[]>([])
-  const [isFetchingModels, setIsFetchingModels] = useState(false)
   const [modelsMessage, setModelsMessage] = useState<string | null>(null)
 
   // Test message states
-  const [isTestingMessage, setIsTestingMessage] = useState(false)
   const [testMessageResult, setTestMessageResult] = useState<string | null>(null)
 
   const countMessagesPerProfile = useCallback(async (profilesList: ConnectionProfile[]) => {
@@ -160,44 +176,46 @@ export default function ConnectionProfilesTab() {
               })
             }
           } catch (err) {
-            clientLogger.error(`Error processing chat ${chat.id}`, { error: err instanceof Error ? err.message : String(err) })
+            clientLogger.error(`Error processing chat ${chat.id}`, { error: getErrorMessage(err) })
           }
         })
       )
 
       return messageCounts
     } catch (err) {
-      clientLogger.error('Error counting messages per profile', { error: err instanceof Error ? err.message : String(err) })
+      clientLogger.error('Error counting messages per profile', { error: getErrorMessage(err) })
       return {}
     }
   }, [])
 
   const fetchProfiles = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
+    return await fetchOp.execute(async () => {
+      clientLogger.debug('Fetching connection profiles')
       // Add cache busting timestamp to force fresh data
-      const res = await fetch(`/api/profiles?t=${Date.now()}`, {
+      const result = await fetchJson<ConnectionProfile[]>(`/api/profiles?t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache'
         }
       })
-      if (!res.ok) throw new Error('Failed to fetch profiles')
-      const data = await res.json()
+
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to fetch profiles')
+      }
+
+      const data = result.data || []
 
       // Fetch tags for each profile
       const profilesWithTags = await Promise.all(
         data.map(async (profile: ConnectionProfile) => {
           try {
-            const tagsRes = await fetch(`/api/profiles/${profile.id}/tags`)
-            if (tagsRes.ok) {
-              const tagsData = await tagsRes.json()
-              return { ...profile, tags: tagsData.tags || [] }
+            const tagsResult = await fetchJson<{ tags: Tag[] }>(`/api/profiles/${profile.id}/tags`)
+            if (tagsResult.ok) {
+              return { ...profile, tags: tagsResult.data?.tags || [] }
             }
           } catch (err) {
-            clientLogger.error(`Error fetching tags for profile ${profile.id}`, { error: err instanceof Error ? err.message : String(err) })
+            clientLogger.error(`Error fetching tags for profile ${profile.id}`, { error: getErrorMessage(err) })
           }
           return profile
         })
@@ -213,40 +231,44 @@ export default function ConnectionProfilesTab() {
       }))
 
       setProfiles(profilesWithCounts)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }, [countMessagesPerProfile])
+      clientLogger.debug('Profiles loaded successfully', { count: profilesWithCounts.length })
+      return profilesWithCounts
+    })
+  }, [fetchOp, countMessagesPerProfile])
 
-  const fetchApiKeys = async () => {
+  const fetchApiKeys = useCallback(async () => {
     try {
-      const res = await fetch('/api/keys')
-      if (!res.ok) throw new Error('Failed to fetch API keys')
-      const data = await res.json()
-      setApiKeys(data)
+      clientLogger.debug('Fetching API keys')
+      const result = await fetchJson<ApiKey[]>('/api/keys')
+      if (result.ok) {
+        setApiKeys(result.data || [])
+        clientLogger.debug('API keys loaded', { count: result.data?.length })
+      } else {
+        throw new Error(result.error)
+      }
     } catch (err) {
-      clientLogger.error('Failed to fetch API keys', { error: err instanceof Error ? err.message : String(err) })
+      clientLogger.error('Failed to fetch API keys', { error: getErrorMessage(err) })
     }
-  }
+  }, [])
 
-  const fetchProviders = async () => {
+  const fetchProviders = useCallback(async () => {
     try {
       clientLogger.debug('Fetching providers configuration')
-      const res = await fetch('/api/providers')
-      if (!res.ok) throw new Error('Failed to fetch providers')
-      const data = await res.json()
-      clientLogger.debug('Providers loaded', {
-        count: data.providers?.length ?? 0,
-        providers: data.providers?.map((p: ProviderConfig) => p.name)
-      })
-      setProviders(data.providers || [])
+      const result = await fetchJson<{ providers: ProviderConfig[] }>('/api/providers')
+      if (result.ok) {
+        const providerList = result.data?.providers || []
+        setProviders(providerList)
+        clientLogger.debug('Providers loaded', {
+          count: providerList.length,
+          providers: providerList.map((p: ProviderConfig) => p.name)
+        })
+      } else {
+        throw new Error(result.error)
+      }
     } catch (err) {
-      clientLogger.error('Failed to fetch providers', { error: err instanceof Error ? err.message : String(err) })
+      clientLogger.error('Failed to fetch providers', { error: getErrorMessage(err) })
     }
-  }
+  }, [])
 
   // Get provider config requirements - returns defaults if provider not found
   const getProviderRequirements = (providerName: string) => {
@@ -265,41 +287,19 @@ export default function ConnectionProfilesTab() {
     // Fetch chat settings to get the cheap default profile
     const fetchChatSettings = async () => {
       try {
-        const res = await fetch('/api/chat-settings')
-        if (res.ok) {
-          const settings = await res.json()
-          setCheapDefaultProfileId(settings.cheapLLMSettings?.defaultCheapProfileId || null)
+        const result = await fetchJson<any>('/api/chat-settings')
+        if (result.ok) {
+          setCheapDefaultProfileId(result.data?.cheapLLMSettings?.defaultCheapProfileId || null)
         }
       } catch (err) {
-        clientLogger.error('Error fetching chat settings', { error: err instanceof Error ? err.message : String(err) })
+        clientLogger.error('Error fetching chat settings', { error: getErrorMessage(err) })
       }
     }
     fetchChatSettings()
-  }, [fetchProfiles])
+  }, [fetchProfiles, fetchApiKeys, fetchProviders])
 
   const resetForm = () => {
-    setFormData({
-      name: '',
-      provider: 'OPENAI',
-      apiKeyId: '',
-      baseUrl: '',
-      modelName: 'gpt-3.5-turbo',
-      temperature: 1,
-      maxTokens: 4096,
-      topP: 1,
-      isDefault: false,
-      isCheap: false,
-      allowWebSearch: false,
-      // OpenRouter-specific fields
-      fallbackModels: [],
-      enableZDR: false,
-      providerOrder: [],
-      useCustomModel: false,
-      // Anthropic-specific fields
-      enableCacheBreakpoints: false,
-      cacheStrategy: 'system_and_long_context',
-      cacheTTL: '5m',
-    })
+    form.resetForm()
     setEditingId(null)
     // Reset connection states
     setIsConnected(false)
@@ -310,7 +310,7 @@ export default function ConnectionProfilesTab() {
   }
 
   const handleEdit = async (profile: ConnectionProfile) => {
-    setFormData({
+    form.setFormData({
       name: profile.name,
       provider: profile.provider,
       apiKeyId: profile.apiKeyId || '',
@@ -336,10 +336,8 @@ export default function ConnectionProfilesTab() {
     setShowForm(true)
 
     // Auto-fetch models to show model warnings and enable ModelSelector
-    // We fetch models using the profile data directly since formData state update is async
     try {
-      setIsFetchingModels(true)
-      const res = await fetch('/api/models', {
+      const result = await fetchJson<any>('/api/models', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -348,16 +346,14 @@ export default function ConnectionProfilesTab() {
           baseUrl: profile.baseUrl || undefined,
         }),
       })
-      const data = await res.json()
-      if (res.ok) {
-        setFetchedModels(data.models || [])
-        setFetchedModelsWithInfo(data.modelsWithInfo || [])
-        setModelsMessage(`Found ${data.models?.length || 0} models`)
+      if (result.ok) {
+        setFetchedModels(result.data?.models || [])
+        setFetchedModelsWithInfo(result.data?.modelsWithInfo || [])
+        setModelsMessage(`Found ${result.data?.models?.length || 0} models`)
+        clientLogger.debug('Models auto-fetched during edit', { count: result.data?.models?.length })
       }
     } catch {
       // Silently ignore fetch errors - user can manually fetch if needed
-    } finally {
-      setIsFetchingModels(false)
     }
 
     // Scroll to form after state update
@@ -371,112 +367,114 @@ export default function ConnectionProfilesTab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setFormLoading(true)
-    setError(null)
 
-    try {
+    const result = await saveOp.execute(async () => {
+      clientLogger.debug('Saving connection profile', { editingId, profileName: form.formData.name })
       const method = editingId ? 'PUT' : 'POST'
       const url = editingId ? `/api/profiles/${editingId}` : '/api/profiles'
 
       // Build request body
       // Start with base parameters
       const parameters: Record<string, any> = {
-        temperature: parseFloat(String(formData.temperature)),
-        max_tokens: parseInt(String(formData.maxTokens)),
-        top_p: parseFloat(String(formData.topP)),
+        temperature: parseFloat(String(form.formData.temperature)),
+        max_tokens: parseInt(String(form.formData.maxTokens)),
+        top_p: parseFloat(String(form.formData.topP)),
       }
 
       // Add OpenRouter-specific parameters
-      if (formData.provider === 'OPENROUTER') {
-        if (formData.fallbackModels.length > 0) {
-          parameters.fallbackModels = formData.fallbackModels
+      if (form.formData.provider === 'OPENROUTER') {
+        if (form.formData.fallbackModels.length > 0) {
+          parameters.fallbackModels = form.formData.fallbackModels
         }
         // Build providerPreferences if any options are set
         const providerPreferences: Record<string, any> = {}
-        if (formData.enableZDR) {
+        if (form.formData.enableZDR) {
           providerPreferences.dataCollection = 'deny'
         }
-        if (formData.providerOrder.length > 0) {
-          providerPreferences.order = formData.providerOrder
+        if (form.formData.providerOrder.length > 0) {
+          providerPreferences.order = form.formData.providerOrder
         }
         if (Object.keys(providerPreferences).length > 0) {
           parameters.providerPreferences = providerPreferences
         }
         // Save custom model preference
-        if (formData.useCustomModel) {
+        if (form.formData.useCustomModel) {
           parameters.useCustomModel = true
         }
       }
 
       // Add Anthropic-specific parameters
-      if (formData.provider === 'ANTHROPIC' && formData.enableCacheBreakpoints) {
+      if (form.formData.provider === 'ANTHROPIC' && form.formData.enableCacheBreakpoints) {
         parameters.enableCacheBreakpoints = true
-        parameters.cacheStrategy = formData.cacheStrategy
-        parameters.cacheTTL = formData.cacheTTL
+        parameters.cacheStrategy = form.formData.cacheStrategy
+        parameters.cacheTTL = form.formData.cacheTTL
       }
 
       const requestBody: any = {
-        name: formData.name,
-        provider: formData.provider,
-        modelName: formData.modelName,
-        isDefault: formData.isDefault,
-        isCheap: formData.isCheap,
-        allowWebSearch: formData.allowWebSearch,
+        name: form.formData.name,
+        provider: form.formData.provider,
+        modelName: form.formData.modelName,
+        isDefault: form.formData.isDefault,
+        isCheap: form.formData.isCheap,
+        allowWebSearch: form.formData.allowWebSearch,
         parameters,
       }
 
       // Always include apiKeyId when editing (to support changes)
       // Only include when truthy for new profiles
       if (editingId) {
-        requestBody.apiKeyId = formData.apiKeyId || null
-      } else if (formData.apiKeyId) {
-        requestBody.apiKeyId = formData.apiKeyId
+        requestBody.apiKeyId = form.formData.apiKeyId || null
+      } else if (form.formData.apiKeyId) {
+        requestBody.apiKeyId = form.formData.apiKeyId
       }
 
       // Only include baseUrl if set
-      if (formData.baseUrl) {
-        requestBody.baseUrl = formData.baseUrl
+      if (form.formData.baseUrl) {
+        requestBody.baseUrl = form.formData.baseUrl
       }
 
-      const res = await fetch(url, {
+      const fetchResult = await fetchJson<any>(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
       })
 
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to save profile')
+      if (!fetchResult.ok) {
+        throw new Error(fetchResult.error || 'Failed to save profile')
       }
 
+      clientLogger.debug('Profile saved successfully', { editingId, isNew: !editingId })
+      return fetchResult.data
+    })
+
+    if (result) {
       resetForm()
       setShowForm(false)
       await fetchProfiles()
       await fetchApiKeys()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setFormLoading(false)
     }
   }
 
   const handleDelete = async (id: string) => {
-    try {
-      setError(null)
-      const res = await fetch(`/api/profiles/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete profile')
+    const result = await deleteOp.execute(async () => {
+      clientLogger.debug('Deleting connection profile', { profileId: id })
+      const fetchResult = await fetchJson(`/api/profiles/${id}`, { method: 'DELETE' })
+      if (!fetchResult.ok) throw new Error(fetchResult.error || 'Failed to delete profile')
+      clientLogger.debug('Profile deleted successfully', { profileId: id })
+      return fetchResult.data
+    })
+
+    if (result) {
       setDeleteConfirming(null)
       await fetchProfiles()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
     }
   }
 
   // Helper to get the selected model's info (including maxOutputTokens)
   const getSelectedModelInfo = useCallback(() => {
-    if (!formData.modelName || fetchedModelsWithInfo.length === 0) return null
-    return fetchedModelsWithInfo.find(m => m.id === formData.modelName) || null
-  }, [formData.modelName, fetchedModelsWithInfo])
+    if (!form.formData.modelName || fetchedModelsWithInfo.length === 0) return null
+    return fetchedModelsWithInfo.find(m => m.id === form.formData.modelName) || null
+  }, [form.formData.modelName, fetchedModelsWithInfo])
 
   // Get max tokens limit for the selected model (default to 128000 if not known)
   const getMaxTokensLimit = useCallback(() => {
@@ -485,153 +483,125 @@ export default function ConnectionProfilesTab() {
     return modelInfo?.maxOutputTokens || 128000
   }, [getSelectedModelInfo])
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    const { name, value, type } = e.target
-    setFormData({
-      ...formData,
-      [name]:
-        type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
-    })
-
-    // Reset connection state if provider or credentials change
-    if (name === 'provider' || name === 'apiKeyId' || name === 'baseUrl') {
-      setIsConnected(false)
-      setConnectionMessage(null)
-      setFetchedModels([])
-      setModelsMessage(null)
-      setTestMessageResult(null)
-    }
-  }
-
   const handleConnect = async () => {
-    setIsConnecting(true)
-    setConnectionMessage(null)
-    setError(null)
-
-    try {
+    const result = await connectOp.execute(async () => {
+      clientLogger.debug('Testing connection', { provider: form.formData.provider })
       // Validate required fields
-      if (!formData.provider) {
+      if (!form.formData.provider) {
         throw new Error('Provider is required')
       }
 
-      const requirements = getProviderRequirements(formData.provider)
+      const requirements = getProviderRequirements(form.formData.provider)
 
-      if (requirements.requiresBaseUrl && !formData.baseUrl) {
+      if (requirements.requiresBaseUrl && !form.formData.baseUrl) {
         throw new Error('Base URL is required for this provider')
       }
 
-      if (requirements.requiresApiKey && !formData.apiKeyId) {
+      if (requirements.requiresApiKey && !form.formData.apiKeyId) {
         throw new Error('API Key is required for this provider')
       }
 
       // Test the connection
-      const res = await fetch('/api/profiles/test-connection', {
+      const fetchResult = await fetchJson<any>('/api/profiles/test-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider: formData.provider,
-          apiKeyId: formData.apiKeyId || undefined,
-          baseUrl: formData.baseUrl || undefined,
+          provider: form.formData.provider,
+          apiKeyId: form.formData.apiKeyId || undefined,
+          baseUrl: form.formData.baseUrl || undefined,
         }),
       })
 
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Connection test failed')
+      if (!fetchResult.ok) {
+        throw new Error(fetchResult.error || 'Connection test failed')
       }
 
+      clientLogger.debug('Connection test successful', { provider: form.formData.provider })
+      return fetchResult.data
+    })
+
+    if (result) {
       setIsConnected(true)
-      setConnectionMessage(data.message || 'Connection successful!')
-    } catch (err) {
+      setConnectionMessage(result.message || 'Connection successful!')
+    } else {
       setIsConnected(false)
       setConnectionMessage(null)
-      setError(err instanceof Error ? err.message : 'Connection failed')
-    } finally {
-      setIsConnecting(false)
     }
   }
 
   const handleFetchModels = async () => {
-    setIsFetchingModels(true)
-    setModelsMessage(null)
-    setError(null)
-
-    try {
+    const result = await fetchModelsOp.execute(async () => {
+      clientLogger.debug('Fetching models', { provider: form.formData.provider })
       // Validate required fields based on provider
-      const requirements = getProviderRequirements(formData.provider)
-      if (requirements.requiresBaseUrl && !formData.baseUrl) {
+      const requirements = getProviderRequirements(form.formData.provider)
+      if (requirements.requiresBaseUrl && !form.formData.baseUrl) {
         throw new Error('Base URL is required for this provider')
       }
 
-      const res = await fetch('/api/models', {
+      const fetchResult = await fetchJson<any>('/api/models', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider: formData.provider,
-          apiKeyId: formData.apiKeyId || undefined,
-          baseUrl: formData.baseUrl || undefined,
+          provider: form.formData.provider,
+          apiKeyId: form.formData.apiKeyId || undefined,
+          baseUrl: form.formData.baseUrl || undefined,
         }),
       })
 
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to fetch models')
+      if (!fetchResult.ok) {
+        throw new Error(fetchResult.error || 'Failed to fetch models')
       }
 
-      setFetchedModels(data.models || [])
-      setFetchedModelsWithInfo(data.modelsWithInfo || [])
-      setModelsMessage(`Found ${data.models?.length || 0} models`)
-    } catch (err) {
+      clientLogger.debug('Models fetched successfully', { count: fetchResult.data?.models?.length })
+      return fetchResult.data
+    })
+
+    if (result) {
+      setFetchedModels(result.models || [])
+      setFetchedModelsWithInfo(result.modelsWithInfo || [])
+      setModelsMessage(`Found ${result.models?.length || 0} models`)
+    } else {
+      setFetchedModels([])
       setModelsMessage(null)
-      setError(err instanceof Error ? err.message : 'Failed to fetch models')
-    } finally {
-      setIsFetchingModels(false)
     }
   }
 
   const handleTestMessage = async () => {
-    setIsTestingMessage(true)
-    setTestMessageResult(null)
-    setError(null)
-
-    try {
+    const result = await testMessageOp.execute(async () => {
+      clientLogger.debug('Testing message', { provider: form.formData.provider, model: form.formData.modelName })
       // Validate model name
-      if (!formData.modelName) {
+      if (!form.formData.modelName) {
         throw new Error('Model name is required')
       }
 
-      const res = await fetch('/api/profiles/test-message', {
+      const fetchResult = await fetchJson<any>('/api/profiles/test-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider: formData.provider,
-          apiKeyId: formData.apiKeyId || undefined,
-          baseUrl: formData.baseUrl || undefined,
-          modelName: formData.modelName,
+          provider: form.formData.provider,
+          apiKeyId: form.formData.apiKeyId || undefined,
+          baseUrl: form.formData.baseUrl || undefined,
+          modelName: form.formData.modelName,
           parameters: {
-            temperature: parseFloat(String(formData.temperature)),
-            max_tokens: parseInt(String(formData.maxTokens)),
-            top_p: parseFloat(String(formData.topP)),
+            temperature: parseFloat(String(form.formData.temperature)),
+            max_tokens: parseInt(String(form.formData.maxTokens)),
+            top_p: parseFloat(String(form.formData.topP)),
           },
         }),
       })
 
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Test message failed')
+      if (!fetchResult.ok) {
+        throw new Error(fetchResult.error || 'Test message failed')
       }
 
-      setTestMessageResult(data.message || 'Test message sent successfully!')
-    } catch (err) {
+      clientLogger.debug('Test message sent successfully')
+      return fetchResult.data
+    })
+
+    if (result) {
+      setTestMessageResult(result.message || 'Test message sent successfully!')
+    } else {
       setTestMessageResult(null)
-      setError(err instanceof Error ? err.message : 'Test message failed')
-    } finally {
-      setIsTestingMessage(false)
     }
   }
 
@@ -650,16 +620,18 @@ export default function ConnectionProfilesTab() {
     return modelList.sort()
   }
 
-  if (loading) {
-    return <div className="text-center py-8">Loading connection profiles...</div>
+  if (fetchOp.loading) {
+    return <LoadingState message="Loading connection profiles..." />
   }
 
   return (
     <div>
-      {error && (
-        <div className="qt-alert-error mb-4">
-          {error}
-        </div>
+      {fetchOp.error && (
+        <ErrorAlert
+          message={fetchOp.error}
+          onRetry={() => fetchProfiles()}
+          className="mb-4"
+        />
       )}
 
       {apiKeys.length === 0 && (
@@ -671,32 +643,38 @@ export default function ConnectionProfilesTab() {
 
       {/* Profiles List */}
       <div className="mb-8">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Connection Profiles</h2>
-          {!showForm && (
-            <button
-              onClick={() => {
-                resetForm()
-                setShowForm(true)
-                // Scroll to form after state update
-                setTimeout(() => {
-                  const formElement = document.getElementById('profile-form')
-                  if (formElement) {
-                    formElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }
-                }, 0)
-              }}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-            >
-              + Add Profile
-            </button>
-          )}
-        </div>
+        <SectionHeader
+          title="Connection Profiles"
+          count={profiles.length}
+          level="h2"
+          action={{
+            label: '+ Add Profile',
+            onClick: () => {
+              resetForm()
+              setShowForm(true)
+              setTimeout(() => {
+                const formElement = document.getElementById('profile-form')
+                if (formElement) {
+                  formElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              }, 0)
+            },
+            show: !showForm,
+          }}
+        />
 
         {profiles.length === 0 ? (
-          <div className="bg-muted border border-border rounded-lg p-6 text-center text-muted-foreground">
-            <p>No connection profiles yet. Create one to start chatting.</p>
-          </div>
+          <EmptyState
+            title="No connection profiles yet"
+            description="Create one to start chatting."
+            action={{
+              label: 'Create Profile',
+              onClick: () => {
+                resetForm()
+                setShowForm(true)
+              },
+            }}
+          />
         ) : (
           <div className="space-y-3">
             {profiles
@@ -776,25 +754,13 @@ export default function ConnectionProfilesTab() {
                       </button>
 
                       {/* Delete Confirmation Popover */}
-                      {deleteConfirming === profile.id && (
-                        <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg p-3 whitespace-nowrap z-10">
-                          <p className="text-sm text-foreground mb-2">Delete this profile?</p>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setDeleteConfirming(null)}
-                              className="px-2 py-1 text-xs bg-muted text-foreground hover:bg-accent rounded focus:outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => handleDelete(profile.id)}
-                              className="px-2 py-1 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded focus:outline-none focus:ring-2 focus:ring-destructive"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      <DeleteConfirmPopover
+                        isOpen={deleteConfirming === profile.id}
+                        onCancel={() => setDeleteConfirming(null)}
+                        onConfirm={() => handleDelete(profile.id)}
+                        message="Delete this profile?"
+                        isDeleting={deleteOp.loading}
+                      />
                     </div>
                   </div>
                 </div>
@@ -820,8 +786,8 @@ export default function ConnectionProfilesTab() {
                   type="text"
                   id="name"
                   name="name"
-                  value={formData.name}
-                  onChange={handleChange}
+                  value={form.formData.name}
+                  onChange={form.handleChange}
                   placeholder="e.g., My GPT-4 Profile"
                   required
                   className="qt-input"
@@ -835,8 +801,8 @@ export default function ConnectionProfilesTab() {
                 <select
                   id="provider"
                   name="provider"
-                  value={formData.provider}
-                  onChange={handleChange}
+                  value={form.formData.provider}
+                  onChange={form.handleChange}
                   className="qt-select"
                 >
                   {providers.length > 0 ? (
@@ -861,13 +827,13 @@ export default function ConnectionProfilesTab() {
                   )}
                 </select>
                 <p className="qt-text-xs mt-1">
-                  File attachments: {getAttachmentSupportDescription(formData.provider as any, formData.baseUrl || undefined)}
+                  File attachments: {getAttachmentSupportDescription(form.formData.provider as any, form.formData.baseUrl || undefined)}
                 </p>
               </div>
             </div>
 
             {(() => {
-              const reqs = getProviderRequirements(formData.provider)
+              const reqs = getProviderRequirements(form.formData.provider)
               const showApiKey = reqs.requiresApiKey
               const showBaseUrl = reqs.requiresBaseUrl
               const showBoth = showApiKey && showBaseUrl
@@ -882,13 +848,13 @@ export default function ConnectionProfilesTab() {
                       <select
                         id="apiKeyId"
                         name="apiKeyId"
-                        value={formData.apiKeyId}
-                        onChange={handleChange}
+                        value={form.formData.apiKeyId}
+                        onChange={form.handleChange}
                         className="qt-select"
                       >
                         <option value="">Select an API Key</option>
                         {apiKeys
-                          .filter(key => key.provider === formData.provider)
+                          .filter(key => key.provider === form.formData.provider)
                           .map(key => (
                             <option key={key.id} value={key.id}>
                               {key.label}
@@ -908,8 +874,8 @@ export default function ConnectionProfilesTab() {
                         type="url"
                         id="baseUrl"
                         name="baseUrl"
-                        value={formData.baseUrl}
-                        onChange={handleChange}
+                        value={form.formData.baseUrl}
+                        onChange={form.handleChange}
                         placeholder="http://localhost:11434"
                         className="qt-input"
                       />
@@ -928,36 +894,36 @@ export default function ConnectionProfilesTab() {
                 <button
                   type="button"
                   onClick={handleConnect}
-                  disabled={isConnecting}
+                  disabled={connectOp.loading}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
                 >
-                  {isConnecting ? 'Connecting...' : 'Connect'}
+                  {connectOp.loading ? 'Connecting...' : 'Connect'}
                 </button>
 
                 <button
                   type="button"
                   onClick={handleFetchModels}
                   disabled={(() => {
-                    const reqs = getProviderRequirements(formData.provider)
-                    if (isFetchingModels) return true
+                    const reqs = getProviderRequirements(form.formData.provider)
+                    if (fetchModelsOp.loading) return true
                     // For providers that need baseUrl, require it
-                    if (reqs.requiresBaseUrl && !formData.baseUrl) return true
+                    if (reqs.requiresBaseUrl && !form.formData.baseUrl) return true
                     // For providers that need API key and aren't connected yet, require connection
                     if (reqs.requiresApiKey && !isConnected) return true
                     return false
                   })()}
                   className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
                 >
-                  {isFetchingModels ? 'Fetching...' : 'Fetch Models'}
+                  {fetchModelsOp.loading ? 'Fetching...' : 'Fetch Models'}
                 </button>
 
                 <button
                   type="button"
                   onClick={handleTestMessage}
-                  disabled={!isConnected || isTestingMessage || !formData.modelName}
+                  disabled={!isConnected || testMessageOp.loading || !form.formData.modelName}
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
                 >
-                  {isTestingMessage ? 'Testing...' : 'Test Message'}
+                  {testMessageOp.loading ? 'Testing...' : 'Test Message'}
                 </button>
               </div>
 
@@ -990,14 +956,14 @@ export default function ConnectionProfilesTab() {
                 Model *
               </label>
               {/* Show text input for custom model (OpenRouter only) or when models haven't been fetched */}
-              {(formData.provider === 'OPENROUTER' && formData.useCustomModel) ? (
+              {(form.formData.provider === 'OPENROUTER' && form.formData.useCustomModel) ? (
                 <>
                   <input
                     type="text"
                     id="modelName"
                     name="modelName"
-                    value={formData.modelName}
-                    onChange={handleChange}
+                    value={form.formData.modelName}
+                    onChange={form.handleChange}
                     placeholder="e.g., openai/gpt-4-turbo or anthropic/claude-3-opus"
                     list="modelSuggestions"
                     required
@@ -1009,7 +975,7 @@ export default function ConnectionProfilesTab() {
                         <option key={model} value={model} />
                       ))
                     ) : (
-                      getModelSuggestions(formData.provider).map(model => (
+                      getModelSuggestions(form.formData.provider).map(model => (
                         <option key={model} value={model} />
                       ))
                     )}
@@ -1022,8 +988,8 @@ export default function ConnectionProfilesTab() {
                 <ModelSelector
                   models={fetchedModels}
                   modelsWithInfo={fetchedModelsWithInfo}
-                  value={formData.modelName}
-                  onChange={(value) => setFormData({ ...formData, modelName: value })}
+                  value={form.formData.modelName}
+                  onChange={(value) => form.setField('modelName', value)}
                   placeholder="Select or search a model"
                   required
                   showFetchedCount
@@ -1034,15 +1000,15 @@ export default function ConnectionProfilesTab() {
                     type="text"
                     id="modelName"
                     name="modelName"
-                    value={formData.modelName}
-                    onChange={handleChange}
+                    value={form.formData.modelName}
+                    onChange={form.handleChange}
                     placeholder="e.g., gpt-4"
                     list="modelSuggestions"
                     required
                     className="qt-input"
                   />
                   <datalist id="modelSuggestions">
-                    {getModelSuggestions(formData.provider).map(model => (
+                    {getModelSuggestions(form.formData.provider).map(model => (
                       <option key={model} value={model} />
                     ))}
                   </datalist>
@@ -1055,7 +1021,7 @@ export default function ConnectionProfilesTab() {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label htmlFor="temperature" className="block qt-text-label mb-2">
-                    Temperature ({formData.temperature})
+                    Temperature ({form.formData.temperature})
                   </label>
                   <input
                     type="range"
@@ -1064,8 +1030,8 @@ export default function ConnectionProfilesTab() {
                     min="0"
                     max="2"
                     step="0.1"
-                    value={formData.temperature}
-                    onChange={handleChange}
+                    value={form.formData.temperature}
+                    onChange={form.handleChange}
                     className="w-full"
                   />
                   <p className="qt-text-xs mt-1">0 = deterministic, 2 = creative</p>
@@ -1079,8 +1045,8 @@ export default function ConnectionProfilesTab() {
                     type="number"
                     id="maxTokens"
                     name="maxTokens"
-                    value={formData.maxTokens}
-                    onChange={handleChange}
+                    value={form.formData.maxTokens}
+                    onChange={form.handleChange}
                     min="1"
                     max={getMaxTokensLimit()}
                     className="qt-input"
@@ -1094,7 +1060,7 @@ export default function ConnectionProfilesTab() {
 
                 <div>
                   <label htmlFor="topP" className="block qt-text-label mb-2">
-                    Top P ({formData.topP})
+                    Top P ({form.formData.topP})
                   </label>
                   <input
                     type="range"
@@ -1103,8 +1069,8 @@ export default function ConnectionProfilesTab() {
                     min="0"
                     max="1"
                     step="0.05"
-                    value={formData.topP}
-                    onChange={handleChange}
+                    value={form.formData.topP}
+                    onChange={form.handleChange}
                     className="w-full"
                   />
                   <p className="qt-text-xs mt-1">Nucleus sampling (0-1)</p>
@@ -1118,8 +1084,8 @@ export default function ConnectionProfilesTab() {
                   type="checkbox"
                   id="isDefault"
                   name="isDefault"
-                  checked={formData.isDefault}
-                  onChange={handleChange}
+                  checked={form.formData.isDefault}
+                  onChange={form.handleChange}
                   className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
                 />
                 <label htmlFor="isDefault" className="text-sm">
@@ -1131,8 +1097,8 @@ export default function ConnectionProfilesTab() {
                   type="checkbox"
                   id="isCheap"
                   name="isCheap"
-                  checked={formData.isCheap}
-                  onChange={handleChange}
+                  checked={form.formData.isCheap}
+                  onChange={form.handleChange}
                   className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
                 />
                 <label htmlFor="isCheap" className="text-sm">
@@ -1140,15 +1106,15 @@ export default function ConnectionProfilesTab() {
                 </label>
               </div>
               {(() => {
-                const supportsWebSearch = getProviderRequirements(formData.provider).supportsWebSearch
+                const supportsWebSearch = getProviderRequirements(form.formData.provider).supportsWebSearch
                 return (
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       id="allowWebSearch"
                       name="allowWebSearch"
-                      checked={formData.allowWebSearch}
-                      onChange={handleChange}
+                      checked={form.formData.allowWebSearch}
+                      onChange={form.handleChange}
                       disabled={!supportsWebSearch}
                       className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
@@ -1172,7 +1138,7 @@ export default function ConnectionProfilesTab() {
             </div>
 
             {/* OpenRouter-specific options */}
-            {formData.provider === 'OPENROUTER' && (
+            {form.formData.provider === 'OPENROUTER' && (
               <div className="border border-border rounded-lg p-4 bg-muted/50">
                 <h4 className="font-medium text-sm mb-3">OpenRouter Options</h4>
 
@@ -1181,8 +1147,8 @@ export default function ConnectionProfilesTab() {
                   <input
                     type="checkbox"
                     id="enableZDR"
-                    checked={formData.enableZDR}
-                    onChange={(e) => setFormData({ ...formData, enableZDR: e.target.checked })}
+                    checked={form.formData.enableZDR}
+                    onChange={(e) => form.setField('enableZDR', e.target.checked)}
                     className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
                   />
                   <div className="flex flex-col gap-1">
@@ -1200,8 +1166,8 @@ export default function ConnectionProfilesTab() {
                   <input
                     type="checkbox"
                     id="useCustomModel"
-                    checked={formData.useCustomModel}
-                    onChange={(e) => setFormData({ ...formData, useCustomModel: e.target.checked })}
+                    checked={form.formData.useCustomModel}
+                    onChange={(e) => form.setField('useCustomModel', e.target.checked)}
                     className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
                   />
                   <div className="flex flex-col gap-1">
@@ -1222,18 +1188,18 @@ export default function ConnectionProfilesTab() {
                       If the primary model fails or is unavailable, OpenRouter will try these models in order.
                       OpenRouter supports up to 3 total models (1 primary + 2 fallbacks).
                     </p>
-                    {formData.fallbackModels.length >= 2 && (
+                    {form.formData.fallbackModels.length >= 2 && (
                       <p className="qt-text-xs text-amber-600 dark:text-amber-400 mb-2">
                         Maximum fallback models reached. Remove one to add a different model.
                       </p>
                     )}
                     <div className="space-y-1 max-h-32 overflow-y-auto border border-border rounded p-2 bg-background">
                       {fetchedModels
-                        .filter(model => model !== formData.modelName)
+                        .filter(model => model !== form.formData.modelName)
                         .slice(0, 50)
                         .map(model => {
-                          const isSelected = formData.fallbackModels.includes(model)
-                          const isDisabled = !isSelected && formData.fallbackModels.length >= 2
+                          const isSelected = form.formData.fallbackModels.includes(model)
+                          const isDisabled = !isSelected && form.formData.fallbackModels.length >= 2
                           return (
                             <label
                               key={model}
@@ -1248,16 +1214,10 @@ export default function ConnectionProfilesTab() {
                                 checked={isSelected}
                                 disabled={isDisabled}
                                 onChange={(e) => {
-                                  if (e.target.checked && formData.fallbackModels.length < 2) {
-                                    setFormData({
-                                      ...formData,
-                                      fallbackModels: [...formData.fallbackModels, model],
-                                    })
+                                  if (e.target.checked && form.formData.fallbackModels.length < 2) {
+                                    form.setField('fallbackModels', [...form.formData.fallbackModels, model])
                                   } else if (!e.target.checked) {
-                                    setFormData({
-                                      ...formData,
-                                      fallbackModels: formData.fallbackModels.filter(m => m !== model),
-                                    })
+                                    form.setField('fallbackModels', form.formData.fallbackModels.filter(m => m !== model))
                                   }
                                 }}
                                 className="w-3 h-3 rounded"
@@ -1267,13 +1227,13 @@ export default function ConnectionProfilesTab() {
                           )
                         })}
                     </div>
-                    {formData.fallbackModels.length > 0 && (
+                    {form.formData.fallbackModels.length > 0 && (
                       <div className="mt-2">
                         <p className="qt-text-xs mb-1">
-                          Selected fallbacks ({formData.fallbackModels.length}/2):
+                          Selected fallbacks ({form.formData.fallbackModels.length}/2):
                         </p>
                         <div className="flex flex-wrap gap-1">
-                          {formData.fallbackModels.map((model, idx) => (
+                          {form.formData.fallbackModels.map((model, idx) => (
                             <span
                               key={model}
                               className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded flex items-center gap-1"
@@ -1281,10 +1241,7 @@ export default function ConnectionProfilesTab() {
                               {idx + 1}. {model.split('/').pop()}
                               <button
                                 type="button"
-                                onClick={() => setFormData({
-                                  ...formData,
-                                  fallbackModels: formData.fallbackModels.filter(m => m !== model),
-                                })}
+                                onClick={() => form.setField('fallbackModels', form.formData.fallbackModels.filter(m => m !== model))}
                                 className="hover:text-destructive ml-1"
                               >
                                 ×
@@ -1305,25 +1262,22 @@ export default function ConnectionProfilesTab() {
                   </p>
                   <div className="grid grid-cols-3 gap-1 mb-2">
                     {['OpenAI', 'Anthropic', 'Google', 'Azure', 'AWS Bedrock', 'Together', 'Fireworks', 'DeepInfra', 'Cloudflare', 'Lepton']
-                      .filter(p => !formData.providerOrder.includes(p))
+                      .filter(p => !form.formData.providerOrder.includes(p))
                       .map(provider => (
                         <button
                           key={provider}
                           type="button"
-                          onClick={() => setFormData({
-                            ...formData,
-                            providerOrder: [...formData.providerOrder, provider],
-                          })}
+                          onClick={() => form.setField('providerOrder', [...form.formData.providerOrder, provider])}
                           className="px-2 py-1 text-xs bg-muted text-foreground rounded hover:bg-accent text-left truncate"
                         >
                           + {provider}
                         </button>
                       ))}
                   </div>
-                  {formData.providerOrder.length > 0 && (
+                  {form.formData.providerOrder.length > 0 && (
                     <div className="space-y-1 border border-border rounded p-2 bg-background">
                       <p className="qt-text-label-xs mb-1">Priority order:</p>
-                      {formData.providerOrder.map((provider, idx) => (
+                      {form.formData.providerOrder.map((provider, idx) => (
                         <div key={provider} className="flex items-center gap-2 bg-primary/5 rounded px-2 py-1">
                           <span className="qt-text-label-xs w-4">{idx + 1}.</span>
                           <span className="qt-text-xs flex-1">{provider}</span>
@@ -1331,9 +1285,9 @@ export default function ConnectionProfilesTab() {
                             type="button"
                             onClick={() => {
                               if (idx > 0) {
-                                const newOrder = [...formData.providerOrder]
+                                const newOrder = [...form.formData.providerOrder]
                                 ;[newOrder[idx], newOrder[idx - 1]] = [newOrder[idx - 1], newOrder[idx]]
-                                setFormData({ ...formData, providerOrder: newOrder })
+                                form.setField('providerOrder', newOrder)
                               }
                             }}
                             disabled={idx === 0}
@@ -1344,23 +1298,20 @@ export default function ConnectionProfilesTab() {
                           <button
                             type="button"
                             onClick={() => {
-                              if (idx < formData.providerOrder.length - 1) {
-                                const newOrder = [...formData.providerOrder]
+                              if (idx < form.formData.providerOrder.length - 1) {
+                                const newOrder = [...form.formData.providerOrder]
                                 ;[newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]]
-                                setFormData({ ...formData, providerOrder: newOrder })
+                                form.setField('providerOrder', newOrder)
                               }
                             }}
-                            disabled={idx === formData.providerOrder.length - 1}
+                            disabled={idx === form.formData.providerOrder.length - 1}
                             className="px-1 qt-text-xs disabled:opacity-30 hover:bg-muted rounded"
                           >
                             ↓
                           </button>
                           <button
                             type="button"
-                            onClick={() => setFormData({
-                              ...formData,
-                              providerOrder: formData.providerOrder.filter(p => p !== provider),
-                            })}
+                            onClick={() => form.setField('providerOrder', form.formData.providerOrder.filter(p => p !== provider))}
                             className="px-1 qt-text-xs text-destructive hover:bg-destructive/10 rounded"
                           >
                             ×
@@ -1374,7 +1325,7 @@ export default function ConnectionProfilesTab() {
             )}
 
             {/* Anthropic-specific options */}
-            {formData.provider === 'ANTHROPIC' && (
+            {form.formData.provider === 'ANTHROPIC' && (
               <div className="border border-border rounded-lg p-4 bg-muted/50">
                 <h4 className="font-medium text-sm mb-3">Anthropic Options</h4>
 
@@ -1383,15 +1334,15 @@ export default function ConnectionProfilesTab() {
                   <input
                     type="checkbox"
                     id="enableCacheBreakpoints"
-                    checked={formData.enableCacheBreakpoints}
-                    onChange={(e) => setFormData({ ...formData, enableCacheBreakpoints: e.target.checked })}
+                    checked={form.formData.enableCacheBreakpoints}
+                    onChange={(e) => form.setField('enableCacheBreakpoints', e.target.checked)}
                     className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
                   />
                   <label htmlFor="enableCacheBreakpoints" className="text-sm">
                     Enable Prompt Caching
                   </label>
                 </div>
-                {formData.enableCacheBreakpoints && (
+                {form.formData.enableCacheBreakpoints && (
                   <div className="space-y-3 pl-6 mb-3">
                     {/* Cache Strategy */}
                     <div className="space-y-2">
@@ -1401,8 +1352,8 @@ export default function ConnectionProfilesTab() {
                           type="radio"
                           name="cacheStrategy"
                           value="system_only"
-                          checked={formData.cacheStrategy === 'system_only'}
-                          onChange={(e) => setFormData({ ...formData, cacheStrategy: e.target.value as any })}
+                          checked={form.formData.cacheStrategy === 'system_only'}
+                          onChange={(e) => form.setField('cacheStrategy', e.target.value as any)}
                           className="w-3 h-3"
                         />
                         <span className="text-sm">System message only</span>
@@ -1412,8 +1363,8 @@ export default function ConnectionProfilesTab() {
                           type="radio"
                           name="cacheStrategy"
                           value="system_and_long_context"
-                          checked={formData.cacheStrategy === 'system_and_long_context'}
-                          onChange={(e) => setFormData({ ...formData, cacheStrategy: e.target.value as any })}
+                          checked={form.formData.cacheStrategy === 'system_and_long_context'}
+                          onChange={(e) => form.setField('cacheStrategy', e.target.value as any)}
                           className="w-3 h-3"
                         />
                         <span className="text-sm">System + tools + conversation (recommended)</span>
@@ -1425,8 +1376,8 @@ export default function ConnectionProfilesTab() {
                       <label htmlFor="cacheTTL" className="qt-text-label-xs">Cache Duration</label>
                       <select
                         id="cacheTTL"
-                        value={formData.cacheTTL}
-                        onChange={(e) => setFormData({ ...formData, cacheTTL: e.target.value as '5m' | '1h' })}
+                        value={form.formData.cacheTTL}
+                        onChange={(e) => form.setField('cacheTTL', e.target.value as '5m' | '1h')}
                         className="qt-select text-sm"
                       >
                         <option value="5m">5 minutes (1.25x write cost)</option>
@@ -1454,10 +1405,10 @@ export default function ConnectionProfilesTab() {
             <div className="flex gap-3 pt-4 border-t border-border">
               <button
                 type="submit"
-                disabled={formLoading}
+                disabled={saveOp.loading}
                 className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
               >
-                {formLoading
+                {saveOp.loading
                   ? 'Saving...'
                   : editingId
                     ? 'Update Profile'

@@ -1,7 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useFormState } from '@/hooks/useFormState'
+import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { fetchJson } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { FormActions } from '@/components/ui/FormActions'
+import { clientLogger } from '@/lib/client-logger'
 
 interface Tag {
   id: string
@@ -32,40 +36,36 @@ interface MemoryEditorProps {
 export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEditorProps) {
   const isEditing = !!memory
 
-  const [formData, setFormData] = useState({
+  const form = useFormState({
     content: memory?.content || '',
     summary: memory?.summary || '',
     keywords: memory?.keywords?.join(', ') || '',
     importance: memory?.importance || 0.5,
   })
-  const [saving, setSaving] = useState(false)
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target
-    setFormData({ ...formData, [name]: value })
-  }
+  const { loading: saving, error, execute, clearError } = useAsyncOperation<void>()
 
-  const handleImportanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, importance: parseFloat(e.target.value) })
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSaving(true)
+    clearError()
 
-    try {
-      const keywords = formData.keywords
+    await execute(async () => {
+      clientLogger.debug('Memory editor submitting form', {
+        isEditing,
+        characterId,
+        memoryId: memory?.id,
+      })
+
+      const keywords = form.formData.keywords
         .split(',')
         .map(k => k.trim())
         .filter(k => k.length > 0)
 
       const payload = {
-        content: formData.content,
-        summary: formData.summary,
+        content: form.formData.content,
+        summary: form.formData.summary,
         keywords,
-        importance: formData.importance,
+        importance: form.formData.importance,
         source: 'MANUAL' as const,
       }
 
@@ -73,29 +73,37 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
         ? `/api/characters/${characterId}/memories/${memory.id}`
         : `/api/characters/${characterId}/memories`
 
-      const res = await fetch(url, {
+      const result = await fetchJson<{ id: string }>(url, {
         method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
 
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to save memory')
+      if (!result.ok) {
+        clientLogger.error('Failed to save memory', {
+          status: result.status,
+          error: result.error,
+        })
+        throw new Error(result.error || 'Failed to save memory')
       }
+
+      clientLogger.debug('Memory saved successfully', {
+        isEditing,
+        memoryId: result.data?.id,
+      })
 
       showSuccessToast(isEditing ? 'Memory updated' : 'Memory created')
       onSave()
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to save')
-    } finally {
-      setSaving(false)
-    }
+    })
   }
 
-  const importanceLabel = formData.importance >= 0.7
+  const handleSubmitClick = () => {
+    handleFormSubmit(new Event('submit') as any)
+  }
+
+  const importanceLabel = form.formData.importance >= 0.7
     ? 'High'
-    : formData.importance >= 0.4
+    : form.formData.importance >= 0.4
       ? 'Medium'
       : 'Low'
 
@@ -119,8 +127,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
         </div>
 
         <div className="qt-dialog-body">
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleFormSubmit} className="space-y-4">
             <div>
               <label htmlFor="summary" className="block qt-text-label mb-1">
                 Summary *
@@ -129,8 +136,8 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 type="text"
                 id="summary"
                 name="summary"
-                value={formData.summary}
-                onChange={handleChange}
+                value={form.formData.summary}
+                onChange={form.handleChange}
                 required
                 placeholder="Brief summary of this memory"
                 className="qt-input"
@@ -147,8 +154,8 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
               <textarea
                 id="content"
                 name="content"
-                value={formData.content}
-                onChange={handleChange}
+                value={form.formData.content}
+                onChange={form.handleChange}
                 required
                 rows={6}
                 placeholder="The complete memory content..."
@@ -167,8 +174,8 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 type="text"
                 id="keywords"
                 name="keywords"
-                value={formData.keywords}
-                onChange={handleChange}
+                value={form.formData.keywords}
+                onChange={form.handleChange}
                 placeholder="keyword1, keyword2, keyword3"
                 className="qt-input"
               />
@@ -179,7 +186,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
 
             <div>
               <label htmlFor="importance" className="block qt-text-label mb-1">
-                Importance: {importanceLabel} ({Math.round(formData.importance * 100)}%)
+                Importance: {importanceLabel} ({Math.round(form.formData.importance * 100)}%)
               </label>
               <input
                 type="range"
@@ -188,8 +195,8 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 min="0"
                 max="1"
                 step="0.1"
-                value={formData.importance}
-                onChange={handleImportanceChange}
+                value={form.formData.importance}
+                onChange={form.handleChange}
                 className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
               />
               <div className="flex justify-between qt-text-xs mt-1">
@@ -202,21 +209,21 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
               </p>
             </div>
 
-            <div className="flex gap-3 pt-4">
-              <button
+            {error && (
+              <div className="rounded-md bg-destructive/10 p-3">
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
+            )}
+
+            <div className="pt-4">
+              <FormActions
+                onCancel={onClose}
+                onSubmit={handleSubmitClick}
+                submitLabel={isEditing ? 'Save Changes' : 'Create Memory'}
+                cancelLabel="Cancel"
+                isLoading={saving}
                 type="button"
-                onClick={onClose}
-                className="qt-button qt-button-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="qt-button qt-button-primary"
-              >
-                {saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Memory'}
-              </button>
+              />
             </div>
           </form>
         </div>

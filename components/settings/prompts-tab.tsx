@@ -2,7 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import { useFormState } from '@/hooks/useFormState'
+import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { fetchJson } from '@/lib/fetch-helpers'
+import { getErrorMessage } from '@/lib/error-utils'
 import ReactMarkdown from 'react-markdown'
+import { SectionHeader } from '@/components/ui/SectionHeader'
+import { LoadingState } from '@/components/ui/LoadingState'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
+import { FormActions } from '@/components/ui/FormActions'
 
 interface PromptTemplate {
   id: string
@@ -32,15 +42,11 @@ const INITIAL_FORM_DATA: TemplateFormData = {
 
 export default function PromptsTab() {
   const [templates, setTemplates] = useState<PromptTemplate[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null>(null)
-  const [formData, setFormData] = useState<TemplateFormData>(INITIAL_FORM_DATA)
   const [showPreview, setShowPreview] = useState(false)
 
   // Preview modal state
@@ -52,42 +58,48 @@ export default function PromptsTab() {
   // Clipboard state
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
+  // Form state hook
+  const form = useFormState<TemplateFormData>(INITIAL_FORM_DATA)
+
+  // Async operation hooks
+  const fetchOp = useAsyncOperation<PromptTemplate[]>()
+  const saveOp = useAsyncOperation<PromptTemplate>()
+  const deleteOp = useAsyncOperation<void>()
+
+  // Fetch templates on mount
   const fetchTemplates = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await fetch('/api/prompt-templates')
-      if (!res.ok) throw new Error('Failed to fetch templates')
-      const data = await res.json()
-      setTemplates(data)
-      clientLogger.debug('Fetched prompt templates', { count: data.length })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'An error occurred'
-      setError(message)
-      clientLogger.error('Error fetching prompt templates', { error: message })
-    } finally {
-      setLoading(false)
+    clientLogger.debug('Fetching prompt templates')
+    const result = await fetchOp.execute(async () => {
+      const response = await fetchJson<PromptTemplate[]>('/api/prompt-templates')
+      if (!response.ok) {
+        throw new Error(response.error || 'Failed to fetch templates')
+      }
+      return response.data || []
+    })
+    if (result) {
+      setTemplates(result)
+      clientLogger.debug('Fetched prompt templates', { count: result.length })
     }
-  }, [])
+  }, [fetchOp])
 
   useEffect(() => {
+    // Fetch templates on mount - this is the correct pattern for data loading
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTemplates()
   }, [fetchTemplates])
 
   const openCreateModal = () => {
     setEditingTemplate(null)
-    setFormData(INITIAL_FORM_DATA)
+    form.resetForm()
     setShowPreview(false)
     setIsModalOpen(true)
   }
 
   const openEditModal = (template: PromptTemplate) => {
     setEditingTemplate(template)
-    setFormData({
-      name: template.name,
-      description: template.description || '',
-      content: template.content,
-    })
+    form.setField('name', template.name)
+    form.setField('description', template.description || '')
+    form.setField('content', template.content)
     setShowPreview(false)
     setIsModalOpen(true)
   }
@@ -95,99 +107,110 @@ export default function PromptsTab() {
   const closeModal = () => {
     setIsModalOpen(false)
     setEditingTemplate(null)
-    setFormData(INITIAL_FORM_DATA)
+    form.resetForm()
     setShowPreview(false)
   }
 
   const handleSave = async () => {
-    try {
-      setSaving(true)
-      setError(null)
+    clientLogger.debug('Saving prompt template', {
+      isEdit: !!editingTemplate,
+      templateName: form.formData.name,
+    })
 
+    const result = await saveOp.execute(async () => {
       if (editingTemplate) {
         // Update existing template
-        const res = await fetch(`/api/prompt-templates/${editingTemplate.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        })
+        clientLogger.debug('Updating template', { templateId: editingTemplate.id })
+        const response = await fetchJson<PromptTemplate>(
+          `/api/prompt-templates/${editingTemplate.id}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(form.formData),
+          }
+        )
 
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update template')
+        if (!response.ok) {
+          throw new Error(response.error || 'Failed to update template')
         }
 
-        const updated = await res.json()
-        setTemplates(prev =>
-          prev.map(t => t.id === updated.id ? updated : t)
-        )
-        setSuccess('Template updated successfully')
-        clientLogger.info('Prompt template updated', { templateId: updated.id })
+        if (!response.data) {
+          throw new Error('No data returned from server')
+        }
+
+        return response.data
       } else {
         // Create new template
-        const res = await fetch('/api/prompt-templates', {
+        clientLogger.debug('Creating new template')
+        const response = await fetchJson<PromptTemplate>('/api/prompt-templates', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(form.formData),
         })
 
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to create template')
+        if (!response.ok) {
+          throw new Error(response.error || 'Failed to create template')
         }
 
-        const created = await res.json()
-        setTemplates(prev => [...prev, created])
+        if (!response.data) {
+          throw new Error('No data returned from server')
+        }
+
+        return response.data
+      }
+    })
+
+    if (result) {
+      if (editingTemplate) {
+        // Update existing in list
+        setTemplates(prev =>
+          prev.map(t => t.id === result.id ? result : t)
+        )
+        setSuccess('Template updated successfully')
+        clientLogger.info('Prompt template updated', { templateId: result.id })
+      } else {
+        // Add new to list
+        setTemplates(prev => [...prev, result])
         setSuccess('Template created successfully')
-        clientLogger.info('Prompt template created', { templateId: created.id })
+        clientLogger.info('Prompt template created', { templateId: result.id })
       }
 
       closeModal()
       setTimeout(() => setSuccess(null), 3000)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'An error occurred'
-      setError(message)
-      clientLogger.error('Error saving prompt template', { error: message })
-    } finally {
-      setSaving(false)
     }
   }
 
   const handleDelete = async (templateId: string) => {
-    try {
-      setSaving(true)
-      setError(null)
+    clientLogger.debug('Deleting template', { templateId })
 
-      const res = await fetch(`/api/prompt-templates/${templateId}`, {
-        method: 'DELETE',
-      })
+    const result = await deleteOp.execute(async () => {
+      const response = await fetchJson<void>(
+        `/api/prompt-templates/${templateId}`,
+        {
+          method: 'DELETE',
+        }
+      )
 
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to delete template')
+      if (!response.ok) {
+        throw new Error(response.error || 'Failed to delete template')
       }
+    })
 
+    if (result !== null) {
       setTemplates(prev => prev.filter(t => t.id !== templateId))
       setSuccess('Template deleted successfully')
       setDeleteConfirm(null)
       clientLogger.info('Prompt template deleted', { templateId })
       setTimeout(() => setSuccess(null), 3000)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'An error occurred'
-      setError(message)
-      clientLogger.error('Error deleting prompt template', { error: message })
-    } finally {
-      setSaving(false)
     }
   }
 
   const handleCopyAsNew = (template: PromptTemplate) => {
+    clientLogger.debug('Copying template as new', { templateId: template.id })
     setEditingTemplate(null)
-    setFormData({
-      name: `${template.name} (Copy)`,
-      description: template.description || '',
-      content: template.content,
-    })
+    form.setField('name', `${template.name} (Copy)`)
+    form.setField('description', template.description || '')
+    form.setField('content', template.content)
     setShowPreview(false)
     setIsModalOpen(true)
   }
@@ -208,20 +231,17 @@ export default function PromptsTab() {
   const builtInTemplates = templates.filter(t => t.isBuiltIn)
   const userTemplates = templates.filter(t => !t.isBuiltIn)
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-muted-foreground">Loading templates...</div>
-      </div>
-    )
+  if (fetchOp.loading) {
+    return <LoadingState message="Loading templates..." />
   }
 
   return (
     <div className="space-y-6">
-      {error && (
-        <div className="bg-destructive/10 border border-destructive/30 rounded p-4 text-destructive">
-          {error}
-        </div>
+      {fetchOp.error && (
+        <ErrorAlert
+          message={fetchOp.error}
+          onRetry={fetchTemplates}
+        />
       )}
 
       {success && (
@@ -230,17 +250,35 @@ export default function PromptsTab() {
         </div>
       )}
 
+      {saveOp.error && (
+        <ErrorAlert
+          message={saveOp.error}
+          onRetry={() => {}}
+        />
+      )}
+
+      {deleteOp.error && (
+        <ErrorAlert
+          message={deleteOp.error}
+          onRetry={() => {}}
+        />
+      )}
+
       {/* Sample Prompts Section */}
       <section>
-        <h2 className="text-xl font-semibold mb-2">Sample Prompts</h2>
+        <SectionHeader
+          title="Sample Prompts"
+          level="h2"
+        />
         <p className="qt-text-small mb-4">
           These prompts are provided by Quilltap and cannot be modified. You can preview them or copy them to create your own version.
         </p>
 
         {builtInTemplates.length === 0 ? (
-          <div className="qt-text-small border border-dashed border-border rounded-lg p-4">
-            No sample prompts available.
-          </div>
+          <EmptyState
+            title="No sample prompts available"
+            variant="dashed"
+          />
         ) : (
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
             {builtInTemplates.map(template => (
@@ -306,26 +344,28 @@ export default function PromptsTab() {
 
       {/* User Templates Section */}
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-semibold">My Prompts</h2>
-            <p className="qt-text-small mt-1">
-              Custom prompt templates you&apos;ve created for reuse across characters and chats.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-          >
-            Create Prompt
-          </button>
-        </div>
+        <SectionHeader
+          title="My Prompts"
+          level="h2"
+          action={{
+            label: 'Create Prompt',
+            onClick: openCreateModal,
+          }}
+        />
+        <p className="qt-text-small mb-4">
+          Custom prompt templates you&apos;ve created for reuse across characters and chats.
+        </p>
 
         {userTemplates.length === 0 ? (
-          <div className="qt-text-small border border-dashed border-border rounded-lg p-4">
-            No custom prompts yet. Create one to build your own reusable prompt templates.
-          </div>
+          <EmptyState
+            title="No custom prompts yet"
+            description="Create one to build your own reusable prompt templates."
+            action={{
+              label: 'Create Prompt',
+              onClick: openCreateModal,
+            }}
+            variant="dashed"
+          />
         ) : (
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
             {userTemplates.map(template => (
@@ -341,7 +381,7 @@ export default function PromptsTab() {
                     </p>
                   )}
                 </div>
-                <div className="flex gap-2 mt-4">
+                <div className="flex gap-2 mt-4 relative">
                   <button
                     type="button"
                     onClick={() => setPreviewTemplate(template)}
@@ -363,33 +403,22 @@ export default function PromptsTab() {
                   >
                     Edit
                   </button>
-                  {deleteConfirm === template.id ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(template.id)}
-                        disabled={saving}
-                        className="px-3 py-1.5 text-sm rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirm(null)}
-                        className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
+                  <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setDeleteConfirm(template.id)}
+                      onClick={() => setDeleteConfirm(deleteConfirm === template.id ? null : template.id)}
                       className="px-3 py-1.5 text-sm rounded-md text-destructive border border-destructive/30 hover:bg-destructive/10"
                     >
                       Delete
                     </button>
-                  )}
+                    <DeleteConfirmPopover
+                      isOpen={deleteConfirm === template.id}
+                      isDeleting={deleteOp.loading}
+                      onCancel={() => setDeleteConfirm(null)}
+                      onConfirm={() => handleDelete(template.id)}
+                      message="Are you sure you want to delete this template?"
+                    />
+                  </div>
                 </div>
               </div>
             ))}
@@ -413,14 +442,15 @@ export default function PromptsTab() {
                   </label>
                   <input
                     type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    name="name"
+                    value={form.formData.name}
+                    onChange={form.handleChange}
                     maxLength={100}
                     placeholder="My Custom Prompt"
                     className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <p className="qt-text-xs mt-1">
-                    {formData.name.length}/100 characters
+                    {form.formData.name.length}/100 characters
                   </p>
                 </div>
 
@@ -430,14 +460,15 @@ export default function PromptsTab() {
                   </label>
                   <input
                     type="text"
-                    value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    name="description"
+                    value={form.formData.description}
+                    onChange={form.handleChange}
                     maxLength={500}
                     placeholder="A brief description of what this prompt does"
                     className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <p className="qt-text-xs mt-1">
-                    {formData.description.length}/500 characters
+                    {form.formData.description.length}/500 characters
                   </p>
                 </div>
 
@@ -457,12 +488,13 @@ export default function PromptsTab() {
 
                   {showPreview ? (
                     <div className="w-full rounded-md border border-input bg-background p-4 min-h-[300px] max-h-[400px] overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
-                      <ReactMarkdown>{formData.content || '*No content*'}</ReactMarkdown>
+                      <ReactMarkdown>{form.formData.content || '*No content*'}</ReactMarkdown>
                     </div>
                   ) : (
                     <textarea
-                      value={formData.content}
-                      onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
+                      name="content"
+                      value={form.formData.content}
+                      onChange={form.handleChange}
                       rows={15}
                       placeholder="Enter your prompt content here. Markdown formatting is supported."
                       className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
@@ -474,24 +506,13 @@ export default function PromptsTab() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  disabled={saving}
-                  className="px-4 py-2 text-sm rounded-md border border-border hover:bg-accent disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving || !formData.name.trim() || !formData.content.trim()}
-                  className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : editingTemplate ? 'Save Changes' : 'Create Prompt'}
-                </button>
-              </div>
+              <FormActions
+                onCancel={closeModal}
+                onSubmit={handleSave}
+                isLoading={saveOp.loading}
+                isDisabled={!form.formData.name.trim() || !form.formData.content.trim()}
+                submitLabel={editingTemplate ? 'Save Changes' : 'Create Prompt'}
+              />
             </div>
           </div>
         </div>

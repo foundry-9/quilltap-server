@@ -4,6 +4,29 @@
 
 ### 2.4-dev
 
+- refactor: Major TSX component refactoring to reduce code duplication
+  - Created 3 new reusable hooks with comprehensive tests:
+    - `useAsyncOperation` - manages loading/error state for async operations
+    - `useListManager` - consolidates CRUD list state management
+    - `useFormState` - handles form data with automatic type conversion
+  - Created 6 new UI components with comprehensive tests:
+    - `DeleteConfirmPopover` - inline delete confirmation popover
+    - `EmptyState` - consistent empty state display with variants
+    - `SectionHeader` - header with title, count, and action button
+    - `LoadingState` - loading spinner/message display with variants
+    - `ErrorAlert` - error display with optional retry button
+    - `FormActions` - standardized Save/Cancel button pair
+  - Refactored 9 TSX components to use new hooks and utilities:
+    - `memory-list.tsx`, `memory-editor.tsx`
+    - `physical-description-list.tsx`, `physical-description-editor.tsx`
+    - `connection-profiles-tab.tsx`, `embedding-profiles-tab.tsx`
+    - `image-profiles-tab.tsx`, `api-keys-tab.tsx`, `prompts-tab.tsx`
+  - Key improvements across all refactored components:
+    - `fetchJson` helper used for consistent API error handling
+    - `getErrorMessage` utility for error message extraction
+    - `clientLogger` debug logging added throughout
+    - Standardized UI patterns for loading, error, empty, and form states
+  - All existing functionality preserved, 1330+ tests passing
 - fix: Add user-created prompt and roleplay templates to cloud backup/restore
   - PromptTemplates and RoleplayTemplates (user-created, not built-in) are now included in backups
   - Backwards compatible with older backups that don't have templates

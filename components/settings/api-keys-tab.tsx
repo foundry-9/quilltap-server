@@ -1,7 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { showConfirmation } from '@/lib/alert'
+import { useEffect, useState } from 'react'
+import { useFormState } from '@/hooks/useFormState'
+import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { fetchJson } from '@/lib/fetch-helpers'
+import { getErrorMessage } from '@/lib/error-utils'
+import { clientLogger } from '@/lib/client-logger'
+import SectionHeader from '@/components/ui/SectionHeader'
+import LoadingState from '@/components/ui/LoadingState'
+import ErrorAlert from '@/components/ui/ErrorAlert'
+import EmptyState from '@/components/ui/EmptyState'
+import DeleteConfirmPopover from '@/components/ui/DeleteConfirmPopover'
+import FormActions from '@/components/ui/FormActions'
 
 interface ApiKey {
   id: string
@@ -14,145 +24,232 @@ interface ApiKey {
   keyPreview: string
 }
 
+interface ApiKeyFormData {
+  label: string
+  provider: string
+  apiKey: string
+}
+
 export default function ApiKeysTab() {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [formLoading, setFormLoading] = useState(false)
-  const [formData, setFormData] = useState({
+  const [testingKeyId, setTestingKeyId] = useState<string | null>(null)
+  const [testResults, setTestResults] = useState<{ [key: string]: string }>({})
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+
+  // Form state management
+  const form = useFormState<ApiKeyFormData>({
     label: '',
     provider: 'OPENAI',
     apiKey: '',
   })
-  const [testingKeyId, setTestingKeyId] = useState<string | null>(null)
-  const [testResults, setTestResults] = useState<{ [key: string]: string }>({})
 
-  useEffect(() => {
-    fetchApiKeys()
-  }, [])
+  // Load initial state
+  const loadKeys = useAsyncOperation<ApiKey[]>()
+  const createKey = useAsyncOperation<ApiKey>()
+  const deleteKey = useAsyncOperation<void>()
+  const testKey = useAsyncOperation<{ valid: boolean; error?: string }>()
 
-  const fetchApiKeys = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await fetch('/api/keys', {
+  const fetchApiKeysData = async () => {
+    clientLogger.debug('Fetching API keys')
+    const result = await loadKeys.execute(async () => {
+      const response = await fetchJson<ApiKey[]>('/api/keys', {
         cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
       })
-      if (!res.ok) throw new Error('Failed to fetch API keys')
-      const data = await res.json()
-      setApiKeys(data)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
+
+      if (!response.ok) {
+        throw new Error(response.error || 'Failed to fetch API keys')
+      }
+
+      clientLogger.debug('API keys fetched successfully', {
+        count: response.data?.length || 0,
+      })
+      return response.data || []
+    })
+
+    if (result) {
+      setApiKeys(result)
     }
   }
+
+  // Load API keys on mount
+  useEffect(() => {
+    clientLogger.debug('ApiKeysTab mounted, fetching API keys')
+    fetchApiKeysData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setFormLoading(true)
-    setError(null)
+    clientLogger.debug('Creating API key', {
+      provider: form.formData.provider,
+    })
 
-    try {
-      const res = await fetch('/api/keys', {
+    const result = await createKey.execute(async () => {
+      const response = await fetchJson<ApiKey>('/api/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(form.formData),
       })
 
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to create API key')
+      if (!response.ok) {
+        throw new Error(response.error || 'Failed to create API key')
       }
 
-      setFormData({ label: '', provider: 'OPENAI', apiKey: '' })
+      clientLogger.debug('API key created successfully', {
+        id: response.data?.id,
+      })
+      return response.data!
+    })
+
+    if (result) {
+      form.resetForm()
       setShowForm(false)
-      await fetchApiKeys()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setFormLoading(false)
+      await fetchApiKeysData()
     }
   }
 
-  const handleDelete = async (id: string) => {
-    const confirmed = await showConfirmation('Are you sure you want to delete this API key?')
-    if (!confirmed) return
+  const handleDeleteClick = (id: string) => {
+    clientLogger.debug('Delete confirmation requested for API key', { id })
+    setDeleteConfirmId(id)
+  }
 
-    try {
-      const res = await fetch(`/api/keys/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete API key')
-      await fetchApiKeys()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+  const handleDeleteCancel = () => {
+    clientLogger.debug('Delete confirmation cancelled')
+    setDeleteConfirmId(null)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmId) return
+
+    clientLogger.debug('Deleting API key', { id: deleteConfirmId })
+    const result = await deleteKey.execute(async () => {
+      const response = await fetchJson<void>(`/api/keys/${deleteConfirmId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error(response.error || 'Failed to delete API key')
+      }
+
+      clientLogger.debug('API key deleted successfully', { id: deleteConfirmId })
+    })
+
+    if (result !== null) {
+      setDeleteConfirmId(null)
+      await fetchApiKeysData()
     }
   }
 
   const handleTest = async (id: string) => {
+    clientLogger.debug('Testing API key', { id })
     setTestingKeyId(id)
     setTestResults({})
 
-    try {
-      const res = await fetch(`/api/keys/${id}/test`, { method: 'POST' })
-      const data = await res.json()
+    const result = await testKey.execute(async () => {
+      const response = await fetchJson<{ valid: boolean; error?: string }>(
+        `/api/keys/${id}/test`,
+        { method: 'POST' }
+      )
 
-      if (res.ok) {
-        setTestResults({ [id]: '✓ Key is valid' })
-      } else {
-        setTestResults({ [id]: `✗ ${data.error || 'Key is invalid'}` })
+      if (!response.ok) {
+        throw new Error(response.error || 'Failed to test API key')
       }
-    } catch (err) {
+
+      return response.data || { valid: false }
+    })
+
+    if (result) {
+      if (result.valid) {
+        setTestResults({ [id]: '✓ Key is valid' })
+        clientLogger.debug('API key test passed', { id })
+      } else {
+        setTestResults({ [id]: `✗ ${result.error || 'Key is invalid'}` })
+        clientLogger.debug('API key test failed', { id, error: result.error })
+      }
+    } else {
       setTestResults({ [id]: 'Connection failed' })
-    } finally {
-      setTestingKeyId(null)
+      clientLogger.error('API key test connection failed', { id })
     }
+
+    setTestingKeyId(null)
   }
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+  const handleCancel = () => {
+    clientLogger.debug('Form cancelled')
+    form.resetForm()
+    setShowForm(false)
   }
 
-  if (loading) {
-    return <div className="text-center py-8">Loading API keys...</div>
+  // Show loading state while fetching initial data
+  if (loadKeys.loading && apiKeys.length === 0) {
+    return <LoadingState message="Loading API keys..." />
   }
+
+  const sortedKeys = apiKeys.toSorted((a, b) => a.label.localeCompare(b.label))
 
   return (
     <div>
-      {error && (
-        <div className="qt-alert-error mb-4">
-          {error}
-        </div>
+      {/* Main error state */}
+      {loadKeys.error && (
+        <ErrorAlert
+          message={loadKeys.error}
+          onRetry={fetchApiKeysData}
+          className="mb-4"
+        />
+      )}
+
+      {/* Create key error state */}
+      {createKey.error && (
+        <ErrorAlert
+          message={createKey.error}
+          className="mb-4"
+        />
+      )}
+
+      {/* Delete key error state */}
+      {deleteKey.error && (
+        <ErrorAlert
+          message={deleteKey.error}
+          className="mb-4"
+        />
       )}
 
       {/* API Keys List */}
       <div className="mb-8">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Your API Keys</h2>
-          {!showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-            >
-              + Add API Key
-            </button>
-          )}
-        </div>
+        <SectionHeader
+          title="Your API Keys"
+          count={sortedKeys.length}
+          action={{
+            label: '+ Add API Key',
+            onClick: () => {
+              clientLogger.debug('Add API key form opened')
+              setShowForm(true)
+            },
+            show: !showForm,
+          }}
+          level="h2"
+        />
 
-        {apiKeys.length === 0 ? (
-          <div className="bg-muted border border-border rounded-lg p-6 text-center text-muted-foreground">
-            <p>No API keys yet. Add one to get started.</p>
-          </div>
+        {sortedKeys.length === 0 ? (
+          <EmptyState
+            title="No API keys yet"
+            description="Add one to get started."
+            action={{
+              label: 'Add API Key',
+              onClick: () => {
+                clientLogger.debug('Add API key from empty state')
+                setShowForm(true)
+              },
+            }}
+          />
         ) : (
           <div className="space-y-3">
-            {apiKeys.toSorted((a, b) => a.label.localeCompare(b.label)).map(key => (
+            {sortedKeys.map((key) => (
               <div
                 key={key.id}
-                className="border border-border rounded-lg p-4 flex items-center justify-between bg-card hover:bg-accent/50"
+                className="relative border border-border rounded-lg p-4 flex items-center justify-between bg-card hover:bg-accent/50"
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-3">
@@ -163,13 +260,20 @@ export default function ApiKeysTab() {
                       </p>
                       {key.lastUsed && (
                         <p className="qt-text-xs">
-                          Last used: {new Date(key.lastUsed).toLocaleDateString()}
+                          Last used:{' '}
+                          {new Date(key.lastUsed).toLocaleDateString()}
                         </p>
                       )}
                     </div>
                   </div>
                   {testResults[key.id] && (
-                    <p className={`text-sm mt-2 ${testResults[key.id].startsWith('✓') ? 'text-green-600' : 'text-destructive/80'}`}>
+                    <p
+                      className={`text-sm mt-2 ${
+                        testResults[key.id].startsWith('✓')
+                          ? 'text-green-600'
+                          : 'text-destructive/80'
+                      }`}
+                    >
                       {testResults[key.id]}
                     </p>
                   )}
@@ -183,11 +287,20 @@ export default function ApiKeysTab() {
                     {testingKeyId === key.id ? 'Testing...' : 'Test'}
                   </button>
                   <button
-                    onClick={() => handleDelete(key.id)}
+                    onClick={() => handleDeleteClick(key.id)}
                     className="px-3 py-1 text-sm bg-destructive/10 text-destructive rounded hover:bg-destructive/20"
                   >
                     Delete
                   </button>
+
+                  {/* Delete confirmation popover */}
+                  <DeleteConfirmPopover
+                    isOpen={deleteConfirmId === key.id}
+                    onCancel={handleDeleteCancel}
+                    onConfirm={handleDeleteConfirm}
+                    message="Delete this API key?"
+                    isDeleting={deleteKey.loading}
+                  />
                 </div>
               </div>
             ))}
@@ -208,8 +321,8 @@ export default function ApiKeysTab() {
                 type="text"
                 id="label"
                 name="label"
-                value={formData.label}
-                onChange={handleChange}
+                value={form.formData.label}
+                onChange={form.handleChange}
                 placeholder="e.g., My OpenAI Key"
                 required
                 className="qt-input"
@@ -224,8 +337,8 @@ export default function ApiKeysTab() {
               <select
                 id="provider"
                 name="provider"
-                value={formData.provider}
-                onChange={handleChange}
+                value={form.formData.provider}
+                onChange={form.handleChange}
                 className="qt-select"
               >
                 <option value="OPENAI">OpenAI</option>
@@ -247,8 +360,8 @@ export default function ApiKeysTab() {
                 type="password"
                 id="apiKey"
                 name="apiKey"
-                value={formData.apiKey}
-                onChange={handleChange}
+                value={form.formData.apiKey}
+                onChange={form.handleChange}
                 placeholder="Your API key (will be encrypted)"
                 required
                 className="qt-input"
@@ -256,22 +369,12 @@ export default function ApiKeysTab() {
               <p className="qt-text-xs mt-1">Your key is encrypted and never exposed</p>
             </div>
 
-            <div className="flex gap-3 pt-2">
-              <button
-                type="submit"
-                disabled={formLoading}
-                className="px-6 py-2 qt-button qt-button-primary"
-              >
-                {formLoading ? 'Creating...' : 'Create API Key'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-6 py-2 qt-button qt-button-secondary"
-              >
-                Cancel
-              </button>
-            </div>
+            <FormActions
+              onCancel={handleCancel}
+              submitLabel={createKey.loading ? 'Creating...' : 'Create API Key'}
+              isLoading={createKey.loading}
+              type="submit"
+            />
           </form>
         </div>
       )}

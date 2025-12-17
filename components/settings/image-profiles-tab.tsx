@@ -1,9 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { fetchJson } from '@/lib/fetch-helpers'
+import { getErrorMessage } from '@/lib/error-utils'
 import { ImageProfileForm } from '@/components/image-profiles/ImageProfileForm'
 import { ProviderBadge } from '@/components/image-profiles/ProviderIcon'
+import { SectionHeader } from '@/components/ui/SectionHeader'
+import { LoadingState } from '@/components/ui/LoadingState'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
 
 interface ApiKey {
   id: string
@@ -27,101 +35,147 @@ interface ImageProfile {
 export default function ImageProfilesTab() {
   const [profiles, setProfiles] = useState<ImageProfile[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
 
+  const {
+    loading: loadingProfiles,
+    error: profilesError,
+    execute: executeLoadProfiles,
+    clearError: clearProfilesError,
+  } = useAsyncOperation<ImageProfile[]>()
+
+  const {
+    loading: deletingProfile,
+    error: deleteError,
+    execute: executeDelete,
+    setError: setDeleteError,
+  } = useAsyncOperation<void>()
+
+  const {
+    loading: loadingApiKeys,
+    error: apiKeysError,
+  } = useAsyncOperation<ApiKey[]>()
+
+  // Fetch profiles on mount
   useEffect(() => {
-    fetchProfiles()
-    fetchApiKeys()
+    const loadProfiles = async () => {
+      clientLogger.debug('Loading image profiles')
+      const result = await executeLoadProfiles(async () => {
+        const response = await fetchJson<ImageProfile[]>('/api/image-profiles')
+        if (!response.ok) {
+          throw new Error(response.error || 'Failed to load profiles')
+        }
+        return response.data || []
+      })
+      if (result) {
+        clientLogger.debug('Image profiles loaded successfully', { count: result.length })
+        setProfiles(result)
+      }
+    }
+
+    loadProfiles()
+  }, [executeLoadProfiles])
+
+  // Fetch API keys on mount
+  useEffect(() => {
+    const loadApiKeys = async () => {
+      clientLogger.debug('Loading API keys for image profiles')
+      const response = await fetchJson<ApiKey[]>('/api/keys')
+      if (response.ok && response.data) {
+        clientLogger.debug('API keys loaded successfully', { count: response.data.length })
+        setApiKeys(response.data)
+      } else {
+        clientLogger.error('Failed to load API keys', { error: response.error })
+      }
+    }
+
+    loadApiKeys()
   }, [])
 
-  const fetchProfiles = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await fetch('/api/image-profiles')
-      if (!res.ok) throw new Error('Failed to fetch profiles')
-      const data = await res.json()
-      setProfiles(data)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchApiKeys = async () => {
-    try {
-      const res = await fetch('/api/keys')
-      if (!res.ok) throw new Error('Failed to fetch API keys')
-      const data = await res.json()
-      setApiKeys(data)
-    } catch (err) {
-      clientLogger.error('Failed to fetch API keys', { error: err instanceof Error ? err.message : String(err) })
+  const refreshProfiles = async () => {
+    clientLogger.debug('Refreshing image profiles')
+    const response = await fetchJson<ImageProfile[]>('/api/image-profiles')
+    if (response.ok && response.data) {
+      setProfiles(response.data)
+      clientLogger.debug('Profiles refreshed', { count: response.data.length })
+    } else {
+      clientLogger.error('Failed to refresh profiles', { error: response.error })
     }
   }
 
   const handleDelete = async (id: string) => {
-    try {
-      const res = await fetch(`/api/image-profiles/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete profile')
-      await fetchProfiles()
+    clientLogger.debug('Deleting image profile', { profileId: id })
+    const result = await executeDelete(async () => {
+      const response = await fetchJson(`/api/image-profiles/${id}`, { method: 'DELETE' })
+      if (!response.ok) {
+        throw new Error(response.error || 'Failed to delete profile')
+      }
+    })
+
+    if (result !== null) {
+      clientLogger.debug('Profile deleted successfully', { profileId: id })
       setDeleteConfirming(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      await refreshProfiles()
     }
   }
 
   const handleFormSuccess = async () => {
+    clientLogger.debug('Image profile form submitted successfully')
     setShowForm(false)
     setEditingId(null)
-    await fetchProfiles()
+    await refreshProfiles()
   }
 
   const handleFormCancel = () => {
+    clientLogger.debug('Image profile form cancelled')
     setShowForm(false)
     setEditingId(null)
   }
 
   const editingProfile = editingId ? profiles.find(p => p.id === editingId) : undefined
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-8">
-        <div className="text-muted-foreground">Loading image profiles...</div>
-      </div>
-    )
+  const isLoading = loadingProfiles
+
+  if (isLoading) {
+    return <LoadingState message="Loading image profiles..." />
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Image Generation Profiles</h2>
-          <p className="qt-text-small mt-1">
-            Manage profiles for different image generation providers
-          </p>
-        </div>
-        {!showForm && !editingId && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            New Profile
-          </button>
-        )}
+      <div>
+        <SectionHeader
+          title="Image Generation Profiles"
+          count={profiles.length}
+          level="h2"
+          action={
+            !showForm && !editingId
+              ? {
+                  label: 'New Profile',
+                  onClick: () => {
+                    clientLogger.debug('Opening new image profile form')
+                    setShowForm(true)
+                  },
+                }
+              : undefined
+          }
+        />
+        <p className="qt-text-small">
+          Manage profiles for different image generation providers
+        </p>
       </div>
 
       {/* Error Alert */}
-      {error && (
-        <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded">
-          {error}
-        </div>
+      {(profilesError || deleteError) && (
+        <ErrorAlert
+          message={profilesError || deleteError || 'An error occurred'}
+          onRetry={() => {
+            if (profilesError) clearProfilesError()
+            refreshProfiles()
+          }}
+        />
       )}
 
       {/* Form */}
@@ -143,15 +197,17 @@ export default function ImageProfilesTab() {
       {!showForm && !editingId && (
         <div className="space-y-3">
           {profiles.length === 0 ? (
-            <div className="text-center py-8 bg-muted rounded-lg border border-border">
-              <p className="text-muted-foreground mb-4">No image profiles yet</p>
-              <button
-                onClick={() => setShowForm(true)}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                Create First Profile
-              </button>
-            </div>
+            <EmptyState
+              title="No image profiles yet"
+              description="Create a profile to start generating images with AI"
+              action={{
+                label: 'Create First Profile',
+                onClick: () => {
+                  clientLogger.debug('Opening new image profile form from empty state')
+                  setShowForm(true)
+                },
+              }}
+            />
           ) : (
             profiles.toSorted((a, b) => a.name.localeCompare(b.name)).map(profile => (
               <div
@@ -203,39 +259,36 @@ export default function ImageProfilesTab() {
                   {/* Actions */}
                   <div className="flex gap-2 ml-4">
                     <button
-                      onClick={() => setEditingId(profile.id)}
+                      onClick={() => {
+                        clientLogger.debug('Editing image profile', { profileId: profile.id })
+                        setEditingId(profile.id)
+                      }}
                       className="px-3 py-1 text-sm text-primary hover:bg-accent rounded border border-border/50 hover:border-border focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                       Edit
                     </button>
                     <div className="relative">
                       <button
-                        onClick={() => setDeleteConfirming(deleteConfirming === profile.id ? null : profile.id)}
+                        onClick={() => {
+                          clientLogger.debug('Toggling delete confirmation', { profileId: profile.id })
+                          setDeleteConfirming(deleteConfirming === profile.id ? null : profile.id)
+                        }}
                         className="px-3 py-1 text-sm text-destructive hover:bg-destructive/10 rounded border border-border/50 hover:border-destructive/30 focus:outline-none focus:ring-2 focus:ring-ring"
                       >
                         Delete
                       </button>
 
                       {/* Delete Confirmation Popover */}
-                      {deleteConfirming === profile.id && (
-                        <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg p-3 whitespace-nowrap z-10">
-                          <p className="text-sm text-foreground mb-2">Delete this profile?</p>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setDeleteConfirming(null)}
-                              className="px-2 py-1 text-xs bg-muted text-foreground hover:bg-accent rounded focus:outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => handleDelete(profile.id)}
-                              className="px-2 py-1 text-xs bg-destructive text-primary-foreground hover:bg-destructive/90 rounded focus:outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      <DeleteConfirmPopover
+                        isOpen={deleteConfirming === profile.id}
+                        isDeleting={deletingProfile}
+                        message="Delete this profile?"
+                        onCancel={() => {
+                          clientLogger.debug('Cancelling profile deletion')
+                          setDeleteConfirming(null)
+                        }}
+                        onConfirm={() => handleDelete(profile.id)}
+                      />
                     </div>
                   </div>
                 </div>

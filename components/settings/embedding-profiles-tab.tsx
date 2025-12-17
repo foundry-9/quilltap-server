@@ -1,7 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import { useFormState } from '@/hooks/useFormState'
+import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { fetchJson } from '@/lib/fetch-helpers'
+import { SectionHeader } from '@/components/ui/SectionHeader'
+import { LoadingState } from '@/components/ui/LoadingState'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
+import { FormActions } from '@/components/ui/FormActions'
 
 interface ApiKey {
   id: string
@@ -43,17 +52,39 @@ function ProviderBadge({ provider }: { provider: string }) {
 }
 
 export default function EmbeddingProfilesTab() {
+  // Data states
   const [profiles, setProfiles] = useState<EmbeddingProfile[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
   const [embeddingModels, setEmbeddingModels] = useState<Record<string, EmbeddingModel[]>>({})
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+
+  // UI states
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
 
+  // Async operations
+  const {
+    loading: initialLoading,
+    error: loadError,
+    execute: executeLoad,
+  } = useAsyncOperation<void>()
+
+  const {
+    loading: formLoading,
+    error: formError,
+    execute: executeFormSubmit,
+    clearError: clearFormError,
+  } = useAsyncOperation<void>()
+
+  const {
+    loading: deleteLoading,
+    error: deleteError,
+    execute: executeDelete,
+    clearError: clearDeleteError,
+  } = useAsyncOperation<void>()
+
   // Form state
-  const [formData, setFormData] = useState({
+  const form = useFormState({
     name: '',
     provider: 'OPENAI' as 'OPENAI' | 'OLLAMA',
     apiKeyId: '',
@@ -62,183 +93,174 @@ export default function EmbeddingProfilesTab() {
     dimensions: '',
     isDefault: false,
   })
-  const [formLoading, setFormLoading] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
 
+  // Load initial data
   useEffect(() => {
-    fetchProfiles()
-    fetchApiKeys()
-    fetchModels()
-  }, [])
+    const loadData = async () => {
+      clientLogger.debug('Loading embedding profiles tab data')
+      await executeLoad(async () => {
+        const [profilesRes, keysRes, modelsRes] = await Promise.all([
+          fetchJson<EmbeddingProfile[]>('/api/embedding-profiles'),
+          fetchJson<ApiKey[]>('/api/keys'),
+          fetchJson<Record<string, EmbeddingModel[]>>('/api/embedding-profiles/models'),
+        ])
+
+        if (!profilesRes.ok) {
+          throw new Error(profilesRes.error || 'Failed to fetch profiles')
+        }
+        if (!keysRes.ok) {
+          clientLogger.error('Failed to fetch API keys', { error: keysRes.error })
+        } else if (keysRes.data) {
+          setApiKeys(keysRes.data)
+        }
+        if (!modelsRes.ok) {
+          clientLogger.error('Failed to fetch embedding models', { error: modelsRes.error })
+        } else if (modelsRes.data) {
+          setEmbeddingModels(modelsRes.data)
+        }
+
+        if (profilesRes.data) {
+          setProfiles(profilesRes.data)
+        }
+      })
+    }
+
+    loadData()
+  }, [executeLoad])
 
   const fetchProfiles = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await fetch('/api/embedding-profiles')
-      if (!res.ok) throw new Error('Failed to fetch profiles')
-      const data = await res.json()
-      setProfiles(data)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
+    clientLogger.debug('Fetching embedding profiles')
+    const result = await fetchJson<EmbeddingProfile[]>('/api/embedding-profiles')
+    if (!result.ok) {
+      throw new Error(result.error || 'Failed to fetch profiles')
     }
-  }
-
-  const fetchApiKeys = async () => {
-    try {
-      const res = await fetch('/api/keys')
-      if (!res.ok) throw new Error('Failed to fetch API keys')
-      const data = await res.json()
-      setApiKeys(data)
-    } catch (err) {
-      clientLogger.error('Failed to fetch API keys', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }
-
-  const fetchModels = async () => {
-    try {
-      const res = await fetch('/api/embedding-profiles/models')
-      if (!res.ok) throw new Error('Failed to fetch models')
-      const data = await res.json()
-      setEmbeddingModels(data)
-    } catch (err) {
-      clientLogger.error('Failed to fetch embedding models', { error: err instanceof Error ? err.message : String(err) })
+    if (result.data) {
+      setProfiles(result.data)
     }
   }
 
   const handleDelete = async (id: string) => {
-    try {
-      const res = await fetch(`/api/embedding-profiles/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete profile')
+    clientLogger.debug('Deleting embedding profile', { profileId: id })
+    await executeDelete(async () => {
+      const result = await fetchJson('/api/embedding-profiles/' + id, { method: 'DELETE' })
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to delete profile')
+      }
       await fetchProfiles()
       setDeleteConfirming(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    }
+    })
   }
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setFormLoading(true)
-    setFormError(null)
+    clientLogger.debug('Submitting embedding profile form', { isEditing: !!editingId })
 
-    try {
+    await executeFormSubmit(async () => {
       const payload = {
-        name: formData.name,
-        provider: formData.provider,
-        apiKeyId: formData.apiKeyId || undefined,
-        baseUrl: formData.baseUrl || undefined,
-        modelName: formData.modelName,
-        dimensions: formData.dimensions ? parseInt(formData.dimensions) : undefined,
-        isDefault: formData.isDefault,
+        name: form.formData.name,
+        provider: form.formData.provider,
+        apiKeyId: form.formData.apiKeyId || undefined,
+        baseUrl: form.formData.baseUrl || undefined,
+        modelName: form.formData.modelName,
+        dimensions: form.formData.dimensions ? parseInt(form.formData.dimensions) : undefined,
+        isDefault: form.formData.isDefault,
       }
 
       const url = editingId ? `/api/embedding-profiles/${editingId}` : '/api/embedding-profiles'
       const method = editingId ? 'PUT' : 'POST'
 
-      const res = await fetch(url, {
+      const result = await fetchJson(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
 
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to save profile')
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to save profile')
       }
 
       await fetchProfiles()
       handleFormCancel()
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setFormLoading(false)
-    }
+    })
   }
 
   const handleFormCancel = () => {
+    clientLogger.debug('Cancelling form')
     setShowForm(false)
     setEditingId(null)
-    setFormData({
-      name: '',
-      provider: 'OPENAI',
-      apiKeyId: '',
-      baseUrl: '',
-      modelName: '',
-      dimensions: '',
-      isDefault: false,
-    })
-    setFormError(null)
+    form.resetForm()
+    clearFormError()
   }
 
   const handleEdit = (profile: EmbeddingProfile) => {
+    clientLogger.debug('Editing profile', { profileId: profile.id })
     setEditingId(profile.id)
-    setFormData({
-      name: profile.name,
-      provider: profile.provider,
-      apiKeyId: profile.apiKeyId || '',
-      baseUrl: profile.baseUrl || '',
-      modelName: profile.modelName,
-      dimensions: profile.dimensions?.toString() || '',
-      isDefault: profile.isDefault,
-    })
+    form.setField('name', profile.name)
+    form.setField('provider', profile.provider)
+    form.setField('apiKeyId', profile.apiKeyId || '')
+    form.setField('baseUrl', profile.baseUrl || '')
+    form.setField('modelName', profile.modelName)
+    form.setField('dimensions', profile.dimensions?.toString() || '')
+    form.setField('isDefault', profile.isDefault)
   }
 
   const handleModelSelect = (modelId: string) => {
-    setFormData(prev => ({ ...prev, modelName: modelId }))
+    form.setField('modelName', modelId)
     // Auto-fill dimensions if we know them
-    const models = embeddingModels[formData.provider] || []
+    const models = embeddingModels[form.formData.provider] || []
     const model = models.find(m => m.id === modelId)
     if (model) {
-      setFormData(prev => ({ ...prev, dimensions: model.dimensions.toString() }))
+      form.setField('dimensions', model.dimensions.toString())
     }
   }
 
   // Filter API keys for selected provider
   const filteredApiKeys = apiKeys.filter(key => {
-    if (formData.provider === 'OPENAI') return key.provider === 'OPENAI'
-    if (formData.provider === 'OLLAMA') return key.provider === 'OLLAMA'
+    if (form.formData.provider === 'OPENAI') return key.provider === 'OPENAI'
+    if (form.formData.provider === 'OLLAMA') return key.provider === 'OLLAMA'
     return false
   })
 
-  const currentModels = embeddingModels[formData.provider] || []
+  const currentModels = embeddingModels[form.formData.provider] || []
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-8">
-        <div className="text-muted-foreground">Loading embedding profiles...</div>
-      </div>
-    )
+  // Show loading state during initial load
+  if (initialLoading) {
+    return <LoadingState message="Loading embedding profiles..." />
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Embedding Profiles</h2>
-          <p className="qt-text-small mt-1">
-            Manage text embedding connections for semantic search (OpenAI or Ollama)
-          </p>
-        </div>
-        {!showForm && !editingId && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            New Profile
-          </button>
-        )}
+      {/* Header with description and action */}
+      <div>
+        <SectionHeader
+          title="Embedding Profiles"
+          level="h2"
+          action={
+            !showForm && !editingId
+              ? {
+                  label: 'New Profile',
+                  onClick: () => {
+                    clientLogger.debug('Opening new profile form')
+                    setShowForm(true)
+                  },
+                }
+              : undefined
+          }
+        />
+        <p className="qt-text-small text-muted-foreground">
+          Manage text embedding connections for semantic search (OpenAI or Ollama)
+        </p>
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <div className="qt-alert-error">
-          {error}
-        </div>
+      {/* Load error alert */}
+      {loadError && (
+        <ErrorAlert
+          message={loadError}
+          onRetry={() => {
+            clientLogger.debug('Retrying load')
+            window.location.reload()
+          }}
+        />
       )}
 
       {/* Form */}
@@ -249,9 +271,7 @@ export default function EmbeddingProfilesTab() {
           </h3>
 
           {formError && (
-            <div className="mb-4 qt-alert-error">
-              {formError}
-            </div>
+            <ErrorAlert message={formError} className="mb-4" />
           )}
 
           <form onSubmit={handleFormSubmit} className="space-y-4">
@@ -262,8 +282,9 @@ export default function EmbeddingProfilesTab() {
               </label>
               <input
                 type="text"
-                value={formData.name}
-                onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                name="name"
+                value={form.formData.name}
+                onChange={form.handleChange}
                 className="qt-input"
                 placeholder="My OpenAI Embeddings"
                 required
@@ -276,8 +297,14 @@ export default function EmbeddingProfilesTab() {
                 Provider
               </label>
               <select
-                value={formData.provider}
-                onChange={e => setFormData(prev => ({ ...prev, provider: e.target.value as 'OPENAI' | 'OLLAMA', apiKeyId: '', modelName: '', dimensions: '' }))}
+                name="provider"
+                value={form.formData.provider}
+                onChange={(e) => {
+                  form.handleChange(e)
+                  form.setField('apiKeyId', '')
+                  form.setField('modelName', '')
+                  form.setField('dimensions', '')
+                }}
                 className="qt-select"
               >
                 <option value="OPENAI">OpenAI</option>
@@ -286,14 +313,15 @@ export default function EmbeddingProfilesTab() {
             </div>
 
             {/* API Key (for OpenAI) */}
-            {formData.provider === 'OPENAI' && (
+            {form.formData.provider === 'OPENAI' && (
               <div>
                 <label className="qt-label mb-1">
                   API Key
                 </label>
                 <select
-                  value={formData.apiKeyId}
-                  onChange={e => setFormData(prev => ({ ...prev, apiKeyId: e.target.value }))}
+                  name="apiKeyId"
+                  value={form.formData.apiKeyId}
+                  onChange={form.handleChange}
                   className="qt-select"
                 >
                   <option value="">Select API Key...</option>
@@ -312,15 +340,16 @@ export default function EmbeddingProfilesTab() {
             )}
 
             {/* Base URL (for Ollama) */}
-            {formData.provider === 'OLLAMA' && (
+            {form.formData.provider === 'OLLAMA' && (
               <div>
                 <label className="qt-label mb-1">
                   Base URL
                 </label>
                 <input
                   type="text"
-                  value={formData.baseUrl}
-                  onChange={e => setFormData(prev => ({ ...prev, baseUrl: e.target.value }))}
+                  name="baseUrl"
+                  value={form.formData.baseUrl}
+                  onChange={form.handleChange}
                   className="qt-input"
                   placeholder="http://localhost:11434"
                 />
@@ -338,7 +367,7 @@ export default function EmbeddingProfilesTab() {
               {currentModels.length > 0 ? (
                 <div className="space-y-2">
                   <select
-                    value={formData.modelName}
+                    value={form.formData.modelName}
                     onChange={e => handleModelSelect(e.target.value)}
                     className="qt-select"
                   >
@@ -349,17 +378,18 @@ export default function EmbeddingProfilesTab() {
                       </option>
                     ))}
                   </select>
-                  {formData.modelName && (
+                  {form.formData.modelName && (
                     <p className="qt-text-xs">
-                      {currentModels.find(m => m.id === formData.modelName)?.description}
+                      {currentModels.find(m => m.id === form.formData.modelName)?.description}
                     </p>
                   )}
                 </div>
               ) : (
                 <input
                   type="text"
-                  value={formData.modelName}
-                  onChange={e => setFormData(prev => ({ ...prev, modelName: e.target.value }))}
+                  name="modelName"
+                  value={form.formData.modelName}
+                  onChange={form.handleChange}
                   className="qt-input"
                   placeholder="text-embedding-3-small"
                   required
@@ -373,9 +403,10 @@ export default function EmbeddingProfilesTab() {
                 Dimensions (optional)
               </label>
               <input
-                type="number"
-                value={formData.dimensions}
-                onChange={e => setFormData(prev => ({ ...prev, dimensions: e.target.value }))}
+                type="text"
+                name="dimensions"
+                value={form.formData.dimensions}
+                onChange={form.handleChange}
                 className="qt-input"
                 placeholder="1536"
                 min="1"
@@ -390,8 +421,9 @@ export default function EmbeddingProfilesTab() {
               <input
                 type="checkbox"
                 id="isDefault"
-                checked={formData.isDefault}
-                onChange={e => setFormData(prev => ({ ...prev, isDefault: e.target.checked }))}
+                name="isDefault"
+                checked={form.formData.isDefault}
+                onChange={form.handleChange}
                 className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
               />
               <label htmlFor="isDefault" className="ml-2 block qt-text-label text-foreground">
@@ -399,43 +431,42 @@ export default function EmbeddingProfilesTab() {
               </label>
             </div>
 
-            {/* Buttons */}
-            <div className="flex gap-3 pt-4">
-              <button
+            {/* Form Actions */}
+            <div className="pt-4">
+              <FormActions
+                onCancel={handleFormCancel}
+                submitLabel={editingId ? 'Update Profile' : 'Create Profile'}
+                isLoading={formLoading}
                 type="submit"
-                disabled={formLoading}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-              >
-                {formLoading ? 'Saving...' : editingId ? 'Update Profile' : 'Create Profile'}
-              </button>
-              <button
-                type="button"
-                onClick={handleFormCancel}
-                className="px-4 py-2 bg-muted text-foreground rounded-md hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                Cancel
-              </button>
+              />
             </div>
           </form>
         </div>
+      )}
+
+      {/* Delete operation error */}
+      {deleteError && (
+        <ErrorAlert
+          message={deleteError}
+          onRetry={clearDeleteError}
+        />
       )}
 
       {/* Profiles List */}
       {!showForm && !editingId && (
         <div className="space-y-3">
           {profiles.length === 0 ? (
-            <div className="text-center py-8 bg-muted rounded-lg border border-border">
-              <p className="text-muted-foreground mb-2">No embedding profiles yet</p>
-              <p className="qt-text-small mb-4">
-                Embedding profiles are used for semantic search in memories
-              </p>
-              <button
-                onClick={() => setShowForm(true)}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                Create First Profile
-              </button>
-            </div>
+            <EmptyState
+              title="No embedding profiles yet"
+              description="Embedding profiles are used for semantic search in memories"
+              action={{
+                label: 'Create First Profile',
+                onClick: () => {
+                  clientLogger.debug('Creating first profile')
+                  setShowForm(true)
+                },
+              }}
+            />
           ) : (
             profiles.toSorted((a, b) => a.name.localeCompare(b.name)).map(profile => (
               <div
@@ -496,25 +527,13 @@ export default function EmbeddingProfilesTab() {
                       </button>
 
                       {/* Delete Confirmation Popover */}
-                      {deleteConfirming === profile.id && (
-                        <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg p-3 whitespace-nowrap z-10">
-                          <p className="text-sm text-foreground mb-2">Delete this profile?</p>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setDeleteConfirming(null)}
-                              className="px-2 py-1 text-xs bg-muted text-foreground hover:bg-accent rounded focus:outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => handleDelete(profile.id)}
-                              className="px-2 py-1 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded focus:outline-none focus:ring-2 focus:ring-destructive"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      <DeleteConfirmPopover
+                        isOpen={deleteConfirming === profile.id}
+                        onCancel={() => setDeleteConfirming(null)}
+                        onConfirm={() => handleDelete(profile.id)}
+                        message="Delete this profile?"
+                        isDeleting={deleteLoading}
+                      />
                     </div>
                   </div>
                 </div>
