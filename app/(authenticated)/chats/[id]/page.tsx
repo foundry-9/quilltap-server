@@ -1091,11 +1091,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               // Only log if it's a real parse error, not noise from SSE chunking
               // Note: rawData is already trimmed and we've skipped empty/[DONE]/{} before try block
               const errorMessage = getErrorMessage(parseError)
-              // Skip logging for generic stringified objects or empty error messages
+              // Skip logging for generic stringified objects, empty error messages,
+              // or errors that look like empty JSON objects (various SSE chunk artifacts)
+              const trimmedError = errorMessage.trim()
+              const trimmedRaw = rawData.trim()
               const shouldSkip = !errorMessage ||
-                errorMessage === 'undefined' ||
-                errorMessage === '[object Object]' ||
-                errorMessage === '{}'
+                !trimmedError ||
+                trimmedError === 'undefined' ||
+                trimmedError === '[object Object]' ||
+                trimmedError === '{}' ||
+                trimmedError === '{ }' ||
+                /^\{\s*\}$/.test(trimmedError) ||
+                // Also skip if the raw data itself is empty-ish (shouldn't happen but defensive)
+                !trimmedRaw ||
+                trimmedRaw === '{}' ||
+                /^\{\s*\}$/.test(trimmedRaw)
               if (!shouldSkip) {
                 clientLogger.error('Failed to parse SSE data:', { error: errorMessage, raw: rawData.substring(0, 100) })
               }

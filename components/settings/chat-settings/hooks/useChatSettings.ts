@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import {
   ChatSettings,
   ConnectionProfile,
@@ -36,6 +37,9 @@ export function useChatSettings(): UseChatSettingsReturn {
   const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
   const [embeddingProfiles, setEmbeddingProfiles] = useState<EmbeddingProfile[]>([])
   const [loadingProfiles, setLoadingProfiles] = useState(false)
+
+  // Get the avatar display context updater to sync style changes globally
+  const { syncAvatarDisplayStyle } = useAvatarDisplay()
 
   /**
    * Fetch chat settings from the API
@@ -180,6 +184,11 @@ export function useChatSettings(): UseChatSettingsReturn {
         const updatedSettings = await res.json()
         clientLogger.info('Avatar display style updated successfully', { style })
         setSettings(updatedSettings)
+
+        // Sync the style to the global AvatarDisplayProvider context
+        // This ensures all Avatar components re-render with the new style
+        syncAvatarDisplayStyle(style)
+
         showSuccess()
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'An error occurred'
@@ -189,7 +198,7 @@ export function useChatSettings(): UseChatSettingsReturn {
         setSaving(false)
       }
     },
-    [settings, showSuccess]
+    [settings, showSuccess, syncAvatarDisplayStyle]
   )
 
   /**

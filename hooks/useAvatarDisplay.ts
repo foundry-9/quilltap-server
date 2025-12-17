@@ -18,6 +18,7 @@ export function useAvatarDisplay() {
     loading: ctx.loading,
     error: ctx.error,
     updateAvatarDisplayStyle: ctx.updateStyle,
+    syncAvatarDisplayStyle: ctx.syncStyle,
   }
 }
 
@@ -30,6 +31,7 @@ export function useAvatarDisplayOptional(): {
   loading: boolean
   error: string | null
   updateAvatarDisplayStyle: ((newStyle: AvatarDisplayStyle) => Promise<void>) | null
+  syncAvatarDisplayStyle: ((newStyle: AvatarDisplayStyle) => void) | null
 } {
   const ctx = useAvatarDisplayContextOptional()
 
@@ -39,6 +41,7 @@ export function useAvatarDisplayOptional(): {
       loading: false,
       error: null,
       updateAvatarDisplayStyle: null,
+      syncAvatarDisplayStyle: null,
     }
   }
 
@@ -47,5 +50,6 @@ export function useAvatarDisplayOptional(): {
     loading: ctx.loading,
     error: ctx.error,
     updateAvatarDisplayStyle: ctx.updateStyle,
+    syncAvatarDisplayStyle: ctx.syncStyle,
   }
 }

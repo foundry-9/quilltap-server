@@ -4,6 +4,13 @@
 
 ### 2.4-dev
 
+- fix: Avatar style change not applied until page refresh
+  - Settings page was updating API but not syncing to AvatarDisplayProvider context
+  - Added syncStyle function to AvatarDisplayProvider for local-only state updates
+  - useChatSettings now syncs the style to the global context after API update
+- fix: Suppress noisy "Failed to parse SSE data: {}" console errors
+  - Added more robust filtering for empty object SSE artifacts in chat streaming
+  - Now handles various whitespace variations and empty-ish JSON patterns
 - fix: Physical Descriptions tab API loop bug
   - Clicking Physical Descriptions tab on character view or Settings → NPCs repeatedly hit the API in infinite loop
   - Fixed by using refs in useListManager hook to prevent fetchFn recreation causing infinite loop

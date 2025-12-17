@@ -24,6 +24,8 @@ interface AvatarDisplayContextValue {
   error: string | null
   /** Update the avatar display style (persists to API) */
   updateStyle: (newStyle: AvatarDisplayStyle) => Promise<void>
+  /** Sync the avatar display style locally (does not call API - for use when API was already called elsewhere) */
+  syncStyle: (newStyle: AvatarDisplayStyle) => void
 }
 
 const AvatarDisplayContext = createContext<AvatarDisplayContextValue | null>(null)
@@ -112,6 +114,15 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
     fetchAvatarDisplayStyle()
   }, [])
 
+  // Sync style locally without API call (used when API was already called elsewhere)
+  const syncStyle = useCallback((newStyle: AvatarDisplayStyle) => {
+    clientLogger.debug('AvatarDisplayProvider: Syncing avatar display style locally', {
+      from: style,
+      to: newStyle
+    })
+    setStyle(newStyle)
+  }, [style])
+
   const updateStyle = useCallback(async (newStyle: AvatarDisplayStyle) => {
     const previousStyle = style
     try {
@@ -178,8 +189,9 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
       loading,
       error,
       updateStyle,
+      syncStyle,
     }),
-    [style, loading, error, updateStyle]
+    [style, loading, error, updateStyle, syncStyle]
   )
 
   return (
