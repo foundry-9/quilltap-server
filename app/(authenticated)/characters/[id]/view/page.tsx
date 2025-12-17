@@ -20,7 +20,7 @@ import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { MemoryList } from '@/components/memory/memory-list'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
-import { TemplateHighlighter, countTemplateReplacements, replaceWithTemplate } from '@/components/characters/TemplateHighlighter'
+import { TemplateHighlighter, TemplateDisplay, countTemplateReplacements, replaceWithTemplate } from '@/components/characters/TemplateHighlighter'
 
 interface Tag {
   id: string
@@ -597,11 +597,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                     )}
                   </h2>
                   <div className="qt-text-small">
-                    <TemplateHighlighter
+                    <TemplateDisplay
                       content={character.description}
                       characterName={character.name}
                       personaName={defaultPersonaName}
-                      showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
                     />
                   </div>
                 </div>
@@ -618,11 +617,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                     )}
                   </h2>
                   <div className="qt-text-small">
-                    <TemplateHighlighter
+                    <TemplateDisplay
                       content={character.personality}
                       characterName={character.name}
                       personaName={defaultPersonaName}
-                      showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
                     />
                   </div>
                 </div>
@@ -639,11 +637,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                     )}
                   </h2>
                   <div className="qt-text-small">
-                    <TemplateHighlighter
+                    <TemplateDisplay
                       content={character.scenario}
                       characterName={character.name}
                       personaName={defaultPersonaName}
-                      showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
                     />
                   </div>
                 </div>
@@ -660,11 +657,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                     )}
                   </h2>
                   <div className="qt-text-small">
-                    <TemplateHighlighter
+                    <TemplateDisplay
                       content={character.firstMessage}
                       characterName={character.name}
                       personaName={defaultPersonaName}
-                      showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
                     />
                   </div>
                 </div>
@@ -681,11 +677,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                     )}
                   </h2>
                   <div className="qt-text-small">
-                    <TemplateHighlighter
+                    <TemplateDisplay
                       content={character.exampleDialogues}
                       characterName={character.name}
                       personaName={defaultPersonaName}
-                      showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
                     />
                   </div>
                 </div>
@@ -766,11 +761,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                     </div>
                     <pre className="overflow-hidden rounded-md bg-muted/80 p-4 text-sm text-foreground">
                       <code className="text-sm whitespace-pre-wrap break-words">
-                        <TemplateHighlighter
+                        <TemplateDisplay
                           content={prompt.content}
                           characterName={character.name}
                           personaName={defaultPersonaName}
-                          showHighlights={templateCounts.charCount > 0 || templateCounts.userCount > 0}
                         />
                       </code>
                     </pre>

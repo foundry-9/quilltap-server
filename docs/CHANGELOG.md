@@ -4,6 +4,12 @@
 
 ### 2.4-dev
 
+- feat: Enhanced template display in character view mode
+  - Added `TemplateDisplay` component combining template replacement with hard-coded name detection
+  - `{{char}}` templates are replaced with character name (blue highlight, solid border)
+  - `{{user}}` templates are replaced with persona name or "USER" (green highlight, solid border)
+  - Hard-coded character/persona names are highlighted in amber/orange with dashed borders as warnings
+  - Keeps the auto-replace buttons to convert hard-coded names to template variables
 - refactor: Consolidate tab button styling into qt-tab utility classes
   - Added CSS variables to `_variables.css`: `--qt-tab-*` for padding, colors, radius, transitions
   - Added `qt-tab`, `qt-tab-active`, `qt-tab-group`, `qt-tab-divider`, `qt-tab-icon` classes to `_interactive.css`
