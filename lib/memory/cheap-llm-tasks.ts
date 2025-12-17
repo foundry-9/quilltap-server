@@ -650,11 +650,10 @@ const CHAT_TITLE_CONSIDERATION_PROMPT = `You are a chat title evaluator. You wil
 2. A previous summary or title (if available)
 3. Recent messages from the chat
 
-Determine if the conversation has shifted topic significantly enough to warrant a new title.
-Consider:
-- Is the current title still accurate?
-- Has the main topic or focus changed?
-- Are they discussing something substantially different now?
+Determine if the chat needs a new title. Consider:
+- If the current title is generic (like "Chat with [Name]" or "New Chat"), it SHOULD be replaced with a descriptive title based on what the conversation is actually about
+- If the title is already descriptive, only suggest a change if the main topic has shifted significantly
+- A good title captures the essence of the conversation in a few words
 
 Respond with a JSON object:
 {

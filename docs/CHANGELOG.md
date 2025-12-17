@@ -4,6 +4,7 @@
 
 ### 2.4-dev
 
+- fix: Chat gradual renaming now properly replaces generic titles like "Chat with [Name]"
 - fix: Restore sendMessage functionality after refactor (chat send button/enter key not working)
 - fix: Remove duplicate avatar display during waiting-for-response state
 - fix: Textarea auto-resize now properly shrinks when deleting content
