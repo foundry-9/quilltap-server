@@ -4,6 +4,11 @@
 
 ### 2.4-dev
 
+- fix: Improved SSE error handling for cleaner error messages
+  - Server now properly formats Zod validation errors (e.g., from provider SDKs)
+  - Client now shows full error details in toast messages instead of truncated JSON
+  - Suppressed noisy parse error logs for server-side error messages
+  - Added error handling for continue mode SSE streaming
 - fix: Avatar style change not applied until page refresh
   - Settings page was updating API but not syncing to AvatarDisplayProvider context
   - Added syncStyle function to AvatarDisplayProvider for local-only state updates

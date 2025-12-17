@@ -1361,11 +1361,31 @@ export async function POST(
           }
         } catch (error) {
           logger.error('Streaming error:', {}, error as Error)
+
+          // Format error message appropriately based on error type
+          let errorMessage = 'Unknown error'
+          let errorType = 'unknown'
+
+          if (error instanceof z.ZodError) {
+            // Zod validation errors (e.g., from provider SDK parsing)
+            // Extract the first error for a cleaner message
+            const firstError = error.errors[0]
+            errorMessage = firstError
+              ? `Validation error: ${firstError.message} at ${firstError.path.join('.')}`
+              : 'Response validation failed'
+            errorType = 'validation'
+            logger.debug('Zod validation error details:', { errors: error.errors })
+          } else if (error instanceof Error) {
+            errorMessage = error.message
+            errorType = error.name
+          }
+
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
                 error: 'Failed to generate response',
-                details: error instanceof Error ? error.message : 'Unknown error',
+                errorType,
+                details: errorMessage,
               })}\n\n`
             )
           )

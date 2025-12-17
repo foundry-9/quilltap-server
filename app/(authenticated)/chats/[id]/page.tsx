@@ -450,6 +450,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setStreamingContent(fullContent)
               }
 
+              if (data.error) {
+                // Include details in error message if available
+                const errorMsg = data.details
+                  ? `${data.error}: ${data.details}`
+                  : data.error
+                throw new Error(errorMsg)
+              }
+
               if (data.done) {
                 if (fullContent.trim()) {
                   const newMessage: Message = {
@@ -470,8 +478,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   clientLogger.debug('[Chat] Turn info from continue mode', data.turn)
                 }
               }
-            } catch {
-              // Ignore parse errors
+            } catch (parseError) {
+              // Rethrow actual errors (from data.error), ignore JSON parse errors
+              if (parseError instanceof Error && !parseError.message.includes('JSON')) {
+                throw parseError
+              }
+              // Ignore JSON parse errors (SSE chunking artifacts)
             }
           }
         }
@@ -1085,7 +1097,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               }
 
               if (data.error) {
-                throw new Error(data.error)
+                // Include details in error message if available
+                const errorMsg = data.details
+                  ? `${data.error}: ${data.details}`
+                  : data.error
+                throw new Error(errorMsg)
               }
             } catch (parseError) {
               // Only log if it's a real parse error, not noise from SSE chunking
@@ -1105,9 +1121,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 // Also skip if the raw data itself is empty-ish (shouldn't happen but defensive)
                 !trimmedRaw ||
                 trimmedRaw === '{}' ||
-                /^\{\s*\}$/.test(trimmedRaw)
+                /^\{\s*\}$/.test(trimmedRaw) ||
+                // Skip if it's a server-side error message (already logged on server)
+                trimmedRaw.includes('"error":')
               if (!shouldSkip) {
-                clientLogger.error('Failed to parse SSE data:', { error: errorMessage, raw: rawData.substring(0, 100) })
+                clientLogger.debug('SSE parse issue (may be chunking artifact):', { rawLength: rawData.length })
               }
             }
           }
