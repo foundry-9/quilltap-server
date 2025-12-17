@@ -4,6 +4,12 @@
 
 ### 2.4-dev
 
+- refactor: Consolidated avatar rendering into reusable components
+  - Created `components/ui/Avatar.tsx` - unified avatar component with size/style variants
+  - Created `components/ui/AvatarStack.tsx` - stacked avatar display for multi-character contexts
+  - Removed ~200 lines of duplicated avatar rendering code across 6 files
+  - Components automatically respect user's circular/rectangular avatar style preference
+  - Supports image source extraction from defaultImage, avatarUrl, or direct URL
 - fix: SillyTavern chat export now produces proper JSONL format
   - Export now outputs true JSONL (one JSON object per line) matching SillyTavern's format
   - First line contains header with user_name, character_name, create_date, chat_metadata
@@ -195,7 +201,6 @@
 - feat: Add About page with project info, links, and tech stack; simplify footer to version and copyright
 - fix: Robust error extraction in useAvatarDisplay hook - handles unusual error types and logs error type for debugging
 - feat: Responsive navbar with dynamic collapse - menu items collapse into logo dropdown when space is limited
-- New development checkpoint
 
 ### 2.3
 

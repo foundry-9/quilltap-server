@@ -15,6 +15,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import Avatar from '@/components/ui/Avatar'
 
 interface CharacterOption {
   id: string
@@ -240,14 +241,6 @@ export default function AddCharacterDialog({
     }
   }
 
-  const getAvatarSrc = (character: CharacterOption) => {
-    if (character.defaultImage) {
-      const filepath = character.defaultImage.url || character.defaultImage.filepath
-      return filepath.startsWith('/') ? filepath : `/${filepath}`
-    }
-    return character.avatarUrl || null
-  }
-
   if (!isOpen) return null
 
   return (
@@ -308,7 +301,6 @@ export default function AddCharacterDialog({
                     </div>
                   ) : (
                     availableCharacters.map((character) => {
-                      const avatarSrc = getAvatarSrc(character)
                       const isSelected = selectedCharacterId === character.id
 
                       return (
@@ -327,23 +319,12 @@ export default function AddCharacterDialog({
                         >
                           <div className="flex items-center gap-3">
                             {/* Avatar */}
-                            <div
-                              className="w-12 h-15 rounded overflow-hidden bg-muted flex items-center justify-center flex-shrink-0"
-                              style={{ width: '48px', height: '60px' }}
-                            >
-                              {avatarSrc ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={avatarSrc}
-                                  alt={character.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <span className="text-lg font-bold text-muted-foreground">
-                                  {character.name.charAt(0).toUpperCase()}
-                                </span>
-                              )}
-                            </div>
+                            <Avatar
+                              name={character.name}
+                              src={character}
+                              size="md"
+                              styleOverride="RECTANGULAR"
+                            />
 
                             {/* Info */}
                             <div className="min-w-0 flex-1">

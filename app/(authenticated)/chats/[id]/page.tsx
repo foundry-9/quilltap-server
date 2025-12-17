@@ -25,6 +25,7 @@ import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import { useDebugOptional } from '@/components/providers/debug-provider'
 import type { TagVisualStyle } from '@/lib/schemas/types'
 import { useChatContext } from '@/components/providers/chat-context'
@@ -1831,15 +1832,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return null
   }
 
-  const getAvatarSrc = (avatar: ReturnType<typeof getMessageAvatar>) => {
-    if (!avatar) return null
-    if (avatar.defaultImage) {
-      const filepath = avatar.defaultImage.url || avatar.defaultImage.filepath;
-      return filepath.startsWith('/') ? filepath : `/${filepath}`;
-    }
-    return avatar.avatarUrl || null
-  }
-
   // Strip [Attached: ...] from message content for display
   const getDisplayContent = (content: string) => {
     return content.replace(/\n?\[Attached: [^\]]+\]$/, '').trim()
@@ -1850,52 +1842,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return (message.attachments || []).filter(a => a.mimeType.startsWith('image/'))
   }
 
-  const renderAvatar = (avatar: ReturnType<typeof getMessageAvatar>) => {
-    if (!avatar) return null
-
-    const avatarSrc = getAvatarSrc(avatar)
-    // 4:5 ratio: width 100px = height 125px, max height 200px = width 160px
-    // Using width 120px and height 150px as a good balance
-    const avatarWidth = 120
-    const avatarHeight = 150
-
-    return (
-      <div className="flex flex-col items-center flex-shrink-0 w-32 gap-1">
-        <div
-          className="bg-muted flex items-center justify-center overflow-hidden"
-          style={{
-            width: `${avatarWidth}px`,
-            height: `${avatarHeight}px`,
-          }}
-        >
-          {avatarSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatarSrc}
-              alt={avatar.name}
-              width={avatarWidth}
-              height={avatarHeight}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <span className="text-4xl font-bold text-muted-foreground">
-              {avatar.name.charAt(0).toUpperCase()}
-            </span>
-          )}
-        </div>
-        <div className="text-center">
-          <div className="text-sm font-semibold text-foreground line-clamp-2">
-            {avatar.name}
-          </div>
-          {avatar.title && (
-            <div className="text-xs italic text-muted-foreground line-clamp-2">
-              {avatar.title}
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
 
   if (awaitingTagInfo) {
     return (
@@ -1976,9 +1922,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             className={messageRowClasses.join(' ')}
           >
               {/* Desktop avatar - assistant (left side) */}
-              {message.role === 'ASSISTANT' && shouldShowAvatars() && (
+              {message.role === 'ASSISTANT' && shouldShowAvatars() && messageAvatar && (
                 <div className="flex-shrink-0 qt-chat-desktop-avatar">
-                  {renderAvatar(messageAvatar)}
+                  <Avatar
+                    name={messageAvatar.name}
+                    title={messageAvatar.title}
+                    src={messageAvatar}
+                    size="chat"
+                    showName
+                    showTitle
+                    className="flex flex-col items-center w-32 gap-1"
+                  />
                 </div>
               )}
             <div className="qt-chat-message-body group">
@@ -2411,9 +2365,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 )}
               </div>
               {/* Desktop avatar - user (right side) */}
-              {message.role === 'USER' && shouldShowAvatars() && (
+              {message.role === 'USER' && shouldShowAvatars() && messageAvatar && (
                 <div className="flex-shrink-0 qt-chat-desktop-avatar">
-                  {renderAvatar(messageAvatar)}
+                  <Avatar
+                    name={messageAvatar.name}
+                    title={messageAvatar.title}
+                    src={messageAvatar}
+                    size="chat"
+                    showName
+                    showTitle
+                    className="flex flex-col items-center w-32 gap-1"
+                  />
                 </div>
               )}
             </div>
@@ -2425,12 +2387,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           <div className="qt-chat-message-row qt-chat-message-row-assistant items-center">
             {shouldShowAvatars() && (
               <div className="flex-shrink-0 qt-chat-desktop-avatar">
-                {renderAvatar({
-                  name: getRespondingCharacter()?.name || 'AI',
-                  title: null,
-                  avatarUrl: getRespondingCharacter()?.avatarUrl,
-                  defaultImage: getRespondingCharacter()?.defaultImage,
-                })}
+                <Avatar
+                  name={getRespondingCharacter()?.name || 'AI'}
+                  title={null}
+                  src={getRespondingCharacter()}
+                  size="chat"
+                  showName
+                  showTitle
+                  className="flex flex-col items-center w-32 gap-1"
+                />
               </div>
             )}
             <div className="qt-chat-message-body">
@@ -2536,12 +2501,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           <div className="qt-chat-message-row qt-chat-message-row-assistant">
             {shouldShowAvatars() && (
               <div className="flex-shrink-0 qt-chat-desktop-avatar">
-                {renderAvatar({
-                  name: getRespondingCharacter()?.name || 'AI',
-                  title: null,
-                  avatarUrl: getRespondingCharacter()?.avatarUrl,
-                  defaultImage: getRespondingCharacter()?.defaultImage,
-                })}
+                <Avatar
+                  name={getRespondingCharacter()?.name || 'AI'}
+                  title={null}
+                  src={getRespondingCharacter()}
+                  size="chat"
+                  showName
+                  showTitle
+                  className="flex flex-col items-center w-32 gap-1"
+                />
               </div>
             )}
             <div className="qt-chat-message-body">

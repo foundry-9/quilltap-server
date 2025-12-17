@@ -6,11 +6,10 @@ import { showConfirmation } from '@/lib/alert'
 import { showErrorToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
 import { TagDisplay } from '@/components/tags/tag-display'
-import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
-import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
+import AvatarStack from '@/components/ui/AvatarStack'
 
 interface ChatParticipant {
   id: string
@@ -68,7 +67,6 @@ export default function ChatsPage() {
   const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([])
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
-  const { style } = useAvatarDisplay()
   const { formatPersonaName } = usePersonaDisplayName()
   const { shouldHideByIds } = useQuickHide()
 
@@ -126,15 +124,6 @@ export default function ChatsPage() {
       p => p.type === 'PERSONA' && p.isActive && p.persona
     )
     return personaParticipant?.persona
-  }
-
-  // Helper to get avatar src for a character
-  const getCharacterAvatarSrc = (character: NonNullable<ChatParticipant['character']>): string | null => {
-    if (character.defaultImage) {
-      const filepath = character.defaultImage.filepath
-      return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
-    }
-    return character.avatarUrl || null
   }
 
   // Helper to format character names for display
@@ -307,108 +296,10 @@ export default function ChatsPage() {
                     const characters = getActiveCharacters(chat)
                     const persona = getFirstPersona(chat)
                     const characterNames = formatCharacterNames(characters)
-                    const isMultiCharacter = characters.length > 1
-
-                    // Render combined avatar for multi-character chats (up to 3)
-                    const renderAvatars = () => {
-                      if (characters.length === 0) {
-                        // Fallback for no characters
-                        return (
-                          <div
-                            className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`}
-                            style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
-                          >
-                            <span className={getAvatarClasses(style, 'lg').fallbackClass}>?</span>
-                          </div>
-                        )
-                      }
-
-                      if (characters.length === 1) {
-                        // Single character - original display
-                        const avatarSrc = getCharacterAvatarSrc(characters[0])
-                        if (avatarSrc) {
-                          return (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={avatarSrc}
-                              alt={characters[0].name}
-                              className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full object-cover flex-shrink-0`}
-                              style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
-                            />
-                          )
-                        }
-                        return (
-                          <div
-                            className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`}
-                            style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
-                          >
-                            <span className={getAvatarClasses(style, 'lg').fallbackClass}>
-                              {characters[0].name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                        )
-                      }
-
-                      // Multi-character: show stacked/overlapping avatars (max 4)
-                      const displayChars = characters.slice(0, 4)
-                      const overlapOffset = style === 'CIRCULAR' ? -12 : -10
-
-                      return (
-                        <div className="flex items-stretch h-full" style={{ marginRight: `${Math.abs(overlapOffset) * (displayChars.length - 1)}px` }}>
-                          {displayChars.map((char, index) => {
-                            const avatarSrc = getCharacterAvatarSrc(char)
-                            const zIndex = displayChars.length - index
-                            const marginLeft = index === 0 ? 0 : overlapOffset
-
-                            if (avatarSrc) {
-                              return (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  key={char.id}
-                                  src={avatarSrc}
-                                  alt={char.name}
-                                  className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full object-cover ring-2 ring-card flex-shrink-0`}
-                                  style={{ zIndex, marginLeft: `${marginLeft}px`, position: 'relative', ...(style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : {}) }}
-                                  title={char.name}
-                                />
-                              )
-                            }
-                            return (
-                              <div
-                                key={char.id}
-                                className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center ring-2 ring-card flex-shrink-0`}
-                                style={{
-                                  zIndex,
-                                  marginLeft: `${marginLeft}px`,
-                                  position: 'relative',
-                                  ...(style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : {})
-                                }}
-                                title={char.name}
-                              >
-                                <span className={getAvatarClasses(style, 'md').fallbackClass}>
-                                  {char.name.charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                            )
-                          })}
-                          {characters.length > 4 && (
-                            <div
-                              className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full bg-muted flex items-center justify-center ring-2 ring-card flex-shrink-0`}
-                              style={{ zIndex: 0, marginLeft: `${overlapOffset}px`, position: 'relative' }}
-                              title={`+${characters.length - 4} more`}
-                            >
-                              <span className="text-sm font-bold text-muted-foreground">
-                                +{characters.length - 4}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    }
 
                     return (
                       <>
-                        {renderAvatars()}
+                        <AvatarStack entities={characters} size="lg" />
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <h2 className="text-xl font-semibold text-foreground">{chat.title}</h2>

@@ -15,6 +15,7 @@
 
 import { useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import Avatar from '@/components/ui/Avatar'
 
 export interface ParticipantData {
   id: string
@@ -99,16 +100,6 @@ export function ParticipantCard({
   const title = entity.title
   const talkativeness = participant.character?.talkativeness ?? 0.5
 
-  // Get avatar source
-  const getAvatarSrc = () => {
-    if (entity.defaultImage) {
-      const filepath = entity.defaultImage.url || entity.defaultImage.filepath
-      return filepath.startsWith('/') ? filepath : `/${filepath}`
-    }
-    return entity.avatarUrl || null
-  }
-
-  const avatarSrc = getAvatarSrc()
 
   // Handle nudge/queue button click
   const handleActionClick = () => {
@@ -185,26 +176,13 @@ export function ParticipantCard({
       <div className="qt-participant-card-header">
         {/* Avatar */}
         <div className="flex-shrink-0">
-          <div
-            className={`
-              qt-participant-card-avatar overflow-hidden bg-muted flex items-center justify-center
-              ${isCurrentTurn ? 'ring-2 ring-primary ring-offset-1 ring-offset-card' : ''}
-            `}
-            style={{ width: '48px', height: '60px', borderRadius: 'var(--radius-md)' }}
-          >
-            {avatarSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarSrc}
-                alt={name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-lg font-bold text-muted-foreground">
-                {name.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
+          <Avatar
+            name={name}
+            src={entity}
+            size="md"
+            isActive={isCurrentTurn}
+            styleOverride="RECTANGULAR"
+          />
         </div>
 
         {/* Info */}

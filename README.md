@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.0--dev.30-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.4.0--dev.31-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -541,9 +541,10 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [ ] Create web-only version that uses IndexedDB for everything
 - [ ] Stop using NextAuth
 - [X] Add in the capability to stop a runaway response
-- [ ] Make the system capable of importing chats that it exports
+- [X] Make the system capable of importing chats that it exports
 - [X] Maintain a settings tab of basic system prompts with suggestions built-in
 - [X] Get rid of any trace of "prisma"
+- [ ] Create a native Quilltap import/export for everything
 
 ## Acknowledgments
 

@@ -1,13 +1,13 @@
 'use client'
 
-import { useMemo, useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { TagDisplay } from '@/components/tags/tag-display'
-import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
-import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { clientLogger } from '@/lib/client-logger'
+import Avatar from '@/components/ui/Avatar'
+import AvatarStack from '@/components/ui/AvatarStack'
 
 interface CharacterInfo {
   id: string
@@ -52,14 +52,6 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
   day: '2-digit',
   timeZone: 'UTC',
 })
-
-function getCharacterAvatarSrc(character: CharacterInfo): string | null {
-  if (character.defaultImage) {
-    const filepath = character.defaultImage.filepath
-    return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
-  }
-  return character.avatarUrl || null
-}
 
 function formatCharacterNames(characters: CharacterInfo[]): string {
   if (characters.length === 0) return 'Unknown'
@@ -106,7 +98,6 @@ function transformApiChatToRecentChat(apiChat: any): RecentChat {
 }
 
 export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionProps) {
-  const { style } = useAvatarDisplay()
   const { formatPersonaName } = usePersonaDisplayName()
   const { hiddenTagIds, loading: quickHideLoading } = useQuickHide()
   const [chats, setChats] = useState<RecentChat[]>(initialChats)
@@ -199,104 +190,8 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
             const characters = chat.characters
             const characterNames = formatCharacterNames(characters)
 
-            // Render avatar(s)
-            const renderAvatars = () => {
-              if (characters.length === 0) {
-                return (
-                  <div
-                    className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`}
-                    style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
-                  >
-                    <span className={getAvatarClasses(style, 'lg').fallbackClass}>?</span>
-                  </div>
-                )
-              }
-
-              if (characters.length === 1) {
-                const avatarSrc = getCharacterAvatarSrc(characters[0])
-                if (avatarSrc) {
-                  return (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={avatarSrc}
-                      alt={characters[0].name}
-                      className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full object-cover flex-shrink-0`}
-                      style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
-                    />
-                  )
-                }
-                return (
-                  <div
-                    className={`${style === 'CIRCULAR' ? 'w-20 rounded-full' : 'w-16'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`}
-                    style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}
-                  >
-                    <span className={getAvatarClasses(style, 'lg').fallbackClass}>
-                      {characters[0].name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                )
-              }
-
-              // Multi-character: show stacked/overlapping avatars (max 4)
-              const displayChars = characters.slice(0, 4)
-              const overlapOffset = style === 'CIRCULAR' ? -12 : -10
-
-              return (
-                <div className="flex items-stretch h-full" style={{ marginRight: `${Math.abs(overlapOffset) * (displayChars.length - 1)}px` }}>
-                  {displayChars.map((char, index) => {
-                    const avatarSrc = getCharacterAvatarSrc(char)
-                    const zIndex = displayChars.length - index
-                    const marginLeft = index === 0 ? 0 : overlapOffset
-
-                    if (avatarSrc) {
-                      return (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={char.id}
-                          src={avatarSrc}
-                          alt={char.name}
-                          className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full object-cover ring-2 ring-card flex-shrink-0`}
-                          style={{ zIndex, marginLeft: `${marginLeft}px`, position: 'relative', ...(style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : {}) }}
-                          title={char.name}
-                        />
-                      )
-                    }
-                    return (
-                      <div
-                        key={char.id}
-                        className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center ring-2 ring-card flex-shrink-0`}
-                        style={{
-                          zIndex,
-                          marginLeft: `${marginLeft}px`,
-                          position: 'relative',
-                          ...(style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : {})
-                        }}
-                        title={char.name}
-                      >
-                        <span className={getAvatarClasses(style, 'md').fallbackClass}>
-                          {char.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                    )
-                  })}
-                  {characters.length > 4 && (
-                    <div
-                      className={`${style === 'CIRCULAR' ? 'w-14 rounded-full' : 'w-11'} h-full bg-muted flex items-center justify-center ring-2 ring-card flex-shrink-0`}
-                      style={{ zIndex: 0, marginLeft: `${overlapOffset}px`, position: 'relative' }}
-                      title={`+${characters.length - 4} more`}
-                    >
-                      <span className="text-sm font-bold text-muted-foreground">
-                        +{characters.length - 4}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )
-            }
-
-            // Get first character avatar for mobile
+            // Get first character for mobile
             const firstChar = characters[0]
-            const firstAvatarSrc = firstChar ? getCharacterAvatarSrc(firstChar) : null
 
             return (
               <div key={chat.id}>
@@ -305,22 +200,11 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
                   href={`/chats/${chat.id}`}
                   className="flex sm:hidden items-center gap-2 p-2 rounded-lg border border-border bg-card hover:border-primary hover:shadow-md transition-all"
                 >
-                  {firstAvatarSrc ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={firstAvatarSrc}
-                      alt={firstChar?.name || 'Chat'}
-                      width={40}
-                      height={40}
-                      className={`${getAvatarClasses(style, 'sm').imageClass} flex-shrink-0`}
-                    />
-                  ) : (
-                    <div className={`${getAvatarClasses(style, 'sm').wrapperClass} flex-shrink-0`} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5', width: '40px' } : undefined}>
-                      <span className={getAvatarClasses(style, 'sm').fallbackClass}>
-                        {firstChar?.name?.charAt(0).toUpperCase() || '?'}
-                      </span>
-                    </div>
-                  )}
+                  <Avatar
+                    name={firstChar?.name || 'Chat'}
+                    src={firstChar}
+                    size="sm"
+                  />
                   <div className="flex flex-col min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <h4 className="text-xs font-semibold text-foreground truncate">
@@ -344,7 +228,7 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
                 >
                   <div className="flex items-stretch justify-between gap-3">
                     <div className="flex items-stretch gap-4 flex-grow">
-                      {renderAvatars()}
+                      <AvatarStack entities={characters} size="lg" />
                       <div className="flex-grow min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <h4 className="font-semibold text-foreground truncate">
