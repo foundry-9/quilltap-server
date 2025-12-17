@@ -258,7 +258,7 @@ export default function AddCharacterDialog({
             <div className="space-y-6">
               {/* Character Selection */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label className="block text-sm qt-text-primary mb-2">
                   Select Character
                 </label>
 
@@ -335,7 +335,7 @@ export default function AddCharacterDialog({
               {/* Connection Profile Selection */}
               {selectedCharacterId && (
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="block text-sm qt-text-primary mb-2">
                     LLM Backend
                   </label>
                   <select
@@ -371,7 +371,7 @@ export default function AddCharacterDialog({
                     className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
                   />
                   <div>
-                    <label htmlFor="hasHistoryAccess" className="text-sm font-medium text-foreground cursor-pointer">
+                    <label htmlFor="hasHistoryAccess" className="text-sm qt-text-primary cursor-pointer">
                       Include chat history in context
                     </label>
                     <p className="qt-text-xs mt-0.5">
@@ -384,7 +384,7 @@ export default function AddCharacterDialog({
               {/* Join Scenario */}
               {selectedCharacterId && (
                 <div>
-                  <label htmlFor="joinScenario" className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="joinScenario" className="block text-sm qt-text-primary mb-2">
                     How did they join? <span className="text-muted-foreground font-normal">(optional)</span>
                   </label>
                   <textarea
@@ -417,7 +417,7 @@ export default function AddCharacterDialog({
           <button
             onClick={handleAddCharacter}
             disabled={isAdding || !selectedCharacterId || !selectedConnectionProfileId}
-            className="qt-button qt-button-primary flex items-center gap-2"
+            className="qt-button qt-button-primary"
           >
             {isAdding ? (
               <>

@@ -345,7 +345,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
               <div className="flex justify-between items-start">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-medium text-foreground truncate">{prompt.name}</h4>
+                    <h4 className="qt-text-primary truncate">{prompt.name}</h4>
                     {prompt.isDefault && (
                       <span className="qt-badge-primary">
                         Default
@@ -560,7 +560,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                   {/* Sample Prompts */}
                   {samplePrompts.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-medium text-foreground mb-3">Sample Prompts</h4>
+                      <h4 className="text-sm qt-text-primary mb-3">Sample Prompts</h4>
                       <div className="space-y-2 max-h-60 overflow-y-auto">
                         {samplePrompts.map((sample) => (
                           <button
@@ -571,7 +571,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                           >
                             <div className="w-full">
                               <div className="flex items-center justify-between">
-                                <span className="font-medium text-foreground">{sample.name}</span>
+                                <span className="qt-text-primary">{sample.name}</span>
                                 <span className="qt-badge">
                                   {sample.modelHint}
                                 </span>
@@ -589,7 +589,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                   {/* User Templates */}
                   {templates.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-medium text-foreground mb-3">
+                      <h4 className="text-sm qt-text-primary mb-3">
                         {samplePrompts.length > 0 ? 'My Templates' : 'Templates'}
                       </h4>
                       <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -601,7 +601,7 @@ export function SystemPromptsEditor({ characterId, characterName, onUpdate }: Sy
                             className="qt-button-ghost w-full p-3 text-left justify-start"
                           >
                             <div className="w-full">
-                              <span className="font-medium text-foreground">{template.name}</span>
+                              <span className="qt-text-primary">{template.name}</span>
                               {template.description && (
                                 <p className="qt-text-xs mt-1">
                                   {template.description}

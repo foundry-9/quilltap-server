@@ -85,7 +85,7 @@ export function SpeakerMapper({
           }`}>
             {isUser ? 'User' : 'AI'}
           </span>
-          <span className="font-medium text-foreground">
+          <span className="qt-text-primary">
             &ldquo;{speaker.name}&rdquo;
           </span>
           <span className="qt-text-small">
@@ -298,7 +298,7 @@ export function SpeakerMapper({
     <div className="space-y-6">
       {/* Default connection profile */}
       <div className="bg-accent rounded-lg p-4">
-        <label className="block text-sm font-medium text-foreground mb-2">
+        <label className="block text-sm qt-text-primary mb-2">
           Default Connection Profile
         </label>
         <p className="qt-text-xs mb-2">
@@ -319,7 +319,7 @@ export function SpeakerMapper({
       {/* User/Persona speakers */}
       {userSpeakers.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium text-foreground mb-3">
+          <h4 className="text-sm qt-text-primary mb-3">
             User Speakers (map to Personas)
           </h4>
           <div className="space-y-3">
@@ -333,7 +333,7 @@ export function SpeakerMapper({
       {/* AI/Character speakers */}
       {aiSpeakers.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium text-foreground mb-3">
+          <h4 className="text-sm qt-text-primary mb-3">
             AI Speakers (map to Characters)
           </h4>
           <div className="space-y-3">

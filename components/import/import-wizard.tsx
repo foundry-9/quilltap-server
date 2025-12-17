@@ -207,7 +207,7 @@ export function ImportWizard({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
+              <label className="block text-sm qt-text-primary mb-2">
                 Select SillyTavern chat file (JSON or JSONL)
               </label>
               <input
@@ -289,7 +289,7 @@ export function ImportWizard({
                   className="mt-1"
                 />
                 <div>
-                  <div className="font-medium text-foreground">Analyze messages for memories</div>
+                  <div className="qt-text-primary">Analyze messages for memories</div>
                   <div className="qt-text-small">
                     Queue each message for AI analysis to extract meaningful memories in the background
                   </div>

@@ -310,7 +310,7 @@ export default function GenerateImageDialog({
 
             {/* Right side - Prompt input */}
             <div className="flex-1">
-              <label htmlFor="image-prompt" className="block text-sm font-medium text-foreground mb-2">
+              <label htmlFor="image-prompt" className="block text-sm qt-text-primary mb-2">
                 Image Prompt
               </label>
               <textarea
@@ -347,7 +347,7 @@ export default function GenerateImageDialog({
           <button
             onClick={handleGenerate}
             disabled={isGenerating || !prompt.trim() || !imageProfileId}
-            className="qt-button qt-button-primary flex items-center gap-2"
+            className="qt-button qt-button-primary"
           >
             {isGenerating ? (
               <>

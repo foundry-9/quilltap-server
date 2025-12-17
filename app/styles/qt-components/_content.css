@@ -327,6 +327,11 @@
     color: var(--qt-text-secondary-fg);
   }
 
+  .qt-text-primary {
+    @apply font-medium;
+    color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
   /* ==========================================================================
      EMPTY STATES
      ========================================================================== */

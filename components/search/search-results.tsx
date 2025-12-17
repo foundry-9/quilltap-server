@@ -46,7 +46,7 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground truncate">
+            <span className="qt-text-primary truncate">
               {result.name}
             </span>
             {result.isFavorite && <span className="text-yellow-500">★</span>}
@@ -100,7 +100,7 @@ function PersonaResultCard({ result, query, onResultClick }: { result: PersonaSe
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground truncate">
+            <span className="qt-text-primary truncate">
               {result.name}
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded qt-badge-persona">
@@ -146,7 +146,7 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-foreground truncate">
+            <span className="qt-text-primary truncate">
               {result.name}
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded qt-badge-chat">
@@ -216,7 +216,7 @@ function TagResultCard({ result, query, onResultClick }: { result: TagSearchResu
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground">
+            <span className="qt-text-primary">
               <HighlightedText text={result.name} query={query} />
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded qt-badge-tag">
@@ -253,7 +253,7 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground truncate">
+            <span className="qt-text-primary truncate">
               {result.name}
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded qt-badge-memory">

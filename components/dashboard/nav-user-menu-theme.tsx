@@ -87,7 +87,7 @@ function ThemeOption({ theme, isActive, onSelect, resolvedColorMode }: ThemeOpti
       </div>
 
       {/* Theme name */}
-      <span className="text-sm font-medium text-foreground truncate flex-1">
+      <span className="text-sm qt-text-primary truncate flex-1">
         {name}
       </span>
 

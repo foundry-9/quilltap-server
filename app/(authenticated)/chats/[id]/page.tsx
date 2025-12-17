@@ -2445,7 +2445,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                  <span className="text-sm font-medium text-foreground">
+                  <span className="text-sm qt-text-primary">
                     {pendingToolCalls.map(tc => {
                       const displayNames: Record<string, string> = {
                         'generate_image': 'Image Generation',

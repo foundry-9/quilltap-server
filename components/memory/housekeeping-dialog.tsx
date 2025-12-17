@@ -128,7 +128,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
         <div className="qt-dialog-body border-b border-border space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label className="qt-label mb-1">
                 Max Memories
               </label>
               <input
@@ -145,7 +145,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label className="qt-label mb-1">
                 Max Age (months)
               </label>
               <input
@@ -163,7 +163,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <label className="qt-label mb-1">
               Min Importance: {(minImportance * 100).toFixed(0)}%
             </label>
             <input
@@ -233,7 +233,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
               {/* Details */}
               {preview.wouldDelete > 0 || preview.wouldMerge > 0 ? (
                 <div>
-                  <h3 className="text-sm font-medium text-foreground mb-2">
+                  <h3 className="text-sm qt-text-primary mb-2">
                     Changes Preview
                   </h3>
                   <div className="max-h-64 overflow-y-auto space-y-2">
@@ -248,7 +248,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                               : 'bg-yellow-500/10 border border-yellow-600/30'
                           }`}
                         >
-                          <p className="font-medium text-foreground line-clamp-1">
+                          <p className="qt-text-primary line-clamp-1">
                             {detail.summary || 'Untitled memory'}
                           </p>
                           <p className="qt-text-xs mt-1">

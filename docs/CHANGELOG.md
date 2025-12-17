@@ -4,6 +4,15 @@
 
 ### 2.4-dev
 
+- refactor: Remove redundant flex utilities from qt-button elements
+  - qt-button base class already includes `inline-flex items-center justify-center gap-2`
+  - Removed 14 redundant `flex items-center gap-2` / `inline-flex items-center gap-2` instances
+  - Affected 8 files: about page, backup/restore dialogs, tasks queue, chat dialogs, capabilities report
+- refactor: Consolidate primary text styling into qt-text-primary utility class
+  - Added `.qt-text-primary` class to `_content.css` with `font-medium` and themeable foreground color
+  - Replaced ~100 instances of `font-medium text-foreground` pattern across 39 component files
+  - Class uses CSS variable `--qt-text-primary-fg` for theme customization
+  - Affects labels, headings, emphasis text, and item titles throughout the application
 - feat: Added theme-overridable secondary text utility classes
   - Added `--qt-text-secondary-fg` CSS variable to `_variables.css`
   - Updated `qt-text-lead`, `qt-text-small`, `qt-text-muted` to use the variable

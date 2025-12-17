@@ -161,7 +161,7 @@ export default function ImageProfilesTab() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-medium text-foreground">{profile.name}</h3>
+                      <h3 className="qt-text-primary">{profile.name}</h3>
                       <ProviderBadge provider={profile.provider} />
                       {profile.isDefault && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">

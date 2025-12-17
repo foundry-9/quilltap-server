@@ -175,7 +175,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                 {/* File Upload */}
                 {uploadMode === 'file' && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
+                    <label className="block text-sm qt-text-primary mb-2">
                       Select Image File
                     </label>
                     <input
@@ -196,7 +196,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                 {/* URL Import */}
                 {uploadMode === 'url' && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Image URL</label>
+                    <label className="block text-sm qt-text-primary mb-2">Image URL</label>
                     <input
                       type="url"
                       value={imageUrl}

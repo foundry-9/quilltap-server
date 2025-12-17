@@ -130,7 +130,7 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
             className="h-8 w-8 rounded-full"
           />
         ) : (
-          <span className="text-sm font-medium text-foreground">
+          <span className="text-sm qt-text-primary">
             {user.name || user.email || 'User'}
           </span>
         )}
@@ -155,7 +155,7 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
           <div className="qt-navbar-dropdown-section space-y-2">
             {/* User Info */}
             <div className="qt-navbar-dropdown-header">
-              <p className="text-sm font-medium text-foreground">{user.name}</p>
+              <p className="text-sm qt-text-primary">{user.name}</p>
               <p className="qt-text-xs">{user.email}</p>
             </div>
 

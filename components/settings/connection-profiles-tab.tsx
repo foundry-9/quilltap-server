@@ -709,7 +709,7 @@ export default function ConnectionProfilesTab() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-medium text-foreground">{profile.name}</p>
+                      <p className="qt-text-primary">{profile.name}</p>
                       {profile.isDefault && (
                         <span className="px-2 py-1 bg-green-100/50 text-green-700 text-xs rounded-full">
                           Default

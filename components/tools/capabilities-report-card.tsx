@@ -312,7 +312,7 @@ export function CapabilitiesReportCard() {
                 className="qt-card p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-foreground truncate">
+                  <p className="qt-text-primary truncate">
                     {report.filename}
                   </p>
                   <div className="flex gap-4 mt-1 qt-text-small">

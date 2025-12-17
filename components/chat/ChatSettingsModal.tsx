@@ -171,7 +171,7 @@ function ParticipantEditor({
           }`}>
             {isCharacter ? 'Character' : 'Persona'}
           </span>
-          <h4 className="font-medium text-foreground">{name}</h4>
+          <h4 className="qt-text-primary">{name}</h4>
         </div>
         <label htmlFor={activeCheckboxId} className="flex items-center gap-2 qt-text-small">
           <input
@@ -188,7 +188,7 @@ function ParticipantEditor({
       {isCharacter && (
         <>
           <div className="mb-3">
-            <label htmlFor={connectionProfileId} className="block text-sm font-medium text-foreground mb-1">
+            <label htmlFor={connectionProfileId} className="qt-label mb-1">
               Chat Provider
             </label>
             <select
@@ -208,7 +208,7 @@ function ParticipantEditor({
           </div>
 
           <div className="mb-3">
-            <label htmlFor={imageProfileId} className="block text-sm font-medium text-foreground mb-1">
+            <label htmlFor={imageProfileId} className="qt-label mb-1">
               Image Provider (Optional)
             </label>
             <select
@@ -229,7 +229,7 @@ function ParticipantEditor({
 
           {participant.character?.systemPrompts && participant.character.systemPrompts.length > 0 && (
             <div className="mb-3">
-              <label htmlFor={systemPromptSelectId} className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor={systemPromptSelectId} className="qt-label mb-1">
                 System Prompt
               </label>
               <select
@@ -255,7 +255,7 @@ function ParticipantEditor({
       )}
 
       <div className="mb-3">
-        <label htmlFor={systemPromptId} className="block text-sm font-medium text-foreground mb-1">
+        <label htmlFor={systemPromptId} className="qt-label mb-1">
           System Prompt Override (Optional)
         </label>
         <textarea
@@ -428,7 +428,7 @@ export default function ChatSettingsModal({
             Roleplay Template
           </h3>
           <div className="qt-card">
-            <label htmlFor="roleplay-template" className="block text-sm font-medium text-foreground mb-1">
+            <label htmlFor="roleplay-template" className="qt-label mb-1">
               Formatting Style
             </label>
             <select

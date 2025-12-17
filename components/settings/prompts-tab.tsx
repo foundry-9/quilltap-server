@@ -250,7 +250,7 @@ export default function PromptsTab() {
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-foreground truncate">{template.name}</h3>
+                    <h3 className="qt-text-primary truncate">{template.name}</h3>
                     {template.description && (
                       <p className="qt-text-small mt-1 line-clamp-2">
                         {template.description}
@@ -334,7 +334,7 @@ export default function PromptsTab() {
                 className="border border-border rounded-lg p-4 bg-card shadow-sm"
               >
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-foreground truncate">{template.name}</h3>
+                  <h3 className="qt-text-primary truncate">{template.name}</h3>
                   {template.description && (
                     <p className="qt-text-small mt-1 line-clamp-2">
                       {template.description}
@@ -408,7 +408,7 @@ export default function PromptsTab() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
+                  <label className="qt-label mb-1">
                     Name <span className="text-destructive">*</span>
                   </label>
                   <input
@@ -425,7 +425,7 @@ export default function PromptsTab() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
+                  <label className="qt-label mb-1">
                     Description
                   </label>
                   <input
@@ -443,7 +443,7 @@ export default function PromptsTab() {
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-sm font-medium text-foreground">
+                    <label className="block text-sm qt-text-primary">
                       Content <span className="text-destructive">*</span>
                     </label>
                     <button

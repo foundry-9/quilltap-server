@@ -348,7 +348,7 @@ export default function NewChatPage() {
                         </div>
                       )}
                       <div className="flex-1 text-left">
-                        <div className="font-medium text-foreground">{character.name}</div>
+                        <div className="qt-text-primary">{character.name}</div>
                         {character.title && <div className="qt-text-small">{character.title}</div>}
                       </div>
                       <div className={'flex h-6 w-6 items-center justify-center rounded-full border-2 ' + (isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground')}>
@@ -387,7 +387,7 @@ export default function NewChatPage() {
                           )}
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium text-foreground">{sc.character.name}</span>
+                              <span className="qt-text-primary">{sc.character.name}</span>
                               {index === 0 && <span className="rounded bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">Speaks First</span>}
                             </div>
                             {sc.character.title && <div className="qt-text-small">{sc.character.title}</div>}

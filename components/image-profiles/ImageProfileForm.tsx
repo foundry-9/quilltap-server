@@ -227,7 +227,7 @@ export function ImageProfileForm({
 
       {/* Profile Name */}
       <div>
-        <label className="block text-sm font-medium text-foreground mb-1">
+        <label className="qt-label mb-1">
           Profile Name
         </label>
         <input
@@ -244,7 +244,7 @@ export function ImageProfileForm({
 
       {/* Provider Selection */}
       <div>
-        <label className="block text-sm font-medium text-foreground mb-1">
+        <label className="qt-label mb-1">
           Provider
         </label>
         <select
@@ -265,7 +265,7 @@ export function ImageProfileForm({
 
       {/* API Key Selection */}
       <div>
-        <label className="block text-sm font-medium text-foreground mb-1">
+        <label className="qt-label mb-1">
           API Key
         </label>
         <div className="flex gap-2">
@@ -302,7 +302,7 @@ export function ImageProfileForm({
 
       {/* Model Selection */}
       <div>
-        <label className="block text-sm font-medium text-foreground mb-1">
+        <label className="qt-label mb-1">
           Model
         </label>
         <select

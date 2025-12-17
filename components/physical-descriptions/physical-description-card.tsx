@@ -43,7 +43,7 @@ export function PhysicalDescriptionCard({
     <div className="qt-card">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-foreground truncate">
+          <h3 className="qt-text-primary truncate">
             {description.name}
           </h3>
           <div className="flex items-center gap-2 mt-1 qt-text-small">

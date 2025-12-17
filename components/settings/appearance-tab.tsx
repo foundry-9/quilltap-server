@@ -193,7 +193,7 @@ function ThemeCard({ theme, isActive, onSelect, disabled }: ThemeCardProps) {
       </div>
 
       {/* Theme Name */}
-      <div className="font-medium text-foreground">{name}</div>
+      <div className="qt-text-primary">{name}</div>
 
       {/* Theme Description */}
       {description && (
@@ -313,7 +313,7 @@ function ColorModeSelector({
 
           {/* Label and Description */}
           <div className="flex-1">
-            <div className="font-medium text-foreground">{option.label}</div>
+            <div className="qt-text-primary">{option.label}</div>
             <div className="qt-text-small">
               {option.description}
               {option.value === 'system' && (
@@ -473,7 +473,7 @@ export default function AppearanceTab() {
               </svg>
             </div>
             <div>
-              <div className="font-medium text-foreground">Show theme selector in navigation</div>
+              <div className="qt-text-primary">Show theme selector in navigation</div>
               <div className="qt-text-small">
                 Quickly switch themes from the navigation bar
               </div>

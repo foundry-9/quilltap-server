@@ -129,7 +129,7 @@ export function PhysicalDescriptionEditor({
           <div className="qt-dialog-body space-y-4 flex-1">
           {/* Name */}
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-foreground mb-1">
+            <label htmlFor="name" className="qt-label mb-1">
               Name *
             </label>
             <input
@@ -147,7 +147,7 @@ export function PhysicalDescriptionEditor({
           {/* Short Prompt */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="shortPrompt" className="block text-sm font-medium text-foreground">
+              <label htmlFor="shortPrompt" className="block text-sm qt-text-primary">
                 Short Prompt
               </label>
               <span className={`text-xs ${charCountClass(formData.shortPrompt.length, 350)}`}>
@@ -169,7 +169,7 @@ export function PhysicalDescriptionEditor({
           {/* Medium Prompt */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="mediumPrompt" className="block text-sm font-medium text-foreground">
+              <label htmlFor="mediumPrompt" className="block text-sm qt-text-primary">
                 Medium Prompt
               </label>
               <span className={`text-xs ${charCountClass(formData.mediumPrompt.length, 500)}`}>
@@ -191,7 +191,7 @@ export function PhysicalDescriptionEditor({
           {/* Long Prompt */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="longPrompt" className="block text-sm font-medium text-foreground">
+              <label htmlFor="longPrompt" className="block text-sm qt-text-primary">
                 Long Prompt
               </label>
               <span className={`text-xs ${charCountClass(formData.longPrompt.length, 750)}`}>
@@ -213,7 +213,7 @@ export function PhysicalDescriptionEditor({
           {/* Complete Prompt */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="completePrompt" className="block text-sm font-medium text-foreground">
+              <label htmlFor="completePrompt" className="block text-sm qt-text-primary">
                 Complete Prompt
               </label>
               <span className={`text-xs ${charCountClass(formData.completePrompt.length, 1000)}`}>
@@ -235,7 +235,7 @@ export function PhysicalDescriptionEditor({
           {/* Full Description (Markdown) */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="fullDescription" className="block text-sm font-medium text-foreground">
+              <label htmlFor="fullDescription" className="block text-sm qt-text-primary">
                 Full Description (Markdown)
               </label>
               <button

@@ -28,11 +28,11 @@ export function ImageProfileParameters({
     case 'OPENAI':
       return (
         <div className="space-y-4 border-t border-border pt-4">
-          <h3 className="text-sm font-medium text-foreground">Image Parameters (Optional)</h3>
+          <h3 className="text-sm qt-text-primary">Image Parameters (Optional)</h3>
 
           {/* Quality */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <label className="qt-label mb-1">
               Quality
             </label>
             <select
@@ -48,7 +48,7 @@ export function ImageProfileParameters({
 
           {/* Style */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <label className="qt-label mb-1">
               Style
             </label>
             <select
@@ -64,7 +64,7 @@ export function ImageProfileParameters({
 
           {/* Size */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <label className="qt-label mb-1">
               Default Size
             </label>
             <select
@@ -85,11 +85,11 @@ export function ImageProfileParameters({
     case 'GOOGLE_IMAGEN':
       return (
         <div className="space-y-4 border-t border-border pt-4">
-          <h3 className="text-sm font-medium text-foreground">Image Parameters (Optional)</h3>
+          <h3 className="text-sm qt-text-primary">Image Parameters (Optional)</h3>
 
           {/* Aspect Ratio */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <label className="qt-label mb-1">
               Default Aspect Ratio
             </label>
             <select
@@ -108,7 +108,7 @@ export function ImageProfileParameters({
 
           {/* Negative Prompt */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <label className="qt-label mb-1">
               Default Negative Prompt
             </label>
             <textarea

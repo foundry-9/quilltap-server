@@ -116,7 +116,7 @@ export function PhysicalDescriptionList({ entityType, entityId }: PhysicalDescri
         </h3>
         <button
           onClick={handleCreate}
-          className="qt-button qt-button-primary qt-button-sm flex items-center gap-2"
+          className="qt-button qt-button-primary qt-button-sm"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

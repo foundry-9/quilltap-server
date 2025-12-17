@@ -189,7 +189,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-foreground">
+      <label className="block text-sm qt-text-primary">
         Tags
       </label>
 

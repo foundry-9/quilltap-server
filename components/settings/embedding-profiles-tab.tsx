@@ -257,7 +257,7 @@ export default function EmbeddingProfilesTab() {
           <form onSubmit={handleFormSubmit} className="space-y-4">
             {/* Name */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label className="qt-label mb-1">
                 Profile Name
               </label>
               <input
@@ -272,7 +272,7 @@ export default function EmbeddingProfilesTab() {
 
             {/* Provider */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label className="qt-label mb-1">
                 Provider
               </label>
               <select
@@ -288,7 +288,7 @@ export default function EmbeddingProfilesTab() {
             {/* API Key (for OpenAI) */}
             {formData.provider === 'OPENAI' && (
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
+                <label className="qt-label mb-1">
                   API Key
                 </label>
                 <select
@@ -314,7 +314,7 @@ export default function EmbeddingProfilesTab() {
             {/* Base URL (for Ollama) */}
             {formData.provider === 'OLLAMA' && (
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
+                <label className="qt-label mb-1">
                   Base URL
                 </label>
                 <input
@@ -332,7 +332,7 @@ export default function EmbeddingProfilesTab() {
 
             {/* Model Selection */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label className="qt-label mb-1">
                 Model
               </label>
               {currentModels.length > 0 ? (
@@ -369,7 +369,7 @@ export default function EmbeddingProfilesTab() {
 
             {/* Dimensions (optional override) */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label className="qt-label mb-1">
                 Dimensions (optional)
               </label>
               <input
@@ -445,7 +445,7 @@ export default function EmbeddingProfilesTab() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-medium text-foreground">{profile.name}</h3>
+                      <h3 className="qt-text-primary">{profile.name}</h3>
                       <ProviderBadge provider={profile.provider} />
                       {profile.isDefault && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100/50 text-green-700">

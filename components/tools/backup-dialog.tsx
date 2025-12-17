@@ -130,7 +130,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
           <div className="qt-dialog-body space-y-6">
             {/* Destination Selection */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-3">
+              <label className="block text-sm qt-text-primary mb-3">
                 Backup Destination
               </label>
               <div className="space-y-3">
@@ -150,7 +150,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                     className="w-4 h-4"
                   />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-foreground">
+                    <p className="text-sm qt-text-primary">
                       Download to Computer
                     </p>
                     <p className="qt-text-xs mt-0.5">
@@ -174,7 +174,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                     className="w-4 h-4"
                   />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-foreground">
+                    <p className="text-sm qt-text-primary">
                       Save to Cloud Storage (S3)
                     </p>
                     <p className="qt-text-xs mt-0.5">
@@ -188,7 +188,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
             {/* Filename Input (S3 only) */}
             {destination === 's3' && (
               <div>
-                <label htmlFor="filename" className="block text-sm font-medium text-foreground mb-2">
+                <label htmlFor="filename" className="block text-sm qt-text-primary mb-2">
                   Filename (optional)
                 </label>
                 <input
@@ -225,7 +225,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
             <button
               onClick={handleCreateBackup}
               disabled={loading}
-              className="qt-button qt-button-primary flex items-center gap-2"
+              className="qt-button qt-button-primary"
             >
               {loading && (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

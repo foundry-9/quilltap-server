@@ -252,7 +252,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
   const renderSourceSelection = () => (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-foreground mb-3">
+        <label className="block text-sm qt-text-primary mb-3">
           Upload Local Backup
         </label>
         <div className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-input transition-colors"
@@ -281,7 +281,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
 
       {/* S3 Backups */}
       <div>
-        <label className="block text-sm font-medium text-foreground mb-3">
+        <label className="block text-sm qt-text-primary mb-3">
           Or Select from Cloud Storage
         </label>
         {loadingBackups ? (
@@ -307,7 +307,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                   className="w-4 h-4"
                 />
                 <div className="ml-3 flex-1">
-                  <p className="text-sm font-medium text-foreground">
+                  <p className="text-sm qt-text-primary">
                     {backup.filename}
                   </p>
                   <p className="qt-text-xs mt-0.5">
@@ -390,7 +390,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
             className="mt-1"
           />
           <div className="ml-3 flex-1">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-sm qt-text-primary">
               Replace Existing Data
             </p>
             <p className="qt-text-xs mt-1">
@@ -414,7 +414,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
             className="mt-1"
           />
           <div className="ml-3 flex-1">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-sm qt-text-primary">
               Import as New Data
             </p>
             <p className="qt-text-xs mt-1">
@@ -603,7 +603,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                       <button
                         onClick={handleStartRestore}
                         disabled={restoring || (restoreMode === 'replace' && !confirmReplace)}
-                        className="qt-button qt-button-primary flex items-center gap-2"
+                        className="qt-button qt-button-primary"
                       >
                         {restoring ? (
                           <>
@@ -624,7 +624,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
                           loadingPreview ||
                           (step === 'source' && !selectedFile && !selectedS3Key)
                         }
-                        className="qt-button qt-button-primary flex items-center gap-2"
+                        className="qt-button qt-button-primary"
                       >
                         {loadingPreview ? (
                           <>

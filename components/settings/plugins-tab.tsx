@@ -181,7 +181,7 @@ export default function PluginsTab() {
               d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
             />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-foreground">
+          <h3 className="mt-4 text-lg qt-text-primary">
             No Plugins Found
           </h3>
           <p className="mt-2 qt-text-small">
@@ -201,7 +201,7 @@ export default function PluginsTab() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-foreground truncate">
+                      <h3 className="text-lg qt-text-primary truncate">
                         {plugin.title}
                       </h3>
                       <span className="px-2 py-0.5 qt-text-xs font-medium bg-muted rounded">

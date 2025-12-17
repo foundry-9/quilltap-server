@@ -264,7 +264,7 @@ export default function RoleplayTemplatesTab() {
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[200px] max-w-md">
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <label className="qt-label mb-1">
               Template for New Chats
             </label>
             <select
@@ -307,7 +307,7 @@ export default function RoleplayTemplatesTab() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-foreground truncate">{template.name}</h3>
+                    <h3 className="qt-text-primary truncate">{template.name}</h3>
                     {template.description && (
                       <p className="qt-text-small mt-1 line-clamp-2">
                         {template.description}
@@ -370,7 +370,7 @@ export default function RoleplayTemplatesTab() {
                 className="border border-border rounded-lg p-4 bg-card shadow-sm"
               >
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-foreground truncate">{template.name}</h3>
+                  <h3 className="qt-text-primary truncate">{template.name}</h3>
                   {template.description && (
                     <p className="qt-text-small mt-1 line-clamp-2">
                       {template.description}
@@ -437,7 +437,7 @@ export default function RoleplayTemplatesTab() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
+                  <label className="qt-label mb-1">
                     Name <span className="text-destructive">*</span>
                   </label>
                   <input
@@ -454,7 +454,7 @@ export default function RoleplayTemplatesTab() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
+                  <label className="qt-label mb-1">
                     Description
                   </label>
                   <input
@@ -471,7 +471,7 @@ export default function RoleplayTemplatesTab() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
+                  <label className="qt-label mb-1">
                     System Prompt <span className="text-destructive">*</span>
                   </label>
                   <textarea

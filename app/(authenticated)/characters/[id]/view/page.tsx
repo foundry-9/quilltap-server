@@ -699,7 +699,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                       <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      <span className="text-sm font-medium text-foreground">Active System Prompt:</span>
+                      <span className="text-sm qt-text-primary">Active System Prompt:</span>
                       <span className="qt-text-small">
                         {defaultSystemPrompt?.name || 'None'}
                       </span>
@@ -757,7 +757,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-3">
-                      <h3 className="font-medium text-foreground">{prompt.name}</h3>
+                      <h3 className="qt-text-primary">{prompt.name}</h3>
                       {prompt.isDefault && (
                         <span className="qt-badge-primary">
                           Default
@@ -1044,7 +1044,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             <div className="space-y-4">
               {/* Connection Profile Selection */}
               <div>
-                <label htmlFor="profile" className="mb-2 block text-sm font-medium text-foreground">
+                <label htmlFor="profile" className="mb-2 block text-sm qt-text-primary">
                   Connection Profile *
                 </label>
                 <select
@@ -1065,7 +1065,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
               {/* Persona Selection */}
               {personas.length > 0 && (
                 <div>
-                  <label htmlFor="persona" className="mb-2 block text-sm font-medium text-foreground">
+                  <label htmlFor="persona" className="mb-2 block text-sm qt-text-primary">
                     Persona (Optional)
                   </label>
                   <select
@@ -1086,7 +1086,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
               {/* Image Profile Selection */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">
+                <label className="mb-2 block text-sm qt-text-primary">
                   Image Generation Profile (Optional)
                 </label>
                 <ImageProfilePicker

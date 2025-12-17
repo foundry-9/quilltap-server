@@ -157,7 +157,7 @@ export default function ApiKeysTab() {
                 <div className="flex-1">
                   <div className="flex items-center gap-3">
                     <div>
-                      <p className="font-medium text-foreground">{key.label}</p>
+                      <p className="qt-text-primary">{key.label}</p>
                       <p className="qt-text-small">
                         {key.provider} • {key.keyPreview}
                       </p>

@@ -239,7 +239,7 @@ export default function TagsTab() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label className="qt-label mb-1">
                 Tag
               </label>
               <select
@@ -277,7 +277,7 @@ export default function TagsTab() {
                 return (
                   <div key={tagId} className="border border-border rounded-lg p-4 bg-card shadow-sm flex flex-col">
                     <div className="flex-1">
-                      <div className="font-medium text-foreground text-sm">{label}</div>
+                      <div className="qt-text-primary text-sm">{label}</div>
                       <div className="qt-text-xs mt-2">Preview:</div>
                       <div className="mt-2 mb-4">
                         <TagBadge tag={{ id: tagId, name: label }} styleOverride={mergedStyle} />

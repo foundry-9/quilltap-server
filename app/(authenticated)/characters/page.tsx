@@ -179,7 +179,7 @@ export default function CharactersPage() {
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setImportDialogOpen(true)}
-            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Import
           </button>
@@ -197,7 +197,7 @@ export default function CharactersPage() {
           <p className="mb-4 text-lg text-muted-foreground">No characters yet</p>
           <Link
             href="/characters/new"
-            className="font-medium text-primary hover:text-primary/80"
+            className="qt-text-primary hover:text-primary/80"
           >
             Create your first character
           </Link>
@@ -274,7 +274,7 @@ export default function CharactersPage() {
                 </Link>
                 <a
                   href={`/api/characters/${character.id}/export?format=json`}
-                  className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted"
+                  className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted"
                   title="Export character data"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,7 +305,7 @@ export default function CharactersPage() {
             </h3>
             <form onSubmit={handleImport}>
               <div className="mb-4">
-                <label className="mb-2 block text-sm font-medium text-foreground">
+                <label className="mb-2 block text-sm qt-text-primary">
                   Select SillyTavern character file (PNG or JSON)
                 </label>
                 <input
@@ -320,7 +320,7 @@ export default function CharactersPage() {
                 <button
                   type="button"
                   onClick={() => setImportDialogOpen(false)}
-                  className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted"
+                  className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm qt-text-primary shadow-sm hover:bg-muted"
                 >
                   Cancel
                 </button>

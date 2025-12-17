@@ -386,7 +386,7 @@ export function TasksQueueCard() {
         <button
           onClick={fetchQueueStatus}
           disabled={loading}
-          className="qt-button qt-button-secondary flex items-center gap-2"
+          className="qt-button qt-button-secondary"
         >
           {loading ? (
             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -421,7 +421,7 @@ export function TasksQueueCard() {
         <button
           onClick={() => controlQueue('start')}
           disabled={controlLoading || data?.processorStatus?.running || !data?.stats?.activeTotal}
-          className="qt-button qt-button-primary flex items-center gap-2"
+          className="qt-button qt-button-primary"
         >
           {controlLoading ? (
             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -461,7 +461,7 @@ export function TasksQueueCard() {
         <button
           onClick={() => controlQueue('stop')}
           disabled={controlLoading || !data?.processorStatus?.running || !data?.stats?.activeTotal}
-          className="qt-button qt-button-secondary flex items-center gap-2"
+          className="qt-button qt-button-secondary"
         >
           {controlLoading ? (
             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -633,7 +633,7 @@ export function TasksQueueCard() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-foreground">
+                        <span className="qt-text-primary">
                           {job.typeName}
                         </span>
                         {job.priority > 0 && (
@@ -805,7 +805,7 @@ export function TasksQueueCard() {
                 <button
                   onClick={() => deleteJob(selectedJob.id)}
                   disabled={jobActionLoading === selectedJob.id}
-                  className="qt-button bg-red-600 hover:bg-red-700 text-white flex items-center gap-2"
+                  className="qt-button bg-red-600 hover:bg-red-700 text-white"
                 >
                   {jobActionLoading === selectedJob.id ? (
                     <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

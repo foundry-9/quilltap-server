@@ -282,7 +282,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                 className="flex-1 min-w-0 block"
               >
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-medium text-foreground truncate">
+                  <h3 className="qt-text-primary truncate">
                     {chat.title || `Chat with ${characterName}`}
                   </h3>
                   <span className="inline-block bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0">

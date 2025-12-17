@@ -185,7 +185,7 @@ export function CapabilitiesReportDialog({
             <a
               href={`/api/tools/capabilities-report/${reportId}?download=true`}
               download={filename}
-              className="qt-button qt-button-secondary flex items-center gap-2"
+              className="qt-button qt-button-secondary"
             >
               <svg
                 className="w-4 h-4"

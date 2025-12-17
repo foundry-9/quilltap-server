@@ -221,47 +221,47 @@ export function DeleteDataCard() {
                         <div className="bg-muted rounded-lg p-4 space-y-2 text-sm">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Characters</span>
-                            <span className="font-medium text-foreground">{preview.characters}</span>
+                            <span className="qt-text-primary">{preview.characters}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Personas</span>
-                            <span className="font-medium text-foreground">{preview.personas}</span>
+                            <span className="qt-text-primary">{preview.personas}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Chats</span>
-                            <span className="font-medium text-foreground">{preview.chats}</span>
+                            <span className="qt-text-primary">{preview.chats}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Tags</span>
-                            <span className="font-medium text-foreground">{preview.tags}</span>
+                            <span className="qt-text-primary">{preview.tags}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Files</span>
-                            <span className="font-medium text-foreground">{preview.files}</span>
+                            <span className="qt-text-primary">{preview.files}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Memories</span>
-                            <span className="font-medium text-foreground">{preview.memories}</span>
+                            <span className="qt-text-primary">{preview.memories}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">API Keys</span>
-                            <span className="font-medium text-foreground">{preview.apiKeys}</span>
+                            <span className="qt-text-primary">{preview.apiKeys}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Backups</span>
-                            <span className="font-medium text-foreground">{preview.backups}</span>
+                            <span className="qt-text-primary">{preview.backups}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Connection Profiles</span>
-                            <span className="font-medium text-foreground">{preview.profiles.connection}</span>
+                            <span className="qt-text-primary">{preview.profiles.connection}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Image Profiles</span>
-                            <span className="font-medium text-foreground">{preview.profiles.image}</span>
+                            <span className="qt-text-primary">{preview.profiles.image}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Embedding Profiles</span>
-                            <span className="font-medium text-foreground">{preview.profiles.embedding}</span>
+                            <span className="qt-text-primary">{preview.profiles.embedding}</span>
                           </div>
                           <div className="border-t border-border pt-2 mt-2">
                             <div className="flex justify-between font-semibold">
