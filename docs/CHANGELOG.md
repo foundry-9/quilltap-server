@@ -4,6 +4,12 @@
 
 ### 2.4-dev
 
+- feat: Per-user post-login migration for character system prompts
+  - Added signIn callback in NextAuth configuration to run migrations at login
+  - New `lib/auth/post-login-migrations.ts` module handles per-user data migrations
+  - Migrates characters with legacy `systemPrompt` field to new `systemPrompts` array
+  - Runs for each user at login to catch data that startup migrations may have missed
+  - Migration is idempotent and safe to run multiple times
 - fix: SystemPromptsEditor buttons causing form submission redirect
   - Added `type="button"` to all buttons in SystemPromptsEditor component
   - Buttons inside parent form no longer trigger form submission unexpectedly
