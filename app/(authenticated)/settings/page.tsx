@@ -9,7 +9,7 @@ import EmbeddingProfilesTab from '@/components/settings/embedding-profiles-tab'
 import PluginsTab from '@/components/settings/plugins-tab'
 import TagsTab from '@/components/settings/tags-tab'
 import AppearanceTab from '@/components/settings/appearance-tab'
-import RoleplayTemplatesTab from '@/components/settings/roleplay-templates-tab'
+import RoleplayTemplatesTab from '@/components/settings/roleplay-templates'
 import PromptsTab from '@/components/settings/prompts-tab'
 import { EntityTabs, Tab } from '@/components/tabs'
 

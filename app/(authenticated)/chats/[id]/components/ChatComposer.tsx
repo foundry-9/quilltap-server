@@ -1,0 +1,394 @@
+'use client'
+
+import { useRef } from 'react'
+import ToolPalette from '@/components/chat/ToolPalette'
+import MobileToolPalette from '@/components/chat/MobileToolPalette'
+import MessageContent from '@/components/chat/MessageContent'
+import { clientLogger } from '@/lib/client-logger'
+import type { AttachedFile } from '../types'
+
+interface ChatComposerProps {
+  id: string
+  input: string
+  setInput: (value: string) => void
+  attachedFiles: AttachedFile[]
+  onRemoveAttachedFile: (fileId: string) => void
+  disabled: boolean
+  sending: boolean
+  hasActiveCharacters: boolean
+  streaming: boolean
+  waitingForResponse: boolean
+  toolPaletteOpen: boolean
+  setToolPaletteOpen: (open: boolean) => void
+  mobileToolPaletteOpen: boolean
+  setMobileToolPaletteOpen: (open: boolean) => void
+  showPreview: boolean
+  setShowPreview: (show: boolean) => void
+  uploadingFile: boolean
+  toolExecutionStatus: { tool: string; status: 'pending' | 'success' | 'error'; message: string } | null
+  roleplayTemplateName: string | null
+  chatPhotoCount: number
+  chatMemoryCount: number
+  hasImageProfile: boolean
+  isSingleCharacterChat: boolean
+  roleplayTemplateId?: string | null
+
+  // Callbacks
+  onSubmit: (e: React.FormEvent) => void
+  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onAttachFileClick: () => void
+  onGalleryClick: () => void
+  onGenerateImageClick: () => void
+  onAddCharacterClick: () => void
+  onSettingsClick: () => void
+  onDeleteChatMemoriesClick: () => void
+  onReextractMemoriesClick: () => void
+  onStopStreaming: () => void
+}
+
+const resizeTextarea = (textarea: HTMLTextAreaElement, maxHeight: number) => {
+  textarea.style.height = 'auto'
+  const newHeight = Math.min(textarea.scrollHeight, maxHeight)
+  textarea.style.height = newHeight + 'px'
+}
+
+const getTextareaMaxHeight = (): number => {
+  if (typeof globalThis === 'undefined' || !globalThis.window) return 200
+  const windowHeight = globalThis.window.innerHeight
+  const isMobile = globalThis.window.matchMedia('(max-width: 768px)').matches
+  if (isMobile) {
+    const navbarHeight = 64
+    const paletteReserved = windowHeight * 0.5
+    const composerChrome = 96
+    return Math.max(40, windowHeight - navbarHeight - paletteReserved - composerChrome)
+  }
+  return windowHeight / 3
+}
+
+export function ChatComposer({
+  id,
+  input,
+  setInput,
+  attachedFiles,
+  onRemoveAttachedFile,
+  disabled,
+  sending,
+  hasActiveCharacters,
+  streaming,
+  waitingForResponse,
+  toolPaletteOpen,
+  setToolPaletteOpen,
+  mobileToolPaletteOpen,
+  setMobileToolPaletteOpen,
+  showPreview,
+  setShowPreview,
+  uploadingFile,
+  toolExecutionStatus,
+  roleplayTemplateName,
+  chatPhotoCount,
+  chatMemoryCount,
+  hasImageProfile,
+  isSingleCharacterChat,
+  roleplayTemplateId,
+  onSubmit,
+  onFileSelect,
+  onAttachFileClick,
+  onGalleryClick,
+  onGenerateImageClick,
+  onAddCharacterClick,
+  onSettingsClick,
+  onDeleteChatMemoriesClick,
+  onReextractMemoriesClick,
+  onStopStreaming,
+}: ChatComposerProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
+  const desktopToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const maxHeight = getTextareaMaxHeight()
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && e.shiftKey) {
+      // Shift+Enter: insert newline, don't submit
+      e.preventDefault()
+      const textarea = e.currentTarget
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      const newValue = input.substring(0, start) + '\n' + input.substring(end)
+      setInput(newValue)
+      // Move cursor after the inserted newline
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = start + 1
+        resizeTextarea(textarea, maxHeight)
+      }, 0)
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      // Enter (without Shift): submit form
+      e.preventDefault()
+      if (input.trim() || attachedFiles.length > 0) {
+        const form = e.currentTarget.form
+        if (form) {
+          form.dispatchEvent(new Event('submit', { bubbles: true }))
+        }
+      }
+    }
+  }
+
+  return (
+    <div className="qt-chat-composer">
+      {/* Mobile Tool Palette - positioned absolutely above the composer */}
+      <MobileToolPalette
+        isOpen={mobileToolPaletteOpen}
+        onClose={() => setMobileToolPaletteOpen(false)}
+        toggleButtonRef={mobileToolPaletteToggleRef}
+        onAttachFileClick={onAttachFileClick}
+        uploadingFile={uploadingFile}
+        showPreview={showPreview}
+        onTogglePreview={() => setShowPreview(!showPreview)}
+        onGalleryClick={onGalleryClick}
+        chatPhotoCount={chatPhotoCount}
+        onGenerateImageClick={onGenerateImageClick}
+        hasImageProfile={hasImageProfile}
+        onAddCharacterClick={onAddCharacterClick}
+        showAddCharacter={isSingleCharacterChat}
+        onSettingsClick={onSettingsClick}
+        chatId={id}
+        onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
+        onReextractMemoriesClick={onReextractMemoriesClick}
+        chatMemoryCount={chatMemoryCount}
+        roleplayTemplateId={roleplayTemplateId}
+        inputRef={inputRef}
+        input={input}
+        setInput={setInput}
+        disabled={sending || !hasActiveCharacters}
+      />
+
+      {/* No active characters warning */}
+      {!hasActiveCharacters && (
+        <div className="qt-alert qt-alert-warning flex items-center gap-3">
+          <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div className="flex-1">
+            <p className="font-medium text-sm">No characters in this chat</p>
+            <p className="text-xs opacity-80 mt-0.5">
+              Add a character to continue the conversation.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="qt-chat-composer-content">
+        {/* Tool execution status indicator */}
+        {toolExecutionStatus && (
+          <div
+            className={`qt-alert flex items-center gap-2 ${
+              toolExecutionStatus.status === 'pending'
+                ? 'qt-alert-info'
+                : toolExecutionStatus.status === 'success'
+                  ? 'qt-alert-success'
+                  : 'qt-alert-error'
+            }`}
+          >
+            {toolExecutionStatus.status === 'pending' ? (
+              <svg className="w-5 h-5 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            ) : toolExecutionStatus.status === 'success' ? (
+              <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            )}
+            <span className="text-sm font-medium">{toolExecutionStatus.message}</span>
+          </div>
+        )}
+
+        {/* Attached files preview */}
+        {attachedFiles.length > 0 && (
+          <div className="qt-chat-attachment-list mb-2">
+            {attachedFiles.map((file) => (
+              <div
+                key={file.id}
+                className="qt-chat-attachment-chip"
+              >
+                {file.mimeType.startsWith('image/') ? (
+                  <svg className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                ) : (
+                  <svg className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                )}
+                <span className="text-foreground max-w-[150px] truncate">
+                  {file.filename}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onRemoveAttachedFile(file.id)}
+                  className="qt-chat-attachment-chip-remove"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Desktop tool palette bar - shows above the composer when open */}
+        <div className="qt-desktop-only">
+          <ToolPalette
+            isOpen={toolPaletteOpen}
+            onClose={() => setToolPaletteOpen(false)}
+            toggleButtonRef={desktopToolPaletteToggleRef}
+            onGalleryClick={onGalleryClick}
+            onGenerateImageClick={onGenerateImageClick}
+            onSettingsClick={onSettingsClick}
+            onAddCharacterClick={onAddCharacterClick}
+            onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
+            onReextractMemoriesClick={onReextractMemoriesClick}
+            chatPhotoCount={chatPhotoCount}
+            hasImageProfile={hasImageProfile}
+            showAddCharacter={isSingleCharacterChat}
+            chatId={id}
+            chatMemoryCount={chatMemoryCount}
+            onAttachFileClick={onAttachFileClick}
+            uploadingFile={uploadingFile}
+            showPreview={showPreview}
+            onTogglePreview={() => setShowPreview(!showPreview)}
+            roleplayTemplateId={roleplayTemplateId}
+            inputRef={inputRef}
+            input={input}
+            setInput={setInput}
+            disabled={sending || !hasActiveCharacters}
+          />
+        </div>
+
+        <form onSubmit={onSubmit} className="qt-chat-composer-inner">
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={onFileSelect}
+            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
+            className="hidden"
+          />
+
+          {/* Tool palette toggle button - left side */}
+          <div className="qt-chat-toolbar">
+            {/* Desktop: Stop button - only shown during streaming/waiting */}
+            {(streaming || waitingForResponse) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onStopStreaming()
+                }}
+                className="qt-chat-toolbar-button qt-chat-stop-button qt-desktop-only"
+                title="Stop generating"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
+              </button>
+            )}
+
+            {/* File attach button - triggers the hidden file input */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                fileInputRef.current?.click()
+              }}
+              className="qt-chat-toolbar-button qt-desktop-only"
+              disabled={uploadingFile}
+              title={uploadingFile ? "Uploading..." : "Attach file"}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+
+            {/* Mobile: Tool palette toggle button */}
+            <button
+              ref={mobileToolPaletteToggleRef}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setMobileToolPaletteOpen(!mobileToolPaletteOpen)
+              }}
+              className="qt-chat-toolbar-button qt-mobile-only"
+              title="Tools"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            {/* Desktop: Tool palette toggle button */}
+            <button
+              ref={desktopToolPaletteToggleRef}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setToolPaletteOpen(!toolPaletteOpen)
+              }}
+              className="qt-chat-toolbar-button qt-desktop-only"
+              title="Tools"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
+
+          {showPreview ? (
+            <div className="qt-chat-composer-input overflow-y-auto"
+              style={{
+                lineHeight: '1.5'
+              }}
+            >
+              <MessageContent content={input} roleplayTemplateName={roleplayTemplateName} />
+            </div>
+          ) : (
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value)
+                if (inputRef.current) {
+                  resizeTextarea(inputRef.current, maxHeight)
+                }
+              }}
+              onKeyDown={handleKeyDown}
+              disabled={sending || !hasActiveCharacters}
+              rows={1}
+              placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
+              className="qt-chat-composer-input resize-none overflow-y-auto"
+              style={{
+                lineHeight: '1.5'
+              }}
+            />
+          )}
+
+          {/* Send button - right side */}
+          <button
+            type="submit"
+            disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
+            className="qt-chat-composer-send"
+            title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}

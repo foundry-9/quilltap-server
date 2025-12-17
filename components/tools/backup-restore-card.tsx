@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { BackupDialog } from './backup-dialog'
-import { RestoreDialog } from './restore-dialog'
+import { RestoreDialog } from './restore'
 
 interface BackupInfo {
   key: string

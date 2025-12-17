@@ -1,0 +1,575 @@
+'use client'
+
+import { useState, useRef } from 'react'
+import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
+import MessageContent from '@/components/chat/MessageContent'
+import { formatMessageTime } from '@/lib/format-time'
+import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
+import { clientLogger } from '@/lib/client-logger'
+import type { Message, Participant } from '../types'
+import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
+import { getQueuePosition } from '@/lib/chat/turn-manager'
+import type { ParticipantData } from '@/components/chat/ParticipantCard'
+
+interface MessageAvatarInfo {
+  name: string
+  title: string | null | undefined
+  avatarUrl?: string
+  defaultImage?: { id: string; filepath: string; url?: string } | null | undefined
+}
+
+interface MessageRowProps {
+  message: Message
+  messageIndex: number
+  isEditing: boolean
+  editContent: string
+  viewSourceMessageIds: Set<string>
+  swipeState: { current: number; total: number } | null
+  showResendButton: boolean
+  shouldShowAvatars: boolean
+  messageAvatar: MessageAvatarInfo | null
+  roleplayTemplateName: string | null
+  isMultiChar: boolean
+  participantData: ParticipantData[]
+  turnState: TurnState
+  streaming: boolean
+  waitingForResponse: boolean
+  mobileParticipantDropdownId: string | null
+  mobileParticipantRefs: React.MutableRefObject<Map<string, HTMLButtonElement | null>>
+  userParticipantId: string | null
+
+  // Callbacks
+  onEditStart: (message: Message) => void
+  onEditSave: (messageId: string) => void
+  onEditCancel: () => void
+  onEditChange: (content: string) => void
+  onToggleSourceView: (messageId: string) => void
+  onDelete: (messageId: string) => void
+  onGenerateSwipe: (messageId: string) => void
+  onSwitchSwipe: (swipeGroupId: string, direction: 'prev' | 'next') => void
+  onCopyContent: (content: string) => void
+  onResend: (message: Message) => void
+  onImageClick: (filepath: string, filename: string, fileId?: string) => void
+  onMobileParticipantDropdownChange: (participantId: string | null) => void
+  onHandleNudge: (participantId: string) => void
+  onHandleQueue: (participantId: string) => void
+  onHandleDequeue: (participantId: string) => void
+  onHandleTalkativenessChange: (participantId: string, value: number) => void
+  onHandleRemoveCharacter: (participantId: string) => void
+  onHandleContinue: () => void
+}
+
+function getImageAttachments(message: Message) {
+  return (message.attachments || []).filter(a => a.mimeType.startsWith('image/'))
+}
+
+export function MessageRow({
+  message,
+  messageIndex,
+  isEditing,
+  editContent,
+  viewSourceMessageIds,
+  swipeState,
+  showResendButton,
+  shouldShowAvatars,
+  messageAvatar,
+  roleplayTemplateName,
+  isMultiChar,
+  participantData,
+  turnState,
+  streaming,
+  waitingForResponse,
+  mobileParticipantDropdownId,
+  mobileParticipantRefs,
+  userParticipantId,
+  onEditStart,
+  onEditSave,
+  onEditCancel,
+  onEditChange,
+  onToggleSourceView,
+  onDelete,
+  onGenerateSwipe,
+  onSwitchSwipe,
+  onCopyContent,
+  onResend,
+  onImageClick,
+  onMobileParticipantDropdownChange,
+  onHandleNudge,
+  onHandleQueue,
+  onHandleDequeue,
+  onHandleTalkativenessChange,
+  onHandleRemoveCharacter,
+  onHandleContinue,
+}: MessageRowProps) {
+  const messageRowClasses = ['qt-chat-message-row']
+  if (message.role === 'USER') {
+    messageRowClasses.push('qt-chat-message-row-user')
+  } else {
+    messageRowClasses.push('qt-chat-message-row-assistant')
+  }
+
+  return (
+    <div
+      key={message.id}
+      className={messageRowClasses.join(' ')}
+    >
+      {/* Desktop avatar - assistant (left side) */}
+      {message.role === 'ASSISTANT' && shouldShowAvatars && messageAvatar && (
+        <div className="flex-shrink-0 qt-chat-desktop-avatar">
+          <Avatar
+            name={messageAvatar.name}
+            title={messageAvatar.title}
+            src={messageAvatar}
+            size="chat"
+            showName
+            showTitle
+            className="flex flex-col items-center w-32 gap-1"
+          />
+        </div>
+      )}
+      <div className="qt-chat-message-body group">
+        {/* Mobile header - speaker avatar/name on left, participant controls on right */}
+        {shouldShowAvatars && messageAvatar && (
+          <div className="qt-chat-message-mobile-header">
+            {/* Left side: current message speaker */}
+            <div className="qt-chat-message-mobile-speaker">
+              <div className="qt-chat-message-mobile-avatar">
+                {getAvatarSrc(messageAvatar) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={getAvatarSrc(messageAvatar)!}
+                    alt={messageAvatar.name}
+                  />
+                ) : (
+                  <div className="qt-chat-message-mobile-avatar-initial">
+                    {messageAvatar.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <span className="qt-chat-message-mobile-name">{messageAvatar.name}</span>
+            </div>
+
+            {/* Right side: participant controls for multi-char chats */}
+            {isMultiChar && (
+              <div className="qt-mobile-participant-controls">
+                {(() => {
+                  // Sort participants: user on right, characters on left
+                  const activeParticipants = participantData
+                    .filter(p => p.isActive)
+                    .sort((a, b) => {
+                      if (a.type === 'PERSONA' && b.type !== 'PERSONA') return 1
+                      if (b.type === 'PERSONA' && a.type !== 'PERSONA') return -1
+                      return b.displayOrder - a.displayOrder
+                    })
+                  const activeCharCount = activeParticipants.filter(p => p.type === 'CHARACTER').length
+
+                  return activeParticipants.map((participant) => {
+                    const entity = participant.type === 'CHARACTER' ? participant.character : participant.persona
+                    if (!entity) return null
+
+                    const isCurrentTurn = turnState.currentTurnParticipantId === participant.id
+                    const queuePos = getQueuePosition(turnState, participant.id)
+                    const isSelected = mobileParticipantDropdownId === participant.id
+
+                    // Get avatar source
+                    const pAvatarSrc = entity.defaultImage
+                      ? (entity.defaultImage.url || entity.defaultImage.filepath).replace(/^(?!\/)/, '/')
+                      : entity.avatarUrl || null
+
+                    const avatarClasses = [
+                      'qt-mobile-participant-avatar',
+                      isCurrentTurn ? 'qt-mobile-participant-avatar-active' : '',
+                      isSelected ? 'qt-mobile-participant-avatar-selected' : '',
+                    ].filter(Boolean).join(' ')
+
+                    return (
+                      <button
+                        key={participant.id}
+                        ref={(el) => { mobileParticipantRefs.current.set(participant.id, el) }}
+                        className={avatarClasses}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onMobileParticipantDropdownChange(
+                            mobileParticipantDropdownId === participant.id ? null : participant.id
+                          )
+                        }}
+                        title={entity.name}
+                      >
+                        {pAvatarSrc ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={pAvatarSrc} alt={entity.name} />
+                        ) : (
+                          <span className="qt-mobile-participant-avatar-initial">
+                            {entity.name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        {queuePos > 0 && (
+                          <span className="qt-mobile-participant-queue-badge">{queuePos}</span>
+                        )}
+                        {isCurrentTurn && <span className="qt-mobile-participant-turn-dot" />}
+                      </button>
+                    )
+                  })
+                })()}
+
+                {/* Dropdown for selected participant */}
+                {mobileParticipantDropdownId && (() => {
+                  const selectedParticipant = participantData.find(p => p.id === mobileParticipantDropdownId)
+                  if (!selectedParticipant) return null
+                  const activeCharCount = participantData.filter(p => p.type === 'CHARACTER' && p.isActive).length
+
+                  return (
+                    <MobileParticipantDropdown
+                      participant={selectedParticipant}
+                      isOpen={true}
+                      anchorRef={{ current: mobileParticipantRefs.current.get(mobileParticipantDropdownId) ?? null }}
+                      isCurrentTurn={turnState.currentTurnParticipantId === mobileParticipantDropdownId}
+                      queuePosition={getQueuePosition(turnState, mobileParticipantDropdownId)}
+                      isGenerating={streaming || waitingForResponse}
+                      isUserParticipant={mobileParticipantDropdownId === userParticipantId}
+                      canRemove={activeCharCount > 1}
+                      onClose={() => onMobileParticipantDropdownChange(null)}
+                      onNudge={onHandleNudge}
+                      onQueue={onHandleQueue}
+                      onDequeue={onHandleDequeue}
+                      onTalkativenessChange={onHandleTalkativenessChange}
+                      onRemove={onHandleRemoveCharacter}
+                    />
+                  )
+                })()}
+              </div>
+            )}
+
+            {/* Mobile continue button - to the right of participant avatars */}
+            {isMultiChar && (
+              <button
+                type="button"
+                onClick={onHandleContinue}
+                disabled={
+                  streaming ||
+                  waitingForResponse ||
+                  turnState.currentTurnParticipantId !== null
+                }
+                className="qt-mobile-continue-button"
+                title={
+                  turnState.currentTurnParticipantId !== null
+                    ? "It's not your turn"
+                    : "Pass turn to next character"
+                }
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+
+        <div
+          className={`chat-message ${
+            message.role === 'USER'
+              ? 'qt-chat-message-user'
+              : 'qt-chat-message-assistant'
+          }`}
+        >
+          {isEditing ? (
+            <div className="space-y-2">
+              <textarea
+                value={editContent}
+                onChange={(e) => onEditChange(e.target.value)}
+                className="qt-textarea"
+                rows={3}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onEditSave(message.id)}
+                  className="qt-button qt-button-primary qt-button-sm"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={onEditCancel}
+                  className="qt-button qt-button-secondary qt-button-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {viewSourceMessageIds.has(message.id) ? (
+                <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
+                  {message.content}
+                </div>
+              ) : (
+                <MessageContent content={message.content} roleplayTemplateName={roleplayTemplateName} />
+              )}
+              {/* Image attachment thumbnails */}
+              {getImageAttachments(message).length > 0 && (
+                <div className="qt-chat-attachment-list">
+                  {getImageAttachments(message).map((attachment) => (
+                    <button
+                      key={attachment.id}
+                      onClick={() => onImageClick(
+                        attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`,
+                        attachment.filename,
+                        attachment.id
+                      )}
+                      type="button"
+                      className="qt-button qt-chat-attachment-button"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
+                        alt={attachment.filename}
+                        width={80}
+                        height={80}
+                        className="qt-chat-attachment-image"
+                      />
+                      <div className="qt-chat-attachment-overlay">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                        </svg>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Mobile/responsive action bar - shown on mobile, hidden on desktop */}
+              <div className="qt-chat-message-action-bar">
+                <div className="qt-chat-message-action-bar-icons">
+                  {/* Copy */}
+                  <button
+                    onClick={() => onCopyContent(message.content)}
+                    className="qt-chat-message-action-icon"
+                    title="Copy message"
+                  >
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                  {/* View source/rendered */}
+                  <button
+                    onClick={() => onToggleSourceView(message.id)}
+                    className="qt-chat-message-action-icon"
+                    title={viewSourceMessageIds.has(message.id) ? 'View rendered' : 'View source'}
+                  >
+                    {viewSourceMessageIds.has(message.id) ? (
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    ) : (
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                      </svg>
+                    )}
+                  </button>
+                  {/* Edit (user messages only) */}
+                  {message.role === 'USER' && (
+                    <button
+                      onClick={() => onEditStart(message)}
+                      className="qt-chat-message-action-icon"
+                      title="Edit message"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  )}
+                  {/* Delete */}
+                  <button
+                    onClick={() => onDelete(message.id)}
+                    className="qt-chat-message-action-icon qt-chat-message-action-icon-danger"
+                    title="Delete message"
+                  >
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                  {/* Regenerate (assistant messages only) */}
+                  {message.role === 'ASSISTANT' && (
+                    <button
+                      onClick={() => onGenerateSwipe(message.id)}
+                      className="qt-chat-message-action-icon"
+                      title="Regenerate response"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                  )}
+                  {/* Resend (user messages only) */}
+                  {message.role === 'USER' && showResendButton && (
+                    <button
+                      onClick={() => onResend(message)}
+                      className="qt-chat-message-action-icon"
+                      title="Resend this message"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
+                      </svg>
+                    </button>
+                  )}
+                  {/* Swipe controls */}
+                  {message.role === 'ASSISTANT' && swipeState && swipeState.total > 1 && (
+                    <>
+                      <button
+                        onClick={() => onSwitchSwipe(message.swipeGroupId!, 'prev')}
+                        disabled={swipeState.current === 0}
+                        className="qt-chat-message-action-icon disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Previous response"
+                      >
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <span className="qt-text-xs px-1">
+                        {swipeState.current + 1}/{swipeState.total}
+                      </span>
+                      <button
+                        onClick={() => onSwitchSwipe(message.swipeGroupId!, 'next')}
+                        disabled={swipeState.current === swipeState.total - 1}
+                        className="qt-chat-message-action-icon disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Next response"
+                      >
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
+                </div>
+                <span className="qt-chat-message-action-timestamp">
+                  {formatMessageTime(message.createdAt)}
+                </span>
+              </div>
+
+              {/* Desktop timestamp - hidden on mobile */}
+              <div className="qt-text-xs mt-2 qt-chat-desktop-timestamp">
+                {formatMessageTime(message.createdAt)}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Desktop hover action buttons - hidden on mobile */}
+        {!isEditing && (
+          <div className="absolute -top-8 right-0 flex gap-1 bg-muted rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity qt-chat-desktop-hover-actions">
+            <button
+              onClick={() => onCopyContent(message.content)}
+              className="p-1 text-muted-foreground hover:text-foreground"
+              title="Copy message"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => onToggleSourceView(message.id)}
+              className="p-1 text-muted-foreground hover:text-foreground"
+              title={viewSourceMessageIds.has(message.id) ? 'View rendered' : 'View source'}
+            >
+              {viewSourceMessageIds.has(message.id) ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                </svg>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Desktop message actions - hidden on mobile */}
+        {!isEditing && (
+          <div className="flex gap-2 mt-1 text-sm qt-chat-message-desktop-actions">
+            {message.role === 'USER' && (
+              <>
+                <button
+                  onClick={() => onEditStart(message)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => onDelete(message.id)}
+                  className="text-destructive hover:text-destructive/80"
+                >
+                  Delete
+                </button>
+                {showResendButton && (
+                  <button
+                    onClick={() => onResend(message)}
+                    className="text-warning hover:text-warning/80"
+                    title="Resend this message (deletes blank responses and restores to input)"
+                  >
+                    ↻ Resend
+                  </button>
+                )}
+              </>
+            )}
+
+            {message.role === 'ASSISTANT' && (
+              <>
+                <button
+                  onClick={() => onDelete(message.id)}
+                  className="text-destructive hover:text-destructive/80"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => onGenerateSwipe(message.id)}
+                  className="text-info hover:text-info/80"
+                >
+                  Regenerate
+                </button>
+
+                {/* Swipe controls */}
+                {swipeState && swipeState.total > 1 && (
+                  <div className="flex items-center gap-2 ml-2">
+                    <button
+                      onClick={() => onSwitchSwipe(message.swipeGroupId!, 'prev')}
+                      disabled={swipeState.current === 0}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      ←
+                    </button>
+                    <span className="qt-text-xs">
+                      {swipeState.current + 1} / {swipeState.total}
+                    </span>
+                    <button
+                      onClick={() => onSwitchSwipe(message.swipeGroupId!, 'next')}
+                      disabled={swipeState.current === swipeState.total - 1}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      →
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      {/* Desktop avatar - user (right side) */}
+      {message.role === 'USER' && shouldShowAvatars && messageAvatar && (
+        <div className="flex-shrink-0 qt-chat-desktop-avatar">
+          <Avatar
+            name={messageAvatar.name}
+            title={messageAvatar.title}
+            src={messageAvatar}
+            size="chat"
+            showName
+            showTitle
+            className="flex flex-col items-center w-32 gap-1"
+          />
+        </div>
+      )}
+    </div>
+  )
+}

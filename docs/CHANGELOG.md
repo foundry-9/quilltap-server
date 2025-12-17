@@ -4,6 +4,29 @@
 
 ### 2.4-dev
 
+- refactor: Major component file breakup for maintainability
+  - Split 18 large components (500+ lines) into modular structures under 500 lines each
+  - Extracted types, hooks, and sub-components into dedicated files
+  - Original files converted to re-exports for backward compatibility
+  - Components refactored:
+    - `connection-profiles-tab.tsx` → `connection-profiles/` (types, hooks, components)
+    - `characters/[id]/view/page.tsx` → extracted hooks, components, types, constants
+    - `tasks-queue-card.tsx` → `tasks-queue/` module
+    - `characters/[id]/edit/page.tsx` → extracted hooks, components, types
+    - `SystemPromptsEditor.tsx` → `system-prompts-editor/` module
+    - `restore-dialog.tsx` → `restore/` module
+    - `appearance-tab.tsx` → `appearance/` module
+    - `DebugPanel.tsx` → extracted DebugEntryRow, DebugFilters, hooks, types, utilities
+    - `prompts-tab.tsx` → `prompts/` module
+    - `roleplay-templates-tab.tsx` → `roleplay-templates/` module
+    - `chat-settings-tab.tsx` → `chat-settings/` module
+    - `EmbeddedPhotoGallery.tsx` → `embedded-gallery/` module
+    - `embedding-profiles-tab.tsx` → `embedding-profiles/` module
+    - `ImageDetailModal.tsx` → `image-detail/` module
+    - `theme-provider.tsx` → `theme/` module
+    - `chats/[id]/page.tsx` → extracted hooks, components, types
+  - Architecture improvements: single responsibility, reusable hooks, clear type contracts
+  - All TypeScript compilation passes with zero errors
 - refactor: Major TSX component refactoring to reduce code duplication
   - Created 3 new reusable hooks with comprehensive tests:
     - `useAsyncOperation` - manages loading/error state for async operations

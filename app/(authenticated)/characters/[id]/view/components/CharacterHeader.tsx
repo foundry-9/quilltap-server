@@ -1,0 +1,74 @@
+'use client'
+
+import type { AvatarDisplayStyle } from '@/lib/avatar-styles'
+import { getAvatarClasses } from '@/lib/avatar-styles'
+import { Character } from '../types'
+
+interface CharacterHeaderProps {
+  character: Character | null
+  style: AvatarDisplayStyle
+  avatarRefreshKey: number
+  onStartChat: () => void
+}
+
+export function CharacterHeader({
+  character,
+  style,
+  avatarRefreshKey,
+  onStartChat,
+}: CharacterHeaderProps) {
+  const getAvatarSrc = () => {
+    let src = null
+    if (character?.defaultImage) {
+      const filepath = character.defaultImage.filepath
+      src = character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
+    } else {
+      src = character?.avatarUrl
+    }
+    if (src && character?.defaultImageId) {
+      const separator = src.includes('?') ? '&' : '?'
+      src = `${src}${separator}v=${character.defaultImageId}`
+    }
+    return src
+  }
+
+  return (
+    <div className="mb-8 flex flex-wrap items-start justify-between gap-6 rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm">
+      <div className="flex flex-grow items-center gap-4">
+        <div className="relative">
+          {getAvatarSrc() ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={`${character?.defaultImageId || 'no-image'}-${avatarRefreshKey}`}
+              src={getAvatarSrc()!}
+              alt={character?.name || ''}
+              className={getAvatarClasses(style, 'lg').imageClass}
+            />
+          ) : (
+            <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
+              <span className={getAvatarClasses(style, 'lg').fallbackClass}>
+                {character?.name?.charAt(0)?.toUpperCase() || '?'}
+              </span>
+            </div>
+          )}
+        </div>
+        <div>
+          <h1 className="text-3xl font-semibold">
+            {character?.name || 'Loading...'}
+          </h1>
+          {character?.title && (
+            <p className="qt-text-small">{character.title}</p>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-shrink-0 gap-2">
+        <button
+          onClick={onStartChat}
+          className="inline-flex items-center rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow hover:bg-success/90"
+        >
+          Start Chat
+        </button>
+      </div>
+    </div>
+  )
+}

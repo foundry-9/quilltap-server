@@ -1,59 +1,20 @@
 'use client'
 
-import { use, useCallback, useEffect, useState } from 'react'
-import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import { use } from 'react'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
-import { TagEditor } from '@/components/tags/tag-editor'
-import { showAlert } from '@/lib/alert'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { EntityTabs, Tab } from '@/components/tabs'
 import { EmbeddedPhotoGallery } from '@/components/images/EmbeddedPhotoGallery'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor'
+import { useCharacterEdit } from './hooks'
+import { CharacterBasicInfo, CharacterSettings } from './components'
 import { clientLogger } from '@/lib/client-logger'
-import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 
-interface Character {
-  id: string
-  name: string
-  title?: string | null
-  description?: string | null
-  personality?: string | null
-  scenario?: string | null
-  firstMessage?: string | null
-  exampleDialogues?: string | null
-  systemPrompt?: string
-  avatarUrl?: string
-  defaultImageId?: string
-  defaultConnectionProfileId?: string
-  defaultImage?: {
-    id: string
-    filepath: string
-    url?: string
-  }
-}
-
-interface ConnectionProfile {
-  id: string
-  name: string
-}
-
-interface Persona {
-  id: string
-  name: string
-  title?: string
-  matchingTagCount?: number
-}
-
-interface CharacterPersonaLink {
-  personaId: string
-  isDefault: boolean
-  persona: Persona
-}
-
+/**
+ * Tab configuration for character edit page
+ */
 const EDIT_CHARACTER_TABS: Tab[] = [
   {
     id: 'details',
@@ -112,252 +73,40 @@ const EDIT_CHARACTER_TABS: Tab[] = [
   },
 ]
 
+/**
+ * Main character edit page component
+ * Orchestrates the editing of character information across multiple tabs
+ */
 export default function EditCharacterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [showUploadDialog, setShowUploadDialog] = useState(false)
-  const [showAvatarSelector, setShowAvatarSelector] = useState(false)
-  const [character, setCharacter] = useState<Character | null>(null)
-  const [personas, setPersonas] = useState<Persona[]>([])
-  const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
-  const [defaultPersonaId, setDefaultPersonaId] = useState<string>('')
-  const [loadingPersonas, setLoadingPersonas] = useState(false)
-  const [formData, setFormData] = useState({
-    name: '',
-    title: '',
-    description: '',
-    personality: '',
-    scenario: '',
-    firstMessage: '',
-    exampleDialogues: '',
-    systemPrompt: '',
-    avatarUrl: '',
-    defaultConnectionProfileId: '',
-  })
-  const [originalFormData, setOriginalFormData] = useState({
-    name: '',
-    title: '',
-    description: '',
-    personality: '',
-    scenario: '',
-    firstMessage: '',
-    exampleDialogues: '',
-    systemPrompt: '',
-    avatarUrl: '',
-    defaultConnectionProfileId: '',
-  })
-  const [originalDefaultPersonaId, setOriginalDefaultPersonaId] = useState<string>('')
-  const [avatarRefreshKey, setAvatarRefreshKey] = useState(0)
-  const { formatPersonaName } = usePersonaDisplayName()
 
-  const fetchCharacter = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/characters/${id}`, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache',
-        }
-      })
-      if (!res.ok) throw new Error('Failed to fetch character')
-      const data = await res.json()
-      const char = data.character
-      setCharacter((prev) => {
-        if (prev?.defaultImageId !== char.defaultImageId) {
-          setAvatarRefreshKey(k => k + 1)
-        }
-        return char
-      })
-      const initialFormData = {
-        name: char.name,
-        title: char.title || '',
-        description: char.description || '',
-        personality: char.personality || '',
-        scenario: char.scenario || '',
-        firstMessage: char.firstMessage || '',
-        exampleDialogues: char.exampleDialogues || '',
-        systemPrompt: char.systemPrompt || '',
-        avatarUrl: char.avatarUrl || '',
-        defaultConnectionProfileId: char.defaultConnectionProfileId || '',
-      }
-      setFormData(initialFormData)
-      setOriginalFormData(initialFormData)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }, [id])
+  const {
+    loading,
+    saving,
+    error,
+    character,
+    formData,
+    personas,
+    profiles,
+    defaultPersonaId,
+    loadingPersonas,
+    showAvatarSelector,
+    showUploadDialog,
+    avatarRefreshKey,
+    handleChange,
+    handleDefaultPersonaChange,
+    handleSubmit,
+    handleCancel,
+    setCharacterAvatar,
+    getAvatarSrc,
+    toggleAvatarSelector,
+    toggleUploadDialog,
+    clearAvatar,
+    fetchCharacter,
+    hasChanges,
+  } = useCharacterEdit(id)
 
-  const fetchPersonas = useCallback(async () => {
-    try {
-      setLoadingPersonas(true)
-      const res = await fetch(`/api/personas?sortByCharacter=${id}`)
-      if (!res.ok) throw new Error('Failed to fetch personas')
-      const data = await res.json()
-      setPersonas(data)
-    } catch (err) {
-      clientLogger.error('Error fetching personas', { error: err instanceof Error ? err.message : String(err) })
-    } finally {
-      setLoadingPersonas(false)
-    }
-  }, [id])
-
-  const fetchDefaultPersona = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/characters/${id}/personas`)
-      if (!res.ok) throw new Error('Failed to fetch linked personas')
-      const data = await res.json()
-      const defaultPersona = data.find((cp: CharacterPersonaLink) => cp.isDefault)
-      if (defaultPersona) {
-        setDefaultPersonaId(defaultPersona.personaId)
-        setOriginalDefaultPersonaId(defaultPersona.personaId)
-      }
-    } catch (err) {
-      clientLogger.error('Error fetching default persona', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [id])
-
-  const fetchProfiles = useCallback(async () => {
-    try {
-      const res = await fetch('/api/profiles')
-      if (res.ok) {
-        const data = await res.json()
-        setProfiles(data)
-      }
-    } catch (err) {
-      clientLogger.error('Failed to fetch profiles', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchCharacter()
-    fetchPersonas()
-    fetchDefaultPersona()
-    fetchProfiles()
-  }, [fetchCharacter, fetchPersonas, fetchDefaultPersona, fetchProfiles])
-
-  const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalFormData) || defaultPersonaId !== originalDefaultPersonaId
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
-    setError(null)
-
-    try {
-      const res = await fetch(`/api/characters/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to update character')
-      }
-
-      // Handle persona linking/unlinking
-      if (defaultPersonaId !== originalDefaultPersonaId) {
-        // If there was a previous default persona, unlink it
-        if (originalDefaultPersonaId) {
-          await fetch(`/api/characters/${id}/personas?personaId=${originalDefaultPersonaId}`, {
-            method: 'DELETE',
-          })
-        }
-
-        // If a new default persona is selected, link it
-        if (defaultPersonaId) {
-          await fetch(`/api/characters/${id}/personas`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              personaId: defaultPersonaId,
-              isDefault: true,
-            }),
-          })
-        }
-      }
-
-      await fetchCharacter()
-      showSuccessToast('Character saved successfully!')
-      router.push(`/characters/${id}/view`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
-  }
-
-  const handleCancel = async () => {
-    if (hasChanges) {
-      const result = await showAlert(
-        'You have unsaved changes. What would you like to do?',
-        ['Save', 'Discard', 'Cancel']
-      )
-
-      if (result === 'Save') {
-        // Submit the form
-        const submitEvent = new Event('submit', { bubbles: true, cancelable: true })
-        document.querySelector('form')?.dispatchEvent(submitEvent)
-        return
-      } else if (result === 'Cancel' || result === undefined) {
-        return
-      }
-      // If 'Discard', continue to navigation
-    }
-    router.push(`/characters/${id}/view`)
-  }
-
-  const setCharacterAvatar = async (imageId: string) => {
-    try {
-      if (!id) {
-        throw new Error('Character ID is missing')
-      }
-      
-      const res = await fetch(`/api/characters/${id}/avatar`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageId: imageId || null }),
-      })
-
-      const responseData = await res.json()
-      
-      if (!res.ok) {
-        throw new Error(responseData.error || 'Failed to set avatar')
-      }
-
-      await fetchCharacter()
-      setShowAvatarSelector(false)
-      showSuccessToast('Avatar updated!')
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to set avatar')
-    }
-  }
-
-  const getAvatarSrc = () => {
-    let src = null
-    if (character?.defaultImage) {
-      // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
-      const filepath = character.defaultImage.filepath
-      src = character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
-    } else {
-      src = character?.avatarUrl
-    }
-    // Add cache-busting parameter based on defaultImageId to force reload when avatar changes
-    if (src && character?.defaultImageId) {
-      const separator = src.includes('?') ? '&' : '?'
-      src = `${src}${separator}v=${character.defaultImageId}`
-    }
-    return src
-  }
+  clientLogger.debug('Rendering EditCharacterPage', { characterId: id, loading })
 
   if (loading) {
     return (
@@ -367,8 +116,11 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     )
   }
 
+  const avatarSrc = getAvatarSrc()
+
   return (
     <div className="character-edit container mx-auto max-w-5xl px-4 py-8 text-foreground">
+      {/* Header Section */}
       <div className="mb-8">
         <button
           onClick={handleCancel}
@@ -377,12 +129,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           ← Back
         </button>
         <div className="flex items-center gap-4">
+          {/* Avatar Display */}
           <div className="relative">
-            {getAvatarSrc() ? (
+            {avatarSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={`${character?.defaultImageId || 'no-image'}-${avatarRefreshKey}`}
-                src={getAvatarSrc()!}
+                src={avatarSrc}
                 alt={character?.name || ''}
                 className="w-20 h-20 rounded-full object-cover"
               />
@@ -394,7 +147,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
               </div>
             )}
             <button
-              onClick={() => setShowAvatarSelector(true)}
+              onClick={() => toggleAvatarSelector(true)}
               className="absolute -bottom-1 -right-1 rounded-full bg-primary p-1.5 text-primary-foreground shadow-lg transition hover:bg-primary/90"
               title="Change avatar"
             >
@@ -403,6 +156,8 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
               </svg>
             </button>
           </div>
+
+          {/* Title */}
           <div>
             <h1 className="text-3xl font-bold text-foreground">
               Edit: {character?.name || 'Loading...'}
@@ -411,16 +166,21 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {/* Error Display */}
       {error && (
         <div className="mb-4 rounded border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive">
           {error}
         </div>
       )}
 
+      {/* Main Form */}
       <form onSubmit={handleSubmit}>
         <EntityTabs tabs={EDIT_CHARACTER_TABS} defaultTab="details">
           {(activeTab: string) => {
             switch (activeTab) {
+              case 'details':
+                return <CharacterBasicInfo characterId={id} formData={formData} onChange={handleChange} />
+
               case 'system-prompts':
                 return (
                   <SystemPromptsEditor
@@ -430,199 +190,17 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                   />
                 )
 
-              case 'details':
-                return (
-                  <div className="space-y-6">
-                    <div>
-                      <label htmlFor="name" className="block text-sm font-medium mb-2 text-foreground">
-                        Name *
-                      </label>
-                      <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleChange}
-                        required
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="title" className="block text-sm font-medium mb-2 text-foreground">
-                        Title (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        id="title"
-                        name="title"
-                        value={formData.title}
-                        onChange={handleChange}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        placeholder="e.g., Student, Teacher, Narrator"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="description" className="block text-sm font-medium mb-2 text-foreground">
-                        Description (Optional)
-                      </label>
-                      <textarea
-                        id="description"
-                        name="description"
-                        value={formData.description}
-                        onChange={handleChange}
-                        rows={4}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        placeholder="Describe the character's appearance, background, and key traits"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="personality" className="block text-sm font-medium mb-2 text-foreground">
-                        Personality (Optional)
-                      </label>
-                      <textarea
-                        id="personality"
-                        name="personality"
-                        value={formData.personality}
-                        onChange={handleChange}
-                        rows={4}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        placeholder="Describe the character's personality traits and behavioral patterns"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="scenario" className="block text-sm font-medium mb-2 text-foreground">
-                        Scenario (Optional)
-                      </label>
-                      <textarea
-                        id="scenario"
-                        name="scenario"
-                        value={formData.scenario}
-                        onChange={handleChange}
-                        rows={4}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        placeholder="Describe the setting and context for conversations"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="firstMessage" className="block text-sm font-medium mb-2 text-foreground">
-                        First Message (Optional)
-                      </label>
-                      <textarea
-                        id="firstMessage"
-                        name="firstMessage"
-                        value={formData.firstMessage}
-                        onChange={handleChange}
-                        rows={3}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        placeholder="The character's opening message to start conversations"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="exampleDialogues" className="block text-sm font-medium mb-2 text-foreground">
-                        Example Dialogues (Optional)
-                      </label>
-                      <textarea
-                        id="exampleDialogues"
-                        name="exampleDialogues"
-                        value={formData.exampleDialogues}
-                        onChange={handleChange}
-                        rows={6}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        placeholder="Example conversations to guide the AI's responses"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="systemPrompt" className="block text-sm font-medium mb-2 text-foreground">
-                        System Prompt (Optional)
-                      </label>
-                      <textarea
-                        id="systemPrompt"
-                        name="systemPrompt"
-                        value={formData.systemPrompt}
-                        onChange={handleChange}
-                        rows={4}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        placeholder="Custom system instructions (will be combined with auto-generated prompt)"
-                      />
-                    </div>
-
-                    {/* Tag Editor */}
-                    <TagEditor entityType="character" entityId={id} />
-                  </div>
-                )
-
               case 'profiles':
                 return (
-                  <div className="space-y-6">
-                    <div>
-                      <label htmlFor="defaultConnectionProfileId" className="block text-sm font-medium mb-2 text-foreground">
-                        Default Connection Profile (Optional)
-                      </label>
-                      <select
-                        id="defaultConnectionProfileId"
-                        name="defaultConnectionProfileId"
-                        value={formData.defaultConnectionProfileId}
-                        onChange={handleChange}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        <option value="">No default profile</option>
-                        {profiles.map((profile) => (
-                          <option key={profile.id} value={profile.id}>
-                            {profile.name}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="mt-1 qt-text-xs">
-                        Can be overridden for individual chats
-                      </p>
-                    </div>
-
-                    {/* Default Persona Selector */}
-                    <div>
-                      <label htmlFor="defaultPersona" className="block text-sm font-medium mb-2 text-foreground">
-                        Default Persona (Optional)
-                      </label>
-                      {loadingPersonas ? (
-                        <p className="qt-text-small">Loading personas...</p>
-                      ) : personas.length > 0 ? (
-                        <>
-                          <select
-                            id="defaultPersona"
-                            value={defaultPersonaId}
-                            onChange={(e) => setDefaultPersonaId(e.target.value)}
-                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            <option value="">No default persona</option>
-                            {personas.map((persona) => {
-                              const displayName = formatPersonaName(persona)
-                              const tagCount = persona.matchingTagCount
-                              const plural = tagCount === 1 ? '' : 's'
-                              const tagSuffix = tagCount ? ` — ${tagCount} shared tag${plural}` : ''
-                              return (
-                                <option key={persona.id} value={persona.id}>
-                                  {displayName}{tagSuffix}
-                                </option>
-                              )
-                            })}
-                          </select>
-                          <p className="mt-1 qt-text-xs">
-                            Personas are sorted by number of tags shared with this character
-                          </p>
-                        </>
-                      ) : (
-                        <p className="qt-text-small">
-                          No personas available. Create a persona first.
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  <CharacterSettings
+                    formData={formData}
+                    onChange={(e) => handleChange(e as React.ChangeEvent<HTMLSelectElement>)}
+                    profiles={profiles}
+                    personas={personas}
+                    defaultPersonaId={defaultPersonaId}
+                    onDefaultPersonaChange={handleDefaultPersonaChange}
+                    loadingPersonas={loadingPersonas}
+                  />
                 )
 
               case 'gallery':
@@ -636,12 +214,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                       if (imageId) {
                         setCharacterAvatar(imageId)
                       } else {
-                        // Clear avatar
-                        fetch(`/api/characters/${id}/avatar`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ imageId: null }),
-                        }).then(() => fetchCharacter())
+                        clearAvatar()
                       }
                     }}
                     onRefresh={fetchCharacter}
@@ -662,7 +235,6 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                     characterId={id}
                     characterName={character?.name || ''}
                     onRenameComplete={() => {
-                      // Refresh character data after rename
                       fetchCharacter()
                     }}
                   />
@@ -674,6 +246,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           }}
         </EntityTabs>
 
+        {/* Form Action Buttons */}
         <div className="flex gap-4 mt-8">
           <button
             type="submit"
@@ -695,7 +268,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       {/* Avatar Selector Modal */}
       <AvatarSelector
         isOpen={showAvatarSelector}
-        onClose={() => setShowAvatarSelector(false)}
+        onClose={() => toggleAvatarSelector(false)}
         onSelect={setCharacterAvatar}
         currentImageId={character?.defaultImageId}
         contextType="CHARACTER"
@@ -705,11 +278,11 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       {/* Image Upload Dialog */}
       <ImageUploadDialog
         isOpen={showUploadDialog}
-        onClose={() => setShowUploadDialog(false)}
+        onClose={() => toggleUploadDialog(false)}
         contextType="CHARACTER"
         contextId={id}
         onSuccess={() => {
-          setShowUploadDialog(false)
+          toggleUploadDialog(false)
           fetchCharacter()
         }}
       />
