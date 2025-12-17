@@ -192,3 +192,39 @@ export function exportSTChat(
     create_date: chat.createdAt.getTime(),
   }
 }
+
+/**
+ * Export internal chat to SillyTavern JSONL format
+ *
+ * SillyTavern uses JSONL (JSON Lines) format where:
+ * - First line: Header with user_name, character_name, create_date, chat_metadata
+ * - Subsequent lines: Individual message objects
+ *
+ * Each line is a complete JSON object, allowing streaming reads/writes.
+ */
+export function exportSTChatAsJSONL(
+  chat: any,
+  messages: any[],
+  characterName: string,
+  userName: string = 'User'
+): string {
+  const stChat = exportSTChat(chat, messages, characterName, userName)
+
+  const lines: string[] = []
+
+  // First line: Header with metadata
+  const header = {
+    user_name: stChat.user_name,
+    character_name: stChat.character_name,
+    create_date: stChat.create_date,
+    chat_metadata: stChat.chat_metadata || {},
+  }
+  lines.push(JSON.stringify(header))
+
+  // Subsequent lines: Individual messages
+  for (const message of stChat.messages) {
+    lines.push(JSON.stringify(message))
+  }
+
+  return lines.join('\n')
+}

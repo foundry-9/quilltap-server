@@ -4,6 +4,13 @@
 
 ### 2.4-dev
 
+- fix: SillyTavern chat export now produces proper JSONL format
+  - Export now outputs true JSONL (one JSON object per line) matching SillyTavern's format
+  - First line contains header with user_name, character_name, create_date, chat_metadata
+  - Subsequent lines contain individual message objects
+  - Previously exported a single JSON object which was incompatible with SillyTavern
+  - Added `exportSTChatAsJSONL` function in `lib/sillytavern/chat.ts`
+  - Import parser also improved to auto-detect format (JSON vs JSONL) for backwards compatibility
 - feat: Per-user post-login migration for character system prompts
   - Added signIn callback in NextAuth configuration to run migrations at login
   - New `lib/auth/post-login-migrations.ts` module handles per-user data migrations
