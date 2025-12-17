@@ -21,6 +21,7 @@ import { getFileMetadata, listFiles } from '@/lib/s3/operations';
 import { validateS3Config } from '@/lib/s3/config';
 import type { LLMProviderPlugin } from '@/lib/plugins/interfaces/provider-plugin';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
+import { getErrorMessage } from '@/lib/errors';
 
 // Read version from package.json
 import packageJson from '@/package.json';
@@ -325,7 +326,7 @@ async function collectModels(userId: string): Promise<ModelInfo[]> {
         }
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       moduleLogger.warn('Failed to fetch models from provider', {
         providerName,
         error: errorMessage,

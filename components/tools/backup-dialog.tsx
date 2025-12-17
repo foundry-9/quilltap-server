@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { getErrorMessage } from '@/lib/error-utils'
 
 interface BackupDialogProps {
   isOpen: boolean
@@ -77,7 +78,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
       // Close dialog
       onClose()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create backup'
+      const errorMessage = getErrorMessage(err, 'Failed to create backup')
       setError(errorMessage)
       clientLogger.error('Backup creation failed', { error: errorMessage })
       showErrorToast(errorMessage)

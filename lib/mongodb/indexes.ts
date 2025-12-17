@@ -1,5 +1,6 @@
 import { Db } from 'mongodb';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errors';
 
 /**
  * Index definition interface for MongoDB indexes
@@ -170,7 +171,7 @@ async function createCollectionIndexes(
       );
       indexCount++;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       logger.warn(
         `[MongoDB] Failed to create index for ${collectionName}`,
         { key: indexDef.key, error: errorMessage }
@@ -249,7 +250,7 @@ async function dropCollectionIndexes(
           );
           indexCount++;
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          const errorMessage = getErrorMessage(error);
           logger.warn(
             `[MongoDB] Failed to drop index for ${collectionName}`,
             { indexName: index.name, error: errorMessage }
@@ -259,7 +260,7 @@ async function dropCollectionIndexes(
       }
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.warn(
       `[MongoDB] Failed to get indexes for ${collectionName}`,
       { error: errorMessage }

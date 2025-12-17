@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
+import { getErrorMessage } from '@/lib/error-utils'
 import { CapabilitiesReportDialog } from './capabilities-report-dialog'
 
 interface ReportInfo {
@@ -88,7 +89,7 @@ export function CapabilitiesReportCard() {
       // Refresh the list
       await fetchReports()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       setError(errorMessage)
       clientLogger.error('Failed to generate capabilities report', { error: errorMessage })
       showErrorToast(errorMessage)
@@ -113,7 +114,7 @@ export function CapabilitiesReportCard() {
       })
       setShowDialog(true)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       clientLogger.error('Failed to view report', { error: errorMessage })
       showErrorToast('Failed to load report')
     } finally {
@@ -140,7 +141,7 @@ export function CapabilitiesReportCard() {
       showSuccessToast('Report deleted')
       await fetchReports()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       clientLogger.error('Failed to delete report', { error: errorMessage })
       showErrorToast('Failed to delete report')
     }

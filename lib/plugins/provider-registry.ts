@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import type { LLMProviderPlugin, ProviderMetadata, AttachmentSupport, ProviderConfigRequirements, ImageProviderConstraints } from './interfaces/provider-plugin';
 import type { LLMProvider } from '@/lib/llm/base';
 import type { ImageGenProvider } from '@/lib/image-gen/base';
+import { getErrorMessage } from '@/lib/errors';
 
 // ============================================================================
 // TYPES
@@ -130,7 +131,7 @@ class ProviderRegistry {
     } catch (error) {
       this.logger.error('Failed to create LLM provider', {
         provider: name,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       });
       throw error;
     }
@@ -173,7 +174,7 @@ class ProviderRegistry {
     } catch (error) {
       this.logger.error('Failed to create image provider', {
         provider: name,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       });
       throw error;
     }
@@ -307,7 +308,7 @@ class ProviderRegistry {
         this.registerProvider(provider);
       } catch (error) {
         const providerName = provider.metadata.providerName;
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage = getErrorMessage(error);
         this.state.errors.set(providerName, errorMessage);
         this.logger.warn('Failed to register provider', {
           name: providerName,

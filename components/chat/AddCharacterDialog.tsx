@@ -16,6 +16,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface CharacterOption {
   id: string
@@ -160,31 +161,10 @@ export default function AddCharacterDialog({
   }, [characters, selectedCharacterId])
 
   // Handle click outside to close
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
-        if (!isAdding) {
-          onClose()
-        }
-      }
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isAdding) {
-        onClose()
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      document.addEventListener('keydown', handleKeyDown)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, isAdding, onClose])
+  useClickOutside(modalRef, () => { if (!isAdding) onClose() }, {
+    enabled: isOpen,
+    onEscape: () => { if (!isAdding) onClose() },
+  })
 
   const handleAddCharacter = async () => {
     if (!selectedCharacterId || !selectedConnectionProfileId) {

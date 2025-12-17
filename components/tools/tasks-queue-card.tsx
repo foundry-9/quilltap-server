@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import { getErrorMessage } from '@/lib/error-utils'
 
 interface QueueStats {
   pending: number
@@ -80,7 +81,7 @@ export function TasksQueueCard() {
         estimatedTokens: queueData.totalEstimatedTokens,
       })
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       setError(errorMessage)
       clientLogger.error('Failed to fetch tasks queue status', { error: errorMessage })
     } finally {
@@ -110,7 +111,7 @@ export function TasksQueueCard() {
       // Refresh the queue status to get updated processor state
       await fetchQueueStatus()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       setError(errorMessage)
       clientLogger.error(`Failed to ${action} queue`, { error: errorMessage })
     } finally {
@@ -133,7 +134,7 @@ export function TasksQueueCard() {
       setShowJobDialog(true)
       clientLogger.debug('Job details fetched', { jobId })
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       setError(errorMessage)
       clientLogger.error('Failed to fetch job details', { error: errorMessage })
     } finally {
@@ -160,7 +161,7 @@ export function TasksQueueCard() {
       clientLogger.info('Job paused', { jobId })
       await fetchQueueStatus()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       setError(errorMessage)
       clientLogger.error('Failed to pause job', { error: errorMessage })
     } finally {
@@ -187,7 +188,7 @@ export function TasksQueueCard() {
       clientLogger.info('Job resumed', { jobId })
       await fetchQueueStatus()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       setError(errorMessage)
       clientLogger.error('Failed to resume job', { error: errorMessage })
     } finally {
@@ -219,7 +220,7 @@ export function TasksQueueCard() {
 
       await fetchQueueStatus()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      const errorMessage = getErrorMessage(err)
       setError(errorMessage)
       clientLogger.error('Failed to delete job', { error: errorMessage })
     } finally {

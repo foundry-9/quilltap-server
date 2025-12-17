@@ -16,6 +16,7 @@ import { generateContextSummaryAsync } from '@/lib/chat/context-summary'
 import { enqueueMemoryExtractionBatch, ensureProcessorRunning, type MessagePair } from '@/lib/background-jobs'
 import type { ChatParticipantBase, FileEntry, Character, Persona } from '@/lib/schemas/types'
 import type { SpeakerMapping } from '@/lib/sillytavern/multi-char-parser'
+import { getErrorMessage } from '@/lib/errors'
 
 /**
  * Get the filepath for a file based on storage type
@@ -76,10 +77,10 @@ export async function POST(req: NextRequest) {
       return handleLegacyImport(body, session.user.id, repos)
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorMessage = getErrorMessage(error, 'Failed to import chat')
     logger.error('Error importing chat', { context: 'POST /api/chats/import', errorMessage }, error instanceof Error ? error : undefined)
     return NextResponse.json(
-      { error: errorMessage || 'Failed to import chat' },
+      { error: errorMessage },
       { status: 500 }
     )
   }

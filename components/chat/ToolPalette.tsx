@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface ToolPaletteProps {
   isOpen: boolean
@@ -185,42 +186,11 @@ export default function ToolPalette({
     [input, inputRef, setInput, onClose]
   )
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!paletteRef.current) return
-
-      const target = event.target as Node
-
-      // Check if click is inside the palette
-      if (paletteRef.current.contains(target)) {
-        return
-      }
-
-      // Don't close if clicking the toggle button (it handles its own toggle)
-      if (toggleButtonRef?.current?.contains(target)) {
-        return
-      }
-
-      // Click is outside both palette and toggle button
-      onClose()
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      document.addEventListener('keydown', handleKeyDown)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, onClose, toggleButtonRef])
+  useClickOutside(paletteRef, onClose, {
+    enabled: isOpen,
+    excludeRefs: toggleButtonRef ? [toggleButtonRef] : [],
+    onEscape: onClose,
+  })
 
   const handleGalleryClick = () => {
     onGalleryClick()

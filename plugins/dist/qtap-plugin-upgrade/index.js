@@ -32265,6 +32265,31 @@ var require_lib3 = __commonJS({
   }
 });
 
+// ../../../lib/errors.ts
+function getErrorMessage(error2, fallback = "Unknown error") {
+  if (error2 instanceof Error) {
+    return error2.message;
+  }
+  if (typeof error2 === "string") {
+    return error2;
+  }
+  if (error2 !== null && error2 !== void 0) {
+    const stringified = String(error2);
+    if (stringified !== "[object Object]") {
+      return stringified;
+    }
+  }
+  return fallback;
+}
+var import_server;
+var init_errors = __esm({
+  "../../../lib/errors.ts"() {
+    "use strict";
+    import_server = require("next/server");
+    init_logger();
+  }
+});
+
 // ../../../lib/mongodb/config.ts
 function sanitizeURI(uri) {
   try {
@@ -32324,7 +32349,7 @@ function validateMongoDBConfig() {
         errors: validationErrors
       });
     } else {
-      const errorMessage = error2 instanceof Error ? error2.message : "Unknown error";
+      const errorMessage = getErrorMessage(error2);
       errors.push(errorMessage);
       logger.error("MongoDB configuration validation error", {
         error: errorMessage
@@ -32389,7 +32414,7 @@ async function testMongoDBConnection() {
     };
   } catch (error2) {
     const latencyMs = Date.now() - startTime;
-    const errorMessage = error2 instanceof Error ? error2.message : "Unknown error";
+    const errorMessage = getErrorMessage(error2);
     logger.error("MongoDB connection test failed", {
       uri: sanitizeURI(config.uri),
       error: errorMessage,
@@ -32406,7 +32431,7 @@ async function testMongoDBConnection() {
         await client.close();
         logger.debug("MongoDB client connection closed");
       } catch (error2) {
-        const closeError = error2 instanceof Error ? error2.message : "Unknown error";
+        const closeError = getErrorMessage(error2);
         logger.warn("Error closing MongoDB connection", {
           error: closeError
         });
@@ -32421,6 +32446,7 @@ var init_config = __esm({
     import_zod2 = require("zod");
     import_mongodb = __toESM(require_lib3());
     init_logger();
+    init_errors();
     mongoDBConfigSchema = import_zod2.z.object({
       uri: import_zod2.z.string().min(1, "MongoDB URI is required"),
       database: import_zod2.z.string().min(1, "Database name is required"),
@@ -51214,7 +51240,7 @@ var init_SSOOIDCServiceException = __esm({
 
 // ../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/models/errors.js
 var AccessDeniedException, AuthorizationPendingException, ExpiredTokenException, InternalServerException, InvalidClientException, InvalidGrantException, InvalidRequestException, InvalidScopeException, SlowDownException, UnauthorizedClientException, UnsupportedGrantTypeException;
-var init_errors = __esm({
+var init_errors2 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/models/errors.js"() {
     init_SSOOIDCServiceException();
     AccessDeniedException = class _AccessDeniedException extends SSOOIDCServiceException {
@@ -51405,7 +51431,7 @@ var _ADE, _APE, _AT, _CS, _CT, _CTR, _CTRr, _CV, _ETE, _ICE, _IGE, _IRE, _ISE, _
 var init_schemas_0 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sso-oidc/schemas/schemas_0.js"() {
     init_schema();
-    init_errors();
+    init_errors2();
     init_SSOOIDCServiceException();
     _ADE = "AccessDeniedException";
     _APE = "AuthorizationPendingException";
@@ -51616,7 +51642,7 @@ var init_sso_oidc = __esm({
     init_SSOOIDC();
     init_commands();
     init_enums();
-    init_errors();
+    init_errors2();
     init_SSOOIDCServiceException();
   }
 });
@@ -52930,7 +52956,7 @@ var init_SigninServiceException = __esm({
 
 // ../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/models/errors.js
 var AccessDeniedException3, InternalServerException3, TooManyRequestsError, ValidationException;
-var init_errors2 = __esm({
+var init_errors3 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/models/errors.js"() {
     init_SigninServiceException();
     AccessDeniedException3 = class _AccessDeniedException extends SigninServiceException {
@@ -52997,7 +53023,7 @@ var _ADE2, _AT2, _COAT, _COATR, _COATRB, _COATRBr, _COATRr, _ISE2, _RT2, _TMRE, 
 var init_schemas_02 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/signin/schemas/schemas_0.js"() {
     init_schema();
-    init_errors2();
+    init_errors3();
     init_SigninServiceException();
     _ADE2 = "AccessDeniedException";
     _AT2 = "AccessToken";
@@ -53187,7 +53213,7 @@ var init_signin = __esm({
     init_Signin();
     init_commands2();
     init_enums2();
-    init_errors2();
+    init_errors3();
     init_SigninServiceException();
   }
 });
@@ -53866,7 +53892,7 @@ var init_STSServiceException = __esm({
 
 // ../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/models/errors.js
 var ExpiredTokenException3, MalformedPolicyDocumentException, PackedPolicyTooLargeException, RegionDisabledException, IDPRejectedClaimException, InvalidIdentityTokenException, IDPCommunicationErrorException;
-var init_errors3 = __esm({
+var init_errors4 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/models/errors.js"() {
     init_STSServiceException();
     ExpiredTokenException3 = class _ExpiredTokenException extends STSServiceException {
@@ -53961,7 +53987,7 @@ var _A, _AKI, _AR, _ARI, _ARR, _ARRs, _ARU, _ARWWI, _ARWWIR, _ARWWIRs, _Au, _C, 
 var init_schemas_03 = __esm({
   "../../../node_modules/@aws-sdk/nested-clients/dist-es/submodules/sts/schemas/schemas_0.js"() {
     init_schema();
-    init_errors3();
+    init_errors4();
     init_STSServiceException();
     _A = "Arn";
     _AKI = "AccessKeyId";
@@ -54368,7 +54394,7 @@ var init_sts = __esm({
     init_STSClient();
     init_STS();
     init_commands3();
-    init_errors3();
+    init_errors4();
     init_defaultRoleAssumers();
     init_STSServiceException();
   }
@@ -66134,6 +66160,7 @@ var validateMongoDBConfigMigration = {
 var import_zod5 = require("zod");
 var import_client_s3 = __toESM(require_dist_cjs71());
 init_logger();
+init_errors();
 var s3ConfigSchema = import_zod5.z.object({
   mode: import_zod5.z.enum(["embedded", "external"]),
   endpoint: import_zod5.z.string().url().optional(),
@@ -66283,7 +66310,7 @@ function validateS3Config() {
         mode
       });
     } else {
-      const errorMessage = error2 instanceof Error ? error2.message : "Unknown error";
+      const errorMessage = getErrorMessage(error2);
       errors.push(errorMessage);
       logger_inst.error("S3 configuration validation error", {
         error: errorMessage,
@@ -66408,7 +66435,7 @@ async function testS3Connection() {
       client.destroy();
     }
   } catch (error2) {
-    const errorMsg = `Failed to initialize S3 client: ${error2 instanceof Error ? error2.message : "Unknown error"}`;
+    const errorMsg = `Failed to initialize S3 client: ${getErrorMessage(error2)}`;
     logger_inst.error(errorMsg, {}, error2 instanceof Error ? error2 : void 0);
     return {
       success: false,

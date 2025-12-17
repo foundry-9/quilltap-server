@@ -13,6 +13,7 @@
 
 import { ReactNode, useState, useRef, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 export interface NavUserMenuItemProps {
   /** Icon element to display */
@@ -69,33 +70,11 @@ export function NavUserMenuItem({
   const itemRef = useRef<HTMLDivElement>(null)
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Close submenu when clicking outside
-  useEffect(() => {
-    if (!isSubmenuOpen) return
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (itemRef.current && !itemRef.current.contains(event.target as Node)) {
-        setIsSubmenuOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isSubmenuOpen])
-
-  // Close submenu on escape
-  useEffect(() => {
-    if (!isSubmenuOpen) return
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsSubmenuOpen(false)
-      }
-    }
-
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
-  }, [isSubmenuOpen])
+  // Close submenu when clicking outside or pressing escape
+  useClickOutside(itemRef, () => setIsSubmenuOpen(false), {
+    enabled: isSubmenuOpen,
+    onEscape: () => setIsSubmenuOpen(false),
+  })
 
   const handleClick = () => {
     if (disabled) return

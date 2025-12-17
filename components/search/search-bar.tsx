@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { clientLogger } from '@/lib/client-logger'
+import { useClickOutside } from '@/hooks/useClickOutside'
 import { SearchResults } from './search-results'
 import { SearchDialog } from './search-dialog'
 import type { SearchResult, SearchResponse, SearchType } from './types'
@@ -47,16 +48,7 @@ export function SearchBar() {
   }, [])
 
   // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setShowDropdown(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  useClickOutside(containerRef, () => setShowDropdown(false))
 
   // Debounced search
   const performSearch = useCallback(async (searchQuery: string) => {

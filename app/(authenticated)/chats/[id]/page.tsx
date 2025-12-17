@@ -21,6 +21,7 @@ import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { clientLogger } from '@/lib/client-logger'
+import { getErrorMessage } from '@/lib/error-utils'
 import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
@@ -1505,7 +1506,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             } catch (parseError) {
               // Only log if it's a real parse error, not noise from SSE chunking
               // Note: rawData is already trimmed and we've skipped empty/[DONE]/{} before try block
-              const errorMessage = parseError instanceof Error ? parseError.message : String(parseError)
+              const errorMessage = getErrorMessage(parseError)
               // Skip logging for generic stringified objects or empty error messages
               const shouldSkip = !errorMessage ||
                 errorMessage === 'undefined' ||

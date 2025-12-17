@@ -175,3 +175,7 @@ export function withErrorHandling(
     }
   }
 }
+
+// Re-export client-safe error utilities
+// Server components can import from here; client components should import from @/lib/error-utils
+export { getErrorMessage } from './error-utils'

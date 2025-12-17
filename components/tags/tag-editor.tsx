@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { showErrorToast } from '@/lib/toast';
 import { clientLogger } from '@/lib/client-logger';
+import { useClickOutside } from '@/hooks/useClickOutside';
 import { TagBadge } from '@/components/tags/tag-badge';
 
 export interface Tag {
@@ -94,21 +95,9 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
   );
 
   // Close suggestions when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(event.target as Node) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside(suggestionsRef, () => setShowSuggestions(false), {
+    excludeRefs: [inputRef]
+  });
 
   const addTag = async (tagName: string) => {
     if (!tagName.trim() || loading) return;

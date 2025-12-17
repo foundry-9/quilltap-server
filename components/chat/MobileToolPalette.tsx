@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface MobileToolPaletteProps {
   isOpen: boolean
@@ -190,41 +191,11 @@ export default function MobileToolPalette({
   )
 
   // Close on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!paletteRef.current) return
-
-      const target = event.target as Node
-
-      // Don't close if clicking inside the palette
-      if (paletteRef.current.contains(target)) {
-        return
-      }
-
-      // Don't close if clicking the toggle button (it handles its own toggle)
-      if (toggleButtonRef?.current?.contains(target)) {
-        return
-      }
-
-      onClose()
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      document.addEventListener('keydown', handleKeyDown)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, onClose, toggleButtonRef])
+  useClickOutside(paletteRef, onClose, {
+    enabled: isOpen,
+    excludeRefs: toggleButtonRef ? [toggleButtonRef] : [],
+    onEscape: onClose,
+  })
 
   // Debug logging when palette opens
   useEffect(() => {

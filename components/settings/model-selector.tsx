@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 // Model warning types (matching server-side types)
 export interface ModelWarning {
@@ -91,21 +92,7 @@ export function ModelSelector({
     : sortedModels
 
   // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false)
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isOpen])
+  useClickOutside(containerRef, () => setIsOpen(false), { enabled: isOpen })
 
   // Focus search input when dropdown opens
   useEffect(() => {

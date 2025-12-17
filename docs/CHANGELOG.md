@@ -4,6 +4,17 @@
 
 ### 2.4-dev
 
+- refactor: Consolidated click-outside detection into `useClickOutside` hook
+  - Created `hooks/useClickOutside.ts` with options for `enabled`, `excludeRefs`, and `onEscape`
+  - Updated 14 components across search, tags, dashboard, chat, and settings
+  - Removed ~300 lines of repetitive event listener boilerplate
+  - Consistent behavior for dropdowns, modals, and palettes
+- refactor: Consolidated error message extraction into centralized `getErrorMessage` utility
+  - Added `getErrorMessage(error, fallback?)` function to `lib/errors.ts`
+  - Replaced ~50 instances of `error instanceof Error ? error.message : String(error)` pattern
+  - Updated 35+ files across lib/, app/api/, components/, and app/(authenticated)/
+  - Supports custom fallback messages: `getErrorMessage(err, 'Failed to load data')`
+  - Handles string errors, Error instances, and unknown types consistently
 - refactor: Consolidated avatar rendering into reusable components
   - Created `components/ui/Avatar.tsx` - unified avatar component with size/style variants
   - Created `components/ui/AvatarStack.tsx` - stacked avatar display for multi-character contexts

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { getErrorMessage } from '@/lib/error-utils'
 
 interface DeleteSummary {
   characters: number
@@ -48,7 +49,7 @@ export function DeleteDataCard() {
       setPreview(data.summary)
       clientLogger.info('Delete preview loaded', { summary: data.summary })
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load preview'
+      const errorMessage = getErrorMessage(err, 'Failed to load preview')
       setError(errorMessage)
       clientLogger.error('Failed to load delete preview', { error: errorMessage })
     } finally {
@@ -98,7 +99,7 @@ export function DeleteDataCard() {
       clientLogger.info('Complete data deletion finished', { summary: data.summary })
       showSuccessToast('All data has been deleted')
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to delete data'
+      const errorMessage = getErrorMessage(err, 'Failed to delete data')
       setError(errorMessage)
       setStep('confirm')
       clientLogger.error('Data deletion failed', { error: errorMessage })

@@ -13,6 +13,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import type { ParticipantData } from './ParticipantCard'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface MobileParticipantDropdownProps {
   participant: ParticipantData
@@ -126,41 +127,11 @@ export default function MobileParticipantDropdown({
   }, [isOpen, anchorRef, participant.id])
 
   // Close on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!dropdownRef.current) return
-
-      const target = event.target as Node
-
-      // Don't close if clicking inside the dropdown
-      if (dropdownRef.current.contains(target)) {
-        return
-      }
-
-      // Don't close if clicking the anchor button (it handles toggle)
-      if (anchorRef.current?.contains(target)) {
-        return
-      }
-
-      onClose()
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      document.addEventListener('keydown', handleKeyDown)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, onClose, anchorRef])
+  useClickOutside(dropdownRef, onClose, {
+    enabled: isOpen,
+    excludeRefs: anchorRef ? [anchorRef] : [],
+    onEscape: onClose,
+  })
 
   // Handle action button click
   const handleActionClick = () => {

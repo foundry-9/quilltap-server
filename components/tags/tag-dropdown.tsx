@@ -6,6 +6,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
+import { useClickOutside } from '@/hooks/useClickOutside';
 import { Tag } from './tag-editor';
 import { TagBadge } from '@/components/tags/tag-badge';
 
@@ -32,23 +33,7 @@ export function TagDropdown({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        if (isOpen) {
-          onToggle();
-        }
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen, onToggle]);
+  useClickOutside(dropdownRef, onToggle, { enabled: isOpen });
 
   // Focus input when add mode is enabled
   useEffect(() => {

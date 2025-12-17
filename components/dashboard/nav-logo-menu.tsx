@@ -13,6 +13,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { BrandLogo } from '@/components/ui/brand-logo';
 import { clientLogger } from '@/lib/client-logger';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 export interface NavMenuItem {
   href: string;
@@ -33,33 +34,11 @@ export function NavLogoMenu({ isCollapsed, menuItems }: NavLogoMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen]);
-
-  // Close dropdown on escape key
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      return () => document.removeEventListener('keydown', handleEscape);
-    }
-  }, [isOpen]);
+  // Close dropdown when clicking outside or pressing escape
+  useClickOutside(dropdownRef, () => setIsOpen(false), {
+    enabled: isOpen,
+    onEscape: () => setIsOpen(false),
+  });
 
   const handleToggle = () => {
     clientLogger.debug('NavLogoMenu: toggle dropdown', { wasOpen: isOpen, isCollapsed });

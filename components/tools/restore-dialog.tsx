@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { getErrorMessage } from '@/lib/error-utils'
 import type { BackupInfo, RestoreSummary } from '@/lib/backup/types'
 
 interface RestoreDialogProps {
@@ -67,7 +68,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
       setS3Backups(data.backups || data || [])
       setBackupsLoaded(true)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load backups'
+      const errorMessage = getErrorMessage(err, 'Failed to load backups')
       clientLogger.error('Failed to load S3 backups', { error: errorMessage })
       setBackupsLoaded(true) // Mark as loaded even on error to prevent infinite retries
     } finally {
@@ -157,7 +158,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
 
       clientLogger.info('Preview loaded successfully', { preview: previewData.preview })
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to preview backup'
+      const errorMessage = getErrorMessage(err, 'Failed to preview backup')
       setError(errorMessage)
       clientLogger.error('Failed to fetch preview', { error: errorMessage })
       showErrorToast(errorMessage)
@@ -210,7 +211,7 @@ export function RestoreDialog({ isOpen, onClose, onRestoreComplete, initialS3Key
 
       showSuccessToast('Backup restored successfully')
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to restore backup'
+      const errorMessage = getErrorMessage(err, 'Failed to restore backup')
       setError(errorMessage)
       clientLogger.error('Restore failed', { error: errorMessage })
       showErrorToast(errorMessage)

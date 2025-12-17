@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { validateMongoDBConfig, testMongoDBConnection } from '@/lib/mongodb/config';
 import { validateS3Config, testS3Connection } from '@/lib/s3/config';
+import { getErrorMessage } from '@/lib/errors';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +54,7 @@ async function checkJsonStoreHealth(
     serviceStatuses.push('healthy');
     healthLogger.debug('JSON store health check passed');
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = getErrorMessage(error);
     services.json = {
       status: 'unhealthy',
       message: `JSON store check failed: ${errorMessage}`,
@@ -102,7 +103,7 @@ async function checkMongoDBHealth(
         });
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = getErrorMessage(error);
       services.mongodb = {
         status: 'unhealthy',
         message: `MongoDB connection test error: ${errorMessage}`,
@@ -163,7 +164,7 @@ async function checkS3Health(
         });
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = getErrorMessage(error);
       services.s3 = {
         status: 'unhealthy',
         message: `S3 connection test error: ${errorMessage}`,
@@ -257,7 +258,7 @@ export async function GET() {
 
     return NextResponse.json(health, { status: statusCode });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = getErrorMessage(error);
     const checkDuration = Date.now() - startTime;
 
     const health: HealthResponse = {

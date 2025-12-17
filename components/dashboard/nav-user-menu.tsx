@@ -23,6 +23,7 @@ import { NavUserMenuItem } from './nav-user-menu-item'
 import { NavUserMenuThemeContent, ThemeIcon } from './nav-user-menu-theme'
 import { NavUserMenuQuickHideContent, QuickHideIcon } from './nav-user-menu-quick-hide'
 import { clientLogger } from '@/lib/client-logger'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface NavUserMenuProps {
   user: {
@@ -81,33 +82,11 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
   const hasAnyHidden = hiddenTagIds.size > 0
   const hasQuickHideTags = quickHideTags.length > 0
 
-  // Close menu when clicking outside
-  useEffect(() => {
-    if (!isOpen) return
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen])
-
-  // Close on escape key
-  useEffect(() => {
-    if (!isOpen) return
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsOpen(false)
-      }
-    }
-
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
-  }, [isOpen])
+  // Close menu when clicking outside or pressing escape
+  useClickOutside(menuRef, () => setIsOpen(false), {
+    enabled: isOpen,
+    onEscape: () => setIsOpen(false),
+  })
 
   const handleToggle = () => {
     clientLogger.debug('User menu toggle', { wasOpen: isOpen })

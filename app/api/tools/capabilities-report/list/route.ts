@@ -10,6 +10,7 @@ import { getServerSession } from '@/lib/auth/session';
 import { logger } from '@/lib/logger';
 import { s3FileService } from '@/lib/s3/file-service';
 import { getFileMetadata } from '@/lib/s3/operations';
+import { getErrorMessage } from '@/lib/errors';
 
 const moduleLogger = logger.child({ module: 'api:capabilities-report:list' });
 
@@ -73,7 +74,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ reports });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     moduleLogger.error('Failed to list capabilities reports', { error: errorMessage }, error instanceof Error ? error : undefined);
     return NextResponse.json(
       { error: 'Failed to list reports', details: errorMessage },

@@ -9,6 +9,7 @@ import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errors';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       memoryCount: count,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('[ChatMemories] Error getting memory count', { error: errorMessage });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
@@ -154,7 +155,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       deletedCount,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('[ChatMemories] Error deleting memories', { error: errorMessage });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

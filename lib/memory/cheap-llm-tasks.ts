@@ -12,6 +12,7 @@ import { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
+import { getErrorMessage } from '@/lib/errors'
 
 /**
  * Candidate memory extracted from a conversation
@@ -165,7 +166,7 @@ async function executeCheapLLMTask<T>(
       }
     } catch (error) {
       // If temperature is not supported, cache it and retry with default temperature
-      const errorMessage = error instanceof Error ? error.message : ''
+      const errorMessage = getErrorMessage(error, '')
       if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
         profilesWithoutCustomTemp.add(profileKey)
 
@@ -191,7 +192,7 @@ async function executeCheapLLMTask<T>(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: getErrorMessage(error),
     }
   }
 }

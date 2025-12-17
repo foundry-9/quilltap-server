@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface EntityOption {
   id: string
@@ -190,24 +191,9 @@ export default function GenerateImageDialog({
   }
 
   // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsDropdownOpen(false)
-      }
-    }
-
-    if (isDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isDropdownOpen])
+  useClickOutside(dropdownRef, () => setIsDropdownOpen(false), {
+    enabled: isDropdownOpen,
+  })
 
   if (!isOpen) return null
 

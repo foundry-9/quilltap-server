@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { getErrorMessage } from '@/lib/error-utils'
 import { SpeakerMapper } from './speaker-mapper'
 import { MemoryCreationDialog } from './memory-creation-dialog'
 import {
@@ -107,7 +108,7 @@ export function ImportWizard({
         isGroupChat: result.isGroupChat,
       })
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to parse file'
+      const errorMessage = getErrorMessage(err, 'Failed to parse file')
       setError(errorMessage)
       setStep('file-select')
       clientLogger.error('Error analyzing file', { error: errorMessage })
@@ -178,7 +179,7 @@ export function ImportWizard({
         messageCount: imported._count?.messages,
       })
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to import chat'
+      const errorMessage = getErrorMessage(err, 'Failed to import chat')
       setError(errorMessage)
       setStep('mapping')
       showErrorToast(errorMessage)

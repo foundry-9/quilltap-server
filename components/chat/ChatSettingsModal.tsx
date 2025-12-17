@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface ConnectionProfile {
   id: string
@@ -309,29 +310,10 @@ export default function ChatSettingsModal({
     }
   }, [isOpen])
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
-        onClose()
-      }
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      document.addEventListener('keydown', handleKeyDown)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, onClose])
+  useClickOutside(modalRef, onClose, {
+    enabled: isOpen,
+    onEscape: onClose,
+  })
 
   const fetchProfiles = async () => {
     try {
