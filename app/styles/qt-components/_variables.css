@@ -315,6 +315,33 @@
   --qt-auth-divider-color: var(--color-border);
 
   /* ==========================================================================
+     TAB VARIABLES
+     ========================================================================== */
+  --qt-tab-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  --qt-tab-padding-x: 1rem;
+  --qt-tab-padding-y: 0.625rem;
+  --qt-tab-font-size: 0.875rem;
+  --qt-tab-font-weight: 500;
+  --qt-tab-gap: 0.5rem;
+  --qt-tab-transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Inactive tab */
+  --qt-tab-bg: var(--color-muted);
+  --qt-tab-fg: var(--color-muted-foreground);
+  --qt-tab-border: transparent;
+  --qt-tab-hover-bg: color-mix(in srgb, var(--color-muted) 80%, var(--color-foreground) 5%);
+  --qt-tab-hover-fg: var(--color-foreground);
+
+  /* Active tab */
+  --qt-tab-active-bg: var(--color-card);
+  --qt-tab-active-fg: var(--color-primary);
+  --qt-tab-active-border: var(--color-border);
+
+  /* Tab group/container */
+  --qt-tab-group-gap: 0.25rem;
+  --qt-tab-divider-color: var(--color-border);
+
+  /* ==========================================================================
      DEVCONSOLE VARIABLES
      ========================================================================== */
   --qt-devconsole-bg: var(--color-background);

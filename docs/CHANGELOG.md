@@ -4,6 +4,15 @@
 
 ### 2.4-dev
 
+- refactor: Consolidate tab button styling into qt-tab utility classes
+  - Added CSS variables to `_variables.css`: `--qt-tab-*` for padding, colors, radius, transitions
+  - Added `qt-tab`, `qt-tab-active`, `qt-tab-group`, `qt-tab-divider`, `qt-tab-icon` classes to `_interactive.css`
+  - Updated `entity-tabs.tsx` to use new semantic classes instead of ~45 inline Tailwind classes
+  - Tabs are now fully theme-customizable via CSS variables
+- style: Rains theme tab styling (v1.0.11)
+  - Added unified tab strip appearance with consistent borders
+  - Inactive tabs blend together with transparent backgrounds
+  - Active tab stands out with raised surface and subtle shadow
 - refactor: Consolidate text styling and add new label utility classes
   - Added `qt-text-label` (text-sm font-medium), `qt-text-label-xs` (text-xs font-medium), `qt-text-section` (text-lg font-medium) to `_content.css`
   - Fixed redundant/conflicting class combinations (e.g., `text-xs qt-text-xs`, `text-sm font-medium qt-text-xs`)

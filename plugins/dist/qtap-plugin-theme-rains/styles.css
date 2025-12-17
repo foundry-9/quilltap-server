@@ -979,6 +979,30 @@
   --qt-rp-button-internal-fg: hsl(var(--oncolor-100));
   --qt-rp-button-ooc-bg: hsl(120 100% 20%);
   --qt-rp-button-ooc-fg: hsl(120 100% 75%);
+
+  /* ==========================================================================
+     TAB VARIABLES - Unified tab strip appearance
+     ========================================================================== */
+  --qt-tab-radius: 0.5rem 0.5rem 0 0;
+  --qt-tab-padding-x: 1rem;
+  --qt-tab-padding-y: 0.625rem;
+  --qt-tab-gap: 0;
+  --qt-tab-group-gap: 0;
+
+  /* Inactive tabs - subtle, blend together */
+  --qt-tab-bg: transparent;
+  --qt-tab-fg: hsl(var(--text-400));
+  --qt-tab-border: hsl(var(--border-300) / 0.35);
+  --qt-tab-hover-bg: hsl(var(--bg-200) / 0.5);
+  --qt-tab-hover-fg: hsl(var(--text-200));
+
+  /* Active tab - stands out, connects to content */
+  --qt-tab-active-bg: var(--surface-raised);
+  --qt-tab-active-fg: hsl(var(--accent-brand));
+  --qt-tab-active-border: hsl(var(--border-300) / 0.35);
+
+  /* Divider matches active tab border */
+  --qt-tab-divider-color: hsl(var(--border-300) / 0.35);
 }
 
 /* Button override - Rains primary button gradient */
@@ -1032,4 +1056,15 @@
   color: hsl(var(--text-200));
   border-color: hsl(var(--border-300) / 0.45);
   font-family: var(--font-claude-response);
+}
+
+/* Tab overrides - unified tab strip appearance */
+[data-theme="rains"] .qt-tab {
+  border-bottom: 1px solid hsl(var(--border-300) / 0.35);
+  margin-bottom: -1px;
+}
+
+[data-theme="rains"] .qt-tab-active {
+  border-bottom-color: transparent;
+  box-shadow: 0 -2px 8px -4px hsl(var(--always-black) / 0.3);
 }
