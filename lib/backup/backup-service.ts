@@ -8,6 +8,7 @@
 import archiver from 'archiver';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
+import { getRepositories } from '@/lib/mongodb/repositories';
 import { s3FileService } from '@/lib/s3/file-service';
 import { downloadFile } from '@/lib/s3/operations';
 import type { BackupManifest, BackupData, BackupInfo, ChatWithMessages } from './types';
@@ -25,6 +26,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   moduleLogger.debug('Collecting user data', { userId });
 
   const repos = getUserRepositories(userId);
+  const globalRepos = getRepositories();
 
   // Collect all entities in parallel
   const [
@@ -36,6 +38,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     imageProfiles,
     embeddingProfiles,
     files,
+    promptTemplates,
+    roleplayTemplates,
   ] = await Promise.all([
     repos.characters.findAll(),
     repos.personas.findAll(),
@@ -45,6 +49,9 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     repos.imageProfiles.findAll(),
     repos.embeddingProfiles.findAll(),
     repos.files.findAll(),
+    // Get user-created templates (excludes built-in templates)
+    globalRepos.promptTemplates.findByUserId(userId),
+    globalRepos.roleplayTemplates.findByUserId(userId),
   ]);
 
   moduleLogger.debug('Collected base entities', {
@@ -57,6 +64,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     imageProfiles: imageProfiles.length,
     embeddingProfiles: embeddingProfiles.length,
     files: files.length,
+    promptTemplates: promptTemplates.length,
+    roleplayTemplates: roleplayTemplates.length,
   });
 
   // Collect messages for each chat
@@ -103,6 +112,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     embeddingProfiles,
     memories,
     files,
+    promptTemplates,
+    roleplayTemplates,
   };
 }
 
@@ -128,6 +139,8 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       embeddingProfiles: data.embeddingProfiles.length,
       memories: data.memories.length,
       files: data.files.length,
+      promptTemplates: data.promptTemplates.length,
+      roleplayTemplates: data.roleplayTemplates.length,
     },
   };
 }
@@ -210,6 +223,12 @@ export async function createBackup(userId: string): Promise<{
   });
   archive.append(JSON.stringify(data.files, null, 2), {
     name: `${folderName}/data/files.json`,
+  });
+  archive.append(JSON.stringify(data.promptTemplates, null, 2), {
+    name: `${folderName}/data/prompt-templates.json`,
+  });
+  archive.append(JSON.stringify(data.roleplayTemplates, null, 2), {
+    name: `${folderName}/data/roleplay-templates.json`,
   });
 
   // Add actual files from S3

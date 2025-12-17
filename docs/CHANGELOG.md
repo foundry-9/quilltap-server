@@ -4,6 +4,12 @@
 
 ### 2.4-dev
 
+- fix: Add user-created prompt and roleplay templates to cloud backup/restore
+  - PromptTemplates and RoleplayTemplates (user-created, not built-in) are now included in backups
+  - Backwards compatible with older backups that don't have templates
+  - Templates are remapped correctly in new-account mode restore
+  - Delete-all-data feature now also deletes user-created templates
+  - Added templates count to backup manifest and restore summary
 - style: Major Earl Grey theme enhancement with full qt-* utility class support (v1.0.10)
   - Added 140+ new CSS variable overrides for comprehensive theming
   - Tabs: Full tab styling with transparent inactive states and raised active states

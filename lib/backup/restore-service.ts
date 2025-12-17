@@ -31,6 +31,8 @@ import type {
   FileEntry,
   ChatParticipantBase,
   PhysicalDescription,
+  PromptTemplate,
+  RoleplayTemplate,
 } from '@/lib/schemas/types';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
@@ -69,6 +71,17 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
     return JSON.parse(content) as T;
   };
 
+  // Helper to read JSON from zip with optional fallback for backwards compatibility
+  const readJsonOptional = <T>(path: string, fallback: T): T => {
+    const entry = zip.getEntry(rootFolder + path);
+    if (!entry) {
+      moduleLogger.debug('Optional file not found in backup, using fallback', { path });
+      return fallback;
+    }
+    const content = entry.getData().toString('utf8');
+    return JSON.parse(content) as T;
+  };
+
   // Read all data files
   const manifest = readJson<BackupManifest>('manifest.json');
   const characters = readJson<Character[]>('data/characters.json');
@@ -80,6 +93,9 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
   const embeddingProfiles = readJson<EmbeddingProfile[]>('data/embedding-profiles.json');
   const memories = readJson<Memory[]>('data/memories.json');
   const files = readJson<FileEntry[]>('data/files.json');
+  // Templates are optional for backwards compatibility with older backups
+  const promptTemplates = readJsonOptional<PromptTemplate[]>('data/prompt-templates.json', []);
+  const roleplayTemplates = readJsonOptional<RoleplayTemplate[]>('data/roleplay-templates.json', []);
 
   moduleLogger.info('Parsed backup ZIP', {
     version: manifest.version,
@@ -98,6 +114,8 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
     embeddingProfiles,
     memories,
     files,
+    promptTemplates,
+    roleplayTemplates,
   };
 }
 
@@ -153,6 +171,10 @@ export function previewRestore(zipBuffer: Buffer): RestoreSummary {
       image: data.imageProfiles.length,
       embedding: data.embeddingProfiles.length,
     },
+    templates: {
+      prompt: data.promptTemplates.length,
+      roleplay: data.roleplayTemplates.length,
+    },
     warnings: [],
   };
 }
@@ -165,9 +187,10 @@ async function deleteUserData(userId: string): Promise<void> {
   moduleLogger.info('Deleting existing user data for replace mode', { userId });
 
   const repos = getUserRepositories(userId);
+  const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles] =
+  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates] =
     await Promise.all([
       repos.characters.findAll(),
       repos.personas.findAll(),
@@ -177,6 +200,8 @@ async function deleteUserData(userId: string): Promise<void> {
       repos.connections.findAll(),
       repos.imageProfiles.findAll(),
       repos.embeddingProfiles.findAll(),
+      globalRepos.promptTemplates.findByUserId(userId),
+      globalRepos.roleplayTemplates.findByUserId(userId),
     ]);
 
   // Delete memories for each character first
@@ -187,7 +212,7 @@ async function deleteUserData(userId: string): Promise<void> {
     }
   }
 
-  // Delete all entities
+  // Delete all entities (including user-created templates)
   await Promise.all([
     ...characters.map((c) => repos.characters.delete(c.id)),
     ...personas.map((p) => repos.personas.delete(p.id)),
@@ -196,6 +221,8 @@ async function deleteUserData(userId: string): Promise<void> {
     ...connectionProfiles.map((cp) => repos.connections.delete(cp.id)),
     ...imageProfiles.map((ip) => repos.imageProfiles.delete(ip.id)),
     ...embeddingProfiles.map((ep) => repos.embeddingProfiles.delete(ep.id)),
+    ...promptTemplates.map((pt) => globalRepos.promptTemplates.delete(pt.id)),
+    ...roleplayTemplates.map((rt) => globalRepos.roleplayTemplates.delete(rt.id)),
   ]);
 
   // Delete files from S3
@@ -224,6 +251,8 @@ async function deleteUserData(userId: string): Promise<void> {
       connectionProfiles: connectionProfiles.length,
       imageProfiles: imageProfiles.length,
       embeddingProfiles: embeddingProfiles.length,
+      promptTemplates: promptTemplates.length,
+      roleplayTemplates: roleplayTemplates.length,
     },
   });
 }
@@ -245,6 +274,10 @@ export interface DeleteSummary {
     image: number;
     embedding: number;
   };
+  templates: {
+    prompt: number;
+    roleplay: number;
+  };
 }
 
 /**
@@ -255,9 +288,10 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
   moduleLogger.info('Starting complete user data deletion', { userId });
 
   const repos = getUserRepositories(userId);
+  const globalRepos = getRepositories();
 
   // First, count everything before deletion
-  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys] =
+  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates] =
     await Promise.all([
       repos.characters.findAll(),
       repos.personas.findAll(),
@@ -268,6 +302,8 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
       repos.imageProfiles.findAll(),
       repos.embeddingProfiles.findAll(),
       repos.connections.getAllApiKeys(),
+      globalRepos.promptTemplates.findByUserId(userId),
+      globalRepos.roleplayTemplates.findByUserId(userId),
     ]);
 
   // Count memories
@@ -281,7 +317,7 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
   const backupKeys = await s3FileService.listUserFiles(userId, 'backups');
   const backupsCount = backupKeys.length;
 
-  // Now delete everything using the existing function
+  // Now delete everything using the existing function (includes templates)
   await deleteUserData(userId);
 
   // Delete API keys
@@ -322,6 +358,10 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
       image: imageProfiles.length,
       embedding: embeddingProfiles.length,
     },
+    templates: {
+      prompt: promptTemplates.length,
+      roleplay: roleplayTemplates.length,
+    },
   };
 
   moduleLogger.info('Complete user data deletion finished', { userId, summary });
@@ -336,8 +376,9 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
   moduleLogger.debug('Previewing data to be deleted', { userId });
 
   const repos = getUserRepositories(userId);
+  const globalRepos = getRepositories();
 
-  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys] =
+  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates] =
     await Promise.all([
       repos.characters.findAll(),
       repos.personas.findAll(),
@@ -348,6 +389,8 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
       repos.imageProfiles.findAll(),
       repos.embeddingProfiles.findAll(),
       repos.connections.getAllApiKeys(),
+      globalRepos.promptTemplates.findByUserId(userId),
+      globalRepos.roleplayTemplates.findByUserId(userId),
     ]);
 
   // Count memories
@@ -373,6 +416,10 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
       connection: connectionProfiles.length,
       image: imageProfiles.length,
       embedding: embeddingProfiles.length,
+    },
+    templates: {
+      prompt: promptTemplates.length,
+      roleplay: roleplayTemplates.length,
     },
   };
 }
@@ -503,6 +550,20 @@ function remapBackupData(
     ...remapper.remapArrayFields(memory, ['tags']),
   })) as Memory[];
 
+  // Remap prompt templates
+  const remappedPromptTemplates = data.promptTemplates.map((template) => ({
+    ...remapper.remapFields(template, ['id']),
+    ...remapper.remapArrayFields(template, ['tags']),
+    userId: targetUserId,
+  })) as PromptTemplate[];
+
+  // Remap roleplay templates
+  const remappedRoleplayTemplates = data.roleplayTemplates.map((template) => ({
+    ...remapper.remapFields(template, ['id']),
+    ...remapper.remapArrayFields(template, ['tags']),
+    userId: targetUserId,
+  })) as RoleplayTemplate[];
+
   return {
     manifest: data.manifest,
     characters: remappedCharacters,
@@ -514,6 +575,8 @@ function remapBackupData(
     embeddingProfiles: remappedEmbeddingProfiles,
     memories: remappedMemories,
     files: remappedFiles as FileEntry[],
+    promptTemplates: remappedPromptTemplates,
+    roleplayTemplates: remappedRoleplayTemplates,
   };
 }
 
@@ -726,6 +789,41 @@ export async function restore(
     }
   }
 
+  // 10. Prompt Templates (user-created only)
+  const globalRepos = getRepositories();
+  let promptTemplatesRestored = 0;
+  moduleLogger.debug('Restoring prompt templates', { count: data.promptTemplates.length });
+  for (const template of data.promptTemplates) {
+    try {
+      const { id, userId, createdAt, updatedAt, ...templateData } = template;
+      await globalRepos.promptTemplates.create({
+        ...templateData,
+        userId: targetUserId,
+      });
+      promptTemplatesRestored++;
+    } catch (error) {
+      warnings.push(`Failed to restore prompt template "${template.name}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore prompt template', { templateId: template.id, error });
+    }
+  }
+
+  // 11. Roleplay Templates (user-created only)
+  let roleplayTemplatesRestored = 0;
+  moduleLogger.debug('Restoring roleplay templates', { count: data.roleplayTemplates.length });
+  for (const template of data.roleplayTemplates) {
+    try {
+      const { id, userId, createdAt, updatedAt, ...templateData } = template;
+      await globalRepos.roleplayTemplates.create({
+        ...templateData,
+        userId: targetUserId,
+      });
+      roleplayTemplatesRestored++;
+    } catch (error) {
+      warnings.push(`Failed to restore roleplay template "${template.name}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore roleplay template', { templateId: template.id, error });
+    }
+  }
+
   const summary: RestoreSummary = {
     characters: data.characters.length,
     personas: data.personas.length,
@@ -738,6 +836,10 @@ export async function restore(
       connection: data.connectionProfiles.length,
       image: data.imageProfiles.length,
       embedding: data.embeddingProfiles.length,
+    },
+    templates: {
+      prompt: promptTemplatesRestored,
+      roleplay: roleplayTemplatesRestored,
     },
     warnings,
   };
