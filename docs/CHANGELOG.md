@@ -4,6 +4,10 @@
 
 ### 2.4-dev
 
+- fix: Add template variable processing to LLM context building
+  - Fixed `{{char}}` and `{{user}}` template variables not being replaced in system prompts sent to LLMs
+  - Roleplay templates, character system prompts, personality, scenario, and example dialogues now have templates processed
+  - Template context built with character name and persona name (or "User" fallback)
 - style: Major Rains theme enhancement with full qt-* utility class support (v1.0.12)
   - Added 100+ new CSS variable overrides for comprehensive theming
   - Navbar: Warm backdrop blur styling with earthy gradients

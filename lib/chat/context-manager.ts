@@ -20,6 +20,7 @@ import { searchMemoriesSemantic, SemanticSearchResult } from '@/lib/memory/memor
 import { formatMessagesForProvider, buildMultiCharacterContextSection, type MultiCharacterMessage } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
+import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 
 /**
  * Message format expected by the context manager
@@ -193,6 +194,7 @@ export interface OtherParticipantInfo {
 /**
  * Build the system prompt for a character
  * Supports both single-character and multi-character scenarios
+ * Processes {{char}}, {{user}}, and other template variables in all prompts
  */
 export function buildSystemPrompt(
   character: Character,
@@ -209,29 +211,52 @@ export function buildSystemPrompt(
 ): string {
   const parts: string[] = []
 
+  // Build template context for {{char}}, {{user}}, etc. replacement
+  const templateContext: TemplateContext = {
+    char: character.name,
+    user: persona?.name || 'User',
+    description: character.description || '',
+    personality: character.personality || '',
+    scenario: character.scenario || '',
+    persona: persona?.description || '',
+  }
+
+  logger.debug('[ContextManager] Building system prompt with template context', {
+    characterName: templateContext.char,
+    userName: templateContext.user,
+  })
+
   // Roleplay template system prompt (formatting instructions) - prepended first
+  // Process templates to replace {{char}} and {{user}}
   if (roleplayTemplate?.systemPrompt) {
+    const processedRoleplayPrompt = processTemplate(roleplayTemplate.systemPrompt, templateContext)
     logger.debug('Prepending roleplay template to system prompt', {
       templatePromptLength: roleplayTemplate.systemPrompt.length,
+      processedLength: processedRoleplayPrompt.length,
+      hasTemplateVars: roleplayTemplate.systemPrompt.includes('{{'),
     })
-    parts.push(roleplayTemplate.systemPrompt)
+    parts.push(processedRoleplayPrompt)
   }
 
   // Pseudo-tool instructions (for models without native function calling)
   // Added after roleplay template so tool usage instructions are seen early
+  // Note: These typically don't contain {{char}}/{{user}} but process anyway for consistency
   if (pseudoToolInstructions) {
+    const processedToolInstructions = processTemplate(pseudoToolInstructions, templateContext)
     logger.debug('[ContextManager] Adding pseudo-tool instructions', {
       instructionsLength: pseudoToolInstructions.length,
     })
-    parts.push(pseudoToolInstructions)
+    parts.push(processedToolInstructions)
   }
 
   // Base system prompt - priority: override > selected prompt > default systemPrompt
   if (systemPromptOverride) {
+    const processedOverride = processTemplate(systemPromptOverride, templateContext)
     logger.debug('[ContextManager] Using system prompt override', {
       overrideLength: systemPromptOverride.length,
+      processedLength: processedOverride.length,
     })
-    parts.push(systemPromptOverride)
+    parts.push(processedOverride)
   } else {
     // Check for selected system prompt from character's prompts array
     let systemPromptContent: string | null = null
@@ -270,7 +295,9 @@ export function buildSystemPrompt(
     }
 
     if (systemPromptContent) {
-      parts.push(systemPromptContent)
+      // Process templates in the system prompt content
+      const processedSystemPrompt = processTemplate(systemPromptContent, templateContext)
+      parts.push(processedSystemPrompt)
     } else {
       logger.debug('[ContextManager] No system prompt found for character', {
         characterId: character.id,
@@ -280,19 +307,22 @@ export function buildSystemPrompt(
     }
   }
 
-  // Character personality
+  // Character personality - process templates
   if (character.personality) {
-    parts.push(`\n## Character Personality\n${character.personality}`)
+    const processedPersonality = processTemplate(character.personality, templateContext)
+    parts.push(`\n## Character Personality\n${processedPersonality}`)
   }
 
-  // Scenario/setting
+  // Scenario/setting - process templates
   if (character.scenario) {
-    parts.push(`\n## Scenario\n${character.scenario}`)
+    const processedScenario = processTemplate(character.scenario, templateContext)
+    parts.push(`\n## Scenario\n${processedScenario}`)
   }
 
-  // Example dialogues for style reference
+  // Example dialogues for style reference - process templates
   if (character.exampleDialogues) {
-    parts.push(`\n## Example Dialogue Style\n${character.exampleDialogues}`)
+    const processedDialogues = processTemplate(character.exampleDialogues, templateContext)
+    parts.push(`\n## Example Dialogue Style\n${processedDialogues}`)
   }
 
   // Persona information if provided (single-character mode)
