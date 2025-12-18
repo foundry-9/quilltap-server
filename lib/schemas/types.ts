@@ -501,6 +501,8 @@ export const ChatMetadataSchema = z.object({
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
+  /** Whether auto-responses are paused in multi-character chats */
+  isPaused: z.boolean().default(false),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -526,6 +528,8 @@ export const ChatMetadataBaseSchema = z.object({
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
+  /** Whether auto-responses are paused in multi-character chats */
+  isPaused: z.boolean().default(false),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

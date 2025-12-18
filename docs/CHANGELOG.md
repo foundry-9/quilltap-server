@@ -4,6 +4,13 @@
 
 ### 2.5-dev
 
+- feat: Multi-character chat pause feature
+  - Added `isPaused` field to ChatMetadata schema, persisted to database
+  - Pause button in participant sidebar (desktop) and message header (mobile)
+  - Pressing stop while streaming now also pauses auto-responses
+  - Nudging a character automatically unpauses the chat
+  - Pause state survives page reload
+  - Added cleanup effect for stream cancellation on component unmount
 - chore: Cleaned up old documentation
 - Started 2.5-dev cycle
 

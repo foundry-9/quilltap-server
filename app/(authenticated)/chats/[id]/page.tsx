@@ -101,6 +101,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
   const [mobileParticipantDropdownId, setMobileParticipantDropdownId] = useState<string | null>(null)
+  const [isPaused, setIsPaused] = useState(false)
 
   // Use the extracted file attachments hook
   const fileHook = useFileAttachments(id)
@@ -117,6 +118,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const abortControllerRef = useRef<AbortController | null>(null)
   const userStoppedStreamRef = useRef<boolean>(false)
   const hasRestoredTurnStateRef = useRef<boolean>(false)
+
+  // Cleanup effect: abort any pending request when unmounting or chat changes
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        clientLogger.debug('[Chat] Cleanup: aborting pending request on unmount')
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+    }
+  }, [id])
 
   const chatContext = useChatContext()
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
@@ -278,6 +290,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     inputRef as React.RefObject<HTMLTextAreaElement>,
   )
 
+  // Unpause callback for the turn management hook - needs to be defined before the hook call
+  const unpauseChat = useCallback(async () => {
+    clientLogger.debug('[Chat] Unpausing chat (from nudge)')
+    setIsPaused(false)
+    userStoppedStreamRef.current = false
+    try {
+      const response = await fetch(`/api/chats/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { isPaused: false } }),
+      })
+      if (!response.ok) {
+        clientLogger.error('[Chat] Failed to persist unpause state', { status: response.status })
+      }
+    } catch (error) {
+      clientLogger.error('[Chat] Error persisting unpause state', { error })
+    }
+  }, [id])
+
   // Use the extracted turn management hook
   const turnManagement = useTurnManagement(
     participantsAsBase,
@@ -293,6 +324,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       // Trigger continue mode - implementation below
       await triggerContinueMode(participantId)
     },
+    isPaused,
+    unpauseChat,
   )
 
   // Calculate turn state when messages change - copied from original
@@ -371,6 +404,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     })
   }, [messages, participantsAsBase, userParticipantId, charactersMap, chat?.lastTurnParticipantId])
 
+  // Initialize isPaused from chat data
+  useEffect(() => {
+    if (chat?.isPaused !== undefined) {
+      setIsPaused(chat.isPaused)
+      if (chat.isPaused) {
+        // Also set the ref to prevent auto-triggering on page load
+        userStoppedStreamRef.current = true
+      }
+    }
+  }, [chat?.isPaused])
+
   // triggerContinueMode function - large streaming logic kept in place
   const triggerContinueMode = useCallback(async (participantId: string) => {
     if (streaming || waitingForResponse) {
@@ -394,6 +438,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
 
     clientLogger.debug('[Chat] Triggering continue mode for participant', { participantId })
+
+    // Abort any existing request before starting a new one
+    if (abortControllerRef.current) {
+      clientLogger.debug('[Chat] Aborting previous request before starting new one')
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
 
     setWaitingForResponse(true)
     setStreaming(false)
@@ -515,6 +566,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       return
     }
 
+    if (isPaused) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - chat is paused')
+      return
+    }
+
     if (userStoppedStreamRef.current) {
       clientLogger.debug('[Chat] Auto-trigger skipped - user stopped streaming')
       return
@@ -559,7 +615,39 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }, 100)
 
     return () => clearTimeout(timeoutId)
-  }, [isMultiChar, streaming, waitingForResponse, turnSelectionResult, userParticipantId, triggerContinueMode])
+  }, [isMultiChar, isPaused, streaming, waitingForResponse, turnSelectionResult, userParticipantId, triggerContinueMode])
+
+  // Function to set pause state and persist to database
+  const setPauseState = useCallback(async (paused: boolean) => {
+    clientLogger.debug('[Chat] Setting pause state', { paused, chatId: id })
+    setIsPaused(paused)
+    userStoppedStreamRef.current = paused
+
+    try {
+      const response = await fetch(`/api/chats/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { isPaused: paused } }),
+      })
+      if (!response.ok) {
+        clientLogger.error('[Chat] Failed to persist pause state', { status: response.status })
+      }
+    } catch (error) {
+      clientLogger.error('[Chat] Error persisting pause state', { error })
+    }
+  }, [id])
+
+  // Toggle pause state
+  const togglePause = useCallback(async () => {
+    const newPausedState = !isPaused
+    clientLogger.info('[Chat] Toggling pause state', { from: isPaused, to: newPausedState })
+    await setPauseState(newPausedState)
+    if (newPausedState) {
+      showInfoToast('Auto-responses paused')
+    } else {
+      showInfoToast('Auto-responses resumed')
+    }
+  }, [isPaused, setPauseState])
 
   // stopStreaming function
   const stopStreaming = useCallback(() => {
@@ -575,17 +663,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setPendingToolCalls([])
     setToolExecutionStatus(null)
     if (isMultiChar) {
-      clientLogger.debug('[Chat] Setting userStoppedStreamRef to prevent auto-triggering')
+      clientLogger.debug('[Chat] Setting userStoppedStreamRef and pausing chat')
       userStoppedStreamRef.current = true
+      // Also pause the chat persistently
+      setPauseState(true)
     }
     if (streamingContent) {
       clientLogger.debug('[Chat] Streaming stopped with partial content', {
         contentLength: streamingContent.length,
       })
-      showInfoToast('Response stopped - your turn to speak')
+      showInfoToast('Response stopped - chat paused')
     }
     setStreamingContent('')
-  }, [streamingContent, isMultiChar])
+  }, [streamingContent, isMultiChar, setPauseState])
 
   // Persist turn state effect
   useEffect(() => {
@@ -1326,6 +1416,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   mobileParticipantDropdownId={mobileParticipantDropdownId}
                   mobileParticipantRefs={mobileParticipantRefs}
                   userParticipantId={userParticipantId}
+                  isPaused={isPaused}
+                  onTogglePause={togglePause}
                   onEditStart={messageActions.startEdit}
                   onEditSave={messageActions.saveEdit}
                   onEditCancel={messageActions.cancelEdit}
@@ -1525,6 +1617,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           isGenerating={streaming || waitingForResponse}
           userParticipantId={userParticipantId}
           respondingParticipantId={respondingParticipantId}
+          isPaused={isPaused}
+          onTogglePause={togglePause}
           onNudge={turnManagement.handleNudge}
           onQueue={turnManagement.handleQueue}
           onDequeue={turnManagement.handleDequeue}

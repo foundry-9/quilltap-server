@@ -17,7 +17,7 @@ import { createEphemeralMessage } from '@/components/chat/EphemeralMessage'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 
 export interface TurnManagementActions {
-  handleNudge: (participantId: string) => void
+  handleNudge: (participantId: string) => void | Promise<void>
   handleQueue: (participantId: string) => void
   handleDequeue: (participantId: string) => void
   handleContinue: () => void
@@ -35,13 +35,21 @@ export function useTurnManagement(
   setTurnSelectionResult: (result: TurnSelectionResult | null) => void,
   setEphemeralMessages: (messages: EphemeralMessageData[]) => void,
   triggerContinueMode: (participantId: string) => Promise<void>,
+  isPaused?: boolean,
+  onUnpause?: () => Promise<void>,
 ) {
   const hasActiveCharacters = useMemo(() => {
     return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length > 0
   }, [participantsAsBase])
 
-  const handleNudge = useCallback((participantId: string) => {
-    clientLogger.debug('[Chat] Nudging participant', { participantId })
+  const handleNudge = useCallback(async (participantId: string) => {
+    clientLogger.debug('[Chat] Nudging participant', { participantId, isPaused })
+
+    // If chat is paused, unpause it first
+    if (isPaused && onUnpause) {
+      clientLogger.debug('[Chat] Unpausing chat before nudge')
+      await onUnpause()
+    }
 
     // Find participant name for ephemeral message
     const participant = participantData.find(p => p.id === participantId)
@@ -68,7 +76,7 @@ export function useTurnManagement(
 
     // Trigger immediate response generation
     triggerContinueMode(participantId)
-  }, [turnState, participantsAsBase, charactersMap, userParticipantId, participantData, ephemeralMessages, setTurnState, setTurnSelectionResult, setEphemeralMessages, triggerContinueMode])
+  }, [turnState, participantsAsBase, charactersMap, userParticipantId, participantData, ephemeralMessages, setTurnState, setTurnSelectionResult, setEphemeralMessages, triggerContinueMode, isPaused, onUnpause])
 
   const handleQueue = useCallback((participantId: string) => {
     clientLogger.debug('[Chat] Queueing participant', { participantId })
