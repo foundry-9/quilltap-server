@@ -516,7 +516,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./features/comfy_ui_local_image.md))
 - [ ] Arcadia "art deco" theme to show off what the theme system can really do
 - [ ] Fully mobile-capable media breakpoints
-  - [X] Dashboard
+  - [X] Dashboard (v2.4)
   - [ ] Chat (partially done in v2.4)
   - [ ] Characters
   - [ ] Personas
@@ -537,6 +537,11 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [ ] Create a native Quilltap import/export for everything
 - [ ] Add "Pause" to the turn system; if a chat is marked "Pause" then nobody ever gets to talk until the user nudges somebody again, or "un-pauses" it
 - [ ] Add a "Rename" to a chat, and if the user has renamed it, never try to rename it again unless something is toggled indicating that renaming can be automatic again
+- [ ] Project support
+  - [ ] Folders
+  - [ ] Files (text/Markdown or binary)
+  - [ ] Direct import/export/access
+  - [ ] Project becomes overridding context for chats, images, etc.
 
 ## Acknowledgments
 

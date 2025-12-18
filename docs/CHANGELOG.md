@@ -2,6 +2,11 @@
 
 ## Recent Changes
 
+### 2.5-dev
+
+- chore: Cleaned up old documentation
+- Started 2.5-dev cycle
+
 ### 2.4
 
 - doc: Major documentation refresh
