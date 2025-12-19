@@ -4,6 +4,14 @@
 
 ### 2.5-dev
 
+- fix: Backup restore breaking entity relationships
+  - Fixed characters losing avatars and linked images after restore
+  - Fixed chats not being linked to characters after restore
+  - Fixed characters not being linked to personas after restore
+  - Root cause: Repositories generate new IDs during create(), but relationship fields still referenced backup IDs
+  - Added comprehensive ID mapping for all entity types (tags, files, profiles, characters, personas, chats)
+  - Added post-restore reconciliation phase that updates all relationship fields with correct IDs
+  - Relationships now correctly remapped: defaultImageId, personaLinks, avatarOverrides, characterLinks, chat participants
 - refactor: Convert inline settings forms to modals
   - API Keys: New `ApiKeyModal` component for adding keys
   - Image Profiles: New `ImageProfileModal` for create/edit
