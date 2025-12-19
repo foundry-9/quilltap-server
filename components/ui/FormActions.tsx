@@ -44,7 +44,7 @@ export function FormActions({
       >
         {cancelLabel}
       </button>
-      {onSubmit && (
+      {(onSubmit || type === 'submit') && (
         <button
           type={type}
           onClick={onSubmit}

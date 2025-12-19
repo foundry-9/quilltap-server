@@ -4,6 +4,16 @@
 
 ### 2.5-dev
 
+- refactor: Convert inline settings forms to modals
+  - API Keys: New `ApiKeyModal` component for adding keys
+  - Image Profiles: New `ImageProfileModal` for create/edit
+  - Embedding Profiles: New `ProfileModal` for create/edit
+  - Connection Profiles: New `ProfileModal` with full interactive features (Connect, Fetch Models, Test Message)
+  - Profiles lists now always visible instead of being hidden when form is open
+  - Consistent UX across all settings tabs with proper modal dismiss handling (click outside, Escape key)
+- fix: FormActions component not rendering submit button when using type="submit"
+  - Button now renders when either `onSubmit` callback is provided OR `type="submit"` is set
+  - Fixes missing "Create API Key" button in API keys settings
 - refactor: Replaced NextAuth with Arctic + custom session management
   - Removed next-auth dependency entirely
   - Added Arctic library for OAuth 2.0 flows with PKCE support

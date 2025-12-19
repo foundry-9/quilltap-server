@@ -6,7 +6,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useEmbeddingProfiles } from './hooks/useEmbeddingProfiles'
-import { ProfileForm } from './ProfileForm'
+import { ProfileModal } from './ProfileModal'
 import { ProfileList } from './ProfileList'
 import type { EmbeddingProfile } from './types'
 
@@ -28,7 +28,7 @@ export { ProviderBadge } from './ProviderBadge'
  */
 export default function EmbeddingProfilesTab() {
   // UI states
-  const [showForm, setShowForm] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProfile, setEditingProfile] = useState<EmbeddingProfile | null>(null)
 
   // Data hook
@@ -51,24 +51,24 @@ export default function EmbeddingProfilesTab() {
   const handleEdit = (profile: EmbeddingProfile) => {
     clientLogger.debug('Editing profile', { profileId: profile.id })
     setEditingProfile(profile)
-    setShowForm(true)
+    setIsModalOpen(true)
   }
 
-  const handleFormCancel = () => {
-    clientLogger.debug('Cancelling form')
-    setShowForm(false)
+  const handleOpenModal = () => {
+    clientLogger.debug('Opening new profile modal')
+    setEditingProfile(null)
+    setIsModalOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    clientLogger.debug('Closing profile modal')
+    setIsModalOpen(false)
     setEditingProfile(null)
   }
 
-  const handleNewProfile = () => {
-    clientLogger.debug('Opening new profile form')
-    setEditingProfile(null)
-    setShowForm(true)
-  }
-
-  const handleFormSubmitSuccess = async () => {
+  const handleModalSuccess = async () => {
+    clientLogger.debug('Profile saved via modal')
     await fetchProfiles()
-    handleFormCancel()
   }
 
   // Show loading state during initial load
@@ -83,14 +83,10 @@ export default function EmbeddingProfilesTab() {
         <SectionHeader
           title="Embedding Profiles"
           level="h2"
-          action={
-            !showForm && !editingProfile
-              ? {
-                  label: 'New Profile',
-                  onClick: handleNewProfile,
-                }
-              : undefined
-          }
+          action={{
+            label: 'New Profile',
+            onClick: handleOpenModal,
+          }}
         />
         <p className="qt-text-small text-muted-foreground">
           Manage text embedding connections for semantic search (OpenAI or Ollama)
@@ -108,25 +104,23 @@ export default function EmbeddingProfilesTab() {
         />
       )}
 
-      {/* Form */}
-      {showForm && (
-        <ProfileForm
-          profile={editingProfile}
-          apiKeys={apiKeys}
-          embeddingModels={embeddingModels}
-          onSubmitSuccess={handleFormSubmitSuccess}
-          onCancel={handleFormCancel}
-        />
-      )}
+      {/* Profiles List - always visible */}
+      <ProfileList
+        profiles={profiles}
+        onEdit={handleEdit}
+        onProfilesChange={fetchProfiles}
+      />
 
-      {/* Profiles List */}
-      {!showForm && (
-        <ProfileList
-          profiles={profiles}
-          onEdit={handleEdit}
-          onProfilesChange={fetchProfiles}
-        />
-      )}
+      {/* Profile Modal - key ensures remount when switching profiles */}
+      <ProfileModal
+        key={editingProfile?.id || 'new'}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onSuccess={handleModalSuccess}
+        profile={editingProfile}
+        apiKeys={apiKeys}
+        embeddingModels={embeddingModels}
+      />
     </div>
   )
 }
