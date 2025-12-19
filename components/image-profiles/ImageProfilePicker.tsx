@@ -83,12 +83,16 @@ export function ImageProfilePicker({
         className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
       >
         <option value="">No image generation</option>
-        {profiles.map(profile => (
-          <option key={profile.id} value={profile.id}>
-            {profile.name} ({profile.modelName})
-            {profile.isDefault ? ' [Default]' : ''}
-          </option>
-        ))}
+        {profiles.map(profile => {
+          const hasApiKey = Boolean(profile.apiKey)
+          return (
+            <option key={profile.id} value={profile.id}>
+              {profile.name} ({profile.modelName})
+              {profile.isDefault ? ' [Default]' : ''}
+              {!hasApiKey ? ' ⚠️ No API Key' : ''}
+            </option>
+          )
+        })}
       </select>
 
       {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}

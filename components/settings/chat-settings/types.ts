@@ -28,6 +28,13 @@ export interface ChatSettings {
   updatedAt: string
 }
 
+export interface ApiKey {
+  id: string
+  label: string
+  provider: string
+  isActive: boolean
+}
+
 export interface ConnectionProfile {
   id: string
   name: string
@@ -35,6 +42,8 @@ export interface ConnectionProfile {
   modelName: string
   isDefault: boolean
   isCheap?: boolean
+  apiKeyId?: string
+  apiKey?: ApiKey | null
 }
 
 export interface EmbeddingProfile {
@@ -43,6 +52,8 @@ export interface EmbeddingProfile {
   provider: string
   modelName: string
   isDefault: boolean
+  apiKeyId?: string
+  apiKey?: ApiKey | null
 }
 
 /**

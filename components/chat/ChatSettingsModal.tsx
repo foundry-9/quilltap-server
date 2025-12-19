@@ -17,7 +17,14 @@ interface ImageProfile {
   id: string
   name: string
   provider: string
+  apiKeyId?: string
   modelName: string
+}
+
+interface ApiKey {
+  id: string
+  label: string
+  provider: string
 }
 
 interface Character {
@@ -80,6 +87,7 @@ interface ParticipantEditorProps {
   participant: Participant
   connectionProfiles: ConnectionProfile[]
   imageProfiles: ImageProfile[]
+  apiKeys: ApiKey[]
   onUpdate: (participantId: string, updates: ParticipantUpdate) => void
   loading: boolean
 }
@@ -96,6 +104,7 @@ function ParticipantEditor({
   participant,
   connectionProfiles,
   imageProfiles,
+  apiKeys,
   onUpdate,
   loading,
 }: Readonly<ParticipantEditorProps>) {
@@ -103,6 +112,12 @@ function ParticipantEditor({
   const name = isCharacter
     ? participant.character?.name || 'Unknown Character'
     : participant.persona?.name || 'Unknown Persona'
+
+  // Helper to check if a profile has a valid API key
+  const profileHasApiKey = (apiKeyId?: string): boolean => {
+    if (!apiKeyId) return false
+    return apiKeys.some((key) => key.id === apiKeyId)
+  }
 
   // Generate unique IDs for form controls
   const connectionProfileId = `connection-profile-${participant.id}`
@@ -199,11 +214,14 @@ function ParticipantEditor({
               className="qt-select text-sm"
             >
               <option value="">Select a provider...</option>
-              {connectionProfiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name} ({profile.modelName})
-                </option>
-              ))}
+              {connectionProfiles.map((profile) => {
+                const hasKey = profileHasApiKey(profile.apiKeyId)
+                return (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name} ({profile.modelName}){!hasKey ? ' ⚠️ No API Key' : ''}
+                  </option>
+                )
+              })}
             </select>
           </div>
 
@@ -219,11 +237,14 @@ function ParticipantEditor({
               className="qt-select text-sm"
             >
               <option value="">None</option>
-              {imageProfiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name} ({profile.provider})
-                </option>
-              ))}
+              {imageProfiles.map((profile) => {
+                const hasKey = profileHasApiKey(profile.apiKeyId)
+                return (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name} ({profile.provider}){!hasKey ? ' ⚠️ No API Key' : ''}
+                  </option>
+                )
+              })}
             </select>
           </div>
 
@@ -291,6 +312,7 @@ export default function ChatSettingsModal({
   const modalRef = useRef<HTMLDivElement>(null)
   const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
   const [roleplayTemplates, setRoleplayTemplates] = useState<RoleplayTemplate[]>([])
   const [selectedRoleplayTemplateId, setSelectedRoleplayTemplateId] = useState<string | null>(
     initialRoleplayTemplateId ?? null
@@ -318,9 +340,10 @@ export default function ChatSettingsModal({
   const fetchProfiles = async () => {
     try {
       setLoading(true)
-      const [profilesRes, imageProfilesRes] = await Promise.all([
+      const [profilesRes, imageProfilesRes, apiKeysRes] = await Promise.all([
         fetch('/api/profiles'),
         fetch('/api/image-profiles'),
+        fetch('/api/keys'),
       ])
 
       if (profilesRes.ok) {
@@ -331,6 +354,12 @@ export default function ChatSettingsModal({
       if (imageProfilesRes.ok) {
         const data = await imageProfilesRes.json()
         setImageProfiles(data)
+      }
+
+      if (apiKeysRes.ok) {
+        const data = await apiKeysRes.json()
+        setApiKeys(data)
+        clientLogger.debug('Fetched API keys for profile validation', { count: data.length })
       }
     } catch (error) {
       clientLogger.error('Failed to fetch profiles', { error: error instanceof Error ? error.message : String(error) })
@@ -463,6 +492,7 @@ export default function ChatSettingsModal({
               participant={participant}
               connectionProfiles={connectionProfiles}
               imageProfiles={imageProfiles}
+              apiKeys={apiKeys}
               onUpdate={handleParticipantUpdate}
               loading={loading}
             />

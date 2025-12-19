@@ -139,6 +139,7 @@ export default function ConnectionProfilesTab() {
       <ProfileList
         profiles={profiles}
         cheapDefaultProfileId={cheapDefaultProfileId}
+        providers={providers}
         showForm={false}
         deleteConfirming={deleteConfirming}
         isDeleting={deleteOp.loading}

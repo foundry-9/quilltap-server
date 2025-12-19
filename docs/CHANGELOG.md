@@ -4,6 +4,16 @@
 
 ### 2.5-dev
 
+- ux: Add visual warnings for elements missing API keys
+  - New `MissingApiKeyBadge` component displays "⚠️ No API Key" warning badge
+  - Connection profile cards show warning badge when API key is missing but required
+  - Image generation profile cards show warning badge when API key is missing
+  - Embedding profile cards show warning badge when OpenAI API key is missing (Ollama doesn't require one)
+  - Chat settings modal shows warning in profile dropdowns for profiles without valid API keys
+  - Cheap LLM settings dropdowns show warning for connection and embedding profiles without API keys
+  - Image description settings dropdown shows warning for profiles without API keys
+  - Image profile picker dropdown shows warning for profiles without API keys
+  - Helps users identify which profiles need API key configuration before use
 - refactor: Clarify authentication environment variables
   - `AUTH_DISABLED=true` now completely bypasses auth and auto-logs in as "unauthenticatedLocalUser"
   - New `OAUTH_DISABLED` env var hides OAuth buttons but keeps credentials login working

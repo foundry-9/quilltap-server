@@ -11,6 +11,7 @@ import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
+import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 
 interface ApiKey {
   id: string
@@ -192,6 +193,8 @@ export default function ImageProfilesTab() {
                         Default
                       </span>
                     )}
+                    {/* All image generation providers require API keys */}
+                    {!profile.apiKey && <MissingApiKeyBadge />}
                   </div>
                   <div className="grid grid-cols-2 gap-4 qt-text-small">
                     <div>
