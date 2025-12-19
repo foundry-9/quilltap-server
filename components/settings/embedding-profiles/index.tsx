@@ -42,10 +42,11 @@ export default function EmbeddingProfilesTab() {
     fetchProfiles,
   } = useEmbeddingProfiles()
 
-  // Load initial data
+  // Load initial data on mount only
   useEffect(() => {
     loadData()
-  }, [loadData])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // loadData is stable
 
   const handleEdit = (profile: EmbeddingProfile) => {
     clientLogger.debug('Editing profile', { profileId: profile.id })

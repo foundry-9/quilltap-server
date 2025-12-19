@@ -57,7 +57,8 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
         setProfiles(profilesRes.data)
       }
     })
-  }, [executeLoad])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // executeLoad is stable (empty deps in useAsyncOperation)
 
   const fetchProfiles = useCallback(async () => {
     clientLogger.debug('Fetching embedding profiles')
