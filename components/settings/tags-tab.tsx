@@ -147,8 +147,9 @@ export default function TagsTab() {
 
   // Clean up debounce timers on unmount
   useEffect(() => {
+    const timers = colorDebounceTimers.current
     return () => {
-      colorDebounceTimers.current.forEach(timer => clearTimeout(timer))
+      timers.forEach(timer => clearTimeout(timer))
     }
   }, [])
 
