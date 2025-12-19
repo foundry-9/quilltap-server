@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.0--dev.13-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.5.0--dev.14-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -545,7 +545,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Direct import/export/access
   - [ ] Project becomes overridding context for chats, images, etc.
 - [X] Bug: when the textarea grows in the chat conversation footer, it doesn't shrink until you change something in it after you submit; upon submit it should reduce to normal levels with nothing in it
-- [ ] Make a safely encrypted export/import for API keys, separate from backups
+- [X] Make a safely encrypted export/import for API keys, separate from backups
 
 ## Acknowledgments
 

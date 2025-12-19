@@ -4,6 +4,15 @@
 
 ### 2.5-dev
 
+- feat: Add API key import/export functionality
+  - New Import/Export buttons in Settings → API Keys
+  - Export encrypts keys with user-provided passphrase (AES-256-GCM)
+  - Export file includes HMAC signature for integrity verification
+  - Import supports preview of keys before importing
+  - Import warns if signature verification fails (different user/instance)
+  - Duplicate handling options: skip, replace, or rename
+  - New encryption functions: `encryptWithPassphrase`, `decryptWithPassphrase`, `signData`, `verifySignature`
+  - New API routes: `/api/keys/export`, `/api/keys/import`, `/api/keys/import/preview`
 - ux: Add visual warnings for elements missing API keys
   - New `MissingApiKeyBadge` component displays "⚠️ No API Key" warning badge
   - Connection profile cards show warning badge when API key is missing but required

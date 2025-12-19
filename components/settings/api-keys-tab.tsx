@@ -10,6 +10,8 @@ import ErrorAlert from '@/components/ui/ErrorAlert'
 import EmptyState from '@/components/ui/EmptyState'
 import DeleteConfirmPopover from '@/components/ui/DeleteConfirmPopover'
 import { ApiKeyModal } from './api-keys/ApiKeyModal'
+import { ExportKeysDialog } from './api-keys/ExportKeysDialog'
+import { ImportKeysDialog } from './api-keys/ImportKeysDialog'
 
 interface ApiKey {
   id: string
@@ -25,6 +27,8 @@ interface ApiKey {
 export default function ApiKeysTab() {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [testingKeyId, setTestingKeyId] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<{ [key: string]: string }>({})
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
@@ -145,6 +149,31 @@ export default function ApiKeysTab() {
     fetchApiKeysData()
   }
 
+  const handleOpenExportDialog = () => {
+    clientLogger.debug('Export keys dialog opened')
+    setIsExportDialogOpen(true)
+  }
+
+  const handleCloseExportDialog = () => {
+    clientLogger.debug('Export keys dialog closed')
+    setIsExportDialogOpen(false)
+  }
+
+  const handleOpenImportDialog = () => {
+    clientLogger.debug('Import keys dialog opened')
+    setIsImportDialogOpen(true)
+  }
+
+  const handleCloseImportDialog = () => {
+    clientLogger.debug('Import keys dialog closed')
+    setIsImportDialogOpen(false)
+  }
+
+  const handleImportSuccess = () => {
+    clientLogger.debug('API keys imported successfully')
+    fetchApiKeysData()
+  }
+
   // Show loading state while fetching initial data
   if (loadKeys.loading && apiKeys.length === 0) {
     return <LoadingState message="Loading API keys..." />
@@ -173,15 +202,35 @@ export default function ApiKeysTab() {
 
       {/* API Keys List */}
       <div className="mb-8">
-        <SectionHeader
-          title="Your API Keys"
-          count={sortedKeys.length}
-          action={{
-            label: '+ Add API Key',
-            onClick: handleOpenModal,
-          }}
-          level="h2"
-        />
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <h2 className="qt-text-section text-foreground flex-1">
+            Your API Keys ({sortedKeys.length})
+          </h2>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={handleOpenImportDialog}
+              className="qt-button-secondary qt-button-sm"
+            >
+              Import
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenExportDialog}
+              className="qt-button-secondary qt-button-sm"
+              disabled={sortedKeys.length === 0}
+            >
+              Export
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenModal}
+              className="qt-button-secondary qt-button-sm"
+            >
+              + Add API Key
+            </button>
+          </div>
+        </div>
 
         {sortedKeys.length === 0 ? (
           <EmptyState
@@ -261,6 +310,20 @@ export default function ApiKeysTab() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         onSuccess={handleModalSuccess}
+      />
+
+      {/* Export Keys Dialog */}
+      <ExportKeysDialog
+        isOpen={isExportDialogOpen}
+        onClose={handleCloseExportDialog}
+        keyCount={sortedKeys.length}
+      />
+
+      {/* Import Keys Dialog */}
+      <ImportKeysDialog
+        isOpen={isImportDialogOpen}
+        onClose={handleCloseImportDialog}
+        onSuccess={handleImportSuccess}
       />
     </div>
   )
