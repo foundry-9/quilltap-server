@@ -14,7 +14,6 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
-import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/components/providers/theme-provider'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
@@ -174,12 +173,13 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
         aria-haspopup="menu"
       >
         {user.image ? (
-          <Image
+          // Using img instead of Image because the avatar comes from /api/files
+          // which requires auth cookies that Next.js Image optimization can't include
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={user.image}
             alt={user.name || 'User'}
-            width={32}
-            height={32}
-            className="h-8 w-8 rounded-full"
+            className="h-8 w-8 rounded-full object-cover"
           />
         ) : (
           <span className="text-sm qt-text-primary">

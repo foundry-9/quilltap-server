@@ -4,6 +4,9 @@
 
 ### 2.5-dev
 
+- fix: Navbar avatar now loads correctly from /api/files
+  - Changed from Next.js Image to regular img tag to include auth cookies
+  - Added object-cover for proper cropping of non-square images
 - feat: Add native Quilltap export/import system
   - New Import/Export card on Tools page for selective entity export and import
   - Supports all entity types: Characters, Personas, Chats, Roleplay Templates, Connection Profiles, Image Profiles, Embedding Profiles, Tags
