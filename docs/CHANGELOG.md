@@ -4,6 +4,25 @@
 
 ### 2.5-dev
 
+- refactor: Clarify authentication environment variables
+  - `AUTH_DISABLED=true` now completely bypasses auth and auto-logs in as "unauthenticatedLocalUser"
+  - New `OAUTH_DISABLED` env var hides OAuth buttons but keeps credentials login working
+  - New `AUTH_UNAUTHENTICATED_USER_NAME` env var configures display name for auto-login user
+  - Signin page auto-redirects to dashboard when `AUTH_DISABLED=true`
+  - `/api/auth/status` now returns separate `authDisabled` and `oauthDisabled` flags
+  - New unauthenticated user ID (`ffffffff-...`) distinct from deprecated anonymous user (`00000000-...`)
+  - Deprecated `AUTH_ANONYMOUS_USER_NAME` env var (use `AUTH_UNAUTHENTICATED_USER_NAME` instead)
+  - Deprecated `lib/auth/anonymous-user.ts` (use `lib/auth/unauthenticated-user.ts` instead)
+- feat: New profile page at `/profile`
+  - Accessible from user menu dropdown (new "Profile" link)
+  - Profile Settings section: edit display name, email, and profile avatar
+  - Account Information section: view read-only account details (user ID, username, email verified, creation date)
+  - Two-Factor Authentication section: enable/disable 2FA, regenerate backup codes
+  - Trusted Devices section: view and revoke devices that skip 2FA
+  - AUTH_DISABLED notice when authentication is disabled
+  - New API endpoints: GET/PUT `/api/user/profile`, PATCH `/api/user/profile/avatar`
+  - Removed `/settings/security` page (functionality moved to profile)
+  - Updated TwoFactorPrompt component to link to `/profile`
 - ux: Replace inline notices with toasts in tags settings tab
   - Error and success messages now display as toast notifications in bottom-right corner
   - Prevents form layout from shifting when messages appear/disappear

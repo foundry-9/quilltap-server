@@ -10,6 +10,7 @@ Complete API reference for Quilltap v2.4.
 - [Providers](#providers)
 - [Endpoints](#endpoints)
   - [Health](#health)
+  - [User Profile](#user-profile)
   - [API Keys](#api-keys)
   - [Connection Profiles](#connection-profiles)
   - [Embedding Profiles](#embedding-profiles)
@@ -36,9 +37,10 @@ All API endpoints (except `/api/health`) require authentication via session cook
 
 Authentication is handled through custom JWT session cookies, which support:
 
-- **Google OAuth** (if Google plugin is enabled)
+- **Google OAuth** (if Google plugin is enabled and `OAUTH_DISABLED=false`)
 - **Email/password login** (local accounts)
-- **No-auth mode** (`AUTH_DISABLED=true` for local/offline deployments)
+- **No-auth mode** (`AUTH_DISABLED=true` for local/offline deployments, auto-logs in as unauthenticatedLocalUser)
+- **Credentials-only mode** (`OAUTH_DISABLED=true` hides OAuth buttons, credentials login still works)
 
 Include credentials in requests:
 
@@ -151,6 +153,65 @@ Check application health status.
   "database": "connected"
 }
 ```
+
+---
+
+### User Profile
+
+#### `GET /api/user/profile`
+
+Get current user's profile information.
+
+**Response**: `200 OK`
+
+```json
+{
+  "id": "user-uuid",
+  "username": "johndoe",
+  "email": "john@example.com",
+  "name": "John Doe",
+  "image": "/api/files/avatar-uuid",
+  "emailVerified": "2025-01-15T12:00:00.000Z",
+  "createdAt": "2025-01-15T12:00:00.000Z",
+  "updatedAt": "2025-01-19T10:00:00.000Z",
+  "totpEnabled": true
+}
+```
+
+#### `PUT /api/user/profile`
+
+Update current user's profile.
+
+**Request Body**:
+
+```json
+{
+  "email": "newemail@example.com",
+  "name": "New Name"
+}
+```
+
+**Response**: `200 OK`
+
+Returns updated profile (same format as GET).
+
+#### `PATCH /api/user/profile/avatar`
+
+Set or clear user's profile avatar.
+
+**Request Body**:
+
+```json
+{
+  "imageId": "file-uuid-from-file-manager"
+}
+```
+
+To clear avatar, set `imageId` to `null`.
+
+**Response**: `200 OK`
+
+Returns updated profile with avatar URL.
 
 ---
 

@@ -8,7 +8,7 @@
  */
 
 import { isAuthDisabled } from '@/lib/auth/config';
-import { getOrCreateAnonymousUser } from '@/lib/auth/anonymous-user';
+import { getOrCreateUnauthenticatedUser } from '@/lib/auth/unauthenticated-user';
 import { logger } from '@/lib/logger';
 import {
   verifySessionToken,
@@ -39,33 +39,33 @@ export interface ExtendedSession {
 /**
  * Get the current session, handling no-auth mode
  *
- * When AUTH_DISABLED=true, returns an anonymous user session.
+ * When AUTH_DISABLED=true, returns an unauthenticated user session.
  * Otherwise, verifies the JWT session cookie.
  *
  * @returns The current session or null if not authenticated
  */
 export async function getServerSession(): Promise<ExtendedSession | null> {
-  // If auth is disabled, return anonymous user session
+  // If auth is disabled, return unauthenticated user session
   if (isAuthDisabled()) {
-    logger.debug('Auth disabled - returning anonymous session', {
+    logger.debug('Auth disabled - returning unauthenticated user session', {
       context: 'getServerSession',
     });
 
     try {
-      const anonymousUser = await getOrCreateAnonymousUser();
+      const unauthenticatedUser = await getOrCreateUnauthenticatedUser();
 
       return {
         user: {
-          id: anonymousUser.id,
-          email: anonymousUser.email || anonymousUser.username,
-          name: anonymousUser.name,
-          image: anonymousUser.image,
+          id: unauthenticatedUser.id,
+          email: unauthenticatedUser.email || unauthenticatedUser.username,
+          name: unauthenticatedUser.name,
+          image: unauthenticatedUser.image,
         },
         expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
       };
     } catch (error) {
       logger.error(
-        'Failed to get anonymous user session',
+        'Failed to get unauthenticated user session',
         { context: 'getServerSession' },
         error instanceof Error ? error : new Error(String(error))
       );

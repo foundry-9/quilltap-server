@@ -34,6 +34,26 @@ interface NavUserMenuProps {
 }
 
 /**
+ * User profile icon
+ */
+function ProfileIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  )
+}
+
+/**
  * Sign out icon (door with arrow)
  */
 function SignOutIcon({ className }: { className?: string }) {
@@ -73,6 +93,7 @@ function DevConsoleIcon({ className }: { className?: string }) {
 
 export function NavUserMenu({ user }: NavUserMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [authDisabled, setAuthDisabled] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
@@ -83,6 +104,20 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
   const hasAnyHidden = hiddenTagIds.size > 0
   const hasQuickHideTags = quickHideTags.length > 0
 
+  // Check if auth is disabled (no point showing sign out if auto-logged in)
+  useEffect(() => {
+    fetch('/api/auth/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data.authDisabled) {
+          setAuthDisabled(true)
+        }
+      })
+      .catch(() => {
+        // Ignore errors, default to showing sign out
+      })
+  }, [])
+
   // Close menu when clicking outside or pressing escape
   useClickOutside(menuRef, () => setIsOpen(false), {
     enabled: isOpen,
@@ -92,6 +127,12 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
   const handleToggle = () => {
     clientLogger.debug('User menu toggle', { wasOpen: isOpen })
     setIsOpen(!isOpen)
+  }
+
+  const handleProfileClick = () => {
+    clientLogger.debug('Navigating to profile')
+    setIsOpen(false)
+    router.push('/profile')
   }
 
   const handleDevConsoleClick = () => {
@@ -173,6 +214,14 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
             {/* Divider */}
             <div className="qt-navbar-dropdown-divider" />
 
+            {/* Profile link */}
+            <NavUserMenuItem
+              icon={<ProfileIcon className="w-4 h-4" />}
+              label="Profile"
+              onClick={handleProfileClick}
+              testId="user-menu-profile"
+            />
+
             {/* Theme selector (shown when enabled in settings) */}
             {showNavThemeSelector && (
               <NavUserMenuItem
@@ -208,18 +257,20 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
               />
             )}
 
-            {/* Show divider before sign out if there were menu items above */}
-            {(showNavThemeSelector || hasQuickHideTags || devConsole) && (
+            {/* Show divider before sign out (Profile is always above, so always show when sign out is shown) */}
+            {!authDisabled && (
               <div className="qt-navbar-dropdown-divider" />
             )}
 
-            {/* Sign Out */}
-            <NavUserMenuItem
-              icon={<SignOutIcon className="w-4 h-4" />}
-              label="Sign Out"
-              onClick={handleSignOut}
-              testId="user-menu-sign-out"
-            />
+            {/* Sign Out - hidden when AUTH_DISABLED since user is auto-logged in */}
+            {!authDisabled && (
+              <NavUserMenuItem
+                icon={<SignOutIcon className="w-4 h-4" />}
+                label="Sign Out"
+                onClick={handleSignOut}
+                testId="user-menu-sign-out"
+              />
+            )}
           </div>
         </div>
       )}

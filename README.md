@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.0--dev.10-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.5.0--dev.11-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -105,7 +105,7 @@ Quilltap is built on a modern, plugin-friendly stack:
 - **Plugin Runtime**: Providers, auth connectors, themes, upgrade scripts, and dev tooling are delivered as site plugins in `plugins/dist`, loaded according to `SITE_PLUGINS_ENABLED`.
 - **Data Store**: MongoDB 7+ holds users, chats, characters, personas, memories, embeddings, and provider metadata.
 - **File Storage**: S3-compatible storage (embedded MinIO for dev or any external S3/MinIO) stores uploads, gallery assets, and user backups under `users/{userId}/`.
-- **Authentication**: Arctic OAuth + custom JWT session management handles Google OAuth, local accounts, optional TOTP, and the AUTH_DISABLED "no-auth" mode.
+- **Authentication**: Arctic OAuth + custom JWT session management handles Google OAuth, local accounts, optional TOTP, the AUTH_DISABLED "no-auth" auto-login mode, and OAUTH_DISABLED for credentials-only login.
 - **Styling**: Tailwind CSS 4 + the qt-* semantic component class system ensures theme plugins can override every UI surface.
 - **Deployment**: Docker + Docker Compose orchestrate the Next.js app, MongoDB, MinIO, Mongo Express, and Let’s Encrypt-enabled Nginx proxies.
 - **Encryption**: User-specific AES-256-GCM keys plus a master pepper secure API keys and sensitive connection metadata at rest.
@@ -148,9 +148,10 @@ Edit `.env.local` and set your values:
 BASE_URL="http://localhost:3000"
 JWT_SECRET="your-jwt-secret-here"
 
-# Authentication options
-AUTH_DISABLED="false"                # Enable only for local/offline installs
-AUTH_ANONYMOUS_USER_NAME="Anonymous User"
+# Authentication modes
+AUTH_DISABLED="false"                # Set to "true" for auto-login (local/offline installs)
+AUTH_UNAUTHENTICATED_USER_NAME="Unauthenticated Local User"
+OAUTH_DISABLED="false"               # Set to "true" to hide OAuth buttons (credentials-only)
 
 # Google OAuth (optional - get from https://console.cloud.google.com/)
 # If not configured, only email/password login will be available
@@ -392,8 +393,9 @@ Optional environment variables:
 | Variable | Description | Default |
 | -------- | ----------- | ------- |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth credentials for the auth plugin | - |
-| `AUTH_DISABLED` | Disables auth and auto-creates an anonymous user (local-only) | `false` |
-| `AUTH_ANONYMOUS_USER_NAME` | Display name when `AUTH_DISABLED=true` | `Anonymous User` |
+| `AUTH_DISABLED` | Completely bypass auth, auto-login as unauthenticated user (local-only) | `false` |
+| `AUTH_UNAUTHENTICATED_USER_NAME` | Display name when `AUTH_DISABLED=true` | `Unauthenticated Local User` |
+| `OAUTH_DISABLED` | Hide OAuth buttons but keep credentials login | `false` |
 | `SITE_PLUGINS_ENABLED` | Comma-separated plugin IDs or `all` | `all` |
 | `SITE_PLUGINS_DISABLED` | Comma-separated plugins to remove even if enabled | *(empty)* |
 | `LOG_LEVEL` | Logging level (`error`, `warn`, `info`, `debug`) | `info` |
@@ -543,6 +545,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Direct import/export/access
   - [ ] Project becomes overridding context for chats, images, etc.
 - [X] Bug: when the textarea grows in the chat conversation footer, it doesn't shrink until you change something in it after you submit; upon submit it should reduce to normal levels with nothing in it
+- [ ] Make a safely encrypted export/import for API keys, separate from backups
 
 ## Acknowledgments
 

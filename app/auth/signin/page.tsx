@@ -16,6 +16,7 @@ interface AuthProvider {
 
 interface AuthStatus {
   authDisabled: boolean;
+  oauthDisabled: boolean;
   hasOAuthProviders: boolean;
   providers: AuthProvider[];
   credentialsEnabled: boolean;
@@ -46,6 +47,13 @@ function SignInForm() {
         if (response.ok) {
           const data = await response.json();
           setAuthStatus(data);
+
+          // If auth is completely disabled, redirect to dashboard automatically
+          // The session will be created with the unauthenticated user
+          if (data.authDisabled) {
+            router.push('/dashboard');
+            return;
+          }
         }
       } catch (err) {
         console.error('Failed to fetch auth status:', err);
@@ -54,7 +62,7 @@ function SignInForm() {
       }
     }
     fetchAuthStatus();
-  }, []);
+  }, [router]);
 
   async function handleCredentialsSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -153,6 +161,22 @@ function SignInForm() {
     );
   }
 
+  // Show redirecting message when auth is disabled
+  if (authStatus?.authDisabled) {
+    return (
+      <div className="qt-auth-page">
+        <div className="qt-auth-card">
+          <div className="qt-auth-header">
+            <h1 className="qt-auth-title">Redirecting...</h1>
+            <p className="qt-auth-subtitle">
+              Authentication is disabled. Redirecting to dashboard...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="qt-auth-page">
       <div className="qt-auth-card">
@@ -183,13 +207,13 @@ function SignInForm() {
         )}
 
         <div className="mt-8 space-y-4">
-          {/* OAuth Provider Buttons - dynamically rendered */}
+          {/* OAuth Provider Buttons - dynamically rendered (hidden when oauthDisabled) */}
           {authStatusLoading ? (
             <div className="qt-button qt-button-secondary w-full justify-center opacity-70">
               Loading authentication options...
             </div>
           ) : (
-            authStatus?.providers.map((provider) => (
+            !authStatus?.oauthDisabled && authStatus?.providers.map((provider) => (
               <button
                 key={provider.id}
                 onClick={() => handleOAuthSignIn(provider.id)}

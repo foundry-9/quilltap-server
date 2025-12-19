@@ -271,7 +271,9 @@ docker compose -f docker-compose.prod.yml restart nginx
 |----------|-------------|---------|
 | `GOOGLE_CLIENT_ID` | From Google Cloud Console (for OAuth) | - |
 | `GOOGLE_CLIENT_SECRET` | From Google Cloud Console (for OAuth) | - |
-| `AUTH_DISABLED` | Disable authentication entirely | `false` |
+| `AUTH_DISABLED` | Completely bypass auth, auto-login as unauthenticated user | `false` |
+| `AUTH_UNAUTHENTICATED_USER_NAME` | Display name when `AUTH_DISABLED=true` | `Unauthenticated Local User` |
+| `OAUTH_DISABLED` | Hide OAuth buttons but keep credentials login | `false` |
 | `LOG_LEVEL` | Logging level | `info` |
 | `NODE_ENV` | Environment | `production` |
 
