@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import ToolPalette from '@/components/chat/ToolPalette'
 import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import MessageContent from '@/components/chat/MessageContent'
@@ -108,6 +108,14 @@ export function ChatComposer({
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const maxHeight = getTextareaMaxHeight()
 
+  // Resize textarea when input changes (including when cleared after submission)
+  useEffect(() => {
+    if (inputRef.current) {
+      clientLogger.debug('[ChatComposer] Resizing textarea on input change', { inputLength: input.length })
+      resizeTextarea(inputRef.current, maxHeight)
+    }
+  }, [input, maxHeight])
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && e.shiftKey) {
       // Shift+Enter: insert newline, don't submit
@@ -127,8 +135,14 @@ export function ChatComposer({
       e.preventDefault()
       if (input.trim() || attachedFiles.length > 0) {
         const form = e.currentTarget.form
+        const textarea = e.currentTarget
         if (form) {
           form.dispatchEvent(new Event('submit', { bubbles: true }))
+          // Re-focus textarea after form dispatch to prevent focus loss
+          setTimeout(() => {
+            textarea.focus({ preventScroll: true })
+            clientLogger.debug('[ChatComposer] Re-focused textarea after Enter submit')
+          }, 10)
         }
       }
     }

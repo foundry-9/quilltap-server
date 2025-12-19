@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.0--dev.2-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.5.0--dev.3-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -535,14 +535,14 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [ ] Create web-only version that uses IndexedDB for everything
 - [ ] Stop using NextAuth
 - [ ] Create a native Quilltap import/export for everything
-- [ ] Add "Pause" to the turn system; if a chat is marked "Pause" then nobody ever gets to talk until the user nudges somebody again, or "un-pauses" it
+- [X] Add "Pause" to the turn system; if a chat is marked "Pause" then nobody ever gets to talk until the user nudges somebody again, or "un-pauses" it
 - [ ] Add a "Rename" to a chat, and if the user has renamed it, never try to rename it again unless something is toggled indicating that renaming can be automatic again
 - [ ] Project support
   - [ ] Folders
   - [ ] Files (text/Markdown or binary)
   - [ ] Direct import/export/access
   - [ ] Project becomes overridding context for chats, images, etc.
-- [ ] Bug: when the textarea grows in the chat conversation footer, it doesn't shrink until you change something in it after you submit; upon submit it should reduce to normal levels with nothing in it
+- [X] Bug: when the textarea grows in the chat conversation footer, it doesn't shrink until you change something in it after you submit; upon submit it should reduce to normal levels with nothing in it
 
 ## Acknowledgments
 

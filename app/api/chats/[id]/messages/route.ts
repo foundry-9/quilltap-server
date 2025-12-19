@@ -276,19 +276,20 @@ export async function POST(
       return NextResponse.json({ error: 'No active character in chat' }, { status: 404 })
     }
 
-    logger.debug('[Chat Messages] Selected responding participant', {
-      chatId: id,
-      participantId: characterParticipant.id,
-      characterId: characterParticipant.characterId,
-      isContinueMode,
-      requestedParticipantId: requestedRespondingParticipantId,
-    })
-
     // Get character
     const character = await repos.characters.findById(characterParticipant.characterId)
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
+
+    logger.info('[Chat Messages] Selected responding character', {
+      chatId: id,
+      participantId: characterParticipant.id,
+      characterId: characterParticipant.characterId,
+      characterName: character.name,
+      isContinueMode,
+      requestedParticipantId: requestedRespondingParticipantId,
+    })
 
     // Resolve connection profile using fallback chain:
     // 1. participant.connectionProfileId (per-chat override)

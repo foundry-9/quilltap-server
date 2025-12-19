@@ -108,12 +108,17 @@ export function DevConsoleProvider({ children }: { children: ReactNode }) {
     setConsoleLogs([]);
   }, []);
 
-  // Setup keyboard shortcut (Ctrl+Shift+D)
+  // Setup keyboard shortcut (Cmd+Shift+D on macOS, Ctrl+Shift+D on Windows/Linux)
   useEffect(() => {
     if (!isDevelopmentClient()) return;
 
+    const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+      // On macOS: Cmd+Shift+D, on other platforms: Ctrl+Shift+D
+      const isModifierPressed = isMac ? (e.metaKey && !e.ctrlKey) : (e.ctrlKey && !e.metaKey);
+
+      if (isModifierPressed && e.shiftKey && e.key === 'D') {
         e.preventDefault();
         togglePanel();
       }

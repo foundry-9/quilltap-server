@@ -4,6 +4,30 @@
 
 ### 2.5-dev
 
+- fix: Chat composer textarea not resizing after message submission
+  - Added useEffect to resize textarea when input changes programmatically
+  - Textarea now properly shrinks to default height when cleared after submission
+- fix: Sending message while paused should not auto-resume turn manager
+  - User messages now respect pause state instead of unconditionally resuming
+  - Only nudging or explicit unpause will resume auto-responses when paused
+- feat: Draft message persistence across page reloads
+  - Saves textarea content to localStorage with 5-second debounce
+  - Restores draft on page load if text was being composed
+  - Clears draft automatically on successful message submission
+  - Per-chat storage using chat ID in localStorage key
+- fix: Focus returns to textarea after AI response completes
+  - Added focus call to triggerContinueMode finally block
+  - Added effect to detect when generation completes and focus textarea
+  - Re-focus immediately after Enter key form dispatch
+  - Use preventScroll option to avoid scroll conflicts
+  - User can immediately continue typing after character speaks
+- chore: Added logging for multi-character identity debugging
+  - Log selected character name when responding in multi-character chats
+  - Log context builder identity information to trace confusion issues
+- fix: Platform-aware keyboard shortcuts across the application
+  - Search: Cmd+K on macOS, Ctrl+K on Windows/Linux
+  - Dev console: Cmd+Shift+D on macOS, Ctrl+Shift+D on Windows/Linux
+  - Ctrl+K on macOS now falls through to native "delete to end of line" behavior
 - feat: Multi-character chat pause feature
   - Added `isPaused` field to ChatMetadata schema, persisted to database
   - Pause button in participant sidebar (desktop) and message header (mobile)
