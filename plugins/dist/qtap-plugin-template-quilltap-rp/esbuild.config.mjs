@@ -1,7 +1,7 @@
 /**
- * esbuild configuration for qtap-plugin-anthropic
+ * esbuild configuration for qtap-plugin-template-quilltap-rp
  *
- * Bundles the plugin with its SDK dependency into a single CommonJS file.
+ * Bundles the plugin into a single CommonJS file.
  * External packages (react, zod, etc.) are provided by the main app at runtime.
  */
 
@@ -54,15 +54,6 @@ const EXTERNAL_PACKAGES = [
   'node:os',
   'node:child_process',
   'node:module',
-  // App package.json - read at runtime to avoid bundling version changes
-  '@/package.json',
-  // Also handle resolved path (alias resolves before external check)
-  '../../../package.json',
-  '*/package.json',
-  '../package.json',
-  // AWS SDK packages - these are provided by the main app and have internal package.json refs
-  '@aws-sdk/*',
-  '@smithy/*',
 ];
 
 async function build() {

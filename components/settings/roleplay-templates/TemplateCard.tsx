@@ -40,7 +40,7 @@ export function TemplateCard({
         </div>
         {isBuiltIn && (
           <span className="px-2 py-0.5 qt-text-label-xs bg-primary/10 text-primary rounded">
-            Built-in
+            {template.pluginName || 'Built-in'}
           </span>
         )}
       </div>

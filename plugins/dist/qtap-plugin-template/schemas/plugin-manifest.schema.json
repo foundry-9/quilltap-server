@@ -172,7 +172,8 @@
               "THEME",
               "DATABASE_BACKEND",
               "FILE_BACKEND",
-              "UPGRADE_MIGRATION"
+              "UPGRADE_MIGRATION",
+              "ROLEPLAY_TEMPLATE"
             ]
           },
           "default": []
@@ -719,6 +720,40 @@
               "description": "Custom fonts to load"
             }
           },
+          "additionalProperties": false
+        },
+        "roleplayTemplateConfig": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "description": "Template display name"
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "Template description"
+            },
+            "systemPrompt": {
+              "type": "string",
+              "minLength": 1,
+              "description": "System prompt with formatting instructions"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [],
+              "description": "Tags for categorization"
+            }
+          },
+          "required": [
+            "name",
+            "systemPrompt"
+          ],
           "additionalProperties": false
         },
         "permissions": {

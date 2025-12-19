@@ -1,0 +1,26 @@
+{
+  "name": "qtap-plugin-template-quilltap-rp",
+  "version": "1.0.0",
+  "description": "Quilltap RP template plugin - Custom roleplay formatting with bare dialogue, [actions], {thoughts}, and // OOC",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "author": "Foundry-9",
+  "license": "MIT",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "clean": "rm -f index.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "keywords": [
+    "quilltap",
+    "roleplay",
+    "template",
+    "formatting",
+    "rp"
+  ]
+}

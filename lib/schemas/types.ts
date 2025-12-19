@@ -773,6 +773,7 @@ export const RoleplayTemplateSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   systemPrompt: z.string().min(1),           // The template content
   isBuiltIn: z.boolean().default(false),     // Built-in templates are read-only
+  pluginName: z.string().nullable().optional(), // Plugin name if provided by a plugin
   tags: z.array(UUIDSchema).default([]),     // Optional categorization
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

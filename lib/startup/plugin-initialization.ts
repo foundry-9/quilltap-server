@@ -14,6 +14,7 @@ import { initializeProviderRegistry } from '@/lib/plugins/provider-registry';
 import { registerAuthProvider, clearAuthProviders } from '@/lib/plugins/auth-provider-registry';
 import type { AuthProviderPluginExport } from '@/lib/plugins/interfaces/auth-provider-plugin';
 import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-registry';
+import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/lib/plugins/roleplay-template-registry';
 import packageJson from '@/package.json';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
@@ -423,6 +424,17 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       });
     }
 
+    // Initialize roleplay template registry from enabled plugins with ROLEPLAY_TEMPLATE capability
+    logger.debug('Initializing roleplay template registry');
+    await initializeRoleplayTemplateRegistry();
+    const templateStats = roleplayTemplateRegistry.getStats();
+    if (templateStats.total > 0) {
+      logger.info('Roleplay template plugins initialized', {
+        total: templateStats.total,
+        templates: roleplayTemplateRegistry.getAll().map(t => t.name),
+      });
+    }
+
     return result;
   } catch (error) {
     logger.error('Failed to initialize plugin system', { error });
@@ -455,6 +467,8 @@ export function resetPluginSystem(): void {
   pluginRouteRegistry.skipValidation = false;
   // Reset theme registry
   themeRegistry.reset();
+  // Reset roleplay template registry
+  roleplayTemplateRegistry.reset();
   logger.debug('Plugin system reset');
 }
 

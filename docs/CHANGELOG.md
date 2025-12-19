@@ -4,6 +4,17 @@
 
 ### 2.5-dev
 
+- feat: Plugin-provided roleplay templates (ROLEPLAY_TEMPLATE capability)
+  - Added new `ROLEPLAY_TEMPLATE` plugin capability for providing roleplay formatting templates
+  - Created `roleplayTemplateRegistry` to manage templates from enabled plugins
+  - Plugins can define templates via `roleplayTemplateConfig` in manifest.json
+  - Plugin templates appear alongside built-in and user templates in settings
+  - Plugin templates display the plugin name badge instead of "Built-in"
+  - Added `pluginName` field to RoleplayTemplate schema
+  - Migrated "Quilltap RP" template from hardcoded built-in to `qtap-plugin-template-quilltap-rp` plugin
+  - "Standard" template remains as a hardcoded built-in
+  - Added migration to remove old "Quilltap RP" built-in from database
+  - Updated PLUGIN_MANIFEST.md with capability documentation
 - fix: Memory attribution in multi-character chats
   - Updated cheap LLM prompts with clear participant identification
   - Added explicit "CRITICAL RULES" to prevent user/character confusion

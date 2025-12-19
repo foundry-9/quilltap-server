@@ -42,6 +42,7 @@ export function usePrompts() {
 
   /**
    * Save a template (create or update)
+   * Note: Empty dependency array since saveOp.execute is stable
    */
   const saveTemplate = useCallback(
     async (formData: { name: string; content: string; description: string }, editingId?: string) => {
