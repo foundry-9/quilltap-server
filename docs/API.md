@@ -30,11 +30,11 @@ Complete API reference for Quilltap v2.4.
 
 ## Authentication
 
-All API endpoints (except `/api/health`) require authentication via NextAuth.js session cookies.
+All API endpoints (except `/api/health`) require authentication via session cookies.
 
 ### Session Cookie
 
-Authentication is handled through NextAuth.js sessions, which support:
+Authentication is handled through custom JWT session cookies, which support:
 
 - **Google OAuth** (if Google plugin is enabled)
 - **Email/password login** (local accounts)
@@ -998,7 +998,7 @@ import requests
 # List characters
 response = requests.get(
     'https://yourdomain.com/api/characters',
-    cookies={'next-auth.session-token': 'your-session-cookie'}
+    cookies={'quilltap-session': 'your-session-cookie'}
 )
 characters = response.json()
 ```

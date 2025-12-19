@@ -3,10 +3,41 @@
  *
  * Defines the contract for authentication provider plugins.
  * OAuth providers (Google, Apple, GitHub, etc.) implement this interface.
+ *
+ * Uses Arctic for OAuth flows instead of NextAuth.
  */
 
-import type { OAuthConfig, OAuthUserConfig } from 'next-auth/providers/oauth';
 import { logger } from '@/lib/logger';
+import type { OAuth2Tokens } from 'arctic';
+
+/**
+ * User info returned by OAuth provider
+ */
+export interface ArcticUserInfo {
+  id: string;
+  email?: string;
+  name?: string;
+  image?: string;
+}
+
+/**
+ * Arctic provider instance interface
+ * Different providers have different methods, so we define a generic interface
+ */
+export interface ArcticProviderInstance {
+  /** Create authorization URL with PKCE */
+  createAuthorizationURL: (
+    state: string,
+    codeVerifier: string,
+    scopes: string[]
+  ) => URL;
+
+  /** Validate authorization code and get tokens */
+  validateAuthorizationCode: (
+    code: string,
+    codeVerifier: string
+  ) => Promise<OAuth2Tokens>;
+}
 
 /**
  * Configuration for an OAuth authentication provider
@@ -26,6 +57,9 @@ export interface AuthProviderConfig {
 
   /** Optional environment variables */
   optionalEnvVars?: string[];
+
+  /** OAuth scopes to request */
+  scopes?: string[];
 
   /** Button color for sign-in page (Tailwind classes) */
   buttonColor?: string;
@@ -50,14 +84,26 @@ export interface AuthProviderPluginExport {
   /** Provider configuration metadata */
   config: AuthProviderConfig;
 
-  /** Factory function to create the NextAuth provider */
-  createProvider: () => OAuthConfig<unknown> | null;
+  /** Factory function to create the Arctic provider instance */
+  createArcticProvider: () => ArcticProviderInstance | null;
+
+  /** Fetch user info from the provider using access token */
+  fetchUserInfo: (accessToken: string) => Promise<ArcticUserInfo>;
+
+  /** Get OAuth scopes to request */
+  getScopes: () => string[];
 
   /** Check if the provider is properly configured */
   isConfigured: () => boolean;
 
   /** Get detailed configuration status */
   getConfigStatus: () => ProviderConfigStatus;
+
+  /**
+   * @deprecated Legacy NextAuth provider - will be removed
+   * Keep for backwards compatibility during migration
+   */
+  createProvider?: () => unknown | null;
 }
 
 /**

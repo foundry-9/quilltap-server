@@ -22,7 +22,7 @@ This document outlines a migration plan for splitting Quilltap from a Next.js mo
 │  │  (SSR + CSR)   │  │   /api/*               │  │
 │  └────────────────┘  └────────────────────────┘  │
 │  ┌────────────────┐  ┌────────────────────────┐  │
-│  │  Plugin System │  │   NextAuth             │  │
+│  │  Plugin System │  │   Arctic + JWT         │  │
 │  │  (8 providers) │  │   (Session + OAuth)    │  │
 │  └────────────────┘  └────────────────────────┘  │
 └──────────────────────────────────────────────────┘
@@ -149,35 +149,24 @@ quilltap/
 
 #### 1.3 Authentication System
 
-**Challenge:** NextAuth is designed for Next.js. Options:
+**Note:** Quilltap now uses Arctic for OAuth + custom JWT sessions (no NextAuth dependency).
 
-**Option A: NextAuth Standalone (Recommended)**
-NextAuth v5 (Auth.js) supports standalone mode:
-```typescript
-import { Auth } from "@auth/core"
-import { FastifyPluginAsync } from "fastify"
+Current auth stack:
+- **Arctic** for OAuth 2.0 flows (Google, etc.)
+- **Custom JWT sessions** using jose library
+- **PKCE** for OAuth security
 
-const authPlugin: FastifyPluginAsync = async (fastify) => {
-  fastify.all('/api/auth/*', async (request, reply) => {
-    const response = await Auth(request.raw, authConfig)
-    // Convert response to Fastify reply
-  })
-}
-```
-
-**Option B: Custom JWT + Session**
-For mobile support, implement:
-- Session-based auth for web (existing behavior)
-- JWT tokens for mobile clients
-- Shared user validation logic
+For Fastify migration:
+- JWT session verification can be ported directly (standard jose library)
+- Arctic OAuth flows need callback route adaptation
+- Session cookie handling maps to Fastify cookies
 
 **Tasks:**
-- [ ] Evaluate Auth.js standalone vs custom implementation
-- [ ] Port auth provider plugin interface
-- [ ] Implement session middleware for Fastify
-- [ ] Add JWT token endpoint for mobile clients
+- [ ] Port Arctic OAuth routes to Fastify
+- [ ] Adapt JWT session middleware for Fastify
 - [ ] Port 2FA/TOTP logic
-- [ ] Test Google OAuth flow
+- [ ] Add JWT token endpoint for mobile clients
+- [ ] Test Google OAuth flow with Fastify
 
 #### 1.4 Rate Limiting Migration
 
@@ -271,7 +260,7 @@ fastify.all('/api/plugin-routes/*', async (request, reply) => {
 - [ ] `POST /api/messages/:id/swipe` - Regenerate
 
 **Priority 2: Authentication**
-- [ ] `GET/POST /api/auth/*` - NextAuth handlers
+- [ ] `GET/POST /api/auth/*` - Auth handlers (login, logout, session, OAuth)
 - [ ] `POST /api/auth/signup` - Registration
 - [ ] `POST /api/auth/change-password` - Password change
 - [ ] `GET/POST /api/auth/2fa/*` - 2FA endpoints (6 routes)
@@ -658,7 +647,7 @@ Migration is complete when:
 ## References
 
 - [Fastify Documentation](https://www.fastify.io/docs/latest/)
-- [Auth.js (NextAuth v5)](https://authjs.dev/)
+- [Arctic OAuth](https://arcticjs.dev/)
 - [Vite](https://vitejs.dev/)
 - [React Router v6](https://reactrouter.com/)
 - [AWS ECS](https://docs.aws.amazon.com/ecs/)

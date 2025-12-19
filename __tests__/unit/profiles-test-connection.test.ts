@@ -9,7 +9,6 @@ import { decryptApiKey } from '@/lib/encryption'
 import { getRepositories } from '@/lib/repositories/factory'
 
 // Mock dependencies
-jest.mock('next-auth')
 jest.mock('@/lib/encryption', () => ({
   decryptApiKey: jest.fn(),
 }))

@@ -284,7 +284,7 @@ curl -X PUT http://localhost:3000/api/plugins/qtap-plugin-template \
 
 # 3. Test the plugin route (requires authentication - login first via browser)
 curl http://localhost:3000/api/plugin-routes/example \
-  -H "Cookie: next-auth.session-token=YOUR_SESSION_TOKEN"
+  -H "Cookie: quilltap-session=YOUR_SESSION_TOKEN"
 
 # Response should be:
 # {
@@ -315,7 +315,7 @@ To test authenticated routes, you need a session token:
 1. Open your browser and log in to Quilltap
 2. Open Developer Tools (F12)
 3. Go to Application/Storage → Cookies
-4. Find `next-auth.session-token` and copy its value
+4. Find `quilltap-session` and copy its value
 5. Use it in your curl commands
 
 ### Testing Without Authentication

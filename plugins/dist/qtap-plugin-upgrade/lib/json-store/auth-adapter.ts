@@ -1,20 +1,69 @@
 /**
- * NextAuth JSON Store Adapter
+ * JSON Store Auth Adapter
  *
- * Custom adapter for NextAuth v4+ that uses the JSON store instead of Prisma.
- * Implements the Adapter interface to support:
+ * Provides authentication-related operations for the JSON store.
+ * Used during migrations from JSON store to MongoDB.
+ * Supports:
  * - User creation and retrieval
  * - Account linking for OAuth providers
  * - Session management
  * - Verification token handling
  */
 
-import { Adapter, AdapterUser, AdapterAccount } from 'next-auth/adapters';
 import { JsonStore } from './core/json-store';
 import { UsersRepository } from './repositories/users.repository';
 import { z } from 'zod';
 import { Account, Session, VerificationToken as VerificationTokenType } from './schemas/types';
 import crypto from 'node:crypto';
+
+// ============================================================================
+// TYPE DEFINITIONS (formerly from next-auth/adapters)
+// ============================================================================
+
+export interface AdapterUser {
+  id: string;
+  email?: string | null;
+  emailVerified?: Date | null;
+  name?: string | null;
+  image?: string | null;
+}
+
+export interface AdapterAccount {
+  userId: string;
+  type: string;
+  provider: string;
+  providerAccountId: string;
+  refresh_token?: string;
+  access_token?: string;
+  expires_at?: number;
+  token_type?: string;
+  scope?: string;
+  id_token?: string;
+  session_state?: string;
+}
+
+export interface AdapterSession {
+  sessionToken: string;
+  userId: string;
+  expires: Date;
+}
+
+export interface Adapter {
+  createUser(user: Omit<AdapterUser, 'id'>): Promise<AdapterUser>;
+  getUser(id: string): Promise<AdapterUser | null>;
+  getUserByEmail(email: string): Promise<AdapterUser | null>;
+  getUserByAccount(params: { provider: string; providerAccountId: string }): Promise<AdapterUser | null>;
+  updateUser(user: Partial<AdapterUser> & { id: string }): Promise<AdapterUser>;
+  deleteUser?(userId: string): Promise<void>;
+  linkAccount(account: AdapterAccount): Promise<void>;
+  unlinkAccount?(params: { provider: string; providerAccountId: string }): Promise<void>;
+  createSession(session: { sessionToken: string; userId: string; expires: Date }): Promise<AdapterSession>;
+  getSessionAndUser(sessionToken: string): Promise<{ session: AdapterSession; user: AdapterUser } | null>;
+  updateSession(session: Partial<AdapterSession> & { sessionToken: string }): Promise<AdapterSession | null>;
+  deleteSession(sessionToken: string): Promise<void>;
+  createVerificationToken?(token: { identifier: string; token: string; expires: Date }): Promise<{ identifier: string; token: string; expires: Date }>;
+  useVerificationToken?(params: { identifier: string; token: string }): Promise<{ identifier: string; token: string; expires: Date } | null>;
+}
 
 /**
  * Create a custom NextAuth adapter for JSON store
@@ -74,7 +123,7 @@ export function JsonStoreAdapter(jsonStore: JsonStore): Adapter {
       try {
         console.log('Creating user', { context: 'JsonStoreAdapter.createUser', email: user.email });
         const created = await usersRepo.create({
-          email: user.email,
+          email: user.email ?? '',
           emailVerified: user.emailVerified ? (user.emailVerified instanceof Date ? user.emailVerified.toISOString() : user.emailVerified) : null,
           image: user.image,
           name: user.name,
@@ -147,7 +196,7 @@ export function JsonStoreAdapter(jsonStore: JsonStore): Adapter {
     async updateUser(user: Partial<AdapterUser> & { id: string }): Promise<AdapterUser> {
       const emailVerified = user.emailVerified ? (user.emailVerified instanceof Date ? user.emailVerified.toISOString() : user.emailVerified) : undefined;
       const updated = await usersRepo.update(user.id, {
-        email: user.email,
+        email: user.email ?? undefined,
         emailVerified,
         image: user.image,
         name: user.name,

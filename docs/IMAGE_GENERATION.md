@@ -377,7 +377,7 @@ Generated images are saved to your private database and are backed by your user 
 
 Generate images using your configured LLM providers.
 
-**Authentication**: Requires valid NextAuth session cookie (automatically included in browser requests).
+**Authentication**: Requires valid session cookie (automatically included in browser requests).
 
 **Request Body**:
 

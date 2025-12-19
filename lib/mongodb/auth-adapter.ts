@@ -1,27 +1,58 @@
 /**
- * NextAuth MongoDB Adapter
+ * MongoDB Auth Adapter
  *
- * Custom adapter for NextAuth v4+ that uses MongoDB for persistence.
- * This adapter uses UUID-style string IDs (in the `id` field) instead of
+ * Provides authentication-related database operations using MongoDB.
+ * Uses UUID-style string IDs (in the `id` field) instead of
  * MongoDB ObjectIds to maintain compatibility with the rest of the application.
  *
- * Implements the Adapter interface to support:
+ * Supports:
  * - User creation and retrieval
  * - Account linking for OAuth providers
  * - Session management
  * - Verification token handling
  */
 
-import {
-  Adapter,
-  AdapterUser,
-  AdapterAccount,
-  AdapterSession,
-  VerificationToken,
-} from 'next-auth/adapters';
 import { getMongoDatabase } from './client';
 import { logger } from '@/lib/logger';
 import crypto from 'node:crypto';
+
+// ============================================================================
+// TYPE DEFINITIONS (formerly from next-auth/adapters)
+// ============================================================================
+
+export interface AuthAdapterUser {
+  id: string;
+  email?: string | null;
+  emailVerified?: Date | null;
+  name?: string | null;
+  image?: string | null;
+}
+
+export interface AuthAdapterAccount {
+  userId: string;
+  type: string;
+  provider: string;
+  providerAccountId: string;
+  refresh_token?: string;
+  access_token?: string;
+  expires_at?: number;
+  token_type?: string;
+  scope?: string;
+  id_token?: string;
+  session_state?: string;
+}
+
+export interface AuthAdapterSession {
+  sessionToken: string;
+  userId: string;
+  expires: Date;
+}
+
+export interface AuthVerificationToken {
+  identifier: string;
+  token: string;
+  expires: Date;
+}
 
 /**
  * MongoDB user document type
@@ -97,21 +128,43 @@ function now(): string {
 }
 
 /**
- * Get the NextAuth MongoDB adapter
+ * MongoDB Auth Adapter Interface
+ *
+ * Defines the interface for the auth adapter with all supported operations.
+ */
+export interface MongoDBAuthAdapter {
+  createUser(user: Omit<AuthAdapterUser, 'id'>): Promise<AuthAdapterUser>;
+  getUser(id: string): Promise<AuthAdapterUser | null>;
+  getUserByEmail(email: string): Promise<AuthAdapterUser | null>;
+  getUserByAccount(params: { provider: string; providerAccountId: string }): Promise<AuthAdapterUser | null>;
+  updateUser(user: Partial<AuthAdapterUser> & { id: string }): Promise<AuthAdapterUser>;
+  deleteUser(userId: string): Promise<void>;
+  linkAccount(account: AuthAdapterAccount): Promise<void>;
+  unlinkAccount(params: { provider: string; providerAccountId: string }): Promise<void>;
+  createSession(session: Omit<AuthAdapterSession, 'id'>): Promise<AuthAdapterSession>;
+  getSessionAndUser(sessionToken: string): Promise<{ session: AuthAdapterSession; user: AuthAdapterUser } | null>;
+  updateSession(session: Partial<AuthAdapterSession> & { sessionToken: string }): Promise<AuthAdapterSession | null>;
+  deleteSession(sessionToken: string): Promise<void>;
+  createVerificationToken(token: AuthVerificationToken): Promise<AuthVerificationToken | null>;
+  useVerificationToken(params: { identifier: string; token: string }): Promise<AuthVerificationToken | null>;
+}
+
+/**
+ * Get the MongoDB auth adapter
  *
  * This adapter uses UUID-style IDs stored in the `id` field, maintaining
  * compatibility with the application's data model.
  *
- * @returns Adapter instance for NextAuth
+ * @returns Adapter instance for auth operations
  * @throws Error if MongoDB connection fails
  */
-export function getMongoDBAuthAdapter(): Adapter {
+export function getMongoDBAuthAdapter(): MongoDBAuthAdapter {
   return {
     /**
      * Create a new user in the database
      * For OAuth users, generates a username from their email or name
      */
-    async createUser(user: Omit<AdapterUser, 'id'>): Promise<AdapterUser> {
+    async createUser(user: Omit<AuthAdapterUser, 'id'>): Promise<AuthAdapterUser> {
       try {
         logger.debug('MongoDB Auth: Creating user', {
           email: user.email,
@@ -175,7 +228,7 @@ export function getMongoDBAuthAdapter(): Adapter {
     /**
      * Get a user by their ID (UUID)
      */
-    async getUser(id: string): Promise<AdapterUser | null> {
+    async getUser(id: string): Promise<AuthAdapterUser | null> {
       try {
         logger.debug('MongoDB Auth: Getting user by ID', { userId: id });
 
@@ -217,7 +270,7 @@ export function getMongoDBAuthAdapter(): Adapter {
     /**
      * Get a user by their email address
      */
-    async getUserByEmail(email: string): Promise<AdapterUser | null> {
+    async getUserByEmail(email: string): Promise<AuthAdapterUser | null> {
       try {
         logger.debug('MongoDB Auth: Getting user by email', { email });
 
@@ -264,7 +317,7 @@ export function getMongoDBAuthAdapter(): Adapter {
     }: {
       provider: string;
       providerAccountId: string;
-    }): Promise<AdapterUser | null> {
+    }): Promise<AuthAdapterUser | null> {
       try {
         logger.debug('MongoDB Auth: Getting user by account', {
           provider,
@@ -328,8 +381,8 @@ export function getMongoDBAuthAdapter(): Adapter {
      * Update a user in the database
      */
     async updateUser(
-      user: Partial<AdapterUser> & { id: string }
-    ): Promise<AdapterUser> {
+      user: Partial<AuthAdapterUser> & { id: string }
+    ): Promise<AuthAdapterUser> {
       try {
         logger.debug('MongoDB Auth: Updating user', { userId: user.id });
 
@@ -421,7 +474,7 @@ export function getMongoDBAuthAdapter(): Adapter {
     /**
      * Link an account to a user (for OAuth providers)
      */
-    async linkAccount(account: AdapterAccount): Promise<void> {
+    async linkAccount(account: AuthAdapterAccount): Promise<void> {
       try {
         logger.debug('MongoDB Auth: Linking account', {
           userId: account.userId,
@@ -506,8 +559,8 @@ export function getMongoDBAuthAdapter(): Adapter {
      * Create a new session
      */
     async createSession(
-      session: Omit<AdapterSession, 'id'>
-    ): Promise<AdapterSession> {
+      session: Omit<AuthAdapterSession, 'id'>
+    ): Promise<AuthAdapterSession> {
       try {
         logger.debug('MongoDB Auth: Creating session', {
           userId: session.userId,
@@ -554,7 +607,7 @@ export function getMongoDBAuthAdapter(): Adapter {
      */
     async getSessionAndUser(
       sessionToken: string
-    ): Promise<{ session: AdapterSession; user: AdapterUser } | null> {
+    ): Promise<{ session: AuthAdapterSession; user: AuthAdapterUser } | null> {
       try {
         logger.debug('MongoDB Auth: Getting session and user', {
           sessionToken,
@@ -627,8 +680,8 @@ export function getMongoDBAuthAdapter(): Adapter {
      * Update a session
      */
     async updateSession(
-      session: Partial<AdapterSession> & { sessionToken: string }
-    ): Promise<AdapterSession | null> {
+      session: Partial<AuthAdapterSession> & { sessionToken: string }
+    ): Promise<AuthAdapterSession | null> {
       try {
         logger.debug('MongoDB Auth: Updating session', {
           sessionToken: session.sessionToken,
@@ -707,8 +760,8 @@ export function getMongoDBAuthAdapter(): Adapter {
      * Create a verification token (for passwordless sign-in)
      */
     async createVerificationToken(
-      verificationToken: VerificationToken
-    ): Promise<VerificationToken | null> {
+      verificationToken: AuthVerificationToken
+    ): Promise<AuthVerificationToken | null> {
       try {
         logger.debug('MongoDB Auth: Creating verification token', {
           identifier: verificationToken.identifier,
@@ -752,7 +805,7 @@ export function getMongoDBAuthAdapter(): Adapter {
     }: {
       identifier: string;
       token: string;
-    }): Promise<VerificationToken | null> {
+    }): Promise<AuthVerificationToken | null> {
       try {
         logger.debug('MongoDB Auth: Using verification token', { identifier });
 

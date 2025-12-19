@@ -4,6 +4,21 @@
 
 ### 2.5-dev
 
+- refactor: Replaced NextAuth with Arctic + custom session management
+  - Removed next-auth dependency entirely
+  - Added Arctic library for OAuth 2.0 flows with PKCE support
+  - Created custom JWT session management using jose library
+  - Session tokens are derived from ENCRYPTION_MASTER_PEPPER (no separate JWT secret needed)
+  - Custom session provider with same useSession API for React components
+  - OAuth state stored in encrypted httpOnly cookies
+  - Credentials login: POST /api/auth/login
+  - OAuth authorize: GET /api/auth/oauth/[provider]/authorize
+  - OAuth callback: GET /api/auth/oauth/[provider]/callback
+  - Session check: GET /api/auth/session
+  - Logout: POST /api/auth/logout
+  - Updated Google OAuth plugin to use Arctic provider
+  - Removed NEXTAUTH_URL and NEXTAUTH_SECRET environment variables
+  - Added optional BASE_URL environment variable (defaults to http://localhost:3000)
 - feat: Plugin-provided roleplay templates (ROLEPLAY_TEMPLATE capability)
   - Added new `ROLEPLAY_TEMPLATE` plugin capability for providing roleplay formatting templates
   - Created `roleplayTemplateRegistry` to manage templates from enabled plugins

@@ -15,7 +15,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
-import { signOut } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { useTheme } from '@/components/providers/theme-provider'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useDevConsoleOptional } from '@/components/providers/dev-console-provider'
@@ -74,6 +74,7 @@ function DevConsoleIcon({ className }: { className?: string }) {
 export function NavUserMenu({ user }: NavUserMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   const { showNavThemeSelector } = useTheme()
   const { quickHideTags, hiddenTagIds } = useQuickHide()
@@ -101,9 +102,19 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
     }
   }
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     clientLogger.info('User signing out from user menu')
-    signOut({ callbackUrl: '/' })
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      router.push('/')
+    } catch (error) {
+      clientLogger.error('Sign out failed', { error })
+      // Still redirect even if logout fails - cookie will expire anyway
+      router.push('/')
+    }
   }
 
   const handleThemeSelected = () => {

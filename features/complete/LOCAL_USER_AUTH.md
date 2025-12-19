@@ -12,12 +12,19 @@ This document outlines the implementation plan for adding email/password authent
 
 ## Current Authentication System
 
-Quilltap currently uses:
+> **Note:** This document was written before the Arctic migration. Quilltap now uses:
+> - **Arctic** for OAuth 2.0 flows (replaced NextAuth OAuth)
+> - **Custom JWT sessions** using jose library (replaced NextAuth sessions)
+> - **MongoDB** for user storage (replaced PostgreSQL + Prisma)
+>
+> The local auth features (email/password + TOTP 2FA) described below have been implemented and remain functional with the new session system.
 
-- **NextAuth.js v4.24.7** for authentication
+Originally, Quilltap used:
+
+- **NextAuth.js v4.24.7** for authentication (now replaced with Arctic + custom JWT)
 - **Google OAuth** as the sole authentication provider
-- **PostgreSQL + Prisma ORM** for user storage
-- **Database sessions** (not JWT) for session management
+- **PostgreSQL + Prisma ORM** for user storage (now MongoDB)
+- **Database sessions** (not JWT) for session management (now custom JWT sessions)
 - **AES-256-GCM encryption** infrastructure for secure data storage
 
 ### Existing Security Infrastructure
@@ -203,98 +210,20 @@ export function validatePasswordStrength(password: string): {
 }
 ```
 
-#### 1.3: NextAuth Credentials Provider ✅
+#### 1.3: Credentials Login Route ✅
 
 **Status**: COMPLETED
 
-Update `lib/auth.ts` to add CredentialsProvider:
+> **Note:** The original plan used NextAuth CredentialsProvider. The actual implementation uses a custom `/api/auth/login` route with JWT session management.
 
-```typescript
-import NextAuth from 'next-auth'
-import { PrismaAdapter } from '@auth/prisma-adapter'
-import GoogleProvider from 'next-auth/providers/google'
-import CredentialsProvider from 'next-auth/providers/credentials'
-import { prisma } from '@/lib/prisma'
-import { verifyPassword } from '@/lib/auth/password'
+The credentials login endpoint in `app/api/auth/login/route.ts` handles:
+- Email/password validation
+- Password verification with bcrypt
+- TOTP 2FA verification when enabled
+- JWT session token creation
+- Trusted device handling
 
-export const authOptions = {
-  adapter: PrismaAdapter(prisma),
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-    CredentialsProvider({
-      id: 'credentials',
-      name: 'Email and Password',
-      credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
-        totpCode: { label: '2FA Code (if enabled)', type: 'text' }
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error('Email and password required')
-        }
-
-        // Find user
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email }
-        })
-
-        if (!user || !user.passwordHash) {
-          throw new Error('Invalid email or password')
-        }
-
-        // Verify password
-        const valid = await verifyPassword(
-          credentials.password,
-          user.passwordHash
-        )
-
-        if (!valid) {
-          throw new Error('Invalid email or password')
-        }
-
-        // Check if 2FA is enabled
-        if (user.totpEnabled) {
-          if (!credentials.totpCode) {
-            throw new Error('2FA code required')
-          }
-
-          // Verify TOTP (implemented in Phase 2)
-          const totpValid = await verifyTOTP(user.id, credentials.totpCode)
-
-          if (!totpValid) {
-            throw new Error('Invalid 2FA code')
-          }
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-        }
-      },
-    }),
-  ],
-  session: {
-    strategy: 'database', // Use existing database sessions
-  },
-  callbacks: {
-    session({ session, user }) {
-      session.user.id = user.id
-      return session
-    },
-  },
-  pages: {
-    signIn: '/auth/signin',
-    error: '/auth/error',
-  },
-  debug: process.env.NODE_ENV === 'development',
-}
-```
+See the actual implementation in `app/api/auth/login/route.ts`.
 
 #### 1.4: Signup API Endpoint ✅
 
@@ -509,160 +438,13 @@ export default function SignupPage() {
 
 **Status**: COMPLETED
 
-Update `app/auth/signin/page.tsx` to support both OAuth and credentials:
+> **Note:** The actual implementation uses direct API calls to `/api/auth/login` and redirects to `/api/auth/oauth/google/authorize` for OAuth, rather than `next-auth/react` signIn function.
 
-```typescript
-'use client'
-
-import { signIn } from 'next-auth/react'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-
-export default function SignInPage() {
-  const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [totpCode, setTotpCode] = useState('')
-  const [needsTotp, setNeedsTotp] = useState(false)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  async function handleCredentialsSignIn(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        totpCode: needsTotp ? totpCode : undefined,
-        redirect: false
-      })
-
-      if (result?.error) {
-        if (result.error === '2FA code required') {
-          setNeedsTotp(true)
-          setError('Please enter your 2FA code')
-        } else {
-          setError(result.error)
-        }
-      } else {
-        router.push('/dashboard')
-      }
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleGoogleSignIn() {
-    await signIn('google', { callbackUrl: '/dashboard' })
-  }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
-        <h2 className="text-3xl font-bold text-center">Sign In</h2>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded">
-            {error}
-          </div>
-        )}
-
-        {/* OAuth Sign In */}
-        <div>
-          <button
-            onClick={handleGoogleSignIn}
-            className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 py-2 px-4 rounded hover:bg-gray-50"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              {/* Google icon SVG */}
-            </svg>
-            Continue with Google
-          </button>
-        </div>
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300" />
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">Or</span>
-          </div>
-        </div>
-
-        {/* Email/Password Sign In */}
-        <form onSubmit={handleCredentialsSignIn} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full rounded border-gray-300 shadow-sm"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full rounded border-gray-300 shadow-sm"
-            />
-          </div>
-
-          {needsTotp && (
-            <div>
-              <label htmlFor="totpCode" className="block text-sm font-medium">
-                2FA Code
-              </label>
-              <input
-                id="totpCode"
-                type="text"
-                required
-                value={totpCode}
-                onChange={(e) => setTotpCode(e.target.value)}
-                placeholder="000000"
-                maxLength={6}
-                className="mt-1 block w-full rounded border-gray-300 shadow-sm"
-              />
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <p className="text-center text-sm text-gray-600">
-          Don't have an account?{' '}
-          <Link href="/auth/signup" className="text-blue-600 hover:text-blue-700">
-            Sign up
-          </Link>
-        </p>
-      </div>
-    </div>
-  )
-}
-```
+The sign-in page in `app/auth/signin/page.tsx`:
+- Posts credentials to `/api/auth/login` for email/password login
+- Redirects to `/api/auth/oauth/[provider]/authorize` for OAuth providers
+- Handles 2FA code prompts when required
+- Shows available OAuth providers from the auth status API
 
 ### Phase 2: TOTP 2FA Implementation (3-4 days)
 
@@ -942,10 +724,9 @@ Create `app/api/auth/2fa/setup/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth/session'
 import { generateTOTPSecret } from '@/lib/auth/totp'
-import { prisma } from '@/lib/prisma'
+// Note: Uses MongoDB repositories instead of Prisma
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -995,8 +776,7 @@ Create `app/api/auth/2fa/enable/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth/session'
 import { enableTOTP } from '@/lib/auth/totp'
 import { z } from 'zod'
 
@@ -1059,8 +839,7 @@ Create `app/api/auth/2fa/disable/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerSession } from '@/lib/auth/session'
 import { disableTOTP } from '@/lib/auth/totp'
 
 export async function POST(req: NextRequest) {
@@ -1392,9 +1171,9 @@ Allow users to link both OAuth and password authentication:
 
 ### Session Security
 
-1. **Database Sessions**: Use existing database session strategy
-2. **Session Rotation**: Rotate session on authentication
-3. **Logout**: Properly invalidate sessions on logout
+1. **JWT Sessions**: Custom JWT sessions with automatic refresh
+2. **Session Rotation**: New token issued on authentication
+3. **Logout**: Clear session cookie on logout
 
 ### Best Practices
 
@@ -1436,8 +1215,11 @@ Allow users to link both OAuth and password authentication:
 ### Authentication
 
 - `POST /api/auth/signup` - Create new account
-- `POST /api/auth/signin` - Sign in (handled by NextAuth)
-- `POST /api/auth/signout` - Sign out (handled by NextAuth)
+- `POST /api/auth/login` - Sign in with credentials
+- `POST /api/auth/logout` - Sign out (clears session cookie)
+- `GET /api/auth/session` - Get current session
+- `GET /api/auth/oauth/[provider]/authorize` - Start OAuth flow
+- `GET /api/auth/oauth/[provider]/callback` - OAuth callback
 
 ### 2FA Management
 
@@ -1672,7 +1454,8 @@ These are enforced on both client and server.
 
 ### Documentation
 
-- [NextAuth Credentials Provider](https://next-auth.js.org/providers/credentials)
+- [Arctic OAuth Library](https://arcticjs.dev/)
+- [jose JWT Library](https://github.com/panva/jose)
 - [bcrypt Documentation](https://github.com/kelektiv/node.bcrypt.js)
 - [Speakeasy Documentation](https://github.com/speakeasyjs/speakeasy)
 - [RFC 6238 - TOTP](https://datatracker.ietf.org/doc/html/rfc6238)

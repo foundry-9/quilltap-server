@@ -130,9 +130,9 @@ nano .env.production
 **Required variables:**
 
 ```env
-# NextAuth (production domain)
-NEXTAUTH_URL="https://yourdomain.com"
-NEXTAUTH_SECRET="$(openssl rand -base64 32)"
+# Authentication (production domain)
+BASE_URL="https://yourdomain.com"
+JWT_SECRET="$(openssl rand -base64 32)"
 
 # Google OAuth (get from https://console.cloud.google.com/) - optional
 GOOGLE_CLIENT_ID="your-google-client-id"
@@ -170,7 +170,7 @@ SSL_EMAIL="admin@yourdomain.com"
 4. Go to Credentials → Create Credentials → OAuth client ID
 5. Application type: Web application
 6. Authorized redirect URIs:
-   - `https://yourdomain.com/api/auth/callback/google`
+   - `https://yourdomain.com/api/auth/oauth/google/callback`
 7. Copy Client ID and Client Secret to `.env.production`
 
 ### 3. Initialize SSL Certificates
@@ -246,8 +246,8 @@ docker compose -f docker-compose.prod.yml restart nginx
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `NEXTAUTH_URL` | Your production domain | `https://yourdomain.com` |
-| `NEXTAUTH_SECRET` | Secret for NextAuth (32+ chars) | `$(openssl rand -base64 32)` |
+| `BASE_URL` | Your production domain | `https://yourdomain.com` |
+| `JWT_SECRET` | Secret for JWT session signing (32+ chars) | `$(openssl rand -base64 32)` |
 | `ENCRYPTION_MASTER_PEPPER` | Master encryption key (32+ chars) | `$(openssl rand -base64 32)` |
 | `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
 | `MONGODB_DATABASE` | MongoDB database name | `quilltap` |
@@ -659,7 +659,7 @@ No additional tuning usually needed.
 - [ ] Backups stored off-server
 - [ ] SSL certificate auto-renewal verified
 - [ ] Rate limiting enabled (default)
-- [ ] NEXTAUTH_SECRET is strong (32+ characters)
+- [ ] JWT_SECRET is strong (32+ characters)
 - [ ] No Quilltap sensitive files in version control
 
 That's it! Your Quilltap instance is now running securely in production with MongoDB and S3-compatible storage.

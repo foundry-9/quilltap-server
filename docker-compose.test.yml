@@ -7,11 +7,11 @@ services:
     container_name: quilltap-test
     environment:
       - NODE_ENV=test
-      - NEXTAUTH_SECRET=test-secret-key-minimum-32-characters
+      - JWT_SECRET=test-secret-key-minimum-32-characters
       - ENCRYPTION_MASTER_PEPPER=test-pepper-key-minimum-32-chars
       - GOOGLE_CLIENT_ID=test-client-id
       - GOOGLE_CLIENT_SECRET=test-client-secret
-      - NEXTAUTH_URL=http://localhost:3000
+      - BASE_URL=http://localhost:3000
     command: npm run test:coverage
     networks:
       - quilltap-test-network

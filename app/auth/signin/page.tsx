@@ -1,6 +1,5 @@
 "use client";
 
-import { signIn } from "next-auth/react";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -27,13 +26,14 @@ function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const message = searchParams.get("message");
+  const errorParam = searchParams.get("error");
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [needsTotp, setNeedsTotp] = useState(false);
   const [rememberDevice, setRememberDevice] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(errorParam || "");
   const [loading, setLoading] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [authStatusLoading, setAuthStatusLoading] = useState(true);
@@ -68,20 +68,29 @@ function SignInForm() {
         .find(row => row.startsWith('totp_trusted_device='))
         ?.split('=')[1];
 
-      const result = await signIn("credentials", {
-        username,
-        password,
-        totpCode: needsTotp ? totpCode : undefined,
-        trustedDeviceToken: trustedDeviceToken || undefined,
-        redirect: false,
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          username,
+          password,
+          totpCode: needsTotp ? totpCode : undefined,
+          trustedDeviceToken: trustedDeviceToken || undefined,
+          rememberDevice,
+        }),
       });
 
-      if (result?.error) {
-        if (result.error === "2FA code required") {
+      const result = await response.json();
+
+      if (!result.success) {
+        if (result.requires2FA) {
           setNeedsTotp(true);
           setError("Please enter your 2FA code");
         } else {
-          setError(result.error);
+          setError(result.error || "Login failed");
         }
       } else {
         // Login successful - if TOTP was verified and remember device is checked, create trusted device
@@ -90,6 +99,7 @@ function SignInForm() {
             await fetch('/api/auth/2fa/trusted-devices', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
             });
           } catch (deviceErr) {
             // Don't block login if device trust fails
@@ -105,8 +115,10 @@ function SignInForm() {
     }
   }
 
-  async function handleOAuthSignIn(providerId: string) {
-    await signIn(providerId, { callbackUrl: "/dashboard" });
+  function handleOAuthSignIn(providerId: string) {
+    // Redirect to Arctic OAuth authorization endpoint
+    const callbackUrl = encodeURIComponent("/dashboard");
+    window.location.href = `/api/auth/oauth/${providerId}/authorize?callbackUrl=${callbackUrl}`;
   }
 
   // Render Google icon SVG

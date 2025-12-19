@@ -7,7 +7,10 @@
 
 import { NextResponse } from 'next/server';
 import { isAuthDisabled } from '@/lib/auth/config';
-import { getConfiguredAuthProviders, getAllAuthProviders } from '@/lib/plugins/auth-provider-registry';
+import {
+  getConfiguredArcticProviders,
+  getAllArcticProviders,
+} from '@/lib/auth/arctic/registry';
 import { isPluginSystemInitialized, initializePlugins } from '@/lib/startup/plugin-initialization';
 import { logger } from '@/lib/logger';
 
@@ -38,9 +41,9 @@ export async function GET() {
       });
     }
 
-    // Get provider information
-    const configuredProviders = pluginsInitialized ? getConfiguredAuthProviders() : [];
-    const allProviders = pluginsInitialized ? getAllAuthProviders() : [];
+    // Get provider information from Arctic registry
+    const configuredProviders = pluginsInitialized ? getConfiguredArcticProviders() : [];
+    const allProviders = pluginsInitialized ? getAllArcticProviders() : new Map();
 
     // Build provider info for response
     const providers = configuredProviders.map(p => ({
@@ -56,11 +59,11 @@ export async function GET() {
     if (!pluginsInitialized) {
       warning = 'Plugin system is still initializing. OAuth providers may not be available yet.';
     } else if (configuredProviders.length === 0) {
-      const unconfiguredCount = allProviders.filter(p => !p.isConfigured).length;
+      const unconfiguredCount = Array.from(allProviders.values()).filter(p => !p.isConfigured()).length;
       if (unconfiguredCount > 0) {
         warning = `${unconfiguredCount} authentication plugin(s) are registered but not configured. Check environment variables.`;
-      } else {
-        warning = 'No OAuth authentication plugins are configured. Only credentials-based login is available.';
+      } else if (allProviders.size === 0) {
+        warning = 'No OAuth authentication plugins are registered. Only credentials-based login is available.';
       }
     }
 
@@ -69,7 +72,7 @@ export async function GET() {
       authDisabled,
       pluginsInitialized,
       configuredProviders: configuredProviders.length,
-      totalProviders: allProviders.length,
+      totalProviders: allProviders.size,
     });
 
     return NextResponse.json({

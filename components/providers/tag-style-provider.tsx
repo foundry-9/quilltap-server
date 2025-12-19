@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/components/providers/session-provider';
 import type { TagStyleMap, TagVisualStyle } from '@/lib/schemas/types';
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles';
 import { clientLogger } from '@/lib/client-logger';

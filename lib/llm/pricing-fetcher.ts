@@ -46,7 +46,7 @@ async function fetchOpenRouterPricing(apiKey: string): Promise<ModelPricing[]> {
 
     const client = new OpenRouter({
       apiKey,
-      httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+      httpReferer: process.env.BASE_URL || 'http://localhost:3000',
       xTitle: 'Quilltap',
     })
 

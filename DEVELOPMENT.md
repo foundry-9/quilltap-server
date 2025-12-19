@@ -9,7 +9,7 @@ quilltap/
 ├── app/                      # Next.js App Router entry point
 │   ├── (authenticated)/      # Protected routes (characters, chats, personas, settings, about, tools)
 │   ├── api/                  # API route handlers (auth, chats, characters, providers, backups, etc.)
-│   ├── auth/                 # NextAuth flows (sign-in, error, callback)
+│   ├── auth/                 # Auth flows (sign-in, OAuth callbacks, session)
 │   ├── dashboard/            # Dashboard page
 │   ├── styles/               # Qt-* utility class stylesheets
 │   ├── globals.css           # Root styles and Tailwind imports
