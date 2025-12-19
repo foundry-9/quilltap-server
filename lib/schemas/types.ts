@@ -649,6 +649,7 @@ export const TagSchema = z.object({
   name: z.string(),
   nameLower: z.string(),
   quickHide: z.boolean().default(false),
+  visualStyle: TagVisualStyleSchema.nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

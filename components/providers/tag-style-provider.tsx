@@ -30,14 +30,22 @@ export function TagStyleProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const res = await fetch('/api/chat-settings', { cache: 'no-store' });
+      // Fetch tags directly - visual styles are now stored on the tag entities
+      const res = await fetch('/api/tags', { cache: 'no-store' });
       if (res.status === 401) {
         setStyles({});
       } else if (!res.ok) {
-        throw new Error('Failed to fetch chat settings');
+        throw new Error('Failed to fetch tags');
       } else {
         const data = await res.json();
-        setStyles(data.tagStyles ?? {});
+        // Build style map from tags that have visualStyle defined
+        const styleMap: TagStyleMap = {};
+        for (const tag of data.tags ?? []) {
+          if (tag.visualStyle) {
+            styleMap[tag.id] = tag.visualStyle;
+          }
+        }
+        setStyles(styleMap);
       }
     } catch (error) {
       clientLogger.warn('Unable to load tag styles:', { error: error instanceof Error ? error.message : String(error) });

@@ -38518,7 +38518,7 @@ var migrateCharacterSystemPromptsMigration = {
   }
 };
 
-// migrations/remove-quilltap-rp-builtin.ts
+// migrations/migrate-tag-styles-to-tags.ts
 init_logger();
 function isMongoDBBackendEnabled5() {
   const backend = process.env.DATA_BACKEND || "";
@@ -38534,6 +38534,204 @@ async function isMongoDBAccessible5() {
     await db.admin().ping();
     return true;
   } catch (error) {
+    logger.warn("MongoDB is not accessible for tag styles migration", {
+      context: "migration.migrate-tag-styles-to-tags",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+async function getChatSettingsWithTagStyles() {
+  try {
+    const db = await getMongoDatabase6();
+    const chatSettingsCollection = db.collection("chat_settings");
+    const settings = await chatSettingsCollection.find({
+      tagStyles: { $exists: true, $ne: {} }
+    }).toArray();
+    return settings.filter((s) => s.tagStyles && Object.keys(s.tagStyles).length > 0).map((s) => ({
+      id: s.id,
+      userId: s.userId,
+      tagStyles: s.tagStyles
+    }));
+  } catch (error) {
+    logger.error("Error getting chat settings with tag styles", {
+      context: "migration.migrate-tag-styles-to-tags",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return [];
+  }
+}
+var migrateTagStylesToTagsMigration = {
+  id: "migrate-tag-styles-to-tags-v1",
+  description: "Move tag visual styles from ChatSettings to individual Tag entities",
+  introducedInVersion: "2.5.1",
+  dependsOn: ["migrate-json-to-mongodb-v1"],
+  // Run after data migration to MongoDB
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled5()) {
+      logger.debug("MongoDB not enabled, skipping tag styles migration", {
+        context: "migration.migrate-tag-styles-to-tags"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible5()) {
+      logger.debug("MongoDB not accessible, deferring tag styles migration", {
+        context: "migration.migrate-tag-styles-to-tags"
+      });
+      return false;
+    }
+    const settingsWithStyles = await getChatSettingsWithTagStyles();
+    logger.debug("Checked for chat settings with tag styles", {
+      context: "migration.migrate-tag-styles-to-tags",
+      count: settingsWithStyles.length
+    });
+    return settingsWithStyles.length > 0;
+  },
+  async run() {
+    const startTime = Date.now();
+    let updatedTags = 0;
+    let processedSettings = 0;
+    const errors = [];
+    logger.info("Starting tag styles to tags migration", {
+      context: "migration.migrate-tag-styles-to-tags"
+    });
+    try {
+      const db = await getMongoDatabase6();
+      const tagsCollection = db.collection("tags");
+      const chatSettingsCollection = db.collection("chat_settings");
+      const settingsWithStyles = await getChatSettingsWithTagStyles();
+      logger.info("Found chat settings with tag styles", {
+        context: "migration.migrate-tag-styles-to-tags",
+        count: settingsWithStyles.length
+      });
+      for (const settings of settingsWithStyles) {
+        const { userId, tagStyles } = settings;
+        for (const [tagId, visualStyle] of Object.entries(tagStyles)) {
+          try {
+            const tag = await tagsCollection.findOne({ id: tagId, userId });
+            if (!tag) {
+              logger.debug("Tag not found, skipping style migration", {
+                context: "migration.migrate-tag-styles-to-tags",
+                tagId,
+                userId
+              });
+              continue;
+            }
+            if (tag.visualStyle) {
+              logger.debug("Tag already has visual style, skipping", {
+                context: "migration.migrate-tag-styles-to-tags",
+                tagId
+              });
+              continue;
+            }
+            const result = await tagsCollection.updateOne(
+              { id: tagId },
+              {
+                $set: {
+                  visualStyle,
+                  updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+                }
+              }
+            );
+            if (result.modifiedCount > 0) {
+              updatedTags++;
+              logger.debug("Updated tag with visual style", {
+                context: "migration.migrate-tag-styles-to-tags",
+                tagId,
+                visualStyle
+              });
+            }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            errors.push({
+              tagId,
+              error: errorMessage
+            });
+            logger.error("Failed to update tag visual style", {
+              context: "migration.migrate-tag-styles-to-tags",
+              tagId,
+              error: errorMessage
+            });
+          }
+        }
+        try {
+          await chatSettingsCollection.updateOne(
+            { id: settings.id },
+            {
+              $set: {
+                tagStyles: {},
+                updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+              }
+            }
+          );
+          processedSettings++;
+          logger.debug("Cleared tagStyles from ChatSettings", {
+            context: "migration.migrate-tag-styles-to-tags",
+            chatSettingsId: settings.id,
+            userId
+          });
+        } catch (error) {
+          logger.warn("Failed to clear tagStyles from ChatSettings", {
+            context: "migration.migrate-tag-styles-to-tags",
+            chatSettingsId: settings.id,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error("Tag styles migration failed", {
+        context: "migration.migrate-tag-styles-to-tags",
+        error: errorMessage
+      });
+      return {
+        id: "migrate-tag-styles-to-tags-v1",
+        success: false,
+        itemsAffected: updatedTags,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const success = errors.length === 0;
+    const durationMs = Date.now() - startTime;
+    logger.info("Tag styles to tags migration completed", {
+      context: "migration.migrate-tag-styles-to-tags",
+      success,
+      updatedTags,
+      processedSettings,
+      errorCount: errors.length,
+      durationMs
+    });
+    return {
+      id: "migrate-tag-styles-to-tags-v1",
+      success,
+      itemsAffected: updatedTags,
+      message: success ? `Migrated visual styles to ${updatedTags} tags from ${processedSettings} user settings` : `Updated ${updatedTags} tags with ${errors.length} errors`,
+      error: errors.length > 0 ? `Failed tags: ${errors.slice(0, 5).map((e) => `${e.tagId}: ${e.error}`).join("; ")}${errors.length > 5 ? ` (and ${errors.length - 5} more)` : ""}` : void 0,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
+// migrations/remove-quilltap-rp-builtin.ts
+init_logger();
+function isMongoDBBackendEnabled6() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase7() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible6() {
+  try {
+    const db = await getMongoDatabase7();
+    await db.admin().ping();
+    return true;
+  } catch (error) {
     logger.warn("MongoDB is not accessible for Quilltap RP removal migration", {
       context: "migration.remove-quilltap-rp-builtin",
       error: error instanceof Error ? error.message : String(error)
@@ -38543,7 +38741,7 @@ async function isMongoDBAccessible5() {
 }
 async function getOldQuilltapRPTemplate() {
   try {
-    const db = await getMongoDatabase6();
+    const db = await getMongoDatabase7();
     const templatesCollection = db.collection("roleplay_templates");
     const template = await templatesCollection.findOne({
       name: "Quilltap RP",
@@ -38568,13 +38766,13 @@ var removeQuilltapRPBuiltinMigration = {
   dependsOn: ["migrate-json-to-mongodb-v1"],
   // Run after data migration to MongoDB
   async shouldRun() {
-    if (!isMongoDBBackendEnabled5()) {
+    if (!isMongoDBBackendEnabled6()) {
       logger.debug("MongoDB not enabled, skipping Quilltap RP removal migration", {
         context: "migration.remove-quilltap-rp-builtin"
       });
       return false;
     }
-    if (!await isMongoDBAccessible5()) {
+    if (!await isMongoDBAccessible6()) {
       logger.debug("MongoDB not accessible, deferring Quilltap RP removal migration", {
         context: "migration.remove-quilltap-rp-builtin"
       });
@@ -38593,7 +38791,7 @@ var removeQuilltapRPBuiltinMigration = {
       context: "migration.remove-quilltap-rp-builtin"
     });
     try {
-      const db = await getMongoDatabase6();
+      const db = await getMongoDatabase7();
       const templatesCollection = db.collection("roleplay_templates");
       const result = await templatesCollection.deleteOne({
         name: "Quilltap RP",
@@ -38659,6 +38857,7 @@ var migrations = [
   ensureUserUsernamesMigration,
   inheritFileTagsMigration,
   migrateCharacterSystemPromptsMigration,
+  migrateTagStylesToTagsMigration,
   // Plugin system migrations
   removeQuilltapRPBuiltinMigration
 ];

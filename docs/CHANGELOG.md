@@ -4,6 +4,19 @@
 
 ### 2.5-dev
 
+- ux: Replace inline notices with toasts in tags settings tab
+  - Error and success messages now display as toast notifications in bottom-right corner
+  - Prevents form layout from shifting when messages appear/disappear
+  - Color picker changes are debounced (500ms) to prevent toast spam while dragging
+- refactor: Move tag visual styles from ChatSettings to Tag entities
+  - Tag visual styles (emoji, colors, formatting) now stored directly on each Tag
+  - Added `visualStyle` field to TagSchema with TagVisualStyleSchema type
+  - Updated `/api/tags` GET to include visualStyle in response
+  - Updated `/api/tags/[id]` PUT to accept visualStyle updates
+  - Updated tag-style-provider to read styles from tags instead of ChatSettings
+  - Updated tags-tab.tsx settings component to edit styles on tags directly
+  - Added migration `migrate-tag-styles-to-tags-v1` to move existing styles from ChatSettings.tagStyles to individual Tag.visualStyle
+  - Tag styles now automatically backed up and restored with tags
 - fix: Backup restore breaking entity relationships
   - Fixed characters losing avatars and linked images after restore
   - Fixed chats not being linked to characters after restore

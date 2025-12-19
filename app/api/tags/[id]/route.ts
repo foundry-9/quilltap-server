@@ -7,6 +7,7 @@ import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
 import { z } from 'zod'
 import type { Tag } from '@/lib/schemas/types'
+import { TagVisualStyleSchema } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 
 // Validation schema
@@ -14,9 +15,10 @@ const updateTagSchema = z
   .object({
     name: z.string().min(1, 'Tag name is required').max(50).optional(),
     quickHide: z.boolean().optional(),
+    visualStyle: TagVisualStyleSchema.nullable().optional(),
   })
   .refine(
-    (data) => typeof data.name !== 'undefined' || typeof data.quickHide !== 'undefined',
+    (data) => typeof data.name !== 'undefined' || typeof data.quickHide !== 'undefined' || typeof data.visualStyle !== 'undefined',
     { message: 'At least one field must be provided' }
   )
 
@@ -79,6 +81,10 @@ export async function PUT(
 
     if (typeof validatedData.quickHide !== 'undefined') {
       updateData.quickHide = validatedData.quickHide
+    }
+
+    if (typeof validatedData.visualStyle !== 'undefined') {
+      updateData.visualStyle = validatedData.visualStyle
     }
 
     const tag = await repos.tags.update(tagId, updateData)

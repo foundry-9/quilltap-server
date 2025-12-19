@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.0--dev.8-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.5.0--dev.9-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -80,7 +80,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 Configure dedicated connection profiles for each provider you want to use:
 
 | Provider | Capabilities |
-|----------|--------------|
+| -------- | ------------ |
 | **OpenAI** | GPT-5/5.1 families, GPT-4o/4o-mini, GPT-4.1/4.1-mini/4.1-nano, GPT-3.5 legacy models, tool/function calling, file attachments, and image generation. |
 | **Anthropic** | Claude 4/4.5 families (Opus, Sonnet, Haiku) and Claude 3 models with streaming, image understanding, and tool/JSON output control. |
 | **Google Gemini** | Gemini 2.5 Flash/Pro with multimodal inputs, web search, plus Imagen 4 image generation through Google Generative AI. |
@@ -366,7 +366,7 @@ The Tools workspace orchestrates MongoDB + S3 backups per user, so multi-tenant 
 ### Environment Variables
 
 | Variable | Description | Example |
-|----------|-------------|---------|
+| -------- | ----------- | ------- |
 | `BASE_URL` | Your app's URL | `http://localhost:3000` |
 | `JWT_SECRET` | Secret for session JWT signing | Generate with `openssl rand -base64 32` |
 | `ENCRYPTION_MASTER_PEPPER` | Master encryption key | Generate with `openssl rand -base64 32` |
@@ -376,7 +376,7 @@ The Tools workspace orchestrates MongoDB + S3 backups per user, so multi-tenant 
 S3 storage configuration:
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| -------- | ----------- | ------- |
 | `S3_MODE` | Storage mode (`embedded` or `external`) | `embedded` |
 | `S3_ENDPOINT` | S3 endpoint URL (for external mode) | - |
 | `S3_ACCESS_KEY` | S3 access key | - |
@@ -390,7 +390,7 @@ S3 storage configuration:
 Optional environment variables:
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| -------- | ----------- | ------- |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth credentials for the auth plugin | - |
 | `AUTH_DISABLED` | Disables auth and auto-creates an anonymous user (local-only) | `false` |
 | `AUTH_ANONYMOUS_USER_NAME` | Display name when `AUTH_DISABLED=true` | `Anonymous User` |
