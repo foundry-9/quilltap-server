@@ -1237,6 +1237,8 @@ export async function POST(
                 processMessageForMemoryAsync({
                   characterId: character.id,
                   characterName: character.name,
+                  personaName: personaData?.name,
+                  allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
                   chatId: id,
                   userMessage: isContinueMode ? '[Continue/Nudge - no user message]' : content,
                   assistantMessage: fullResponse,

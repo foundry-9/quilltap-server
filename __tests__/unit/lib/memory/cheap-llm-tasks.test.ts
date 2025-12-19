@@ -119,7 +119,9 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await extractMemoryFromMessage(
         'I need to go feed my cat Whiskers',
         'That sounds like a lovely cat! I hope Whiskers enjoys their meal.',
-        'Character: Luna, Persona: John',
+        'PARTICIPANTS:\n- USER: John\n- CHARACTER: Luna',
+        'Luna',
+        'John',
         testSelection,
         testUserId
       )
@@ -144,7 +146,9 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await extractMemoryFromMessage(
         'Hello!',
         'Hi there! How are you?',
-        'Character: Luna',
+        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: Luna',
+        'Luna',
+        undefined,
         testSelection,
         testUserId
       )
@@ -162,7 +166,9 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await extractMemoryFromMessage(
         'Test message',
         'Test response',
-        'Context',
+        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
+        'TestChar',
+        undefined,
         testSelection,
         testUserId
       )
@@ -181,7 +187,9 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await extractMemoryFromMessage(
         'Test',
         'Response',
-        'Context',
+        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
+        'TestChar',
+        undefined,
         testSelection,
         testUserId
       )
@@ -199,7 +207,9 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await extractMemoryFromMessage(
         'Hello',
         'Hi',
-        'Context',
+        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
+        'TestChar',
+        undefined,
         localSelection,
         testUserId
       )
@@ -214,7 +224,9 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await extractMemoryFromMessage(
         'Hello',
         'Hi',
-        'Context',
+        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
+        'TestChar',
+        undefined,
         testSelection,
         testUserId
       )
@@ -476,7 +488,9 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await extractMemoryFromMessage(
         'Test',
         'Response',
-        'Context',
+        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
+        'TestChar',
+        undefined,
         testSelection,
         testUserId
       )

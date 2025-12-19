@@ -4,6 +4,13 @@
 
 ### 2.5-dev
 
+- fix: Memory attribution in multi-character chats
+  - Updated cheap LLM prompts with clear participant identification
+  - Added explicit "CRITICAL RULES" to prevent user/character confusion
+  - Memory extraction now passes all character names in multi-character chats
+  - Conversation labels now use actual persona/character names instead of generic "USER"/"CHARACTER"
+  - Added `allCharacterNames` to MemoryExtractionContext for multi-character awareness
+  - Both user memory and character memory prompts now clearly distinguish participants
 - fix: Chat composer textarea not resizing after message submission
   - Added useEffect to resize textarea when input changes programmatically
   - Textarea now properly shrinks to default height when cleared after submission
