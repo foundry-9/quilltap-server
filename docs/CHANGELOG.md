@@ -4,6 +4,19 @@
 
 ### 2.5-dev
 
+- feat: Add native Quilltap export/import system
+  - New Import/Export card on Tools page for selective entity export and import
+  - Supports all entity types: Characters, Personas, Chats, Roleplay Templates, Connection Profiles, Image Profiles, Embedding Profiles, Tags
+  - Export wizard: select entity type → choose scope (all/selected) → optional memory inclusion → download .qtap file
+  - Import wizard: select file → preview entities with conflict detection → choose conflict strategy → import
+  - Three conflict resolution strategies: skip (keep existing), overwrite (replace with imported), duplicate (create with new ID)
+  - Memories can be optionally included/excluded during export and import
+  - API keys are never exported for security (only labels for reference)
+  - Post-import reconciliation updates all foreign key relationships correctly
+  - New API routes: `/api/tools/quilltap-export`, `/api/tools/quilltap-import`, `/api/tools/quilltap-import/execute`
+  - New export service: `lib/export/quilltap-export-service.ts` with entity-specific export functions
+  - New import service: `lib/import/quilltap-import-service.ts` with conflict resolution and ID remapping
+  - New UI components: `ExportDialog`, `ImportDialog`, `ImportExportCard` with custom hooks
 - feat: Add API key import/export functionality
   - New Import/Export buttons in Settings → API Keys
   - Export encrypts keys with user-provided passphrase (AES-256-GCM)

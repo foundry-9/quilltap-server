@@ -8,12 +8,14 @@ This plan covers the implementation of a Quilltap-native import/export system, e
 
 | Component | Status |
 |-----------|--------|
-| Export File Format Specification | PENDING |
-| Export API Routes | PENDING |
-| Export UI Components | PENDING |
-| Import API Routes | PENDING |
-| Import UI Components | PENDING |
-| Import/Export Tool Card | PENDING |
+| Export File Format Specification | COMPLETE |
+| Export API Routes | COMPLETE |
+| Export UI Components | COMPLETE |
+| Import API Routes | COMPLETE |
+| Import UI Components | COMPLETE |
+| Import/Export Tool Card | COMPLETE |
+
+**Implementation Complete:** All components have been implemented and integrated into the Tools page.
 
 ---
 
@@ -34,8 +36,9 @@ This plan covers the implementation of a Quilltap-native import/export system, e
 3. **Chats** - with optional memories (chat-tagged), includes: messages, participants (references), tags
 4. **Roleplay Templates** - user-created templates only
 5. **Connection Profiles** - LLM connection configurations (API keys are NOT exported for security)
-6. **Image Profiles** - image generation configurations
-7. **Tags** - tag definitions with visual styles
+6. **Image Profiles** - image generation configurations (API keys are NOT exported for security)
+7. **Embedding Profiles** - embedding/RAG configurations (API keys are NOT exported for security)
+8. **Tags** - tag definitions with visual styles
 
 ---
 
