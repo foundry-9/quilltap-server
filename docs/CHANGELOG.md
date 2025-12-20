@@ -4,6 +4,22 @@
 
 ### 2.5-dev
 
+- feat: Add AI Wizard for character creation and editing
+  - New "AI Wizard" button on both New Character and Edit Character pages
+  - Multi-step wizard modal with profile selection, image source options, field selection, and generation progress
+  - Step 1: Select primary LLM connection profile for generation
+  - Step 2: Choose physical description source (existing data, upload image, gallery, or skip)
+  - Step 3: Select which empty fields to generate with checkboxes, plus background context input
+  - Step 4: View generation progress and preview results before applying
+  - Automatically detects if vision-capable profile needed for image analysis
+  - Generates: title, description, personality, scenario, exampleDialogues, systemPrompt
+  - Generates physical descriptions with all prompt levels (short/medium/long/complete/full)
+  - Physical descriptions saved as new "AI Generated" entry in Physical Descriptions tab
+  - New API endpoint: `/api/characters/ai-wizard` for server-side generation
+  - New components: `AIWizardModal`, step components, `useAIWizard` hook
+  - Added image size validation (5MB limit) with helpful error message
+  - Fixed physical description API URL to use correct `/api/characters/{id}/descriptions` endpoint
+  - Physical descriptions now properly saved for both new and existing characters
 - fix: Navbar avatar now loads correctly from /api/files
   - Changed from Next.js Image to regular img tag to include auth cookies
   - Added object-cover for proper cropping of non-square images

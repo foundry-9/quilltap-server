@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { clientLogger } from '@/lib/client-logger'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription } from '@/components/characters/ai-wizard'
 
 interface ConnectionProfile {
   id: string
@@ -15,6 +17,9 @@ export default function NewCharacterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
+  const [showWizard, setShowWizard] = useState(false)
+  // Store pending physical description from wizard to save after character creation
+  const pendingPhysicalDescription = useRef<GeneratedPhysicalDescription | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     title: '',
@@ -27,6 +32,30 @@ export default function NewCharacterPage() {
     avatarUrl: '',
     defaultConnectionProfileId: '',
   })
+
+  // Handle applying wizard-generated data
+  const handleWizardApply = (data: GeneratedCharacterData) => {
+    setFormData((prev) => ({
+      ...prev,
+      ...(data.title && { title: data.title }),
+      ...(data.description && { description: data.description }),
+      ...(data.personality && { personality: data.personality }),
+      ...(data.scenario && { scenario: data.scenario }),
+      ...(data.exampleDialogues && { exampleDialogues: data.exampleDialogues }),
+      ...(data.systemPrompt && { systemPrompt: data.systemPrompt }),
+    }))
+    // Store physical description to save after character creation
+    if (data.physicalDescription) {
+      pendingPhysicalDescription.current = data.physicalDescription
+      clientLogger.debug('Physical description stored for post-creation save', {
+        name: data.physicalDescription.name,
+      })
+    }
+    clientLogger.info('AI Wizard data applied to new character form', {
+      fieldsApplied: Object.keys(data).filter(k => k !== 'physicalDescription'),
+      hasPendingPhysicalDescription: !!data.physicalDescription,
+    })
+  }
 
   useEffect(() => {
     const fetchProfiles = async () => {
@@ -61,7 +90,50 @@ export default function NewCharacterPage() {
       }
 
       const data = await res.json()
-      router.push(`/characters/${data.character.id}`)
+      const characterId = data.character.id
+
+      // Save pending physical description if any
+      if (pendingPhysicalDescription.current) {
+        try {
+          clientLogger.debug('Saving physical description for new character', {
+            characterId,
+            name: pendingPhysicalDescription.current.name,
+          })
+
+          const descResponse = await fetch(`/api/characters/${characterId}/descriptions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: pendingPhysicalDescription.current.name,
+              shortPrompt: pendingPhysicalDescription.current.shortPrompt,
+              mediumPrompt: pendingPhysicalDescription.current.mediumPrompt,
+              longPrompt: pendingPhysicalDescription.current.longPrompt,
+              completePrompt: pendingPhysicalDescription.current.completePrompt,
+              fullDescription: pendingPhysicalDescription.current.fullDescription,
+            }),
+          })
+
+          if (descResponse.ok) {
+            showSuccessToast('Physical description created')
+            clientLogger.debug('Physical description saved successfully', { characterId })
+          } else {
+            const errorData = await descResponse.json()
+            clientLogger.error('Failed to save physical description', {
+              characterId,
+              error: errorData.error || 'Unknown error',
+            })
+            showErrorToast('Character created, but physical description failed to save')
+          }
+        } catch (descErr) {
+          clientLogger.error('Error saving physical description', {
+            characterId,
+            error: descErr instanceof Error ? descErr.message : String(descErr),
+          })
+          showErrorToast('Character created, but physical description failed to save')
+        }
+      }
+
+      router.push(`/characters/${characterId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -84,7 +156,21 @@ export default function NewCharacterPage() {
         >
           ← Back to Characters
         </Link>
-        <h1 className="text-3xl font-bold text-foreground">Create Character</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-foreground">Create Character</h1>
+          <button
+            type="button"
+            onClick={() => setShowWizard(true)}
+            disabled={!formData.name.trim()}
+            className="qt-button-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={!formData.name.trim() ? 'Enter a character name first' : 'Use AI to generate character details'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            AI Wizard
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -268,6 +354,22 @@ export default function NewCharacterPage() {
           </Link>
         </div>
       </form>
+
+      {/* AI Wizard Modal */}
+      <AIWizardModal
+        isOpen={showWizard}
+        onClose={() => setShowWizard(false)}
+        characterName={formData.name}
+        currentData={{
+          title: formData.title,
+          description: formData.description,
+          personality: formData.personality,
+          scenario: formData.scenario,
+          exampleDialogues: formData.exampleDialogues,
+          systemPrompt: formData.systemPrompt,
+        }}
+        onApply={handleWizardApply}
+      />
     </div>
   )
 }

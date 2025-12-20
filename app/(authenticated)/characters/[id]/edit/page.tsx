@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect } from 'react'
+import { use, useEffect, useState } from 'react'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { EntityTabs, Tab } from '@/components/tabs'
@@ -8,9 +8,11 @@ import { EmbeddedPhotoGallery } from '@/components/images/EmbeddedPhotoGallery'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor'
+import { AIWizardModal, type GeneratedCharacterData } from '@/components/characters/ai-wizard'
 import { useCharacterEdit } from './hooks'
 import { CharacterBasicInfo, CharacterSettings } from './components'
 import { clientLogger } from '@/lib/client-logger'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
 
 /**
  * Tab configuration for character edit page
@@ -107,10 +109,71 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     isNpc,
   } = useCharacterEdit(id)
 
+  const [showWizard, setShowWizard] = useState(false)
+
   // Debug logging moved to useEffect to avoid state updates during render
   useEffect(() => {
     clientLogger.debug('EditCharacterPage mounted', { characterId: id })
   }, [id])
+
+  // Handle applying wizard-generated data
+  const handleWizardApply = async (data: GeneratedCharacterData) => {
+    // Apply text fields by creating synthetic events
+    const fieldsToApply: Array<{ name: string; value: string }> = []
+
+    if (data.title) fieldsToApply.push({ name: 'title', value: data.title })
+    if (data.description) fieldsToApply.push({ name: 'description', value: data.description })
+    if (data.personality) fieldsToApply.push({ name: 'personality', value: data.personality })
+    if (data.scenario) fieldsToApply.push({ name: 'scenario', value: data.scenario })
+    if (data.exampleDialogues) fieldsToApply.push({ name: 'exampleDialogues', value: data.exampleDialogues })
+    if (data.systemPrompt) fieldsToApply.push({ name: 'systemPrompt', value: data.systemPrompt })
+
+    // Apply each field
+    for (const field of fieldsToApply) {
+      const syntheticEvent = {
+        target: { name: field.name, value: field.value },
+      } as React.ChangeEvent<HTMLInputElement>
+      handleChange(syntheticEvent)
+    }
+
+    // Handle physical description if generated
+    if (data.physicalDescription) {
+      try {
+        // Use the correct API endpoint for character physical descriptions
+        const response = await fetch(`/api/characters/${id}/descriptions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: data.physicalDescription.name,
+            shortPrompt: data.physicalDescription.shortPrompt,
+            mediumPrompt: data.physicalDescription.mediumPrompt,
+            longPrompt: data.physicalDescription.longPrompt,
+            completePrompt: data.physicalDescription.completePrompt,
+            fullDescription: data.physicalDescription.fullDescription,
+          }),
+        })
+
+        if (response.ok) {
+          showSuccessToast('Physical description created')
+          fetchCharacter() // Refresh to show new physical description
+        } else {
+          const errorData = await response.json()
+          showErrorToast(errorData.error || 'Failed to create physical description')
+        }
+      } catch (err) {
+        clientLogger.error('Failed to create physical description', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+        showErrorToast('Failed to create physical description')
+      }
+    }
+
+    clientLogger.info('AI Wizard data applied to character', {
+      characterId: id,
+      fieldsApplied: fieldsToApply.map((f) => f.name),
+      physicalDescriptionCreated: !!data.physicalDescription,
+    })
+  }
 
   if (loading) {
     return (
@@ -161,11 +224,22 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
             </button>
           </div>
 
-          {/* Title */}
-          <div>
+          {/* Title and AI Wizard Button */}
+          <div className="flex-1 flex items-center justify-between">
             <h1 className="text-3xl font-bold text-foreground">
               Edit: {character?.name || 'Loading...'}
             </h1>
+            <button
+              type="button"
+              onClick={() => setShowWizard(true)}
+              className="qt-button-secondary flex items-center gap-2"
+              title="Use AI to generate character details"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              AI Wizard
+            </button>
           </div>
         </div>
       </div>
@@ -289,6 +363,23 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           toggleUploadDialog(false)
           fetchCharacter()
         }}
+      />
+
+      {/* AI Wizard Modal */}
+      <AIWizardModal
+        isOpen={showWizard}
+        onClose={() => setShowWizard(false)}
+        characterId={id}
+        characterName={character?.name || ''}
+        currentData={{
+          title: formData.title,
+          description: formData.description,
+          personality: formData.personality,
+          scenario: formData.scenario,
+          exampleDialogues: formData.exampleDialogues,
+          systemPrompt: formData.systemPrompt,
+        }}
+        onApply={handleWizardApply}
       />
     </div>
   )

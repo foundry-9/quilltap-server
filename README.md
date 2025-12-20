@@ -531,7 +531,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Can be restored quickly to basics
   - [ ] Has intimate knowledge of this application
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
-- [ ] Character build-out wizard
+- [X] Character build-out wizard
   - Uses LLM of choice to fill out gaps in character fields or physical descriptions
 - [X] Make roleplay templates besides the default one into plugins (start with "Quilltap RP")
 - [ ] Create web-only version that uses IndexedDB for everything
