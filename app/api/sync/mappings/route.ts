@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger';
 import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/repositories/factory';
 import { SyncMappingSchema, SyncableEntityTypeEnum, CreateSyncMapping } from '@/lib/sync/types';
+import { getAuthenticatedUserForSync } from '@/lib/sync/api-key-auth';
 
 // Schema for creating/updating mappings
 const CreateMappingSchema = z.object({
@@ -41,14 +42,18 @@ export async function GET(req: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // Check authentication
+    // Check authentication (via session or API key)
     const session = await getServerSession();
-    if (!session?.user?.id) {
+    const authResult = await getAuthenticatedUserForSync(req, session?.user?.id || null);
+
+    if (!authResult.userId) {
       logger.warn('Sync mappings GET requested without authentication', {
         context: 'api:sync:mappings',
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const userId = authResult.userId;
 
     // Get query params
     const { searchParams } = new URL(req.url);
@@ -58,14 +63,14 @@ export async function GET(req: NextRequest) {
     if (!instanceId) {
       logger.warn('Sync mappings GET missing instanceId', {
         context: 'api:sync:mappings',
-        userId: session.user.id,
+        userId,
       });
       return NextResponse.json({ error: 'instanceId is required' }, { status: 400 });
     }
 
     logger.debug('Getting sync mappings', {
       context: 'api:sync:mappings',
-      userId: session.user.id,
+      userId,
       instanceId,
       entityType,
     });
@@ -80,19 +85,19 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid entityType' }, { status: 400 });
       }
       mappings = await repos.syncMappings.findByEntityType(
-        session.user.id,
+        userId,
         instanceId,
         parseResult.data
       );
     } else {
-      mappings = await repos.syncMappings.findAllForInstance(session.user.id, instanceId);
+      mappings = await repos.syncMappings.findAllForInstance(userId, instanceId);
     }
 
     const duration = Date.now() - startTime;
 
     logger.info('Sync mappings GET complete', {
       context: 'api:sync:mappings',
-      userId: session.user.id,
+      userId,
       instanceId,
       mappingCount: mappings.length,
       durationMs: duration,
@@ -124,14 +129,18 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // Check authentication
+    // Check authentication (via session or API key)
     const session = await getServerSession();
-    if (!session?.user?.id) {
+    const authResult = await getAuthenticatedUserForSync(req, session?.user?.id || null);
+
+    if (!authResult.userId) {
       logger.warn('Sync mappings POST requested without authentication', {
         context: 'api:sync:mappings',
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const userId = authResult.userId;
 
     // Parse request body
     let body: unknown;
@@ -140,7 +149,7 @@ export async function POST(req: NextRequest) {
     } catch {
       logger.warn('Sync mappings POST received invalid JSON', {
         context: 'api:sync:mappings',
-        userId: session.user.id,
+        userId,
       });
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
@@ -150,7 +159,7 @@ export async function POST(req: NextRequest) {
     if (!parseResult.success) {
       logger.warn('Sync mappings POST received invalid request', {
         context: 'api:sync:mappings',
-        userId: session.user.id,
+        userId,
         errors: parseResult.error.errors,
       });
       return NextResponse.json(
@@ -163,7 +172,7 @@ export async function POST(req: NextRequest) {
 
     logger.info('Processing sync mappings POST', {
       context: 'api:sync:mappings',
-      userId: session.user.id,
+      userId,
       mappingCount: mappings.length,
     });
 
@@ -177,7 +186,7 @@ export async function POST(req: NextRequest) {
       try {
         // Check if mapping already exists
         const existing = await repos.syncMappings.findByLocalId(
-          session.user.id,
+          userId,
           mapping.instanceId,
           mapping.entityType,
           mapping.localId
@@ -195,7 +204,7 @@ export async function POST(req: NextRequest) {
         } else {
           // Create new mapping
           const newMapping: CreateSyncMapping = {
-            userId: session.user.id,
+            userId,
             instanceId: mapping.instanceId,
             entityType: mapping.entityType,
             localId: mapping.localId,
@@ -213,7 +222,7 @@ export async function POST(req: NextRequest) {
         errors.push(errorMsg);
         logger.warn('Error processing individual mapping', {
           context: 'api:sync:mappings',
-          userId: session.user.id,
+          userId,
           mapping,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -224,7 +233,7 @@ export async function POST(req: NextRequest) {
 
     logger.info('Sync mappings POST complete', {
       context: 'api:sync:mappings',
-      userId: session.user.id,
+      userId,
       createdCount: created.length,
       updatedCount: updated.length,
       errorCount: errors.length,

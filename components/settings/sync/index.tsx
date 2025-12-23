@@ -13,8 +13,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { SyncFormData, SyncInstanceDisplay, INITIAL_FORM_DATA } from './types'
-import { useSyncInstances, useSyncOperations, useSyncTrigger } from './hooks'
-import { InstanceList, InstanceForm, SyncHistoryPanel } from './components'
+import { useSyncInstances, useSyncOperations, useSyncTrigger, useSyncApiKeys } from './hooks'
+import { InstanceList, InstanceForm, SyncHistoryPanel, ApiKeyPanel } from './components'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 
@@ -31,11 +31,13 @@ export default function SyncTab() {
   const instances = useSyncInstances()
   const operations = useSyncOperations()
   const syncTrigger = useSyncTrigger()
+  const apiKeys = useSyncApiKeys()
 
   // Fetch data on mount
   useEffect(() => {
     instances.fetchInstances()
     operations.fetchOperations()
+    apiKeys.fetchKeys()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Only fetch once on mount - fetch functions are stable
 
@@ -44,10 +46,11 @@ export default function SyncTab() {
     clientLogger.debug('SyncTab: rendered', {
       instanceCount: instances.instances.length,
       operationCount: operations.operations.length,
+      apiKeyCount: apiKeys.keys.length,
       isFormOpen,
       editingInstanceId: editingInstance?.id,
     })
-  }, [instances.instances.length, operations.operations.length, isFormOpen, editingInstance])
+  }, [instances.instances.length, operations.operations.length, apiKeys.keys.length, isFormOpen, editingInstance])
 
   // Open create form
   const openCreateForm = useCallback(() => {
@@ -164,6 +167,21 @@ export default function SyncTab() {
           installations. Profiles and API keys are never synced.
         </p>
       </div>
+
+      {/* API Key Panel - for receiving sync requests */}
+      <ApiKeyPanel
+        keys={apiKeys.keys}
+        newlyCreatedKey={apiKeys.newlyCreatedKey}
+        isLoading={apiKeys.fetchOp.loading}
+        isCreating={apiKeys.createOp.loading}
+        deleteConfirmId={apiKeys.deleteConfirm}
+        success={apiKeys.success}
+        error={apiKeys.createOp.error || apiKeys.deleteOp.error}
+        onCreateKey={apiKeys.createKey}
+        onDeleteKey={apiKeys.deleteKey}
+        onDeleteConfirmToggle={apiKeys.setDeleteConfirm}
+        onClearNewKey={apiKeys.clearNewlyCreatedKey}
+      />
 
       {/* Error alerts */}
       {instances.fetchOp.error && (

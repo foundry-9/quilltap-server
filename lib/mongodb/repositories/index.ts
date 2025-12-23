@@ -29,6 +29,7 @@ export { ProviderModelsRepository } from './provider-models.repository';
 export { SyncInstancesRepository } from './sync-instances.repository';
 export { SyncMappingsRepository } from './sync-mappings.repository';
 export { SyncOperationsRepository } from './sync-operations.repository';
+export { UserSyncApiKeysRepository } from './user-sync-api-keys.repository';
 
 // Import all repository classes
 import { MongoBaseRepository } from './base.repository';
@@ -49,6 +50,7 @@ import { ProviderModelsRepository } from './provider-models.repository';
 import { SyncInstancesRepository } from './sync-instances.repository';
 import { SyncMappingsRepository } from './sync-mappings.repository';
 import { SyncOperationsRepository } from './sync-operations.repository';
+import { UserSyncApiKeysRepository } from './user-sync-api-keys.repository';
 
 /**
  * Container interface for all repository instances.
@@ -74,6 +76,7 @@ export interface RepositoryContainer {
   syncInstances: SyncInstancesRepository;
   syncMappings: SyncMappingsRepository;
   syncOperations: SyncOperationsRepository;
+  userSyncApiKeys: UserSyncApiKeysRepository;
 }
 
 /**
@@ -111,6 +114,7 @@ export function createRepositories(): RepositoryContainer {
       syncInstances: new SyncInstancesRepository(),
       syncMappings: new SyncMappingsRepository(),
       syncOperations: new SyncOperationsRepository(),
+      userSyncApiKeys: new UserSyncApiKeysRepository(),
     };
 
     logger.debug('Repository container created successfully', {

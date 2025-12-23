@@ -73,3 +73,26 @@ export type SyncOperationStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAI
  * Direction of sync operation
  */
 export type SyncDirection = 'PUSH' | 'PULL' | 'BIDIRECTIONAL';
+
+/**
+ * Sync API key display data for UI
+ * Represents a user's API key for authenticating remote sync requests
+ */
+export interface SyncApiKeyDisplay {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  isActive: boolean;
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Response when creating a new API key
+ * Includes the plaintext key (only shown once)
+ */
+export interface CreateApiKeyResult {
+  key: SyncApiKeyDisplay;
+  plaintextKey: string;
+}

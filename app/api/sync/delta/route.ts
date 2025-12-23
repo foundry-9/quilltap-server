@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { getServerSession } from '@/lib/auth/session';
 import { SyncDeltaRequestSchema, SyncDeltaResponse } from '@/lib/sync/types';
 import { detectDeltas } from '@/lib/sync/delta-detector';
+import { getAuthenticatedUserForSync } from '@/lib/sync/api-key-auth';
 
 /**
  * POST /api/sync/delta
@@ -28,14 +29,18 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // Check authentication
+    // Check authentication (via session or API key)
     const session = await getServerSession();
-    if (!session?.user?.id) {
+    const authResult = await getAuthenticatedUserForSync(req, session?.user?.id || null);
+
+    if (!authResult.userId) {
       logger.warn('Sync delta requested without authentication', {
         context: 'api:sync:delta',
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const userId = authResult.userId;
 
     // Parse request body
     let body: unknown;
@@ -44,7 +49,7 @@ export async function POST(req: NextRequest) {
     } catch {
       logger.warn('Sync delta received invalid JSON', {
         context: 'api:sync:delta',
-        userId: session.user.id,
+        userId,
       });
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
@@ -54,7 +59,7 @@ export async function POST(req: NextRequest) {
     if (!parseResult.success) {
       logger.warn('Sync delta received invalid request', {
         context: 'api:sync:delta',
-        userId: session.user.id,
+        userId,
         errors: parseResult.error.errors,
       });
       return NextResponse.json(
@@ -67,7 +72,8 @@ export async function POST(req: NextRequest) {
 
     logger.info('Processing sync delta request', {
       context: 'api:sync:delta',
-      userId: session.user.id,
+      userId,
+      authMethod: authResult.authMethod,
       entityTypes,
       sinceTimestamp,
       limit,
@@ -75,7 +81,7 @@ export async function POST(req: NextRequest) {
 
     // Detect deltas
     const result = await detectDeltas({
-      userId: session.user.id,
+      userId,
       entityTypes,
       sinceTimestamp,
       limit: Math.min(limit, 1000), // Cap at 1000
@@ -94,7 +100,7 @@ export async function POST(req: NextRequest) {
 
     logger.info('Sync delta request complete', {
       context: 'api:sync:delta',
-      userId: session.user.id,
+      userId,
       deltaCount: result.deltas.length,
       hasMore: result.hasMore,
       durationMs: duration,

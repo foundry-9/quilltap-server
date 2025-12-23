@@ -14,6 +14,7 @@ import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/repositories/factory';
 import { SyncPushRequestSchema, SyncPushResponse } from '@/lib/sync/types';
 import { processRemoteDeltas } from '@/lib/sync/sync-service';
+import { getAuthenticatedUserForSync } from '@/lib/sync/api-key-auth';
 
 /**
  * POST /api/sync/push
@@ -28,14 +29,18 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // Check authentication
+    // Check authentication (via session or API key)
     const session = await getServerSession();
-    if (!session?.user?.id) {
+    const authResult = await getAuthenticatedUserForSync(req, session?.user?.id || null);
+
+    if (!authResult.userId) {
       logger.warn('Sync push attempted without authentication', {
         context: 'api:sync:push',
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const userId = authResult.userId;
 
     // Parse request body
     let body: unknown;
@@ -44,7 +49,7 @@ export async function POST(req: NextRequest) {
     } catch {
       logger.warn('Sync push received invalid JSON', {
         context: 'api:sync:push',
-        userId: session.user.id,
+        userId,
       });
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
@@ -54,7 +59,7 @@ export async function POST(req: NextRequest) {
     if (!parseResult.success) {
       logger.warn('Sync push received invalid request', {
         context: 'api:sync:push',
-        userId: session.user.id,
+        userId,
         errors: parseResult.error.errors,
       });
       return NextResponse.json(
@@ -67,7 +72,8 @@ export async function POST(req: NextRequest) {
 
     logger.info('Processing sync push request', {
       context: 'api:sync:push',
-      userId: session.user.id,
+      userId,
+      authMethod: authResult.authMethod,
       deltaCount: deltas.length,
       mappingCount: mappings.length,
     });
@@ -77,7 +83,7 @@ export async function POST(req: NextRequest) {
     const instanceId = req.headers.get('X-Sync-Instance-Id') || 'temp-instance';
 
     // Process the incoming deltas
-    const result = await processRemoteDeltas(session.user.id, instanceId, deltas);
+    const result = await processRemoteDeltas(userId, instanceId, deltas);
 
     // Build mapping updates to return
     // These tell the remote instance what local IDs were created for their entities
@@ -98,7 +104,7 @@ export async function POST(req: NextRequest) {
 
     logger.info('Sync push request complete', {
       context: 'api:sync:push',
-      userId: session.user.id,
+      userId,
       applied: result.applied,
       conflictCount: result.conflicts.length,
       errorCount: result.errors.length,

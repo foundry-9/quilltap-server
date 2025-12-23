@@ -19,6 +19,18 @@
   - UI components: InstanceCard, InstanceForm, InstanceList, SyncHistoryPanel, SyncStatusBadge
   - Hooks: useSyncInstances, useSyncOperations, useSyncTrigger
   - Unit tests: 164 tests for version-checker, conflict-resolver, and Zod schema validation
+- feat: Add API key authentication for cross-instance sync
+  - Generate API keys on the main instance to allow remote instances to sync
+  - New API Key panel in Sync tab for generating and managing keys
+  - Keys are securely hashed with bcrypt (plaintext only shown once on creation)
+  - Bearer token authentication supported on all sync endpoints (handshake, delta, push, mappings)
+  - New MongoDB collection: user_sync_api_keys
+  - New repository: UserSyncApiKeysRepository
+  - New API routes: `/api/sync/api-keys`, `/api/sync/api-keys/[id]`
+  - New components: ApiKeyPanel, useSyncApiKeys hook
+  - New lib: api-key-auth.ts for Bearer token validation
+  - Enables sync from private/home instances to public instances through firewalls
+  - Unit tests: 35 tests for UserSyncApiKey schema validation
 - feat: Add AI Wizard for character creation and editing
   - New "AI Wizard" button on both New Character and Edit Character pages
   - Multi-step wizard modal with profile selection, image source options, field selection, and generation progress

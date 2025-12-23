@@ -22,6 +22,7 @@ import {
   getLocalVersionInfo,
   validateVersionInfo,
 } from '@/lib/sync/version-checker';
+import { getAuthenticatedUserForSync } from '@/lib/sync/api-key-auth';
 
 /**
  * POST /api/sync/handshake
@@ -35,14 +36,25 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // Check if user is authenticated (for this instance)
+    // Check if user is authenticated (via session or API key)
     const session = await getServerSession();
-    if (!session?.user?.id) {
+    const authResult = await getAuthenticatedUserForSync(req, session?.user?.id || null);
+
+    if (!authResult.userId) {
       logger.warn('Sync handshake attempted without authentication', {
         context: 'api:sync:handshake',
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const userId = authResult.userId;
+    const authMethod = authResult.authMethod;
+
+    logger.debug('Sync handshake authentication successful', {
+      context: 'api:sync:handshake',
+      userId,
+      authMethod,
+    });
 
     // Parse request body
     let body: unknown;
@@ -51,7 +63,7 @@ export async function POST(req: NextRequest) {
     } catch {
       logger.warn('Sync handshake received invalid JSON', {
         context: 'api:sync:handshake',
-        userId: session.user.id,
+        userId,
       });
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
@@ -61,7 +73,7 @@ export async function POST(req: NextRequest) {
     if (!parseResult.success) {
       logger.warn('Sync handshake received invalid request', {
         context: 'api:sync:handshake',
-        userId: session.user.id,
+        userId,
         errors: parseResult.error.errors,
       });
       return NextResponse.json(
@@ -74,7 +86,8 @@ export async function POST(req: NextRequest) {
 
     logger.info('Processing sync handshake', {
       context: 'api:sync:handshake',
-      userId: session.user.id,
+      userId,
+      authMethod,
       remoteAppVersion: remoteVersionInfo.appVersion,
       remoteSchemaVersion: remoteVersionInfo.schemaVersion,
       remoteProtocolVersion: remoteVersionInfo.syncProtocolVersion,
@@ -86,7 +99,7 @@ export async function POST(req: NextRequest) {
     if (!compatibilityResult.compatible) {
       logger.warn('Sync handshake failed: version incompatible', {
         context: 'api:sync:handshake',
-        userId: session.user.id,
+        userId,
         reason: compatibilityResult.reason,
         localVersion: compatibilityResult.localVersion,
         remoteVersion: compatibilityResult.remoteVersion,
@@ -103,12 +116,12 @@ export async function POST(req: NextRequest) {
 
     // Version is compatible - return success with local version info
     const repos = getRepositories();
-    const user = await repos.users.findById(session.user.id);
+    const user = await repos.users.findById(userId);
 
     if (!user) {
       logger.error('User not found during sync handshake', {
         context: 'api:sync:handshake',
-        userId: session.user.id,
+        userId,
       });
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -117,15 +130,14 @@ export async function POST(req: NextRequest) {
       compatible: true,
       versionInfo: getLocalVersionInfo(),
       remoteUserId: user.id,
-      // Note: sessionToken would be generated here for API key-based auth
-      // For now, we rely on existing session authentication
     };
 
     const duration = Date.now() - startTime;
 
     logger.info('Sync handshake successful', {
       context: 'api:sync:handshake',
-      userId: session.user.id,
+      userId,
+      authMethod,
       compatible: true,
       durationMs: duration,
     });
