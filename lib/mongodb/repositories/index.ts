@@ -26,6 +26,9 @@ export { BackgroundJobsRepository } from './background-jobs.repository';
 export { RoleplayTemplatesRepository } from './roleplay-templates.repository';
 export { PromptTemplatesRepository } from './prompt-templates.repository';
 export { ProviderModelsRepository } from './provider-models.repository';
+export { SyncInstancesRepository } from './sync-instances.repository';
+export { SyncMappingsRepository } from './sync-mappings.repository';
+export { SyncOperationsRepository } from './sync-operations.repository';
 
 // Import all repository classes
 import { MongoBaseRepository } from './base.repository';
@@ -43,6 +46,9 @@ import { BackgroundJobsRepository } from './background-jobs.repository';
 import { RoleplayTemplatesRepository } from './roleplay-templates.repository';
 import { PromptTemplatesRepository } from './prompt-templates.repository';
 import { ProviderModelsRepository } from './provider-models.repository';
+import { SyncInstancesRepository } from './sync-instances.repository';
+import { SyncMappingsRepository } from './sync-mappings.repository';
+import { SyncOperationsRepository } from './sync-operations.repository';
 
 /**
  * Container interface for all repository instances.
@@ -64,6 +70,10 @@ export interface RepositoryContainer {
   roleplayTemplates: RoleplayTemplatesRepository;
   promptTemplates: PromptTemplatesRepository;
   providerModels: ProviderModelsRepository;
+  // Sync API repositories
+  syncInstances: SyncInstancesRepository;
+  syncMappings: SyncMappingsRepository;
+  syncOperations: SyncOperationsRepository;
 }
 
 /**
@@ -97,6 +107,10 @@ export function createRepositories(): RepositoryContainer {
       roleplayTemplates: new RoleplayTemplatesRepository(),
       promptTemplates: new PromptTemplatesRepository(),
       providerModels: new ProviderModelsRepository(),
+      // Sync API repositories
+      syncInstances: new SyncInstancesRepository(),
+      syncMappings: new SyncMappingsRepository(),
+      syncOperations: new SyncOperationsRepository(),
     };
 
     logger.debug('Repository container created successfully', {

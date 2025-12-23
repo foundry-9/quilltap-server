@@ -13,6 +13,22 @@ export { ThemePreferenceSchema };
 export type { ThemePreference };
 
 // ============================================================================
+// VERSION CONSTANTS (for Sync API compatibility)
+// ============================================================================
+
+/**
+ * Current schema version for data compatibility checks.
+ * Major version must match for sync to proceed between instances.
+ */
+export const SCHEMA_VERSION = '2.5.0';
+
+/**
+ * Sync protocol version.
+ * Must match exactly between instances for sync to proceed.
+ */
+export const SYNC_PROTOCOL_VERSION = '1.0';
+
+// ============================================================================
 // ENUMS
 // ============================================================================
 

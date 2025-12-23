@@ -4,6 +4,21 @@
 
 ### 2.5-dev
 
+- feat: Add bidirectional Sync API for multi-instance synchronization
+  - New "Sync" tab in Settings for managing remote Quilltap instances
+  - Bidirectional sync with permanent UUID mapping between entities
+  - Last-write-wins conflict resolution based on updatedAt timestamps
+  - Syncs: Characters, Personas, Chats, Memories, Tags, Roleplay Templates, Prompt Templates
+  - Excludes: Profiles (API keys are never synced)
+  - Version compatibility checking before sync operations
+  - Server-side sync endpoints: `/api/sync/handshake`, `/api/sync/delta`, `/api/sync/push`, `/api/sync/mappings`
+  - Client-side management: `/api/sync/instances`, `/api/sync/instances/[id]`, `/api/sync/operations`
+  - New sync services: version-checker, delta-detector, conflict-resolver, sync-service, remote-client
+  - New MongoDB collections: sync_instances, sync_mappings, sync_operations
+  - New repositories: SyncInstancesRepository, SyncMappingsRepository, SyncOperationsRepository
+  - UI components: InstanceCard, InstanceForm, InstanceList, SyncHistoryPanel, SyncStatusBadge
+  - Hooks: useSyncInstances, useSyncOperations, useSyncTrigger
+  - Unit tests: 164 tests for version-checker, conflict-resolver, and Zod schema validation
 - feat: Add AI Wizard for character creation and editing
   - New "AI Wizard" button on both New Character and Edit Character pages
   - Multi-step wizard modal with profile selection, image source options, field selection, and generation progress
