@@ -64,8 +64,8 @@ export function useSyncTrigger() {
           operationId: result.operationId,
           direction: result.direction,
           entityCounts: result.entityCounts,
-          conflictCount: result.conflicts.length,
-          errorCount: result.errors.length,
+          conflictCount: result.conflicts?.length ?? 0,
+          errorCount: result.errors?.length ?? 0,
           duration: result.duration,
         })
       } else {

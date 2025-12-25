@@ -182,40 +182,65 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       const localDeltas = await prepareLocalDeltasForPush(session.user.id, id, lastSyncAt);
 
       if (localDeltas.deltas.length > 0) {
-        const pushResponse = await pushToRemote(
-          instance,
-          localDeltas.deltas,
-          localDeltas.mappings
-        );
-
-        entityCounts.pushed = localDeltas.deltas.length;
-        allConflicts.push(...pushResponse.conflicts);
-        allErrors.push(...pushResponse.errors);
-
-        // Create mappings for new entities
+        // Push in batches to avoid body size limits (Next.js default is 1MB)
+        const PUSH_BATCH_SIZE = 50;
+        let totalPushed = 0;
         const now = new Date().toISOString();
-        for (const update of pushResponse.mappingUpdates) {
-          // Check if mapping already exists
-          const existingMapping = await repos.syncMappings.findByLocalId(
-            session.user.id,
-            id,
-            update.entityType,
-            update.localId
-          );
 
-          if (!existingMapping) {
-            await repos.syncMappings.create({
-              userId: session.user.id,
-              instanceId: id,
-              entityType: update.entityType,
-              localId: update.localId,
-              remoteId: update.remoteId,
-              lastSyncedAt: now,
-              lastLocalUpdatedAt: now,
-              lastRemoteUpdatedAt: now,
+        for (let i = 0; i < localDeltas.deltas.length; i += PUSH_BATCH_SIZE) {
+          const batchDeltas = localDeltas.deltas.slice(i, i + PUSH_BATCH_SIZE);
+          const batchMappings = localDeltas.mappings.slice(i, i + PUSH_BATCH_SIZE);
+
+          logger.debug('Pushing batch to remote', {
+            context: 'api:sync:instances:[id]:sync',
+            operationId: operation.id,
+            batchIndex: Math.floor(i / PUSH_BATCH_SIZE) + 1,
+            batchSize: batchDeltas.length,
+            totalDeltas: localDeltas.deltas.length,
+          });
+
+          const pushResponse = await pushToRemote(instance, batchDeltas, batchMappings);
+
+          totalPushed += batchDeltas.length;
+          allConflicts.push(...pushResponse.conflicts);
+          allErrors.push(...pushResponse.errors);
+
+          // Create mappings for new entities in this batch
+          for (const update of pushResponse.mappingUpdates) {
+            // Check if mapping already exists
+            const existingMapping = await repos.syncMappings.findByLocalId(
+              session.user.id,
+              id,
+              update.entityType,
+              update.localId
+            );
+
+            if (!existingMapping) {
+              await repos.syncMappings.create({
+                userId: session.user.id,
+                instanceId: id,
+                entityType: update.entityType,
+                localId: update.localId,
+                remoteId: update.remoteId,
+                lastSyncedAt: now,
+                lastLocalUpdatedAt: now,
+                lastRemoteUpdatedAt: now,
+              });
+            }
+          }
+
+          // Stop if we encountered errors in this batch
+          if (allErrors.length > 0) {
+            logger.warn('Stopping push due to errors in batch', {
+              context: 'api:sync:instances:[id]:sync',
+              operationId: operation.id,
+              errorCount: allErrors.length,
             });
+            break;
           }
         }
+
+        entityCounts.pushed = totalPushed;
       } else {
         entityCounts.pushed = 0;
       }
@@ -227,7 +252,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       });
 
       // Step 4: Update sync timestamp
-      const now = new Date().toISOString();
       await repos.syncInstances.updateSyncStatus(
         id,
         allErrors.length === 0 ? 'SUCCESS' : 'PARTIAL',
@@ -298,7 +322,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           {
             success: false,
             operationId: operation.id,
-            error: errorMessage,
+            direction: 'BIDIRECTIONAL',
+            entityCounts,
+            conflicts: allConflicts,
+            errors: allErrors,
+            duration,
             statusCode: error.statusCode,
           },
           { status: 200 } // Return 200 with success:false for handled errors

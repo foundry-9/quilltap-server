@@ -4,6 +4,16 @@
 
 ### 2.5-dev
 
+- feat: Sync operations now recorded on both client and server sides
+  - Remote server records sync operations when receiving pushes (PULL direction)
+  - Remote server records sync operations when sending deltas (PUSH direction)
+  - Both instances now show matching sync history from their respective perspectives
+- fix: Sync API batched pushing to avoid body size limits
+  - Push deltas in batches of 50 to stay under Next.js 1MB body size limit
+  - Fixes "Invalid JSON body" errors when syncing large delta sets (850+ entities)
+- fix: Sync API error response now includes required fields
+  - Error responses now include `conflicts`, `errors`, and `direction` arrays
+  - Fixes TypeError "Cannot read properties of undefined (reading 'length')" in client
 - feat: Add bidirectional Sync API for multi-instance synchronization
   - New "Sync" tab in Settings for managing remote Quilltap instances
   - Bidirectional sync with permanent UUID mapping between entities

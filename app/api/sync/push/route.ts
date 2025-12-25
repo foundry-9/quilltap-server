@@ -13,7 +13,11 @@ import { logger } from '@/lib/logger';
 import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/repositories/factory';
 import { SyncPushRequestSchema, SyncPushResponse } from '@/lib/sync/types';
-import { processRemoteDeltas } from '@/lib/sync/sync-service';
+import {
+  processRemoteDeltas,
+  startSyncOperation,
+  completeSyncOperation,
+} from '@/lib/sync/sync-service';
 import { getAuthenticatedUserForSync } from '@/lib/sync/api-key-auth';
 
 /**
@@ -70,49 +74,74 @@ export async function POST(req: NextRequest) {
 
     const { deltas, mappings } = parseResult.data;
 
+    // Get remote instance ID from header (identifies who is pushing to us)
+    const remoteInstanceId = req.headers.get('X-Sync-Instance-Id') || 'unknown-remote';
+
     logger.info('Processing sync push request', {
       context: 'api:sync:push',
       userId,
       authMethod: authResult.authMethod,
+      remoteInstanceId,
       deltaCount: deltas.length,
       mappingCount: mappings.length,
     });
 
-    // Get or create a temporary instance ID for this push
-    // In a full implementation, this would come from the handshake
-    const instanceId = req.headers.get('X-Sync-Instance-Id') || 'temp-instance';
+    // Start a sync operation to record this push (from our perspective, we're receiving/pulling)
+    const operation = await startSyncOperation(userId, remoteInstanceId, 'PULL');
 
-    // Process the incoming deltas
-    const result = await processRemoteDeltas(userId, instanceId, deltas);
+    try {
+      // Process the incoming deltas
+      const result = await processRemoteDeltas(userId, remoteInstanceId, deltas);
 
-    // Build mapping updates to return
-    // These tell the remote instance what local IDs were created for their entities
-    const mappingUpdates = result.newMappings.map((m) => ({
-      localId: m.remoteId, // From remote's perspective, their localId is our remoteId
-      remoteId: m.localId, // Our localId becomes their remoteId
-      entityType: m.entityType,
-    }));
+      // Build mapping updates to return
+      // These tell the remote instance what local IDs were created for their entities
+      const mappingUpdates = result.newMappings.map((m) => ({
+        localId: m.remoteId, // From remote's perspective, their localId is our remoteId
+        remoteId: m.localId, // Our localId becomes their remoteId
+        entityType: m.entityType,
+      }));
 
-    const response: SyncPushResponse = {
-      success: result.errors.length === 0,
-      mappingUpdates,
-      conflicts: result.conflicts,
-      errors: result.errors,
-    };
+      const response: SyncPushResponse = {
+        success: result.errors.length === 0,
+        mappingUpdates,
+        conflicts: result.conflicts,
+        errors: result.errors,
+      };
 
-    const duration = Date.now() - startTime;
+      const duration = Date.now() - startTime;
 
-    logger.info('Sync push request complete', {
-      context: 'api:sync:push',
-      userId,
-      applied: result.applied,
-      conflictCount: result.conflicts.length,
-      errorCount: result.errors.length,
-      newMappingCount: result.newMappings.length,
-      durationMs: duration,
-    });
+      // Complete the sync operation
+      await completeSyncOperation(
+        operation.id,
+        result.errors.length === 0,
+        { received: result.applied },
+        result.conflicts,
+        result.errors
+      );
 
-    return NextResponse.json(response, { status: 200 });
+      logger.info('Sync push request complete', {
+        context: 'api:sync:push',
+        userId,
+        operationId: operation.id,
+        applied: result.applied,
+        conflictCount: result.conflicts.length,
+        errorCount: result.errors.length,
+        newMappingCount: result.newMappings.length,
+        durationMs: duration,
+      });
+
+      return NextResponse.json(response, { status: 200 });
+    } catch (error) {
+      // Mark operation as failed
+      await completeSyncOperation(
+        operation.id,
+        false,
+        {},
+        [],
+        [error instanceof Error ? error.message : String(error)]
+      );
+      throw error;
+    }
   } catch (error) {
     const duration = Date.now() - startTime;
 

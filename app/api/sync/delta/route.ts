@@ -13,6 +13,7 @@ import { getServerSession } from '@/lib/auth/session';
 import { SyncDeltaRequestSchema, SyncDeltaResponse } from '@/lib/sync/types';
 import { detectDeltas } from '@/lib/sync/delta-detector';
 import { getAuthenticatedUserForSync } from '@/lib/sync/api-key-auth';
+import { startSyncOperation, completeSyncOperation } from '@/lib/sync/sync-service';
 
 /**
  * POST /api/sync/delta
@@ -70,10 +71,14 @@ export async function POST(req: NextRequest) {
 
     const { entityTypes, sinceTimestamp, limit = 100 } = parseResult.data;
 
+    // Get remote instance ID from header (identifies who is pulling from us)
+    const remoteInstanceId = req.headers.get('X-Sync-Instance-Id') || 'unknown-remote';
+
     logger.info('Processing sync delta request', {
       context: 'api:sync:delta',
       userId,
       authMethod: authResult.authMethod,
+      remoteInstanceId,
       entityTypes,
       sinceTimestamp,
       limit,
@@ -98,13 +103,34 @@ export async function POST(req: NextRequest) {
 
     const duration = Date.now() - startTime;
 
-    logger.info('Sync delta request complete', {
-      context: 'api:sync:delta',
-      userId,
-      deltaCount: result.deltas.length,
-      hasMore: result.hasMore,
-      durationMs: duration,
-    });
+    // Record a sync operation if we sent any deltas (from our perspective, we're pushing/sending)
+    if (result.deltas.length > 0) {
+      const operation = await startSyncOperation(userId, remoteInstanceId, 'PUSH');
+      await completeSyncOperation(
+        operation.id,
+        true,
+        { sent: result.deltas.length },
+        [],
+        []
+      );
+
+      logger.info('Sync delta request complete', {
+        context: 'api:sync:delta',
+        userId,
+        operationId: operation.id,
+        deltaCount: result.deltas.length,
+        hasMore: result.hasMore,
+        durationMs: duration,
+      });
+    } else {
+      logger.info('Sync delta request complete (no deltas)', {
+        context: 'api:sync:delta',
+        userId,
+        deltaCount: 0,
+        hasMore: result.hasMore,
+        durationMs: duration,
+      });
+    }
 
     return NextResponse.json(response, { status: 200 });
   } catch (error) {
