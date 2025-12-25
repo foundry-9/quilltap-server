@@ -34,10 +34,28 @@ export default function SyncTab() {
   const apiKeys = useSyncApiKeys()
 
   // Fetch data on mount
+  // Using a ref to track mount state prevents race conditions during initial navigation
   useEffect(() => {
-    instances.fetchInstances()
-    operations.fetchOperations()
-    apiKeys.fetchKeys()
+    let isMounted = true
+
+    const fetchData = async () => {
+      // Small delay to ensure component is fully mounted
+      // This prevents race conditions during client-side navigation
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      if (!isMounted) return
+
+      // Execute fetches - they handle their own error states
+      instances.fetchInstances()
+      operations.fetchOperations()
+      apiKeys.fetchKeys()
+    }
+
+    fetchData()
+
+    return () => {
+      isMounted = false
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Only fetch once on mount - fetch functions are stable
 

@@ -284,6 +284,12 @@ export interface DeleteSummary {
     prompt: number;
     roleplay: number;
   };
+  sync: {
+    instances: number;
+    mappings: number;
+    operations: number;
+    syncApiKeys: number;
+  };
 }
 
 /**
@@ -297,7 +303,7 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
   const globalRepos = getRepositories();
 
   // First, count everything before deletion
-  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates] =
+  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys] =
     await Promise.all([
       repos.characters.findAll(),
       repos.personas.findAll(),
@@ -310,6 +316,9 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
       repos.connections.getAllApiKeys(),
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
+      globalRepos.syncInstances.findByUserId(userId),
+      globalRepos.syncOperations.findByUserId(userId, 10000), // High limit to get all
+      globalRepos.userSyncApiKeys.findByUserId(userId),
     ]);
 
   // Count memories
@@ -317,6 +326,13 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
   for (const character of characters) {
     const memories = await repos.memories.findByCharacterId(character.id);
     memoriesCount += memories.length;
+  }
+
+  // Count sync mappings (need to count per instance)
+  let syncMappingsCount = 0;
+  for (const instance of syncInstances) {
+    const mappings = await globalRepos.syncMappings.findAllForInstance(userId, instance.id);
+    syncMappingsCount += mappings.length;
   }
 
   // List and count backups
@@ -350,6 +366,53 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
     }
   }
 
+  // Delete sync data
+  // First delete mappings for each instance (must be done before deleting instances)
+  for (const instance of syncInstances) {
+    try {
+      await globalRepos.syncMappings.deleteByInstanceId(instance.id);
+    } catch (error) {
+      moduleLogger.warn('Failed to delete sync mappings for instance', {
+        instanceId: instance.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Delete sync instances
+  for (const instance of syncInstances) {
+    try {
+      await globalRepos.syncInstances.delete(instance.id);
+    } catch (error) {
+      moduleLogger.warn('Failed to delete sync instance', {
+        instanceId: instance.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Delete sync operations
+  for (const operation of syncOperations) {
+    try {
+      await globalRepos.syncOperations.delete(operation.id);
+    } catch (error) {
+      moduleLogger.warn('Failed to delete sync operation', {
+        operationId: operation.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Delete sync API keys
+  try {
+    await globalRepos.userSyncApiKeys.deleteByUserId(userId);
+  } catch (error) {
+    moduleLogger.warn('Failed to delete sync API keys', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   const summary: DeleteSummary = {
     characters: characters.length,
     personas: personas.length,
@@ -368,6 +431,12 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
       prompt: promptTemplates.length,
       roleplay: roleplayTemplates.length,
     },
+    sync: {
+      instances: syncInstances.length,
+      mappings: syncMappingsCount,
+      operations: syncOperations.length,
+      syncApiKeys: syncApiKeys.length,
+    },
   };
 
   moduleLogger.info('Complete user data deletion finished', { userId, summary });
@@ -384,7 +453,7 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
 
-  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates] =
+  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys] =
     await Promise.all([
       repos.characters.findAll(),
       repos.personas.findAll(),
@@ -397,6 +466,9 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
       repos.connections.getAllApiKeys(),
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
+      globalRepos.syncInstances.findByUserId(userId),
+      globalRepos.syncOperations.findByUserId(userId, 10000), // High limit to get all
+      globalRepos.userSyncApiKeys.findByUserId(userId),
     ]);
 
   // Count memories
@@ -404,6 +476,13 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
   for (const character of characters) {
     const memories = await repos.memories.findByCharacterId(character.id);
     memoriesCount += memories.length;
+  }
+
+  // Count sync mappings (need to count per instance)
+  let syncMappingsCount = 0;
+  for (const instance of syncInstances) {
+    const mappings = await globalRepos.syncMappings.findAllForInstance(userId, instance.id);
+    syncMappingsCount += mappings.length;
   }
 
   // List and count backups
@@ -426,6 +505,12 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
     templates: {
       prompt: promptTemplates.length,
       roleplay: roleplayTemplates.length,
+    },
+    sync: {
+      instances: syncInstances.length,
+      mappings: syncMappingsCount,
+      operations: syncOperations.length,
+      syncApiKeys: syncApiKeys.length,
     },
   };
 }

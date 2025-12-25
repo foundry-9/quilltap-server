@@ -4,6 +4,14 @@
 
 ### 2.5-dev
 
+- fix: "Delete All Data" now includes sync data for complete account reset
+  - Sync instances, mappings, operations, and sync API keys are now deleted
+  - Delete preview UI shows sync data counts when present
+  - Ensures syncing after delete will pull fresh data from remote server
+- fix: Sync tab race condition causing error on first navigation
+  - Added mount state tracking to prevent async operations during unmount
+  - Deferred fetch operations to ensure component is fully mounted
+  - Improved error logging in useAsyncOperation with better error details
 - feat: Sync operations now recorded on both client and server sides
   - Remote server records sync operations when receiving pushes (PULL direction)
   - Remote server records sync operations when sending deltas (PUSH direction)
