@@ -181,10 +181,18 @@ async function createLocalEntity(
     updatedAt: _updatedAt,
     // Extract special fields that need separate handling
     messages: messagesData,
-    content: fileContent,
-    requiresContentFetch,
-    ...entityData
+    ...restData
   } = data;
+
+  // Only extract file-specific fields for FILE entities
+  // For other entities like MEMORY, 'content' is a required field and must be preserved
+  const fileContent = entityType === 'FILE' ? (restData.content as string | undefined) : undefined;
+  const requiresContentFetch = entityType === 'FILE' ? restData.requiresContentFetch : undefined;
+
+  // Remove file-specific fields only for FILE type
+  const entityData = entityType === 'FILE'
+    ? (() => { const { content: _, requiresContentFetch: __, ...rest } = restData; return rest; })()
+    : restData;
 
   // Ensure userId is set to local user
   const createData = { ...entityData, userId };
@@ -301,10 +309,17 @@ async function updateLocalEntity(
     createdAt: _createdAt,
     // Extract special fields that need separate handling
     messages: messagesData,
-    content: fileContent,
-    requiresContentFetch: _requiresContentFetch,
-    ...updateData
+    ...restData
   } = data;
+
+  // Only extract file-specific fields for FILE entities
+  // For other entities like MEMORY, 'content' is a required field and must be preserved
+  const fileContent = entityType === 'FILE' ? (restData.content as string | undefined) : undefined;
+
+  // Remove file-specific fields only for FILE type
+  const updateData = entityType === 'FILE'
+    ? (() => { const { content: _, requiresContentFetch: __, ...rest } = restData; return rest; })()
+    : restData;
 
   try {
     switch (entityType) {
@@ -504,14 +519,27 @@ export async function processRemoteDeltas(
       }
 
       // Track FILE deltas that need content fetched
+      // We need to fetch content for:
+      // 1. New files that require content fetch
+      // 2. Existing files that require content fetch (in case previous fetch failed)
       if (
         delta.entityType === 'FILE' &&
-        delta.data?.requiresContentFetch === true &&
-        result.isNewEntity
+        delta.data?.requiresContentFetch === true
       ) {
-        filesNeedingContent.push({
-          fileId: delta.id,
-        });
+        // Check if the local file has content (s3Key) already
+        const repos = getRepositories();
+        const localFile = await repos.files.findById(delta.id);
+        if (!localFile?.s3Key) {
+          filesNeedingContent.push({
+            fileId: delta.id,
+          });
+          logger.debug('File needs content fetch', {
+            context: 'sync:sync-service',
+            fileId: delta.id,
+            isNewEntity: result.isNewEntity,
+            hasS3Key: !!localFile?.s3Key,
+          });
+        }
       }
     } else if (result.error) {
       errors.push(`${delta.entityType}:${delta.id}: ${result.error}`);

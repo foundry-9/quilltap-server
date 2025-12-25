@@ -13,7 +13,8 @@ import { logger } from '@/lib/logger';
 import { getServerSession } from '@/lib/auth/session';
 import { getAuthenticatedUserForSync } from '@/lib/sync/api-key-auth';
 import { getRepositories } from '@/lib/mongodb/repositories';
-import { s3FileService } from '@/lib/s3/file-service';
+import { downloadFile as downloadS3File } from '@/lib/s3/operations';
+import { createSyncLogCollector } from '@/lib/sync/sync-log-collector';
 
 /**
  * GET /api/sync/files/[id]/content
@@ -34,6 +35,7 @@ export async function GET(
 ) {
   const startTime = Date.now();
   const { id: fileId } = await params;
+  const syncLogs = createSyncLogCollector();
 
   try {
     // Check authentication (via session or API key)
@@ -41,11 +43,15 @@ export async function GET(
     const authResult = await getAuthenticatedUserForSync(req, session?.user?.id || null);
 
     if (!authResult.userId) {
+      syncLogs.warn('Authentication failed', { fileId });
       logger.warn('Sync file content requested without authentication', {
         context: 'api:sync:files:content',
         fileId,
       });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized', serverLogs: syncLogs.getLogs() },
+        { status: 401 }
+      );
     }
 
     const userId = authResult.userId;
@@ -62,42 +68,86 @@ export async function GET(
     const file = await repos.files.findById(fileId);
 
     if (!file) {
+      syncLogs.warn('File not found in database', { fileId });
       logger.warn('Sync file content requested for non-existent file', {
         context: 'api:sync:files:content',
         userId,
         fileId,
       });
-      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'File not found', serverLogs: syncLogs.getLogs() },
+        { status: 404 }
+      );
     }
 
     // Check ownership
     if (file.userId !== userId) {
+      syncLogs.warn('File ownership mismatch', { fileId, fileOwnerId: file.userId, requestUserId: userId });
       logger.warn('Sync file content requested for file owned by another user', {
         context: 'api:sync:files:content',
         userId,
         fileId,
         fileOwnerId: file.userId,
       });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Forbidden', serverLogs: syncLogs.getLogs() },
+        { status: 403 }
+      );
     }
 
     // Check if file has storage reference
     if (!file.s3Key) {
+      syncLogs.error('File has no S3 key (content not stored)', {
+        fileId,
+        filename: file.originalFilename,
+        category: file.category,
+      });
       logger.warn('Sync file content requested for file without S3 key', {
         context: 'api:sync:files:content',
         userId,
         fileId,
       });
-      return NextResponse.json({ error: 'File has no content' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'File has no content (no S3 key)', serverLogs: syncLogs.getLogs() },
+        { status: 404 }
+      );
     }
 
-    // Download file content
-    const content = await s3FileService.downloadUserFile(
-      file.userId,
-      file.id,
-      file.originalFilename,
-      file.category
-    );
+    // Download file content using the stored s3Key directly
+    // This matches how /api/files/[id] serves files
+    let content: Buffer;
+    try {
+      content = await downloadS3File(file.s3Key);
+    } catch (downloadError) {
+      const duration = Date.now() - startTime;
+      const errorMessage = downloadError instanceof Error ? downloadError.message : String(downloadError);
+      const errorName = downloadError instanceof Error ? downloadError.name : 'UnknownError';
+
+      syncLogs.error('S3 download failed', {
+        fileId,
+        filename: file.originalFilename,
+        s3Key: file.s3Key,
+        errorName,
+        errorMessage,
+      });
+
+      logger.error('Failed to download file from S3 for sync', {
+        context: 'api:sync:files:content',
+        userId,
+        fileId,
+        s3Key: file.s3Key,
+        error: errorMessage,
+        durationMs: duration,
+      });
+
+      return NextResponse.json(
+        {
+          error: `Failed to download file: ${errorMessage}`,
+          serverLogs: syncLogs.getLogs(),
+        },
+        { status: 500 }
+      );
+    }
 
     const duration = Date.now() - startTime;
 
@@ -123,14 +173,21 @@ export async function GET(
     });
   } catch (error) {
     const duration = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    syncLogs.error('Unexpected error', { error: errorMessage });
 
     logger.error('Error serving sync file content', {
       context: 'api:sync:files:content',
       fileId,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
       durationMs: duration,
     });
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: `Internal server error: ${errorMessage}`, serverLogs: syncLogs.getLogs() },
+      { status: 500 }
+    );
   }
 }

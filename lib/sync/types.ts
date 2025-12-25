@@ -339,4 +339,42 @@ export interface SyncResult {
   conflicts: SyncConflict[];
   errors: string[];
   duration: number; // milliseconds
+  /** Logs collected from the remote server during sync operations */
+  remoteLogs?: SyncLogEntry[];
 }
+
+// ============================================================================
+// SYNC LOGGING
+// ============================================================================
+
+/**
+ * Log levels for sync operations
+ */
+export const SyncLogLevelEnum = z.enum(['debug', 'info', 'warn', 'error']);
+export type SyncLogLevel = z.infer<typeof SyncLogLevelEnum>;
+
+/**
+ * A single log entry collected during sync operations.
+ * Used to transmit server-side logs to the requesting client for debugging.
+ */
+export const SyncLogEntrySchema = z.object({
+  timestamp: TimestampSchema,
+  level: SyncLogLevelEnum,
+  message: z.string(),
+  context: z.record(z.unknown()).optional(),
+});
+export type SyncLogEntry = z.infer<typeof SyncLogEntrySchema>;
+
+/**
+ * Extended response schema that includes server logs.
+ * Used by endpoints that participate in sync to provide debugging info.
+ */
+export const SyncDeltaResponseWithLogsSchema = SyncDeltaResponseSchema.extend({
+  serverLogs: z.array(SyncLogEntrySchema).optional(),
+});
+export type SyncDeltaResponseWithLogs = z.infer<typeof SyncDeltaResponseWithLogsSchema>;
+
+export const SyncPushResponseWithLogsSchema = SyncPushResponseSchema.extend({
+  serverLogs: z.array(SyncLogEntrySchema).optional(),
+});
+export type SyncPushResponseWithLogs = z.infer<typeof SyncPushResponseWithLogsSchema>;

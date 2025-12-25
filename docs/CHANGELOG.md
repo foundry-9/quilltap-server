@@ -4,6 +4,25 @@
 
 ### 2.5-dev
 
+- fix: Memory sync now works correctly
+  - Fixed bug where `content` field was being stripped from all entity types during sync
+  - The `content` and `requiresContentFetch` fields are now only extracted for FILE entities
+  - Memory entities (which require `content`) now sync properly
+- fix: File content sync now uses stored S3 key correctly
+  - Sync file content endpoint was constructing a new S3 path instead of using stored s3Key
+  - Now uses the same approach as /api/files/[id] - downloading directly by s3Key
+  - Fixes "NoSuchKey" errors when file paths don't match constructed paths
+- fix: File content fetch now retries for existing files without content
+  - Previously only new files would have their content fetched from remote
+  - Now files that exist but have no s3Key will also be queued for content fetch
+  - Fixes broken images when re-syncing after a failed sync
+- feat: Add sync log sharing - server sends diagnostic logs to client
+  - New SyncLogCollector utility for capturing sync-related logs
+  - File content endpoint now returns serverLogs in error responses
+  - Helps debug sync issues without needing access to remote server logs
+- fix: Improved sync file content error handling
+  - Better error messages when S3 download fails during sync
+  - More detailed logging for troubleshooting file sync issues
 - refactor: Major sync architecture simplification - use original IDs directly
   - Entities now keep their original IDs when synced (no ID mapping needed)
   - Removed complex `remapEntityReferences()` function (~280 lines)

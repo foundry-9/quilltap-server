@@ -308,7 +308,7 @@ export async function fetchRemoteMappings(
 export async function fetchRemoteFileContent(
   instance: SyncInstance,
   remoteFileId: string
-): Promise<{ content: Buffer; sha256?: string; mimeType?: string }> {
+): Promise<{ content: Buffer; sha256?: string; mimeType?: string; serverLogs?: unknown[] }> {
   const url = new URL(`/api/sync/files/${remoteFileId}/content`, instance.url);
   const apiKey = await getDecryptedApiKey(instance);
 
@@ -335,11 +335,20 @@ export async function fetchRemoteFileContent(
 
     if (!response.ok) {
       let errorMessage = `Remote file request failed with status ${response.status}`;
+      let errorDetails: string | undefined;
+      let serverLogs: unknown[] | undefined;
       try {
         const errorBody = await response.json();
         errorMessage = errorBody.error || errorMessage;
+        serverLogs = errorBody.serverLogs;
+        errorDetails = JSON.stringify(errorBody);
       } catch {
-        // Might not be JSON
+        // Might not be JSON - try to get text
+        try {
+          errorDetails = await response.text();
+        } catch {
+          // Ignore
+        }
       }
 
       logger.warn('Remote file content request failed', {
@@ -348,9 +357,14 @@ export async function fetchRemoteFileContent(
         remoteFileId,
         status: response.status,
         error: errorMessage,
+        errorDetails,
+        serverLogs,
       });
 
-      throw new RemoteSyncError(errorMessage, response.status);
+      // Include server logs in the error for debugging
+      const error = new RemoteSyncError(errorMessage, response.status);
+      (error as any).serverLogs = serverLogs;
+      throw error;
     }
 
     // Get file content as buffer
