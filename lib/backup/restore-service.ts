@@ -366,8 +366,8 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
     }
   }
 
-  // Delete sync data
-  // First delete mappings for each instance (must be done before deleting instances)
+  // Reset sync data
+  // Delete mappings for each instance (so entities get re-mapped on next sync)
   for (const instance of syncInstances) {
     try {
       await globalRepos.syncMappings.deleteByInstanceId(instance.id);
@@ -379,19 +379,19 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
     }
   }
 
-  // Delete sync instances
-  for (const instance of syncInstances) {
-    try {
-      await globalRepos.syncInstances.delete(instance.id);
-    } catch (error) {
-      moduleLogger.warn('Failed to delete sync instance', {
-        instanceId: instance.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+  // Reset sync state on instances (clear lastSyncAt so next sync pulls all data)
+  // We keep the instances themselves so user doesn't have to re-enter remote server info
+  try {
+    await globalRepos.syncInstances.resetSyncStateForUser(userId);
+    moduleLogger.info('Reset sync state for all user instances', { userId });
+  } catch (error) {
+    moduleLogger.warn('Failed to reset sync state for instances', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
-  // Delete sync operations
+  // Delete sync operations (clear history)
   for (const operation of syncOperations) {
     try {
       await globalRepos.syncOperations.delete(operation.id);
@@ -403,15 +403,7 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
     }
   }
 
-  // Delete sync API keys
-  try {
-    await globalRepos.userSyncApiKeys.deleteByUserId(userId);
-  } catch (error) {
-    moduleLogger.warn('Failed to delete sync API keys', {
-      userId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  // Keep sync API keys - they're needed for remote instances to sync to us
 
   const summary: DeleteSummary = {
     characters: characters.length,
@@ -432,10 +424,12 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
       roleplay: roleplayTemplates.length,
     },
     sync: {
+      // Instances are reset (not deleted), so count shows how many were reset
       instances: syncInstances.length,
       mappings: syncMappingsCount,
       operations: syncOperations.length,
-      syncApiKeys: syncApiKeys.length,
+      // API keys are kept (not deleted)
+      syncApiKeys: 0,
     },
   };
 
@@ -507,10 +501,12 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
       roleplay: roleplayTemplates.length,
     },
     sync: {
+      // Instances will be reset (not deleted), count shows how many will be reset
       instances: syncInstances.length,
       mappings: syncMappingsCount,
       operations: syncOperations.length,
-      syncApiKeys: syncApiKeys.length,
+      // API keys are kept (not deleted)
+      syncApiKeys: 0,
     },
   };
 }

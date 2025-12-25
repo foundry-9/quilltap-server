@@ -433,6 +433,60 @@ export class SyncInstancesRepository {
   }
 
   /**
+   * Reset sync state for an instance (clear lastSyncAt and status)
+   * This allows the next sync to pull all data from remote
+   */
+  async resetSyncState(id: string): Promise<SyncInstance | null> {
+    logger.debug('Resetting sync state for instance', {
+      instanceId: id,
+    });
+
+    return this.update(id, {
+      lastSyncAt: null,
+      lastSyncStatus: null,
+    });
+  }
+
+  /**
+   * Reset sync state for all instances belonging to a user
+   * Used when user deletes all data but wants to keep sync configuration
+   */
+  async resetSyncStateForUser(userId: string): Promise<number> {
+    const collection = await this.getCollection();
+    const now = this.getCurrentTimestamp();
+
+    logger.debug('Resetting sync state for all user instances', {
+      userId,
+    });
+
+    try {
+      const result = await collection.updateMany(
+        { userId },
+        {
+          $set: {
+            lastSyncAt: null,
+            lastSyncStatus: null,
+            updatedAt: now,
+          },
+        }
+      );
+
+      logger.info('Reset sync state for user instances', {
+        userId,
+        modifiedCount: result.modifiedCount,
+      });
+
+      return result.modifiedCount;
+    } catch (error) {
+      logger.error('Error resetting sync state for user', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Delete a sync instance
    */
   async delete(id: string): Promise<boolean> {

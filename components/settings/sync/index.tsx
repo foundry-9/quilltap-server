@@ -133,9 +133,9 @@ export default function SyncTab() {
   }, [editingInstance, formData, instances, operations, closeForm])
 
   // Handle sync trigger
-  const handleSync = useCallback(async (instanceId: string) => {
-    clientLogger.debug('SyncTab: triggering sync', { instanceId })
-    const result = await syncTrigger.triggerSync(instanceId)
+  const handleSync = useCallback(async (instanceId: string, forceFull: boolean = false) => {
+    clientLogger.debug('SyncTab: triggering sync', { instanceId, forceFull })
+    const result = await syncTrigger.triggerSync(instanceId, forceFull)
     if (result) {
       // Refresh instances to get updated lastSyncAt
       instances.fetchInstances()
@@ -226,6 +226,13 @@ export default function SyncTab() {
       {syncTrigger.syncOp.error && (
         <ErrorAlert
           message={syncTrigger.syncOp.error}
+          onRetry={() => {}}
+        />
+      )}
+
+      {instances.testOp.error && (
+        <ErrorAlert
+          message={`Connection test failed: ${instances.testOp.error}`}
           onRetry={() => {}}
         />
       )}

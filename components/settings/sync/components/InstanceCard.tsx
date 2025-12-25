@@ -10,7 +10,7 @@
  * @module components/settings/sync/components/InstanceCard
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { SyncInstanceDisplay } from '../types';
 import { SyncStatusBadge } from './SyncStatusBadge';
 import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover';
@@ -21,7 +21,7 @@ interface InstanceCardProps {
   isSyncing: boolean;
   onEdit: (instance: SyncInstanceDisplay) => void;
   onDelete: (instanceId: string) => void;
-  onSync: (instanceId: string) => void;
+  onSync: (instanceId: string, forceFull?: boolean) => void;
   onTest: (instanceId: string) => void;
   deleteConfirmId: string | null;
   onDeleteConfirmToggle: (instanceId: string | null) => void;
@@ -61,6 +61,9 @@ export function InstanceCard({
   deleteConfirmId,
   onDeleteConfirmToggle,
 }: InstanceCardProps) {
+  const [showSyncMenu, setShowSyncMenu] = useState(false);
+  const syncMenuRef = useRef<HTMLDivElement>(null);
+
   // Log render in useEffect to avoid state updates during render
   useEffect(() => {
     clientLogger.debug('InstanceCard: rendered', {
@@ -68,6 +71,30 @@ export function InstanceCard({
       isSyncing,
     });
   }, [instance.id, isSyncing]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (syncMenuRef.current && !syncMenuRef.current.contains(event.target as Node)) {
+        setShowSyncMenu(false);
+      }
+    };
+
+    if (showSyncMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showSyncMenu]);
+
+  const handleSyncNow = () => {
+    setShowSyncMenu(false);
+    onSync(instance.id, false);
+  };
+
+  const handleForceFullSync = () => {
+    setShowSyncMenu(false);
+    onSync(instance.id, true);
+  };
 
   return (
     <div className="qt-bg-card qt-border rounded-lg p-4 shadow-sm">
@@ -105,21 +132,51 @@ export function InstanceCard({
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        <button
-          type="button"
-          onClick={() => onSync(instance.id)}
-          disabled={isSyncing || !instance.isActive}
-          className="qt-button-primary qt-button-sm"
-        >
-          {isSyncing ? (
-            <span className="flex items-center gap-2">
-              <span className="qt-spinner-sm" />
-              Syncing...
-            </span>
-          ) : (
-            'Sync Now'
+        {/* Sync dropdown */}
+        <div className="relative" ref={syncMenuRef}>
+          <button
+            type="button"
+            onClick={() => setShowSyncMenu(!showSyncMenu)}
+            disabled={isSyncing || !instance.isActive}
+            className="qt-button-primary qt-button-sm flex items-center gap-1"
+          >
+            {isSyncing ? (
+              <span className="flex items-center gap-2">
+                <span className="qt-spinner-sm" />
+                Syncing...
+              </span>
+            ) : (
+              <>
+                Sync
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </>
+            )}
+          </button>
+          {showSyncMenu && !isSyncing && (
+            <div className="absolute left-0 mt-1 qt-dropdown min-w-[180px]">
+              <button
+                type="button"
+                onClick={handleSyncNow}
+                className="qt-dropdown-item w-full text-left"
+              >
+                Sync Now
+              </button>
+              <div className="qt-dropdown-separator" />
+              <button
+                type="button"
+                onClick={handleForceFullSync}
+                className="qt-dropdown-item w-full text-left flex-col items-start"
+              >
+                <div>Force Full Sync</div>
+                <div className="text-xs text-muted-foreground">
+                  Pulls all data from remote
+                </div>
+              </button>
+            </div>
           )}
-        </button>
+        </div>
         <button
           type="button"
           onClick={() => onTest(instance.id)}

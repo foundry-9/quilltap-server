@@ -29,20 +29,22 @@ export function useSyncTrigger() {
 
   /**
    * Trigger a manual sync for a specific instance
+   * @param instanceId - The ID of the sync instance
+   * @param forceFull - If true, ignores lastSyncAt and syncs all data
    * Note: Empty dependency array since syncOp.execute is stable
    */
   const triggerSync = useCallback(
-    async (instanceId: string) => {
-      clientLogger.debug('Triggering manual sync', { instanceId })
+    async (instanceId: string, forceFull: boolean = false) => {
+      clientLogger.debug('Triggering manual sync', { instanceId, forceFull })
       setSyncingInstanceId(instanceId)
 
       const result = await syncOp.execute(async () => {
-        const response = await fetchJson<SyncResult>(
-          `/api/sync/instances/${instanceId}/sync`,
-          {
-            method: 'POST',
-          }
-        )
+        const url = forceFull
+          ? `/api/sync/instances/${instanceId}/sync?forceFull=true`
+          : `/api/sync/instances/${instanceId}/sync`
+        const response = await fetchJson<SyncResult>(url, {
+          method: 'POST',
+        })
 
         if (!response.ok) {
           throw new Error(response.error || 'Failed to trigger sync')
@@ -61,6 +63,7 @@ export function useSyncTrigger() {
       if (result) {
         clientLogger.info('Manual sync completed', {
           instanceId,
+          forceFull,
           operationId: result.operationId,
           direction: result.direction,
           entityCounts: result.entityCounts,
@@ -69,7 +72,7 @@ export function useSyncTrigger() {
           duration: result.duration,
         })
       } else {
-        clientLogger.error('Manual sync failed', { instanceId })
+        clientLogger.error('Manual sync failed', { instanceId, forceFull })
       }
 
       return result

@@ -97,7 +97,8 @@ describe('backup restore service - delete preview', () => {
     expect(summary.backups).toBe(1)
     expect(summary.profiles).toEqual({ connection: 1, image: 1, embedding: 1 })
     expect(summary.templates).toEqual({ prompt: 1, roleplay: 2 })
-    expect(summary.sync).toEqual({ instances: 1, mappings: 3, operations: 2, syncApiKeys: 1 })
+    // syncApiKeys is 0 because they are preserved (not deleted) during data deletion
+    expect(summary.sync).toEqual({ instances: 1, mappings: 3, operations: 2, syncApiKeys: 0 })
     expect(s3FileService.listUserFiles).toHaveBeenCalledWith('user-1', 'backups')
   })
 })

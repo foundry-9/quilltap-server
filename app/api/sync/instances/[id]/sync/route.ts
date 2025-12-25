@@ -33,6 +33,10 @@ interface RouteParams {
  *
  * Perform a full bidirectional sync with the remote instance.
  *
+ * Query parameters:
+ * - forceFull: If "true", ignores lastSyncAt and pulls ALL data from remote.
+ *              Useful after local data deletion to restore from remote.
+ *
  * Sync algorithm:
  * 1. Handshake - Verify connection and versions
  * 2. Pull - Fetch remote changes and apply locally
@@ -42,6 +46,7 @@ interface RouteParams {
 export async function POST(req: NextRequest, { params }: RouteParams) {
   const startTime = Date.now();
   const { id } = await params;
+  const forceFull = req.nextUrl.searchParams.get('forceFull') === 'true';
 
   try {
     const session = await getServerSession();
@@ -56,6 +61,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       context: 'api:sync:instances:[id]:sync',
       userId: session.user.id,
       instanceId: id,
+      forceFull,
     });
 
     const repos = getRepositories();
@@ -136,12 +142,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       }
 
       // Step 2: Pull - Fetch remote changes
+      // If forceFull is true, we ignore lastSyncAt and pull everything
+      const lastSyncAt = forceFull ? null : (instance.lastSyncAt ?? null);
+
       logger.info('Sync step 2: Pull remote changes', {
         context: 'api:sync:instances:[id]:sync',
         operationId: operation.id,
+        forceFull,
+        lastSyncAt,
       });
 
-      const lastSyncAt = instance.lastSyncAt ?? null;
       let pullTotal = 0;
       let hasMore = true;
       let cursor: string | null = lastSyncAt;
@@ -174,12 +184,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       });
 
       // Step 3: Push - Send local changes
+      // If forceFull, push all local data regardless of timestamp
+      const pushSinceTimestamp = forceFull ? null : lastSyncAt;
+
       logger.info('Sync step 3: Push local changes', {
         context: 'api:sync:instances:[id]:sync',
         operationId: operation.id,
+        forceFull,
+        pushSinceTimestamp,
       });
 
-      const localDeltas = await prepareLocalDeltasForPush(session.user.id, id, lastSyncAt);
+      const localDeltas = await prepareLocalDeltasForPush(session.user.id, id, pushSinceTimestamp);
 
       if (localDeltas.deltas.length > 0) {
         // Push in batches to avoid body size limits (Next.js default is 1MB)
@@ -279,6 +294,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         userId: session.user.id,
         instanceId: id,
         operationId: operation.id,
+        forceFull,
         entityCounts,
         conflictCount: allConflicts.length,
         errorCount: allErrors.length,

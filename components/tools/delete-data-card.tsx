@@ -291,10 +291,10 @@ export function DeleteDataCard() {
                               </div>
                             </>
                           )}
-                          {preview.sync && (preview.sync.instances > 0 || preview.sync.syncApiKeys > 0) && (
+                          {preview.sync && (preview.sync.instances > 0 || preview.sync.mappings > 0 || preview.sync.operations > 0) && (
                             <>
                               <div className="flex justify-between">
-                                <span className="text-muted-foreground">Sync Instances</span>
+                                <span className="text-muted-foreground">Sync Instances (reset)</span>
                                 <span className="qt-text-primary">{preview.sync.instances}</span>
                               </div>
                               <div className="flex justify-between">
@@ -305,9 +305,8 @@ export function DeleteDataCard() {
                                 <span className="text-muted-foreground">Sync Operations</span>
                                 <span className="qt-text-primary">{preview.sync.operations}</span>
                               </div>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Sync API Keys</span>
-                                <span className="qt-text-primary">{preview.sync.syncApiKeys}</span>
+                              <div className="text-xs text-muted-foreground mt-1 italic">
+                                Sync instances will be reset (not deleted) - you can sync again to restore data from remote
                               </div>
                             </>
                           )}

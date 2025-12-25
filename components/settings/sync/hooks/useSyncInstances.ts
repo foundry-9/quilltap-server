@@ -213,6 +213,18 @@ export function useSyncInstances() {
                 : i
             )
           )
+          // Show success message with version info
+          setSuccess(
+            `Connection successful! Remote version: ${result.versionInfo.appVersion}`
+          )
+          setTimeout(() => setSuccess(null), 5000)
+        } else if (result.success) {
+          setSuccess('Connection successful!')
+          setTimeout(() => setSuccess(null), 5000)
+        } else {
+          // Connection test returned success:false with an error
+          // This will be shown via testOp.error in the UI
+          throw new Error(result.error || 'Connection test failed')
         }
 
         return result

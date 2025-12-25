@@ -4,10 +4,28 @@
 
 ### 2.5-dev
 
-- fix: "Delete All Data" now includes sync data for complete account reset
-  - Sync instances, mappings, operations, and sync API keys are now deleted
-  - Delete preview UI shows sync data counts when present
-  - Ensures syncing after delete will pull fresh data from remote server
+- feat: Add qt-* utility classes for backgrounds, borders, and text colors
+  - New `_utilities.css` with semantic utility classes for theme-aware styling
+  - Background utilities: qt-bg-surface, qt-bg-surface-alt, qt-bg-card, qt-bg-muted
+  - Status backgrounds with opacity: qt-bg-primary/N, qt-bg-warning/N, qt-bg-info/N, etc.
+  - Border utilities: qt-border, qt-border-primary, qt-border-warning, qt-border-info
+  - Text utilities: qt-text-secondary, qt-text-warning, qt-text-info, qt-text-success
+  - Fixes transparency issues where qt-bg-* classes were used but never defined
+- fix: Sync dropdown menu now uses proper qt-dropdown component class
+- fix: Sync connection test now shows clear success/failure feedback
+  - Success message displays remote version info (e.g., "Connection successful! Remote version: 2.5.0")
+  - Error messages now appear in the error alert section when connection test fails
+- feat: Add "Force Full Sync" option for pulling all data from remote
+  - New dropdown on Sync button with "Sync Now" and "Force Full Sync" options
+  - Force Full Sync ignores lastSyncAt timestamp and pulls all remote data
+  - Useful after local data deletion to restore from remote server
+  - Also pushes all local data regardless of previous sync timestamp
+- fix: "Delete All Data" now resets sync state for fresh remote sync
+  - Sync instances are now RESET (not deleted) - preserving remote server configuration
+  - lastSyncAt timestamp is cleared so next sync pulls all data from remote
+  - Sync mappings and operations are deleted for clean re-sync
+  - Sync API keys are preserved (for receiving remote sync requests)
+  - Delete preview UI shows sync data counts with "(reset)" clarification
 - fix: Sync tab race condition causing error on first navigation
   - Added mount state tracking to prevent async operations during unmount
   - Deferred fetch operations to ensure component is fully mounted
