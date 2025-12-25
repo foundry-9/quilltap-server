@@ -7,6 +7,46 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { SyncApiKeyDisplay, CreateApiKeyResult } from '../types'
 
 /**
+ * Helper to retry a fetch operation on transient errors
+ */
+async function fetchWithRetry<T>(
+  fetchFn: () => Promise<T>,
+  maxRetries: number = 3,
+  delayMs: number = 1000
+): Promise<T> {
+  let lastError: Error | null = null
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fetchFn()
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+
+      // Only retry on server errors (500) or "Internal server error"
+      const isRetryable = lastError.message.toLowerCase().includes('internal server error') ||
+                          lastError.message.includes('500') ||
+                          lastError.message.includes('network') ||
+                          lastError.message.includes('fetch')
+
+      if (!isRetryable || attempt === maxRetries) {
+        throw lastError
+      }
+
+      clientLogger.debug('Retrying fetch after transient error', {
+        attempt,
+        maxRetries,
+        error: lastError.message,
+        delayMs,
+      })
+
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+  }
+
+  throw lastError || new Error('Fetch failed after retries')
+}
+
+/**
  * Hook for managing sync API keys
  */
 export function useSyncApiKeys() {
@@ -22,21 +62,24 @@ export function useSyncApiKeys() {
 
   /**
    * Fetch all sync API keys from the server
+   * Uses retry logic to handle transient connection errors during startup
    */
   const fetchKeys = useCallback(async () => {
     clientLogger.debug('Fetching sync API keys')
     const result = await fetchOp.execute(async () => {
-      const response = await fetchJson<{ keys: SyncApiKeyDisplay[] }>('/api/sync/api-keys')
-      clientLogger.debug('Sync API keys response', {
-        ok: response.ok,
-        status: response.status,
-        hasData: !!response.data,
-        error: response.error || undefined,
+      return fetchWithRetry(async () => {
+        const response = await fetchJson<{ keys: SyncApiKeyDisplay[] }>('/api/sync/api-keys')
+        clientLogger.debug('Sync API keys response', {
+          ok: response.ok,
+          status: response.status,
+          hasData: !!response.data,
+          error: response.error || undefined,
+        })
+        if (!response.ok) {
+          throw new Error(response.error || 'Failed to fetch sync API keys')
+        }
+        return response.data?.keys || []
       })
-      if (!response.ok) {
-        throw new Error(response.error || 'Failed to fetch sync API keys')
-      }
-      return response.data?.keys || []
     })
     if (result) {
       setKeys(result)

@@ -14,6 +14,7 @@ import {
   SyncableEntityType,
   SyncableEntityTypeEnum,
 } from './types';
+import packageJson from '@/package.json';
 
 /**
  * Result of a version compatibility check
@@ -29,8 +30,8 @@ export interface VersionCompatibilityResult {
  * Get the current instance's version info
  */
 export function getLocalVersionInfo(): SyncVersionInfo {
-  // Get app version from package.json (imported at build time)
-  const appVersion = process.env.npm_package_version || '2.5.0';
+  // Get app version directly from package.json (includes full version like 2.5.0-dev.25)
+  const appVersion = packageJson.version;
 
   const versionInfo: SyncVersionInfo = {
     appVersion,

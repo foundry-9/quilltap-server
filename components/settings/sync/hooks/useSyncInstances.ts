@@ -7,6 +7,46 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { SyncInstanceDisplay, SyncFormData } from '../types'
 
 /**
+ * Helper to retry a fetch operation on transient errors
+ */
+async function fetchWithRetry<T>(
+  fetchFn: () => Promise<T>,
+  maxRetries: number = 3,
+  delayMs: number = 1000
+): Promise<T> {
+  let lastError: Error | null = null
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fetchFn()
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+
+      // Only retry on server errors (500) or "Internal server error"
+      const isRetryable = lastError.message.toLowerCase().includes('internal server error') ||
+                          lastError.message.includes('500') ||
+                          lastError.message.includes('network') ||
+                          lastError.message.includes('fetch')
+
+      if (!isRetryable || attempt === maxRetries) {
+        throw lastError
+      }
+
+      clientLogger.debug('Retrying fetch after transient error', {
+        attempt,
+        maxRetries,
+        error: lastError.message,
+        delayMs,
+      })
+
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+  }
+
+  throw lastError || new Error('Fetch failed after retries')
+}
+
+/**
  * Connection test result from the API
  */
 interface ConnectionTestResult {
@@ -34,22 +74,25 @@ export function useSyncInstances() {
 
   /**
    * Fetch all sync instances from the server
+   * Uses retry logic to handle transient connection errors during startup
    * Note: Empty dependency array since fetchOp.execute is stable
    */
   const fetchInstances = useCallback(async () => {
     clientLogger.debug('Fetching sync instances')
     const result = await fetchOp.execute(async () => {
-      const response = await fetchJson<{ instances: SyncInstanceDisplay[] }>('/api/sync/instances')
-      clientLogger.debug('Sync instances response', {
-        ok: response.ok,
-        status: response.status,
-        hasData: !!response.data,
-        error: response.error || undefined,
+      return fetchWithRetry(async () => {
+        const response = await fetchJson<{ instances: SyncInstanceDisplay[] }>('/api/sync/instances')
+        clientLogger.debug('Sync instances response', {
+          ok: response.ok,
+          status: response.status,
+          hasData: !!response.data,
+          error: response.error || undefined,
+        })
+        if (!response.ok) {
+          throw new Error(response.error || 'Failed to fetch sync instances')
+        }
+        return response.data?.instances || []
       })
-      if (!response.ok) {
-        throw new Error(response.error || 'Failed to fetch sync instances')
-      }
-      return response.data?.instances || []
     })
     if (result) {
       setInstances(result)
