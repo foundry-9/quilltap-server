@@ -4,16 +4,26 @@
 
 ### 2.5-dev
 
+- refactor: Major sync architecture simplification - use original IDs directly
+  - Entities now keep their original IDs when synced (no ID mapping needed)
+  - Removed complex `remapEntityReferences()` function (~280 lines)
+  - All repositories now have `createOrUpdate()` for idempotent upserts
+  - Repository `create()` methods now accept optional `id` and `createdAt` via CreateOptions
+  - Sync pushes/pulls work with original entity IDs, eliminating ID mismatches
+  - Fixes duplicate characters, broken references, and missing associations
+- feat: Add "Reset Sync State" button in Sync Settings
+  - New `/api/sync/cleanup` endpoint to reset sync data
+  - Deletes legacy sync mappings and operation history
+  - Resets instance sync timestamps for fresh re-sync
+  - Added useSyncCleanup hook and CleanupPanel component
+  - User data (characters, chats, etc.) is not affected
 - feat: Sync now includes chat messages and file attachments
   - Chat messages are now included in CHAT entity sync (previously only metadata was synced)
   - FILE entity type added to sync - syncs avatars, attachments, and generated images
   - Small files (<1MB) are included inline as base64; large files are fetched separately
   - New endpoint `GET /api/sync/files/[id]/content` for streaming large file content
 - fix: Synced entities now properly reference local IDs instead of remote IDs
-  - Added `remapEntityReferences()` to translate all ID references during sync
-  - CHAT participants now correctly reference locally-synced characters/personas
-  - MEMORY entities now correctly reference local characterId, aboutCharacterId, chatId
-  - Tags and file references are properly remapped across all entity types
+  - (Superseded by ID preservation refactor - entities now use original IDs directly)
 - feat: Sync entity order now enforced to ensure dependencies exist before dependents
   - Order: TAG -> FILE -> PERSONA -> CHARACTER -> templates -> CHAT -> MEMORY
   - Prevents broken references when syncing entities with dependencies

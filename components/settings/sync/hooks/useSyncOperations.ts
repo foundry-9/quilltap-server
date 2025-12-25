@@ -29,6 +29,12 @@ export function useSyncOperations() {
 
     const result = await fetchOp.execute(async () => {
       const response = await fetchJson<{ operations: SyncOperationDisplay[] }>(url)
+      clientLogger.debug('Sync operations response', {
+        ok: response.ok,
+        status: response.status,
+        hasData: !!response.data,
+        error: response.error || undefined,
+      })
       if (!response.ok) {
         throw new Error(response.error || 'Failed to fetch sync operations')
       }

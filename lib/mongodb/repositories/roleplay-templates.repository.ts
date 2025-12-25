@@ -12,7 +12,7 @@ import {
   RoleplayTemplateSchema,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { MongoBaseRepository } from './base.repository';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
 import { roleplayTemplateRegistry, type LoadedRoleplayTemplate } from '@/lib/plugins/roleplay-template-registry';
 
 /**
@@ -449,9 +449,12 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
 
   /**
    * Create a new roleplay template
+   * @param data The template data
+   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
    */
   async create(
-    data: Omit<RoleplayTemplate, 'id' | 'createdAt' | 'updatedAt'>
+    data: Omit<RoleplayTemplate, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
   ): Promise<RoleplayTemplate> {
     try {
       logger.debug('Creating new roleplay template', {
@@ -461,13 +464,14 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
         collection: this.collectionName,
       });
 
-      const id = this.generateId();
+      const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
+      const createdAt = options?.createdAt || now;
 
       const template: RoleplayTemplate = {
         ...data,
         id,
-        createdAt: now,
+        createdAt,
         updatedAt: now,
       };
 

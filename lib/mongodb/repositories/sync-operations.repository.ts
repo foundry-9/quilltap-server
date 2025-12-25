@@ -603,6 +603,34 @@ export class SyncOperationsRepository {
   }
 
   /**
+   * Delete all sync operations for a specific user
+   */
+  async deleteByUserId(userId: string): Promise<number> {
+    const collection = await this.getCollection();
+
+    logger.debug('Deleting all sync operations for user', {
+      userId,
+    });
+
+    try {
+      const result = await collection.deleteMany({ userId });
+
+      logger.info('Sync operations deleted for user', {
+        userId,
+        deletedCount: result.deletedCount,
+      });
+
+      return result.deletedCount;
+    } catch (error) {
+      logger.error('Error deleting sync operations for user', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Delete old sync operations (for cleanup)
    */
   async deleteOlderThan(olderThan: Date): Promise<number> {

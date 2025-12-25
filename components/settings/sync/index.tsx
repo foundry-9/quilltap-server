@@ -13,8 +13,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { SyncFormData, SyncInstanceDisplay, INITIAL_FORM_DATA } from './types'
-import { useSyncInstances, useSyncOperations, useSyncTrigger, useSyncApiKeys } from './hooks'
-import { InstanceList, InstanceForm, SyncHistoryPanel, ApiKeyPanel } from './components'
+import { useSyncInstances, useSyncOperations, useSyncTrigger, useSyncApiKeys, useSyncCleanup } from './hooks'
+import { InstanceList, InstanceForm, SyncHistoryPanel, ApiKeyPanel, CleanupPanel } from './components'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 
@@ -32,6 +32,7 @@ export default function SyncTab() {
   const operations = useSyncOperations()
   const syncTrigger = useSyncTrigger()
   const apiKeys = useSyncApiKeys()
+  const cleanup = useSyncCleanup()
 
   // Fetch data on mount
   // Using a ref to track mount state prevents race conditions during initial navigation
@@ -199,6 +200,17 @@ export default function SyncTab() {
         onDeleteKey={apiKeys.deleteKey}
         onDeleteConfirmToggle={apiKeys.setDeleteConfirm}
         onClearNewKey={apiKeys.clearNewlyCreatedKey}
+      />
+
+      {/* Cleanup Panel - for resetting sync state */}
+      <CleanupPanel
+        showConfirm={cleanup.showConfirm}
+        lastResult={cleanup.lastResult}
+        isLoading={cleanup.cleanupOp.loading}
+        error={cleanup.cleanupOp.error}
+        onShowConfirm={cleanup.setShowConfirm}
+        onCleanup={cleanup.executeCleanup}
+        onClearResult={cleanup.clearResult}
       />
 
       {/* Error alerts */}

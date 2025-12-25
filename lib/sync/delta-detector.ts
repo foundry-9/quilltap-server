@@ -59,6 +59,7 @@ async function getEntityDeltas(
             deltas.push({
               entityType: 'CHARACTER',
               id: char.id,
+              createdAt: char.createdAt,
               updatedAt: char.updatedAt,
               isDeleted: false,
               data: char as unknown as Record<string, unknown>,
@@ -76,6 +77,7 @@ async function getEntityDeltas(
             deltas.push({
               entityType: 'PERSONA',
               id: persona.id,
+              createdAt: persona.createdAt,
               updatedAt: persona.updatedAt,
               isDeleted: false,
               data: persona as unknown as Record<string, unknown>,
@@ -98,6 +100,7 @@ async function getEntityDeltas(
               deltas.push({
                 entityType: 'CHAT',
                 id: chat.id,
+                createdAt: chat.createdAt,
                 updatedAt: chat.updatedAt,
                 isDeleted: false,
                 data: {
@@ -127,6 +130,7 @@ async function getEntityDeltas(
               deltas.push({
                 entityType: 'MEMORY',
                 id: memory.id,
+                createdAt: memory.createdAt,
                 updatedAt: memory.updatedAt,
                 isDeleted: false,
                 data: memory as unknown as Record<string, unknown>,
@@ -146,6 +150,7 @@ async function getEntityDeltas(
             deltas.push({
               entityType: 'TAG',
               id: tag.id,
+              createdAt: tag.createdAt,
               updatedAt: tag.updatedAt,
               isDeleted: false,
               data: tag as unknown as Record<string, unknown>,
@@ -208,6 +213,7 @@ async function getEntityDeltas(
             deltas.push({
               entityType: 'FILE',
               id: file.id,
+              createdAt: file.createdAt,
               updatedAt: file.updatedAt,
               isDeleted: false,
               data: fileData,
@@ -225,6 +231,7 @@ async function getEntityDeltas(
             deltas.push({
               entityType: 'ROLEPLAY_TEMPLATE',
               id: template.id,
+              createdAt: template.createdAt,
               updatedAt: template.updatedAt,
               isDeleted: false,
               data: template as unknown as Record<string, unknown>,
@@ -242,6 +249,7 @@ async function getEntityDeltas(
             deltas.push({
               entityType: 'PROMPT_TEMPLATE',
               id: prompt.id,
+              createdAt: prompt.createdAt,
               updatedAt: prompt.updatedAt,
               isDeleted: false,
               data: prompt as unknown as Record<string, unknown>,

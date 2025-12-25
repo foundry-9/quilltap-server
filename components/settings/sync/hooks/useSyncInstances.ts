@@ -40,6 +40,12 @@ export function useSyncInstances() {
     clientLogger.debug('Fetching sync instances')
     const result = await fetchOp.execute(async () => {
       const response = await fetchJson<{ instances: SyncInstanceDisplay[] }>('/api/sync/instances')
+      clientLogger.debug('Sync instances response', {
+        ok: response.ok,
+        status: response.status,
+        hasData: !!response.data,
+        error: response.error || undefined,
+      })
       if (!response.ok) {
         throw new Error(response.error || 'Failed to fetch sync instances')
       }

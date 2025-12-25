@@ -62,15 +62,22 @@ export function useAsyncOperation<T>(): UseAsyncOperationResult<T> {
         const errorMessage = getErrorMessage(err, 'Operation failed');
         const errorType = err instanceof Error ? 'Error' : typeof err;
         const errorName = err instanceof Error ? err.name : 'Unknown';
+        const stackTrace = err instanceof Error && err.stack
+          ? err.stack.split('\n').slice(0, 3).join('\n')
+          : undefined;
 
-        // Log with explicit non-undefined values to ensure proper capture
-        clientLogger.error('Async operation failed', {
-          errorMessage,
-          errorType,
-          errorName,
-          // Include stack trace for Error instances
-          ...(err instanceof Error && err.stack ? { stack: err.stack.split('\n').slice(0, 3).join('\n') } : {}),
-        });
+        // Build error details object with only defined values
+        const errorDetails: Record<string, string> = {
+          message: errorMessage,
+          type: errorType,
+          name: errorName,
+        };
+        if (stackTrace) {
+          errorDetails.stack = stackTrace;
+        }
+
+        // Log with explicit values to ensure proper capture in console
+        clientLogger.error('Async operation failed', errorDetails);
 
         setErrorState(errorMessage);
         setLoading(false);

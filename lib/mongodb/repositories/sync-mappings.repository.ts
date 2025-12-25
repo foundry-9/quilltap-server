@@ -613,6 +613,34 @@ export class SyncMappingsRepository {
   }
 
   /**
+   * Delete all mappings for a specific user
+   */
+  async deleteByUserId(userId: string): Promise<number> {
+    const collection = await this.getCollection();
+
+    logger.debug('Deleting all sync mappings for user', {
+      userId,
+    });
+
+    try {
+      const result = await collection.deleteMany({ userId });
+
+      logger.info('Sync mappings deleted for user', {
+        userId,
+        deletedCount: result.deletedCount,
+      });
+
+      return result.deletedCount;
+    } catch (error) {
+      logger.error('Error deleting sync mappings for user', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Delete mapping by local entity ID
    */
   async deleteByLocalId(

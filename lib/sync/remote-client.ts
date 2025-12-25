@@ -238,23 +238,22 @@ export async function fetchRemoteDeltas(
 }
 
 /**
- * Push local deltas to remote instance
+ * Push local deltas to remote instance.
+ * With ID preservation, deltas contain their original IDs that work across instances.
  */
 export async function pushToRemote(
   instance: SyncInstance,
-  deltas: SyncEntityDelta[],
-  mappings: Array<{ localId: string; remoteId?: string; entityType: string }>
+  deltas: SyncEntityDelta[]
 ): Promise<SyncPushResponse> {
   logger.info('Pushing deltas to remote', {
     context: 'sync:remote-client',
     instanceId: instance.id,
     deltaCount: deltas.length,
-    mappingCount: mappings.length,
   });
 
-  const request: SyncPushRequest = {
+  // With ID preservation, just send deltas - no mappings needed
+  const request = {
     deltas,
-    mappings: mappings as SyncPushRequest['mappings'],
   };
 
   const response = await makeRemoteRequest<SyncPushResponse>(
@@ -269,7 +268,6 @@ export async function pushToRemote(
     context: 'sync:remote-client',
     instanceId: instance.id,
     success: response.success,
-    mappingUpdates: response.mappingUpdates.length,
     conflicts: response.conflicts.length,
     errors: response.errors.length,
   });

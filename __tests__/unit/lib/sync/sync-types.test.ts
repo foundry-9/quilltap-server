@@ -366,6 +366,7 @@ describe('Sync System Zod Schemas', () => {
         {
           entityType: 'CHARACTER',
           id: '550e8400-e29b-41d4-a716-446655440001',
+          createdAt: '2025-01-01T10:00:00.000Z',
           updatedAt: '2025-01-01T11:00:00.000Z',
           isDeleted: false,
           data: { name: 'Test Character', description: 'A test' },
@@ -442,6 +443,7 @@ describe('Sync System Zod Schemas', () => {
           {
             entityType: 'CHARACTER',
             id: '550e8400-e29b-41d4-a716-446655440001',
+            createdAt: '2025-01-01T10:00:00.000Z',
             updatedAt: '2025-01-01T11:00:00.000Z',
             isDeleted: false,
             data: { name: 'Character 1' },
@@ -449,6 +451,7 @@ describe('Sync System Zod Schemas', () => {
           {
             entityType: 'PERSONA',
             id: '550e8400-e29b-41d4-a716-446655440002',
+            createdAt: '2025-01-01T10:30:00.000Z',
             updatedAt: '2025-01-01T11:30:00.000Z',
             isDeleted: false,
             data: { name: 'Persona 1' },
@@ -468,6 +471,7 @@ describe('Sync System Zod Schemas', () => {
     const validEntityDelta = {
       entityType: 'CHARACTER',
       id: '550e8400-e29b-41d4-a716-446655440000',
+      createdAt: '2025-01-01T10:00:00.000Z',
       updatedAt: '2025-01-01T12:00:00.000Z',
       isDeleted: false,
       data: {
@@ -489,6 +493,7 @@ describe('Sync System Zod Schemas', () => {
       const valid = {
         entityType: 'CHARACTER',
         id: '550e8400-e29b-41d4-a716-446655440000',
+        createdAt: '2025-01-01T10:00:00.000Z',
         updatedAt: '2025-01-01T12:00:00.000Z',
         isDeleted: true,
         data: null,
@@ -759,6 +764,7 @@ describe('Sync System Zod Schemas', () => {
           {
             entityType: 'CHARACTER',
             id: '550e8400-e29b-41d4-a716-446655440001',
+            createdAt: '2025-01-01T10:00:00.000Z',
             updatedAt: '2025-01-01T11:00:00.000Z',
             isDeleted: false,
             data: { name: 'Character' },
@@ -766,6 +772,7 @@ describe('Sync System Zod Schemas', () => {
           {
             entityType: 'PERSONA',
             id: '550e8400-e29b-41d4-a716-446655440002',
+            createdAt: '2025-01-01T10:30:00.000Z',
             updatedAt: '2025-01-01T11:30:00.000Z',
             isDeleted: false,
             data: { name: 'Persona' },
@@ -773,6 +780,7 @@ describe('Sync System Zod Schemas', () => {
           {
             entityType: 'CHAT',
             id: '550e8400-e29b-41d4-a716-446655440003',
+            createdAt: '2025-01-01T10:45:00.000Z',
             updatedAt: '2025-01-01T11:45:00.000Z',
             isDeleted: true,
             data: null,
@@ -789,6 +797,7 @@ describe('Sync System Zod Schemas', () => {
       const entityDelta = {
         entityType: 'CHARACTER',
         id: '550e8400-e29b-41d4-a716-446655440000',
+        createdAt: new Date('2025-01-01T10:00:00.000Z'),
         updatedAt: new Date('2025-01-01T12:00:00.000Z'),
         isDeleted: false,
         data: { name: 'Test' },
@@ -807,6 +816,7 @@ describe('Sync System Zod Schemas', () => {
       const entityDelta = {
         entityType: 'CHARACTER',
         id: '550e8400-e29b-41d4-a716-446655440000',
+        createdAt: '2025-01-01T10:00:00.000Z',
         updatedAt: '2025-01-01T12:00:00.000Z',
         isDeleted: false,
         data: { name: 'Test' },

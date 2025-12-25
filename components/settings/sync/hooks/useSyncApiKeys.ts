@@ -27,6 +27,12 @@ export function useSyncApiKeys() {
     clientLogger.debug('Fetching sync API keys')
     const result = await fetchOp.execute(async () => {
       const response = await fetchJson<{ keys: SyncApiKeyDisplay[] }>('/api/sync/api-keys')
+      clientLogger.debug('Sync API keys response', {
+        ok: response.ok,
+        status: response.status,
+        hasData: !!response.data,
+        error: response.error || undefined,
+      })
       if (!response.ok) {
         throw new Error(response.error || 'Failed to fetch sync API keys')
       }

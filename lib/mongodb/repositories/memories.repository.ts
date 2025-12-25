@@ -6,7 +6,7 @@
  */
 
 import { Memory, MemorySchema } from '@/lib/schemas/types';
-import { MongoBaseRepository } from './base.repository';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
 
 export class MemoriesRepository extends MongoBaseRepository<Memory> {
@@ -377,18 +377,23 @@ export class MemoriesRepository extends MongoBaseRepository<Memory> {
   /**
    * Create a new memory
    * @param data The memory data (without id, createdAt, updatedAt)
+   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
    * @returns Promise<Memory> The created memory with generated id and timestamps
    */
-  async create(data: Omit<Memory, 'id' | 'createdAt' | 'updatedAt'>): Promise<Memory> {
+  async create(
+    data: Omit<Memory, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
+  ): Promise<Memory> {
     logger.debug('Creating new memory', { characterId: data.characterId });
     try {
-      const id = this.generateId();
+      const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
+      const createdAt = options?.createdAt || now;
 
       const memory: Memory = {
         ...data,
         id,
-        createdAt: now,
+        createdAt,
         updatedAt: now,
       };
 

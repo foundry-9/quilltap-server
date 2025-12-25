@@ -261,6 +261,7 @@ export type SyncDeltaRequest = z.infer<typeof SyncDeltaRequestSchema>;
 export const SyncEntityDeltaSchema = z.object({
   entityType: SyncableEntityTypeEnum,
   id: UUIDSchema,
+  createdAt: TimestampSchema, // Original creation timestamp (for ID preservation)
   updatedAt: TimestampSchema,
   isDeleted: z.boolean().default(false),
   // Full entity data (null if deleted)

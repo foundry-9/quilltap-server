@@ -24,10 +24,10 @@ import { getAuthenticatedUserForSync } from '@/lib/sync/api-key-auth';
  * POST /api/sync/push
  *
  * Receive and apply entities from a remote instance.
+ * With ID preservation, entities keep their original IDs across instances.
  *
  * Request body:
- * - deltas: SyncEntityDelta[] - Entities to apply
- * - mappings: Array<{ localId, remoteId?, entityType }> - ID mappings
+ * - deltas: SyncEntityDelta[] - Entities to apply (with original IDs)
  */
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
@@ -58,8 +58,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    // Validate request
-    const parseResult = SyncPushRequestSchema.safeParse(body);
+    // Validate request - just need deltas array
+    const parseResult = z.object({
+      deltas: z.array(z.object({
+        entityType: z.string(),
+        id: z.string(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+        isDeleted: z.boolean().default(false),
+        data: z.record(z.unknown()).nullable().optional(),
+      })),
+    }).safeParse(body);
+
     if (!parseResult.success) {
       logger.warn('Sync push received invalid request', {
         context: 'api:sync:push',
@@ -72,7 +82,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { deltas, mappings } = parseResult.data;
+    const { deltas } = parseResult.data;
 
     // Get remote instance ID from header (identifies who is pushing to us)
     const remoteInstanceId = req.headers.get('X-Sync-Instance-Id') || 'unknown-remote';
@@ -83,27 +93,19 @@ export async function POST(req: NextRequest) {
       authMethod: authResult.authMethod,
       remoteInstanceId,
       deltaCount: deltas.length,
-      mappingCount: mappings.length,
     });
 
     // Start a sync operation to record this push (from our perspective, we're receiving/pulling)
     const operation = await startSyncOperation(userId, remoteInstanceId, 'PULL');
 
     try {
-      // Process the incoming deltas
-      const result = await processRemoteDeltas(userId, remoteInstanceId, deltas);
+      // Process the incoming deltas - entities keep their original IDs
+      const result = await processRemoteDeltas(userId, remoteInstanceId, deltas as any);
 
-      // Build mapping updates to return
-      // These tell the remote instance what local IDs were created for their entities
-      const mappingUpdates = result.newMappings.map((m) => ({
-        localId: m.remoteId, // From remote's perspective, their localId is our remoteId
-        remoteId: m.localId, // Our localId becomes their remoteId
-        entityType: m.entityType,
-      }));
-
+      // With ID preservation, no mapping updates needed
       const response: SyncPushResponse = {
         success: result.errors.length === 0,
-        mappingUpdates,
+        mappingUpdates: [], // Deprecated - kept for backwards compatibility
         conflicts: result.conflicts,
         errors: result.errors,
       };
@@ -126,7 +128,6 @@ export async function POST(req: NextRequest) {
         applied: result.applied,
         conflictCount: result.conflicts.length,
         errorCount: result.errors.length,
-        newMappingCount: result.newMappings.length,
         durationMs: duration,
       });
 

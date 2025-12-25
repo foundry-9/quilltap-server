@@ -9,350 +9,50 @@
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/mongodb/repositories';
 import {
-  SyncInstance,
-  SyncMapping,
   SyncOperation,
   SyncEntityDelta,
   SyncConflict,
   SyncableEntityType,
-  SyncResult,
-  SyncDeltaResponse,
-  SyncPushResponse,
-  CreateSyncMapping,
 } from './types';
 import { checkVersionCompatibility, getLocalVersionInfo } from './version-checker';
-import { resolveConflictWithRecord, needsSync } from './conflict-resolver';
+import { resolveConflictWithRecord } from './conflict-resolver';
 import { detectDeltas } from './delta-detector';
 import { s3FileService } from '@/lib/s3/file-service';
 import { ChatEvent } from '@/lib/schemas/types';
 
 /**
- * Helper to look up the local ID for a remote ID using sync mappings.
- * Returns null if no mapping exists (entity not yet synced).
- */
-async function lookupLocalId(
-  userId: string,
-  instanceId: string,
-  entityType: SyncableEntityType,
-  remoteId: string | null | undefined
-): Promise<string | null> {
-  if (!remoteId) return null;
-
-  const repos = getRepositories();
-  const mapping = await repos.syncMappings.findByRemoteId(userId, instanceId, entityType, remoteId);
-  return mapping?.localId ?? null;
-}
-
-/**
- * Remap all entity ID references in delta data from remote IDs to local IDs.
- * This is critical for maintaining entity relationships across sync.
- *
- * For each entity type, we identify fields that reference other entities
- * and look up their local IDs via sync mappings.
- */
-async function remapEntityReferences(
-  userId: string,
-  instanceId: string,
-  entityType: SyncableEntityType,
-  data: Record<string, unknown>
-): Promise<Record<string, unknown>> {
-  const remapped = { ...data };
-
-  logger.debug('Remapping entity references', {
-    context: 'sync:sync-service',
-    entityType,
-    userId,
-    instanceId,
-  });
-
-  // Helper to remap an array of IDs
-  const remapIdArray = async (
-    arr: unknown[] | undefined,
-    refType: SyncableEntityType
-  ): Promise<string[]> => {
-    if (!arr || !Array.isArray(arr)) return [];
-    const result: string[] = [];
-    for (const id of arr) {
-      if (typeof id === 'string') {
-        const localId = await lookupLocalId(userId, instanceId, refType, id);
-        if (localId) {
-          result.push(localId);
-        } else {
-          logger.debug('No mapping found for referenced ID, skipping', {
-            context: 'sync:sync-service',
-            refType,
-            remoteId: id,
-          });
-        }
-      }
-    }
-    return result;
-  };
-
-  // Helper to remap a single ID
-  const remapSingleId = async (
-    id: unknown,
-    refType: SyncableEntityType
-  ): Promise<string | null> => {
-    if (typeof id !== 'string') return null;
-    const localId = await lookupLocalId(userId, instanceId, refType, id);
-    if (!localId) {
-      logger.debug('No mapping found for referenced ID, nulling', {
-        context: 'sync:sync-service',
-        refType,
-        remoteId: id,
-      });
-    }
-    return localId;
-  };
-
-  switch (entityType) {
-    case 'CHARACTER': {
-      // Remap tags
-      if (Array.isArray(remapped.tags)) {
-        remapped.tags = await remapIdArray(remapped.tags as unknown[], 'TAG');
-      }
-      // Remap personaLinks[].personaId
-      if (Array.isArray(remapped.personaLinks)) {
-        const personaLinks = remapped.personaLinks as Array<{ personaId?: string; [key: string]: unknown }>;
-        remapped.personaLinks = await Promise.all(
-          personaLinks.map(async (link) => ({
-            ...link,
-            personaId: link.personaId
-              ? (await remapSingleId(link.personaId, 'PERSONA')) ?? undefined
-              : undefined,
-          }))
-        );
-      }
-      // Remap defaultImageId
-      if (remapped.defaultImageId) {
-        remapped.defaultImageId = await remapSingleId(remapped.defaultImageId, 'FILE');
-      }
-      break;
-    }
-
-    case 'PERSONA': {
-      // Remap tags
-      if (Array.isArray(remapped.tags)) {
-        remapped.tags = await remapIdArray(remapped.tags as unknown[], 'TAG');
-      }
-      break;
-    }
-
-    case 'CHAT': {
-      // Remap tags
-      if (Array.isArray(remapped.tags)) {
-        remapped.tags = await remapIdArray(remapped.tags as unknown[], 'TAG');
-      }
-      // Remap roleplayTemplateId
-      if (remapped.roleplayTemplateId) {
-        remapped.roleplayTemplateId = await remapSingleId(remapped.roleplayTemplateId, 'ROLEPLAY_TEMPLATE');
-      }
-      // Remap participants[].characterId and participants[].personaId
-      if (Array.isArray(remapped.participants)) {
-        const participants = remapped.participants as Array<{
-          id?: string;
-          type?: string;
-          characterId?: string;
-          personaId?: string;
-          [key: string]: unknown;
-        }>;
-
-        // Build a map of old participant IDs to new participant IDs
-        // (participants get new IDs when the chat is created locally)
-        const oldToNewParticipantId = new Map<string, string>();
-
-        remapped.participants = await Promise.all(
-          participants.map(async (participant) => {
-            const newParticipant = { ...participant };
-
-            if (participant.type === 'CHARACTER' && participant.characterId) {
-              newParticipant.characterId =
-                (await remapSingleId(participant.characterId, 'CHARACTER')) ?? undefined;
-            }
-            if (participant.type === 'PERSONA' && participant.personaId) {
-              newParticipant.personaId =
-                (await remapSingleId(participant.personaId, 'PERSONA')) ?? undefined;
-            }
-
-            // Track participant ID mapping for message remapping
-            if (participant.id) {
-              const newId = crypto.randomUUID();
-              oldToNewParticipantId.set(participant.id, newId);
-              newParticipant.id = newId;
-            }
-
-            return newParticipant;
-          })
-        );
-
-        // Store the participant ID mapping for message remapping
-        (remapped as any)._participantIdMap = Object.fromEntries(oldToNewParticipantId);
-      }
-
-      // Remap messages[].participantId and messages[].attachments[]
-      if (Array.isArray(remapped.messages)) {
-        const messages = remapped.messages as Array<{
-          participantId?: string;
-          attachments?: string[];
-          [key: string]: unknown;
-        }>;
-        const participantIdMap = (remapped as any)._participantIdMap as Record<string, string> | undefined;
-
-        remapped.messages = await Promise.all(
-          messages.map(async (message) => {
-            const newMessage = { ...message };
-
-            // Remap participantId using the participant ID map we built
-            if (message.participantId && participantIdMap && participantIdMap[message.participantId]) {
-              newMessage.participantId = participantIdMap[message.participantId];
-            }
-
-            // Remap attachments (file IDs)
-            if (Array.isArray(message.attachments)) {
-              newMessage.attachments = await remapIdArray(message.attachments, 'FILE');
-            }
-
-            return newMessage;
-          })
-        );
-
-        // Clean up the temporary mapping
-        delete (remapped as any)._participantIdMap;
-      }
-      break;
-    }
-
-    case 'MEMORY': {
-      // Remap characterId (required)
-      if (remapped.characterId) {
-        remapped.characterId = await remapSingleId(remapped.characterId, 'CHARACTER');
-      }
-      // Remap personaId (optional)
-      if (remapped.personaId) {
-        remapped.personaId = await remapSingleId(remapped.personaId, 'PERSONA');
-      }
-      // Remap aboutCharacterId (optional - for inter-character memories)
-      if (remapped.aboutCharacterId) {
-        remapped.aboutCharacterId = await remapSingleId(remapped.aboutCharacterId, 'CHARACTER');
-      }
-      // Remap chatId (optional)
-      if (remapped.chatId) {
-        remapped.chatId = await remapSingleId(remapped.chatId, 'CHAT');
-      }
-      // Remap tags
-      if (Array.isArray(remapped.tags)) {
-        remapped.tags = await remapIdArray(remapped.tags as unknown[], 'TAG');
-      }
-      break;
-    }
-
-    case 'FILE': {
-      // Remap linkedTo[] (entity IDs this file is linked to)
-      if (Array.isArray(remapped.linkedTo)) {
-        // linkedTo can reference any entity type, so we need to try each type
-        const linkedTo = remapped.linkedTo as string[];
-        const remappedLinkedTo: string[] = [];
-
-        for (const id of linkedTo) {
-          // Try each entity type until we find a mapping
-          let localId: string | null = null;
-          for (const type of [
-            'CHARACTER',
-            'PERSONA',
-            'CHAT',
-            'MEMORY',
-          ] as SyncableEntityType[]) {
-            localId = await lookupLocalId(userId, instanceId, type, id);
-            if (localId) break;
-          }
-          if (localId) {
-            remappedLinkedTo.push(localId);
-          } else {
-            logger.debug('No mapping found for linkedTo ID, skipping', {
-              context: 'sync:sync-service',
-              remoteId: id,
-            });
-          }
-        }
-        remapped.linkedTo = remappedLinkedTo;
-      }
-      // Remap tags
-      if (Array.isArray(remapped.tags)) {
-        remapped.tags = await remapIdArray(remapped.tags as unknown[], 'TAG');
-      }
-      break;
-    }
-
-    case 'ROLEPLAY_TEMPLATE':
-    case 'PROMPT_TEMPLATE': {
-      // Remap tags
-      if (Array.isArray(remapped.tags)) {
-        remapped.tags = await remapIdArray(remapped.tags as unknown[], 'TAG');
-      }
-      break;
-    }
-
-    case 'TAG':
-      // Tags don't reference other entities
-      break;
-  }
-
-  logger.debug('Completed remapping entity references', {
-    context: 'sync:sync-service',
-    entityType,
-  });
-
-  return remapped;
-}
-
-/**
  * Apply a remote delta to the local database.
- * Creates or updates the entity based on conflict resolution.
+ * Uses the remote entity ID directly (no mapping needed).
+ * Creates or updates the entity based on whether it exists locally.
  */
 export async function applyRemoteDelta(
   userId: string,
   instanceId: string,
-  delta: SyncEntityDelta,
-  existingMapping: SyncMapping | null
+  delta: SyncEntityDelta
 ): Promise<{
   success: boolean;
   conflict?: SyncConflict;
-  newMapping?: CreateSyncMapping;
   error?: string;
+  isNewEntity?: boolean;
 }> {
-  const repos = getRepositories();
-
   logger.debug('Applying remote delta', {
     context: 'sync:sync-service',
     userId,
     instanceId,
     entityType: delta.entityType,
-    remoteId: delta.id,
-    hasMapping: !!existingMapping,
+    entityId: delta.id,
   });
 
   try {
     if (delta.isDeleted) {
-      // Handle deleted entity
-      if (existingMapping) {
-        // Delete the local entity
-        await deleteLocalEntity(delta.entityType, existingMapping.localId);
-        // Remove the mapping
-        await repos.syncMappings.deleteByLocalId(
-          userId,
-          instanceId,
-          delta.entityType,
-          existingMapping.localId
-        );
+      // Handle deleted entity - use the delta.id directly since IDs are the same
+      await deleteLocalEntity(delta.entityType, delta.id);
 
-        logger.info('Applied remote deletion', {
-          context: 'sync:sync-service',
-          entityType: delta.entityType,
-          localId: existingMapping.localId,
-          remoteId: delta.id,
-        });
-      }
+      logger.info('Applied remote deletion', {
+        context: 'sync:sync-service',
+        entityType: delta.entityType,
+        entityId: delta.id,
+      });
       return { success: true };
     }
 
@@ -360,76 +60,39 @@ export async function applyRemoteDelta(
       logger.warn('Delta has no data and is not deleted', {
         context: 'sync:sync-service',
         entityType: delta.entityType,
-        remoteId: delta.id,
+        entityId: delta.id,
       });
       return { success: false, error: 'Delta has no data' };
     }
 
-    if (!existingMapping) {
-      // Remap entity references from remote IDs to local IDs
-      const remappedData = await remapEntityReferences(userId, instanceId, delta.entityType, delta.data);
+    // Check if entity already exists locally (same ID)
+    const localEntity = await getLocalEntity(delta.entityType, delta.id);
 
-      // New entity from remote - create locally with new UUID
-      const localEntity = await createLocalEntity(userId, instanceId, delta.entityType, remappedData);
-
-      if (!localEntity) {
-        return { success: false, error: 'Failed to create local entity' };
-      }
-
-      const now = new Date().toISOString();
-      const newMapping: CreateSyncMapping = {
+    if (!localEntity) {
+      // New entity - create with the remote ID (preserved)
+      const createdEntity = await createLocalEntity(
         userId,
         instanceId,
-        entityType: delta.entityType,
-        localId: localEntity.id,
-        remoteId: delta.id,
-        lastSyncedAt: now,
-        lastLocalUpdatedAt: localEntity.updatedAt,
-        lastRemoteUpdatedAt: delta.updatedAt,
-      };
+        delta.entityType,
+        delta.id,           // Use remote ID as local ID
+        delta.createdAt,    // Preserve original createdAt
+        delta.data
+      );
+
+      if (!createdEntity) {
+        return { success: false, error: 'Failed to create local entity' };
+      }
 
       logger.info('Created new local entity from remote', {
         context: 'sync:sync-service',
         entityType: delta.entityType,
-        localId: localEntity.id,
-        remoteId: delta.id,
+        entityId: delta.id,
       });
 
-      return { success: true, newMapping };
+      return { success: true, isNewEntity: true };
     }
 
-    // Existing entity - check for conflict
-    const localEntity = await getLocalEntity(delta.entityType, existingMapping.localId);
-
-    if (!localEntity) {
-      // Deleted locally but exists remotely - recreate
-      // Remap entity references from remote IDs to local IDs
-      const remappedData = await remapEntityReferences(userId, instanceId, delta.entityType, delta.data);
-      const newEntity = await createLocalEntity(userId, instanceId, delta.entityType, remappedData);
-
-      if (!newEntity) {
-        return { success: false, error: 'Failed to recreate local entity' };
-      }
-
-      // Update mapping with new local ID
-      await repos.syncMappings.update(existingMapping.id, {
-        localId: newEntity.id,
-        lastLocalUpdatedAt: newEntity.updatedAt,
-        lastRemoteUpdatedAt: delta.updatedAt,
-        lastSyncedAt: new Date().toISOString(),
-      });
-
-      logger.info('Recreated local entity from remote', {
-        context: 'sync:sync-service',
-        entityType: delta.entityType,
-        localId: newEntity.id,
-        remoteId: delta.id,
-      });
-
-      return { success: true };
-    }
-
-    // Both exist - resolve conflict
+    // Entity exists - check for conflict using timestamps
     const { resolution, conflict } = resolveConflictWithRecord(
       delta.entityType,
       { id: localEntity.id, updatedAt: localEntity.updatedAt },
@@ -438,39 +101,28 @@ export async function applyRemoteDelta(
     );
 
     if (resolution === 'REMOTE_WINS') {
-      // Remap entity references from remote IDs to local IDs
-      const remappedData = await remapEntityReferences(userId, instanceId, delta.entityType, delta.data);
       // Update local entity with remote data
-      await updateLocalEntity(delta.entityType, existingMapping.localId, remappedData);
+      await updateLocalEntity(delta.entityType, delta.id, delta.data);
 
       logger.info('Updated local entity from remote (REMOTE_WINS)', {
         context: 'sync:sync-service',
         entityType: delta.entityType,
-        localId: existingMapping.localId,
-        remoteId: delta.id,
+        entityId: delta.id,
       });
     } else {
       logger.info('Kept local entity (LOCAL_WINS)', {
         context: 'sync:sync-service',
         entityType: delta.entityType,
-        localId: existingMapping.localId,
-        remoteId: delta.id,
+        entityId: delta.id,
       });
     }
-
-    // Update mapping timestamps
-    await repos.syncMappings.updateSyncTimestamps(
-      existingMapping.id,
-      localEntity.updatedAt,
-      delta.updatedAt
-    );
 
     return { success: true, conflict };
   } catch (error) {
     logger.error('Error applying remote delta', {
       context: 'sync:sync-service',
       entityType: delta.entityType,
-      remoteId: delta.id,
+      entityId: delta.id,
       error: error instanceof Error ? error.message : String(error),
     });
     return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -509,17 +161,20 @@ async function getLocalEntity(
 }
 
 /**
- * Create a local entity from remote data
+ * Create a local entity from remote data.
+ * Uses the original remote ID and createdAt to maintain consistency across instances.
  */
 async function createLocalEntity(
   userId: string,
   instanceId: string,
   entityType: SyncableEntityType,
+  entityId: string,        // Original ID from remote - use this as local ID
+  entityCreatedAt: string, // Original createdAt from remote - preserve it
   data: Record<string, unknown>
 ): Promise<{ id: string; updatedAt: string } | null> {
   const repos = getRepositories();
 
-  // Remove fields that will be regenerated
+  // Remove timestamp fields from data (we'll provide them via CreateOptions)
   const {
     id: _remoteId,
     createdAt: _createdAt,
@@ -534,14 +189,17 @@ async function createLocalEntity(
   // Ensure userId is set to local user
   const createData = { ...entityData, userId };
 
+  // CreateOptions to preserve original ID and createdAt
+  const createOptions = { id: entityId, createdAt: entityCreatedAt };
+
   try {
     switch (entityType) {
       case 'TAG':
-        return repos.tags.create(createData as any);
+        return repos.tags.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
 
       case 'FILE': {
-        // Create file entry in database
-        const fileEntry = await repos.files.create(createData as any);
+        // Create or update file entry in database
+        const fileEntry = await repos.files.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
 
         // If file content was provided inline (base64), save it to storage
         if (fileContent && typeof fileContent === 'string') {
@@ -581,20 +239,20 @@ async function createLocalEntity(
       }
 
       case 'PERSONA':
-        return repos.personas.create(createData as any);
+        return repos.personas.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
 
       case 'CHARACTER':
-        return repos.characters.create(createData as any);
+        return repos.characters.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
 
       case 'ROLEPLAY_TEMPLATE':
-        return repos.roleplayTemplates.create(createData as any);
+        return repos.roleplayTemplates.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
 
       case 'PROMPT_TEMPLATE':
-        return repos.promptTemplates.create(createData as any);
+        return repos.promptTemplates.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
 
       case 'CHAT': {
-        // Create chat metadata (without messages - that's done by repos.chats.create)
-        const chatEntry = await repos.chats.create(createData as any);
+        // Create or update chat metadata
+        const chatEntry = await repos.chats.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
 
         // Add messages if provided
         if (Array.isArray(messagesData) && messagesData.length > 0) {
@@ -610,7 +268,7 @@ async function createLocalEntity(
       }
 
       case 'MEMORY':
-        return repos.memories.create(createData as any);
+        return repos.memories.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
 
       default:
         return null;
@@ -619,6 +277,7 @@ async function createLocalEntity(
     logger.error('Error creating local entity', {
       context: 'sync:sync-service',
       entityType,
+      entityId,
       error: error instanceof Error ? error.message : String(error),
     });
     return null;
@@ -801,16 +460,17 @@ async function deleteLocalEntity(entityType: SyncableEntityType, id: string): Pr
 }
 
 /**
- * Information about a file that needs content fetched separately
+ * Information about a file that needs content fetched separately.
+ * Note: With the new ID-preservation approach, remoteId === localId (same entity ID).
  */
 export interface FileNeedingContent {
-  remoteId: string;
-  localId: string;
+  /** The file entity ID (same on both sides now) */
+  fileId: string;
 }
 
 /**
  * Process incoming deltas from a remote instance.
- * Applies each delta and tracks conflicts.
+ * Uses the original entity IDs directly (no mapping needed).
  */
 export async function processRemoteDeltas(
   userId: string,
@@ -820,14 +480,11 @@ export async function processRemoteDeltas(
   applied: number;
   conflicts: SyncConflict[];
   errors: string[];
-  newMappings: CreateSyncMapping[];
   filesNeedingContent: FileNeedingContent[];
 }> {
-  const repos = getRepositories();
   let applied = 0;
   const conflicts: SyncConflict[] = [];
   const errors: string[] = [];
-  const newMappings: CreateSyncMapping[] = [];
   const filesNeedingContent: FileNeedingContent[] = [];
 
   logger.info('Processing remote deltas', {
@@ -838,43 +495,27 @@ export async function processRemoteDeltas(
   });
 
   for (const delta of deltas) {
-    // Find existing mapping for this remote entity
-    const existingMapping = await repos.syncMappings.findByRemoteId(
-      userId,
-      instanceId,
-      delta.entityType,
-      delta.id
-    );
-
-    const result = await applyRemoteDelta(userId, instanceId, delta, existingMapping);
+    const result = await applyRemoteDelta(userId, instanceId, delta);
 
     if (result.success) {
       applied++;
       if (result.conflict) {
         conflicts.push(result.conflict);
       }
-      if (result.newMapping) {
-        newMappings.push(result.newMapping);
 
-        // Track FILE deltas that need content fetched
-        if (
-          delta.entityType === 'FILE' &&
-          delta.data?.requiresContentFetch === true
-        ) {
-          filesNeedingContent.push({
-            remoteId: delta.id,
-            localId: result.newMapping.localId,
-          });
-        }
+      // Track FILE deltas that need content fetched
+      if (
+        delta.entityType === 'FILE' &&
+        delta.data?.requiresContentFetch === true &&
+        result.isNewEntity
+      ) {
+        filesNeedingContent.push({
+          fileId: delta.id,
+        });
       }
     } else if (result.error) {
       errors.push(`${delta.entityType}:${delta.id}: ${result.error}`);
     }
-  }
-
-  // Create new mappings
-  for (const mapping of newMappings) {
-    await repos.syncMappings.create(mapping);
   }
 
   logger.info('Finished processing remote deltas', {
@@ -884,16 +525,15 @@ export async function processRemoteDeltas(
     applied,
     conflictCount: conflicts.length,
     errorCount: errors.length,
-    newMappingCount: newMappings.length,
     filesNeedingContent: filesNeedingContent.length,
   });
 
-  return { applied, conflicts, errors, newMappings, filesNeedingContent };
+  return { applied, conflicts, errors, filesNeedingContent };
 }
 
 /**
  * Prepare local deltas for pushing to a remote instance.
- * Converts local IDs to remote IDs using mappings.
+ * With ID preservation, no mapping is needed - IDs are the same everywhere.
  */
 export async function prepareLocalDeltasForPush(
   userId: string,
@@ -901,10 +541,7 @@ export async function prepareLocalDeltasForPush(
   sinceTimestamp: string | null
 ): Promise<{
   deltas: SyncEntityDelta[];
-  mappings: Array<{ localId: string; remoteId?: string; entityType: SyncableEntityType }>;
 }> {
-  const repos = getRepositories();
-
   logger.info('Preparing local deltas for push', {
     context: 'sync:sync-service',
     userId,
@@ -919,36 +556,15 @@ export async function prepareLocalDeltasForPush(
     limit: 1000, // Reasonable batch size
   });
 
-  const mappings: Array<{ localId: string; remoteId?: string; entityType: SyncableEntityType }> = [];
-
-  // For each delta, check if we have a mapping
-  for (const delta of detectionResult.deltas) {
-    const existingMapping = await repos.syncMappings.findByLocalId(
-      userId,
-      instanceId,
-      delta.entityType,
-      delta.id
-    );
-
-    mappings.push({
-      localId: delta.id,
-      remoteId: existingMapping?.remoteId,
-      entityType: delta.entityType,
-    });
-  }
-
   logger.info('Prepared local deltas for push', {
     context: 'sync:sync-service',
     userId,
     instanceId,
     deltaCount: detectionResult.deltas.length,
-    withMappings: mappings.filter((m) => m.remoteId).length,
-    withoutMappings: mappings.filter((m) => !m.remoteId).length,
   });
 
   return {
     deltas: detectionResult.deltas,
-    mappings,
   };
 }
 
@@ -1015,6 +631,63 @@ export async function completeSyncOperation(
   });
 
   return operation;
+}
+
+/**
+ * Clean sync state data for a user.
+ * This removes old sync mappings and operations, and resets instance sync timestamps.
+ * Use this after migrating to ID-preservation sync or when sync state becomes corrupted.
+ * After calling this, user should do a Force Full Sync to re-establish data.
+ */
+export async function cleanSyncData(userId: string): Promise<{
+  mappingsDeleted: number;
+  operationsDeleted: number;
+  instancesReset: number;
+}> {
+  const repos = getRepositories();
+
+  logger.info('Cleaning sync data for user', {
+    context: 'sync:sync-service',
+    userId,
+  });
+
+  try {
+    // Delete all sync mappings for user (deprecated with ID preservation)
+    const mappingsResult = await repos.syncMappings.deleteByUserId(userId);
+    const mappingsDeleted = mappingsResult || 0;
+
+    // Delete all sync operations for user (historical tracking)
+    const operationsResult = await repos.syncOperations.deleteByUserId(userId);
+    const operationsDeleted = operationsResult || 0;
+
+    // Reset lastSyncAt on all user's sync instances
+    const instances = await repos.syncInstances.findByUserId(userId);
+    let instancesReset = 0;
+    for (const instance of instances) {
+      await repos.syncInstances.update(instance.id, {
+        lastSyncAt: null,
+        lastSyncStatus: null,
+      });
+      instancesReset++;
+    }
+
+    logger.info('Sync data cleaned', {
+      context: 'sync:sync-service',
+      userId,
+      mappingsDeleted,
+      operationsDeleted,
+      instancesReset,
+    });
+
+    return { mappingsDeleted, operationsDeleted, instancesReset };
+  } catch (error) {
+    logger.error('Error cleaning sync data', {
+      context: 'sync:sync-service',
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 /**

@@ -200,11 +200,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         let filesFetched = 0;
         for (const fileInfo of allFilesNeedingContent) {
           try {
-            // Fetch content from remote
-            const { content, mimeType } = await fetchRemoteFileContent(instance, fileInfo.remoteId);
+            // With ID preservation, fileId is the same on both sides
+            const { content, mimeType } = await fetchRemoteFileContent(instance, fileInfo.fileId);
 
             // Get the local file entry to know how to store it
-            const localFile = await repos.files.findById(fileInfo.localId);
+            const localFile = await repos.files.findById(fileInfo.fileId);
             if (localFile) {
               // Upload content to local storage
               await s3FileService.uploadUserFile(
@@ -229,19 +229,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
               logger.debug('Fetched and stored file content', {
                 context: 'api:sync:instances:[id]:sync',
                 operationId: operation.id,
-                localFileId: fileInfo.localId,
-                remoteFileId: fileInfo.remoteId,
+                fileId: fileInfo.fileId,
                 size: content.length,
               });
             }
           } catch (error) {
-            const errorMessage = `Failed to fetch file content ${fileInfo.remoteId}: ${error instanceof Error ? error.message : String(error)}`;
+            const errorMessage = `Failed to fetch file content ${fileInfo.fileId}: ${error instanceof Error ? error.message : String(error)}`;
             allErrors.push(errorMessage);
             logger.warn('Failed to fetch file content', {
               context: 'api:sync:instances:[id]:sync',
               operationId: operation.id,
-              localFileId: fileInfo.localId,
-              remoteFileId: fileInfo.remoteId,
+              fileId: fileInfo.fileId,
               error: error instanceof Error ? error.message : String(error),
             });
           }
@@ -273,11 +271,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         // Push in batches to avoid body size limits (Next.js default is 1MB)
         const PUSH_BATCH_SIZE = 50;
         let totalPushed = 0;
-        const now = new Date().toISOString();
 
         for (let i = 0; i < localDeltas.deltas.length; i += PUSH_BATCH_SIZE) {
           const batchDeltas = localDeltas.deltas.slice(i, i + PUSH_BATCH_SIZE);
-          const batchMappings = localDeltas.mappings.slice(i, i + PUSH_BATCH_SIZE);
 
           logger.debug('Pushing batch to remote', {
             context: 'api:sync:instances:[id]:sync',
@@ -287,35 +283,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             totalDeltas: localDeltas.deltas.length,
           });
 
-          const pushResponse = await pushToRemote(instance, batchDeltas, batchMappings);
+          // With ID preservation, no mappings needed - push deltas directly
+          const pushResponse = await pushToRemote(instance, batchDeltas);
 
           totalPushed += batchDeltas.length;
           allConflicts.push(...pushResponse.conflicts);
           allErrors.push(...pushResponse.errors);
-
-          // Create mappings for new entities in this batch
-          for (const update of pushResponse.mappingUpdates) {
-            // Check if mapping already exists
-            const existingMapping = await repos.syncMappings.findByLocalId(
-              session.user.id,
-              id,
-              update.entityType,
-              update.localId
-            );
-
-            if (!existingMapping) {
-              await repos.syncMappings.create({
-                userId: session.user.id,
-                instanceId: id,
-                entityType: update.entityType,
-                localId: update.localId,
-                remoteId: update.remoteId,
-                lastSyncedAt: now,
-                lastLocalUpdatedAt: now,
-                lastRemoteUpdatedAt: now,
-              });
-            }
-          }
 
           // Stop if we encountered errors in this batch
           if (allErrors.length > 0) {
