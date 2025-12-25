@@ -4,6 +4,19 @@
 
 ### 2.5-dev
 
+- feat: Sync now includes chat messages and file attachments
+  - Chat messages are now included in CHAT entity sync (previously only metadata was synced)
+  - FILE entity type added to sync - syncs avatars, attachments, and generated images
+  - Small files (<1MB) are included inline as base64; large files are fetched separately
+  - New endpoint `GET /api/sync/files/[id]/content` for streaming large file content
+- fix: Synced entities now properly reference local IDs instead of remote IDs
+  - Added `remapEntityReferences()` to translate all ID references during sync
+  - CHAT participants now correctly reference locally-synced characters/personas
+  - MEMORY entities now correctly reference local characterId, aboutCharacterId, chatId
+  - Tags and file references are properly remapped across all entity types
+- feat: Sync entity order now enforced to ensure dependencies exist before dependents
+  - Order: TAG -> FILE -> PERSONA -> CHARACTER -> templates -> CHAT -> MEMORY
+  - Prevents broken references when syncing entities with dependencies
 - feat: Add qt-* utility classes for backgrounds, borders, and text colors
   - New `_utilities.css` with semantic utility classes for theme-aware styling
   - Background utilities: qt-bg-surface, qt-bg-surface-alt, qt-bg-card, qt-bg-muted

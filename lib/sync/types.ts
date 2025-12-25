@@ -18,6 +18,13 @@ import {
 // Re-export version constants for convenience
 export { SCHEMA_VERSION, SYNC_PROTOCOL_VERSION };
 
+/**
+ * File size threshold for inline content vs streaming.
+ * Files smaller than this are included as base64 in deltas.
+ * Files larger require a separate content fetch.
+ */
+export const FILE_CONTENT_SIZE_THRESHOLD = 1024 * 1024; // 1MB
+
 // ============================================================================
 // ENUMS
 // ============================================================================
@@ -27,13 +34,15 @@ export { SCHEMA_VERSION, SYNC_PROTOCOL_VERSION };
  * Profiles are excluded as they contain sensitive API keys.
  */
 export const SyncableEntityTypeEnum = z.enum([
-  'CHARACTER',
-  'PERSONA',
-  'CHAT',
-  'MEMORY',
-  'TAG',
-  'ROLEPLAY_TEMPLATE',
-  'PROMPT_TEMPLATE',
+  // Sync order is enforced - entities with dependencies come after their dependencies
+  'TAG', // No dependencies
+  'FILE', // Depends on TAG (for tags[])
+  'PERSONA', // Depends on TAG
+  'CHARACTER', // Depends on TAG, FILE (for defaultImageId), PERSONA (for personaLinks)
+  'ROLEPLAY_TEMPLATE', // Depends on TAG
+  'PROMPT_TEMPLATE', // Depends on TAG
+  'CHAT', // Depends on CHARACTER, PERSONA, TAG, FILE, ROLEPLAY_TEMPLATE
+  'MEMORY', // Depends on CHARACTER, PERSONA, CHAT, TAG
 ]);
 export type SyncableEntityType = z.infer<typeof SyncableEntityTypeEnum>;
 

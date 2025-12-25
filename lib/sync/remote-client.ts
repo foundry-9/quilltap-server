@@ -304,6 +304,107 @@ export async function fetchRemoteMappings(
 }
 
 /**
+ * Fetch file content from remote instance.
+ * Used for large files that couldn't be included inline in deltas.
+ */
+export async function fetchRemoteFileContent(
+  instance: SyncInstance,
+  remoteFileId: string
+): Promise<{ content: Buffer; sha256?: string; mimeType?: string }> {
+  const url = new URL(`/api/sync/files/${remoteFileId}/content`, instance.url);
+  const apiKey = await getDecryptedApiKey(instance);
+
+  logger.info('Fetching remote file content', {
+    context: 'sync:remote-client',
+    instanceId: instance.id,
+    remoteFileId,
+  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SYNC_TIMEOUT);
+
+  try {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'X-Sync-Instance-Id': instance.id,
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      let errorMessage = `Remote file request failed with status ${response.status}`;
+      try {
+        const errorBody = await response.json();
+        errorMessage = errorBody.error || errorMessage;
+      } catch {
+        // Might not be JSON
+      }
+
+      logger.warn('Remote file content request failed', {
+        context: 'sync:remote-client',
+        instanceId: instance.id,
+        remoteFileId,
+        status: response.status,
+        error: errorMessage,
+      });
+
+      throw new RemoteSyncError(errorMessage, response.status);
+    }
+
+    // Get file content as buffer
+    const arrayBuffer = await response.arrayBuffer();
+    const content = Buffer.from(arrayBuffer);
+
+    // Extract metadata from headers
+    const sha256 = response.headers.get('X-File-SHA256') || undefined;
+    const mimeType = response.headers.get('Content-Type') || undefined;
+
+    logger.info('Fetched remote file content', {
+      context: 'sync:remote-client',
+      instanceId: instance.id,
+      remoteFileId,
+      size: content.length,
+      sha256: sha256?.substring(0, 16),
+      mimeType,
+    });
+
+    return { content, sha256, mimeType };
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    if (error instanceof RemoteSyncError) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.name === 'AbortError') {
+      logger.warn('Remote file content request timed out', {
+        context: 'sync:remote-client',
+        instanceId: instance.id,
+        remoteFileId,
+      });
+      throw new RemoteSyncError('Request timed out', 408);
+    }
+
+    logger.error('Remote file content request error', {
+      context: 'sync:remote-client',
+      instanceId: instance.id,
+      remoteFileId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    throw new RemoteSyncError(
+      error instanceof Error ? error.message : 'Unknown error',
+      undefined,
+      String(error)
+    );
+  }
+}
+
+/**
  * Test connection to a remote instance (without full sync)
  */
 export async function testRemoteConnection(

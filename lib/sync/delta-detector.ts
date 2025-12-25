@@ -7,7 +7,8 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/mongodb/repositories';
-import { SyncableEntityType, SyncEntityDelta } from './types';
+import { SyncableEntityType, SyncEntityDelta, FILE_CONTENT_SIZE_THRESHOLD } from './types';
+import { s3FileService } from '@/lib/s3/file-service';
 
 /**
  * Options for delta detection
@@ -89,15 +90,25 @@ async function getEntityDeltas(
         const chats = await repos.chats.findByUserId(userId);
         for (const chat of chats) {
           if (!sinceTimestamp || chat.updatedAt > sinceTimestamp) {
-            // Get full chat with messages
+            // Get full chat metadata
             const fullChat = await repos.chats.findById(chat.id);
             if (fullChat) {
+              // Also fetch messages for the chat
+              const messages = await repos.chats.getMessages(chat.id);
               deltas.push({
                 entityType: 'CHAT',
                 id: chat.id,
                 updatedAt: chat.updatedAt,
                 isDeleted: false,
-                data: fullChat as unknown as Record<string, unknown>,
+                data: {
+                  ...fullChat,
+                  messages, // Include messages in the delta
+                } as unknown as Record<string, unknown>,
+              });
+              logger.debug('Added chat delta with messages', {
+                context: 'sync:delta-detector',
+                chatId: chat.id,
+                messageCount: messages.length,
               });
             }
           }
@@ -138,6 +149,68 @@ async function getEntityDeltas(
               updatedAt: tag.updatedAt,
               isDeleted: false,
               data: tag as unknown as Record<string, unknown>,
+            });
+          }
+          if (deltas.length >= limit) break;
+        }
+        break;
+      }
+
+      case 'FILE': {
+        const files = await repos.files.findByUserId(userId);
+        for (const file of files) {
+          if (!sinceTimestamp || file.updatedAt > sinceTimestamp) {
+            // Prepare file data for sync
+            const fileData: Record<string, unknown> = {
+              ...file,
+              // Don't sync S3-specific references - let local instance manage storage
+              s3Key: undefined,
+              s3Bucket: undefined,
+            };
+
+            // For small files, include base64 content inline
+            // For large files, set flag for separate content fetch
+            if (file.size < FILE_CONTENT_SIZE_THRESHOLD && file.s3Key) {
+              try {
+                const content = await s3FileService.downloadUserFile(
+                  file.userId,
+                  file.id,
+                  file.originalFilename,
+                  file.category
+                );
+                fileData.content = content.toString('base64');
+                fileData.requiresContentFetch = false;
+                logger.debug('Added file delta with inline content', {
+                  context: 'sync:delta-detector',
+                  fileId: file.id,
+                  size: file.size,
+                });
+              } catch (error) {
+                // If we can't read the content, mark for separate fetch
+                logger.warn('Failed to read file content for sync, marking for fetch', {
+                  context: 'sync:delta-detector',
+                  fileId: file.id,
+                  error: error instanceof Error ? error.message : String(error),
+                });
+                fileData.requiresContentFetch = true;
+              }
+            } else {
+              // Large file - requires separate content fetch
+              fileData.requiresContentFetch = true;
+              logger.debug('Added file delta requiring content fetch', {
+                context: 'sync:delta-detector',
+                fileId: file.id,
+                size: file.size,
+                threshold: FILE_CONTENT_SIZE_THRESHOLD,
+              });
+            }
+
+            deltas.push({
+              entityType: 'FILE',
+              id: file.id,
+              updatedAt: file.updatedAt,
+              isDeleted: false,
+              data: fileData,
             });
           }
           if (deltas.length >= limit) break;
@@ -210,7 +283,8 @@ async function getEntityDeltas(
 export async function detectDeltas(options: DeltaDetectionOptions): Promise<DeltaDetectionResult> {
   const {
     userId,
-    entityTypes = ['CHARACTER', 'PERSONA', 'CHAT', 'MEMORY', 'TAG', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE'],
+    // Enforced sync order - entities with dependencies come after their dependencies
+    entityTypes = ['TAG', 'FILE', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
     sinceTimestamp = null,
     limit = 100,
   } = options;
@@ -271,7 +345,8 @@ export async function detectDeltas(options: DeltaDetectionOptions): Promise<Delt
 export async function countDeltas(options: DeltaDetectionOptions): Promise<Record<SyncableEntityType, number>> {
   const {
     userId,
-    entityTypes = ['CHARACTER', 'PERSONA', 'CHAT', 'MEMORY', 'TAG', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE'],
+    // Enforced sync order - entities with dependencies come after their dependencies
+    entityTypes = ['TAG', 'FILE', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
     sinceTimestamp = null,
   } = options;
 
@@ -337,6 +412,9 @@ export async function getMostRecentUpdate(userId: string): Promise<string | null
 
     const tags = await repos.tags.findByUserId(userId);
     tags.forEach((t) => checkTimestamp(t.updatedAt));
+
+    const files = await repos.files.findByUserId(userId);
+    files.forEach((f) => checkTimestamp(f.updatedAt));
 
     const roleplayTemplates = await repos.roleplayTemplates.findByUserId(userId);
     roleplayTemplates.forEach((r) => checkTimestamp(r.updatedAt));

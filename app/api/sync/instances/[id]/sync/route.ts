@@ -14,6 +14,7 @@ import {
   remoteHandshake,
   fetchRemoteDeltas,
   pushToRemote,
+  fetchRemoteFileContent,
   RemoteSyncError,
 } from '@/lib/sync/remote-client';
 import {
@@ -21,8 +22,10 @@ import {
   prepareLocalDeltasForPush,
   startSyncOperation,
   completeSyncOperation,
+  FileNeedingContent,
 } from '@/lib/sync/sync-service';
 import { SyncConflict, SyncResult } from '@/lib/sync/types';
+import { s3FileService } from '@/lib/s3/file-service';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -155,6 +158,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       let pullTotal = 0;
       let hasMore = true;
       let cursor: string | null = lastSyncAt;
+      const allFilesNeedingContent: FileNeedingContent[] = [];
 
       while (hasMore) {
         const deltaResponse = await fetchRemoteDeltas(instance, cursor, 100);
@@ -169,6 +173,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           pullTotal += pullResult.applied;
           allConflicts.push(...pullResult.conflicts);
           allErrors.push(...pullResult.errors);
+          allFilesNeedingContent.push(...pullResult.filesNeedingContent);
         }
 
         hasMore = deltaResponse.hasMore;
@@ -181,7 +186,75 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         context: 'api:sync:instances:[id]:sync',
         operationId: operation.id,
         pulledCount: pullTotal,
+        filesNeedingContent: allFilesNeedingContent.length,
       });
+
+      // Step 2.5: Fetch content for large files
+      if (allFilesNeedingContent.length > 0) {
+        logger.info('Sync step 2.5: Fetching file content for large files', {
+          context: 'api:sync:instances:[id]:sync',
+          operationId: operation.id,
+          fileCount: allFilesNeedingContent.length,
+        });
+
+        let filesFetched = 0;
+        for (const fileInfo of allFilesNeedingContent) {
+          try {
+            // Fetch content from remote
+            const { content, mimeType } = await fetchRemoteFileContent(instance, fileInfo.remoteId);
+
+            // Get the local file entry to know how to store it
+            const localFile = await repos.files.findById(fileInfo.localId);
+            if (localFile) {
+              // Upload content to local storage
+              await s3FileService.uploadUserFile(
+                localFile.userId,
+                localFile.id,
+                localFile.originalFilename,
+                localFile.category,
+                content,
+                mimeType || localFile.mimeType || 'application/octet-stream'
+              );
+
+              // Update file entry with S3 key
+              const s3Key = s3FileService.generateS3Key(
+                localFile.userId,
+                localFile.id,
+                localFile.originalFilename,
+                localFile.category
+              );
+              await repos.files.update(localFile.id, { s3Key });
+
+              filesFetched++;
+              logger.debug('Fetched and stored file content', {
+                context: 'api:sync:instances:[id]:sync',
+                operationId: operation.id,
+                localFileId: fileInfo.localId,
+                remoteFileId: fileInfo.remoteId,
+                size: content.length,
+              });
+            }
+          } catch (error) {
+            const errorMessage = `Failed to fetch file content ${fileInfo.remoteId}: ${error instanceof Error ? error.message : String(error)}`;
+            allErrors.push(errorMessage);
+            logger.warn('Failed to fetch file content', {
+              context: 'api:sync:instances:[id]:sync',
+              operationId: operation.id,
+              localFileId: fileInfo.localId,
+              remoteFileId: fileInfo.remoteId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+
+        entityCounts.filesFetched = filesFetched;
+        logger.info('Sync step 2.5 complete: Fetched file content', {
+          context: 'api:sync:instances:[id]:sync',
+          operationId: operation.id,
+          filesFetched,
+          filesFailed: allFilesNeedingContent.length - filesFetched,
+        });
+      }
 
       // Step 3: Push - Send local changes
       // If forceFull, push all local data regardless of timestamp
