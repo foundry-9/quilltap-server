@@ -306,22 +306,36 @@ export async function detectDeltas(options: DeltaDetectionOptions): Promise<Delt
   });
 
   const allDeltas: SyncEntityDelta[] = [];
-  let remainingLimit = limit;
 
   // Collect deltas from each entity type
-  for (const entityType of entityTypes) {
-    if (remainingLimit <= 0) break;
+  // Use a high internal limit per type to ensure we collect enough entities
+  // from ALL types, not just the first few. This ensures later entity types (like MEMORY)
+  // aren't starved when earlier types have many entities.
+  // We collect up to 10x the requested limit per type to ensure proper sorting by updatedAt
+  // across all entity types. The final result is trimmed to the requested limit.
+  const perTypeLimit = Math.max(limit * 10, 1000);
 
-    const typeDeltas = await getEntityDeltas(userId, entityType, sinceTimestamp, remainingLimit);
+  for (const entityType of entityTypes) {
+    const typeDeltas = await getEntityDeltas(userId, entityType, sinceTimestamp, perTypeLimit);
     allDeltas.push(...typeDeltas);
-    remainingLimit -= typeDeltas.length;
+
+    logger.debug('Collected deltas for entity type', {
+      context: 'sync:delta-detector',
+      entityType,
+      count: typeDeltas.length,
+      totalSoFar: allDeltas.length,
+    });
   }
 
   // Sort by updatedAt ascending (oldest first)
+  // This ensures pagination works correctly - we return the oldest first,
+  // and the cursor can pick up where we left off
   allDeltas.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
 
-  // Trim to limit
+  // Trim to the requested limit
   const trimmedDeltas = allDeltas.slice(0, limit);
+
+  // hasMore is true if we collected more entities than the limit
   const hasMore = allDeltas.length > limit;
 
   // Calculate timestamp range
@@ -332,6 +346,7 @@ export async function detectDeltas(options: DeltaDetectionOptions): Promise<Delt
   logger.info('Delta detection complete', {
     context: 'sync:delta-detector',
     userId,
+    totalCollected: allDeltas.length,
     totalDeltas: trimmedDeltas.length,
     hasMore,
     oldestTimestamp,

@@ -4,6 +4,11 @@
 
 ### 2.5-dev
 
+- fix: Memories now sync correctly from remote servers
+  - Fixed delta detection bug where per-entity-type limits starved later entity types (like MEMORY)
+  - Previously, if TAG+FILE+CHARACTER+CHAT filled the limit, MEMORY would get 0-9 slots
+  - Now each entity type can collect up to 10x the limit, ensuring proper sorting by updatedAt
+  - The `hasMore` flag now correctly indicates when more entities exist for pagination
 - fix: Memory sync now works correctly
   - Fixed bug where `content` field was being stripped from all entity types during sync
   - The `content` and `requiresContentFetch` fields are now only extracted for FILE entities
