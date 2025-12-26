@@ -36,7 +36,7 @@ interface ChatComposerProps {
   // Callbacks
   onSubmit: (e: React.FormEvent) => void
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onAttachFileClick: () => void
+  onAttachFileClick?: () => void
   onGalleryClick: () => void
   onGenerateImageClick: () => void
   onAddCharacterClick: () => void
@@ -108,6 +108,14 @@ export function ChatComposer({
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const maxHeight = getTextareaMaxHeight()
 
+  // Handler that triggers the file input click - the file input lives in this component
+  const handleAttachFileClick = () => {
+    clientLogger.debug('[ChatComposer] Triggering file input click')
+    fileInputRef.current?.click()
+    // Also call the parent's callback in case it needs to do something
+    onAttachFileClick?.()
+  }
+
   // Resize textarea when input changes (including when cleared after submission)
   useEffect(() => {
     if (inputRef.current) {
@@ -155,7 +163,7 @@ export function ChatComposer({
         isOpen={mobileToolPaletteOpen}
         onClose={() => setMobileToolPaletteOpen(false)}
         toggleButtonRef={mobileToolPaletteToggleRef}
-        onAttachFileClick={onAttachFileClick}
+        onAttachFileClick={handleAttachFileClick}
         uploadingFile={uploadingFile}
         showPreview={showPreview}
         onTogglePreview={() => setShowPreview(!showPreview)}
@@ -272,7 +280,7 @@ export function ChatComposer({
             showAddCharacter={isSingleCharacterChat}
             chatId={id}
             chatMemoryCount={chatMemoryCount}
-            onAttachFileClick={onAttachFileClick}
+            onAttachFileClick={handleAttachFileClick}
             uploadingFile={uploadingFile}
             showPreview={showPreview}
             onTogglePreview={() => setShowPreview(!showPreview)}

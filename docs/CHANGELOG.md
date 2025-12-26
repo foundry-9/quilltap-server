@@ -4,6 +4,15 @@
 
 ### 2.5-dev
 
+- fix: Attach file button in chat now opens file picker
+  - The ChatComposer component was passing an empty callback to tool palettes
+  - Now properly triggers the file input click from within the component
+- test: E2E test infrastructure with user lifecycle pattern
+  - Add TestUserHelper for consistent test user management (create, login, cleanup)
+  - Tests create unique users for isolation, delete them after tests complete
+  - Add `/api/auth/delete-account` endpoint for test user cleanup
+  - Convert file-attachment and chat-flow tests to use the pattern
+  - Configure Playwright for serial execution to avoid race conditions
 - chore: Upgrade dependencies for security and performance
   - Next.js 16.0.5 → 16.1.1 (stable Turbopack caching, security patches CVE-2025-55182 & CVE-2025-66478)
   - MongoDB driver 6.21.0 → 7.0.0 (requires Node.js 20.19+)
