@@ -4,6 +4,16 @@
 
 ### 2.5-dev
 
+- feat: API key import dialog auto-closes after successful import
+  - Dialog now closes automatically 1.5 seconds after showing success message
+  - Eliminates need to manually click "Close" button
+- feat: Auto-associate new API keys with profiles that need them
+  - When importing or creating API keys, automatically links them with connection profiles,
+    image generation profiles, and embedding profiles that need matching keys
+  - Profiles are linked if they require an API key (based on provider) and either have no key
+    or reference a non-existent key
+  - Toast notifications show which profiles were auto-linked to the new keys
+  - New utility module at `lib/api-keys/auto-associate.ts` for reuse
 - fix: Sync progress polling now stops when sync completes
   - Fixed stale closure bug where polling interval continued indefinitely after sync completion
   - Changed polling interval from 500ms to 1500ms to reduce unnecessary API calls

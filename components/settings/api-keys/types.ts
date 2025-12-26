@@ -57,12 +57,22 @@ export interface PreviewResponse {
   error?: string
 }
 
+// Profile association result
+export interface ProfileAssociation {
+  profileId: string
+  profileName: string
+  profileType: 'connection' | 'image' | 'embedding'
+  keyId: string
+  keyLabel: string
+}
+
 // Import result from API
 export interface ImportResult {
   imported: number
   skipped: number
   replaced: number
   errors: string[]
+  associations?: ProfileAssociation[]
 }
 
 // Export dialog state

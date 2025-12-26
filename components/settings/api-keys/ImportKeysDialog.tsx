@@ -1,12 +1,14 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useEffect, useCallback } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { FormActions } from '@/components/ui/FormActions'
 import ErrorAlert from '@/components/ui/ErrorAlert'
 import { useImportKeys } from './hooks'
 import { ImportKeysPreview } from './ImportKeysPreview'
-import type { DuplicateHandling } from './types'
+import { showSuccessToast } from '@/lib/toast'
+import { clientLogger } from '@/lib/client-logger'
+import type { DuplicateHandling, ProfileAssociation } from './types'
 
 interface ImportKeysDialogProps {
   isOpen: boolean
@@ -49,10 +51,37 @@ export function ImportKeysDialog({
     onEscape: onClose,
   })
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     actions.reset()
     onClose()
-  }
+  }, [actions, onClose])
+
+  // Auto-close and show toasts when import is complete
+  useEffect(() => {
+    if (state.step === 'complete' && state.importResult) {
+      clientLogger.debug('Import complete, showing toasts for associations', {
+        context: 'ImportKeysDialog',
+        associations: state.importResult.associations?.length || 0,
+      })
+
+      // Show toasts for auto-associations
+      if (state.importResult.associations && state.importResult.associations.length > 0) {
+        state.importResult.associations.forEach((assoc: ProfileAssociation) => {
+          showSuccessToast(
+            `${assoc.profileName} linked to API key "${assoc.keyLabel}"`,
+            4000
+          )
+        })
+      }
+
+      // Auto-close after a brief delay
+      const timer = setTimeout(() => {
+        handleClose()
+      }, 1500)
+
+      return () => clearTimeout(timer)
+    }
+  }, [state.step, state.importResult, handleClose])
 
   if (!isOpen) return null
 

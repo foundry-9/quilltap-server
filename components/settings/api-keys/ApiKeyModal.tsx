@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { useClickOutside } from '@/hooks/useClickOutside'
@@ -8,8 +8,10 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { clientLogger } from '@/lib/client-logger'
 import { FormActions } from '@/components/ui/FormActions'
 import ErrorAlert from '@/components/ui/ErrorAlert'
+import { showSuccessToast } from '@/lib/toast'
+import type { ProfileAssociation } from './types'
 
-interface ApiKey {
+interface ApiKeyResponse {
   id: string
   provider: string
   label: string
@@ -17,7 +19,8 @@ interface ApiKey {
   lastUsed: string | null
   createdAt: string
   updatedAt: string
-  keyPreview: string
+  keyPreview?: string
+  associations?: ProfileAssociation[]
 }
 
 interface ApiKeyFormData {
@@ -52,7 +55,7 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
     apiKey: '',
   })
 
-  const createKey = useAsyncOperation<ApiKey>()
+  const createKey = useAsyncOperation<ApiKeyResponse>()
 
   useClickOutside(modalRef, onClose, {
     enabled: isOpen,
@@ -65,7 +68,7 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
     })
 
     const result = await createKey.execute(async () => {
-      const response = await fetchJson<ApiKey>('/api/keys', {
+      const response = await fetchJson<ApiKeyResponse>('/api/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form.formData),
@@ -77,11 +80,22 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
 
       clientLogger.debug('API key created successfully', {
         id: response.data?.id,
+        associations: response.data?.associations?.length || 0,
       })
       return response.data!
     })
 
     if (result) {
+      // Show toasts for any auto-associations
+      if (result.associations && result.associations.length > 0) {
+        result.associations.forEach((assoc) => {
+          showSuccessToast(
+            `${assoc.profileName} linked to API key "${result.label}"`,
+            4000
+          )
+        })
+      }
+
       form.resetForm()
       onSuccess()
       onClose()

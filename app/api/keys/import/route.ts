@@ -10,6 +10,7 @@ import { getUserRepositories } from '@/lib/repositories/factory'
 import { decryptWithPassphrase, encryptApiKey } from '@/lib/encryption'
 import { Provider } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
+import { autoAssociateApiKeys, type ProfileAssociation } from '@/lib/api-keys/auto-associate'
 
 const EXPORT_FORMAT = 'quilltap-apikeys'
 const SUPPORTED_VERSIONS = [1]
@@ -48,6 +49,7 @@ interface ImportResult {
   skipped: number
   replaced: number
   errors: string[]
+  associations: ProfileAssociation[]
 }
 
 /**
@@ -155,7 +157,11 @@ export async function POST(req: NextRequest) {
       skipped: 0,
       replaced: 0,
       errors: [],
+      associations: [],
     }
+
+    // Track IDs of newly imported/replaced keys for auto-association
+    const newKeyIds: string[] = []
 
     for (const key of payload.keys) {
       try {
@@ -182,6 +188,8 @@ export async function POST(req: NextRequest) {
               iv: encrypted.iv,
               authTag: encrypted.authTag,
             })
+            // Track replaced key ID for auto-association
+            newKeyIds.push(existing.id)
             result.replaced++
             continue
           }
@@ -206,7 +214,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Create the new key
-        await repos.connections.createApiKey({
+        const newKey = await repos.connections.createApiKey({
           provider: key.provider as Provider,
           label,
           ciphertext: encrypted.encrypted,
@@ -215,6 +223,8 @@ export async function POST(req: NextRequest) {
           isActive: true,
         })
 
+        // Track new key ID for auto-association
+        newKeyIds.push(newKey.id)
         result.imported++
       } catch (error) {
         logger.error('Failed to import key', {
@@ -226,12 +236,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Auto-associate new keys with profiles that need them
+    if (newKeyIds.length > 0) {
+      logger.debug('Running auto-association for imported keys', {
+        context: 'keys-import-POST',
+        keyCount: newKeyIds.length,
+      })
+
+      const associationResult = await autoAssociateApiKeys(session.user.id, newKeyIds)
+      result.associations = associationResult.associations
+
+      // Add any association errors to the result
+      if (associationResult.errors.length > 0) {
+        result.errors.push(...associationResult.errors)
+      }
+    }
+
     logger.info('API key import completed', {
       context: 'keys-import-POST',
       userId: session.user.id,
       imported: result.imported,
       skipped: result.skipped,
       replaced: result.replaced,
+      associations: result.associations.length,
       errors: result.errors.length,
     })
 
