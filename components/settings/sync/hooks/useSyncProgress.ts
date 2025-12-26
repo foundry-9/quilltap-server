@@ -1,0 +1,184 @@
+'use client'
+
+/**
+ * useSyncProgress Hook
+ *
+ * Polls the sync progress endpoint to get real-time updates during sync operations.
+ * Automatically starts polling when an operationId is provided and stops when complete.
+ *
+ * @module components/settings/sync/hooks/useSyncProgress
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { clientLogger } from '@/lib/client-logger'
+import { fetchJson } from '@/lib/fetch-helpers'
+import type { SyncProgress, SyncDirection, SyncOperationStatus } from '@/lib/sync/types'
+
+/**
+ * Response from the progress endpoint
+ */
+export interface SyncProgressResponse {
+  operationId: string
+  instanceId: string
+  status: SyncOperationStatus
+  direction: SyncDirection
+  progress: SyncProgress | null
+  entityCounts: Record<string, number>
+  errors: string[]
+  conflicts: Array<unknown>
+  startedAt: string
+  completedAt: string | null
+}
+
+/**
+ * State returned by the hook
+ */
+export interface UseSyncProgressResult {
+  /** Current progress state (null if not polling) */
+  progress: SyncProgressResponse | null
+  /** Whether the sync is complete */
+  isComplete: boolean
+  /** Whether the sync failed */
+  isFailed: boolean
+  /** Any error from polling */
+  error: string | null
+  /** Clear the progress state (call after auto-hide timeout) */
+  clearProgress: () => void
+}
+
+/**
+ * Hook for polling sync progress during operations
+ *
+ * @param operationId - The operation ID to poll (null to stop polling)
+ * @param instanceName - The name of the instance being synced (for display)
+ * @param pollingInterval - How often to poll in ms (default 500ms)
+ */
+export function useSyncProgress(
+  operationId: string | null,
+  instanceName: string = '',
+  pollingInterval: number = 500
+): UseSyncProgressResult {
+  const [progress, setProgress] = useState<SyncProgressResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [isComplete, setIsComplete] = useState(false)
+  const [isFailed, setIsFailed] = useState(false)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const isPollingRef = useRef(false)
+
+  // Fetch progress from API
+  const fetchProgress = useCallback(async (opId: string) => {
+    if (isPollingRef.current) return // Prevent concurrent requests
+
+    isPollingRef.current = true
+
+    try {
+      const response = await fetchJson<SyncProgressResponse>(
+        `/api/sync/operations/${opId}/progress`,
+        { method: 'GET' }
+      )
+
+      if (!response.ok) {
+        throw new Error(response.error || 'Failed to fetch progress')
+      }
+
+      if (response.data) {
+        setProgress(response.data)
+
+        // Check if complete
+        if (response.data.status === 'COMPLETED') {
+          setIsComplete(true)
+          setIsFailed(response.data.errors?.length > 0)
+          clientLogger.debug('Sync progress: completed', {
+            operationId: opId,
+            entityCounts: response.data.entityCounts,
+            errorCount: response.data.errors?.length || 0,
+          })
+        } else if (response.data.status === 'FAILED') {
+          setIsComplete(true)
+          setIsFailed(true)
+          clientLogger.debug('Sync progress: failed', {
+            operationId: opId,
+            errors: response.data.errors,
+          })
+        }
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      clientLogger.warn('Error fetching sync progress', {
+        operationId: opId,
+        error: errorMessage,
+      })
+      // Don't set error for transient network issues - keep polling
+      // Only set error if it's a 404 or other terminal error
+      if (errorMessage.includes('not found') || errorMessage.includes('404')) {
+        setError(errorMessage)
+      }
+    } finally {
+      isPollingRef.current = false
+    }
+  }, [])
+
+  // Start/stop polling when operationId changes
+  useEffect(() => {
+    // Clear previous state when operation changes
+    if (operationId) {
+      setProgress(null)
+      setError(null)
+      setIsComplete(false)
+      setIsFailed(false)
+
+      clientLogger.debug('Starting sync progress polling', {
+        operationId,
+        instanceName,
+        pollingInterval,
+      })
+
+      // Fetch immediately
+      fetchProgress(operationId)
+
+      // Start polling
+      intervalRef.current = setInterval(() => {
+        if (!isComplete && !isFailed) {
+          fetchProgress(operationId)
+        }
+      }, pollingInterval)
+    }
+
+    // Cleanup
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [operationId, pollingInterval, fetchProgress, instanceName, isComplete, isFailed])
+
+  // Stop polling when complete
+  useEffect(() => {
+    if ((isComplete || isFailed) && intervalRef.current) {
+      clientLogger.debug('Stopping sync progress polling', {
+        operationId,
+        isComplete,
+        isFailed,
+      })
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+  }, [isComplete, isFailed, operationId])
+
+  // Clear progress (called after auto-hide)
+  const clearProgress = useCallback(() => {
+    setProgress(null)
+    setError(null)
+    setIsComplete(false)
+    setIsFailed(false)
+  }, [])
+
+  return {
+    progress,
+    isComplete,
+    isFailed,
+    error,
+    clearProgress,
+  }
+}

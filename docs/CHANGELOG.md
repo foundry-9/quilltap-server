@@ -4,6 +4,21 @@
 
 ### 2.5-dev
 
+- feat: Sync direction control - choose between two-way sync, push-only, or pull-only
+  - Added direction dropdown in sync instance card: "Sync Now", "Push Only", "Pull Only", "Force Full Sync"
+  - Push-only mode: Only send local changes to remote (skip pulling)
+  - Pull-only mode: Only fetch remote changes to local (skip pushing)
+  - API supports `direction` query parameter (BIDIRECTIONAL, PUSH, PULL)
+- feat: Real-time sync progress bar with entity information
+  - Progress bar appears at top of Sync Settings during sync operations
+  - Shows current phase (Connecting, Pulling, Downloading files, Pushing, Complete)
+  - Displays current item being synced (character name, chat title, etc.)
+  - Running counts: Pulled, Pushed, Files fetched
+  - Auto-hides 3 seconds after successful completion
+  - Error state persists with dismiss button
+  - New `/api/sync/operations/[id]/progress` endpoint for progress polling
+  - New `useSyncProgress` hook for client-side polling
+  - New `SyncProgressBar` component with fade-out animation
 - fix: Memories now sync correctly from remote servers
   - Fixed delta detection bug where per-entity-type limits starved later entity types (like MEMORY)
   - Previously, if TAG+FILE+CHARACTER+CHAT filled the limit, MEMORY would get 0-9 slots

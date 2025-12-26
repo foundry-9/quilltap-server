@@ -151,6 +151,39 @@ export const CreateSyncMappingSchema = SyncMappingSchema.omit({
 export type CreateSyncMapping = z.infer<typeof CreateSyncMappingSchema>;
 
 // ============================================================================
+// SYNC PROGRESS
+// ============================================================================
+
+/**
+ * Phases of a sync operation
+ */
+export const SyncPhaseEnum = z.enum([
+  'HANDSHAKE',
+  'PULL',
+  'FETCH_FILES',
+  'PUSH',
+  'COMPLETE',
+  'ERROR',
+]);
+export type SyncPhase = z.infer<typeof SyncPhaseEnum>;
+
+/**
+ * Real-time progress tracking for a sync operation.
+ * Updated during sync to allow clients to display progress.
+ */
+export const SyncProgressSchema = z.object({
+  phase: SyncPhaseEnum,
+  currentEntity: SyncableEntityTypeEnum.optional(), // Entity type being synced
+  currentItemName: z.string().optional(), // Name/title of current item
+  pulled: z.number().default(0),
+  pushed: z.number().default(0),
+  filesFetched: z.number().default(0),
+  estimatedTotal: z.number().optional(), // Estimated total items (if known)
+  message: z.string().optional(), // Human-readable status message
+});
+export type SyncProgress = z.infer<typeof SyncProgressSchema>;
+
+// ============================================================================
 // SYNC OPERATION
 // ============================================================================
 
@@ -178,6 +211,8 @@ export const SyncOperationSchema = z.object({
   instanceId: UUIDSchema,
   direction: SyncDirectionEnum,
   status: SyncOperationStatusEnum,
+  // Real-time progress tracking (updated during sync)
+  progress: SyncProgressSchema.optional(),
   // Count of entities synced by type
   entityCounts: z.record(z.number()).default({}),
   // Record of conflicts that were resolved

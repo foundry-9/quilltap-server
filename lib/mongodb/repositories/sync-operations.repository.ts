@@ -13,6 +13,7 @@ import {
   CreateSyncOperation,
   SyncOperationStatus,
   SyncConflict,
+  SyncProgress,
 } from '@/lib/sync/types';
 import { getMongoDatabase } from '../client';
 
@@ -565,6 +566,59 @@ export class SyncOperationsRepository {
     });
 
     return this.update(id, { entityCounts });
+  }
+
+  /**
+   * Update progress for sync operation (for real-time progress tracking)
+   */
+  async updateProgress(id: string, progress: SyncProgress): Promise<SyncOperation | null> {
+    const collection = await this.getCollection();
+    const now = this.getCurrentTimestamp();
+
+    logger.debug('Updating progress for sync operation', {
+      operationId: id,
+      phase: progress.phase,
+      currentItemName: progress.currentItemName,
+    });
+
+    try {
+      const result = await collection.findOneAndUpdate(
+        { id },
+        {
+          $set: {
+            progress,
+            updatedAt: now,
+          },
+        },
+        { returnDocument: 'after' }
+      );
+
+      if (!result) {
+        logger.warn('Sync operation not found during updateProgress', {
+          operationId: id,
+        });
+        return null;
+      }
+
+      const { _id, ...operationData } = result as any;
+
+      const validationResult = this.validateSafe(operationData);
+      if (!validationResult.success) {
+        logger.warn('Updated sync operation validation failed after updateProgress', {
+          operationId: id,
+          error: validationResult.error,
+        });
+        return null;
+      }
+
+      return validationResult.data || null;
+    } catch (error) {
+      logger.error('Error updating progress for sync operation', {
+        operationId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   /**

@@ -481,6 +481,8 @@ async function deleteLocalEntity(entityType: SyncableEntityType, id: string): Pr
 export interface FileNeedingContent {
   /** The file entity ID (same on both sides now) */
   fileId: string;
+  /** Original filename for progress display */
+  originalFilename?: string;
 }
 
 /**
@@ -532,6 +534,7 @@ export async function processRemoteDeltas(
         if (!localFile?.s3Key) {
           filesNeedingContent.push({
             fileId: delta.id,
+            originalFilename: (delta.data?.originalFilename as string) || localFile?.originalFilename,
           });
           logger.debug('File needs content fetch', {
             context: 'sync:sync-service',

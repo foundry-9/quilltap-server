@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
+import type { SyncDirection } from '@/lib/sync/types'
 
 /**
  * Result type returned from the sync trigger operation
@@ -11,7 +12,7 @@ import { fetchJson } from '@/lib/fetch-helpers'
 export interface SyncResult {
   success: boolean
   operationId: string
-  direction: string
+  direction: SyncDirection
   entityCounts: Record<string, number>
   conflicts: Array<unknown>
   errors: Array<string>
@@ -23,6 +24,7 @@ export interface SyncResult {
  */
 export function useSyncTrigger() {
   const [syncingInstanceId, setSyncingInstanceId] = useState<string | null>(null)
+  const [activeOperationId, setActiveOperationId] = useState<string | null>(null)
 
   // Async operation hook for sync operations
   const syncOp = useAsyncOperation<SyncResult>()
@@ -31,17 +33,31 @@ export function useSyncTrigger() {
    * Trigger a manual sync for a specific instance
    * @param instanceId - The ID of the sync instance
    * @param forceFull - If true, ignores lastSyncAt and syncs all data
+   * @param direction - The sync direction: BIDIRECTIONAL, PUSH, or PULL
    * Note: Empty dependency array since syncOp.execute is stable
    */
   const triggerSync = useCallback(
-    async (instanceId: string, forceFull: boolean = false) => {
-      clientLogger.debug('Triggering manual sync', { instanceId, forceFull })
+    async (
+      instanceId: string,
+      forceFull: boolean = false,
+      direction: SyncDirection = 'BIDIRECTIONAL'
+    ) => {
+      clientLogger.debug('Triggering manual sync', { instanceId, forceFull, direction })
       setSyncingInstanceId(instanceId)
+      setActiveOperationId(null) // Reset for new sync
 
       const result = await syncOp.execute(async () => {
-        const url = forceFull
-          ? `/api/sync/instances/${instanceId}/sync?forceFull=true`
-          : `/api/sync/instances/${instanceId}/sync`
+        // Build URL with query parameters
+        const params = new URLSearchParams()
+        if (forceFull) {
+          params.set('forceFull', 'true')
+        }
+        if (direction !== 'BIDIRECTIONAL') {
+          params.set('direction', direction)
+        }
+        const queryString = params.toString()
+        const url = `/api/sync/instances/${instanceId}/sync${queryString ? `?${queryString}` : ''}`
+
         const response = await fetchJson<SyncResult>(url, {
           method: 'POST',
         })
@@ -54,6 +70,9 @@ export function useSyncTrigger() {
           throw new Error('No data returned from server')
         }
 
+        // Store the operation ID for progress polling
+        setActiveOperationId(response.data.operationId)
+
         return response.data
       })
 
@@ -64,15 +83,15 @@ export function useSyncTrigger() {
         clientLogger.info('Manual sync completed', {
           instanceId,
           forceFull,
+          direction,
           operationId: result.operationId,
-          direction: result.direction,
           entityCounts: result.entityCounts,
           conflictCount: result.conflicts?.length ?? 0,
           errorCount: result.errors?.length ?? 0,
           duration: result.duration,
         })
       } else {
-        clientLogger.error('Manual sync failed', { instanceId, forceFull })
+        clientLogger.error('Manual sync failed', { instanceId, forceFull, direction })
       }
 
       return result
@@ -81,13 +100,22 @@ export function useSyncTrigger() {
     [] // syncOp.execute is stable (empty deps in useAsyncOperation)
   )
 
+  /**
+   * Clear the active operation ID (e.g., after progress bar auto-hides)
+   */
+  const clearActiveOperation = useCallback(() => {
+    setActiveOperationId(null)
+  }, [])
+
   // Memoize the return value to prevent unnecessary re-renders
   return useMemo(
     () => ({
       syncingInstanceId,
+      activeOperationId,
       syncOp,
       triggerSync,
+      clearActiveOperation,
     }),
-    [syncingInstanceId, syncOp, triggerSync]
+    [syncingInstanceId, activeOperationId, syncOp, triggerSync, clearActiveOperation]
   )
 }

@@ -10,13 +10,14 @@
  * @module components/settings/sync
  */
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { SyncFormData, SyncInstanceDisplay, INITIAL_FORM_DATA } from './types'
-import { useSyncInstances, useSyncOperations, useSyncTrigger, useSyncApiKeys, useSyncCleanup } from './hooks'
-import { InstanceList, InstanceForm, SyncHistoryPanel, ApiKeyPanel, CleanupPanel } from './components'
+import { useSyncInstances, useSyncOperations, useSyncTrigger, useSyncApiKeys, useSyncCleanup, useSyncProgress } from './hooks'
+import { InstanceList, InstanceForm, SyncHistoryPanel, ApiKeyPanel, CleanupPanel, SyncProgressBar } from './components'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
+import type { SyncDirection } from '@/lib/sync/types'
 
 /**
  * Main sync settings tab component
@@ -33,6 +34,31 @@ export default function SyncTab() {
   const syncTrigger = useSyncTrigger()
   const apiKeys = useSyncApiKeys()
   const cleanup = useSyncCleanup()
+
+  // Track the name of the instance being synced for progress display
+  const [syncingInstanceName, setSyncingInstanceName] = useState<string>('')
+
+  // Get instance name for progress bar
+  const currentSyncingInstance = useMemo(() => {
+    if (syncTrigger.syncingInstanceId) {
+      const instance = instances.instances.find(i => i.id === syncTrigger.syncingInstanceId)
+      return instance?.name || ''
+    }
+    return ''
+  }, [syncTrigger.syncingInstanceId, instances.instances])
+
+  // Update syncing instance name when sync starts
+  useEffect(() => {
+    if (currentSyncingInstance) {
+      setSyncingInstanceName(currentSyncingInstance)
+    }
+  }, [currentSyncingInstance])
+
+  // Progress tracking
+  const syncProgress = useSyncProgress(
+    syncTrigger.activeOperationId,
+    syncingInstanceName
+  )
 
   // Fetch data on mount
   // Using a ref to track mount state prevents race conditions during initial navigation
@@ -134,16 +160,23 @@ export default function SyncTab() {
   }, [editingInstance, formData, instances, operations, closeForm])
 
   // Handle sync trigger
-  const handleSync = useCallback(async (instanceId: string, forceFull: boolean = false) => {
-    clientLogger.debug('SyncTab: triggering sync', { instanceId, forceFull })
-    const result = await syncTrigger.triggerSync(instanceId, forceFull)
-    if (result) {
-      // Refresh instances to get updated lastSyncAt
-      instances.fetchInstances()
-      // Refresh operations to show the new operation
-      operations.fetchOperations()
-    }
-  }, [syncTrigger, instances, operations])
+  const handleSync = useCallback(
+    async (
+      instanceId: string,
+      forceFull: boolean = false,
+      direction: SyncDirection = 'BIDIRECTIONAL'
+    ) => {
+      clientLogger.debug('SyncTab: triggering sync', { instanceId, forceFull, direction })
+      const result = await syncTrigger.triggerSync(instanceId, forceFull, direction)
+      if (result) {
+        // Refresh instances to get updated lastSyncAt
+        instances.fetchInstances()
+        // Refresh operations to show the new operation
+        operations.fetchOperations()
+      }
+    },
+    [syncTrigger, instances, operations]
+  )
 
   // Handle connection test
   const handleTest = useCallback(async (instanceId: string) => {
@@ -170,6 +203,13 @@ export default function SyncTab() {
     await instances.deleteInstance(instanceId)
   }, [instances])
 
+  // Handle progress bar dismiss
+  const handleDismissProgress = useCallback(() => {
+    syncProgress.clearProgress()
+    syncTrigger.clearActiveOperation()
+    setSyncingInstanceName('')
+  }, [syncProgress, syncTrigger])
+
   // Loading state
   if (instances.fetchOp.loading && instances.instances.length === 0) {
     return <LoadingState message="Loading sync instances..." />
@@ -186,6 +226,17 @@ export default function SyncTab() {
           installations. Profiles and API keys are never synced.
         </p>
       </div>
+
+      {/* Sync Progress Bar */}
+      {(syncProgress.progress || syncTrigger.syncingInstanceId) && (
+        <SyncProgressBar
+          progress={syncProgress.progress}
+          instanceName={syncingInstanceName}
+          isComplete={syncProgress.isComplete}
+          isFailed={syncProgress.isFailed}
+          onDismiss={handleDismissProgress}
+        />
+      )}
 
       {/* API Key Panel - for receiving sync requests */}
       <ApiKeyPanel

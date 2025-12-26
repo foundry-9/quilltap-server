@@ -13,3 +13,4 @@ export { InstanceList } from './InstanceList';
 export { SyncHistoryPanel } from './SyncHistoryPanel';
 export { ApiKeyPanel } from './ApiKeyPanel';
 export { CleanupPanel } from './CleanupPanel';
+export { SyncProgressBar } from './SyncProgressBar';

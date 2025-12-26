@@ -15,13 +15,14 @@ import { SyncInstanceDisplay } from '../types';
 import { SyncStatusBadge } from './SyncStatusBadge';
 import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover';
 import { clientLogger } from '@/lib/client-logger';
+import type { SyncDirection } from '@/lib/sync/types';
 
 interface InstanceCardProps {
   instance: SyncInstanceDisplay;
   isSyncing: boolean;
   onEdit: (instance: SyncInstanceDisplay) => void;
   onDelete: (instanceId: string) => void;
-  onSync: (instanceId: string, forceFull?: boolean) => void;
+  onSync: (instanceId: string, forceFull?: boolean, direction?: SyncDirection) => void;
   onTest: (instanceId: string) => void;
   deleteConfirmId: string | null;
   onDeleteConfirmToggle: (instanceId: string | null) => void;
@@ -88,12 +89,22 @@ export function InstanceCard({
 
   const handleSyncNow = () => {
     setShowSyncMenu(false);
-    onSync(instance.id, false);
+    onSync(instance.id, false, 'BIDIRECTIONAL');
+  };
+
+  const handlePushOnly = () => {
+    setShowSyncMenu(false);
+    onSync(instance.id, false, 'PUSH');
+  };
+
+  const handlePullOnly = () => {
+    setShowSyncMenu(false);
+    onSync(instance.id, false, 'PULL');
   };
 
   const handleForceFullSync = () => {
     setShowSyncMenu(false);
-    onSync(instance.id, true);
+    onSync(instance.id, true, 'BIDIRECTIONAL');
   };
 
   return (
@@ -155,13 +166,36 @@ export function InstanceCard({
             )}
           </button>
           {showSyncMenu && !isSyncing && (
-            <div className="absolute left-0 mt-1 qt-dropdown min-w-[180px]">
+            <div className="absolute left-0 mt-1 qt-dropdown min-w-[180px] z-10">
               <button
                 type="button"
                 onClick={handleSyncNow}
-                className="qt-dropdown-item w-full text-left"
+                className="qt-dropdown-item w-full text-left flex-col items-start"
               >
-                Sync Now
+                <div>Sync Now</div>
+                <div className="text-xs text-muted-foreground">
+                  Two-way sync
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={handlePushOnly}
+                className="qt-dropdown-item w-full text-left flex-col items-start"
+              >
+                <div>Push Only</div>
+                <div className="text-xs text-muted-foreground">
+                  Send local changes to remote
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={handlePullOnly}
+                className="qt-dropdown-item w-full text-left flex-col items-start"
+              >
+                <div>Pull Only</div>
+                <div className="text-xs text-muted-foreground">
+                  Fetch remote changes to local
+                </div>
               </button>
               <div className="qt-dropdown-separator" />
               <button
@@ -171,7 +205,7 @@ export function InstanceCard({
               >
                 <div>Force Full Sync</div>
                 <div className="text-xs text-muted-foreground">
-                  Pulls all data from remote
+                  Two-way sync, ignores timestamp
                 </div>
               </button>
             </div>

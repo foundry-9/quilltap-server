@@ -13,6 +13,7 @@ import { useEffect } from 'react';
 import { SyncInstanceDisplay } from '../types';
 import { InstanceCard } from './InstanceCard';
 import { clientLogger } from '@/lib/client-logger';
+import type { SyncDirection } from '@/lib/sync/types';
 
 interface InstanceListProps {
   instances: SyncInstanceDisplay[];
@@ -20,7 +21,7 @@ interface InstanceListProps {
   deleteConfirmId: string | null;
   onEdit: (instance: SyncInstanceDisplay) => void;
   onDelete: (instanceId: string) => void;
-  onSync: (instanceId: string) => void;
+  onSync: (instanceId: string, forceFull?: boolean, direction?: SyncDirection) => void;
   onTest: (instanceId: string) => void;
   onDeleteConfirmToggle: (instanceId: string | null) => void;
   onCreate: () => void;
