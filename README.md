@@ -546,8 +546,11 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Project becomes overridding context for chats, images, etc.
 - [X] Bug: when the textarea grows in the chat conversation footer, it doesn't shrink until you change something in it after you submit; upon submit it should reduce to normal levels with nothing in it
 - [X] Make a safely encrypted export/import for API keys, separate from backups
-- [ ] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
-- [ ] Sync API
+- [ ] Starting a new chat should include:
+  - [ ] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
+  - [ ] A scenario prompt so you can set things up before you start
+- [X] Sync API
+- [ ] The plugin list should have the package.json version, not the manifest.json version
 
 ## Acknowledgments
 
