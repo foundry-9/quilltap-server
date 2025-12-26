@@ -4,6 +4,10 @@
 
 ### 2.5-dev
 
+- fix: OAuth redirects now use BASE_URL instead of request.url
+  - Fixes Google Auth redirect to wrong URL when hosted behind CloudFront/reverse proxy
+  - OAuth callback and authorize routes now correctly redirect to the configured BASE_URL
+  - Affects `/api/auth/oauth/[provider]/callback` and `/api/auth/oauth/[provider]/authorize`
 - fix: Attach file button in chat now opens file picker
   - The ChatComposer component was passing an empty callback to tool palettes
   - Now properly triggers the file input click from within the component

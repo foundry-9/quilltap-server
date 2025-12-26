@@ -13,6 +13,7 @@ import {
   getArcticProviderPlugin,
 } from '@/lib/auth/arctic/registry';
 import { generateOAuthState } from '@/lib/auth/arctic/state';
+import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
 interface RouteParams {
@@ -45,7 +46,7 @@ export async function GET(
         provider: providerId,
       });
       return NextResponse.redirect(
-        new URL(`/auth/signin?error=ProviderNotFound`, request.url)
+        new URL(`/auth/signin?error=ProviderNotFound`, env.BASE_URL)
       );
     }
 
@@ -56,7 +57,7 @@ export async function GET(
         missingVars: plugin.getConfigStatus().missingVars,
       });
       return NextResponse.redirect(
-        new URL(`/auth/signin?error=ProviderNotConfigured`, request.url)
+        new URL(`/auth/signin?error=ProviderNotConfigured`, env.BASE_URL)
       );
     }
 
@@ -68,12 +69,12 @@ export async function GET(
         provider: providerId,
       });
       return NextResponse.redirect(
-        new URL(`/auth/signin?error=ProviderError`, request.url)
+        new URL(`/auth/signin?error=ProviderError`, env.BASE_URL)
       );
     }
 
-    // Create redirect response to store state cookies
-    const redirectResponse = NextResponse.redirect(new URL('/loading', request.url));
+    // Create redirect response to store state cookies (uses BASE_URL for correct domain behind proxies)
+    const redirectResponse = NextResponse.redirect(new URL('/loading', env.BASE_URL));
 
     // Generate OAuth state and store in cookies
     const { state, codeVerifier } = generateOAuthState(redirectResponse, callbackUrl);
@@ -102,7 +103,7 @@ export async function GET(
     );
 
     return NextResponse.redirect(
-      new URL(`/auth/signin?error=AuthorizationError`, request.url)
+      new URL(`/auth/signin?error=AuthorizationError`, env.BASE_URL)
     );
   }
 }

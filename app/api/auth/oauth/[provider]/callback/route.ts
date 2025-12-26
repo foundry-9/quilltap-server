@@ -14,6 +14,7 @@ import { toArcticTokenResult } from '@/lib/auth/arctic/types';
 import { createOrFindOAuthUser } from '@/lib/auth/arctic/user-service';
 import { createSessionToken, setSessionCookie } from '@/lib/auth/session';
 import { runPostLoginMigrations } from '@/lib/auth/post-login-migrations';
+import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
 interface RouteParams {
@@ -44,7 +45,7 @@ export async function GET(
         errorDescription,
       });
       return NextResponse.redirect(
-        new URL(`/auth/signin?error=${encodeURIComponent(error)}`, request.url)
+        new URL(`/auth/signin?error=${encodeURIComponent(error)}`, env.BASE_URL)
       );
     }
 
@@ -57,7 +58,7 @@ export async function GET(
         hasState: !!state,
       });
       return NextResponse.redirect(
-        new URL('/auth/signin?error=InvalidCallback', request.url)
+        new URL('/auth/signin?error=InvalidCallback', env.BASE_URL)
       );
     }
 
@@ -69,7 +70,7 @@ export async function GET(
         provider: providerId,
       });
       return NextResponse.redirect(
-        new URL('/auth/signin?error=InvalidState', request.url)
+        new URL('/auth/signin?error=InvalidState', env.BASE_URL)
       );
     }
 
@@ -89,7 +90,7 @@ export async function GET(
         provider: providerId,
       });
       return NextResponse.redirect(
-        new URL('/auth/signin?error=ProviderError', request.url)
+        new URL('/auth/signin?error=ProviderError', env.BASE_URL)
       );
     }
 
@@ -104,7 +105,7 @@ export async function GET(
         tokenError instanceof Error ? tokenError : undefined
       );
       return NextResponse.redirect(
-        new URL('/auth/signin?error=TokenExchangeFailed', request.url)
+        new URL('/auth/signin?error=TokenExchangeFailed', env.BASE_URL)
       );
     }
 
@@ -118,7 +119,7 @@ export async function GET(
         provider: providerId,
       });
       return NextResponse.redirect(
-        new URL('/auth/signin?error=UserInfoFailed', request.url)
+        new URL('/auth/signin?error=UserInfoFailed', env.BASE_URL)
       );
     }
 
@@ -159,8 +160,8 @@ export async function GET(
       email: user.email,
     });
 
-    // Create redirect response
-    const response = NextResponse.redirect(new URL(callbackUrl, request.url));
+    // Create redirect response using BASE_URL to ensure correct domain behind proxies
+    const response = NextResponse.redirect(new URL(callbackUrl, env.BASE_URL));
 
     // Set session cookie and clear OAuth state cookies
     setSessionCookie(response, sessionToken);
@@ -175,7 +176,7 @@ export async function GET(
     );
 
     return NextResponse.redirect(
-      new URL('/auth/signin?error=CallbackError', request.url)
+      new URL('/auth/signin?error=CallbackError', env.BASE_URL)
     );
   }
 }
