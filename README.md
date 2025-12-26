@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.0--dev.34-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.5.0--dev.38-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -552,6 +552,8 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [X] Sync API
 - [ ] The plugin list should have the package.json version, not the manifest.json version
 - [ ] Search and replace in one chat, or in all chats associated with a character or persona
+- [ ] non-localhost hosted Google Auth didn't set the return page correctly after login, so the dashboard ends up going to some non-functioning URL rather than the BASE_URL.
+- [ ] Attaching a file to a chat doesn't seem to be working anymore.
 
 ## Acknowledgments
 
