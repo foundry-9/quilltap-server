@@ -51,12 +51,12 @@ export interface UseSyncProgressResult {
  *
  * @param operationId - The operation ID to poll (null to stop polling)
  * @param instanceName - The name of the instance being synced (for display)
- * @param pollingInterval - How often to poll in ms (default 500ms)
+ * @param pollingInterval - How often to poll in ms (default 1500ms)
  */
 export function useSyncProgress(
   operationId: string | null,
   instanceName: string = '',
-  pollingInterval: number = 500
+  pollingInterval: number = 1500
 ): UseSyncProgressResult {
   const [progress, setProgress] = useState<SyncProgressResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -64,6 +64,8 @@ export function useSyncProgress(
   const [isFailed, setIsFailed] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const isPollingRef = useRef(false)
+  // Use a ref to track completion state for the interval callback to avoid stale closures
+  const isCompleteRef = useRef(false)
 
   // Fetch progress from API
   const fetchProgress = useCallback(async (opId: string) => {
@@ -86,6 +88,7 @@ export function useSyncProgress(
 
         // Check if complete
         if (response.data.status === 'COMPLETED') {
+          isCompleteRef.current = true
           setIsComplete(true)
           setIsFailed(response.data.errors?.length > 0)
           clientLogger.debug('Sync progress: completed', {
@@ -94,6 +97,7 @@ export function useSyncProgress(
             errorCount: response.data.errors?.length || 0,
           })
         } else if (response.data.status === 'FAILED') {
+          isCompleteRef.current = true
           setIsComplete(true)
           setIsFailed(true)
           clientLogger.debug('Sync progress: failed', {
@@ -126,6 +130,7 @@ export function useSyncProgress(
       setError(null)
       setIsComplete(false)
       setIsFailed(false)
+      isCompleteRef.current = false
 
       clientLogger.debug('Starting sync progress polling', {
         operationId,
@@ -136,10 +141,17 @@ export function useSyncProgress(
       // Fetch immediately
       fetchProgress(operationId)
 
-      // Start polling
+      // Start polling - use ref to check completion status to avoid stale closure
       intervalRef.current = setInterval(() => {
-        if (!isComplete && !isFailed) {
+        if (!isCompleteRef.current) {
           fetchProgress(operationId)
+        } else {
+          // Stop polling when complete
+          if (intervalRef.current) {
+            clientLogger.debug('Clearing interval from inside callback (sync complete)')
+            clearInterval(intervalRef.current)
+            intervalRef.current = null
+          }
         }
       }, pollingInterval)
     }
@@ -151,7 +163,7 @@ export function useSyncProgress(
         intervalRef.current = null
       }
     }
-  }, [operationId, pollingInterval, fetchProgress, instanceName, isComplete, isFailed])
+  }, [operationId, pollingInterval, fetchProgress, instanceName])
 
   // Stop polling when complete
   useEffect(() => {
@@ -172,6 +184,7 @@ export function useSyncProgress(
     setError(null)
     setIsComplete(false)
     setIsFailed(false)
+    isCompleteRef.current = false
   }, [])
 
   return {

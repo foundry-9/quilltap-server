@@ -4,6 +4,10 @@
 
 ### 2.5-dev
 
+- fix: Sync progress polling now stops when sync completes
+  - Fixed stale closure bug where polling interval continued indefinitely after sync completion
+  - Changed polling interval from 500ms to 1500ms to reduce unnecessary API calls
+  - Used ref instead of state for completion check inside interval callback
 - feat: Sync direction control - choose between two-way sync, push-only, or pull-only
   - Added direction dropdown in sync instance card: "Sync Now", "Push Only", "Pull Only", "Force Full Sync"
   - Push-only mode: Only send local changes to remote (skip pulling)
