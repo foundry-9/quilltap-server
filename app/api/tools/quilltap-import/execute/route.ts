@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
+import { executeImport, type ConflictStrategy } from '@/lib/import/quilltap-import-service';
 
 /**
  * Maximum execution time for large imports (5 minutes)
@@ -98,48 +99,28 @@ export async function POST(request: NextRequest) {
 
     const manifest = (exportData as Record<string, unknown>).manifest as Record<string, unknown>;
 
+    // Map 'replace' to 'overwrite' for the import service
+    const mappedConflictStrategy: ConflictStrategy =
+      conflictStrategy === 'replace' ? 'overwrite' : conflictStrategy;
+
     logger.info('Starting Quilltap import execution', {
       context: 'POST /api/tools/quilltap-import/execute',
       userId: session.user.id,
       exportType: manifest.exportType,
-      conflictStrategy,
+      conflictStrategy: mappedConflictStrategy,
       importMemories: importMemories || false,
     });
 
-    // TODO: Implement executeImport from lib/import/quilltap-import-service
-    // This should:
-    // 1. Validate all selected entities exist in exportData
-    // 2. Check for conflicts based on conflictStrategy
-    // 3. For 'duplicate' strategy, generate new UUIDs and remap references
-    // 4. Create/update/skip entities in database as appropriate
-    // 5. Handle memories if importMemories is true
-    // 6. Collect and report results and warnings
-
-    const result = {
-      success: true,
-      imported: {
-        characters: 0,
-        personas: 0,
-        chats: 0,
-        messages: 0,
-        roleplayTemplates: 0,
-        connectionProfiles: 0,
-        imageProfiles: 0,
-        tags: 0,
-        memories: 0,
-      },
-      skipped: {
-        characters: 0,
-        personas: 0,
-        chats: 0,
-        roleplayTemplates: 0,
-        connectionProfiles: 0,
-        imageProfiles: 0,
-        tags: 0,
-        memories: 0,
-      },
-      warnings: [],
-    };
+    const result = await executeImport(
+      session.user.id,
+      exportData,
+      {
+        conflictStrategy: mappedConflictStrategy,
+        includeMemories: importMemories || false,
+        includeRelatedEntities: false,
+        selectedIds,
+      }
+    );
 
     logger.info('Quilltap import completed', {
       context: 'POST /api/tools/quilltap-import/execute',

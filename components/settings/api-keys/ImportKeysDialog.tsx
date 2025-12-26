@@ -51,10 +51,10 @@ export function ImportKeysDialog({
     onEscape: onClose,
   })
 
+  // Don't call actions.reset() here - the !isOpen effect in useImportKeys handles that
   const handleClose = useCallback(() => {
-    actions.reset()
     onClose()
-  }, [actions, onClose])
+  }, [onClose])
 
   // Auto-close and show toasts when import is complete
   useEffect(() => {

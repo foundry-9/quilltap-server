@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import type {
@@ -251,10 +251,9 @@ export function useImportKeys({
     }
   }, [])
 
-  return {
-    state,
-    fileInputRef,
-    actions: {
+  // Memoize actions to prevent unnecessary re-renders and effect re-runs
+  const actions = useMemo(
+    () => ({
       handleFileSelect,
       setPassphrase,
       handleVerify,
@@ -262,6 +261,21 @@ export function useImportKeys({
       handleImport,
       goBack,
       reset,
-    },
+    }),
+    [
+      handleFileSelect,
+      setPassphrase,
+      handleVerify,
+      setDuplicateHandling,
+      handleImport,
+      goBack,
+      reset,
+    ]
+  )
+
+  return {
+    state,
+    fileInputRef,
+    actions,
   }
 }

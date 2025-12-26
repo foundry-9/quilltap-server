@@ -191,14 +191,6 @@ export function useImportData({
         ? selectedIds.filter((selectedId) => selectedId !== id)
         : [...selectedIds, id]
 
-      clientLogger.debug('Entity selection toggled', {
-        context: 'useImportData',
-        entityType: type,
-        entityId: id,
-        isSelected: !selectedIds.includes(id),
-        totalSelected: newSelectedIds.length,
-      })
-
       return {
         ...prev,
         selectedEntityIds: {
@@ -219,7 +211,7 @@ export function useImportData({
           exportType: exportData.manifest.exportType,
         })
 
-        const response = await fetch('/api/tools/quilltap-import/preview', {
+        const response = await fetch('/api/tools/quilltap-import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ exportData }),
@@ -259,45 +251,50 @@ export function useImportData({
   )
 
   const handleNext = useCallback(async () => {
-    setState((prev) => {
-      let nextStep: ImportStep = prev.step
-
-      switch (prev.step) {
-        case 'file':
-          if (!prev.exportData) {
-            clientLogger.warn('Cannot proceed without file selected', {
-              context: 'useImportData',
-            })
-            return prev
-          }
-          nextStep = 'preview'
-          break
-        case 'preview':
-          nextStep = 'options'
-          break
-        case 'options':
-          nextStep = 'importing'
-          break
-        default:
-          return prev
-      }
-
-      clientLogger.debug('Moving to next step', {
+    // Check if we can proceed before setting state
+    if (state.step === 'file' && !state.exportData) {
+      clientLogger.warn('Cannot proceed without file selected', {
         context: 'useImportData',
-        currentStep: prev.step,
-        nextStep,
       })
+      return
+    }
 
-      return { ...prev, step: nextStep }
+    const currentStep = state.step
+    let nextStep: ImportStep = currentStep
+
+    switch (currentStep) {
+      case 'file':
+        nextStep = 'preview'
+        break
+      case 'preview':
+        nextStep = 'options'
+        break
+      case 'options':
+        nextStep = 'importing'
+        break
+      default:
+        return
+    }
+
+    clientLogger.debug('Moving to next step', {
+      context: 'useImportData',
+      currentStep,
+      nextStep,
     })
 
+    setState((prev) => ({ ...prev, step: nextStep }))
+
     // Load preview when moving to preview step
-    if (state.step === 'file' && state.exportData) {
+    if (currentStep === 'file' && state.exportData) {
       await loadPreview(state.exportData)
     }
   }, [state.step, state.exportData, loadPreview])
 
   const handleBack = useCallback(() => {
+    clientLogger.debug('Moving to previous step', {
+      context: 'useImportData',
+    })
+
     setState((prev) => {
       let previousStep: ImportStep = prev.step
 
@@ -314,12 +311,6 @@ export function useImportData({
         default:
           return prev
       }
-
-      clientLogger.debug('Moving to previous step', {
-        context: 'useImportData',
-        currentStep: prev.step,
-        previousStep,
-      })
 
       return { ...prev, step: previousStep, error: null }
     })

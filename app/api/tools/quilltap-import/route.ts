@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
+import { previewImport, type QuilltapExport } from '@/lib/import/quilltap-import-service';
 
 // Max file size: 100MB
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
@@ -149,38 +150,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const exported = exportData as Record<string, unknown>;
-    const manifest = exported.manifest;
-    const data = exported.data || {};
+    const exported = exportData as QuilltapExport;
 
     logger.info('Export file validated', {
       context: 'POST /api/tools/quilltap-import',
       userId: session.user.id,
-      exportType: (manifest as Record<string, unknown>).exportType,
+      exportType: exported.manifest.exportType,
     });
 
-    // TODO: Implement previewImport from lib/import/quilltap-import-service
-    // This should:
-    // 1. Check which entities already exist in the user's database
-    // 2. Build preview with conflict indicators
-    // 3. Return structured preview for UI
-
-    const preview = {
-      manifest,
-      entities: {
-        // TODO: Populate with actual entity lists and conflict detection
-        // Example structure:
-        // characters: [
-        //   { id: '123', name: 'Alice', exists: true },
-        //   { id: '456', name: 'Bob', exists: false }
-        // ]
-      },
-      warnings: [],
-    };
+    const preview = await previewImport(session.user.id, exported);
 
     logger.debug('Quilltap import preview generated', {
       context: 'POST /api/tools/quilltap-import',
       userId: session.user.id,
+      entityTypes: Object.keys(preview.entities),
+      conflictCounts: preview.conflictCounts,
     });
 
     return NextResponse.json(preview);

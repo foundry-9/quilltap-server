@@ -40,6 +40,21 @@ function formatDate(dateString: string): string {
   }
 }
 
+// Map camelCase entity keys from API to kebab-case ExportEntityType
+function toExportEntityType(key: string): ExportEntityType {
+  const mapping: Record<string, ExportEntityType> = {
+    characters: 'characters',
+    personas: 'personas',
+    chats: 'chats',
+    tags: 'tags',
+    connectionProfiles: 'connection-profiles',
+    imageProfiles: 'image-profiles',
+    embeddingProfiles: 'embedding-profiles',
+    roleplayTemplates: 'roleplay-templates',
+  }
+  return mapping[key] || (key as ExportEntityType)
+}
+
 export function ImportDialog({
   isOpen,
   onClose,
@@ -49,7 +64,7 @@ export function ImportDialog({
 }) {
   const { state, fileInputRef, actions } = useImportData({
     isOpen,
-    onSuccess: onClose,
+    // Don't pass onClose as onSuccess - let user see the complete step
   })
   const [dragActive, setDragActive] = useState(false)
 
@@ -97,12 +112,13 @@ export function ImportDialog({
     e.stopPropagation()
   }
 
-  const getEntityTypesInPreview = (): ExportEntityType[] => {
+  // Get entity keys from preview (camelCase from API)
+  const getEntityKeysInPreview = (): string[] => {
     if (!state.preview) return []
     const entities = state.preview.entities || {}
     return Object.keys(entities).filter(
       (key) => key !== 'memories' && (entities as Record<string, unknown>)[key],
-    ) as ExportEntityType[]
+    )
   }
 
   return (
@@ -249,22 +265,23 @@ export function ImportDialog({
 
                     {/* Entity Lists */}
                     <div className="space-y-3 max-h-96 overflow-y-auto">
-                      {getEntityTypesInPreview().map((entityType) => {
-                        const entities = (state.preview?.entities || {})[entityType] || []
+                      {getEntityKeysInPreview().map((entityKey) => {
+                        const entities = (state.preview?.entities || {})[entityKey] || []
                         if (!entities || entities.length === 0) return null
 
                         const selectedCount = (
-                          state.selectedEntityIds[entityType] || []
+                          state.selectedEntityIds[entityKey] || []
                         ).length
+                        const displayType = toExportEntityType(entityKey)
 
                         return (
                           <div
-                            key={entityType}
+                            key={entityKey}
                             className="p-4 border border-border rounded-lg space-y-2"
                           >
                             <div className="flex items-center justify-between">
                               <h4 className="font-medium text-foreground">
-                                {ENTITY_TYPE_LABELS[entityType as ExportEntityType]}
+                                {ENTITY_TYPE_LABELS[displayType]}
                               </h4>
                               <span className="qt-text-small text-muted-foreground">
                                 {selectedCount} of {entities.length}
@@ -285,10 +302,10 @@ export function ImportDialog({
                                     <input
                                       type="checkbox"
                                       checked={(
-                                        state.selectedEntityIds[entityType] || []
+                                        state.selectedEntityIds[entityKey] || []
                                       ).includes(entity.id)}
                                       onChange={() =>
-                                        actions.toggleEntitySelection(entityType, entity.id)
+                                        actions.toggleEntitySelection(entityKey, entity.id)
                                       }
                                       className="w-4 h-4"
                                     />
@@ -407,6 +424,19 @@ export function ImportDialog({
                         </span>
                         <span className="font-medium text-green-600 dark:text-green-400">
                           +{value}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  {Object.entries(state.importResult.skipped || {}).map(([key, value]) => {
+                    if (value === 0) return null
+                    return (
+                      <div key={`skipped-${key}`} className="flex justify-between">
+                        <span className="text-foreground capitalize">
+                          {key.replace(/([A-Z])/g, ' $1').trim()} (skipped)
+                        </span>
+                        <span className="font-medium text-muted-foreground">
+                          {value}
                         </span>
                       </div>
                     )

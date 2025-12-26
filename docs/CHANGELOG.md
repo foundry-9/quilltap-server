@@ -4,6 +4,26 @@
 
 ### 2.5-dev
 
+- fix: Quilltap import now actually imports data
+  - The `/api/tools/quilltap-import/execute` route was stubbed and never called `executeImport`
+  - Imports of connection profiles, image profiles, characters, chats, etc. now work correctly
+  - Added proper conflict strategy mapping from 'replace' to 'overwrite'
+- fix: API key import dialog now auto-closes correctly after successful import
+  - Memoized `actions` object in `useImportKeys` to prevent useEffect dependency churn
+  - Removed redundant `reset()` call from `handleClose` (the `!isOpen` effect already handles reset)
+- fix: Removed clientLogger calls from inside setState callbacks in `useImportData`
+  - Fixes React error about updating component while rendering another component
+- fix: Quilltap import preview now works correctly
+  - The preview route was stubbed and never called `previewImport`
+  - Fixed hook to call correct URL (`/api/tools/quilltap-import` not `/preview`)
+  - Added embedding profiles support to preview function
+  - Fixed entity type label mapping (camelCase from API to kebab-case for labels)
+- fix: Import dialog now shows success screen with statistics after import completes
+  - Previously the dialog closed immediately on success, skipping the complete step
+  - Now shows imported counts (green) and skipped counts (if any)
+- fix: API key test now works for all providers (including Google)
+  - Added `initializePlugins()` call to ensure provider registry is initialized
+  - Fixes "Provider not found" errors in development mode with hot-reloading
 - feat: API key import dialog auto-closes after successful import
   - Dialog now closes automatically 1.5 seconds after showing success message
   - Eliminates need to manually click "Close" button

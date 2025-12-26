@@ -85,6 +85,7 @@ export interface ImportPreview {
     roleplayTemplates?: ImportPreviewEntity[];
     connectionProfiles?: ImportPreviewEntity[];
     imageProfiles?: ImportPreviewEntity[];
+    embeddingProfiles?: ImportPreviewEntity[];
     tags?: ImportPreviewEntity[];
     memories?: { count: number };
   };
@@ -230,7 +231,7 @@ export async function previewImport(
   const data = getExportData(exportData);
 
   // Preview all entity types
-  const [characters, personas, chats, tags, connectionProfiles, imageProfiles, roleplayTemplates] =
+  const [characters, personas, chats, tags, connectionProfiles, imageProfiles, embeddingProfiles, roleplayTemplates] =
     await Promise.all([
       checkExists(
         data.characters,
@@ -263,6 +264,11 @@ export async function previewImport(
         'imageProfiles'
       ),
       checkExists(
+        data.embeddingProfiles,
+        (id) => repos.embeddingProfiles.findById(id),
+        'embeddingProfiles'
+      ),
+      checkExists(
         data.roleplayTemplates,
         (id) => {
           const globalRepos = getRepositories();
@@ -281,6 +287,7 @@ export async function previewImport(
       ...(tags.length > 0 && { tags }),
       ...(connectionProfiles.length > 0 && { connectionProfiles }),
       ...(imageProfiles.length > 0 && { imageProfiles }),
+      ...(embeddingProfiles.length > 0 && { embeddingProfiles }),
       ...(roleplayTemplates.length > 0 && { roleplayTemplates }),
       ...(data.memories && {
         memories: { count: data.memories.length },
