@@ -491,13 +491,13 @@ Contributions are welcome! Please:
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-Copyright (c) 2025 Foundry-9
+Copyright (c) 2025 Foundry-9 LLC
 
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
 - **Author**: Charles Sebold
-- **Email**: <charles@sebold.tech>
+- **Email**: <charles.sebold@foundry-9.com>
 - **Website**: <https://foundry-9.com>
 
 ## Release History
@@ -551,6 +551,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] A scenario prompt so you can set things up before you start
 - [X] Sync API
 - [ ] The plugin list should have the package.json version, not the manifest.json version
+- [ ] Search and replace in one chat, or in all chats associated with a character or persona
 
 ## Acknowledgments
 

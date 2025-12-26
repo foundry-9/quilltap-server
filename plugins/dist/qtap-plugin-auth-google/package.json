@@ -16,7 +16,7 @@
     "oauth",
     "arctic"
   ],
-  "author": "Foundry-9",
+  "author": "Foundry-9 LLC",
   "license": "MIT",
   "devDependencies": {
     "esbuild": "^0.24.0"

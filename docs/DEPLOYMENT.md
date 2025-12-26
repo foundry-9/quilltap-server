@@ -649,7 +649,7 @@ No additional tuning usually needed.
 - **Migration Guide**: [MIGRATION.md](MIGRATION.md)
 - **Backup Guide**: [BACKUP-RESTORE.md](BACKUP-RESTORE.md)
 - **GitHub Issues**: https://github.com/foundry-9/quilltap/issues
-- **Email Support**: charles@sebold.tech
+- **Email Support**: charles.sebold@foundry-9.com
 
 ## Security Checklist
 

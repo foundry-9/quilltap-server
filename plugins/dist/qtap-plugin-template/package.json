@@ -7,7 +7,7 @@
     "plugin"
   ],
   "license": "MIT",
-  "author": "Charles Sebold <charles@sebold.tech>",
+  "author": "Charles Sebold <charles.sebold@foundry-9.com>",
   "type": "module",
   "main": "index.js",
   "exports": {

@@ -586,8 +586,8 @@ Declares required permissions.
   "description": "Handles database migrations and upgrades between Quilltap versions",
   "version": "1.0.0",
   "author": {
-    "name": "Foundry-9",
-    "email": "charles@sebold.tech"
+    "name": "Foundry-9 LLC",
+    "email": "charles.sebold@foundry-9.com"
   },
   "license": "MIT",
   "main": "index.js",
@@ -610,8 +610,8 @@ Declares required permissions.
   "description": "Custom roleplay formatting with bare dialogue, [actions], {thoughts}, and // OOC",
   "version": "1.0.0",
   "author": {
-    "name": "Foundry-9",
-    "email": "charles@sebold.tech"
+    "name": "Foundry-9 LLC",
+    "email": "charles.sebold@foundry-9.com"
   },
   "license": "MIT",
   "main": "index.js",

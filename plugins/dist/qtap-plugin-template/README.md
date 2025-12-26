@@ -410,4 +410,4 @@ MIT License - See the LICENSE file in the Quilltap repository.
 
 - **Documentation**: https://github.com/foundry-9/quilltap
 - **Issues**: https://github.com/foundry-9/quilltap/issues
-- **Email**: charles@sebold.tech
+- **Email**: charles.sebold@foundry-9.com

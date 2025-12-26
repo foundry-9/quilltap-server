@@ -1470,5 +1470,5 @@ These are enforced on both client and server.
 
 **Document Version**: 1.0
 **Last Updated**: 2025-11-21
-**Author**: Foundry-9
+**Author**: Foundry-9 LLC
 **Status**: Awaiting Approval
