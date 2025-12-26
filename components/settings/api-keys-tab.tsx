@@ -12,6 +12,7 @@ import DeleteConfirmPopover from '@/components/ui/DeleteConfirmPopover'
 import { ApiKeyModal } from './api-keys/ApiKeyModal'
 import { ExportKeysDialog } from './api-keys/ExportKeysDialog'
 import { ImportKeysDialog } from './api-keys/ImportKeysDialog'
+import { showSuccessToast } from '@/lib/toast'
 
 interface ApiKey {
   id: string
@@ -60,6 +61,34 @@ export default function ApiKeysTab() {
       setApiKeys(result)
     }
   }
+
+  // Trigger auto-association on mount (fire and forget)
+  useEffect(() => {
+    const triggerAutoAssociate = async () => {
+      clientLogger.debug('Triggering auto-association on API keys tab mount')
+      try {
+        const response = await fetchJson<{
+          success: boolean
+          associations: Array<{ profileName: string; keyLabel: string }>
+        }>('/api/keys/auto-associate', { method: 'POST' })
+        if (response.ok && response.data?.associations?.length) {
+          clientLogger.info('Auto-associated profiles with API keys', {
+            count: response.data.associations.length,
+          })
+          // Show toast for each association
+          response.data.associations.forEach((assoc) => {
+            showSuccessToast(
+              `${assoc.profileName} linked to API key "${assoc.keyLabel}"`,
+              4000
+            )
+          })
+        }
+      } catch (error) {
+        clientLogger.debug('Auto-association failed (non-critical)', { error })
+      }
+    }
+    triggerAutoAssociate()
+  }, [])
 
   // Load API keys on mount
   useEffect(() => {

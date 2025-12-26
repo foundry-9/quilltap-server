@@ -12,6 +12,7 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
+import { showSuccessToast } from '@/lib/toast'
 
 interface ApiKey {
   id: string
@@ -51,6 +52,34 @@ export default function ImageProfilesTab() {
     error: deleteError,
     execute: executeDelete,
   } = useAsyncOperation<void>()
+
+  // Trigger auto-association on mount (fire and forget)
+  useEffect(() => {
+    const triggerAutoAssociate = async () => {
+      clientLogger.debug('Triggering auto-association on image profiles tab mount')
+      try {
+        const response = await fetchJson<{
+          success: boolean
+          associations: Array<{ profileName: string; keyLabel: string }>
+        }>('/api/keys/auto-associate', { method: 'POST' })
+        if (response.ok && response.data?.associations?.length) {
+          clientLogger.info('Auto-associated profiles with API keys', {
+            count: response.data.associations.length,
+          })
+          // Show toast for each association
+          response.data.associations.forEach((assoc) => {
+            showSuccessToast(
+              `${assoc.profileName} linked to API key "${assoc.keyLabel}"`,
+              4000
+            )
+          })
+        }
+      } catch (error) {
+        clientLogger.debug('Auto-association failed (non-critical)', { error })
+      }
+    }
+    triggerAutoAssociate()
+  }, [])
 
   // Fetch profiles on mount only
   useEffect(() => {

@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
+import { showSuccessToast } from '@/lib/toast'
 import type { ApiKey, EmbeddingModel, EmbeddingProfile } from '../types'
 
 interface UseEmbeddingProfilesResult {
@@ -14,6 +15,7 @@ interface UseEmbeddingProfilesResult {
   error: string | null
   loadData: () => Promise<void>
   fetchProfiles: () => Promise<void>
+  triggerAutoAssociate: () => Promise<void>
 }
 
 /**
@@ -71,6 +73,30 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
     }
   }, [])
 
+  const triggerAutoAssociate = useCallback(async () => {
+    clientLogger.debug('Triggering auto-association on embedding profiles tab mount')
+    try {
+      const response = await fetchJson<{
+        success: boolean
+        associations: Array<{ profileName: string; keyLabel: string }>
+      }>('/api/keys/auto-associate', { method: 'POST' })
+      if (response.ok && response.data?.associations?.length) {
+        clientLogger.info('Auto-associated profiles with API keys', {
+          count: response.data.associations.length,
+        })
+        // Show toast for each association
+        response.data.associations.forEach((assoc) => {
+          showSuccessToast(
+            `${assoc.profileName} linked to API key "${assoc.keyLabel}"`,
+            4000
+          )
+        })
+      }
+    } catch (error) {
+      clientLogger.debug('Auto-association failed (non-critical)', { error })
+    }
+  }, [])
+
   return {
     profiles,
     apiKeys,
@@ -79,5 +105,6 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
     error,
     loadData,
     fetchProfiles,
+    triggerAutoAssociate,
   }
 }

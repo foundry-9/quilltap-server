@@ -42,6 +42,7 @@ export default function ConnectionProfilesTab() {
     fetchProviders,
     fetchChatSettings,
     handleDelete,
+    triggerAutoAssociate,
   } = useConnectionProfiles()
 
   // Form state and operations
@@ -64,6 +65,12 @@ export default function ConnectionProfilesTab() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProfile, setEditingProfile] = useState<ConnectionProfile | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
+
+  // Trigger auto-association on mount (fire and forget)
+  useEffect(() => {
+    triggerAutoAssociate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Initialize data on mount - only run once
   useEffect(() => {

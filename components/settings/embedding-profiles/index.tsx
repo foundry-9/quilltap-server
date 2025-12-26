@@ -40,7 +40,14 @@ export default function EmbeddingProfilesTab() {
     error: loadError,
     loadData,
     fetchProfiles,
+    triggerAutoAssociate,
   } = useEmbeddingProfiles()
+
+  // Trigger auto-association on mount (fire and forget)
+  useEffect(() => {
+    triggerAutoAssociate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Load initial data on mount only
   useEffect(() => {

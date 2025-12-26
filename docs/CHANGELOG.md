@@ -14,6 +14,13 @@
     or reference a non-existent key
   - Toast notifications show which profiles were auto-linked to the new keys
   - New utility module at `lib/api-keys/auto-associate.ts` for reuse
+- feat: Auto-associate profiles with API keys on settings tab navigation
+  - When navigating to API Keys, Connection Profiles, Image Profiles, or Embedding Profiles tabs
+  - System automatically checks for profiles missing valid API keys and associates them
+  - New `autoAssociateAllKeys()` function uses any matching available key (not just new ones)
+  - New `/api/keys/auto-associate` endpoint for triggering association check
+  - Shows toast notification for each profile that gets linked to an API key
+  - Runs in background without blocking tab rendering
 - fix: Sync progress polling now stops when sync completes
   - Fixed stale closure bug where polling interval continued indefinitely after sync completion
   - Changed polling interval from 500ms to 1500ms to reduce unnecessary API calls
