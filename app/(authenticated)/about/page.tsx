@@ -89,22 +89,25 @@ export default function AboutPage() {
         <h2 className="text-xl font-semibold mb-4">Tech Stack</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-gray-700 dark:text-gray-300">
           <div>
-            <span className="font-medium">Framework:</span> Next.js 16
+            <span className="font-medium">Runtime:</span> Node.js 22+
           </div>
           <div>
-            <span className="font-medium">Language:</span> TypeScript 5.6
+            <span className="font-medium">Framework:</span> Next.js 16+
           </div>
           <div>
-            <span className="font-medium">Database:</span> MongoDB
+            <span className="font-medium">Language:</span> TypeScript 5.6+
+          </div>
+          <div>
+            <span className="font-medium">Database:</span> MongoDB 6+
           </div>
           <div>
             <span className="font-medium">File Storage:</span> S3-compatible
           </div>
           <div>
-            <span className="font-medium">Auth:</span> NextAuth.js
+            <span className="font-medium">Auth:</span> Local + OAuth
           </div>
           <div>
-            <span className="font-medium">Styling:</span> Tailwind CSS 4
+            <span className="font-medium">Styling:</span> Tailwind CSS 4+
           </div>
         </div>
       </div>

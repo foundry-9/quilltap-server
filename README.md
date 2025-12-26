@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.0--dev.33-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.5.0--dev.34-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -119,7 +119,7 @@ Your API keys are decrypted only when the authenticated user requests them, the 
 ### Prerequisites
 
 - **Docker and Docker Compose** (recommended)
-- **Node.js 20+** (for local development)
+- **Node.js 22+** (for local development)
 - **MongoDB** (local or MongoDB Atlas)
 - **S3-compatible storage** (embedded MinIO for development, or external S3/MinIO for production)
 - **Google OAuth credentials** (optional, for OAuth login - [Get them here](https://console.cloud.google.com/))

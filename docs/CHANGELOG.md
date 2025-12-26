@@ -4,6 +4,16 @@
 
 ### 2.5-dev
 
+- chore: Upgrade dependencies for security and performance
+  - Next.js 16.0.5 → 16.1.1 (stable Turbopack caching, security patches CVE-2025-55182 & CVE-2025-66478)
+  - MongoDB driver 6.21.0 → 7.0.0 (requires Node.js 20.19+)
+  - bcrypt 5.1.1 → 6.0.0 (switched to prebuildify, 40 fewer dependencies)
+  - @openrouter/sdk 0.2.11 → 0.3.10
+  - Now requires Node.js 22+
+- docs: Update About page tech stack with version requirements
+  - Added Node.js 22+ runtime requirement
+  - Changed auth from "NextAuth.js" to "Local + OAuth"
+  - Added version minimums to all stack items
 - fix: Quilltap import now actually imports data
   - The `/api/tools/quilltap-import/execute` route was stubbed and never called `executeImport`
   - Imports of connection profiles, image profiles, characters, chats, etc. now work correctly

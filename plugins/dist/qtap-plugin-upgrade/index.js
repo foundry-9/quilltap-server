@@ -538,7 +538,7 @@ var require_bson = __commonJS({
         return options.stylize;
       }
     }
-    var BSON_MAJOR_VERSION = 6;
+    var BSON_MAJOR_VERSION = 7;
     var BSON_VERSION_SYMBOL = Symbol.for("@@mdb.bson.version");
     var BSON_INT32_MAX = 2147483647;
     var BSON_INT32_MIN = -2147483648;
@@ -626,6 +626,7 @@ var require_bson = __commonJS({
       get name() {
         return "BSONOffsetError";
       }
+      offset;
       constructor(message, offset, options) {
         super(`${message}. offset: ${offset}`, options);
         this.offset = offset;
@@ -693,10 +694,14 @@ var require_bson = __commonJS({
     function nodejsMathRandomBytes(byteLength) {
       return nodeJsByteUtils.fromNumberArray(Array.from({ length: byteLength }, () => Math.floor(Math.random() * 256)));
     }
+    function nodejsSecureRandomBytes(byteLength) {
+      return crypto.getRandomValues(nodeJsByteUtils.allocate(byteLength));
+    }
     var nodejsRandomBytes = (() => {
-      try {
-        return require("crypto").randomBytes;
-      } catch {
+      const { crypto: crypto3 } = globalThis;
+      if (crypto3 != null && typeof crypto3.getRandomValues === "function") {
+        return nodejsSecureRandomBytes;
+      } else {
         return nodejsMathRandomBytes;
       }
     })();
@@ -904,7 +909,11 @@ var require_bson = __commonJS({
     };
     var hasGlobalBuffer = typeof Buffer === "function" && Buffer.prototype?._isBuffer !== true;
     var ByteUtils = hasGlobalBuffer ? nodeJsByteUtils : webByteUtils;
+    var bsonType = Symbol.for("@@mdb.bson.type");
     var BSONValue = class {
+      get [bsonType]() {
+        return this._bsontype;
+      }
       get [BSON_VERSION_SYMBOL]() {
         return BSON_MAJOR_VERSION;
       }
@@ -936,7 +945,7 @@ var require_bson = __commonJS({
       getBigInt64LE(source, offset) {
         const hi = BigInt(source[offset + 4] + source[offset + 5] * 256 + source[offset + 6] * 65536 + (source[offset + 7] << 24));
         const lo = BigInt(source[offset] + source[offset + 1] * 256 + source[offset + 2] * 65536 + source[offset + 3] * 16777216);
-        return (hi << BigInt(32)) + lo;
+        return (hi << 32n) + lo;
       },
       getFloat64LE: isBigEndian ? (source, offset) => {
         FLOAT_BYTES[7] = source[offset];
@@ -980,7 +989,7 @@ var require_bson = __commonJS({
         return 4;
       },
       setBigInt64LE(destination, offset, value) {
-        const mask32bits = BigInt(4294967295);
+        const mask32bits = 0xffffffffn;
         let lo = Number(value & mask32bits);
         destination[offset] = lo;
         lo >>= 8;
@@ -989,7 +998,7 @@ var require_bson = __commonJS({
         destination[offset + 2] = lo;
         lo >>= 8;
         destination[offset + 3] = lo;
-        let hi = Number(value >> BigInt(32) & mask32bits);
+        let hi = Number(value >> 32n & mask32bits);
         destination[offset + 4] = hi;
         hi >>= 8;
         destination[offset + 5] = hi;
@@ -1027,6 +1036,27 @@ var require_bson = __commonJS({
       get _bsontype() {
         return "Binary";
       }
+      static BSON_BINARY_SUBTYPE_DEFAULT = 0;
+      static BUFFER_SIZE = 256;
+      static SUBTYPE_DEFAULT = 0;
+      static SUBTYPE_FUNCTION = 1;
+      static SUBTYPE_BYTE_ARRAY = 2;
+      static SUBTYPE_UUID_OLD = 3;
+      static SUBTYPE_UUID = 4;
+      static SUBTYPE_MD5 = 5;
+      static SUBTYPE_ENCRYPTED = 6;
+      static SUBTYPE_COLUMN = 7;
+      static SUBTYPE_SENSITIVE = 8;
+      static SUBTYPE_VECTOR = 9;
+      static SUBTYPE_USER_DEFINED = 128;
+      static VECTOR_TYPE = Object.freeze({
+        Int8: 3,
+        Float32: 39,
+        PackedBit: 16
+      });
+      buffer;
+      sub_type;
+      position;
       constructor(buffer2, subType) {
         super();
         if (!(buffer2 == null) && typeof buffer2 === "string" && !ArrayBuffer.isView(buffer2) && !isAnyArrayBuffer(buffer2) && !Array.isArray(buffer2)) {
@@ -1269,24 +1299,6 @@ var require_bson = __commonJS({
         return new this(bytes, _Binary.SUBTYPE_VECTOR);
       }
     };
-    Binary.BSON_BINARY_SUBTYPE_DEFAULT = 0;
-    Binary.BUFFER_SIZE = 256;
-    Binary.SUBTYPE_DEFAULT = 0;
-    Binary.SUBTYPE_FUNCTION = 1;
-    Binary.SUBTYPE_BYTE_ARRAY = 2;
-    Binary.SUBTYPE_UUID_OLD = 3;
-    Binary.SUBTYPE_UUID = 4;
-    Binary.SUBTYPE_MD5 = 5;
-    Binary.SUBTYPE_ENCRYPTED = 6;
-    Binary.SUBTYPE_COLUMN = 7;
-    Binary.SUBTYPE_SENSITIVE = 8;
-    Binary.SUBTYPE_VECTOR = 9;
-    Binary.SUBTYPE_USER_DEFINED = 128;
-    Binary.VECTOR_TYPE = Object.freeze({
-      Int8: 3,
-      Float32: 39,
-      PackedBit: 16
-    });
     function validateBinaryVector(vector) {
       if (vector.sub_type !== Binary.SUBTYPE_VECTOR)
         return;
@@ -1414,6 +1426,8 @@ var require_bson = __commonJS({
       get _bsontype() {
         return "Code";
       }
+      code;
+      scope;
       constructor(code, scope) {
         super();
         this.code = code.toString();
@@ -1452,6 +1466,10 @@ var require_bson = __commonJS({
       get _bsontype() {
         return "DBRef";
       }
+      collection;
+      oid;
+      db;
+      fields;
       constructor(collection, oid, db, fields) {
         super();
         const parts = collection.split(".");
@@ -1558,6 +1576,9 @@ var require_bson = __commonJS({
       get __isLong__() {
         return true;
       }
+      high;
+      low;
+      unsigned;
       constructor(lowOrValue = 0, highOrUnsigned, unsigned) {
         super();
         const unsignedBool = typeof highOrUnsigned === "boolean" ? highOrUnsigned : Boolean(unsigned);
@@ -1567,6 +1588,15 @@ var require_bson = __commonJS({
         this.high = res.high;
         this.unsigned = res.unsigned;
       }
+      static TWO_PWR_24 = _Long.fromInt(TWO_PWR_24_DBL);
+      static MAX_UNSIGNED_VALUE = _Long.fromBits(4294967295 | 0, 4294967295 | 0, true);
+      static ZERO = _Long.fromInt(0);
+      static UZERO = _Long.fromInt(0, true);
+      static ONE = _Long.fromInt(1);
+      static UONE = _Long.fromInt(1, true);
+      static NEG_ONE = _Long.fromInt(-1);
+      static MAX_VALUE = _Long.fromBits(4294967295 | 0, 2147483647 | 0, false);
+      static MIN_VALUE = _Long.fromBits(0, 2147483648 | 0, false);
       static fromBits(lowBits, highBits, unsigned) {
         return new _Long(lowBits, highBits, unsigned);
       }
@@ -1605,7 +1635,7 @@ var require_bson = __commonJS({
           if (value >= TWO_PWR_64_DBL)
             return _Long.MAX_UNSIGNED_VALUE;
         } else {
-          if (value <= -9223372036854776e3)
+          if (value <= -TWO_PWR_63_DBL)
             return _Long.MIN_VALUE;
           if (value + 1 >= TWO_PWR_63_DBL)
             return _Long.MAX_VALUE;
@@ -1615,8 +1645,8 @@ var require_bson = __commonJS({
         return _Long.fromBits(value % TWO_PWR_32_DBL | 0, value / TWO_PWR_32_DBL | 0, unsigned);
       }
       static fromBigInt(value, unsigned) {
-        const FROM_BIGINT_BIT_MASK = BigInt(4294967295);
-        const FROM_BIGINT_BIT_SHIFT = BigInt(32);
+        const FROM_BIGINT_BIT_MASK = 0xffffffffn;
+        const FROM_BIGINT_BIT_SHIFT = 32n;
         return new _Long(Number(value & FROM_BIGINT_BIT_MASK), Number(value >> FROM_BIGINT_BIT_SHIFT & FROM_BIGINT_BIT_MASK), unsigned);
       }
       static _fromString(str, unsigned, radix) {
@@ -2170,15 +2200,6 @@ var require_bson = __commonJS({
         return `new Long(${longVal}${unsignedVal})`;
       }
     };
-    Long.TWO_PWR_24 = Long.fromInt(TWO_PWR_24_DBL);
-    Long.MAX_UNSIGNED_VALUE = Long.fromBits(4294967295 | 0, 4294967295 | 0, true);
-    Long.ZERO = Long.fromInt(0);
-    Long.UZERO = Long.fromInt(0, true);
-    Long.ONE = Long.fromInt(1);
-    Long.UONE = Long.fromInt(1, true);
-    Long.NEG_ONE = Long.fromInt(-1);
-    Long.MAX_VALUE = Long.fromBits(4294967295 | 0, 2147483647 | 0, false);
-    Long.MIN_VALUE = Long.fromBits(0, 2147483648 | 0, false);
     var PARSE_STRING_REGEXP = /^(\+|-)?(\d+|(\d*\.\d*))?(E|e)?([-+])?(\d+)?$/;
     var PARSE_INF_REGEXP = /^(\+|-)?(Infinity|inf)$/i;
     var PARSE_NAN_REGEXP = /^(\+|-)?NaN$/i;
@@ -2300,6 +2321,7 @@ var require_bson = __commonJS({
       get _bsontype() {
         return "Decimal128";
       }
+      bytes;
       constructor(bytes) {
         super();
         if (typeof bytes === "string") {
@@ -2746,6 +2768,7 @@ var require_bson = __commonJS({
       get _bsontype() {
         return "Double";
       }
+      value;
       constructor(value) {
         super();
         if (value instanceof Number) {
@@ -2808,6 +2831,7 @@ var require_bson = __commonJS({
       get _bsontype() {
         return "Int32";
       }
+      value;
       constructor(value) {
         super();
         if (value instanceof Number) {
@@ -2885,6 +2909,9 @@ var require_bson = __commonJS({
       get _bsontype() {
         return "ObjectId";
       }
+      static index = Math.floor(Math.random() * 16777215);
+      static cacheHexString;
+      buffer;
       constructor(inputId) {
         super();
         let workingId;
@@ -2900,8 +2927,8 @@ var require_bson = __commonJS({
         } else {
           workingId = inputId;
         }
-        if (workingId == null || typeof workingId === "number") {
-          this.buffer = _ObjectId.generate(typeof workingId === "number" ? workingId : void 0);
+        if (workingId == null) {
+          this.buffer = _ObjectId.generate();
         } else if (ArrayBuffer.isView(workingId) && workingId.byteLength === 12) {
           this.buffer = ByteUtils.toLocalBufferType(workingId);
         } else if (typeof workingId === "string") {
@@ -3074,7 +3101,6 @@ var require_bson = __commonJS({
         return `new ObjectId(${inspect(this.toHexString(), options)})`;
       }
     };
-    ObjectId.index = Math.floor(Math.random() * 16777215);
     function internalCalculateObjectSize(object, serializeFunctions, ignoreUndefined) {
       let totalLength = 4 + 1;
       if (Array.isArray(object)) {
@@ -3180,6 +3206,8 @@ var require_bson = __commonJS({
       get _bsontype() {
         return "BSONRegExp";
       }
+      pattern;
+      options;
       constructor(pattern, options) {
         super();
         this.pattern = pattern;
@@ -3233,6 +3261,7 @@ var require_bson = __commonJS({
       get _bsontype() {
         return "BSONSymbol";
       }
+      value;
       constructor(value) {
         super();
         this.value = value;
@@ -3262,6 +3291,10 @@ var require_bson = __commonJS({
       get _bsontype() {
         return "Timestamp";
       }
+      get [bsonType]() {
+        return "Timestamp";
+      }
+      static MAX_VALUE = Long.MAX_UNSIGNED_VALUE;
       get i() {
         return this.low >>> 0;
       }
@@ -3333,7 +3366,6 @@ var require_bson = __commonJS({
         return `new Timestamp({ t: ${t}, i: ${i} })`;
       }
     };
-    Timestamp.MAX_VALUE = Long.MAX_UNSIGNED_VALUE;
     var JS_INT_MAX_LONG = Long.fromNumber(JS_INT_MAX);
     var JS_INT_MIN_LONG = Long.fromNumber(JS_INT_MIN);
     function internalDeserialize(buffer2, options, isArray) {
@@ -4698,6 +4730,7 @@ var require_bson = __commonJS({
       ObjectId,
       Timestamp,
       UUID,
+      bsonType,
       calculateObjectSize,
       deserialize,
       deserializeStream,
@@ -4728,6 +4761,7 @@ var require_bson = __commonJS({
     exports2.ObjectId = ObjectId;
     exports2.Timestamp = Timestamp;
     exports2.UUID = UUID;
+    exports2.bsonType = bsonType;
     exports2.calculateObjectSize = calculateObjectSize;
     exports2.deserialize = deserialize;
     exports2.deserializeStream = deserializeStream;
@@ -4861,6 +4895,32 @@ var require_bson2 = __commonJS({
   }
 });
 
+// ../../../node_modules/mongodb/lib/cmap/wire_protocol/constants.js
+var require_constants = __commonJS({
+  "../../../node_modules/mongodb/lib/cmap/wire_protocol/constants.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.OP_MSG = exports2.OP_COMPRESSED = exports2.OP_DELETE = exports2.OP_QUERY = exports2.OP_INSERT = exports2.OP_UPDATE = exports2.OP_REPLY = exports2.MIN_SUPPORTED_RAW_DATA_SERVER_VERSION = exports2.MIN_SUPPORTED_RAW_DATA_WIRE_VERSION = exports2.MIN_SUPPORTED_QE_SERVER_VERSION = exports2.MIN_SUPPORTED_QE_WIRE_VERSION = exports2.MAX_SUPPORTED_WIRE_VERSION = exports2.MIN_SUPPORTED_WIRE_VERSION = exports2.MIN_SUPPORTED_SNAPSHOT_READS_SERVER_VERSION = exports2.MIN_SUPPORTED_SNAPSHOT_READS_WIRE_VERSION = exports2.MAX_SUPPORTED_SERVER_VERSION = exports2.MIN_SUPPORTED_SERVER_VERSION = void 0;
+    exports2.MIN_SUPPORTED_SERVER_VERSION = "4.2";
+    exports2.MAX_SUPPORTED_SERVER_VERSION = "8.2";
+    exports2.MIN_SUPPORTED_SNAPSHOT_READS_WIRE_VERSION = 13;
+    exports2.MIN_SUPPORTED_SNAPSHOT_READS_SERVER_VERSION = "5.0";
+    exports2.MIN_SUPPORTED_WIRE_VERSION = 8;
+    exports2.MAX_SUPPORTED_WIRE_VERSION = 27;
+    exports2.MIN_SUPPORTED_QE_WIRE_VERSION = 21;
+    exports2.MIN_SUPPORTED_QE_SERVER_VERSION = "7.0";
+    exports2.MIN_SUPPORTED_RAW_DATA_WIRE_VERSION = 27;
+    exports2.MIN_SUPPORTED_RAW_DATA_SERVER_VERSION = "8.2";
+    exports2.OP_REPLY = 1;
+    exports2.OP_UPDATE = 2001;
+    exports2.OP_INSERT = 2002;
+    exports2.OP_QUERY = 2004;
+    exports2.OP_DELETE = 2006;
+    exports2.OP_COMPRESSED = 2012;
+    exports2.OP_MSG = 2013;
+  }
+});
+
 // ../../../node_modules/mongodb/lib/error.js
 var require_error = __commonJS({
   "../../../node_modules/mongodb/lib/error.js"(exports2) {
@@ -4935,7 +4995,7 @@ var require_error = __commonJS({
       ResumableChangeStreamError: "ResumableChangeStreamError",
       HandshakeError: "HandshakeError",
       ResetPool: "ResetPool",
-      PoolRequstedRetry: "PoolRequstedRetry",
+      PoolRequestedRetry: "PoolRequestedRetry",
       InterruptInUseConnections: "InterruptInUseConnections",
       NoWritesPerformed: "NoWritesPerformed"
     });
@@ -5823,7 +5883,7 @@ var require_error = __commonJS({
       return false;
     }
     function isRetryableWriteError(error) {
-      return error.hasErrorLabel(exports2.MongoErrorLabel.RetryableWriteError) || error.hasErrorLabel(exports2.MongoErrorLabel.PoolRequstedRetry);
+      return error.hasErrorLabel(exports2.MongoErrorLabel.RetryableWriteError) || error.hasErrorLabel(exports2.MongoErrorLabel.PoolRequestedRetry);
     }
     function isRetryableReadError(error) {
       const hasRetryableErrorCode = typeof error.code === "number" ? RETRYABLE_READ_ERROR_CODES.has(error.code) : false;
@@ -5925,6 +5985,36 @@ var require_read_preference = __commonJS({
       nearest: "nearest"
     });
     var ReadPreference = class _ReadPreference {
+      static {
+        this.PRIMARY = exports2.ReadPreferenceMode.primary;
+      }
+      static {
+        this.PRIMARY_PREFERRED = exports2.ReadPreferenceMode.primaryPreferred;
+      }
+      static {
+        this.SECONDARY = exports2.ReadPreferenceMode.secondary;
+      }
+      static {
+        this.SECONDARY_PREFERRED = exports2.ReadPreferenceMode.secondaryPreferred;
+      }
+      static {
+        this.NEAREST = exports2.ReadPreferenceMode.nearest;
+      }
+      static {
+        this.primary = new _ReadPreference(exports2.ReadPreferenceMode.primary);
+      }
+      static {
+        this.primaryPreferred = new _ReadPreference(exports2.ReadPreferenceMode.primaryPreferred);
+      }
+      static {
+        this.secondary = new _ReadPreference(exports2.ReadPreferenceMode.secondary);
+      }
+      static {
+        this.secondaryPreferred = new _ReadPreference(exports2.ReadPreferenceMode.secondaryPreferred);
+      }
+      static {
+        this.nearest = new _ReadPreference(exports2.ReadPreferenceMode.nearest);
+      }
       /**
        * @param mode - A string describing the read preference mode (primary|primaryPreferred|secondary|secondaryPreferred|nearest)
        * @param tags - A tag set used to target reads to members with the specified tag(s). tagSet is not available if using read preference mode primary.
@@ -5944,14 +6034,12 @@ var require_read_preference = __commonJS({
         this.tags = tags;
         this.hedge = options?.hedge;
         this.maxStalenessSeconds = void 0;
-        this.minWireVersion = void 0;
         options = options ?? {};
         if (options.maxStalenessSeconds != null) {
           if (options.maxStalenessSeconds <= 0) {
             throw new error_1.MongoInvalidArgumentError("maxStalenessSeconds must be a positive integer");
           }
           this.maxStalenessSeconds = options.maxStalenessSeconds;
-          this.minWireVersion = 5;
         }
         if (this.mode === _ReadPreference.PRIMARY) {
           if (this.tags && Array.isArray(this.tags) && this.tags.length > 0) {
@@ -6083,16 +6171,6 @@ var require_read_preference = __commonJS({
       }
     };
     exports2.ReadPreference = ReadPreference;
-    ReadPreference.PRIMARY = exports2.ReadPreferenceMode.primary;
-    ReadPreference.PRIMARY_PREFERRED = exports2.ReadPreferenceMode.primaryPreferred;
-    ReadPreference.SECONDARY = exports2.ReadPreferenceMode.secondary;
-    ReadPreference.SECONDARY_PREFERRED = exports2.ReadPreferenceMode.secondaryPreferred;
-    ReadPreference.NEAREST = exports2.ReadPreferenceMode.nearest;
-    ReadPreference.primary = new ReadPreference(exports2.ReadPreferenceMode.primary);
-    ReadPreference.primaryPreferred = new ReadPreference(exports2.ReadPreferenceMode.primaryPreferred);
-    ReadPreference.secondary = new ReadPreference(exports2.ReadPreferenceMode.secondary);
-    ReadPreference.secondaryPreferred = new ReadPreference(exports2.ReadPreferenceMode.secondaryPreferred);
-    ReadPreference.nearest = new ReadPreference(exports2.ReadPreferenceMode.nearest);
   }
 });
 
@@ -6307,30 +6385,6 @@ var require_server_selection = __commonJS({
         return selectedServers;
       };
     }
-  }
-});
-
-// ../../../node_modules/mongodb/lib/cmap/wire_protocol/constants.js
-var require_constants = __commonJS({
-  "../../../node_modules/mongodb/lib/cmap/wire_protocol/constants.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.OP_MSG = exports2.OP_COMPRESSED = exports2.OP_DELETE = exports2.OP_QUERY = exports2.OP_INSERT = exports2.OP_UPDATE = exports2.OP_REPLY = exports2.MIN_SUPPORTED_RAW_DATA_SERVER_VERSION = exports2.MIN_SUPPORTED_RAW_DATA_WIRE_VERSION = exports2.MIN_SUPPORTED_QE_SERVER_VERSION = exports2.MIN_SUPPORTED_QE_WIRE_VERSION = exports2.MAX_SUPPORTED_WIRE_VERSION = exports2.MIN_SUPPORTED_WIRE_VERSION = exports2.MAX_SUPPORTED_SERVER_VERSION = exports2.MIN_SUPPORTED_SERVER_VERSION = void 0;
-    exports2.MIN_SUPPORTED_SERVER_VERSION = "4.2";
-    exports2.MAX_SUPPORTED_SERVER_VERSION = "8.2";
-    exports2.MIN_SUPPORTED_WIRE_VERSION = 8;
-    exports2.MAX_SUPPORTED_WIRE_VERSION = 27;
-    exports2.MIN_SUPPORTED_QE_WIRE_VERSION = 21;
-    exports2.MIN_SUPPORTED_QE_SERVER_VERSION = "7.0";
-    exports2.MIN_SUPPORTED_RAW_DATA_WIRE_VERSION = 27;
-    exports2.MIN_SUPPORTED_RAW_DATA_SERVER_VERSION = "8.2";
-    exports2.OP_REPLY = 1;
-    exports2.OP_UPDATE = 2001;
-    exports2.OP_INSERT = 2002;
-    exports2.OP_QUERY = 2004;
-    exports2.OP_DELETE = 2006;
-    exports2.OP_COMPRESSED = 2012;
-    exports2.OP_MSG = 2013;
   }
 });
 
@@ -6777,6 +6831,9 @@ var require_responses = __commonJS({
         const isError = isErrorResponse(bson, elements);
         return isError ? new _MongoDBResponse(bson, 0, false, elements) : new this(bson, 0, false, elements);
       }
+      static {
+        this.empty = new _MongoDBResponse(new Uint8Array([13, 0, 0, 0, 16, 111, 107, 0, 1, 0, 0, 0, 0]));
+      }
       /**
        * Returns true iff:
        * - ok is 0 and the top-level code === 50
@@ -6860,7 +6917,6 @@ var require_responses = __commonJS({
       }
     };
     exports2.MongoDBResponse = MongoDBResponse;
-    MongoDBResponse.empty = new MongoDBResponse(new Uint8Array([13, 0, 0, 0, 16, 111, 107, 0, 1, 0, 0, 0, 0]));
     var CursorResponse = class _CursorResponse extends MongoDBResponse {
       constructor() {
         super(...arguments);
@@ -7102,7 +7158,6 @@ var require_utils = __commonJS({
     exports2.isObject = isObject;
     exports2.mergeOptions = mergeOptions;
     exports2.filterOptions = filterOptions;
-    exports2.applyRetryableWrites = applyRetryableWrites;
     exports2.isPromiseLike = isPromiseLike;
     exports2.decorateWithCollation = decorateWithCollation;
     exports2.decorateWithReadConcern = decorateWithReadConcern;
@@ -7218,12 +7273,6 @@ var require_utils = __commonJS({
         }
       }
       return filterOptions2;
-    }
-    function applyRetryableWrites(target, db) {
-      if (db && db.s.options?.retryWrites) {
-        target.retryWrites = true;
-      }
-      return target;
     }
     function isPromiseLike(value) {
       return value != null && typeof value === "object" && "then" in value && typeof value.then === "function";
@@ -8509,9 +8558,6 @@ var require_aggregate = __commonJS({
         if (!this.hasWriteStage) {
           delete this.options.writeConcern;
         }
-        if (this.explain && this.writeConcern) {
-          throw new error_1.MongoInvalidArgumentError('Option "explain" cannot be used on an aggregate call with writeConcern');
-        }
         if (options?.cursor != null && typeof options.cursor !== "object") {
           throw new error_1.MongoInvalidArgumentError("Cursor options must be an object");
         }
@@ -8575,6 +8621,7 @@ var require_execute_operation = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.executeOperation = executeOperation;
     exports2.autoConnect = autoConnect;
+    var constants_1 = require_constants();
     var error_1 = require_error();
     var read_preference_1 = require_read_preference();
     var server_selection_1 = require_server_selection();
@@ -8596,7 +8643,7 @@ var require_execute_operation = __commonJS({
         session = client.startSession({ owner, explicit: false });
       } else if (session.hasEnded) {
         throw new error_1.MongoExpiredSessionError("Use of expired sessions is not permitted");
-      } else if (session.snapshotEnabled && !topology.capabilities.supportsSnapshotReads) {
+      } else if (session.snapshotEnabled && (0, utils_1.maxWireVersion)(topology) < constants_1.MIN_SUPPORTED_SNAPSHOT_READS_WIRE_VERSION) {
         throw new error_1.MongoCompatibilityError("Snapshot reads require MongoDB 5.0 or later");
       } else if (session.client !== client) {
         throw new error_1.MongoInvalidArgumentError("ClientSession must be from the same MongoClient");
@@ -9755,12 +9802,12 @@ var require_common2 = __commonJS({
         if (bulkOperation.s.checkKeys === false) {
           finalOptions.checkKeys = false;
         }
-        if (finalOptions.retryWrites) {
+        if (bulkOperation.retryWrites) {
           if (isUpdateBatch(batch)) {
-            finalOptions.retryWrites = finalOptions.retryWrites && !batch.operations.some((op) => op.multi);
+            bulkOperation.retryWrites = bulkOperation.retryWrites && !batch.operations.some((op) => op.multi);
           }
           if (isDeleteBatch(batch)) {
-            finalOptions.retryWrites = finalOptions.retryWrites && !batch.operations.some((op) => op.limit === 0);
+            bulkOperation.retryWrites = bulkOperation.retryWrites && !batch.operations.some((op) => op.limit === 0);
           }
         }
         const operation = isInsertBatch(batch) ? new insert_1.InsertOperation(bulkOperation.s.namespace, batch.operations, finalOptions) : isUpdateBatch(batch) ? new update_1.UpdateOperation(bulkOperation.s.namespace, batch.operations, finalOptions) : isDeleteBatch(batch) ? new delete_1.DeleteOperation(bulkOperation.s.namespace, batch.operations, finalOptions) : null;
@@ -9935,6 +9982,7 @@ var require_common2 = __commonJS({
        */
       constructor(collection, options, isOrdered) {
         this.collection = collection;
+        this.retryWrites = collection.db.options?.retryWrites;
         this.isOrdered = isOrdered;
         const topology = (0, utils_1.getTopology)(collection);
         options = options == null ? {} : options;
@@ -9947,8 +9995,6 @@ var require_common2 = __commonJS({
         const maxBatchSizeBytes = usingAutoEncryption ? 1024 * 1024 * 2 : maxBsonObjectSize;
         const maxWriteBatchSize = hello && hello.maxWriteBatchSize ? hello.maxWriteBatchSize : 1e3;
         const maxKeySize = (maxWriteBatchSize - 1).toString(10).length + 2;
-        let finalOptions = Object.assign({}, options);
-        finalOptions = (0, utils_1.applyRetryableWrites)(finalOptions, collection.db);
         const bulkResult = {
           ok: 1,
           writeErrors: [],
@@ -9987,7 +10033,7 @@ var require_common2 = __commonJS({
           // Topology
           topology,
           // Options
-          options: finalOptions,
+          options,
           // BSON options
           bsonOptions: (0, bson_1.resolveBSONOptions)(options),
           // Current operation
@@ -11096,6 +11142,4834 @@ var require_kill_cursors = __commonJS({
   }
 });
 
+// ../../../node_modules/mongodb/lib/cmap/metrics.js
+var require_metrics = __commonJS({
+  "../../../node_modules/mongodb/lib/cmap/metrics.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ConnectionPoolMetrics = void 0;
+    var ConnectionPoolMetrics = class _ConnectionPoolMetrics {
+      constructor() {
+        this.txnConnections = 0;
+        this.cursorConnections = 0;
+        this.otherConnections = 0;
+      }
+      static {
+        this.TXN = "txn";
+      }
+      static {
+        this.CURSOR = "cursor";
+      }
+      static {
+        this.OTHER = "other";
+      }
+      /**
+       * Mark a connection as pinned for a specific operation.
+       */
+      markPinned(pinType) {
+        if (pinType === _ConnectionPoolMetrics.TXN) {
+          this.txnConnections += 1;
+        } else if (pinType === _ConnectionPoolMetrics.CURSOR) {
+          this.cursorConnections += 1;
+        } else {
+          this.otherConnections += 1;
+        }
+      }
+      /**
+       * Unmark a connection as pinned for an operation.
+       */
+      markUnpinned(pinType) {
+        if (pinType === _ConnectionPoolMetrics.TXN) {
+          this.txnConnections -= 1;
+        } else if (pinType === _ConnectionPoolMetrics.CURSOR) {
+          this.cursorConnections -= 1;
+        } else {
+          this.otherConnections -= 1;
+        }
+      }
+      /**
+       * Return information about the cmap metrics as a string.
+       */
+      info(maxPoolSize) {
+        return `Timed out while checking out a connection from connection pool: maxPoolSize: ${maxPoolSize}, connections in use by cursors: ${this.cursorConnections}, connections in use by transactions: ${this.txnConnections}, connections in use by other operations: ${this.otherConnections}`;
+      }
+      /**
+       * Reset the metrics to the initial values.
+       */
+      reset() {
+        this.txnConnections = 0;
+        this.cursorConnections = 0;
+        this.otherConnections = 0;
+      }
+    };
+    exports2.ConnectionPoolMetrics = ConnectionPoolMetrics;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/transactions.js
+var require_transactions = __commonJS({
+  "../../../node_modules/mongodb/lib/transactions.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.Transaction = exports2.TxnState = void 0;
+    exports2.isTransactionCommand = isTransactionCommand;
+    var error_1 = require_error();
+    var read_concern_1 = require_read_concern();
+    var read_preference_1 = require_read_preference();
+    var write_concern_1 = require_write_concern();
+    exports2.TxnState = Object.freeze({
+      NO_TRANSACTION: "NO_TRANSACTION",
+      STARTING_TRANSACTION: "STARTING_TRANSACTION",
+      TRANSACTION_IN_PROGRESS: "TRANSACTION_IN_PROGRESS",
+      TRANSACTION_COMMITTED: "TRANSACTION_COMMITTED",
+      TRANSACTION_COMMITTED_EMPTY: "TRANSACTION_COMMITTED_EMPTY",
+      TRANSACTION_ABORTED: "TRANSACTION_ABORTED"
+    });
+    var stateMachine = {
+      [exports2.TxnState.NO_TRANSACTION]: [exports2.TxnState.NO_TRANSACTION, exports2.TxnState.STARTING_TRANSACTION],
+      [exports2.TxnState.STARTING_TRANSACTION]: [
+        exports2.TxnState.TRANSACTION_IN_PROGRESS,
+        exports2.TxnState.TRANSACTION_COMMITTED,
+        exports2.TxnState.TRANSACTION_COMMITTED_EMPTY,
+        exports2.TxnState.TRANSACTION_ABORTED
+      ],
+      [exports2.TxnState.TRANSACTION_IN_PROGRESS]: [
+        exports2.TxnState.TRANSACTION_IN_PROGRESS,
+        exports2.TxnState.TRANSACTION_COMMITTED,
+        exports2.TxnState.TRANSACTION_ABORTED
+      ],
+      [exports2.TxnState.TRANSACTION_COMMITTED]: [
+        exports2.TxnState.TRANSACTION_COMMITTED,
+        exports2.TxnState.TRANSACTION_COMMITTED_EMPTY,
+        exports2.TxnState.STARTING_TRANSACTION,
+        exports2.TxnState.NO_TRANSACTION
+      ],
+      [exports2.TxnState.TRANSACTION_ABORTED]: [exports2.TxnState.STARTING_TRANSACTION, exports2.TxnState.NO_TRANSACTION],
+      [exports2.TxnState.TRANSACTION_COMMITTED_EMPTY]: [
+        exports2.TxnState.TRANSACTION_COMMITTED_EMPTY,
+        exports2.TxnState.NO_TRANSACTION
+      ]
+    };
+    var ACTIVE_STATES = /* @__PURE__ */ new Set([
+      exports2.TxnState.STARTING_TRANSACTION,
+      exports2.TxnState.TRANSACTION_IN_PROGRESS
+    ]);
+    var COMMITTED_STATES = /* @__PURE__ */ new Set([
+      exports2.TxnState.TRANSACTION_COMMITTED,
+      exports2.TxnState.TRANSACTION_COMMITTED_EMPTY,
+      exports2.TxnState.TRANSACTION_ABORTED
+    ]);
+    var Transaction = class {
+      /** Create a transaction */
+      constructor(options) {
+        options = options ?? {};
+        this.state = exports2.TxnState.NO_TRANSACTION;
+        this.options = {};
+        const writeConcern = write_concern_1.WriteConcern.fromOptions(options);
+        if (writeConcern) {
+          if (writeConcern.w === 0) {
+            throw new error_1.MongoTransactionError("Transactions do not support unacknowledged write concern");
+          }
+          this.options.writeConcern = writeConcern;
+        }
+        if (options.readConcern) {
+          this.options.readConcern = read_concern_1.ReadConcern.fromOptions(options);
+        }
+        if (options.readPreference) {
+          this.options.readPreference = read_preference_1.ReadPreference.fromOptions(options);
+        }
+        if (options.maxCommitTimeMS) {
+          this.options.maxTimeMS = options.maxCommitTimeMS;
+        }
+        this._pinnedServer = void 0;
+        this._recoveryToken = void 0;
+      }
+      get server() {
+        return this._pinnedServer;
+      }
+      get recoveryToken() {
+        return this._recoveryToken;
+      }
+      get isPinned() {
+        return !!this.server;
+      }
+      /**
+       * @returns Whether the transaction has started
+       */
+      get isStarting() {
+        return this.state === exports2.TxnState.STARTING_TRANSACTION;
+      }
+      /**
+       * @returns Whether this session is presently in a transaction
+       */
+      get isActive() {
+        return ACTIVE_STATES.has(this.state);
+      }
+      get isCommitted() {
+        return COMMITTED_STATES.has(this.state);
+      }
+      /**
+       * Transition the transaction in the state machine
+       * @param nextState - The new state to transition to
+       */
+      transition(nextState) {
+        const nextStates = stateMachine[this.state];
+        if (nextStates && nextStates.includes(nextState)) {
+          this.state = nextState;
+          if (this.state === exports2.TxnState.NO_TRANSACTION || this.state === exports2.TxnState.STARTING_TRANSACTION || this.state === exports2.TxnState.TRANSACTION_ABORTED) {
+            this.unpinServer();
+          }
+          return;
+        }
+        throw new error_1.MongoRuntimeError(`Attempted illegal state transition from [${this.state}] to [${nextState}]`);
+      }
+      pinServer(server) {
+        if (this.isActive) {
+          this._pinnedServer = server;
+        }
+      }
+      unpinServer() {
+        this._pinnedServer = void 0;
+      }
+    };
+    exports2.Transaction = Transaction;
+    function isTransactionCommand(command) {
+      return !!(command.commitTransaction || command.abortTransaction);
+    }
+  }
+});
+
+// ../../../node_modules/mongodb/lib/sessions.js
+var require_sessions = __commonJS({
+  "../../../node_modules/mongodb/lib/sessions.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ServerSessionPool = exports2.ServerSession = exports2.ClientSession = void 0;
+    exports2.maybeClearPinnedConnection = maybeClearPinnedConnection;
+    exports2.applySession = applySession;
+    exports2.updateSessionFromResponse = updateSessionFromResponse;
+    var bson_1 = require_bson2();
+    var metrics_1 = require_metrics();
+    var constants_1 = require_constants2();
+    var error_1 = require_error();
+    var mongo_types_1 = require_mongo_types();
+    var execute_operation_1 = require_execute_operation();
+    var run_command_1 = require_run_command();
+    var read_concern_1 = require_read_concern();
+    var read_preference_1 = require_read_preference();
+    var common_1 = require_common();
+    var timeout_1 = require_timeout();
+    var transactions_1 = require_transactions();
+    var utils_1 = require_utils();
+    var write_concern_1 = require_write_concern();
+    var ClientSession = class _ClientSession extends mongo_types_1.TypedEventEmitter {
+      /**
+       * Create a client session.
+       * @internal
+       * @param client - The current client
+       * @param sessionPool - The server session pool (Internal Class)
+       * @param options - Optional settings
+       * @param clientOptions - Optional settings provided when creating a MongoClient
+       */
+      constructor(client, sessionPool, options, clientOptions) {
+        super();
+        this.timeoutContext = null;
+        this.on("error", utils_1.noop);
+        if (client == null) {
+          throw new error_1.MongoRuntimeError("ClientSession requires a MongoClient");
+        }
+        if (sessionPool == null || !(sessionPool instanceof ServerSessionPool)) {
+          throw new error_1.MongoRuntimeError("ClientSession requires a ServerSessionPool");
+        }
+        options = options ?? {};
+        this.snapshotEnabled = options.snapshot === true;
+        if (options.causalConsistency === true && this.snapshotEnabled) {
+          throw new error_1.MongoInvalidArgumentError('Properties "causalConsistency" and "snapshot" are mutually exclusive');
+        }
+        this.client = client;
+        this.sessionPool = sessionPool;
+        this.hasEnded = false;
+        this.clientOptions = clientOptions;
+        this.timeoutMS = options.defaultTimeoutMS ?? client.s.options?.timeoutMS;
+        this.explicit = !!options.explicit;
+        this._serverSession = this.explicit ? this.sessionPool.acquire() : null;
+        this.txnNumberIncrement = 0;
+        const defaultCausalConsistencyValue = this.explicit && options.snapshot !== true;
+        this.supports = {
+          // if we can enable causal consistency, do so by default
+          causalConsistency: options.causalConsistency ?? defaultCausalConsistencyValue
+        };
+        this.clusterTime = options.initialClusterTime;
+        this.operationTime = void 0;
+        this.owner = options.owner;
+        this.defaultTransactionOptions = { ...options.defaultTransactionOptions };
+        this.transaction = new transactions_1.Transaction();
+      }
+      /** The server id associated with this session */
+      get id() {
+        return this.serverSession?.id;
+      }
+      get serverSession() {
+        let serverSession = this._serverSession;
+        if (serverSession == null) {
+          if (this.explicit) {
+            throw new error_1.MongoRuntimeError("Unexpected null serverSession for an explicit session");
+          }
+          if (this.hasEnded) {
+            throw new error_1.MongoRuntimeError("Unexpected null serverSession for an ended implicit session");
+          }
+          serverSession = this.sessionPool.acquire();
+          this._serverSession = serverSession;
+        }
+        return serverSession;
+      }
+      get loadBalanced() {
+        return this.client.topology?.description.type === common_1.TopologyType.LoadBalanced;
+      }
+      /** @internal */
+      pin(conn) {
+        if (this.pinnedConnection) {
+          throw TypeError("Cannot pin multiple connections to the same session");
+        }
+        this.pinnedConnection = conn;
+        conn.emit(constants_1.PINNED, this.inTransaction() ? metrics_1.ConnectionPoolMetrics.TXN : metrics_1.ConnectionPoolMetrics.CURSOR);
+      }
+      /** @internal */
+      unpin(options) {
+        if (this.loadBalanced) {
+          return maybeClearPinnedConnection(this, options);
+        }
+        this.transaction.unpinServer();
+      }
+      get isPinned() {
+        return this.loadBalanced ? !!this.pinnedConnection : this.transaction.isPinned;
+      }
+      /**
+       * Frees any client-side resources held by the current session.  If a session is in a transaction,
+       * the transaction is aborted.
+       *
+       * Does not end the session on the server.
+       *
+       * @param options - Optional settings. Currently reserved for future use
+       */
+      async endSession(options) {
+        try {
+          if (this.inTransaction()) {
+            await this.abortTransaction({ ...options, throwTimeout: true });
+          }
+        } catch (error) {
+          if (error.name === "MongoOperationTimeoutError")
+            throw error;
+          (0, utils_1.squashError)(error);
+        } finally {
+          if (!this.hasEnded) {
+            const serverSession = this.serverSession;
+            if (serverSession != null) {
+              this.sessionPool.release(serverSession);
+              this._serverSession = new ServerSession(serverSession);
+            }
+            this.hasEnded = true;
+            this.emit("ended", this);
+          }
+          maybeClearPinnedConnection(this, { force: true, ...options });
+        }
+      }
+      /**
+       * @experimental
+       * An alias for {@link ClientSession.endSession|ClientSession.endSession()}.
+       */
+      async [Symbol.asyncDispose]() {
+        await this.endSession({ force: true });
+      }
+      /**
+       * Advances the operationTime for a ClientSession.
+       *
+       * @param operationTime - the `BSON.Timestamp` of the operation type it is desired to advance to
+       */
+      advanceOperationTime(operationTime) {
+        if (this.operationTime == null) {
+          this.operationTime = operationTime;
+          return;
+        }
+        if (operationTime.greaterThan(this.operationTime)) {
+          this.operationTime = operationTime;
+        }
+      }
+      /**
+       * Advances the clusterTime for a ClientSession to the provided clusterTime of another ClientSession
+       *
+       * @param clusterTime - the $clusterTime returned by the server from another session in the form of a document containing the `BSON.Timestamp` clusterTime and signature
+       */
+      advanceClusterTime(clusterTime) {
+        if (!clusterTime || typeof clusterTime !== "object") {
+          throw new error_1.MongoInvalidArgumentError("input cluster time must be an object");
+        }
+        if (!clusterTime.clusterTime || clusterTime.clusterTime._bsontype !== "Timestamp") {
+          throw new error_1.MongoInvalidArgumentError('input cluster time "clusterTime" property must be a valid BSON Timestamp');
+        }
+        if (!clusterTime.signature || clusterTime.signature.hash?._bsontype !== "Binary" || typeof clusterTime.signature.keyId !== "bigint" && typeof clusterTime.signature.keyId !== "number" && clusterTime.signature.keyId?._bsontype !== "Long") {
+          throw new error_1.MongoInvalidArgumentError('input cluster time must have a valid "signature" property with BSON Binary hash and BSON Long keyId');
+        }
+        (0, common_1._advanceClusterTime)(this, clusterTime);
+      }
+      /**
+       * Used to determine if this session equals another
+       *
+       * @param session - The session to compare to
+       */
+      equals(session) {
+        if (!(session instanceof _ClientSession)) {
+          return false;
+        }
+        if (this.id == null || session.id == null) {
+          return false;
+        }
+        return utils_1.ByteUtils.equals(this.id.id.buffer, session.id.id.buffer);
+      }
+      /**
+       * Increment the transaction number on the internal ServerSession
+       *
+       * @privateRemarks
+       * This helper increments a value stored on the client session that will be
+       * added to the serverSession's txnNumber upon applying it to a command.
+       * This is because the serverSession is lazily acquired after a connection is obtained
+       */
+      incrementTransactionNumber() {
+        this.txnNumberIncrement += 1;
+      }
+      /** @returns whether this session is currently in a transaction or not */
+      inTransaction() {
+        return this.transaction.isActive;
+      }
+      /**
+       * Starts a new transaction with the given options.
+       *
+       * @remarks
+       * **IMPORTANT**: Running operations in parallel is not supported during a transaction. The use of `Promise.all`,
+       * `Promise.allSettled`, `Promise.race`, etc to parallelize operations inside a transaction is
+       * undefined behaviour.
+       *
+       * @param options - Options for the transaction
+       */
+      startTransaction(options) {
+        if (this.snapshotEnabled) {
+          throw new error_1.MongoCompatibilityError("Transactions are not supported in snapshot sessions");
+        }
+        if (this.inTransaction()) {
+          throw new error_1.MongoTransactionError("Transaction already in progress");
+        }
+        if (this.isPinned && this.transaction.isCommitted) {
+          this.unpin();
+        }
+        this.commitAttempted = false;
+        this.incrementTransactionNumber();
+        this.transaction = new transactions_1.Transaction({
+          readConcern: options?.readConcern ?? this.defaultTransactionOptions.readConcern ?? this.clientOptions?.readConcern,
+          writeConcern: options?.writeConcern ?? this.defaultTransactionOptions.writeConcern ?? this.clientOptions?.writeConcern,
+          readPreference: options?.readPreference ?? this.defaultTransactionOptions.readPreference ?? this.clientOptions?.readPreference,
+          maxCommitTimeMS: options?.maxCommitTimeMS ?? this.defaultTransactionOptions.maxCommitTimeMS
+        });
+        this.transaction.transition(transactions_1.TxnState.STARTING_TRANSACTION);
+      }
+      /**
+       * Commits the currently active transaction in this session.
+       *
+       * @param options - Optional options, can be used to override `defaultTimeoutMS`.
+       */
+      async commitTransaction(options) {
+        if (this.transaction.state === transactions_1.TxnState.NO_TRANSACTION) {
+          throw new error_1.MongoTransactionError("No transaction started");
+        }
+        if (this.transaction.state === transactions_1.TxnState.STARTING_TRANSACTION || this.transaction.state === transactions_1.TxnState.TRANSACTION_COMMITTED_EMPTY) {
+          this.transaction.transition(transactions_1.TxnState.TRANSACTION_COMMITTED_EMPTY);
+          return;
+        }
+        if (this.transaction.state === transactions_1.TxnState.TRANSACTION_ABORTED) {
+          throw new error_1.MongoTransactionError("Cannot call commitTransaction after calling abortTransaction");
+        }
+        const command = { commitTransaction: 1 };
+        const timeoutMS = typeof options?.timeoutMS === "number" ? options.timeoutMS : typeof this.timeoutMS === "number" ? this.timeoutMS : null;
+        const wc = this.transaction.options.writeConcern ?? this.clientOptions?.writeConcern;
+        if (wc != null) {
+          if (timeoutMS == null && this.timeoutContext == null) {
+            write_concern_1.WriteConcern.apply(command, { wtimeoutMS: 1e4, w: "majority", ...wc });
+          } else {
+            const wcKeys = Object.keys(wc);
+            if (wcKeys.length > 2 || !wcKeys.includes("wtimeoutMS") && !wcKeys.includes("wTimeoutMS"))
+              write_concern_1.WriteConcern.apply(command, { ...wc, wtimeoutMS: void 0 });
+          }
+        }
+        if (this.transaction.state === transactions_1.TxnState.TRANSACTION_COMMITTED || this.commitAttempted) {
+          if (timeoutMS == null && this.timeoutContext == null) {
+            write_concern_1.WriteConcern.apply(command, { wtimeoutMS: 1e4, ...wc, w: "majority" });
+          } else {
+            write_concern_1.WriteConcern.apply(command, { w: "majority", ...wc, wtimeoutMS: void 0 });
+          }
+        }
+        if (typeof this.transaction.options.maxTimeMS === "number") {
+          command.maxTimeMS = this.transaction.options.maxTimeMS;
+        }
+        if (this.transaction.recoveryToken) {
+          command.recoveryToken = this.transaction.recoveryToken;
+        }
+        const operation = new run_command_1.RunCommandOperation(new utils_1.MongoDBNamespace("admin"), command, {
+          session: this,
+          readPreference: read_preference_1.ReadPreference.primary,
+          bypassPinningCheck: true
+        });
+        const timeoutContext = this.timeoutContext ?? (typeof timeoutMS === "number" ? timeout_1.TimeoutContext.create({
+          serverSelectionTimeoutMS: this.clientOptions.serverSelectionTimeoutMS,
+          socketTimeoutMS: this.clientOptions.socketTimeoutMS,
+          timeoutMS
+        }) : null);
+        try {
+          await (0, execute_operation_1.executeOperation)(this.client, operation, timeoutContext);
+          this.commitAttempted = void 0;
+          return;
+        } catch (firstCommitError) {
+          this.commitAttempted = true;
+          if (firstCommitError instanceof error_1.MongoError && (0, error_1.isRetryableWriteError)(firstCommitError)) {
+            write_concern_1.WriteConcern.apply(command, { wtimeoutMS: 1e4, ...wc, w: "majority" });
+            this.unpin({ force: true });
+            try {
+              await (0, execute_operation_1.executeOperation)(this.client, new run_command_1.RunCommandOperation(new utils_1.MongoDBNamespace("admin"), command, {
+                session: this,
+                readPreference: read_preference_1.ReadPreference.primary,
+                bypassPinningCheck: true
+              }), timeoutContext);
+              return;
+            } catch (retryCommitError) {
+              if (shouldAddUnknownTransactionCommitResultLabel(retryCommitError)) {
+                retryCommitError.addErrorLabel(error_1.MongoErrorLabel.UnknownTransactionCommitResult);
+              }
+              if (shouldUnpinAfterCommitError(retryCommitError)) {
+                this.unpin({ error: retryCommitError });
+              }
+              throw retryCommitError;
+            }
+          }
+          if (shouldAddUnknownTransactionCommitResultLabel(firstCommitError)) {
+            firstCommitError.addErrorLabel(error_1.MongoErrorLabel.UnknownTransactionCommitResult);
+          }
+          if (shouldUnpinAfterCommitError(firstCommitError)) {
+            this.unpin({ error: firstCommitError });
+          }
+          throw firstCommitError;
+        } finally {
+          this.transaction.transition(transactions_1.TxnState.TRANSACTION_COMMITTED);
+        }
+      }
+      async abortTransaction(options) {
+        if (this.transaction.state === transactions_1.TxnState.NO_TRANSACTION) {
+          throw new error_1.MongoTransactionError("No transaction started");
+        }
+        if (this.transaction.state === transactions_1.TxnState.STARTING_TRANSACTION) {
+          this.transaction.transition(transactions_1.TxnState.TRANSACTION_ABORTED);
+          return;
+        }
+        if (this.transaction.state === transactions_1.TxnState.TRANSACTION_ABORTED) {
+          throw new error_1.MongoTransactionError("Cannot call abortTransaction twice");
+        }
+        if (this.transaction.state === transactions_1.TxnState.TRANSACTION_COMMITTED || this.transaction.state === transactions_1.TxnState.TRANSACTION_COMMITTED_EMPTY) {
+          throw new error_1.MongoTransactionError("Cannot call abortTransaction after calling commitTransaction");
+        }
+        const command = { abortTransaction: 1 };
+        const timeoutMS = typeof options?.timeoutMS === "number" ? options.timeoutMS : this.timeoutContext?.csotEnabled() ? this.timeoutContext.timeoutMS : typeof this.timeoutMS === "number" ? this.timeoutMS : null;
+        const timeoutContext = timeoutMS != null ? timeout_1.TimeoutContext.create({
+          timeoutMS,
+          serverSelectionTimeoutMS: this.clientOptions.serverSelectionTimeoutMS,
+          socketTimeoutMS: this.clientOptions.socketTimeoutMS
+        }) : null;
+        const wc = this.transaction.options.writeConcern ?? this.clientOptions?.writeConcern;
+        if (wc != null && timeoutMS == null) {
+          write_concern_1.WriteConcern.apply(command, { wtimeoutMS: 1e4, w: "majority", ...wc });
+        }
+        if (this.transaction.recoveryToken) {
+          command.recoveryToken = this.transaction.recoveryToken;
+        }
+        const operation = new run_command_1.RunCommandOperation(new utils_1.MongoDBNamespace("admin"), command, {
+          session: this,
+          readPreference: read_preference_1.ReadPreference.primary,
+          bypassPinningCheck: true
+        });
+        try {
+          await (0, execute_operation_1.executeOperation)(this.client, operation, timeoutContext);
+          this.unpin();
+          return;
+        } catch (firstAbortError) {
+          this.unpin();
+          if (firstAbortError.name === "MongoRuntimeError")
+            throw firstAbortError;
+          if (options?.throwTimeout && firstAbortError.name === "MongoOperationTimeoutError") {
+            throw firstAbortError;
+          }
+          if (firstAbortError instanceof error_1.MongoError && (0, error_1.isRetryableWriteError)(firstAbortError)) {
+            try {
+              await (0, execute_operation_1.executeOperation)(this.client, operation, timeoutContext);
+              return;
+            } catch (secondAbortError) {
+              if (secondAbortError.name === "MongoRuntimeError")
+                throw secondAbortError;
+              if (options?.throwTimeout && secondAbortError.name === "MongoOperationTimeoutError") {
+                throw secondAbortError;
+              }
+            }
+          }
+        } finally {
+          this.transaction.transition(transactions_1.TxnState.TRANSACTION_ABORTED);
+          if (this.loadBalanced) {
+            maybeClearPinnedConnection(this, { force: false });
+          }
+        }
+      }
+      /**
+       * This is here to ensure that ClientSession is never serialized to BSON.
+       */
+      toBSON() {
+        throw new error_1.MongoRuntimeError("ClientSession cannot be serialized to BSON.");
+      }
+      /**
+       * Starts a transaction and runs a provided function, ensuring the commitTransaction is always attempted when all operations run in the function have completed.
+       *
+       * **IMPORTANT:** This method requires the function passed in to return a Promise. That promise must be made by `await`-ing all operations in such a way that rejections are propagated to the returned promise.
+       *
+       * **IMPORTANT:** Running operations in parallel is not supported during a transaction. The use of `Promise.all`,
+       * `Promise.allSettled`, `Promise.race`, etc to parallelize operations inside a transaction is
+       * undefined behaviour.
+       *
+       * **IMPORTANT:** When running an operation inside a `withTransaction` callback, if it is not
+       * provided the explicit session in its options, it will not be part of the transaction and it will not respect timeoutMS.
+       *
+       *
+       * @remarks
+       * - If all operations successfully complete and the `commitTransaction` operation is successful, then the provided function will return the result of the provided function.
+       * - If the transaction is unable to complete or an error is thrown from within the provided function, then the provided function will throw an error.
+       *   - If the transaction is manually aborted within the provided function it will not throw.
+       * - If the driver needs to attempt to retry the operations, the provided function may be called multiple times.
+       *
+       * Checkout a descriptive example here:
+       * @see https://www.mongodb.com/blog/post/quick-start-nodejs--mongodb--how-to-implement-transactions
+       *
+       * If a command inside withTransaction fails:
+       * - It may cause the transaction on the server to be aborted.
+       * - This situation is normally handled transparently by the driver.
+       * - However, if the application catches such an error and does not rethrow it, the driver will not be able to determine whether the transaction was aborted or not.
+       * - The driver will then retry the transaction indefinitely.
+       *
+       * To avoid this situation, the application must not silently handle errors within the provided function.
+       * If the application needs to handle errors within, it must await all operations such that if an operation is rejected it becomes the rejection of the callback function passed into withTransaction.
+       *
+       * @param fn - callback to run within a transaction
+       * @param options - optional settings for the transaction
+       * @returns A raw command response or undefined
+       */
+      async withTransaction(fn, options) {
+        const MAX_TIMEOUT = 12e4;
+        const timeoutMS = options?.timeoutMS ?? this.timeoutMS ?? null;
+        this.timeoutContext = timeoutMS != null ? timeout_1.TimeoutContext.create({
+          timeoutMS,
+          serverSelectionTimeoutMS: this.clientOptions.serverSelectionTimeoutMS,
+          socketTimeoutMS: this.clientOptions.socketTimeoutMS
+        }) : null;
+        const startTime = this.timeoutContext?.csotEnabled() ? this.timeoutContext.start : (0, utils_1.now)();
+        let committed = false;
+        let result;
+        try {
+          while (!committed) {
+            this.startTransaction(options);
+            try {
+              const promise = fn(this);
+              if (!(0, utils_1.isPromiseLike)(promise)) {
+                throw new error_1.MongoInvalidArgumentError("Function provided to `withTransaction` must return a Promise");
+              }
+              result = await promise;
+              if (this.transaction.state === transactions_1.TxnState.NO_TRANSACTION || this.transaction.state === transactions_1.TxnState.TRANSACTION_COMMITTED || this.transaction.state === transactions_1.TxnState.TRANSACTION_ABORTED) {
+                return result;
+              }
+            } catch (fnError) {
+              if (!(fnError instanceof error_1.MongoError) || fnError instanceof error_1.MongoInvalidArgumentError) {
+                await this.abortTransaction();
+                throw fnError;
+              }
+              if (this.transaction.state === transactions_1.TxnState.STARTING_TRANSACTION || this.transaction.state === transactions_1.TxnState.TRANSACTION_IN_PROGRESS) {
+                await this.abortTransaction();
+              }
+              if (fnError.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError) && (this.timeoutContext != null || (0, utils_1.now)() - startTime < MAX_TIMEOUT)) {
+                continue;
+              }
+              throw fnError;
+            }
+            while (!committed) {
+              try {
+                await this.commitTransaction();
+                committed = true;
+              } catch (commitError) {
+                if (!isMaxTimeMSExpiredError(commitError) && commitError.hasErrorLabel(error_1.MongoErrorLabel.UnknownTransactionCommitResult) && (this.timeoutContext != null || (0, utils_1.now)() - startTime < MAX_TIMEOUT)) {
+                  continue;
+                }
+                if (commitError.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError) && (this.timeoutContext != null || (0, utils_1.now)() - startTime < MAX_TIMEOUT)) {
+                  break;
+                }
+                throw commitError;
+              }
+            }
+          }
+          return result;
+        } finally {
+          this.timeoutContext = null;
+        }
+      }
+    };
+    exports2.ClientSession = ClientSession;
+    var NON_DETERMINISTIC_WRITE_CONCERN_ERRORS = /* @__PURE__ */ new Set([
+      "CannotSatisfyWriteConcern",
+      "UnknownReplWriteConcern",
+      "UnsatisfiableWriteConcern"
+    ]);
+    function shouldUnpinAfterCommitError(commitError) {
+      if (commitError instanceof error_1.MongoError) {
+        if ((0, error_1.isRetryableWriteError)(commitError) || commitError instanceof error_1.MongoWriteConcernError || isMaxTimeMSExpiredError(commitError)) {
+          if (isUnknownTransactionCommitResult(commitError)) {
+            return true;
+          }
+        } else if (commitError.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    function shouldAddUnknownTransactionCommitResultLabel(commitError) {
+      let ok = (0, error_1.isRetryableWriteError)(commitError);
+      ok ||= commitError instanceof error_1.MongoWriteConcernError;
+      ok ||= isMaxTimeMSExpiredError(commitError);
+      ok &&= isUnknownTransactionCommitResult(commitError);
+      return ok;
+    }
+    function isUnknownTransactionCommitResult(err) {
+      const isNonDeterministicWriteConcernError = err instanceof error_1.MongoServerError && err.codeName && NON_DETERMINISTIC_WRITE_CONCERN_ERRORS.has(err.codeName);
+      return isMaxTimeMSExpiredError(err) || !isNonDeterministicWriteConcernError && err.code !== error_1.MONGODB_ERROR_CODES.UnsatisfiableWriteConcern && err.code !== error_1.MONGODB_ERROR_CODES.UnknownReplWriteConcern;
+    }
+    function maybeClearPinnedConnection(session, options) {
+      const conn = session.pinnedConnection;
+      const error = options?.error;
+      if (session.inTransaction() && error && error instanceof error_1.MongoError && error.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError)) {
+        return;
+      }
+      const topology = session.client.topology;
+      if (conn && topology != null) {
+        const servers = Array.from(topology.s.servers.values());
+        const loadBalancer = servers[0];
+        if (options?.error == null || options?.force) {
+          loadBalancer.pool.checkIn(conn);
+          session.pinnedConnection = void 0;
+          conn.emit(constants_1.UNPINNED, session.transaction.state !== transactions_1.TxnState.NO_TRANSACTION ? metrics_1.ConnectionPoolMetrics.TXN : metrics_1.ConnectionPoolMetrics.CURSOR);
+          if (options?.forceClear) {
+            loadBalancer.pool.clear({ serviceId: conn.serviceId });
+          }
+        }
+      }
+    }
+    function isMaxTimeMSExpiredError(err) {
+      if (err == null || !(err instanceof error_1.MongoServerError)) {
+        return false;
+      }
+      return err.code === error_1.MONGODB_ERROR_CODES.MaxTimeMSExpired || err.writeConcernError?.code === error_1.MONGODB_ERROR_CODES.MaxTimeMSExpired;
+    }
+    var ServerSession = class {
+      /** @internal */
+      constructor(cloned) {
+        if (cloned != null) {
+          const idBytes = Buffer.allocUnsafe(16);
+          idBytes.set(cloned.id.id.buffer);
+          this.id = { id: new bson_1.Binary(idBytes, cloned.id.id.sub_type) };
+          this.lastUse = cloned.lastUse;
+          this.txnNumber = cloned.txnNumber;
+          this.isDirty = cloned.isDirty;
+          return;
+        }
+        this.id = { id: new bson_1.Binary((0, utils_1.uuidV4)(), bson_1.Binary.SUBTYPE_UUID) };
+        this.lastUse = (0, utils_1.now)();
+        this.txnNumber = 0;
+        this.isDirty = false;
+      }
+      /**
+       * Determines if the server session has timed out.
+       *
+       * @param sessionTimeoutMinutes - The server's "logicalSessionTimeoutMinutes"
+       */
+      hasTimedOut(sessionTimeoutMinutes) {
+        const idleTimeMinutes = Math.round((0, utils_1.calculateDurationInMs)(this.lastUse) % 864e5 % 36e5 / 6e4);
+        return idleTimeMinutes > sessionTimeoutMinutes - 1;
+      }
+    };
+    exports2.ServerSession = ServerSession;
+    var ServerSessionPool = class {
+      constructor(client) {
+        if (client == null) {
+          throw new error_1.MongoRuntimeError("ServerSessionPool requires a MongoClient");
+        }
+        this.client = client;
+        this.sessions = new utils_1.List();
+      }
+      /**
+       * Acquire a Server Session from the pool.
+       * Iterates through each session in the pool, removing any stale sessions
+       * along the way. The first non-stale session found is removed from the
+       * pool and returned. If no non-stale session is found, a new ServerSession is created.
+       */
+      acquire() {
+        const sessionTimeoutMinutes = this.client.topology?.logicalSessionTimeoutMinutes ?? 10;
+        let session = null;
+        while (this.sessions.length > 0) {
+          const potentialSession = this.sessions.shift();
+          if (potentialSession != null && (!!this.client.topology?.loadBalanced || !potentialSession.hasTimedOut(sessionTimeoutMinutes))) {
+            session = potentialSession;
+            break;
+          }
+        }
+        if (session == null) {
+          session = new ServerSession();
+        }
+        return session;
+      }
+      /**
+       * Release a session to the session pool
+       * Adds the session back to the session pool if the session has not timed out yet.
+       * This method also removes any stale sessions from the pool.
+       *
+       * @param session - The session to release to the pool
+       */
+      release(session) {
+        const sessionTimeoutMinutes = this.client.topology?.logicalSessionTimeoutMinutes ?? 10;
+        if (this.client.topology?.loadBalanced && !sessionTimeoutMinutes) {
+          this.sessions.unshift(session);
+        }
+        if (!sessionTimeoutMinutes) {
+          return;
+        }
+        this.sessions.prune((session2) => session2.hasTimedOut(sessionTimeoutMinutes));
+        if (!session.hasTimedOut(sessionTimeoutMinutes)) {
+          if (session.isDirty) {
+            return;
+          }
+          this.sessions.unshift(session);
+        }
+      }
+    };
+    exports2.ServerSessionPool = ServerSessionPool;
+    function applySession(session, command, options) {
+      if (session.hasEnded) {
+        return new error_1.MongoExpiredSessionError();
+      }
+      const serverSession = session.serverSession;
+      if (serverSession == null) {
+        return new error_1.MongoRuntimeError("Unable to acquire server session");
+      }
+      if (options.writeConcern?.w === 0) {
+        if (session && session.explicit) {
+          return new error_1.MongoAPIError("Cannot have explicit session with unacknowledged writes");
+        }
+        return;
+      }
+      serverSession.lastUse = (0, utils_1.now)();
+      command.lsid = serverSession.id;
+      const inTxnOrTxnCommand = session.inTransaction() || (0, transactions_1.isTransactionCommand)(command);
+      const isRetryableWrite = !!options.willRetryWrite;
+      if (isRetryableWrite || inTxnOrTxnCommand) {
+        serverSession.txnNumber += session.txnNumberIncrement;
+        session.txnNumberIncrement = 0;
+        command.txnNumber = bson_1.Long.fromNumber(serverSession.txnNumber);
+      }
+      if (!inTxnOrTxnCommand) {
+        if (session.transaction.state !== transactions_1.TxnState.NO_TRANSACTION) {
+          session.transaction.transition(transactions_1.TxnState.NO_TRANSACTION);
+        }
+        if (session.supports.causalConsistency && session.operationTime && (0, utils_1.commandSupportsReadConcern)(command)) {
+          command.readConcern = command.readConcern || {};
+          Object.assign(command.readConcern, { afterClusterTime: session.operationTime });
+        } else if (session.snapshotEnabled) {
+          command.readConcern = command.readConcern || { level: read_concern_1.ReadConcernLevel.snapshot };
+          if (session.snapshotTime != null) {
+            Object.assign(command.readConcern, { atClusterTime: session.snapshotTime });
+          }
+        }
+        return;
+      }
+      command.autocommit = false;
+      if (session.transaction.state === transactions_1.TxnState.STARTING_TRANSACTION) {
+        session.transaction.transition(transactions_1.TxnState.TRANSACTION_IN_PROGRESS);
+        command.startTransaction = true;
+        const readConcern = session.transaction.options.readConcern || session?.clientOptions?.readConcern;
+        if (readConcern) {
+          command.readConcern = readConcern;
+        }
+        if (session.supports.causalConsistency && session.operationTime) {
+          command.readConcern = command.readConcern || {};
+          Object.assign(command.readConcern, { afterClusterTime: session.operationTime });
+        }
+      }
+      return;
+    }
+    function updateSessionFromResponse(session, document) {
+      if (document.$clusterTime) {
+        (0, common_1._advanceClusterTime)(session, document.$clusterTime);
+      }
+      if (document.operationTime && session && session.supports.causalConsistency) {
+        session.advanceOperationTime(document.operationTime);
+      }
+      if (document.recoveryToken && session && session.inTransaction()) {
+        session.transaction._recoveryToken = document.recoveryToken;
+      }
+      if (session?.snapshotEnabled && session.snapshotTime == null) {
+        const atClusterTime = document.atClusterTime;
+        if (atClusterTime) {
+          session.snapshotTime = atClusterTime;
+        }
+      }
+    }
+  }
+});
+
+// ../../../node_modules/mongodb/lib/cursor/abstract_cursor.js
+var require_abstract_cursor = __commonJS({
+  "../../../node_modules/mongodb/lib/cursor/abstract_cursor.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.CursorTimeoutContext = exports2.AbstractCursor = exports2.CursorTimeoutMode = exports2.CURSOR_FLAGS = void 0;
+    var stream_1 = require("stream");
+    var bson_1 = require_bson2();
+    var error_1 = require_error();
+    var mongo_types_1 = require_mongo_types();
+    var execute_operation_1 = require_execute_operation();
+    var get_more_1 = require_get_more();
+    var kill_cursors_1 = require_kill_cursors();
+    var read_concern_1 = require_read_concern();
+    var read_preference_1 = require_read_preference();
+    var sessions_1 = require_sessions();
+    var timeout_1 = require_timeout();
+    var utils_1 = require_utils();
+    exports2.CURSOR_FLAGS = [
+      "tailable",
+      "oplogReplay",
+      "noCursorTimeout",
+      "awaitData",
+      "exhaust",
+      "partial"
+    ];
+    function removeActiveCursor() {
+      this.client.s.activeCursors.delete(this);
+    }
+    exports2.CursorTimeoutMode = Object.freeze({
+      ITERATION: "iteration",
+      LIFETIME: "cursorLifetime"
+    });
+    var AbstractCursor = class extends mongo_types_1.TypedEventEmitter {
+      static {
+        this.CLOSE = "close";
+      }
+      /** @internal */
+      constructor(client, namespace, options = {}) {
+        super();
+        this.documents = null;
+        this.hasEmittedClose = false;
+        this.on("error", utils_1.noop);
+        if (!client.s.isMongoClient) {
+          throw new error_1.MongoRuntimeError("Cursor must be constructed with MongoClient");
+        }
+        this.cursorClient = client;
+        this.cursorNamespace = namespace;
+        this.cursorId = null;
+        this.initialized = false;
+        this.isClosed = false;
+        this.isKilled = false;
+        this.cursorOptions = {
+          readPreference: options.readPreference && options.readPreference instanceof read_preference_1.ReadPreference ? options.readPreference : read_preference_1.ReadPreference.primary,
+          ...(0, bson_1.pluckBSONSerializeOptions)(options),
+          timeoutMS: options?.timeoutContext?.csotEnabled() ? options.timeoutContext.timeoutMS : options.timeoutMS,
+          tailable: options.tailable,
+          awaitData: options.awaitData
+        };
+        if (this.cursorOptions.timeoutMS != null) {
+          if (options.timeoutMode == null) {
+            if (options.tailable) {
+              if (options.awaitData) {
+                if (options.maxAwaitTimeMS != null && options.maxAwaitTimeMS >= this.cursorOptions.timeoutMS)
+                  throw new error_1.MongoInvalidArgumentError("Cannot specify maxAwaitTimeMS >= timeoutMS for a tailable awaitData cursor");
+              }
+              this.cursorOptions.timeoutMode = exports2.CursorTimeoutMode.ITERATION;
+            } else {
+              this.cursorOptions.timeoutMode = exports2.CursorTimeoutMode.LIFETIME;
+            }
+          } else {
+            if (options.tailable && options.timeoutMode === exports2.CursorTimeoutMode.LIFETIME) {
+              throw new error_1.MongoInvalidArgumentError("Cannot set tailable cursor's timeoutMode to LIFETIME");
+            }
+            this.cursorOptions.timeoutMode = options.timeoutMode;
+          }
+        } else {
+          if (options.timeoutMode != null)
+            throw new error_1.MongoInvalidArgumentError("Cannot set timeoutMode without setting timeoutMS");
+        }
+        this.cursorOptions.omitMaxTimeMS = this.cursorOptions.timeoutMS != null && (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION && !this.cursorOptions.tailable || this.cursorOptions.tailable && !this.cursorOptions.awaitData);
+        const readConcern = read_concern_1.ReadConcern.fromOptions(options);
+        if (readConcern) {
+          this.cursorOptions.readConcern = readConcern;
+        }
+        if (typeof options.batchSize === "number") {
+          this.cursorOptions.batchSize = options.batchSize;
+        }
+        if (options.comment !== void 0) {
+          this.cursorOptions.comment = options.comment;
+        }
+        if (typeof options.maxTimeMS === "number") {
+          this.cursorOptions.maxTimeMS = options.maxTimeMS;
+        }
+        if (typeof options.maxAwaitTimeMS === "number") {
+          this.cursorOptions.maxAwaitTimeMS = options.maxAwaitTimeMS;
+        }
+        this.cursorSession = options.session ?? null;
+        this.deserializationOptions = {
+          ...this.cursorOptions,
+          validation: {
+            utf8: options?.enableUtf8Validation === false ? false : true
+          }
+        };
+        this.timeoutContext = options.timeoutContext;
+        this.signal = options.signal;
+        this.abortListener = (0, utils_1.addAbortListener)(this.signal, () => void this.close().then(void 0, utils_1.squashError));
+        this.trackCursor();
+      }
+      /**
+       * The cursor has no id until it receives a response from the initial cursor creating command.
+       *
+       * It is non-zero for as long as the database has an open cursor.
+       *
+       * The initiating command may receive a zero id if the entire result is in the `firstBatch`.
+       */
+      get id() {
+        return this.cursorId ?? void 0;
+      }
+      /** @internal */
+      get isDead() {
+        return (this.cursorId?.isZero() ?? false) || this.isClosed || this.isKilled;
+      }
+      /** @internal */
+      get client() {
+        return this.cursorClient;
+      }
+      /** @internal */
+      get server() {
+        return this.selectedServer;
+      }
+      get namespace() {
+        return this.cursorNamespace;
+      }
+      get readPreference() {
+        return this.cursorOptions.readPreference;
+      }
+      get readConcern() {
+        return this.cursorOptions.readConcern;
+      }
+      /** @internal */
+      get session() {
+        return this.cursorSession;
+      }
+      set session(clientSession) {
+        this.cursorSession = clientSession;
+      }
+      /**
+       * The cursor is closed and all remaining locally buffered documents have been iterated.
+       */
+      get closed() {
+        return this.isClosed && (this.documents?.length ?? 0) === 0;
+      }
+      /**
+       * A `killCursors` command was attempted on this cursor.
+       * This is performed if the cursor id is non zero.
+       */
+      get killed() {
+        return this.isKilled;
+      }
+      get loadBalanced() {
+        return !!this.cursorClient.topology?.loadBalanced;
+      }
+      /**
+       * @experimental
+       * An alias for {@link AbstractCursor.close|AbstractCursor.close()}.
+       */
+      async [Symbol.asyncDispose]() {
+        await this.close();
+      }
+      /** Adds cursor to client's tracking so it will be closed by MongoClient.close() */
+      trackCursor() {
+        this.cursorClient.s.activeCursors.add(this);
+        if (!this.listeners("close").includes(removeActiveCursor)) {
+          this.once("close", removeActiveCursor);
+        }
+      }
+      /** Returns current buffered documents length */
+      bufferedCount() {
+        return this.documents?.length ?? 0;
+      }
+      /** Returns current buffered documents */
+      readBufferedDocuments(number) {
+        const bufferedDocs = [];
+        const documentsToRead = Math.min(number ?? this.documents?.length ?? 0, this.documents?.length ?? 0);
+        for (let count = 0; count < documentsToRead; count++) {
+          const document = this.documents?.shift(this.deserializationOptions);
+          if (document != null) {
+            bufferedDocs.push(document);
+          }
+        }
+        return bufferedDocs;
+      }
+      async *[Symbol.asyncIterator]() {
+        this.signal?.throwIfAborted();
+        if (this.closed) {
+          return;
+        }
+        try {
+          while (true) {
+            if (this.isKilled) {
+              return;
+            }
+            if (this.closed) {
+              return;
+            }
+            if (this.cursorId != null && this.isDead && (this.documents?.length ?? 0) === 0) {
+              return;
+            }
+            const document = await this.next();
+            if (document === null) {
+              return;
+            }
+            yield document;
+            this.signal?.throwIfAborted();
+          }
+        } finally {
+          if (!this.isClosed) {
+            try {
+              await this.close();
+            } catch (error) {
+              (0, utils_1.squashError)(error);
+            }
+          }
+        }
+      }
+      stream() {
+        const readable = new ReadableCursorStream(this);
+        const abortListener = (0, utils_1.addAbortListener)(this.signal, function() {
+          readable.destroy(this.reason);
+        });
+        readable.once("end", () => {
+          abortListener?.[utils_1.kDispose]();
+        });
+        return readable;
+      }
+      async hasNext() {
+        this.signal?.throwIfAborted();
+        if (this.cursorId === bson_1.Long.ZERO) {
+          return false;
+        }
+        if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION && this.cursorId != null) {
+          this.timeoutContext?.refresh();
+        }
+        try {
+          do {
+            if ((this.documents?.length ?? 0) !== 0) {
+              return true;
+            }
+            await this.fetchBatch();
+          } while (!this.isDead || (this.documents?.length ?? 0) !== 0);
+        } finally {
+          if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION) {
+            this.timeoutContext?.clear();
+          }
+        }
+        return false;
+      }
+      /** Get the next available document from the cursor, returns null if no more documents are available. */
+      async next() {
+        this.signal?.throwIfAborted();
+        if (this.cursorId === bson_1.Long.ZERO) {
+          throw new error_1.MongoCursorExhaustedError();
+        }
+        if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION && this.cursorId != null) {
+          this.timeoutContext?.refresh();
+        }
+        try {
+          do {
+            const doc = this.documents?.shift(this.deserializationOptions);
+            if (doc != null) {
+              if (this.transform != null)
+                return await this.transformDocument(doc);
+              return doc;
+            }
+            await this.fetchBatch();
+          } while (!this.isDead || (this.documents?.length ?? 0) !== 0);
+        } finally {
+          if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION) {
+            this.timeoutContext?.clear();
+          }
+        }
+        return null;
+      }
+      /**
+       * Try to get the next available document from the cursor or `null` if an empty batch is returned
+       */
+      async tryNext() {
+        this.signal?.throwIfAborted();
+        if (this.cursorId === bson_1.Long.ZERO) {
+          throw new error_1.MongoCursorExhaustedError();
+        }
+        if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION && this.cursorId != null) {
+          this.timeoutContext?.refresh();
+        }
+        try {
+          let doc = this.documents?.shift(this.deserializationOptions);
+          if (doc != null) {
+            if (this.transform != null)
+              return await this.transformDocument(doc);
+            return doc;
+          }
+          await this.fetchBatch();
+          doc = this.documents?.shift(this.deserializationOptions);
+          if (doc != null) {
+            if (this.transform != null)
+              return await this.transformDocument(doc);
+            return doc;
+          }
+        } finally {
+          if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION) {
+            this.timeoutContext?.clear();
+          }
+        }
+        return null;
+      }
+      /**
+       * Iterates over all the documents for this cursor using the iterator, callback pattern.
+       *
+       * If the iterator returns `false`, iteration will stop.
+       *
+       * @param iterator - The iteration callback.
+       * @deprecated - Will be removed in a future release. Use for await...of instead.
+       */
+      async forEach(iterator) {
+        this.signal?.throwIfAborted();
+        if (typeof iterator !== "function") {
+          throw new error_1.MongoInvalidArgumentError('Argument "iterator" must be a function');
+        }
+        for await (const document of this) {
+          const result = iterator(document);
+          if (result === false) {
+            break;
+          }
+        }
+      }
+      /**
+       * Frees any client-side resources used by the cursor.
+       */
+      async close(options) {
+        await this.cleanup(options?.timeoutMS);
+      }
+      /**
+       * Returns an array of documents. The caller is responsible for making sure that there
+       * is enough memory to store the results. Note that the array only contains partial
+       * results when this cursor had been previously accessed. In that case,
+       * cursor.rewind() can be used to reset the cursor.
+       */
+      async toArray() {
+        this.signal?.throwIfAborted();
+        const array = [];
+        for await (const document of this) {
+          array.push(document);
+          const docs = this.readBufferedDocuments();
+          if (this.transform != null) {
+            for (const doc of docs) {
+              array.push(await this.transformDocument(doc));
+            }
+          } else {
+            for (const doc of docs) {
+              array.push(doc);
+            }
+          }
+        }
+        return array;
+      }
+      /**
+       * Add a cursor flag to the cursor
+       *
+       * @param flag - The flag to set, must be one of following ['tailable', 'oplogReplay', 'noCursorTimeout', 'awaitData', 'partial' -.
+       * @param value - The flag boolean value.
+       */
+      addCursorFlag(flag, value) {
+        this.throwIfInitialized();
+        if (!exports2.CURSOR_FLAGS.includes(flag)) {
+          throw new error_1.MongoInvalidArgumentError(`Flag ${flag} is not one of ${exports2.CURSOR_FLAGS}`);
+        }
+        if (typeof value !== "boolean") {
+          throw new error_1.MongoInvalidArgumentError(`Flag ${flag} must be a boolean value`);
+        }
+        this.cursorOptions[flag] = value;
+        return this;
+      }
+      /**
+       * Map all documents using the provided function
+       * If there is a transform set on the cursor, that will be called first and the result passed to
+       * this function's transform.
+       *
+       * @remarks
+       *
+       * **Note** Cursors use `null` internally to indicate that there are no more documents in the cursor. Providing a mapping
+       * function that maps values to `null` will result in the cursor closing itself before it has finished iterating
+       * all documents.  This will **not** result in a memory leak, just surprising behavior.  For example:
+       *
+       * ```typescript
+       * const cursor = collection.find({});
+       * cursor.map(() => null);
+       *
+       * const documents = await cursor.toArray();
+       * // documents is always [], regardless of how many documents are in the collection.
+       * ```
+       *
+       * Other falsey values are allowed:
+       *
+       * ```typescript
+       * const cursor = collection.find({});
+       * cursor.map(() => '');
+       *
+       * const documents = await cursor.toArray();
+       * // documents is now an array of empty strings
+       * ```
+       *
+       * **Note for Typescript Users:** adding a transform changes the return type of the iteration of this cursor,
+       * it **does not** return a new instance of a cursor. This means when calling map,
+       * you should always assign the result to a new variable in order to get a correctly typed cursor variable.
+       * Take note of the following example:
+       *
+       * @example
+       * ```typescript
+       * const cursor: FindCursor<Document> = coll.find();
+       * const mappedCursor: FindCursor<number> = cursor.map(doc => Object.keys(doc).length);
+       * const keyCounts: number[] = await mappedCursor.toArray(); // cursor.toArray() still returns Document[]
+       * ```
+       * @param transform - The mapping transformation method.
+       */
+      map(transform) {
+        this.throwIfInitialized();
+        const oldTransform = this.transform;
+        if (oldTransform) {
+          this.transform = (doc) => {
+            return transform(oldTransform(doc));
+          };
+        } else {
+          this.transform = transform;
+        }
+        return this;
+      }
+      /**
+       * Set the ReadPreference for the cursor.
+       *
+       * @param readPreference - The new read preference for the cursor.
+       */
+      withReadPreference(readPreference) {
+        this.throwIfInitialized();
+        if (readPreference instanceof read_preference_1.ReadPreference) {
+          this.cursorOptions.readPreference = readPreference;
+        } else if (typeof readPreference === "string") {
+          this.cursorOptions.readPreference = read_preference_1.ReadPreference.fromString(readPreference);
+        } else {
+          throw new error_1.MongoInvalidArgumentError(`Invalid read preference: ${readPreference}`);
+        }
+        return this;
+      }
+      /**
+       * Set the ReadPreference for the cursor.
+       *
+       * @param readPreference - The new read preference for the cursor.
+       */
+      withReadConcern(readConcern) {
+        this.throwIfInitialized();
+        const resolvedReadConcern = read_concern_1.ReadConcern.fromOptions({ readConcern });
+        if (resolvedReadConcern) {
+          this.cursorOptions.readConcern = resolvedReadConcern;
+        }
+        return this;
+      }
+      /**
+       * Set a maxTimeMS on the cursor query, allowing for hard timeout limits on queries (Only supported on MongoDB 2.6 or higher)
+       *
+       * @param value - Number of milliseconds to wait before aborting the query.
+       */
+      maxTimeMS(value) {
+        this.throwIfInitialized();
+        if (typeof value !== "number") {
+          throw new error_1.MongoInvalidArgumentError("Argument for maxTimeMS must be a number");
+        }
+        this.cursorOptions.maxTimeMS = value;
+        return this;
+      }
+      /**
+       * Set the batch size for the cursor.
+       *
+       * @param value - The number of documents to return per batch. See {@link https://www.mongodb.com/docs/manual/reference/command/find/|find command documentation}.
+       */
+      batchSize(value) {
+        this.throwIfInitialized();
+        if (this.cursorOptions.tailable) {
+          throw new error_1.MongoTailableCursorError("Tailable cursor does not support batchSize");
+        }
+        if (typeof value !== "number") {
+          throw new error_1.MongoInvalidArgumentError('Operation "batchSize" requires an integer');
+        }
+        this.cursorOptions.batchSize = value;
+        return this;
+      }
+      /**
+       * Rewind this cursor to its uninitialized state. Any options that are present on the cursor will
+       * remain in effect. Iterating this cursor will cause new queries to be sent to the server, even
+       * if the resultant data has already been retrieved by this cursor.
+       */
+      rewind() {
+        if (this.timeoutContext && this.timeoutContext.owner !== this) {
+          throw new error_1.MongoAPIError(`Cannot rewind cursor that does not own its timeout context.`);
+        }
+        if (!this.initialized) {
+          return;
+        }
+        this.cursorId = null;
+        this.documents?.clear();
+        this.timeoutContext?.clear();
+        this.timeoutContext = void 0;
+        this.isClosed = false;
+        this.isKilled = false;
+        this.initialized = false;
+        this.hasEmittedClose = false;
+        this.trackCursor();
+        if (this.cursorSession?.explicit === false) {
+          if (!this.cursorSession.hasEnded) {
+            this.cursorSession.endSession().then(void 0, utils_1.squashError);
+          }
+          this.cursorSession = null;
+        }
+      }
+      /** @internal */
+      async getMore() {
+        if (this.cursorId == null) {
+          throw new error_1.MongoRuntimeError("Unexpected null cursor id. A cursor creating command should have set this");
+        }
+        if (this.selectedServer == null) {
+          throw new error_1.MongoRuntimeError("Unexpected null selectedServer. A cursor creating command should have set this");
+        }
+        if (this.cursorSession == null) {
+          throw new error_1.MongoRuntimeError("Unexpected null session. A cursor creating command should have set this");
+        }
+        const getMoreOptions = {
+          ...this.cursorOptions,
+          session: this.cursorSession,
+          batchSize: this.cursorOptions.batchSize
+        };
+        const getMoreOperation = new get_more_1.GetMoreOperation(this.cursorNamespace, this.cursorId, this.selectedServer, getMoreOptions);
+        return await (0, execute_operation_1.executeOperation)(this.cursorClient, getMoreOperation, this.timeoutContext);
+      }
+      /**
+       * @internal
+       *
+       * This function is exposed for the unified test runner's createChangeStream
+       * operation.  We cannot refactor to use the abstract _initialize method without
+       * a significant refactor.
+       */
+      async cursorInit() {
+        if (this.cursorOptions.timeoutMS != null) {
+          this.timeoutContext ??= new CursorTimeoutContext(timeout_1.TimeoutContext.create({
+            serverSelectionTimeoutMS: this.client.s.options.serverSelectionTimeoutMS,
+            timeoutMS: this.cursorOptions.timeoutMS
+          }), this);
+        }
+        try {
+          this.cursorSession ??= this.cursorClient.startSession({ owner: this, explicit: false });
+          const state = await this._initialize(this.cursorSession);
+          this.cursorOptions.omitMaxTimeMS = this.cursorOptions.timeoutMS != null;
+          const response = state.response;
+          this.selectedServer = state.server;
+          this.cursorId = response.id;
+          this.cursorNamespace = response.ns ?? this.namespace;
+          this.documents = response;
+          this.initialized = true;
+        } catch (error) {
+          this.initialized = true;
+          await this.cleanup(void 0, error);
+          throw error;
+        }
+        if (this.isDead) {
+          await this.cleanup();
+        }
+        return;
+      }
+      /** @internal Attempt to obtain more documents */
+      async fetchBatch() {
+        if (this.isClosed) {
+          return;
+        }
+        if (this.isDead) {
+          await this.cleanup();
+          return;
+        }
+        if (this.cursorId == null) {
+          await this.cursorInit();
+          if ((this.documents?.length ?? 0) !== 0 || this.isDead)
+            return;
+        }
+        try {
+          const response = await this.getMore();
+          this.cursorId = response.id;
+          this.documents = response;
+        } catch (error) {
+          try {
+            await this.cleanup(void 0, error);
+          } catch (cleanupError) {
+            (0, utils_1.squashError)(cleanupError);
+          }
+          throw error;
+        }
+        if (this.isDead) {
+          await this.cleanup();
+        }
+      }
+      /** @internal */
+      async cleanup(timeoutMS, error) {
+        this.abortListener?.[utils_1.kDispose]();
+        this.isClosed = true;
+        const timeoutContextForKillCursors = () => {
+          if (timeoutMS != null) {
+            this.timeoutContext?.clear();
+            return new CursorTimeoutContext(timeout_1.TimeoutContext.create({
+              serverSelectionTimeoutMS: this.client.s.options.serverSelectionTimeoutMS,
+              timeoutMS
+            }), this);
+          } else {
+            return this.timeoutContext?.refreshed();
+          }
+        };
+        const withEmitClose = async (fn) => {
+          try {
+            await fn();
+          } finally {
+            this.emitClose();
+          }
+        };
+        const close = async () => {
+          const session = this.cursorSession;
+          if (!session)
+            return;
+          try {
+            if (!this.isKilled && this.cursorId && !this.cursorId.isZero() && this.cursorNamespace && this.selectedServer && !session.hasEnded) {
+              this.isKilled = true;
+              const cursorId = this.cursorId;
+              this.cursorId = bson_1.Long.ZERO;
+              await (0, execute_operation_1.executeOperation)(this.cursorClient, new kill_cursors_1.KillCursorsOperation(cursorId, this.cursorNamespace, this.selectedServer, {
+                session
+              }), timeoutContextForKillCursors());
+            }
+          } catch (error2) {
+            (0, utils_1.squashError)(error2);
+          } finally {
+            if (session.owner === this) {
+              await session.endSession({ error });
+            }
+            if (!session.inTransaction()) {
+              (0, sessions_1.maybeClearPinnedConnection)(session, { error });
+            }
+          }
+        };
+        await withEmitClose(close);
+      }
+      /** @internal */
+      emitClose() {
+        try {
+          if (!this.hasEmittedClose && ((this.documents?.length ?? 0) === 0 || this.isClosed)) {
+            this.emit("close");
+          }
+        } finally {
+          this.hasEmittedClose = true;
+        }
+      }
+      /** @internal */
+      async transformDocument(document) {
+        if (this.transform == null)
+          return document;
+        try {
+          const transformedDocument = this.transform(document);
+          if (transformedDocument === null) {
+            const TRANSFORM_TO_NULL_ERROR = "Cursor returned a `null` document, but the cursor is not exhausted.  Mapping documents to `null` is not supported in the cursor transform.";
+            throw new error_1.MongoAPIError(TRANSFORM_TO_NULL_ERROR);
+          }
+          return transformedDocument;
+        } catch (transformError) {
+          try {
+            await this.close();
+          } catch (closeError) {
+            (0, utils_1.squashError)(closeError);
+          }
+          throw transformError;
+        }
+      }
+      /** @internal */
+      throwIfInitialized() {
+        if (this.initialized)
+          throw new error_1.MongoCursorInUseError();
+      }
+    };
+    exports2.AbstractCursor = AbstractCursor;
+    var ReadableCursorStream = class extends stream_1.Readable {
+      constructor(cursor) {
+        super({
+          objectMode: true,
+          autoDestroy: false,
+          highWaterMark: 1
+        });
+        this._readInProgress = false;
+        this._cursor = cursor;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      _read(size) {
+        if (!this._readInProgress) {
+          this._readInProgress = true;
+          this._readNext();
+        }
+      }
+      _destroy(error, callback) {
+        this._cursor.close().then(() => callback(error), (closeError) => callback(closeError));
+      }
+      _readNext() {
+        if (this._cursor.id === bson_1.Long.ZERO) {
+          this.push(null);
+          return;
+        }
+        this._cursor.next().then(
+          // result from next()
+          (result) => {
+            if (result == null) {
+              this.push(null);
+            } else if (this.destroyed) {
+              this._cursor.close().then(void 0, utils_1.squashError);
+            } else {
+              if (this.push(result)) {
+                return this._readNext();
+              }
+              this._readInProgress = false;
+            }
+          },
+          // error from next()
+          (err) => {
+            if (err.message.match(/server is closed/)) {
+              this._cursor.close().then(void 0, utils_1.squashError);
+              return this.push(null);
+            }
+            if (err.message.match(/operation was interrupted/)) {
+              return this.push(null);
+            }
+            return this.destroy(err);
+          }
+        ).catch((error) => {
+          this._readInProgress = false;
+          this.destroy(error);
+        });
+      }
+    };
+    var CursorTimeoutContext = class _CursorTimeoutContext extends timeout_1.TimeoutContext {
+      constructor(timeoutContext, owner) {
+        super();
+        this.timeoutContext = timeoutContext;
+        this.owner = owner;
+      }
+      get serverSelectionTimeout() {
+        return this.timeoutContext.serverSelectionTimeout;
+      }
+      get connectionCheckoutTimeout() {
+        return this.timeoutContext.connectionCheckoutTimeout;
+      }
+      get clearServerSelectionTimeout() {
+        return this.timeoutContext.clearServerSelectionTimeout;
+      }
+      get timeoutForSocketWrite() {
+        return this.timeoutContext.timeoutForSocketWrite;
+      }
+      get timeoutForSocketRead() {
+        return this.timeoutContext.timeoutForSocketRead;
+      }
+      csotEnabled() {
+        return this.timeoutContext.csotEnabled();
+      }
+      refresh() {
+        if (typeof this.owner !== "symbol")
+          return this.timeoutContext.refresh();
+      }
+      clear() {
+        if (typeof this.owner !== "symbol")
+          return this.timeoutContext.clear();
+      }
+      get maxTimeMS() {
+        return this.timeoutContext.maxTimeMS;
+      }
+      get timeoutMS() {
+        return this.timeoutContext.csotEnabled() ? this.timeoutContext.timeoutMS : null;
+      }
+      refreshed() {
+        return new _CursorTimeoutContext(this.timeoutContext.refreshed(), this.owner);
+      }
+      addMaxTimeMSToCommand(command, options) {
+        this.timeoutContext.addMaxTimeMSToCommand(command, options);
+      }
+      getSocketTimeoutMS() {
+        return this.timeoutContext.getSocketTimeoutMS();
+      }
+    };
+    exports2.CursorTimeoutContext = CursorTimeoutContext;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/cursor/explainable_cursor.js
+var require_explainable_cursor = __commonJS({
+  "../../../node_modules/mongodb/lib/cursor/explainable_cursor.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ExplainableCursor = void 0;
+    var abstract_cursor_1 = require_abstract_cursor();
+    var ExplainableCursor = class extends abstract_cursor_1.AbstractCursor {
+      resolveExplainTimeoutOptions(verbosity, options) {
+        let explain;
+        let timeout;
+        if (verbosity == null && options == null) {
+          explain = void 0;
+          timeout = void 0;
+        } else if (verbosity != null && options == null) {
+          explain = typeof verbosity !== "object" ? verbosity : "verbosity" in verbosity ? verbosity : void 0;
+          timeout = typeof verbosity === "object" && "timeoutMS" in verbosity ? verbosity : void 0;
+        } else {
+          explain = verbosity;
+          timeout = options;
+        }
+        return { timeout, explain };
+      }
+    };
+    exports2.ExplainableCursor = ExplainableCursor;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/cursor/aggregation_cursor.js
+var require_aggregation_cursor = __commonJS({
+  "../../../node_modules/mongodb/lib/cursor/aggregation_cursor.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.AggregationCursor = void 0;
+    var error_1 = require_error();
+    var explain_1 = require_explain();
+    var aggregate_1 = require_aggregate();
+    var execute_operation_1 = require_execute_operation();
+    var utils_1 = require_utils();
+    var abstract_cursor_1 = require_abstract_cursor();
+    var explainable_cursor_1 = require_explainable_cursor();
+    var AggregationCursor = class _AggregationCursor extends explainable_cursor_1.ExplainableCursor {
+      /** @internal */
+      constructor(client, namespace, pipeline = [], options = {}) {
+        super(client, namespace, options);
+        this.pipeline = pipeline;
+        this.aggregateOptions = options;
+        const lastStage = this.pipeline[this.pipeline.length - 1];
+        if (this.cursorOptions.timeoutMS != null && this.cursorOptions.timeoutMode === abstract_cursor_1.CursorTimeoutMode.ITERATION && (lastStage?.$merge != null || lastStage?.$out != null))
+          throw new error_1.MongoAPIError("Cannot use $out or $merge stage with ITERATION timeoutMode");
+      }
+      clone() {
+        const clonedOptions = (0, utils_1.mergeOptions)({}, this.aggregateOptions);
+        delete clonedOptions.session;
+        return new _AggregationCursor(this.client, this.namespace, this.pipeline, {
+          ...clonedOptions
+        });
+      }
+      map(transform) {
+        return super.map(transform);
+      }
+      /** @internal */
+      async _initialize(session) {
+        const options = {
+          ...this.aggregateOptions,
+          ...this.cursorOptions,
+          session,
+          signal: this.signal
+        };
+        if (options.explain) {
+          try {
+            (0, explain_1.validateExplainTimeoutOptions)(options, explain_1.Explain.fromOptions(options));
+          } catch {
+            throw new error_1.MongoAPIError("timeoutMS cannot be used with explain when explain is specified in aggregateOptions");
+          }
+        }
+        const aggregateOperation = new aggregate_1.AggregateOperation(this.namespace, this.pipeline, options);
+        const response = await (0, execute_operation_1.executeOperation)(this.client, aggregateOperation, this.timeoutContext);
+        return { server: aggregateOperation.server, session, response };
+      }
+      async explain(verbosity, options) {
+        const { explain, timeout } = this.resolveExplainTimeoutOptions(verbosity, options);
+        return (await (0, execute_operation_1.executeOperation)(this.client, new aggregate_1.AggregateOperation(this.namespace, this.pipeline, {
+          ...this.aggregateOptions,
+          // NOTE: order matters here, we may need to refine this
+          ...this.cursorOptions,
+          ...timeout,
+          explain: explain ?? true
+        }))).shift(this.deserializationOptions);
+      }
+      addStage(stage) {
+        this.throwIfInitialized();
+        if (this.cursorOptions.timeoutMS != null && this.cursorOptions.timeoutMode === abstract_cursor_1.CursorTimeoutMode.ITERATION && (stage.$out != null || stage.$merge != null)) {
+          throw new error_1.MongoAPIError("Cannot use $out or $merge stage with ITERATION timeoutMode");
+        }
+        this.pipeline.push(stage);
+        return this;
+      }
+      group($group) {
+        return this.addStage({ $group });
+      }
+      /** Add a limit stage to the aggregation pipeline */
+      limit($limit) {
+        return this.addStage({ $limit });
+      }
+      /** Add a match stage to the aggregation pipeline */
+      match($match) {
+        return this.addStage({ $match });
+      }
+      /** Add an out stage to the aggregation pipeline */
+      out($out) {
+        return this.addStage({ $out });
+      }
+      /**
+       * Add a project stage to the aggregation pipeline
+       *
+       * @remarks
+       * In order to strictly type this function you must provide an interface
+       * that represents the effect of your projection on the result documents.
+       *
+       * By default chaining a projection to your cursor changes the returned type to the generic {@link Document} type.
+       * You should specify a parameterized type to have assertions on your final results.
+       *
+       * @example
+       * ```typescript
+       * // Best way
+       * const docs: AggregationCursor<{ a: number }> = cursor.project<{ a: number }>({ _id: 0, a: true });
+       * // Flexible way
+       * const docs: AggregationCursor<Document> = cursor.project({ _id: 0, a: true });
+       * ```
+       *
+       * @remarks
+       * In order to strictly type this function you must provide an interface
+       * that represents the effect of your projection on the result documents.
+       *
+       * **Note for Typescript Users:** adding a transform changes the return type of the iteration of this cursor,
+       * it **does not** return a new instance of a cursor. This means when calling project,
+       * you should always assign the result to a new variable in order to get a correctly typed cursor variable.
+       * Take note of the following example:
+       *
+       * @example
+       * ```typescript
+       * const cursor: AggregationCursor<{ a: number; b: string }> = coll.aggregate([]);
+       * const projectCursor = cursor.project<{ a: number }>({ _id: 0, a: true });
+       * const aPropOnlyArray: {a: number}[] = await projectCursor.toArray();
+       *
+       * // or always use chaining and save the final cursor
+       *
+       * const cursor = coll.aggregate().project<{ a: string }>({
+       *   _id: 0,
+       *   a: { $convert: { input: '$a', to: 'string' }
+       * }});
+       * ```
+       */
+      project($project) {
+        return this.addStage({ $project });
+      }
+      /** Add a lookup stage to the aggregation pipeline */
+      lookup($lookup) {
+        return this.addStage({ $lookup });
+      }
+      /** Add a redact stage to the aggregation pipeline */
+      redact($redact) {
+        return this.addStage({ $redact });
+      }
+      /** Add a skip stage to the aggregation pipeline */
+      skip($skip) {
+        return this.addStage({ $skip });
+      }
+      /** Add a sort stage to the aggregation pipeline */
+      sort($sort) {
+        return this.addStage({ $sort });
+      }
+      /** Add a unwind stage to the aggregation pipeline */
+      unwind($unwind) {
+        return this.addStage({ $unwind });
+      }
+      /** Add a geoNear stage to the aggregation pipeline */
+      geoNear($geoNear) {
+        return this.addStage({ $geoNear });
+      }
+    };
+    exports2.AggregationCursor = AggregationCursor;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/count.js
+var require_count = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/count.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.CountOperation = void 0;
+    var responses_1 = require_responses();
+    var command_1 = require_command();
+    var operation_1 = require_operation();
+    var CountOperation = class extends command_1.CommandOperation {
+      constructor(namespace, filter, options) {
+        super({ s: { namespace } }, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.options = options;
+        this.collectionName = namespace.collection;
+        this.query = filter;
+      }
+      get commandName() {
+        return "count";
+      }
+      buildCommandDocument(_connection, _session) {
+        const options = this.options;
+        const cmd = {
+          count: this.collectionName,
+          query: this.query
+        };
+        if (typeof options.limit === "number") {
+          cmd.limit = options.limit;
+        }
+        if (typeof options.skip === "number") {
+          cmd.skip = options.skip;
+        }
+        if (options.hint != null) {
+          cmd.hint = options.hint;
+        }
+        if (typeof options.maxTimeMS === "number") {
+          cmd.maxTimeMS = options.maxTimeMS;
+        }
+        return cmd;
+      }
+      handleOk(response) {
+        return response.getNumber("n") ?? 0;
+      }
+    };
+    exports2.CountOperation = CountOperation;
+    (0, operation_1.defineAspects)(CountOperation, [operation_1.Aspect.READ_OPERATION, operation_1.Aspect.RETRYABLE, operation_1.Aspect.SUPPORTS_RAW_DATA]);
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/find.js
+var require_find = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/find.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.FindOperation = void 0;
+    var responses_1 = require_responses();
+    var error_1 = require_error();
+    var sort_1 = require_sort();
+    var utils_1 = require_utils();
+    var command_1 = require_command();
+    var operation_1 = require_operation();
+    var FindOperation = class extends command_1.CommandOperation {
+      constructor(ns, filter = {}, options = {}) {
+        super(void 0, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.CursorResponse;
+        this.options = { ...options };
+        delete this.options.writeConcern;
+        this.ns = ns;
+        if (typeof filter !== "object" || Array.isArray(filter)) {
+          throw new error_1.MongoInvalidArgumentError("Query filter must be a plain object or ObjectId");
+        }
+        this.filter = filter != null && filter._bsontype === "ObjectId" ? { _id: filter } : filter;
+        this.SERVER_COMMAND_RESPONSE_TYPE = this.explain ? responses_1.ExplainedCursorResponse : responses_1.CursorResponse;
+      }
+      get commandName() {
+        return "find";
+      }
+      buildOptions(timeoutContext) {
+        return {
+          ...this.options,
+          ...this.bsonOptions,
+          documentsReturnedIn: "firstBatch",
+          session: this.session,
+          timeoutContext
+        };
+      }
+      handleOk(response) {
+        return response;
+      }
+      buildCommandDocument() {
+        return makeFindCommand(this.ns, this.filter, this.options);
+      }
+    };
+    exports2.FindOperation = FindOperation;
+    function makeFindCommand(ns, filter, options) {
+      const findCommand = {
+        find: ns.collection,
+        filter
+      };
+      if (options.sort) {
+        findCommand.sort = (0, sort_1.formatSort)(options.sort);
+      }
+      if (options.projection) {
+        let projection = options.projection;
+        if (projection && Array.isArray(projection)) {
+          projection = projection.length ? projection.reduce((result, field) => {
+            result[field] = 1;
+            return result;
+          }, {}) : { _id: 1 };
+        }
+        findCommand.projection = projection;
+      }
+      if (options.hint) {
+        findCommand.hint = (0, utils_1.normalizeHintField)(options.hint);
+      }
+      if (typeof options.skip === "number") {
+        findCommand.skip = options.skip;
+      }
+      if (typeof options.limit === "number") {
+        if (options.limit < 0) {
+          findCommand.limit = -options.limit;
+          findCommand.singleBatch = true;
+        } else {
+          findCommand.limit = options.limit;
+        }
+      }
+      if (typeof options.batchSize === "number") {
+        if (options.batchSize < 0) {
+          findCommand.limit = -options.batchSize;
+        } else {
+          if (options.batchSize === options.limit) {
+            findCommand.batchSize = options.batchSize + 1;
+          } else {
+            findCommand.batchSize = options.batchSize;
+          }
+        }
+      }
+      if (typeof options.singleBatch === "boolean") {
+        findCommand.singleBatch = options.singleBatch;
+      }
+      if (options.comment !== void 0) {
+        findCommand.comment = options.comment;
+      }
+      if (options.max) {
+        findCommand.max = options.max;
+      }
+      if (options.min) {
+        findCommand.min = options.min;
+      }
+      if (typeof options.returnKey === "boolean") {
+        findCommand.returnKey = options.returnKey;
+      }
+      if (typeof options.showRecordId === "boolean") {
+        findCommand.showRecordId = options.showRecordId;
+      }
+      if (typeof options.tailable === "boolean") {
+        findCommand.tailable = options.tailable;
+      }
+      if (typeof options.oplogReplay === "boolean") {
+        findCommand.oplogReplay = options.oplogReplay;
+      }
+      if (typeof options.timeout === "boolean") {
+        findCommand.noCursorTimeout = !options.timeout;
+      } else if (typeof options.noCursorTimeout === "boolean") {
+        findCommand.noCursorTimeout = options.noCursorTimeout;
+      }
+      if (typeof options.awaitData === "boolean") {
+        findCommand.awaitData = options.awaitData;
+      }
+      if (typeof options.allowPartialResults === "boolean") {
+        findCommand.allowPartialResults = options.allowPartialResults;
+      }
+      if (typeof options.allowDiskUse === "boolean") {
+        findCommand.allowDiskUse = options.allowDiskUse;
+      }
+      if (options.let) {
+        findCommand.let = options.let;
+      }
+      return findCommand;
+    }
+    (0, operation_1.defineAspects)(FindOperation, [
+      operation_1.Aspect.READ_OPERATION,
+      operation_1.Aspect.RETRYABLE,
+      operation_1.Aspect.EXPLAINABLE,
+      operation_1.Aspect.CURSOR_CREATING,
+      operation_1.Aspect.SUPPORTS_RAW_DATA
+    ]);
+  }
+});
+
+// ../../../node_modules/mongodb/lib/cursor/find_cursor.js
+var require_find_cursor = __commonJS({
+  "../../../node_modules/mongodb/lib/cursor/find_cursor.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.FindCursor = exports2.FLAGS = void 0;
+    var responses_1 = require_responses();
+    var error_1 = require_error();
+    var explain_1 = require_explain();
+    var count_1 = require_count();
+    var execute_operation_1 = require_execute_operation();
+    var find_1 = require_find();
+    var sort_1 = require_sort();
+    var utils_1 = require_utils();
+    var explainable_cursor_1 = require_explainable_cursor();
+    exports2.FLAGS = [
+      "tailable",
+      "oplogReplay",
+      "noCursorTimeout",
+      "awaitData",
+      "exhaust",
+      "partial"
+    ];
+    var FindCursor = class _FindCursor extends explainable_cursor_1.ExplainableCursor {
+      /** @internal */
+      constructor(client, namespace, filter = {}, options = {}) {
+        super(client, namespace, options);
+        this.numReturned = 0;
+        this.cursorFilter = filter;
+        this.findOptions = options;
+        if (options.sort != null) {
+          this.findOptions.sort = (0, sort_1.formatSort)(options.sort);
+        }
+      }
+      clone() {
+        const clonedOptions = (0, utils_1.mergeOptions)({}, this.findOptions);
+        delete clonedOptions.session;
+        return new _FindCursor(this.client, this.namespace, this.cursorFilter, {
+          ...clonedOptions
+        });
+      }
+      map(transform) {
+        return super.map(transform);
+      }
+      /** @internal */
+      async _initialize(session) {
+        const options = {
+          ...this.findOptions,
+          // NOTE: order matters here, we may need to refine this
+          ...this.cursorOptions,
+          session,
+          signal: this.signal
+        };
+        if (options.explain) {
+          try {
+            (0, explain_1.validateExplainTimeoutOptions)(options, explain_1.Explain.fromOptions(options));
+          } catch {
+            throw new error_1.MongoAPIError("timeoutMS cannot be used with explain when explain is specified in findOptions");
+          }
+        }
+        const findOperation = new find_1.FindOperation(this.namespace, this.cursorFilter, options);
+        const response = await (0, execute_operation_1.executeOperation)(this.client, findOperation, this.timeoutContext);
+        this.numReturned = response.batchSize;
+        return { server: findOperation.server, session, response };
+      }
+      /** @internal */
+      async getMore() {
+        const numReturned = this.numReturned;
+        const limit = this.findOptions.limit ?? Infinity;
+        const remaining = limit - numReturned;
+        if (numReturned === limit && !this.id?.isZero()) {
+          try {
+            await this.close();
+          } catch (error) {
+            (0, utils_1.squashError)(error);
+          }
+          return responses_1.CursorResponse.emptyGetMore;
+        }
+        let cleanup = utils_1.noop;
+        const { batchSize } = this.cursorOptions;
+        if (batchSize != null && batchSize > remaining) {
+          this.cursorOptions.batchSize = remaining;
+          cleanup = () => {
+            this.cursorOptions.batchSize = batchSize;
+          };
+        }
+        try {
+          const response = await super.getMore();
+          this.numReturned = this.numReturned + response.batchSize;
+          return response;
+        } finally {
+          cleanup?.();
+        }
+      }
+      /**
+       * Get the count of documents for this cursor
+       * @deprecated Use `collection.estimatedDocumentCount` or `collection.countDocuments` instead
+       */
+      async count(options) {
+        (0, utils_1.emitWarningOnce)("cursor.count is deprecated and will be removed in the next major version, please use `collection.estimatedDocumentCount` or `collection.countDocuments` instead ");
+        if (typeof options === "boolean") {
+          throw new error_1.MongoInvalidArgumentError("Invalid first parameter to count");
+        }
+        return await (0, execute_operation_1.executeOperation)(this.client, new count_1.CountOperation(this.namespace, this.cursorFilter, {
+          ...this.findOptions,
+          // NOTE: order matters here, we may need to refine this
+          ...this.cursorOptions,
+          ...options
+        }));
+      }
+      async explain(verbosity, options) {
+        const { explain, timeout } = this.resolveExplainTimeoutOptions(verbosity, options);
+        return (await (0, execute_operation_1.executeOperation)(this.client, new find_1.FindOperation(this.namespace, this.cursorFilter, {
+          ...this.findOptions,
+          // NOTE: order matters here, we may need to refine this
+          ...this.cursorOptions,
+          ...timeout,
+          explain: explain ?? true
+        }))).shift(this.deserializationOptions);
+      }
+      /** Set the cursor query */
+      filter(filter) {
+        this.throwIfInitialized();
+        this.cursorFilter = filter;
+        return this;
+      }
+      /**
+       * Set the cursor hint
+       *
+       * @param hint - If specified, then the query system will only consider plans using the hinted index.
+       */
+      hint(hint) {
+        this.throwIfInitialized();
+        this.findOptions.hint = hint;
+        return this;
+      }
+      /**
+       * Set the cursor min
+       *
+       * @param min - Specify a $min value to specify the inclusive lower bound for a specific index in order to constrain the results of find(). The $min specifies the lower bound for all keys of a specific index in order.
+       */
+      min(min) {
+        this.throwIfInitialized();
+        this.findOptions.min = min;
+        return this;
+      }
+      /**
+       * Set the cursor max
+       *
+       * @param max - Specify a $max value to specify the exclusive upper bound for a specific index in order to constrain the results of find(). The $max specifies the upper bound for all keys of a specific index in order.
+       */
+      max(max) {
+        this.throwIfInitialized();
+        this.findOptions.max = max;
+        return this;
+      }
+      /**
+       * Set the cursor returnKey.
+       * If set to true, modifies the cursor to only return the index field or fields for the results of the query, rather than documents.
+       * If set to true and the query does not use an index to perform the read operation, the returned documents will not contain any fields.
+       *
+       * @param value - the returnKey value.
+       */
+      returnKey(value) {
+        this.throwIfInitialized();
+        this.findOptions.returnKey = value;
+        return this;
+      }
+      /**
+       * Modifies the output of a query by adding a field $recordId to matching documents. $recordId is the internal key which uniquely identifies a document in a collection.
+       *
+       * @param value - The $showDiskLoc option has now been deprecated and replaced with the showRecordId field. $showDiskLoc will still be accepted for OP_QUERY stye find.
+       */
+      showRecordId(value) {
+        this.throwIfInitialized();
+        this.findOptions.showRecordId = value;
+        return this;
+      }
+      /**
+       * Add a query modifier to the cursor query
+       *
+       * @param name - The query modifier (must start with $, such as $orderby etc)
+       * @param value - The modifier value.
+       */
+      addQueryModifier(name, value) {
+        this.throwIfInitialized();
+        if (name[0] !== "$") {
+          throw new error_1.MongoInvalidArgumentError(`${name} is not a valid query modifier`);
+        }
+        const field = name.substr(1);
+        switch (field) {
+          case "comment":
+            this.findOptions.comment = value;
+            break;
+          case "explain":
+            this.findOptions.explain = value;
+            break;
+          case "hint":
+            this.findOptions.hint = value;
+            break;
+          case "max":
+            this.findOptions.max = value;
+            break;
+          case "maxTimeMS":
+            this.findOptions.maxTimeMS = value;
+            break;
+          case "min":
+            this.findOptions.min = value;
+            break;
+          case "orderby":
+            this.findOptions.sort = (0, sort_1.formatSort)(value);
+            break;
+          case "query":
+            this.cursorFilter = value;
+            break;
+          case "returnKey":
+            this.findOptions.returnKey = value;
+            break;
+          case "showDiskLoc":
+            this.findOptions.showRecordId = value;
+            break;
+          default:
+            throw new error_1.MongoInvalidArgumentError(`Invalid query modifier: ${name}`);
+        }
+        return this;
+      }
+      /**
+       * Add a comment to the cursor query allowing for tracking the comment in the log.
+       *
+       * @param value - The comment attached to this query.
+       */
+      comment(value) {
+        this.throwIfInitialized();
+        this.findOptions.comment = value;
+        return this;
+      }
+      /**
+       * Set a maxAwaitTimeMS on a tailing cursor query to allow to customize the timeout value for the option awaitData (Only supported on MongoDB 3.2 or higher, ignored otherwise)
+       *
+       * @param value - Number of milliseconds to wait before aborting the tailed query.
+       */
+      maxAwaitTimeMS(value) {
+        this.throwIfInitialized();
+        if (typeof value !== "number") {
+          throw new error_1.MongoInvalidArgumentError("Argument for maxAwaitTimeMS must be a number");
+        }
+        this.findOptions.maxAwaitTimeMS = value;
+        return this;
+      }
+      /**
+       * Set a maxTimeMS on the cursor query, allowing for hard timeout limits on queries (Only supported on MongoDB 2.6 or higher)
+       *
+       * @param value - Number of milliseconds to wait before aborting the query.
+       */
+      maxTimeMS(value) {
+        this.throwIfInitialized();
+        if (typeof value !== "number") {
+          throw new error_1.MongoInvalidArgumentError("Argument for maxTimeMS must be a number");
+        }
+        this.findOptions.maxTimeMS = value;
+        return this;
+      }
+      /**
+       * Add a project stage to the aggregation pipeline
+       *
+       * @remarks
+       * In order to strictly type this function you must provide an interface
+       * that represents the effect of your projection on the result documents.
+       *
+       * By default chaining a projection to your cursor changes the returned type to the generic
+       * {@link Document} type.
+       * You should specify a parameterized type to have assertions on your final results.
+       *
+       * @example
+       * ```typescript
+       * // Best way
+       * const docs: FindCursor<{ a: number }> = cursor.project<{ a: number }>({ _id: 0, a: true });
+       * // Flexible way
+       * const docs: FindCursor<Document> = cursor.project({ _id: 0, a: true });
+       * ```
+       *
+       * @remarks
+       *
+       * **Note for Typescript Users:** adding a transform changes the return type of the iteration of this cursor,
+       * it **does not** return a new instance of a cursor. This means when calling project,
+       * you should always assign the result to a new variable in order to get a correctly typed cursor variable.
+       * Take note of the following example:
+       *
+       * @example
+       * ```typescript
+       * const cursor: FindCursor<{ a: number; b: string }> = coll.find();
+       * const projectCursor = cursor.project<{ a: number }>({ _id: 0, a: true });
+       * const aPropOnlyArray: {a: number}[] = await projectCursor.toArray();
+       *
+       * // or always use chaining and save the final cursor
+       *
+       * const cursor = coll.find().project<{ a: string }>({
+       *   _id: 0,
+       *   a: { $convert: { input: '$a', to: 'string' }
+       * }});
+       * ```
+       */
+      project(value) {
+        this.throwIfInitialized();
+        this.findOptions.projection = value;
+        return this;
+      }
+      /**
+       * Sets the sort order of the cursor query.
+       *
+       * @param sort - The key or keys set for the sort.
+       * @param direction - The direction of the sorting (1 or -1).
+       */
+      sort(sort, direction) {
+        this.throwIfInitialized();
+        if (this.findOptions.tailable) {
+          throw new error_1.MongoTailableCursorError("Tailable cursor does not support sorting");
+        }
+        this.findOptions.sort = (0, sort_1.formatSort)(sort, direction);
+        return this;
+      }
+      /**
+       * Allows disk use for blocking sort operations exceeding 100MB memory. (MongoDB 3.2 or higher)
+       *
+       * @remarks
+       * {@link https://www.mongodb.com/docs/manual/reference/command/find/#find-cmd-allowdiskuse | find command allowDiskUse documentation}
+       */
+      allowDiskUse(allow = true) {
+        this.throwIfInitialized();
+        if (!this.findOptions.sort) {
+          throw new error_1.MongoInvalidArgumentError('Option "allowDiskUse" requires a sort specification');
+        }
+        if (!allow) {
+          this.findOptions.allowDiskUse = false;
+          return this;
+        }
+        this.findOptions.allowDiskUse = true;
+        return this;
+      }
+      /**
+       * Set the collation options for the cursor.
+       *
+       * @param value - The cursor collation options (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
+       */
+      collation(value) {
+        this.throwIfInitialized();
+        this.findOptions.collation = value;
+        return this;
+      }
+      /**
+       * Set the limit for the cursor.
+       *
+       * @param value - The limit for the cursor query.
+       */
+      limit(value) {
+        this.throwIfInitialized();
+        if (this.findOptions.tailable) {
+          throw new error_1.MongoTailableCursorError("Tailable cursor does not support limit");
+        }
+        if (typeof value !== "number") {
+          throw new error_1.MongoInvalidArgumentError('Operation "limit" requires an integer');
+        }
+        this.findOptions.limit = value;
+        return this;
+      }
+      /**
+       * Set the skip for the cursor.
+       *
+       * @param value - The skip for the cursor query.
+       */
+      skip(value) {
+        this.throwIfInitialized();
+        if (this.findOptions.tailable) {
+          throw new error_1.MongoTailableCursorError("Tailable cursor does not support skip");
+        }
+        if (typeof value !== "number") {
+          throw new error_1.MongoInvalidArgumentError('Operation "skip" requires an integer');
+        }
+        this.findOptions.skip = value;
+        return this;
+      }
+    };
+    exports2.FindCursor = FindCursor;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/indexes.js
+var require_indexes = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/indexes.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ListIndexesOperation = exports2.DropIndexOperation = exports2.CreateIndexesOperation = void 0;
+    var responses_1 = require_responses();
+    var error_1 = require_error();
+    var utils_1 = require_utils();
+    var command_1 = require_command();
+    var operation_1 = require_operation();
+    var VALID_INDEX_OPTIONS = /* @__PURE__ */ new Set([
+      "background",
+      "unique",
+      "name",
+      "partialFilterExpression",
+      "sparse",
+      "hidden",
+      "expireAfterSeconds",
+      "storageEngine",
+      "collation",
+      "version",
+      // text indexes
+      "weights",
+      "default_language",
+      "language_override",
+      "textIndexVersion",
+      // 2d-sphere indexes
+      "2dsphereIndexVersion",
+      // 2d indexes
+      "bits",
+      "min",
+      "max",
+      // geoHaystack Indexes
+      "bucketSize",
+      // wildcard indexes
+      "wildcardProjection"
+    ]);
+    function isIndexDirection(x) {
+      return typeof x === "number" || x === "2d" || x === "2dsphere" || x === "text" || x === "geoHaystack";
+    }
+    function isSingleIndexTuple(t) {
+      return Array.isArray(t) && t.length === 2 && isIndexDirection(t[1]);
+    }
+    function constructIndexDescriptionMap(indexSpec) {
+      const key = /* @__PURE__ */ new Map();
+      const indexSpecs = !Array.isArray(indexSpec) || isSingleIndexTuple(indexSpec) ? [indexSpec] : indexSpec;
+      for (const spec of indexSpecs) {
+        if (typeof spec === "string") {
+          key.set(spec, 1);
+        } else if (Array.isArray(spec)) {
+          key.set(spec[0], spec[1] ?? 1);
+        } else if (spec instanceof Map) {
+          for (const [property, value] of spec) {
+            key.set(property, value);
+          }
+        } else if ((0, utils_1.isObject)(spec)) {
+          for (const [property, value] of Object.entries(spec)) {
+            key.set(property, value);
+          }
+        }
+      }
+      return key;
+    }
+    function resolveIndexDescription(description) {
+      const validProvidedOptions = Object.entries(description).filter(([optionName]) => VALID_INDEX_OPTIONS.has(optionName));
+      return Object.fromEntries(
+        // we support the `version` option, but the `createIndexes` command expects it to be the `v`
+        validProvidedOptions.map(([name, value]) => name === "version" ? ["v", value] : [name, value])
+      );
+    }
+    var CreateIndexesOperation = class _CreateIndexesOperation extends command_1.CommandOperation {
+      constructor(parent, collectionName, indexes, options) {
+        super(parent, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.options = options ?? {};
+        this.options.collation = void 0;
+        this.collectionName = collectionName;
+        this.indexes = indexes.map((userIndex) => {
+          const key = userIndex.key instanceof Map ? userIndex.key : new Map(Object.entries(userIndex.key));
+          const name = userIndex.name ?? Array.from(key).flat().join("_");
+          const validIndexOptions = resolveIndexDescription(userIndex);
+          return {
+            ...validIndexOptions,
+            name,
+            key
+          };
+        });
+        this.ns = parent.s.namespace;
+      }
+      static fromIndexDescriptionArray(parent, collectionName, indexes, options) {
+        return new _CreateIndexesOperation(parent, collectionName, indexes, options);
+      }
+      static fromIndexSpecification(parent, collectionName, indexSpec, options = {}) {
+        const key = constructIndexDescriptionMap(indexSpec);
+        const description = { ...options, key };
+        return new _CreateIndexesOperation(parent, collectionName, [description], options);
+      }
+      get commandName() {
+        return "createIndexes";
+      }
+      buildCommandDocument(connection) {
+        const options = this.options;
+        const indexes = this.indexes;
+        const serverWireVersion = (0, utils_1.maxWireVersion)(connection);
+        const cmd = { createIndexes: this.collectionName, indexes };
+        if (options.commitQuorum != null) {
+          if (serverWireVersion < 9) {
+            throw new error_1.MongoCompatibilityError("Option `commitQuorum` for `createIndexes` not supported on servers < 4.4");
+          }
+          cmd.commitQuorum = options.commitQuorum;
+        }
+        return cmd;
+      }
+      handleOk(_response) {
+        const indexNames = this.indexes.map((index) => index.name || "");
+        return indexNames;
+      }
+    };
+    exports2.CreateIndexesOperation = CreateIndexesOperation;
+    var DropIndexOperation = class extends command_1.CommandOperation {
+      constructor(collection, indexName, options) {
+        super(collection, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.options = options ?? {};
+        this.collection = collection;
+        this.indexName = indexName;
+        this.ns = collection.fullNamespace;
+      }
+      get commandName() {
+        return "dropIndexes";
+      }
+      buildCommandDocument(_connection) {
+        return { dropIndexes: this.collection.collectionName, index: this.indexName };
+      }
+    };
+    exports2.DropIndexOperation = DropIndexOperation;
+    var ListIndexesOperation = class extends command_1.CommandOperation {
+      constructor(collection, options) {
+        super(collection, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.CursorResponse;
+        this.options = { ...options };
+        delete this.options.writeConcern;
+        this.collectionNamespace = collection.s.namespace;
+      }
+      get commandName() {
+        return "listIndexes";
+      }
+      buildCommandDocument(connection) {
+        const serverWireVersion = (0, utils_1.maxWireVersion)(connection);
+        const cursor = this.options.batchSize ? { batchSize: this.options.batchSize } : {};
+        const command = { listIndexes: this.collectionNamespace.collection, cursor };
+        if (serverWireVersion >= 9 && this.options.comment !== void 0) {
+          command.comment = this.options.comment;
+        }
+        return command;
+      }
+      handleOk(response) {
+        return response;
+      }
+    };
+    exports2.ListIndexesOperation = ListIndexesOperation;
+    (0, operation_1.defineAspects)(ListIndexesOperation, [
+      operation_1.Aspect.READ_OPERATION,
+      operation_1.Aspect.RETRYABLE,
+      operation_1.Aspect.CURSOR_CREATING,
+      operation_1.Aspect.SUPPORTS_RAW_DATA
+    ]);
+    (0, operation_1.defineAspects)(CreateIndexesOperation, [operation_1.Aspect.WRITE_OPERATION, operation_1.Aspect.SUPPORTS_RAW_DATA]);
+    (0, operation_1.defineAspects)(DropIndexOperation, [operation_1.Aspect.WRITE_OPERATION, operation_1.Aspect.SUPPORTS_RAW_DATA]);
+  }
+});
+
+// ../../../node_modules/mongodb/lib/cursor/list_indexes_cursor.js
+var require_list_indexes_cursor = __commonJS({
+  "../../../node_modules/mongodb/lib/cursor/list_indexes_cursor.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ListIndexesCursor = void 0;
+    var execute_operation_1 = require_execute_operation();
+    var indexes_1 = require_indexes();
+    var abstract_cursor_1 = require_abstract_cursor();
+    var ListIndexesCursor = class _ListIndexesCursor extends abstract_cursor_1.AbstractCursor {
+      constructor(collection, options) {
+        super(collection.client, collection.s.namespace, options);
+        this.parent = collection;
+        this.options = options;
+      }
+      clone() {
+        return new _ListIndexesCursor(this.parent, {
+          ...this.options,
+          ...this.cursorOptions
+        });
+      }
+      /** @internal */
+      async _initialize(session) {
+        const operation = new indexes_1.ListIndexesOperation(this.parent, {
+          ...this.cursorOptions,
+          ...this.options,
+          session
+        });
+        const response = await (0, execute_operation_1.executeOperation)(this.parent.client, operation, this.timeoutContext);
+        return { server: operation.server, session, response };
+      }
+    };
+    exports2.ListIndexesCursor = ListIndexesCursor;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/cursor/list_search_indexes_cursor.js
+var require_list_search_indexes_cursor = __commonJS({
+  "../../../node_modules/mongodb/lib/cursor/list_search_indexes_cursor.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ListSearchIndexesCursor = void 0;
+    var aggregation_cursor_1 = require_aggregation_cursor();
+    var ListSearchIndexesCursor = class extends aggregation_cursor_1.AggregationCursor {
+      /** @internal */
+      constructor({ fullNamespace: ns, client }, name, options = {}) {
+        const pipeline = name == null ? [{ $listSearchIndexes: {} }] : [{ $listSearchIndexes: { name } }];
+        super(client, ns, pipeline, options);
+      }
+    };
+    exports2.ListSearchIndexesCursor = ListSearchIndexesCursor;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/distinct.js
+var require_distinct = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/distinct.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.DistinctOperation = void 0;
+    var responses_1 = require_responses();
+    var command_1 = require_command();
+    var operation_1 = require_operation();
+    var DistinctOperation = class extends command_1.CommandOperation {
+      /**
+       * Construct a Distinct operation.
+       *
+       * @param collection - Collection instance.
+       * @param key - Field of the document to find distinct values for.
+       * @param query - The query for filtering the set of documents to which we apply the distinct filter.
+       * @param options - Optional settings. See Collection.prototype.distinct for a list of options.
+       */
+      constructor(collection, key, query, options) {
+        super(collection, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.options = options ?? {};
+        this.collection = collection;
+        this.key = key;
+        this.query = query;
+      }
+      get commandName() {
+        return "distinct";
+      }
+      buildCommandDocument(_connection) {
+        const command = {
+          distinct: this.collection.collectionName,
+          key: this.key,
+          query: this.query
+        };
+        if (this.options.comment !== void 0) {
+          command.comment = this.options.comment;
+        }
+        if (this.options.hint != null) {
+          command.hint = this.options.hint;
+        }
+        return command;
+      }
+      handleOk(response) {
+        if (this.explain) {
+          return response.toObject(this.bsonOptions);
+        }
+        return response.toObject(this.bsonOptions).values;
+      }
+    };
+    exports2.DistinctOperation = DistinctOperation;
+    (0, operation_1.defineAspects)(DistinctOperation, [
+      operation_1.Aspect.READ_OPERATION,
+      operation_1.Aspect.RETRYABLE,
+      operation_1.Aspect.EXPLAINABLE,
+      operation_1.Aspect.SUPPORTS_RAW_DATA
+    ]);
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/estimated_document_count.js
+var require_estimated_document_count = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/estimated_document_count.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.EstimatedDocumentCountOperation = void 0;
+    var responses_1 = require_responses();
+    var command_1 = require_command();
+    var operation_1 = require_operation();
+    var EstimatedDocumentCountOperation = class extends command_1.CommandOperation {
+      constructor(collection, options = {}) {
+        super(collection, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.options = options;
+        this.collectionName = collection.collectionName;
+      }
+      get commandName() {
+        return "count";
+      }
+      buildCommandDocument(_connection, _session) {
+        const cmd = { count: this.collectionName };
+        if (typeof this.options.maxTimeMS === "number") {
+          cmd.maxTimeMS = this.options.maxTimeMS;
+        }
+        if (this.options.comment !== void 0) {
+          cmd.comment = this.options.comment;
+        }
+        return cmd;
+      }
+      handleOk(response) {
+        return response.getNumber("n") ?? 0;
+      }
+    };
+    exports2.EstimatedDocumentCountOperation = EstimatedDocumentCountOperation;
+    (0, operation_1.defineAspects)(EstimatedDocumentCountOperation, [
+      operation_1.Aspect.READ_OPERATION,
+      operation_1.Aspect.RETRYABLE,
+      operation_1.Aspect.CURSOR_CREATING,
+      operation_1.Aspect.SUPPORTS_RAW_DATA
+    ]);
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/find_and_modify.js
+var require_find_and_modify = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/find_and_modify.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.FindOneAndUpdateOperation = exports2.FindOneAndReplaceOperation = exports2.FindOneAndDeleteOperation = exports2.FindAndModifyOperation = exports2.ReturnDocument = void 0;
+    var responses_1 = require_responses();
+    var error_1 = require_error();
+    var read_preference_1 = require_read_preference();
+    var sort_1 = require_sort();
+    var utils_1 = require_utils();
+    var command_1 = require_command();
+    var operation_1 = require_operation();
+    exports2.ReturnDocument = Object.freeze({
+      BEFORE: "before",
+      AFTER: "after"
+    });
+    function configureFindAndModifyCmdBaseUpdateOpts(cmdBase, options) {
+      cmdBase.new = options.returnDocument === exports2.ReturnDocument.AFTER;
+      cmdBase.upsert = options.upsert === true;
+      if (options.bypassDocumentValidation === true) {
+        cmdBase.bypassDocumentValidation = options.bypassDocumentValidation;
+      }
+      return cmdBase;
+    }
+    var FindAndModifyOperation = class extends command_1.CommandOperation {
+      constructor(collection, query, options) {
+        super(collection, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.options = options;
+        this.readPreference = read_preference_1.ReadPreference.primary;
+        this.collection = collection;
+        this.query = query;
+      }
+      get commandName() {
+        return "findAndModify";
+      }
+      buildCommandDocument(connection, _session) {
+        const options = this.options;
+        const command = {
+          findAndModify: this.collection.collectionName,
+          query: this.query,
+          remove: false,
+          new: false,
+          upsert: false
+        };
+        options.includeResultMetadata ??= false;
+        const sort = (0, sort_1.formatSort)(options.sort);
+        if (sort) {
+          command.sort = sort;
+        }
+        if (options.projection) {
+          command.fields = options.projection;
+        }
+        if (options.maxTimeMS) {
+          command.maxTimeMS = options.maxTimeMS;
+        }
+        if (options.writeConcern) {
+          command.writeConcern = options.writeConcern;
+        }
+        if (options.let) {
+          command.let = options.let;
+        }
+        if (options.comment !== void 0) {
+          command.comment = options.comment;
+        }
+        (0, utils_1.decorateWithCollation)(command, options);
+        if (options.hint) {
+          const unacknowledgedWrite = this.writeConcern?.w === 0;
+          if (unacknowledgedWrite && (0, utils_1.maxWireVersion)(connection) < 9) {
+            throw new error_1.MongoCompatibilityError("hint for the findAndModify command is only supported on MongoDB 4.4+");
+          }
+          command.hint = options.hint;
+        }
+        return command;
+      }
+      handleOk(response) {
+        const result = super.handleOk(response);
+        return this.options.includeResultMetadata ? result : result.value ?? null;
+      }
+    };
+    exports2.FindAndModifyOperation = FindAndModifyOperation;
+    var FindOneAndDeleteOperation = class extends FindAndModifyOperation {
+      constructor(collection, filter, options) {
+        if (filter == null || typeof filter !== "object") {
+          throw new error_1.MongoInvalidArgumentError('Argument "filter" must be an object');
+        }
+        super(collection, filter, options);
+      }
+      buildCommandDocument(connection, session) {
+        const document = super.buildCommandDocument(connection, session);
+        document.remove = true;
+        return document;
+      }
+    };
+    exports2.FindOneAndDeleteOperation = FindOneAndDeleteOperation;
+    var FindOneAndReplaceOperation = class extends FindAndModifyOperation {
+      constructor(collection, filter, replacement, options) {
+        if (filter == null || typeof filter !== "object") {
+          throw new error_1.MongoInvalidArgumentError('Argument "filter" must be an object');
+        }
+        if (replacement == null || typeof replacement !== "object") {
+          throw new error_1.MongoInvalidArgumentError('Argument "replacement" must be an object');
+        }
+        if ((0, utils_1.hasAtomicOperators)(replacement)) {
+          throw new error_1.MongoInvalidArgumentError("Replacement document must not contain atomic operators");
+        }
+        super(collection, filter, options);
+        this.replacement = replacement;
+      }
+      buildCommandDocument(connection, session) {
+        const document = super.buildCommandDocument(connection, session);
+        document.update = this.replacement;
+        configureFindAndModifyCmdBaseUpdateOpts(document, this.options);
+        return document;
+      }
+    };
+    exports2.FindOneAndReplaceOperation = FindOneAndReplaceOperation;
+    var FindOneAndUpdateOperation = class extends FindAndModifyOperation {
+      constructor(collection, filter, update, options) {
+        if (filter == null || typeof filter !== "object") {
+          throw new error_1.MongoInvalidArgumentError('Argument "filter" must be an object');
+        }
+        if (update == null || typeof update !== "object") {
+          throw new error_1.MongoInvalidArgumentError('Argument "update" must be an object');
+        }
+        if (!(0, utils_1.hasAtomicOperators)(update, options)) {
+          throw new error_1.MongoInvalidArgumentError("Update document requires atomic operators");
+        }
+        super(collection, filter, options);
+        this.update = update;
+        this.options = options;
+      }
+      buildCommandDocument(connection, session) {
+        const document = super.buildCommandDocument(connection, session);
+        document.update = this.update;
+        configureFindAndModifyCmdBaseUpdateOpts(document, this.options);
+        if (this.options.arrayFilters) {
+          document.arrayFilters = this.options.arrayFilters;
+        }
+        return document;
+      }
+    };
+    exports2.FindOneAndUpdateOperation = FindOneAndUpdateOperation;
+    (0, operation_1.defineAspects)(FindAndModifyOperation, [
+      operation_1.Aspect.WRITE_OPERATION,
+      operation_1.Aspect.RETRYABLE,
+      operation_1.Aspect.EXPLAINABLE,
+      operation_1.Aspect.SUPPORTS_RAW_DATA
+    ]);
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/rename.js
+var require_rename = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/rename.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.RenameOperation = void 0;
+    var responses_1 = require_responses();
+    var collection_1 = require_collection();
+    var utils_1 = require_utils();
+    var command_1 = require_command();
+    var operation_1 = require_operation();
+    var RenameOperation = class extends command_1.CommandOperation {
+      constructor(collection, newName, options) {
+        super(collection, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.collection = collection;
+        this.newName = newName;
+        this.options = options;
+        this.ns = new utils_1.MongoDBNamespace("admin", "$cmd");
+      }
+      get commandName() {
+        return "renameCollection";
+      }
+      buildCommandDocument(_connection, _session) {
+        const renameCollection = this.collection.namespace;
+        const to = this.collection.s.namespace.withCollection(this.newName).toString();
+        const dropTarget = typeof this.options.dropTarget === "boolean" ? this.options.dropTarget : false;
+        return {
+          renameCollection,
+          to,
+          dropTarget
+        };
+      }
+      handleOk(_response) {
+        return new collection_1.Collection(this.collection.db, this.newName, this.collection.s.options);
+      }
+    };
+    exports2.RenameOperation = RenameOperation;
+    (0, operation_1.defineAspects)(RenameOperation, [operation_1.Aspect.WRITE_OPERATION]);
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/search_indexes/create.js
+var require_create = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/search_indexes/create.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.CreateSearchIndexesOperation = void 0;
+    var responses_1 = require_responses();
+    var operation_1 = require_operation();
+    var CreateSearchIndexesOperation = class extends operation_1.AbstractOperation {
+      constructor(collection, descriptions) {
+        super();
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.collection = collection;
+        this.descriptions = descriptions;
+        this.ns = collection.fullNamespace;
+      }
+      get commandName() {
+        return "createSearchIndexes";
+      }
+      buildCommand(_connection, _session) {
+        const namespace = this.collection.fullNamespace;
+        return {
+          createSearchIndexes: namespace.collection,
+          indexes: this.descriptions
+        };
+      }
+      handleOk(response) {
+        return super.handleOk(response).indexesCreated.map((val) => val.name);
+      }
+      buildOptions(timeoutContext) {
+        return { session: this.session, timeoutContext };
+      }
+    };
+    exports2.CreateSearchIndexesOperation = CreateSearchIndexesOperation;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/search_indexes/drop.js
+var require_drop = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/search_indexes/drop.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.DropSearchIndexOperation = void 0;
+    var responses_1 = require_responses();
+    var error_1 = require_error();
+    var operation_1 = require_operation();
+    var DropSearchIndexOperation = class extends operation_1.AbstractOperation {
+      constructor(collection, name) {
+        super();
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.collection = collection;
+        this.name = name;
+        this.ns = collection.fullNamespace;
+      }
+      get commandName() {
+        return "dropSearchIndex";
+      }
+      buildCommand(_connection, _session) {
+        const namespace = this.collection.fullNamespace;
+        const command = {
+          dropSearchIndex: namespace.collection
+        };
+        if (typeof this.name === "string") {
+          command.name = this.name;
+        }
+        return command;
+      }
+      handleOk(_response) {
+      }
+      buildOptions(timeoutContext) {
+        return { session: this.session, timeoutContext };
+      }
+      handleError(error) {
+        const isNamespaceNotFoundError = error instanceof error_1.MongoServerError && error.code === error_1.MONGODB_ERROR_CODES.NamespaceNotFound;
+        if (!isNamespaceNotFoundError) {
+          throw error;
+        }
+      }
+    };
+    exports2.DropSearchIndexOperation = DropSearchIndexOperation;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/search_indexes/update.js
+var require_update2 = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/search_indexes/update.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.UpdateSearchIndexOperation = void 0;
+    var responses_1 = require_responses();
+    var operation_1 = require_operation();
+    var UpdateSearchIndexOperation = class extends operation_1.AbstractOperation {
+      constructor(collection, name, definition) {
+        super();
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.collection = collection;
+        this.name = name;
+        this.definition = definition;
+        this.ns = collection.fullNamespace;
+      }
+      get commandName() {
+        return "updateSearchIndex";
+      }
+      buildCommand(_connection, _session) {
+        const namespace = this.collection.fullNamespace;
+        return {
+          updateSearchIndex: namespace.collection,
+          name: this.name,
+          definition: this.definition
+        };
+      }
+      handleOk(_response) {
+      }
+      buildOptions(timeoutContext) {
+        return { session: this.session, timeoutContext };
+      }
+    };
+    exports2.UpdateSearchIndexOperation = UpdateSearchIndexOperation;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/collection.js
+var require_collection = __commonJS({
+  "../../../node_modules/mongodb/lib/collection.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.Collection = void 0;
+    var bson_1 = require_bson2();
+    var ordered_1 = require_ordered();
+    var unordered_1 = require_unordered();
+    var change_stream_1 = require_change_stream();
+    var aggregation_cursor_1 = require_aggregation_cursor();
+    var find_cursor_1 = require_find_cursor();
+    var list_indexes_cursor_1 = require_list_indexes_cursor();
+    var list_search_indexes_cursor_1 = require_list_search_indexes_cursor();
+    var error_1 = require_error();
+    var count_1 = require_count();
+    var delete_1 = require_delete();
+    var distinct_1 = require_distinct();
+    var estimated_document_count_1 = require_estimated_document_count();
+    var execute_operation_1 = require_execute_operation();
+    var find_and_modify_1 = require_find_and_modify();
+    var indexes_1 = require_indexes();
+    var insert_1 = require_insert();
+    var rename_1 = require_rename();
+    var create_1 = require_create();
+    var drop_1 = require_drop();
+    var update_1 = require_update2();
+    var update_2 = require_update();
+    var read_concern_1 = require_read_concern();
+    var read_preference_1 = require_read_preference();
+    var utils_1 = require_utils();
+    var write_concern_1 = require_write_concern();
+    var Collection = class {
+      /**
+       * Create a new Collection instance
+       * @internal
+       */
+      constructor(db, name, options) {
+        this.db = db;
+        this.s = {
+          db,
+          options,
+          namespace: new utils_1.MongoDBCollectionNamespace(db.databaseName, name),
+          pkFactory: db.options?.pkFactory ?? utils_1.DEFAULT_PK_FACTORY,
+          readPreference: read_preference_1.ReadPreference.fromOptions(options),
+          bsonOptions: (0, bson_1.resolveBSONOptions)(options, db),
+          readConcern: read_concern_1.ReadConcern.fromOptions(options),
+          writeConcern: write_concern_1.WriteConcern.fromOptions(options)
+        };
+        this.client = db.client;
+      }
+      /**
+       * The name of the database this collection belongs to
+       */
+      get dbName() {
+        return this.s.namespace.db;
+      }
+      /**
+       * The name of this collection
+       */
+      get collectionName() {
+        return this.s.namespace.collection;
+      }
+      /**
+       * The namespace of this collection, in the format `${this.dbName}.${this.collectionName}`
+       */
+      get namespace() {
+        return this.fullNamespace.toString();
+      }
+      /**
+       *  @internal
+       *
+       * The `MongoDBNamespace` for the collection.
+       */
+      get fullNamespace() {
+        return this.s.namespace;
+      }
+      /**
+       * The current readConcern of the collection. If not explicitly defined for
+       * this collection, will be inherited from the parent DB
+       */
+      get readConcern() {
+        if (this.s.readConcern == null) {
+          return this.db.readConcern;
+        }
+        return this.s.readConcern;
+      }
+      /**
+       * The current readPreference of the collection. If not explicitly defined for
+       * this collection, will be inherited from the parent DB
+       */
+      get readPreference() {
+        if (this.s.readPreference == null) {
+          return this.db.readPreference;
+        }
+        return this.s.readPreference;
+      }
+      get bsonOptions() {
+        return this.s.bsonOptions;
+      }
+      /**
+       * The current writeConcern of the collection. If not explicitly defined for
+       * this collection, will be inherited from the parent DB
+       */
+      get writeConcern() {
+        if (this.s.writeConcern == null) {
+          return this.db.writeConcern;
+        }
+        return this.s.writeConcern;
+      }
+      /** The current index hint for the collection */
+      get hint() {
+        return this.s.collectionHint;
+      }
+      set hint(v) {
+        this.s.collectionHint = (0, utils_1.normalizeHintField)(v);
+      }
+      get timeoutMS() {
+        return this.s.options.timeoutMS;
+      }
+      /**
+       * Inserts a single document into MongoDB. If documents passed in do not contain the **_id** field,
+       * one will be added to each of the documents missing it by the driver, mutating the document. This behavior
+       * can be overridden by setting the **forceServerObjectId** flag.
+       *
+       * @param doc - The document to insert
+       * @param options - Optional settings for the command
+       */
+      async insertOne(doc, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new insert_1.InsertOneOperation(this, doc, (0, utils_1.resolveOptions)(this, options)));
+      }
+      /**
+       * Inserts an array of documents into MongoDB. If documents passed in do not contain the **_id** field,
+       * one will be added to each of the documents missing it by the driver, mutating the document. This behavior
+       * can be overridden by setting the **forceServerObjectId** flag.
+       *
+       * @param docs - The documents to insert
+       * @param options - Optional settings for the command
+       */
+      async insertMany(docs, options) {
+        if (!Array.isArray(docs)) {
+          throw new error_1.MongoInvalidArgumentError('Argument "docs" must be an array of documents');
+        }
+        options = (0, utils_1.resolveOptions)(this, options ?? {});
+        const acknowledged = write_concern_1.WriteConcern.fromOptions(options)?.w !== 0;
+        try {
+          const res = await this.bulkWrite(docs.map((doc) => ({ insertOne: { document: doc } })), options);
+          return {
+            acknowledged,
+            insertedCount: res.insertedCount,
+            insertedIds: res.insertedIds
+          };
+        } catch (err) {
+          if (err && err.message === "Operation must be an object with an operation key") {
+            throw new error_1.MongoInvalidArgumentError("Collection.insertMany() cannot be called with an array that has null/undefined values");
+          }
+          throw err;
+        }
+      }
+      /**
+       * Perform a bulkWrite operation without a fluent API
+       *
+       * Legal operation types are
+       * - `insertOne`
+       * - `replaceOne`
+       * - `updateOne`
+       * - `updateMany`
+       * - `deleteOne`
+       * - `deleteMany`
+       *
+       * If documents passed in do not contain the **_id** field,
+       * one will be added to each of the documents missing it by the driver, mutating the document. This behavior
+       * can be overridden by setting the **forceServerObjectId** flag.
+       *
+       * @param operations - Bulk operations to perform
+       * @param options - Optional settings for the command
+       * @throws MongoDriverError if operations is not an array
+       */
+      async bulkWrite(operations, options) {
+        if (!Array.isArray(operations)) {
+          throw new error_1.MongoInvalidArgumentError('Argument "operations" must be an array of documents');
+        }
+        options = (0, utils_1.resolveOptions)(this, options ?? {});
+        const isConnected = this.client.topology != null;
+        if (!isConnected) {
+          await (0, execute_operation_1.autoConnect)(this.client);
+        }
+        const bulk = options.ordered === false ? this.initializeUnorderedBulkOp(options) : this.initializeOrderedBulkOp(options);
+        for (const operation of operations) {
+          bulk.raw(operation);
+        }
+        return await bulk.execute({ ...options });
+      }
+      /**
+       * Update a single document in a collection
+       *
+       * The value of `update` can be either:
+       * - UpdateFilter<TSchema> - A document that contains update operator expressions,
+       * - Document[] - an aggregation pipeline.
+       *
+       * @param filter - The filter used to select the document to update
+       * @param update - The modifications to apply
+       * @param options - Optional settings for the command
+       */
+      async updateOne(filter, update, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new update_2.UpdateOneOperation(this.s.namespace, filter, update, (0, utils_1.resolveOptions)(this, options)));
+      }
+      /**
+       * Replace a document in a collection with another document
+       *
+       * @param filter - The filter used to select the document to replace
+       * @param replacement - The Document that replaces the matching document
+       * @param options - Optional settings for the command
+       */
+      async replaceOne(filter, replacement, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new update_2.ReplaceOneOperation(this.s.namespace, filter, replacement, (0, utils_1.resolveOptions)(this, options)));
+      }
+      /**
+       * Update multiple documents in a collection
+       *
+       * The value of `update` can be either:
+       * - UpdateFilter<TSchema> - A document that contains update operator expressions,
+       * - Document[] - an aggregation pipeline.
+       *
+       * @param filter - The filter used to select the document to update
+       * @param update - The modifications to apply
+       * @param options - Optional settings for the command
+       */
+      async updateMany(filter, update, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new update_2.UpdateManyOperation(this.s.namespace, filter, update, (0, utils_1.resolveOptions)(this, options)));
+      }
+      /**
+       * Delete a document from a collection
+       *
+       * @param filter - The filter used to select the document to remove
+       * @param options - Optional settings for the command
+       */
+      async deleteOne(filter = {}, options = {}) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new delete_1.DeleteOneOperation(this.s.namespace, filter, (0, utils_1.resolveOptions)(this, options)));
+      }
+      /**
+       * Delete multiple documents from a collection
+       *
+       * @param filter - The filter used to select the documents to remove
+       * @param options - Optional settings for the command
+       */
+      async deleteMany(filter = {}, options = {}) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new delete_1.DeleteManyOperation(this.s.namespace, filter, (0, utils_1.resolveOptions)(this, options)));
+      }
+      /**
+       * Rename the collection.
+       *
+       * @remarks
+       * This operation does not inherit options from the Db or MongoClient.
+       *
+       * @param newName - New name of of the collection.
+       * @param options - Optional settings for the command
+       */
+      async rename(newName, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new rename_1.RenameOperation(this, newName, (0, utils_1.resolveOptions)(void 0, {
+          ...options,
+          readPreference: read_preference_1.ReadPreference.PRIMARY
+        })));
+      }
+      /**
+       * Drop the collection from the database, removing it permanently. New accesses will create a new collection.
+       *
+       * @param options - Optional settings for the command
+       */
+      async drop(options) {
+        return await this.db.dropCollection(this.collectionName, options);
+      }
+      async findOne(filter = {}, options = {}) {
+        const { ...opts } = options;
+        opts.singleBatch = true;
+        const cursor = this.find(filter, opts).limit(1);
+        const result = await cursor.next();
+        await cursor.close();
+        return result;
+      }
+      find(filter = {}, options = {}) {
+        return new find_cursor_1.FindCursor(this.client, this.s.namespace, filter, (0, utils_1.resolveOptions)(this, options));
+      }
+      /**
+       * Returns the options of the collection.
+       *
+       * @param options - Optional settings for the command
+       */
+      async options(options) {
+        options = (0, utils_1.resolveOptions)(this, options);
+        const [collection] = await this.db.listCollections({ name: this.collectionName }, { ...options, nameOnly: false }).toArray();
+        if (collection == null || collection.options == null) {
+          throw new error_1.MongoAPIError(`collection ${this.namespace} not found`);
+        }
+        return collection.options;
+      }
+      /**
+       * Returns if the collection is a capped collection
+       *
+       * @param options - Optional settings for the command
+       */
+      async isCapped(options) {
+        const { capped } = await this.options(options);
+        return Boolean(capped);
+      }
+      /**
+       * Creates an index on the db and collection collection.
+       *
+       * @param indexSpec - The field name or index specification to create an index for
+       * @param options - Optional settings for the command
+       *
+       * @example
+       * ```ts
+       * const collection = client.db('foo').collection('bar');
+       *
+       * await collection.createIndex({ a: 1, b: -1 });
+       *
+       * // Alternate syntax for { c: 1, d: -1 } that ensures order of indexes
+       * await collection.createIndex([ [c, 1], [d, -1] ]);
+       *
+       * // Equivalent to { e: 1 }
+       * await collection.createIndex('e');
+       *
+       * // Equivalent to { f: 1, g: 1 }
+       * await collection.createIndex(['f', 'g'])
+       *
+       * // Equivalent to { h: 1, i: -1 }
+       * await collection.createIndex([ { h: 1 }, { i: -1 } ]);
+       *
+       * // Equivalent to { j: 1, k: -1, l: 2d }
+       * await collection.createIndex(['j', ['k', -1], { l: '2d' }])
+       * ```
+       */
+      async createIndex(indexSpec, options) {
+        const indexes = await (0, execute_operation_1.executeOperation)(this.client, indexes_1.CreateIndexesOperation.fromIndexSpecification(this, this.collectionName, indexSpec, (0, utils_1.resolveOptions)(this, options)));
+        return indexes[0];
+      }
+      /**
+       * Creates multiple indexes in the collection, this method is only supported for
+       * MongoDB 2.6 or higher. Earlier version of MongoDB will throw a command not supported
+       * error.
+       *
+       * **Note**: Unlike {@link Collection#createIndex| createIndex}, this function takes in raw index specifications.
+       * Index specifications are defined {@link https://www.mongodb.com/docs/manual/reference/command/createIndexes/| here}.
+       *
+       * @param indexSpecs - An array of index specifications to be created
+       * @param options - Optional settings for the command
+       *
+       * @example
+       * ```ts
+       * const collection = client.db('foo').collection('bar');
+       * await collection.createIndexes([
+       *   // Simple index on field fizz
+       *   {
+       *     key: { fizz: 1 },
+       *   }
+       *   // wildcard index
+       *   {
+       *     key: { '$**': 1 }
+       *   },
+       *   // named index on darmok and jalad
+       *   {
+       *     key: { darmok: 1, jalad: -1 }
+       *     name: 'tanagra'
+       *   }
+       * ]);
+       * ```
+       */
+      async createIndexes(indexSpecs, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, indexes_1.CreateIndexesOperation.fromIndexDescriptionArray(this, this.collectionName, indexSpecs, (0, utils_1.resolveOptions)(this, { ...options, maxTimeMS: void 0 })));
+      }
+      /**
+       * Drops an index from this collection.
+       *
+       * @param indexName - Name of the index to drop.
+       * @param options - Optional settings for the command
+       */
+      async dropIndex(indexName, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new indexes_1.DropIndexOperation(this, indexName, {
+          ...(0, utils_1.resolveOptions)(this, options),
+          readPreference: read_preference_1.ReadPreference.primary
+        }));
+      }
+      /**
+       * Drops all indexes from this collection.
+       *
+       * @param options - Optional settings for the command
+       */
+      async dropIndexes(options) {
+        try {
+          await (0, execute_operation_1.executeOperation)(this.client, new indexes_1.DropIndexOperation(this, "*", (0, utils_1.resolveOptions)(this, options)));
+          return true;
+        } catch (error) {
+          if (error instanceof error_1.MongoOperationTimeoutError)
+            throw error;
+          return false;
+        }
+      }
+      /**
+       * Get the list of all indexes information for the collection.
+       *
+       * @param options - Optional settings for the command
+       */
+      listIndexes(options) {
+        return new list_indexes_cursor_1.ListIndexesCursor(this, (0, utils_1.resolveOptions)(this, options));
+      }
+      /**
+       * Checks if one or more indexes exist on the collection, fails on first non-existing index
+       *
+       * @param indexes - One or more index names to check.
+       * @param options - Optional settings for the command
+       */
+      async indexExists(indexes, options) {
+        const indexNames = Array.isArray(indexes) ? indexes : [indexes];
+        const allIndexes = new Set(await this.listIndexes(options).map(({ name }) => name).toArray());
+        return indexNames.every((name) => allIndexes.has(name));
+      }
+      async indexInformation(options) {
+        return await this.indexes({
+          ...options,
+          full: options?.full ?? false
+        });
+      }
+      /**
+       * Gets an estimate of the count of documents in a collection using collection metadata.
+       * This will always run a count command on all server versions.
+       *
+       * due to an oversight in versions 5.0.0-5.0.8 of MongoDB, the count command,
+       * which estimatedDocumentCount uses in its implementation, was not included in v1 of
+       * the Stable API, and so users of the Stable API with estimatedDocumentCount are
+       * recommended to upgrade their server version to 5.0.9+ or set apiStrict: false to avoid
+       * encountering errors.
+       *
+       * @see {@link https://www.mongodb.com/docs/manual/reference/command/count/#behavior|Count: Behavior}
+       * @param options - Optional settings for the command
+       */
+      async estimatedDocumentCount(options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new estimated_document_count_1.EstimatedDocumentCountOperation(this, (0, utils_1.resolveOptions)(this, options)));
+      }
+      /**
+       * Gets the number of documents matching the filter.
+       * For a fast count of the total documents in a collection see {@link Collection#estimatedDocumentCount| estimatedDocumentCount}.
+       *
+       * Due to countDocuments using the $match aggregation pipeline stage, certain query operators cannot be used in countDocuments. This includes the $where and $near query operators, among others. Details can be found in the documentation for the $match aggregation pipeline stage.
+       *
+       * **Note**: When migrating from {@link Collection#count| count} to {@link Collection#countDocuments| countDocuments}
+       * the following query operators must be replaced:
+       *
+       * | Operator | Replacement |
+       * | -------- | ----------- |
+       * | `$where`   | [`$expr`][1] |
+       * | `$near`    | [`$geoWithin`][2] with [`$center`][3] |
+       * | `$nearSphere` | [`$geoWithin`][2] with [`$centerSphere`][4] |
+       *
+       * [1]: https://www.mongodb.com/docs/manual/reference/operator/query/expr/
+       * [2]: https://www.mongodb.com/docs/manual/reference/operator/query/geoWithin/
+       * [3]: https://www.mongodb.com/docs/manual/reference/operator/query/center/#op._S_center
+       * [4]: https://www.mongodb.com/docs/manual/reference/operator/query/centerSphere/#op._S_centerSphere
+       *
+       * @param filter - The filter for the count
+       * @param options - Optional settings for the command
+       *
+       * @see https://www.mongodb.com/docs/manual/reference/operator/query/expr/
+       * @see https://www.mongodb.com/docs/manual/reference/operator/query/geoWithin/
+       * @see https://www.mongodb.com/docs/manual/reference/operator/query/center/#op._S_center
+       * @see https://www.mongodb.com/docs/manual/reference/operator/query/centerSphere/#op._S_centerSphere
+       */
+      async countDocuments(filter = {}, options = {}) {
+        const pipeline = [];
+        pipeline.push({ $match: filter });
+        if (typeof options.skip === "number") {
+          pipeline.push({ $skip: options.skip });
+        }
+        if (typeof options.limit === "number") {
+          pipeline.push({ $limit: options.limit });
+        }
+        pipeline.push({ $group: { _id: 1, n: { $sum: 1 } } });
+        const cursor = this.aggregate(pipeline, options);
+        const doc = await cursor.next();
+        await cursor.close();
+        return doc?.n ?? 0;
+      }
+      async distinct(key, filter = {}, options = {}) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new distinct_1.DistinctOperation(this, key, filter, (0, utils_1.resolveOptions)(this, options)));
+      }
+      async indexes(options) {
+        const indexes = await this.listIndexes(options).toArray();
+        const full = options?.full ?? true;
+        if (full) {
+          return indexes;
+        }
+        const object = Object.fromEntries(indexes.map(({ name, key }) => [name, Object.entries(key)]));
+        return object;
+      }
+      async findOneAndDelete(filter, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new find_and_modify_1.FindOneAndDeleteOperation(this, filter, (0, utils_1.resolveOptions)(this, options)));
+      }
+      async findOneAndReplace(filter, replacement, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new find_and_modify_1.FindOneAndReplaceOperation(this, filter, replacement, (0, utils_1.resolveOptions)(this, options)));
+      }
+      async findOneAndUpdate(filter, update, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new find_and_modify_1.FindOneAndUpdateOperation(this, filter, update, (0, utils_1.resolveOptions)(this, options)));
+      }
+      /**
+       * Execute an aggregation framework pipeline against the collection, needs MongoDB \>= 2.2
+       *
+       * @param pipeline - An array of aggregation pipelines to execute
+       * @param options - Optional settings for the command
+       */
+      aggregate(pipeline = [], options) {
+        if (!Array.isArray(pipeline)) {
+          throw new error_1.MongoInvalidArgumentError('Argument "pipeline" must be an array of aggregation stages');
+        }
+        return new aggregation_cursor_1.AggregationCursor(this.client, this.s.namespace, pipeline, (0, utils_1.resolveOptions)(this, options));
+      }
+      /**
+       * Create a new Change Stream, watching for new changes (insertions, updates, replacements, deletions, and invalidations) in this collection.
+       *
+       * @remarks
+       * watch() accepts two generic arguments for distinct use cases:
+       * - The first is to override the schema that may be defined for this specific collection
+       * - The second is to override the shape of the change stream document entirely, if it is not provided the type will default to ChangeStreamDocument of the first argument
+       * @example
+       * By just providing the first argument I can type the change to be `ChangeStreamDocument<{ _id: number }>`
+       * ```ts
+       * collection.watch<{ _id: number }>()
+       *   .on('change', change => console.log(change._id.toFixed(4)));
+       * ```
+       *
+       * @example
+       * Passing a second argument provides a way to reflect the type changes caused by an advanced pipeline.
+       * Here, we are using a pipeline to have MongoDB filter for insert changes only and add a comment.
+       * No need start from scratch on the ChangeStreamInsertDocument type!
+       * By using an intersection we can save time and ensure defaults remain the same type!
+       * ```ts
+       * collection
+       *   .watch<Schema, ChangeStreamInsertDocument<Schema> & { comment: string }>([
+       *     { $addFields: { comment: 'big changes' } },
+       *     { $match: { operationType: 'insert' } }
+       *   ])
+       *   .on('change', change => {
+       *     change.comment.startsWith('big');
+       *     change.operationType === 'insert';
+       *     // No need to narrow in code because the generics did that for us!
+       *     expectType<Schema>(change.fullDocument);
+       *   });
+       * ```
+       *
+       * @remarks
+       * When `timeoutMS` is configured for a change stream, it will have different behaviour depending
+       * on whether the change stream is in iterator mode or emitter mode. In both cases, a change
+       * stream will time out if it does not receive a change event within `timeoutMS` of the last change
+       * event.
+       *
+       * Note that if a change stream is consistently timing out when watching a collection, database or
+       * client that is being changed, then this may be due to the server timing out before it can finish
+       * processing the existing oplog. To address this, restart the change stream with a higher
+       * `timeoutMS`.
+       *
+       * If the change stream times out the initial aggregate operation to establish the change stream on
+       * the server, then the client will close the change stream. If the getMore calls to the server
+       * time out, then the change stream will be left open, but will throw a MongoOperationTimeoutError
+       * when in iterator mode and emit an error event that returns a MongoOperationTimeoutError in
+       * emitter mode.
+       *
+       * To determine whether or not the change stream is still open following a timeout, check the
+       * {@link ChangeStream.closed} getter.
+       *
+       * @example
+       * In iterator mode, if a next() call throws a timeout error, it will attempt to resume the change stream.
+       * The next call can just be retried after this succeeds.
+       * ```ts
+       * const changeStream = collection.watch([], { timeoutMS: 100 });
+       * try {
+       *     await changeStream.next();
+       * } catch (e) {
+       *     if (e instanceof MongoOperationTimeoutError && !changeStream.closed) {
+       *       await changeStream.next();
+       *     }
+       *     throw e;
+       * }
+       * ```
+       *
+       * @example
+       * In emitter mode, if the change stream goes `timeoutMS` without emitting a change event, it will
+       * emit an error event that returns a MongoOperationTimeoutError, but will not close the change
+       * stream unless the resume attempt fails. There is no need to re-establish change listeners as
+       * this will automatically continue emitting change events once the resume attempt completes.
+       *
+       * ```ts
+       * const changeStream = collection.watch([], { timeoutMS: 100 });
+       * changeStream.on('change', console.log);
+       * changeStream.on('error', e => {
+       *     if (e instanceof MongoOperationTimeoutError && !changeStream.closed) {
+       *         // do nothing
+       *     } else {
+       *         changeStream.close();
+       *     }
+       * });
+       * ```
+       *
+       * @param pipeline - An array of {@link https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/|aggregation pipeline stages} through which to pass change stream documents. This allows for filtering (using $match) and manipulating the change stream documents.
+       * @param options - Optional settings for the command
+       * @typeParam TLocal - Type of the data being detected by the change stream
+       * @typeParam TChange - Type of the whole change stream document emitted
+       */
+      watch(pipeline = [], options = {}) {
+        if (!Array.isArray(pipeline)) {
+          options = pipeline;
+          pipeline = [];
+        }
+        return new change_stream_1.ChangeStream(this, pipeline, (0, utils_1.resolveOptions)(this, options));
+      }
+      /**
+       * Initiate an Out of order batch write operation. All operations will be buffered into insert/update/remove commands executed out of order.
+       *
+       * @throws MongoNotConnectedError
+       * @remarks
+       * **NOTE:** MongoClient must be connected prior to calling this method due to a known limitation in this legacy implementation.
+       * However, `collection.bulkWrite()` provides an equivalent API that does not require prior connecting.
+       */
+      initializeUnorderedBulkOp(options) {
+        return new unordered_1.UnorderedBulkOperation(this, (0, utils_1.resolveOptions)(this, options));
+      }
+      /**
+       * Initiate an In order bulk write operation. Operations will be serially executed in the order they are added, creating a new operation for each switch in types.
+       *
+       * @throws MongoNotConnectedError
+       * @remarks
+       * **NOTE:** MongoClient must be connected prior to calling this method due to a known limitation in this legacy implementation.
+       * However, `collection.bulkWrite()` provides an equivalent API that does not require prior connecting.
+       */
+      initializeOrderedBulkOp(options) {
+        return new ordered_1.OrderedBulkOperation(this, (0, utils_1.resolveOptions)(this, options));
+      }
+      /**
+       * An estimated count of matching documents in the db to a filter.
+       *
+       * **NOTE:** This method has been deprecated, since it does not provide an accurate count of the documents
+       * in a collection. To obtain an accurate count of documents in the collection, use {@link Collection#countDocuments| countDocuments}.
+       * To obtain an estimated count of all documents in the collection, use {@link Collection#estimatedDocumentCount| estimatedDocumentCount}.
+       *
+       * @deprecated use {@link Collection#countDocuments| countDocuments} or {@link Collection#estimatedDocumentCount| estimatedDocumentCount} instead
+       *
+       * @param filter - The filter for the count.
+       * @param options - Optional settings for the command
+       */
+      async count(filter = {}, options = {}) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new count_1.CountOperation(this.fullNamespace, filter, (0, utils_1.resolveOptions)(this, options)));
+      }
+      listSearchIndexes(indexNameOrOptions, options) {
+        options = typeof indexNameOrOptions === "object" ? indexNameOrOptions : options == null ? {} : options;
+        const indexName = indexNameOrOptions == null ? null : typeof indexNameOrOptions === "object" ? null : indexNameOrOptions;
+        return new list_search_indexes_cursor_1.ListSearchIndexesCursor(this, indexName, options);
+      }
+      /**
+       * Creates a single search index for the collection.
+       *
+       * @param description - The index description for the new search index.
+       * @returns A promise that resolves to the name of the new search index.
+       *
+       * @remarks Only available when used against a 7.0+ Atlas cluster.
+       */
+      async createSearchIndex(description) {
+        const [index] = await this.createSearchIndexes([description]);
+        return index;
+      }
+      /**
+       * Creates multiple search indexes for the current collection.
+       *
+       * @param descriptions - An array of `SearchIndexDescription`s for the new search indexes.
+       * @returns A promise that resolves to an array of the newly created search index names.
+       *
+       * @remarks Only available when used against a 7.0+ Atlas cluster.
+       * @returns
+       */
+      async createSearchIndexes(descriptions) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new create_1.CreateSearchIndexesOperation(this, descriptions));
+      }
+      /**
+       * Deletes a search index by index name.
+       *
+       * @param name - The name of the search index to be deleted.
+       *
+       * @remarks Only available when used against a 7.0+ Atlas cluster.
+       */
+      async dropSearchIndex(name) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new drop_1.DropSearchIndexOperation(this, name));
+      }
+      /**
+       * Updates a search index by replacing the existing index definition with the provided definition.
+       *
+       * @param name - The name of the search index to update.
+       * @param definition - The new search index definition.
+       *
+       * @remarks Only available when used against a 7.0+ Atlas cluster.
+       */
+      async updateSearchIndex(name, definition) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new update_1.UpdateSearchIndexOperation(this, name, definition));
+      }
+    };
+    exports2.Collection = Collection;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/cursor/change_stream_cursor.js
+var require_change_stream_cursor = __commonJS({
+  "../../../node_modules/mongodb/lib/cursor/change_stream_cursor.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ChangeStreamCursor = void 0;
+    var change_stream_1 = require_change_stream();
+    var constants_1 = require_constants2();
+    var aggregate_1 = require_aggregate();
+    var execute_operation_1 = require_execute_operation();
+    var utils_1 = require_utils();
+    var abstract_cursor_1 = require_abstract_cursor();
+    var ChangeStreamCursor = class _ChangeStreamCursor extends abstract_cursor_1.AbstractCursor {
+      constructor(client, namespace, pipeline = [], options = {}) {
+        super(client, namespace, { ...options, tailable: true, awaitData: true });
+        this.pipeline = pipeline;
+        this.changeStreamCursorOptions = options;
+        this._resumeToken = null;
+        this.startAtOperationTime = options.startAtOperationTime ?? null;
+        if (options.startAfter) {
+          this.resumeToken = options.startAfter;
+        } else if (options.resumeAfter) {
+          this.resumeToken = options.resumeAfter;
+        }
+      }
+      set resumeToken(token) {
+        this._resumeToken = token;
+        this.emit(change_stream_1.ChangeStream.RESUME_TOKEN_CHANGED, token);
+      }
+      get resumeToken() {
+        return this._resumeToken;
+      }
+      get resumeOptions() {
+        const options = {
+          ...this.changeStreamCursorOptions
+        };
+        for (const key of ["resumeAfter", "startAfter", "startAtOperationTime"]) {
+          delete options[key];
+        }
+        if (this.resumeToken != null) {
+          if (this.changeStreamCursorOptions.startAfter && !this.hasReceived) {
+            options.startAfter = this.resumeToken;
+          } else {
+            options.resumeAfter = this.resumeToken;
+          }
+        } else if (this.startAtOperationTime != null) {
+          options.startAtOperationTime = this.startAtOperationTime;
+        }
+        return options;
+      }
+      cacheResumeToken(resumeToken) {
+        if (this.bufferedCount() === 0 && this.postBatchResumeToken) {
+          this.resumeToken = this.postBatchResumeToken;
+        } else {
+          this.resumeToken = resumeToken;
+        }
+        this.hasReceived = true;
+      }
+      _processBatch(response) {
+        const { postBatchResumeToken } = response;
+        if (postBatchResumeToken) {
+          this.postBatchResumeToken = postBatchResumeToken;
+          if (response.batchSize === 0) {
+            this.resumeToken = postBatchResumeToken;
+          }
+        }
+      }
+      clone() {
+        return new _ChangeStreamCursor(this.client, this.namespace, this.pipeline, {
+          ...this.cursorOptions
+        });
+      }
+      async _initialize(session) {
+        const aggregateOperation = new aggregate_1.AggregateOperation(this.namespace, this.pipeline, {
+          ...this.cursorOptions,
+          ...this.changeStreamCursorOptions,
+          session
+        });
+        const response = await (0, execute_operation_1.executeOperation)(session.client, aggregateOperation, this.timeoutContext);
+        const server = aggregateOperation.server;
+        this.maxWireVersion = (0, utils_1.maxWireVersion)(server);
+        if (this.startAtOperationTime == null && this.changeStreamCursorOptions.resumeAfter == null && this.changeStreamCursorOptions.startAfter == null) {
+          this.startAtOperationTime = response.operationTime;
+        }
+        this._processBatch(response);
+        this.emit(constants_1.INIT, response);
+        this.emit(constants_1.RESPONSE);
+        return { server, session, response };
+      }
+      async getMore() {
+        const response = await super.getMore();
+        this.maxWireVersion = (0, utils_1.maxWireVersion)(this.server);
+        this._processBatch(response);
+        this.emit(change_stream_1.ChangeStream.MORE, response);
+        this.emit(change_stream_1.ChangeStream.RESPONSE);
+        return response;
+      }
+    };
+    exports2.ChangeStreamCursor = ChangeStreamCursor;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/list_collections.js
+var require_list_collections = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/list_collections.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ListCollectionsOperation = void 0;
+    var responses_1 = require_responses();
+    var utils_1 = require_utils();
+    var command_1 = require_command();
+    var operation_1 = require_operation();
+    var ListCollectionsOperation = class extends command_1.CommandOperation {
+      constructor(db, filter, options) {
+        super(db, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.CursorResponse;
+        this.options = { ...options };
+        delete this.options.writeConcern;
+        this.db = db;
+        this.filter = filter;
+        this.nameOnly = !!this.options.nameOnly;
+        this.authorizedCollections = !!this.options.authorizedCollections;
+        if (typeof this.options.batchSize === "number") {
+          this.batchSize = this.options.batchSize;
+        }
+        this.SERVER_COMMAND_RESPONSE_TYPE = this.explain ? responses_1.ExplainedCursorResponse : responses_1.CursorResponse;
+      }
+      get commandName() {
+        return "listCollections";
+      }
+      buildCommandDocument(connection) {
+        const command = {
+          listCollections: 1,
+          filter: this.filter,
+          cursor: this.batchSize ? { batchSize: this.batchSize } : {},
+          nameOnly: this.nameOnly,
+          authorizedCollections: this.authorizedCollections
+        };
+        if ((0, utils_1.maxWireVersion)(connection) >= 9 && this.options.comment !== void 0) {
+          command.comment = this.options.comment;
+        }
+        return command;
+      }
+      handleOk(response) {
+        return response;
+      }
+    };
+    exports2.ListCollectionsOperation = ListCollectionsOperation;
+    (0, operation_1.defineAspects)(ListCollectionsOperation, [
+      operation_1.Aspect.READ_OPERATION,
+      operation_1.Aspect.RETRYABLE,
+      operation_1.Aspect.CURSOR_CREATING,
+      operation_1.Aspect.SUPPORTS_RAW_DATA
+    ]);
+  }
+});
+
+// ../../../node_modules/mongodb/lib/cursor/list_collections_cursor.js
+var require_list_collections_cursor = __commonJS({
+  "../../../node_modules/mongodb/lib/cursor/list_collections_cursor.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ListCollectionsCursor = void 0;
+    var execute_operation_1 = require_execute_operation();
+    var list_collections_1 = require_list_collections();
+    var abstract_cursor_1 = require_abstract_cursor();
+    var ListCollectionsCursor = class _ListCollectionsCursor extends abstract_cursor_1.AbstractCursor {
+      constructor(db, filter, options) {
+        super(db.client, db.s.namespace, options);
+        this.parent = db;
+        this.filter = filter;
+        this.options = options;
+      }
+      clone() {
+        return new _ListCollectionsCursor(this.parent, this.filter, {
+          ...this.options,
+          ...this.cursorOptions
+        });
+      }
+      /** @internal */
+      async _initialize(session) {
+        const operation = new list_collections_1.ListCollectionsOperation(this.parent, this.filter, {
+          ...this.cursorOptions,
+          ...this.options,
+          session,
+          signal: this.signal
+        });
+        const response = await (0, execute_operation_1.executeOperation)(this.parent.client, operation, this.timeoutContext);
+        return { server: operation.server, session, response };
+      }
+    };
+    exports2.ListCollectionsCursor = ListCollectionsCursor;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/cursor/run_command_cursor.js
+var require_run_command_cursor = __commonJS({
+  "../../../node_modules/mongodb/lib/cursor/run_command_cursor.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.RunCommandCursor = void 0;
+    var error_1 = require_error();
+    var execute_operation_1 = require_execute_operation();
+    var get_more_1 = require_get_more();
+    var run_command_1 = require_run_command();
+    var utils_1 = require_utils();
+    var abstract_cursor_1 = require_abstract_cursor();
+    var RunCommandCursor = class extends abstract_cursor_1.AbstractCursor {
+      /**
+       * Controls the `getMore.comment` field
+       * @param comment - any BSON value
+       */
+      setComment(comment) {
+        this.getMoreOptions.comment = comment;
+        return this;
+      }
+      /**
+       * Controls the `getMore.maxTimeMS` field. Only valid when cursor is tailable await
+       * @param maxTimeMS - the number of milliseconds to wait for new data
+       */
+      setMaxTimeMS(maxTimeMS) {
+        this.getMoreOptions.maxAwaitTimeMS = maxTimeMS;
+        return this;
+      }
+      /**
+       * Controls the `getMore.batchSize` field
+       * @param batchSize - the number documents to return in the `nextBatch`
+       */
+      setBatchSize(batchSize) {
+        this.getMoreOptions.batchSize = batchSize;
+        return this;
+      }
+      /** Unsupported for RunCommandCursor */
+      clone() {
+        throw new error_1.MongoAPIError("Clone not supported, create a new cursor with db.runCursorCommand");
+      }
+      /** Unsupported for RunCommandCursor: readConcern must be configured directly on command document */
+      withReadConcern(_) {
+        throw new error_1.MongoAPIError("RunCommandCursor does not support readConcern it must be attached to the command being run");
+      }
+      /** Unsupported for RunCommandCursor: various cursor flags must be configured directly on command document */
+      addCursorFlag(_, __) {
+        throw new error_1.MongoAPIError("RunCommandCursor does not support cursor flags, they must be attached to the command being run");
+      }
+      /**
+       * Unsupported for RunCommandCursor: maxTimeMS must be configured directly on command document
+       */
+      maxTimeMS(_) {
+        throw new error_1.MongoAPIError("maxTimeMS must be configured on the command document directly, to configure getMore.maxTimeMS use cursor.setMaxTimeMS()");
+      }
+      /** Unsupported for RunCommandCursor: batchSize must be configured directly on command document */
+      batchSize(_) {
+        throw new error_1.MongoAPIError("batchSize must be configured on the command document directly, to configure getMore.batchSize use cursor.setBatchSize()");
+      }
+      /** @internal */
+      constructor(db, command, options = {}) {
+        super(db.client, (0, utils_1.ns)(db.namespace), options);
+        this.getMoreOptions = {};
+        this.db = db;
+        this.command = Object.freeze({ ...command });
+      }
+      /** @internal */
+      async _initialize(session) {
+        const operation = new run_command_1.RunCursorCommandOperation(this.db.s.namespace, this.command, {
+          ...this.cursorOptions,
+          session,
+          readPreference: this.cursorOptions.readPreference
+        });
+        const response = await (0, execute_operation_1.executeOperation)(this.client, operation, this.timeoutContext);
+        return {
+          server: operation.server,
+          session,
+          response
+        };
+      }
+      /** @internal */
+      async getMore() {
+        if (!this.session) {
+          throw new error_1.MongoRuntimeError("Unexpected null session. A cursor creating command should have set this");
+        }
+        const getMoreOperation = new get_more_1.GetMoreOperation(this.namespace, this.id, this.server, {
+          ...this.cursorOptions,
+          session: this.session,
+          ...this.getMoreOptions
+        });
+        return await (0, execute_operation_1.executeOperation)(this.client, getMoreOperation, this.timeoutContext);
+      }
+    };
+    exports2.RunCommandCursor = RunCommandCursor;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/create_collection.js
+var require_create_collection = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/create_collection.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.CreateCollectionOperation = void 0;
+    exports2.createCollections = createCollections;
+    var constants_1 = require_constants();
+    var responses_1 = require_responses();
+    var collection_1 = require_collection();
+    var error_1 = require_error();
+    var timeout_1 = require_timeout();
+    var utils_1 = require_utils();
+    var command_1 = require_command();
+    var execute_operation_1 = require_execute_operation();
+    var indexes_1 = require_indexes();
+    var operation_1 = require_operation();
+    var ILLEGAL_COMMAND_FIELDS = /* @__PURE__ */ new Set([
+      "w",
+      "wtimeout",
+      "timeoutMS",
+      "j",
+      "fsync",
+      "pkFactory",
+      "raw",
+      "readPreference",
+      "session",
+      "readConcern",
+      "writeConcern",
+      "raw",
+      "fieldsAsRaw",
+      "useBigInt64",
+      "promoteLongs",
+      "promoteValues",
+      "promoteBuffers",
+      "bsonRegExp",
+      "serializeFunctions",
+      "ignoreUndefined",
+      "enableUtf8Validation"
+    ]);
+    var INVALID_QE_VERSION = "Driver support of Queryable Encryption is incompatible with server. Upgrade server to use Queryable Encryption.";
+    var CreateCollectionOperation = class extends command_1.CommandOperation {
+      constructor(db, name, options = {}) {
+        super(db, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.options = options;
+        this.db = db;
+        this.name = name;
+      }
+      get commandName() {
+        return "create";
+      }
+      buildCommandDocument(_connection, _session) {
+        const isOptionValid = ([k, v]) => v != null && typeof v !== "function" && !ILLEGAL_COMMAND_FIELDS.has(k);
+        return {
+          create: this.name,
+          ...Object.fromEntries(Object.entries(this.options).filter(isOptionValid))
+        };
+      }
+      handleOk(_response) {
+        return new collection_1.Collection(this.db, this.name, this.options);
+      }
+    };
+    exports2.CreateCollectionOperation = CreateCollectionOperation;
+    async function createCollections(db, name, options) {
+      const timeoutContext = timeout_1.TimeoutContext.create({
+        session: options.session,
+        serverSelectionTimeoutMS: db.client.s.options.serverSelectionTimeoutMS,
+        waitQueueTimeoutMS: db.client.s.options.waitQueueTimeoutMS,
+        timeoutMS: options.timeoutMS
+      });
+      const encryptedFields = options.encryptedFields ?? db.client.s.options.autoEncryption?.encryptedFieldsMap?.[`${db.databaseName}.${name}`];
+      if (encryptedFields) {
+        class CreateSupportingFLEv2CollectionOperation extends CreateCollectionOperation {
+          buildCommandDocument(connection, session) {
+            if (!connection.description.loadBalanced && (0, utils_1.maxWireVersion)(connection) < constants_1.MIN_SUPPORTED_QE_WIRE_VERSION) {
+              throw new error_1.MongoCompatibilityError(`${INVALID_QE_VERSION} The minimum server version required is ${constants_1.MIN_SUPPORTED_QE_SERVER_VERSION}`);
+            }
+            return super.buildCommandDocument(connection, session);
+          }
+        }
+        const escCollection = encryptedFields.escCollection ?? `enxcol_.${name}.esc`;
+        const ecocCollection = encryptedFields.ecocCollection ?? `enxcol_.${name}.ecoc`;
+        for (const collectionName of [escCollection, ecocCollection]) {
+          const createOp = new CreateSupportingFLEv2CollectionOperation(db, collectionName, {
+            clusteredIndex: {
+              key: { _id: 1 },
+              unique: true
+            },
+            session: options.session
+          });
+          await (0, execute_operation_1.executeOperation)(db.client, createOp, timeoutContext);
+        }
+        if (!options.encryptedFields) {
+          options = { ...options, encryptedFields };
+        }
+      }
+      const coll = await (0, execute_operation_1.executeOperation)(db.client, new CreateCollectionOperation(db, name, options), timeoutContext);
+      if (encryptedFields) {
+        const createIndexOp = indexes_1.CreateIndexesOperation.fromIndexSpecification(db, name, { __safeContent__: 1 }, { session: options.session });
+        await (0, execute_operation_1.executeOperation)(db.client, createIndexOp, timeoutContext);
+      }
+      return coll;
+    }
+    (0, operation_1.defineAspects)(CreateCollectionOperation, [operation_1.Aspect.WRITE_OPERATION]);
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/drop.js
+var require_drop2 = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/drop.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.DropDatabaseOperation = exports2.DropCollectionOperation = void 0;
+    exports2.dropCollections = dropCollections;
+    var __1 = require_lib3();
+    var responses_1 = require_responses();
+    var abstract_cursor_1 = require_abstract_cursor();
+    var error_1 = require_error();
+    var timeout_1 = require_timeout();
+    var command_1 = require_command();
+    var execute_operation_1 = require_execute_operation();
+    var operation_1 = require_operation();
+    var DropCollectionOperation = class extends command_1.CommandOperation {
+      constructor(db, name, options = {}) {
+        super(db, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.options = options;
+        this.name = name;
+      }
+      get commandName() {
+        return "drop";
+      }
+      buildCommandDocument(_connection, _session) {
+        return { drop: this.name };
+      }
+      handleOk(_response) {
+        return true;
+      }
+      handleError(error) {
+        if (!(error instanceof __1.MongoServerError))
+          throw error;
+        if (Number(error.code) !== error_1.MONGODB_ERROR_CODES.NamespaceNotFound)
+          throw error;
+        return false;
+      }
+    };
+    exports2.DropCollectionOperation = DropCollectionOperation;
+    async function dropCollections(db, name, options) {
+      const timeoutContext = timeout_1.TimeoutContext.create({
+        session: options.session,
+        serverSelectionTimeoutMS: db.client.s.options.serverSelectionTimeoutMS,
+        waitQueueTimeoutMS: db.client.s.options.waitQueueTimeoutMS,
+        timeoutMS: options.timeoutMS
+      });
+      const encryptedFieldsMap = db.client.s.options.autoEncryption?.encryptedFieldsMap;
+      let encryptedFields = options.encryptedFields ?? encryptedFieldsMap?.[`${db.databaseName}.${name}`];
+      if (!encryptedFields && encryptedFieldsMap) {
+        const listCollectionsResult = await db.listCollections({ name }, {
+          nameOnly: false,
+          session: options.session,
+          timeoutContext: new abstract_cursor_1.CursorTimeoutContext(timeoutContext, Symbol())
+        }).toArray();
+        encryptedFields = listCollectionsResult?.[0]?.options?.encryptedFields;
+      }
+      if (encryptedFields) {
+        const escCollection = encryptedFields.escCollection || `enxcol_.${name}.esc`;
+        const ecocCollection = encryptedFields.ecocCollection || `enxcol_.${name}.ecoc`;
+        for (const collectionName of [escCollection, ecocCollection]) {
+          const dropOp = new DropCollectionOperation(db, collectionName, options);
+          await (0, execute_operation_1.executeOperation)(db.client, dropOp, timeoutContext);
+        }
+      }
+      return await (0, execute_operation_1.executeOperation)(db.client, new DropCollectionOperation(db, name, options), timeoutContext);
+    }
+    var DropDatabaseOperation = class extends command_1.CommandOperation {
+      constructor(db, options) {
+        super(db, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.options = options;
+      }
+      get commandName() {
+        return "dropDatabase";
+      }
+      buildCommandDocument(_connection, _session) {
+        return { dropDatabase: 1 };
+      }
+      handleOk(_response) {
+        return true;
+      }
+    };
+    exports2.DropDatabaseOperation = DropDatabaseOperation;
+    (0, operation_1.defineAspects)(DropCollectionOperation, [operation_1.Aspect.WRITE_OPERATION]);
+    (0, operation_1.defineAspects)(DropDatabaseOperation, [operation_1.Aspect.WRITE_OPERATION]);
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/profiling_level.js
+var require_profiling_level = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/profiling_level.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ProfilingLevelOperation = void 0;
+    var bson_1 = require_bson2();
+    var responses_1 = require_responses();
+    var error_1 = require_error();
+    var command_1 = require_command();
+    var ProfilingLevelResponse = class extends responses_1.MongoDBResponse {
+      get was() {
+        return this.get("was", bson_1.BSONType.int, true);
+      }
+    };
+    var ProfilingLevelOperation = class extends command_1.CommandOperation {
+      constructor(db, options) {
+        super(db, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = ProfilingLevelResponse;
+        this.options = options;
+      }
+      get commandName() {
+        return "profile";
+      }
+      buildCommandDocument(_connection) {
+        return { profile: -1 };
+      }
+      handleOk(response) {
+        if (response.ok === 1) {
+          const was = response.was;
+          if (was === 0)
+            return "off";
+          if (was === 1)
+            return "slow_only";
+          if (was === 2)
+            return "all";
+          throw new error_1.MongoUnexpectedServerResponseError(`Illegal profiling level value ${was}`);
+        } else {
+          throw new error_1.MongoUnexpectedServerResponseError("Error with profile command");
+        }
+      }
+    };
+    exports2.ProfilingLevelOperation = ProfilingLevelOperation;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/set_profiling_level.js
+var require_set_profiling_level = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/set_profiling_level.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.SetProfilingLevelOperation = exports2.ProfilingLevel = void 0;
+    var responses_1 = require_responses();
+    var error_1 = require_error();
+    var utils_1 = require_utils();
+    var command_1 = require_command();
+    var levelValues = /* @__PURE__ */ new Set(["off", "slow_only", "all"]);
+    exports2.ProfilingLevel = Object.freeze({
+      off: "off",
+      slowOnly: "slow_only",
+      all: "all"
+    });
+    var SetProfilingLevelOperation = class extends command_1.CommandOperation {
+      constructor(db, level, options) {
+        super(db, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.options = options;
+        switch (level) {
+          case exports2.ProfilingLevel.off:
+            this.profile = 0;
+            break;
+          case exports2.ProfilingLevel.slowOnly:
+            this.profile = 1;
+            break;
+          case exports2.ProfilingLevel.all:
+            this.profile = 2;
+            break;
+          default:
+            this.profile = 0;
+            break;
+        }
+        this.level = level;
+      }
+      get commandName() {
+        return "profile";
+      }
+      buildCommandDocument(_connection) {
+        const level = this.level;
+        if (!levelValues.has(level)) {
+          throw new error_1.MongoInvalidArgumentError(`Profiling level must be one of "${(0, utils_1.enumToString)(exports2.ProfilingLevel)}"`);
+        }
+        return { profile: this.profile };
+      }
+      handleOk(_response) {
+        return this.level;
+      }
+    };
+    exports2.SetProfilingLevelOperation = SetProfilingLevelOperation;
+  }
+});
+
+// ../../../node_modules/mongodb/lib/operations/stats.js
+var require_stats = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/stats.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.DbStatsOperation = void 0;
+    var responses_1 = require_responses();
+    var command_1 = require_command();
+    var operation_1 = require_operation();
+    var DbStatsOperation = class extends command_1.CommandOperation {
+      constructor(db, options) {
+        super(db, options);
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.options = options;
+      }
+      get commandName() {
+        return "dbStats";
+      }
+      buildCommandDocument(_connection) {
+        const command = { dbStats: true };
+        if (this.options.scale != null) {
+          command.scale = this.options.scale;
+        }
+        return command;
+      }
+    };
+    exports2.DbStatsOperation = DbStatsOperation;
+    (0, operation_1.defineAspects)(DbStatsOperation, [operation_1.Aspect.READ_OPERATION]);
+  }
+});
+
+// ../../../node_modules/mongodb/lib/db.js
+var require_db = __commonJS({
+  "../../../node_modules/mongodb/lib/db.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.Db = void 0;
+    var admin_1 = require_admin();
+    var bson_1 = require_bson2();
+    var change_stream_1 = require_change_stream();
+    var collection_1 = require_collection();
+    var CONSTANTS = require_constants2();
+    var aggregation_cursor_1 = require_aggregation_cursor();
+    var list_collections_cursor_1 = require_list_collections_cursor();
+    var run_command_cursor_1 = require_run_command_cursor();
+    var error_1 = require_error();
+    var create_collection_1 = require_create_collection();
+    var drop_1 = require_drop2();
+    var execute_operation_1 = require_execute_operation();
+    var indexes_1 = require_indexes();
+    var profiling_level_1 = require_profiling_level();
+    var remove_user_1 = require_remove_user();
+    var rename_1 = require_rename();
+    var run_command_1 = require_run_command();
+    var set_profiling_level_1 = require_set_profiling_level();
+    var stats_1 = require_stats();
+    var read_concern_1 = require_read_concern();
+    var read_preference_1 = require_read_preference();
+    var utils_1 = require_utils();
+    var write_concern_1 = require_write_concern();
+    var DB_OPTIONS_ALLOW_LIST = [
+      "writeConcern",
+      "readPreference",
+      "readPreferenceTags",
+      "native_parser",
+      "forceServerObjectId",
+      "pkFactory",
+      "serializeFunctions",
+      "raw",
+      "authSource",
+      "ignoreUndefined",
+      "readConcern",
+      "retryMiliSeconds",
+      "numberOfRetries",
+      "useBigInt64",
+      "promoteBuffers",
+      "promoteLongs",
+      "bsonRegExp",
+      "enableUtf8Validation",
+      "promoteValues",
+      "compression",
+      "retryWrites",
+      "timeoutMS"
+    ];
+    var Db2 = class {
+      static {
+        this.SYSTEM_NAMESPACE_COLLECTION = CONSTANTS.SYSTEM_NAMESPACE_COLLECTION;
+      }
+      static {
+        this.SYSTEM_INDEX_COLLECTION = CONSTANTS.SYSTEM_INDEX_COLLECTION;
+      }
+      static {
+        this.SYSTEM_PROFILE_COLLECTION = CONSTANTS.SYSTEM_PROFILE_COLLECTION;
+      }
+      static {
+        this.SYSTEM_USER_COLLECTION = CONSTANTS.SYSTEM_USER_COLLECTION;
+      }
+      static {
+        this.SYSTEM_COMMAND_COLLECTION = CONSTANTS.SYSTEM_COMMAND_COLLECTION;
+      }
+      static {
+        this.SYSTEM_JS_COLLECTION = CONSTANTS.SYSTEM_JS_COLLECTION;
+      }
+      /**
+       * Creates a new Db instance.
+       *
+       * Db name cannot contain a dot, the server may apply more restrictions when an operation is run.
+       *
+       * @param client - The MongoClient for the database.
+       * @param databaseName - The name of the database this instance represents.
+       * @param options - Optional settings for Db construction.
+       */
+      constructor(client, databaseName, options) {
+        options = options ?? {};
+        options = (0, utils_1.filterOptions)(options, DB_OPTIONS_ALLOW_LIST);
+        if (typeof databaseName === "string" && databaseName.includes(".")) {
+          throw new error_1.MongoInvalidArgumentError(`Database names cannot contain the character '.'`);
+        }
+        this.s = {
+          // Options
+          options,
+          // Unpack read preference
+          readPreference: read_preference_1.ReadPreference.fromOptions(options),
+          // Merge bson options
+          bsonOptions: (0, bson_1.resolveBSONOptions)(options, client),
+          // Set up the primary key factory or fallback to ObjectId
+          pkFactory: options?.pkFactory ?? utils_1.DEFAULT_PK_FACTORY,
+          // ReadConcern
+          readConcern: read_concern_1.ReadConcern.fromOptions(options),
+          writeConcern: write_concern_1.WriteConcern.fromOptions(options),
+          // Namespace
+          namespace: new utils_1.MongoDBNamespace(databaseName)
+        };
+        this.client = client;
+      }
+      get databaseName() {
+        return this.s.namespace.db;
+      }
+      // Options
+      get options() {
+        return this.s.options;
+      }
+      /**
+       * Check if a secondary can be used (because the read preference is *not* set to primary)
+       */
+      get secondaryOk() {
+        return this.s.readPreference?.preference !== "primary" || false;
+      }
+      get readConcern() {
+        return this.s.readConcern;
+      }
+      /**
+       * The current readPreference of the Db. If not explicitly defined for
+       * this Db, will be inherited from the parent MongoClient
+       */
+      get readPreference() {
+        if (this.s.readPreference == null) {
+          return this.client.readPreference;
+        }
+        return this.s.readPreference;
+      }
+      get bsonOptions() {
+        return this.s.bsonOptions;
+      }
+      // get the write Concern
+      get writeConcern() {
+        return this.s.writeConcern;
+      }
+      get namespace() {
+        return this.s.namespace.toString();
+      }
+      get timeoutMS() {
+        return this.s.options?.timeoutMS;
+      }
+      /**
+       * Create a new collection on a server with the specified options. Use this to create capped collections.
+       * More information about command options available at https://www.mongodb.com/docs/manual/reference/command/create/
+       *
+       * Collection namespace validation is performed server-side.
+       *
+       * @param name - The name of the collection to create
+       * @param options - Optional settings for the command
+       */
+      async createCollection(name, options) {
+        options = (0, utils_1.resolveOptions)(this, options);
+        return await (0, create_collection_1.createCollections)(this, name, options);
+      }
+      /**
+       * Execute a command
+       *
+       * @remarks
+       * This command does not inherit options from the MongoClient.
+       *
+       * The driver will ensure the following fields are attached to the command sent to the server:
+       * - `lsid` - sourced from an implicit session or options.session
+       * - `$readPreference` - defaults to primary or can be configured by options.readPreference
+       * - `$db` - sourced from the name of this database
+       *
+       * If the client has a serverApi setting:
+       * - `apiVersion`
+       * - `apiStrict`
+       * - `apiDeprecationErrors`
+       *
+       * When in a transaction:
+       * - `readConcern` - sourced from readConcern set on the TransactionOptions
+       * - `writeConcern` - sourced from writeConcern set on the TransactionOptions
+       *
+       * Attaching any of the above fields to the command will have no effect as the driver will overwrite the value.
+       *
+       * @param command - The command to run
+       * @param options - Optional settings for the command
+       */
+      async command(command, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new run_command_1.RunCommandOperation(this.s.namespace, command, (0, utils_1.resolveOptions)(void 0, {
+          ...(0, bson_1.resolveBSONOptions)(options),
+          timeoutMS: options?.timeoutMS ?? this.timeoutMS,
+          session: options?.session,
+          readPreference: options?.readPreference,
+          signal: options?.signal
+        })));
+      }
+      /**
+       * Execute an aggregation framework pipeline against the database.
+       *
+       * @param pipeline - An array of aggregation stages to be executed
+       * @param options - Optional settings for the command
+       */
+      aggregate(pipeline = [], options) {
+        return new aggregation_cursor_1.AggregationCursor(this.client, this.s.namespace, pipeline, (0, utils_1.resolveOptions)(this, options));
+      }
+      /** Return the Admin db instance */
+      admin() {
+        return new admin_1.Admin(this);
+      }
+      /**
+       * Returns a reference to a MongoDB Collection. If it does not exist it will be created implicitly.
+       *
+       * Collection namespace validation is performed server-side.
+       *
+       * @param name - the collection name we wish to access.
+       * @returns return the new Collection instance
+       */
+      collection(name, options = {}) {
+        if (typeof options === "function") {
+          throw new error_1.MongoInvalidArgumentError("The callback form of this helper has been removed.");
+        }
+        return new collection_1.Collection(this, name, (0, utils_1.resolveOptions)(this, options));
+      }
+      /**
+       * Get all the db statistics.
+       *
+       * @param options - Optional settings for the command
+       */
+      async stats(options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new stats_1.DbStatsOperation(this, (0, utils_1.resolveOptions)(this, options)));
+      }
+      listCollections(filter = {}, options = {}) {
+        return new list_collections_cursor_1.ListCollectionsCursor(this, filter, (0, utils_1.resolveOptions)(this, options));
+      }
+      /**
+       * Rename a collection.
+       *
+       * @remarks
+       * This operation does not inherit options from the MongoClient.
+       *
+       * @param fromCollection - Name of current collection to rename
+       * @param toCollection - New name of of the collection
+       * @param options - Optional settings for the command
+       */
+      async renameCollection(fromCollection, toCollection, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new rename_1.RenameOperation(this.collection(fromCollection), toCollection, (0, utils_1.resolveOptions)(void 0, {
+          ...options,
+          new_collection: true,
+          readPreference: read_preference_1.ReadPreference.primary
+        })));
+      }
+      /**
+       * Drop a collection from the database, removing it permanently. New accesses will create a new collection.
+       *
+       * @param name - Name of collection to drop
+       * @param options - Optional settings for the command
+       */
+      async dropCollection(name, options) {
+        options = (0, utils_1.resolveOptions)(this, options);
+        return await (0, drop_1.dropCollections)(this, name, options);
+      }
+      /**
+       * Drop a database, removing it permanently from the server.
+       *
+       * @param options - Optional settings for the command
+       */
+      async dropDatabase(options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new drop_1.DropDatabaseOperation(this, (0, utils_1.resolveOptions)(this, options)));
+      }
+      /**
+       * Fetch all collections for the current db.
+       *
+       * @param options - Optional settings for the command
+       */
+      async collections(options) {
+        options = (0, utils_1.resolveOptions)(this, options);
+        const collections = await this.listCollections({}, { ...options, nameOnly: true }).toArray();
+        return collections.filter(
+          // Filter collections removing any illegal ones
+          ({ name }) => !name.includes("$")
+        ).map(({ name }) => new collection_1.Collection(this, name, this.s.options));
+      }
+      /**
+       * Creates an index on the db and collection.
+       *
+       * @param name - Name of the collection to create the index on.
+       * @param indexSpec - Specify the field to index, or an index specification
+       * @param options - Optional settings for the command
+       */
+      async createIndex(name, indexSpec, options) {
+        const indexes = await (0, execute_operation_1.executeOperation)(this.client, indexes_1.CreateIndexesOperation.fromIndexSpecification(this, name, indexSpec, options));
+        return indexes[0];
+      }
+      /**
+       * Remove a user from a database
+       *
+       * @param username - The username to remove
+       * @param options - Optional settings for the command
+       */
+      async removeUser(username, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new remove_user_1.RemoveUserOperation(this, username, (0, utils_1.resolveOptions)(this, options)));
+      }
+      /**
+       * Set the current profiling level of MongoDB
+       *
+       * @param level - The new profiling level (off, slow_only, all).
+       * @param options - Optional settings for the command
+       */
+      async setProfilingLevel(level, options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new set_profiling_level_1.SetProfilingLevelOperation(this, level, (0, utils_1.resolveOptions)(this, options)));
+      }
+      /**
+       * Retrieve the current profiling Level for MongoDB
+       *
+       * @param options - Optional settings for the command
+       */
+      async profilingLevel(options) {
+        return await (0, execute_operation_1.executeOperation)(this.client, new profiling_level_1.ProfilingLevelOperation(this, (0, utils_1.resolveOptions)(this, options)));
+      }
+      async indexInformation(name, options) {
+        return await this.collection(name).indexInformation((0, utils_1.resolveOptions)(this, options));
+      }
+      /**
+       * Create a new Change Stream, watching for new changes (insertions, updates,
+       * replacements, deletions, and invalidations) in this database. Will ignore all
+       * changes to system collections.
+       *
+       * @remarks
+       * watch() accepts two generic arguments for distinct use cases:
+       * - The first is to provide the schema that may be defined for all the collections within this database
+       * - The second is to override the shape of the change stream document entirely, if it is not provided the type will default to ChangeStreamDocument of the first argument
+       *
+       * @remarks
+       * When `timeoutMS` is configured for a change stream, it will have different behaviour depending
+       * on whether the change stream is in iterator mode or emitter mode. In both cases, a change
+       * stream will time out if it does not receive a change event within `timeoutMS` of the last change
+       * event.
+       *
+       * Note that if a change stream is consistently timing out when watching a collection, database or
+       * client that is being changed, then this may be due to the server timing out before it can finish
+       * processing the existing oplog. To address this, restart the change stream with a higher
+       * `timeoutMS`.
+       *
+       * If the change stream times out the initial aggregate operation to establish the change stream on
+       * the server, then the client will close the change stream. If the getMore calls to the server
+       * time out, then the change stream will be left open, but will throw a MongoOperationTimeoutError
+       * when in iterator mode and emit an error event that returns a MongoOperationTimeoutError in
+       * emitter mode.
+       *
+       * To determine whether or not the change stream is still open following a timeout, check the
+       * {@link ChangeStream.closed} getter.
+       *
+       * @example
+       * In iterator mode, if a next() call throws a timeout error, it will attempt to resume the change stream.
+       * The next call can just be retried after this succeeds.
+       * ```ts
+       * const changeStream = collection.watch([], { timeoutMS: 100 });
+       * try {
+       *     await changeStream.next();
+       * } catch (e) {
+       *     if (e instanceof MongoOperationTimeoutError && !changeStream.closed) {
+       *       await changeStream.next();
+       *     }
+       *     throw e;
+       * }
+       * ```
+       *
+       * @example
+       * In emitter mode, if the change stream goes `timeoutMS` without emitting a change event, it will
+       * emit an error event that returns a MongoOperationTimeoutError, but will not close the change
+       * stream unless the resume attempt fails. There is no need to re-establish change listeners as
+       * this will automatically continue emitting change events once the resume attempt completes.
+       *
+       * ```ts
+       * const changeStream = collection.watch([], { timeoutMS: 100 });
+       * changeStream.on('change', console.log);
+       * changeStream.on('error', e => {
+       *     if (e instanceof MongoOperationTimeoutError && !changeStream.closed) {
+       *         // do nothing
+       *     } else {
+       *         changeStream.close();
+       *     }
+       * });
+       * ```
+       * @param pipeline - An array of {@link https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/|aggregation pipeline stages} through which to pass change stream documents. This allows for filtering (using $match) and manipulating the change stream documents.
+       * @param options - Optional settings for the command
+       * @typeParam TSchema - Type of the data being detected by the change stream
+       * @typeParam TChange - Type of the whole change stream document emitted
+       */
+      watch(pipeline = [], options = {}) {
+        if (!Array.isArray(pipeline)) {
+          options = pipeline;
+          pipeline = [];
+        }
+        return new change_stream_1.ChangeStream(this, pipeline, (0, utils_1.resolveOptions)(this, options));
+      }
+      /**
+       * A low level cursor API providing basic driver functionality:
+       * - ClientSession management
+       * - ReadPreference for server selection
+       * - Running getMores automatically when a local batch is exhausted
+       *
+       * @param command - The command that will start a cursor on the server.
+       * @param options - Configurations for running the command, bson options will apply to getMores
+       */
+      runCursorCommand(command, options) {
+        return new run_command_cursor_1.RunCommandCursor(this, command, options);
+      }
+    };
+    exports2.Db = Db2;
+  }
+});
+
 // ../../../node_modules/mongodb/lib/deps.js
 var require_deps = __commonJS({
   "../../../node_modules/mongodb/lib/deps.js"(exports2) {
@@ -11388,7 +16262,6 @@ var require_providers = __commonJS({
     exports2.AUTH_MECHS_AUTH_SRC_EXTERNAL = exports2.AuthMechanism = void 0;
     exports2.AuthMechanism = Object.freeze({
       MONGODB_AWS: "MONGODB-AWS",
-      MONGODB_CR: "MONGODB-CR",
       MONGODB_DEFAULT: "DEFAULT",
       MONGODB_GSSAPI: "GSSAPI",
       MONGODB_PLAIN: "PLAIN",
@@ -11450,20 +16323,6 @@ var require_mongo_credentials = __commonJS({
         }
         this.mechanism = options.mechanism || providers_1.AuthMechanism.MONGODB_DEFAULT;
         this.mechanismProperties = options.mechanismProperties || {};
-        if (this.mechanism.match(/MONGODB-AWS/i)) {
-          if (!this.username && process.env.AWS_ACCESS_KEY_ID) {
-            this.username = process.env.AWS_ACCESS_KEY_ID;
-          }
-          if (!this.password && process.env.AWS_SECRET_ACCESS_KEY) {
-            this.password = process.env.AWS_SECRET_ACCESS_KEY;
-          }
-          if (this.mechanismProperties.AWS_SESSION_TOKEN == null && process.env.AWS_SESSION_TOKEN != null) {
-            this.mechanismProperties = {
-              ...this.mechanismProperties,
-              AWS_SESSION_TOKEN: process.env.AWS_SESSION_TOKEN
-            };
-          }
-        }
         if (this.mechanism === providers_1.AuthMechanism.MONGODB_OIDC && !this.mechanismProperties.ALLOWED_HOSTS) {
           this.mechanismProperties = {
             ...this.mechanismProperties,
@@ -11569,7 +16428,6 @@ var require_client_metadata = __commonJS({
     exports2.LimitedSizeDocument = void 0;
     exports2.isDriverInfoEqual = isDriverInfoEqual;
     exports2.makeClientMetadata = makeClientMetadata;
-    exports2.addContainerMetadata = addContainerMetadata;
     exports2.getFAASEnv = getFAASEnv;
     var os = require("os");
     var process2 = require("process");
@@ -11611,7 +16469,7 @@ var require_client_metadata = __commonJS({
       }
     };
     exports2.LimitedSizeDocument = LimitedSizeDocument;
-    function makeClientMetadata(driverInfoList, { appName = "" }) {
+    async function makeClientMetadata(driverInfoList, { appName = "" }) {
       const metadataDocument = new LimitedSizeDocument(512);
       if (appName.length > 0) {
         const name = Buffer.byteLength(appName, "utf8") <= 128 ? appName : Buffer.from(appName, "utf8").subarray(0, 128).toString("utf8");
@@ -11663,15 +16521,15 @@ var require_client_metadata = __commonJS({
           }
         }
       }
-      return metadataDocument.toObject();
+      return await addContainerMetadata(metadataDocument.toObject());
     }
     var dockerPromise;
     async function getContainerMetadata() {
-      const containerMetadata = {};
       dockerPromise ??= (0, utils_1.fileIsAccessible)("/.dockerenv");
       const isDocker = await dockerPromise;
       const { KUBERNETES_SERVICE_HOST = "" } = process2.env;
       const isKubernetes = KUBERNETES_SERVICE_HOST.length > 0 ? true : false;
+      const containerMetadata = {};
       if (isDocker)
         containerMetadata.runtime = "docker";
       if (isKubernetes)
@@ -11683,7 +16541,10 @@ var require_client_metadata = __commonJS({
       if (Object.keys(containerMetadata).length === 0)
         return originalMetadata;
       const extendedMetadata = new LimitedSizeDocument(512);
-      const extendedEnvMetadata = { ...originalMetadata?.env, container: containerMetadata };
+      const extendedEnvMetadata = {
+        ...originalMetadata?.env,
+        container: containerMetadata
+      };
       for (const [key, val] of Object.entries(originalMetadata)) {
         if (key !== "env") {
           extendedMetadata.ifItFitsItSits(key, val);
@@ -15378,23 +20239,33 @@ var require_redact = __commonJS({
     } : function(o, v) {
       o["default"] = v;
     });
-    var __importStar = exports2 && exports2.__importStar || function(mod) {
-      if (mod && mod.__esModule) return mod;
-      var result = {};
-      if (mod != null) {
-        for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-      }
-      __setModuleDefault(result, mod);
-      return result;
-    };
+    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        }
+        __setModuleDefault(result, mod);
+        return result;
+      };
+    }();
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.redactConnectionString = exports2.redactValidConnectionString = void 0;
+    exports2.redactValidConnectionString = redactValidConnectionString;
+    exports2.redactConnectionString = redactConnectionString;
     var index_1 = __importStar(require_lib2());
     function redactValidConnectionString(inputUrl, options) {
-      var _a, _b;
       const url = inputUrl.clone();
-      const replacementString = (_a = options === null || options === void 0 ? void 0 : options.replacementString) !== null && _a !== void 0 ? _a : "_credentials_";
-      const redactUsernames = (_b = options === null || options === void 0 ? void 0 : options.redactUsernames) !== null && _b !== void 0 ? _b : true;
+      const replacementString = options?.replacementString ?? "_credentials_";
+      const redactUsernames = options?.redactUsernames ?? true;
       if ((url.username || url.password) && redactUsernames) {
         url.username = replacementString;
         url.password = "";
@@ -15419,15 +20290,13 @@ var require_redact = __commonJS({
       }
       return url;
     }
-    exports2.redactValidConnectionString = redactValidConnectionString;
     function redactConnectionString(uri, options) {
-      var _a, _b;
-      const replacementString = (_a = options === null || options === void 0 ? void 0 : options.replacementString) !== null && _a !== void 0 ? _a : "<credentials>";
-      const redactUsernames = (_b = options === null || options === void 0 ? void 0 : options.redactUsernames) !== null && _b !== void 0 ? _b : true;
+      const replacementString = options?.replacementString ?? "<credentials>";
+      const redactUsernames = options?.redactUsernames ?? true;
       let parsed;
       try {
         parsed = new index_1.default(uri);
-      } catch (_c) {
+      } catch {
       }
       if (parsed) {
         options = { ...options, replacementString: "___credentials___" };
@@ -15446,7 +20315,6 @@ var require_redact = __commonJS({
       }
       return uri;
     }
-    exports2.redactConnectionString = redactConnectionString;
   }
 });
 
@@ -15535,8 +20403,8 @@ var require_lib2 = __commonJS({
       }
     };
     var ConnectionString = class _ConnectionString extends URLWithoutHost {
+      _hosts;
       constructor(uri, options = {}) {
-        var _a;
         const { looseValidation } = options;
         if (!looseValidation && !connectionStringHasValidScheme(uri)) {
           throw new MongoParseError('Invalid scheme, expected connection string to start with "mongodb://" or "mongodb+srv://"');
@@ -15545,19 +20413,19 @@ var require_lib2 = __commonJS({
         if (!match) {
           throw new MongoParseError(`Invalid connection string "${uri}"`);
         }
-        const { protocol, username, password, hosts, rest } = (_a = match.groups) !== null && _a !== void 0 ? _a : {};
+        const { protocol, username, password, hosts, rest } = match.groups ?? {};
         if (!looseValidation) {
           if (!protocol || !hosts) {
             throw new MongoParseError(`Protocol and host list are required in "${uri}"`);
           }
           try {
-            decodeURIComponent(username !== null && username !== void 0 ? username : "");
-            decodeURIComponent(password !== null && password !== void 0 ? password : "");
+            decodeURIComponent(username ?? "");
+            decodeURIComponent(password ?? "");
           } catch (err) {
             throw new MongoParseError(err.message);
           }
           const illegalCharacters = /[:/?#[\]@]/gi;
-          if (username === null || username === void 0 ? void 0 : username.match(illegalCharacters)) {
+          if (username?.match(illegalCharacters)) {
             throw new MongoParseError(`Username contains unescaped characters ${username}`);
           }
           if (!username || !password) {
@@ -15566,7 +20434,7 @@ var require_lib2 = __commonJS({
               throw new MongoParseError("URI contained empty userinfo section");
             }
           }
-          if (password === null || password === void 0 ? void 0 : password.match(illegalCharacters)) {
+          if (password?.match(illegalCharacters)) {
             throw new MongoParseError("Password contains unescaped characters");
           }
         }
@@ -15650,19 +20518,30 @@ var require_lib2 = __commonJS({
         return (0, redact_1.redactValidConnectionString)(this, options);
       }
       typedSearchParams() {
-        const sametype = false;
+        const _sametype = false;
         return this.searchParams;
       }
       [Symbol.for("nodejs.util.inspect.custom")]() {
         const { href, origin, protocol, username, password, hosts, pathname, search, searchParams, hash } = this;
-        return { href, origin, protocol, username, password, hosts, pathname, search, searchParams, hash };
+        return {
+          href,
+          origin,
+          protocol,
+          username,
+          password,
+          hosts,
+          pathname,
+          search,
+          searchParams,
+          hash
+        };
       }
     };
     exports2.ConnectionString = ConnectionString;
     var CommaAndColonSeparatedRecord = class extends CaseInsensitiveMap {
       constructor(from) {
         super();
-        for (const entry of (from !== null && from !== void 0 ? from : "").split(",")) {
+        for (const entry of (from ?? "").split(",")) {
           if (!entry)
             continue;
           const colonIndex = entry.indexOf(":");
@@ -16267,96 +21146,12 @@ var require_compression = __commonJS({
   }
 });
 
-// ../../../node_modules/mongodb/lib/client-side-encryption/crypto_callbacks.js
-var require_crypto_callbacks = __commonJS({
-  "../../../node_modules/mongodb/lib/client-side-encryption/crypto_callbacks.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.hmacSha256Hook = exports2.hmacSha512Hook = exports2.aes256CtrDecryptHook = exports2.aes256CtrEncryptHook = exports2.aes256CbcDecryptHook = exports2.aes256CbcEncryptHook = void 0;
-    exports2.makeAES256Hook = makeAES256Hook;
-    exports2.randomHook = randomHook;
-    exports2.sha256Hook = sha256Hook;
-    exports2.makeHmacHook = makeHmacHook;
-    exports2.signRsaSha256Hook = signRsaSha256Hook;
-    var crypto3 = require("crypto");
-    function makeAES256Hook(method, mode) {
-      return function(key, iv, input, output) {
-        let result;
-        try {
-          const cipher = crypto3[method](mode, key, iv);
-          cipher.setAutoPadding(false);
-          result = cipher.update(input);
-          const final = cipher.final();
-          if (final.length > 0) {
-            result = Buffer.concat([result, final]);
-          }
-        } catch (e) {
-          return e;
-        }
-        result.copy(output);
-        return result.length;
-      };
-    }
-    function randomHook(buffer, count) {
-      try {
-        crypto3.randomFillSync(buffer, 0, count);
-      } catch (e) {
-        return e;
-      }
-      return count;
-    }
-    function sha256Hook(input, output) {
-      let result;
-      try {
-        result = crypto3.createHash("sha256").update(input).digest();
-      } catch (e) {
-        return e;
-      }
-      result.copy(output);
-      return result.length;
-    }
-    function makeHmacHook(algorithm) {
-      return (key, input, output) => {
-        let result;
-        try {
-          result = crypto3.createHmac(algorithm, key).update(input).digest();
-        } catch (e) {
-          return e;
-        }
-        result.copy(output);
-        return result.length;
-      };
-    }
-    function signRsaSha256Hook(key, input, output) {
-      let result;
-      try {
-        const signer = crypto3.createSign("sha256WithRSAEncryption");
-        const privateKey = Buffer.from(`-----BEGIN PRIVATE KEY-----
-${key.toString("base64")}
------END PRIVATE KEY-----
-`);
-        result = signer.update(input).end().sign(privateKey);
-      } catch (e) {
-        return e;
-      }
-      result.copy(output);
-      return result.length;
-    }
-    exports2.aes256CbcEncryptHook = makeAES256Hook("createCipheriv", "aes-256-cbc");
-    exports2.aes256CbcDecryptHook = makeAES256Hook("createDecipheriv", "aes-256-cbc");
-    exports2.aes256CtrEncryptHook = makeAES256Hook("createCipheriv", "aes-256-ctr");
-    exports2.aes256CtrDecryptHook = makeAES256Hook("createDecipheriv", "aes-256-ctr");
-    exports2.hmacSha512Hook = makeHmacHook("sha512");
-    exports2.hmacSha256Hook = makeHmacHook("sha256");
-  }
-});
-
 // ../../../node_modules/mongodb/lib/client-side-encryption/errors.js
 var require_errors = __commonJS({
   "../../../node_modules/mongodb/lib/client-side-encryption/errors.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.MongoCryptKMSRequestNetworkTimeoutError = exports2.MongoCryptAzureKMSRequestError = exports2.MongoCryptCreateEncryptedCollectionError = exports2.MongoCryptCreateDataKeyError = exports2.MongoCryptInvalidArgumentError = exports2.MongoCryptError = void 0;
+    exports2.MongoCryptKMSRequestNetworkTimeoutError = exports2.MongoCryptAzureKMSRequestError = exports2.MongoCryptCreateEncryptedCollectionError = exports2.MongoCryptCreateDataKeyError = exports2.MongoCryptInvalidArgumentError = exports2.defaultErrorWrapper = exports2.MongoCryptError = void 0;
     var error_1 = require_error();
     var MongoCryptError = class extends error_1.MongoError {
       /**
@@ -16378,6 +21173,8 @@ var require_errors = __commonJS({
       }
     };
     exports2.MongoCryptError = MongoCryptError;
+    var defaultErrorWrapper = (error) => new MongoCryptError(error.message, { cause: error });
+    exports2.defaultErrorWrapper = defaultErrorWrapper;
     var MongoCryptInvalidArgumentError = class extends MongoCryptError {
       /**
        * **Do not use this constructor!**
@@ -16475,41 +21272,30 @@ var require_aws_temporary_credentials = __commonJS({
   "../../../node_modules/mongodb/lib/cmap/auth/aws_temporary_credentials.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.LegacyAWSTemporaryCredentialProvider = exports2.AWSSDKCredentialProvider = exports2.AWSTemporaryCredentialProvider = void 0;
+    exports2.AWSSDKCredentialProvider = void 0;
     var deps_1 = require_deps();
     var error_1 = require_error();
-    var utils_1 = require_utils();
-    var AWS_RELATIVE_URI = "http://169.254.170.2";
-    var AWS_EC2_URI = "http://169.254.169.254";
-    var AWS_EC2_PATH = "/latest/meta-data/iam/security-credentials";
-    var AWSTemporaryCredentialProvider = class _AWSTemporaryCredentialProvider {
-      static get awsSDK() {
-        _AWSTemporaryCredentialProvider._awsSDK ??= (0, deps_1.getAwsCredentialProvider)();
-        return _AWSTemporaryCredentialProvider._awsSDK;
-      }
-      static get isAWSSDKInstalled() {
-        return !("kModuleError" in _AWSTemporaryCredentialProvider.awsSDK);
-      }
-    };
-    exports2.AWSTemporaryCredentialProvider = AWSTemporaryCredentialProvider;
-    var AWSSDKCredentialProvider = class extends AWSTemporaryCredentialProvider {
+    var AWSSDKCredentialProvider = class _AWSSDKCredentialProvider {
       /**
        * Create the SDK credentials provider.
        * @param credentialsProvider - The credentials provider.
        */
       constructor(credentialsProvider) {
-        super();
         if (credentialsProvider) {
           this._provider = credentialsProvider;
         }
+      }
+      static get awsSDK() {
+        _AWSSDKCredentialProvider._awsSDK ??= (0, deps_1.getAwsCredentialProvider)();
+        return _AWSSDKCredentialProvider._awsSDK;
       }
       /**
        * The AWS SDK caches credentials automatically and handles refresh when the credentials have expired.
        * To ensure this occurs, we need to cache the `provider` returned by the AWS sdk and re-use it when fetching credentials.
        */
       get provider() {
-        if ("kModuleError" in AWSTemporaryCredentialProvider.awsSDK) {
-          throw AWSTemporaryCredentialProvider.awsSDK.kModuleError;
+        if ("kModuleError" in _AWSSDKCredentialProvider.awsSDK) {
+          throw _AWSSDKCredentialProvider.awsSDK.kModuleError;
         }
         if (this._provider) {
           return this._provider;
@@ -16537,9 +21323,9 @@ var require_aws_temporary_credentials = __commonJS({
           "us-west-2"
         ]);
         const useRegionalSts = AWS_STS_REGIONAL_ENDPOINTS === "regional" || AWS_STS_REGIONAL_ENDPOINTS === "legacy" && !LEGACY_REGIONS.has(AWS_REGION);
-        this._provider = awsRegionSettingsExist && useRegionalSts ? AWSTemporaryCredentialProvider.awsSDK.fromNodeProviderChain({
+        this._provider = awsRegionSettingsExist && useRegionalSts ? _AWSSDKCredentialProvider.awsSDK.fromNodeProviderChain({
           clientConfig: { region: AWS_REGION }
-        }) : AWSTemporaryCredentialProvider.awsSDK.fromNodeProviderChain();
+        }) : _AWSSDKCredentialProvider.awsSDK.fromNodeProviderChain();
         return this._provider;
       }
       async getCredentials() {
@@ -16557,27 +21343,6 @@ var require_aws_temporary_credentials = __commonJS({
       }
     };
     exports2.AWSSDKCredentialProvider = AWSSDKCredentialProvider;
-    var LegacyAWSTemporaryCredentialProvider = class extends AWSTemporaryCredentialProvider {
-      async getCredentials() {
-        if (process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI) {
-          return await (0, utils_1.request)(`${AWS_RELATIVE_URI}${process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI}`);
-        }
-        const token = await (0, utils_1.request)(`${AWS_EC2_URI}/latest/api/token`, {
-          method: "PUT",
-          json: false,
-          headers: { "X-aws-ec2-metadata-token-ttl-seconds": 30 }
-        });
-        const roleName = await (0, utils_1.request)(`${AWS_EC2_URI}/${AWS_EC2_PATH}`, {
-          json: false,
-          headers: { "X-aws-ec2-metadata-token": token }
-        });
-        const creds = await (0, utils_1.request)(`${AWS_EC2_URI}/${AWS_EC2_PATH}/${roleName}`, {
-          headers: { "X-aws-ec2-metadata-token": token }
-        });
-        return creds;
-      }
-    };
-    exports2.LegacyAWSTemporaryCredentialProvider = LegacyAWSTemporaryCredentialProvider;
   }
 });
 
@@ -17149,7 +21914,6 @@ var require_client_encryption = __commonJS({
     var deps_1 = require_deps();
     var timeout_1 = require_timeout();
     var utils_1 = require_utils();
-    var cryptoCallbacks = require_crypto_callbacks();
     var errors_1 = require_errors();
     var index_1 = require_providers2();
     var state_machine_1 = require_state_machine();
@@ -17206,8 +21970,8 @@ var require_client_encryption = __commonJS({
         }
         const mongoCryptOptions = {
           ...options,
-          cryptoCallbacks,
-          kmsProviders: !Buffer.isBuffer(this._kmsProviders) ? (0, bson_1.serialize)(this._kmsProviders) : this._kmsProviders
+          kmsProviders: !Buffer.isBuffer(this._kmsProviders) ? (0, bson_1.serialize)(this._kmsProviders) : this._kmsProviders,
+          errorWrapper: errors_1.defaultErrorWrapper
         };
         this._keyVaultNamespace = options.keyVaultNamespace;
         this._keyVaultClient = options.keyVaultClient || client;
@@ -17712,6 +22476,9 @@ var require_mongocryptd_manager = __commonJS({
     exports2.MongocryptdManager = void 0;
     var error_1 = require_error();
     var MongocryptdManager = class _MongocryptdManager {
+      static {
+        this.DEFAULT_MONGOCRYPTD_URI = "mongodb://localhost:27020";
+      }
       constructor(extraOptions = {}) {
         this.spawnPath = "";
         this.spawnArgs = [];
@@ -17761,7 +22528,6 @@ var require_mongocryptd_manager = __commonJS({
       }
     };
     exports2.MongocryptdManager = MongocryptdManager;
-    MongocryptdManager.DEFAULT_MONGOCRYPTD_URI = "mongodb://localhost:27020";
   }
 });
 
@@ -17780,7 +22546,6 @@ var require_auto_encrypter = __commonJS({
     var mongo_client_1 = require_mongo_client();
     var utils_1 = require_utils();
     var client_encryption_1 = require_client_encryption();
-    var cryptoCallbacks = require_crypto_callbacks();
     var errors_1 = require_errors();
     var mongocryptd_manager_1 = require_mongocryptd_manager();
     var providers_1 = require_providers2();
@@ -17793,6 +22558,9 @@ var require_auto_encrypter = __commonJS({
       Trace: 4
     });
     var AutoEncrypter = class _AutoEncrypter {
+      static {
+        _a = constants_1.kDecorateResult;
+      }
       /** @internal */
       static getMongoCrypt() {
         const encryption = (0, deps_1.getMongoDBClientEncryption)();
@@ -17864,8 +22632,7 @@ var require_auto_encrypter = __commonJS({
           throw new errors_1.MongoCryptInvalidArgumentError("Can only provide a custom AWS credential provider when the state machine is configured for automatic AWS credential fetching");
         }
         const mongoCryptOptions = {
-          enableMultipleCollinfo: true,
-          cryptoCallbacks
+          errorWrapper: errors_1.defaultErrorWrapper
         };
         if (options.schemaMap) {
           mongoCryptOptions.schemaMap = Buffer.isBuffer(options.schemaMap) ? options.schemaMap : (0, bson_1.serialize)(options.schemaMap);
@@ -18006,7 +22773,6 @@ var require_auto_encrypter = __commonJS({
       }
     };
     exports2.AutoEncrypter = AutoEncrypter;
-    _a = constants_1.kDecorateResult;
   }
 });
 
@@ -18111,896 +22877,6 @@ var require_encrypter = __commonJS({
       }
     };
     exports2.Encrypter = Encrypter;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/cmap/metrics.js
-var require_metrics = __commonJS({
-  "../../../node_modules/mongodb/lib/cmap/metrics.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.ConnectionPoolMetrics = void 0;
-    var ConnectionPoolMetrics = class _ConnectionPoolMetrics {
-      constructor() {
-        this.txnConnections = 0;
-        this.cursorConnections = 0;
-        this.otherConnections = 0;
-      }
-      /**
-       * Mark a connection as pinned for a specific operation.
-       */
-      markPinned(pinType) {
-        if (pinType === _ConnectionPoolMetrics.TXN) {
-          this.txnConnections += 1;
-        } else if (pinType === _ConnectionPoolMetrics.CURSOR) {
-          this.cursorConnections += 1;
-        } else {
-          this.otherConnections += 1;
-        }
-      }
-      /**
-       * Unmark a connection as pinned for an operation.
-       */
-      markUnpinned(pinType) {
-        if (pinType === _ConnectionPoolMetrics.TXN) {
-          this.txnConnections -= 1;
-        } else if (pinType === _ConnectionPoolMetrics.CURSOR) {
-          this.cursorConnections -= 1;
-        } else {
-          this.otherConnections -= 1;
-        }
-      }
-      /**
-       * Return information about the cmap metrics as a string.
-       */
-      info(maxPoolSize) {
-        return `Timed out while checking out a connection from connection pool: maxPoolSize: ${maxPoolSize}, connections in use by cursors: ${this.cursorConnections}, connections in use by transactions: ${this.txnConnections}, connections in use by other operations: ${this.otherConnections}`;
-      }
-      /**
-       * Reset the metrics to the initial values.
-       */
-      reset() {
-        this.txnConnections = 0;
-        this.cursorConnections = 0;
-        this.otherConnections = 0;
-      }
-    };
-    exports2.ConnectionPoolMetrics = ConnectionPoolMetrics;
-    ConnectionPoolMetrics.TXN = "txn";
-    ConnectionPoolMetrics.CURSOR = "cursor";
-    ConnectionPoolMetrics.OTHER = "other";
-  }
-});
-
-// ../../../node_modules/mongodb/lib/transactions.js
-var require_transactions = __commonJS({
-  "../../../node_modules/mongodb/lib/transactions.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.Transaction = exports2.TxnState = void 0;
-    exports2.isTransactionCommand = isTransactionCommand;
-    var error_1 = require_error();
-    var read_concern_1 = require_read_concern();
-    var read_preference_1 = require_read_preference();
-    var write_concern_1 = require_write_concern();
-    exports2.TxnState = Object.freeze({
-      NO_TRANSACTION: "NO_TRANSACTION",
-      STARTING_TRANSACTION: "STARTING_TRANSACTION",
-      TRANSACTION_IN_PROGRESS: "TRANSACTION_IN_PROGRESS",
-      TRANSACTION_COMMITTED: "TRANSACTION_COMMITTED",
-      TRANSACTION_COMMITTED_EMPTY: "TRANSACTION_COMMITTED_EMPTY",
-      TRANSACTION_ABORTED: "TRANSACTION_ABORTED"
-    });
-    var stateMachine = {
-      [exports2.TxnState.NO_TRANSACTION]: [exports2.TxnState.NO_TRANSACTION, exports2.TxnState.STARTING_TRANSACTION],
-      [exports2.TxnState.STARTING_TRANSACTION]: [
-        exports2.TxnState.TRANSACTION_IN_PROGRESS,
-        exports2.TxnState.TRANSACTION_COMMITTED,
-        exports2.TxnState.TRANSACTION_COMMITTED_EMPTY,
-        exports2.TxnState.TRANSACTION_ABORTED
-      ],
-      [exports2.TxnState.TRANSACTION_IN_PROGRESS]: [
-        exports2.TxnState.TRANSACTION_IN_PROGRESS,
-        exports2.TxnState.TRANSACTION_COMMITTED,
-        exports2.TxnState.TRANSACTION_ABORTED
-      ],
-      [exports2.TxnState.TRANSACTION_COMMITTED]: [
-        exports2.TxnState.TRANSACTION_COMMITTED,
-        exports2.TxnState.TRANSACTION_COMMITTED_EMPTY,
-        exports2.TxnState.STARTING_TRANSACTION,
-        exports2.TxnState.NO_TRANSACTION
-      ],
-      [exports2.TxnState.TRANSACTION_ABORTED]: [exports2.TxnState.STARTING_TRANSACTION, exports2.TxnState.NO_TRANSACTION],
-      [exports2.TxnState.TRANSACTION_COMMITTED_EMPTY]: [
-        exports2.TxnState.TRANSACTION_COMMITTED_EMPTY,
-        exports2.TxnState.NO_TRANSACTION
-      ]
-    };
-    var ACTIVE_STATES = /* @__PURE__ */ new Set([
-      exports2.TxnState.STARTING_TRANSACTION,
-      exports2.TxnState.TRANSACTION_IN_PROGRESS
-    ]);
-    var COMMITTED_STATES = /* @__PURE__ */ new Set([
-      exports2.TxnState.TRANSACTION_COMMITTED,
-      exports2.TxnState.TRANSACTION_COMMITTED_EMPTY,
-      exports2.TxnState.TRANSACTION_ABORTED
-    ]);
-    var Transaction = class {
-      /** Create a transaction @internal */
-      constructor(options) {
-        options = options ?? {};
-        this.state = exports2.TxnState.NO_TRANSACTION;
-        this.options = {};
-        const writeConcern = write_concern_1.WriteConcern.fromOptions(options);
-        if (writeConcern) {
-          if (writeConcern.w === 0) {
-            throw new error_1.MongoTransactionError("Transactions do not support unacknowledged write concern");
-          }
-          this.options.writeConcern = writeConcern;
-        }
-        if (options.readConcern) {
-          this.options.readConcern = read_concern_1.ReadConcern.fromOptions(options);
-        }
-        if (options.readPreference) {
-          this.options.readPreference = read_preference_1.ReadPreference.fromOptions(options);
-        }
-        if (options.maxCommitTimeMS) {
-          this.options.maxTimeMS = options.maxCommitTimeMS;
-        }
-        this._pinnedServer = void 0;
-        this._recoveryToken = void 0;
-      }
-      /** @internal */
-      get server() {
-        return this._pinnedServer;
-      }
-      /** @deprecated - Will be made internal in a future major release. */
-      get recoveryToken() {
-        return this._recoveryToken;
-      }
-      /** @deprecated - Will be made internal in a future major release. */
-      get isPinned() {
-        return !!this.server;
-      }
-      /**
-       * @deprecated - Will be made internal in a future major release.
-       * @returns Whether the transaction has started
-       */
-      get isStarting() {
-        return this.state === exports2.TxnState.STARTING_TRANSACTION;
-      }
-      /**
-       * @deprecated - Will be made internal in a future major release.
-       * @returns Whether this session is presently in a transaction
-       */
-      get isActive() {
-        return ACTIVE_STATES.has(this.state);
-      }
-      /** @deprecated - Will be made internal in a future major release. */
-      get isCommitted() {
-        return COMMITTED_STATES.has(this.state);
-      }
-      /**
-       * Transition the transaction in the state machine
-       * @internal
-       * @param nextState - The new state to transition to
-       */
-      transition(nextState) {
-        const nextStates = stateMachine[this.state];
-        if (nextStates && nextStates.includes(nextState)) {
-          this.state = nextState;
-          if (this.state === exports2.TxnState.NO_TRANSACTION || this.state === exports2.TxnState.STARTING_TRANSACTION || this.state === exports2.TxnState.TRANSACTION_ABORTED) {
-            this.unpinServer();
-          }
-          return;
-        }
-        throw new error_1.MongoRuntimeError(`Attempted illegal state transition from [${this.state}] to [${nextState}]`);
-      }
-      /** @internal */
-      pinServer(server) {
-        if (this.isActive) {
-          this._pinnedServer = server;
-        }
-      }
-      /** @internal */
-      unpinServer() {
-        this._pinnedServer = void 0;
-      }
-    };
-    exports2.Transaction = Transaction;
-    function isTransactionCommand(command) {
-      return !!(command.commitTransaction || command.abortTransaction);
-    }
-  }
-});
-
-// ../../../node_modules/mongodb/lib/sessions.js
-var require_sessions = __commonJS({
-  "../../../node_modules/mongodb/lib/sessions.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.ServerSessionPool = exports2.ServerSession = exports2.ClientSession = void 0;
-    exports2.maybeClearPinnedConnection = maybeClearPinnedConnection;
-    exports2.applySession = applySession;
-    exports2.updateSessionFromResponse = updateSessionFromResponse;
-    var bson_1 = require_bson2();
-    var metrics_1 = require_metrics();
-    var constants_1 = require_constants2();
-    var error_1 = require_error();
-    var mongo_types_1 = require_mongo_types();
-    var execute_operation_1 = require_execute_operation();
-    var run_command_1 = require_run_command();
-    var read_concern_1 = require_read_concern();
-    var read_preference_1 = require_read_preference();
-    var resource_management_1 = require_resource_management();
-    var common_1 = require_common();
-    var timeout_1 = require_timeout();
-    var transactions_1 = require_transactions();
-    var utils_1 = require_utils();
-    var write_concern_1 = require_write_concern();
-    var ClientSession = class _ClientSession extends mongo_types_1.TypedEventEmitter {
-      /**
-       * Create a client session.
-       * @internal
-       * @param client - The current client
-       * @param sessionPool - The server session pool (Internal Class)
-       * @param options - Optional settings
-       * @param clientOptions - Optional settings provided when creating a MongoClient
-       */
-      constructor(client, sessionPool, options, clientOptions) {
-        super();
-        this.timeoutContext = null;
-        this.on("error", utils_1.noop);
-        if (client == null) {
-          throw new error_1.MongoRuntimeError("ClientSession requires a MongoClient");
-        }
-        if (sessionPool == null || !(sessionPool instanceof ServerSessionPool)) {
-          throw new error_1.MongoRuntimeError("ClientSession requires a ServerSessionPool");
-        }
-        options = options ?? {};
-        this.snapshotEnabled = options.snapshot === true;
-        if (options.causalConsistency === true && this.snapshotEnabled) {
-          throw new error_1.MongoInvalidArgumentError('Properties "causalConsistency" and "snapshot" are mutually exclusive');
-        }
-        this.client = client;
-        this.sessionPool = sessionPool;
-        this.hasEnded = false;
-        this.clientOptions = clientOptions;
-        this.timeoutMS = options.defaultTimeoutMS ?? client.s.options?.timeoutMS;
-        this.explicit = !!options.explicit;
-        this._serverSession = this.explicit ? this.sessionPool.acquire() : null;
-        this.txnNumberIncrement = 0;
-        const defaultCausalConsistencyValue = this.explicit && options.snapshot !== true;
-        this.supports = {
-          // if we can enable causal consistency, do so by default
-          causalConsistency: options.causalConsistency ?? defaultCausalConsistencyValue
-        };
-        this.clusterTime = options.initialClusterTime;
-        this.operationTime = void 0;
-        this.owner = options.owner;
-        this.defaultTransactionOptions = { ...options.defaultTransactionOptions };
-        this.transaction = new transactions_1.Transaction();
-      }
-      /** The server id associated with this session */
-      get id() {
-        return this.serverSession?.id;
-      }
-      get serverSession() {
-        let serverSession = this._serverSession;
-        if (serverSession == null) {
-          if (this.explicit) {
-            throw new error_1.MongoRuntimeError("Unexpected null serverSession for an explicit session");
-          }
-          if (this.hasEnded) {
-            throw new error_1.MongoRuntimeError("Unexpected null serverSession for an ended implicit session");
-          }
-          serverSession = this.sessionPool.acquire();
-          this._serverSession = serverSession;
-        }
-        return serverSession;
-      }
-      get loadBalanced() {
-        return this.client.topology?.description.type === common_1.TopologyType.LoadBalanced;
-      }
-      /** @internal */
-      pin(conn) {
-        if (this.pinnedConnection) {
-          throw TypeError("Cannot pin multiple connections to the same session");
-        }
-        this.pinnedConnection = conn;
-        conn.emit(constants_1.PINNED, this.inTransaction() ? metrics_1.ConnectionPoolMetrics.TXN : metrics_1.ConnectionPoolMetrics.CURSOR);
-      }
-      /** @internal */
-      unpin(options) {
-        if (this.loadBalanced) {
-          return maybeClearPinnedConnection(this, options);
-        }
-        this.transaction.unpinServer();
-      }
-      get isPinned() {
-        return this.loadBalanced ? !!this.pinnedConnection : this.transaction.isPinned;
-      }
-      /**
-       * Frees any client-side resources held by the current session.  If a session is in a transaction,
-       * the transaction is aborted.
-       *
-       * Does not end the session on the server.
-       *
-       * @param options - Optional settings. Currently reserved for future use
-       */
-      async endSession(options) {
-        try {
-          if (this.inTransaction()) {
-            await this.abortTransaction({ ...options, throwTimeout: true });
-          }
-        } catch (error) {
-          if (error.name === "MongoOperationTimeoutError")
-            throw error;
-          (0, utils_1.squashError)(error);
-        } finally {
-          if (!this.hasEnded) {
-            const serverSession = this.serverSession;
-            if (serverSession != null) {
-              this.sessionPool.release(serverSession);
-              this._serverSession = new ServerSession(serverSession);
-            }
-            this.hasEnded = true;
-            this.emit("ended", this);
-          }
-          maybeClearPinnedConnection(this, { force: true, ...options });
-        }
-      }
-      /** @internal */
-      async asyncDispose() {
-        await this.endSession({ force: true });
-      }
-      /**
-       * Advances the operationTime for a ClientSession.
-       *
-       * @param operationTime - the `BSON.Timestamp` of the operation type it is desired to advance to
-       */
-      advanceOperationTime(operationTime) {
-        if (this.operationTime == null) {
-          this.operationTime = operationTime;
-          return;
-        }
-        if (operationTime.greaterThan(this.operationTime)) {
-          this.operationTime = operationTime;
-        }
-      }
-      /**
-       * Advances the clusterTime for a ClientSession to the provided clusterTime of another ClientSession
-       *
-       * @param clusterTime - the $clusterTime returned by the server from another session in the form of a document containing the `BSON.Timestamp` clusterTime and signature
-       */
-      advanceClusterTime(clusterTime) {
-        if (!clusterTime || typeof clusterTime !== "object") {
-          throw new error_1.MongoInvalidArgumentError("input cluster time must be an object");
-        }
-        if (!clusterTime.clusterTime || clusterTime.clusterTime._bsontype !== "Timestamp") {
-          throw new error_1.MongoInvalidArgumentError('input cluster time "clusterTime" property must be a valid BSON Timestamp');
-        }
-        if (!clusterTime.signature || clusterTime.signature.hash?._bsontype !== "Binary" || typeof clusterTime.signature.keyId !== "bigint" && typeof clusterTime.signature.keyId !== "number" && clusterTime.signature.keyId?._bsontype !== "Long") {
-          throw new error_1.MongoInvalidArgumentError('input cluster time must have a valid "signature" property with BSON Binary hash and BSON Long keyId');
-        }
-        (0, common_1._advanceClusterTime)(this, clusterTime);
-      }
-      /**
-       * Used to determine if this session equals another
-       *
-       * @param session - The session to compare to
-       */
-      equals(session) {
-        if (!(session instanceof _ClientSession)) {
-          return false;
-        }
-        if (this.id == null || session.id == null) {
-          return false;
-        }
-        return utils_1.ByteUtils.equals(this.id.id.buffer, session.id.id.buffer);
-      }
-      /**
-       * Increment the transaction number on the internal ServerSession
-       *
-       * @privateRemarks
-       * This helper increments a value stored on the client session that will be
-       * added to the serverSession's txnNumber upon applying it to a command.
-       * This is because the serverSession is lazily acquired after a connection is obtained
-       */
-      incrementTransactionNumber() {
-        this.txnNumberIncrement += 1;
-      }
-      /** @returns whether this session is currently in a transaction or not */
-      inTransaction() {
-        return this.transaction.isActive;
-      }
-      /**
-       * Starts a new transaction with the given options.
-       *
-       * @remarks
-       * **IMPORTANT**: Running operations in parallel is not supported during a transaction. The use of `Promise.all`,
-       * `Promise.allSettled`, `Promise.race`, etc to parallelize operations inside a transaction is
-       * undefined behaviour.
-       *
-       * @param options - Options for the transaction
-       */
-      startTransaction(options) {
-        if (this.snapshotEnabled) {
-          throw new error_1.MongoCompatibilityError("Transactions are not supported in snapshot sessions");
-        }
-        if (this.inTransaction()) {
-          throw new error_1.MongoTransactionError("Transaction already in progress");
-        }
-        if (this.isPinned && this.transaction.isCommitted) {
-          this.unpin();
-        }
-        this.commitAttempted = false;
-        this.incrementTransactionNumber();
-        this.transaction = new transactions_1.Transaction({
-          readConcern: options?.readConcern ?? this.defaultTransactionOptions.readConcern ?? this.clientOptions?.readConcern,
-          writeConcern: options?.writeConcern ?? this.defaultTransactionOptions.writeConcern ?? this.clientOptions?.writeConcern,
-          readPreference: options?.readPreference ?? this.defaultTransactionOptions.readPreference ?? this.clientOptions?.readPreference,
-          maxCommitTimeMS: options?.maxCommitTimeMS ?? this.defaultTransactionOptions.maxCommitTimeMS
-        });
-        this.transaction.transition(transactions_1.TxnState.STARTING_TRANSACTION);
-      }
-      /**
-       * Commits the currently active transaction in this session.
-       *
-       * @param options - Optional options, can be used to override `defaultTimeoutMS`.
-       */
-      async commitTransaction(options) {
-        if (this.transaction.state === transactions_1.TxnState.NO_TRANSACTION) {
-          throw new error_1.MongoTransactionError("No transaction started");
-        }
-        if (this.transaction.state === transactions_1.TxnState.STARTING_TRANSACTION || this.transaction.state === transactions_1.TxnState.TRANSACTION_COMMITTED_EMPTY) {
-          this.transaction.transition(transactions_1.TxnState.TRANSACTION_COMMITTED_EMPTY);
-          return;
-        }
-        if (this.transaction.state === transactions_1.TxnState.TRANSACTION_ABORTED) {
-          throw new error_1.MongoTransactionError("Cannot call commitTransaction after calling abortTransaction");
-        }
-        const command = { commitTransaction: 1 };
-        const timeoutMS = typeof options?.timeoutMS === "number" ? options.timeoutMS : typeof this.timeoutMS === "number" ? this.timeoutMS : null;
-        const wc = this.transaction.options.writeConcern ?? this.clientOptions?.writeConcern;
-        if (wc != null) {
-          if (timeoutMS == null && this.timeoutContext == null) {
-            write_concern_1.WriteConcern.apply(command, { wtimeoutMS: 1e4, w: "majority", ...wc });
-          } else {
-            const wcKeys = Object.keys(wc);
-            if (wcKeys.length > 2 || !wcKeys.includes("wtimeoutMS") && !wcKeys.includes("wTimeoutMS"))
-              write_concern_1.WriteConcern.apply(command, { ...wc, wtimeoutMS: void 0 });
-          }
-        }
-        if (this.transaction.state === transactions_1.TxnState.TRANSACTION_COMMITTED || this.commitAttempted) {
-          if (timeoutMS == null && this.timeoutContext == null) {
-            write_concern_1.WriteConcern.apply(command, { wtimeoutMS: 1e4, ...wc, w: "majority" });
-          } else {
-            write_concern_1.WriteConcern.apply(command, { w: "majority", ...wc, wtimeoutMS: void 0 });
-          }
-        }
-        if (typeof this.transaction.options.maxTimeMS === "number") {
-          command.maxTimeMS = this.transaction.options.maxTimeMS;
-        }
-        if (this.transaction.recoveryToken) {
-          command.recoveryToken = this.transaction.recoveryToken;
-        }
-        const operation = new run_command_1.RunCommandOperation(new utils_1.MongoDBNamespace("admin"), command, {
-          session: this,
-          readPreference: read_preference_1.ReadPreference.primary,
-          bypassPinningCheck: true
-        });
-        const timeoutContext = this.timeoutContext ?? (typeof timeoutMS === "number" ? timeout_1.TimeoutContext.create({
-          serverSelectionTimeoutMS: this.clientOptions.serverSelectionTimeoutMS,
-          socketTimeoutMS: this.clientOptions.socketTimeoutMS,
-          timeoutMS
-        }) : null);
-        try {
-          await (0, execute_operation_1.executeOperation)(this.client, operation, timeoutContext);
-          this.commitAttempted = void 0;
-          return;
-        } catch (firstCommitError) {
-          this.commitAttempted = true;
-          if (firstCommitError instanceof error_1.MongoError && (0, error_1.isRetryableWriteError)(firstCommitError)) {
-            write_concern_1.WriteConcern.apply(command, { wtimeoutMS: 1e4, ...wc, w: "majority" });
-            this.unpin({ force: true });
-            try {
-              await (0, execute_operation_1.executeOperation)(this.client, new run_command_1.RunCommandOperation(new utils_1.MongoDBNamespace("admin"), command, {
-                session: this,
-                readPreference: read_preference_1.ReadPreference.primary,
-                bypassPinningCheck: true
-              }), timeoutContext);
-              return;
-            } catch (retryCommitError) {
-              if (shouldAddUnknownTransactionCommitResultLabel(retryCommitError)) {
-                retryCommitError.addErrorLabel(error_1.MongoErrorLabel.UnknownTransactionCommitResult);
-              }
-              if (shouldUnpinAfterCommitError(retryCommitError)) {
-                this.unpin({ error: retryCommitError });
-              }
-              throw retryCommitError;
-            }
-          }
-          if (shouldAddUnknownTransactionCommitResultLabel(firstCommitError)) {
-            firstCommitError.addErrorLabel(error_1.MongoErrorLabel.UnknownTransactionCommitResult);
-          }
-          if (shouldUnpinAfterCommitError(firstCommitError)) {
-            this.unpin({ error: firstCommitError });
-          }
-          throw firstCommitError;
-        } finally {
-          this.transaction.transition(transactions_1.TxnState.TRANSACTION_COMMITTED);
-        }
-      }
-      async abortTransaction(options) {
-        if (this.transaction.state === transactions_1.TxnState.NO_TRANSACTION) {
-          throw new error_1.MongoTransactionError("No transaction started");
-        }
-        if (this.transaction.state === transactions_1.TxnState.STARTING_TRANSACTION) {
-          this.transaction.transition(transactions_1.TxnState.TRANSACTION_ABORTED);
-          return;
-        }
-        if (this.transaction.state === transactions_1.TxnState.TRANSACTION_ABORTED) {
-          throw new error_1.MongoTransactionError("Cannot call abortTransaction twice");
-        }
-        if (this.transaction.state === transactions_1.TxnState.TRANSACTION_COMMITTED || this.transaction.state === transactions_1.TxnState.TRANSACTION_COMMITTED_EMPTY) {
-          throw new error_1.MongoTransactionError("Cannot call abortTransaction after calling commitTransaction");
-        }
-        const command = { abortTransaction: 1 };
-        const timeoutMS = typeof options?.timeoutMS === "number" ? options.timeoutMS : this.timeoutContext?.csotEnabled() ? this.timeoutContext.timeoutMS : typeof this.timeoutMS === "number" ? this.timeoutMS : null;
-        const timeoutContext = timeoutMS != null ? timeout_1.TimeoutContext.create({
-          timeoutMS,
-          serverSelectionTimeoutMS: this.clientOptions.serverSelectionTimeoutMS,
-          socketTimeoutMS: this.clientOptions.socketTimeoutMS
-        }) : null;
-        const wc = this.transaction.options.writeConcern ?? this.clientOptions?.writeConcern;
-        if (wc != null && timeoutMS == null) {
-          write_concern_1.WriteConcern.apply(command, { wtimeoutMS: 1e4, w: "majority", ...wc });
-        }
-        if (this.transaction.recoveryToken) {
-          command.recoveryToken = this.transaction.recoveryToken;
-        }
-        const operation = new run_command_1.RunCommandOperation(new utils_1.MongoDBNamespace("admin"), command, {
-          session: this,
-          readPreference: read_preference_1.ReadPreference.primary,
-          bypassPinningCheck: true
-        });
-        try {
-          await (0, execute_operation_1.executeOperation)(this.client, operation, timeoutContext);
-          this.unpin();
-          return;
-        } catch (firstAbortError) {
-          this.unpin();
-          if (firstAbortError.name === "MongoRuntimeError")
-            throw firstAbortError;
-          if (options?.throwTimeout && firstAbortError.name === "MongoOperationTimeoutError") {
-            throw firstAbortError;
-          }
-          if (firstAbortError instanceof error_1.MongoError && (0, error_1.isRetryableWriteError)(firstAbortError)) {
-            try {
-              await (0, execute_operation_1.executeOperation)(this.client, operation, timeoutContext);
-              return;
-            } catch (secondAbortError) {
-              if (secondAbortError.name === "MongoRuntimeError")
-                throw secondAbortError;
-              if (options?.throwTimeout && secondAbortError.name === "MongoOperationTimeoutError") {
-                throw secondAbortError;
-              }
-            }
-          }
-        } finally {
-          this.transaction.transition(transactions_1.TxnState.TRANSACTION_ABORTED);
-          if (this.loadBalanced) {
-            maybeClearPinnedConnection(this, { force: false });
-          }
-        }
-      }
-      /**
-       * This is here to ensure that ClientSession is never serialized to BSON.
-       */
-      toBSON() {
-        throw new error_1.MongoRuntimeError("ClientSession cannot be serialized to BSON.");
-      }
-      /**
-       * Starts a transaction and runs a provided function, ensuring the commitTransaction is always attempted when all operations run in the function have completed.
-       *
-       * **IMPORTANT:** This method requires the function passed in to return a Promise. That promise must be made by `await`-ing all operations in such a way that rejections are propagated to the returned promise.
-       *
-       * **IMPORTANT:** Running operations in parallel is not supported during a transaction. The use of `Promise.all`,
-       * `Promise.allSettled`, `Promise.race`, etc to parallelize operations inside a transaction is
-       * undefined behaviour.
-       *
-       * **IMPORTANT:** When running an operation inside a `withTransaction` callback, if it is not
-       * provided the explicit session in its options, it will not be part of the transaction and it will not respect timeoutMS.
-       *
-       *
-       * @remarks
-       * - If all operations successfully complete and the `commitTransaction` operation is successful, then the provided function will return the result of the provided function.
-       * - If the transaction is unable to complete or an error is thrown from within the provided function, then the provided function will throw an error.
-       *   - If the transaction is manually aborted within the provided function it will not throw.
-       * - If the driver needs to attempt to retry the operations, the provided function may be called multiple times.
-       *
-       * Checkout a descriptive example here:
-       * @see https://www.mongodb.com/blog/post/quick-start-nodejs--mongodb--how-to-implement-transactions
-       *
-       * If a command inside withTransaction fails:
-       * - It may cause the transaction on the server to be aborted.
-       * - This situation is normally handled transparently by the driver.
-       * - However, if the application catches such an error and does not rethrow it, the driver will not be able to determine whether the transaction was aborted or not.
-       * - The driver will then retry the transaction indefinitely.
-       *
-       * To avoid this situation, the application must not silently handle errors within the provided function.
-       * If the application needs to handle errors within, it must await all operations such that if an operation is rejected it becomes the rejection of the callback function passed into withTransaction.
-       *
-       * @param fn - callback to run within a transaction
-       * @param options - optional settings for the transaction
-       * @returns A raw command response or undefined
-       */
-      async withTransaction(fn, options) {
-        const MAX_TIMEOUT = 12e4;
-        const timeoutMS = options?.timeoutMS ?? this.timeoutMS ?? null;
-        this.timeoutContext = timeoutMS != null ? timeout_1.TimeoutContext.create({
-          timeoutMS,
-          serverSelectionTimeoutMS: this.clientOptions.serverSelectionTimeoutMS,
-          socketTimeoutMS: this.clientOptions.socketTimeoutMS
-        }) : null;
-        const startTime = this.timeoutContext?.csotEnabled() ? this.timeoutContext.start : (0, utils_1.now)();
-        let committed = false;
-        let result;
-        try {
-          while (!committed) {
-            this.startTransaction(options);
-            try {
-              const promise = fn(this);
-              if (!(0, utils_1.isPromiseLike)(promise)) {
-                throw new error_1.MongoInvalidArgumentError("Function provided to `withTransaction` must return a Promise");
-              }
-              result = await promise;
-              if (this.transaction.state === transactions_1.TxnState.NO_TRANSACTION || this.transaction.state === transactions_1.TxnState.TRANSACTION_COMMITTED || this.transaction.state === transactions_1.TxnState.TRANSACTION_ABORTED) {
-                return result;
-              }
-            } catch (fnError) {
-              if (!(fnError instanceof error_1.MongoError) || fnError instanceof error_1.MongoInvalidArgumentError) {
-                await this.abortTransaction();
-                throw fnError;
-              }
-              if (this.transaction.state === transactions_1.TxnState.STARTING_TRANSACTION || this.transaction.state === transactions_1.TxnState.TRANSACTION_IN_PROGRESS) {
-                await this.abortTransaction();
-              }
-              if (fnError.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError) && (this.timeoutContext != null || (0, utils_1.now)() - startTime < MAX_TIMEOUT)) {
-                continue;
-              }
-              throw fnError;
-            }
-            while (!committed) {
-              try {
-                await this.commitTransaction();
-                committed = true;
-              } catch (commitError) {
-                if (!isMaxTimeMSExpiredError(commitError) && commitError.hasErrorLabel(error_1.MongoErrorLabel.UnknownTransactionCommitResult) && (this.timeoutContext != null || (0, utils_1.now)() - startTime < MAX_TIMEOUT)) {
-                  continue;
-                }
-                if (commitError.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError) && (this.timeoutContext != null || (0, utils_1.now)() - startTime < MAX_TIMEOUT)) {
-                  break;
-                }
-                throw commitError;
-              }
-            }
-          }
-          return result;
-        } finally {
-          this.timeoutContext = null;
-        }
-      }
-    };
-    exports2.ClientSession = ClientSession;
-    (0, resource_management_1.configureResourceManagement)(ClientSession.prototype);
-    var NON_DETERMINISTIC_WRITE_CONCERN_ERRORS = /* @__PURE__ */ new Set([
-      "CannotSatisfyWriteConcern",
-      "UnknownReplWriteConcern",
-      "UnsatisfiableWriteConcern"
-    ]);
-    function shouldUnpinAfterCommitError(commitError) {
-      if (commitError instanceof error_1.MongoError) {
-        if ((0, error_1.isRetryableWriteError)(commitError) || commitError instanceof error_1.MongoWriteConcernError || isMaxTimeMSExpiredError(commitError)) {
-          if (isUnknownTransactionCommitResult(commitError)) {
-            return true;
-          }
-        } else if (commitError.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError)) {
-          return true;
-        }
-      }
-      return false;
-    }
-    function shouldAddUnknownTransactionCommitResultLabel(commitError) {
-      let ok = (0, error_1.isRetryableWriteError)(commitError);
-      ok ||= commitError instanceof error_1.MongoWriteConcernError;
-      ok ||= isMaxTimeMSExpiredError(commitError);
-      ok &&= isUnknownTransactionCommitResult(commitError);
-      return ok;
-    }
-    function isUnknownTransactionCommitResult(err) {
-      const isNonDeterministicWriteConcernError = err instanceof error_1.MongoServerError && err.codeName && NON_DETERMINISTIC_WRITE_CONCERN_ERRORS.has(err.codeName);
-      return isMaxTimeMSExpiredError(err) || !isNonDeterministicWriteConcernError && err.code !== error_1.MONGODB_ERROR_CODES.UnsatisfiableWriteConcern && err.code !== error_1.MONGODB_ERROR_CODES.UnknownReplWriteConcern;
-    }
-    function maybeClearPinnedConnection(session, options) {
-      const conn = session.pinnedConnection;
-      const error = options?.error;
-      if (session.inTransaction() && error && error instanceof error_1.MongoError && error.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError)) {
-        return;
-      }
-      const topology = session.client.topology;
-      if (conn && topology != null) {
-        const servers = Array.from(topology.s.servers.values());
-        const loadBalancer = servers[0];
-        if (options?.error == null || options?.force) {
-          loadBalancer.pool.checkIn(conn);
-          session.pinnedConnection = void 0;
-          conn.emit(constants_1.UNPINNED, session.transaction.state !== transactions_1.TxnState.NO_TRANSACTION ? metrics_1.ConnectionPoolMetrics.TXN : metrics_1.ConnectionPoolMetrics.CURSOR);
-          if (options?.forceClear) {
-            loadBalancer.pool.clear({ serviceId: conn.serviceId });
-          }
-        }
-      }
-    }
-    function isMaxTimeMSExpiredError(err) {
-      if (err == null || !(err instanceof error_1.MongoServerError)) {
-        return false;
-      }
-      return err.code === error_1.MONGODB_ERROR_CODES.MaxTimeMSExpired || err.writeConcernError?.code === error_1.MONGODB_ERROR_CODES.MaxTimeMSExpired;
-    }
-    var ServerSession = class {
-      /** @internal */
-      constructor(cloned) {
-        if (cloned != null) {
-          const idBytes = Buffer.allocUnsafe(16);
-          idBytes.set(cloned.id.id.buffer);
-          this.id = { id: new bson_1.Binary(idBytes, cloned.id.id.sub_type) };
-          this.lastUse = cloned.lastUse;
-          this.txnNumber = cloned.txnNumber;
-          this.isDirty = cloned.isDirty;
-          return;
-        }
-        this.id = { id: new bson_1.Binary((0, utils_1.uuidV4)(), bson_1.Binary.SUBTYPE_UUID) };
-        this.lastUse = (0, utils_1.now)();
-        this.txnNumber = 0;
-        this.isDirty = false;
-      }
-      /**
-       * Determines if the server session has timed out.
-       *
-       * @param sessionTimeoutMinutes - The server's "logicalSessionTimeoutMinutes"
-       */
-      hasTimedOut(sessionTimeoutMinutes) {
-        const idleTimeMinutes = Math.round((0, utils_1.calculateDurationInMs)(this.lastUse) % 864e5 % 36e5 / 6e4);
-        return idleTimeMinutes > sessionTimeoutMinutes - 1;
-      }
-    };
-    exports2.ServerSession = ServerSession;
-    var ServerSessionPool = class {
-      constructor(client) {
-        if (client == null) {
-          throw new error_1.MongoRuntimeError("ServerSessionPool requires a MongoClient");
-        }
-        this.client = client;
-        this.sessions = new utils_1.List();
-      }
-      /**
-       * Acquire a Server Session from the pool.
-       * Iterates through each session in the pool, removing any stale sessions
-       * along the way. The first non-stale session found is removed from the
-       * pool and returned. If no non-stale session is found, a new ServerSession is created.
-       */
-      acquire() {
-        const sessionTimeoutMinutes = this.client.topology?.logicalSessionTimeoutMinutes ?? 10;
-        let session = null;
-        while (this.sessions.length > 0) {
-          const potentialSession = this.sessions.shift();
-          if (potentialSession != null && (!!this.client.topology?.loadBalanced || !potentialSession.hasTimedOut(sessionTimeoutMinutes))) {
-            session = potentialSession;
-            break;
-          }
-        }
-        if (session == null) {
-          session = new ServerSession();
-        }
-        return session;
-      }
-      /**
-       * Release a session to the session pool
-       * Adds the session back to the session pool if the session has not timed out yet.
-       * This method also removes any stale sessions from the pool.
-       *
-       * @param session - The session to release to the pool
-       */
-      release(session) {
-        const sessionTimeoutMinutes = this.client.topology?.logicalSessionTimeoutMinutes ?? 10;
-        if (this.client.topology?.loadBalanced && !sessionTimeoutMinutes) {
-          this.sessions.unshift(session);
-        }
-        if (!sessionTimeoutMinutes) {
-          return;
-        }
-        this.sessions.prune((session2) => session2.hasTimedOut(sessionTimeoutMinutes));
-        if (!session.hasTimedOut(sessionTimeoutMinutes)) {
-          if (session.isDirty) {
-            return;
-          }
-          this.sessions.unshift(session);
-        }
-      }
-    };
-    exports2.ServerSessionPool = ServerSessionPool;
-    function applySession(session, command, options) {
-      if (session.hasEnded) {
-        return new error_1.MongoExpiredSessionError();
-      }
-      const serverSession = session.serverSession;
-      if (serverSession == null) {
-        return new error_1.MongoRuntimeError("Unable to acquire server session");
-      }
-      if (options.writeConcern?.w === 0) {
-        if (session && session.explicit) {
-          return new error_1.MongoAPIError("Cannot have explicit session with unacknowledged writes");
-        }
-        return;
-      }
-      serverSession.lastUse = (0, utils_1.now)();
-      command.lsid = serverSession.id;
-      const inTxnOrTxnCommand = session.inTransaction() || (0, transactions_1.isTransactionCommand)(command);
-      const isRetryableWrite = !!options.willRetryWrite;
-      if (isRetryableWrite || inTxnOrTxnCommand) {
-        serverSession.txnNumber += session.txnNumberIncrement;
-        session.txnNumberIncrement = 0;
-        command.txnNumber = bson_1.Long.fromNumber(serverSession.txnNumber);
-      }
-      if (!inTxnOrTxnCommand) {
-        if (session.transaction.state !== transactions_1.TxnState.NO_TRANSACTION) {
-          session.transaction.transition(transactions_1.TxnState.NO_TRANSACTION);
-        }
-        if (session.supports.causalConsistency && session.operationTime && (0, utils_1.commandSupportsReadConcern)(command)) {
-          command.readConcern = command.readConcern || {};
-          Object.assign(command.readConcern, { afterClusterTime: session.operationTime });
-        } else if (session.snapshotEnabled) {
-          command.readConcern = command.readConcern || { level: read_concern_1.ReadConcernLevel.snapshot };
-          if (session.snapshotTime != null) {
-            Object.assign(command.readConcern, { atClusterTime: session.snapshotTime });
-          }
-        }
-        return;
-      }
-      command.autocommit = false;
-      if (session.transaction.state === transactions_1.TxnState.STARTING_TRANSACTION) {
-        session.transaction.transition(transactions_1.TxnState.TRANSACTION_IN_PROGRESS);
-        command.startTransaction = true;
-        const readConcern = session.transaction.options.readConcern || session?.clientOptions?.readConcern;
-        if (readConcern) {
-          command.readConcern = readConcern;
-        }
-        if (session.supports.causalConsistency && session.operationTime) {
-          command.readConcern = command.readConcern || {};
-          Object.assign(command.readConcern, { afterClusterTime: session.operationTime });
-        }
-      }
-      return;
-    }
-    function updateSessionFromResponse(session, document) {
-      if (document.$clusterTime) {
-        (0, common_1._advanceClusterTime)(session, document.$clusterTime);
-      }
-      if (document.operationTime && session && session.supports.causalConsistency) {
-        session.advanceOperationTime(document.operationTime);
-      }
-      if (document.recoveryToken && session && session.inTransaction()) {
-        session.transaction._recoveryToken = document.recoveryToken;
-      }
-      if (session?.snapshotEnabled && session.snapshotTime == null) {
-        const atClusterTime = document.atClusterTime;
-        if (atClusterTime) {
-          session.snapshotTime = atClusterTime;
-        }
-      }
-    }
   }
 });
 
@@ -19454,7 +23330,6 @@ var require_on_data = __commonJS({
         [Symbol.asyncIterator]() {
           return this;
         },
-        // Note this should currently not be used, but is required by the AsyncGenerator interface.
         async [Symbol.asyncDispose]() {
           await closeHandler();
         }
@@ -19903,6 +23778,27 @@ var require_connection = __commonJS({
       return (0, utils_1.uuidV4)().toString("hex");
     }
     var Connection = class _Connection extends mongo_types_1.TypedEventEmitter {
+      static {
+        this.COMMAND_STARTED = constants_1.COMMAND_STARTED;
+      }
+      static {
+        this.COMMAND_SUCCEEDED = constants_1.COMMAND_SUCCEEDED;
+      }
+      static {
+        this.COMMAND_FAILED = constants_1.COMMAND_FAILED;
+      }
+      static {
+        this.CLUSTER_TIME_RECEIVED = constants_1.CLUSTER_TIME_RECEIVED;
+      }
+      static {
+        this.CLOSE = constants_1.CLOSE;
+      }
+      static {
+        this.PINNED = constants_1.PINNED;
+      }
+      static {
+        this.UNPINNED = constants_1.UNPINNED;
+      }
       constructor(stream, options) {
         super();
         this.lastHelloMS = -1;
@@ -20067,7 +23963,7 @@ var require_connection = __commonJS({
             timeoutContext: options.timeoutContext,
             signal: options.signal
           });
-          if (options.noResponse || message.moreToCome) {
+          if (message.moreToCome) {
             yield responses_1.MongoDBResponse.empty;
             return;
           }
@@ -20122,7 +24018,7 @@ var require_connection = __commonJS({
               throw new error_1.MongoServerError(object ??= document.toObject(bsonOptions));
             }
             if (this.shouldEmitAndLogCommand) {
-              this.emitAndLogCommand(this.monitorCommands, _Connection.COMMAND_SUCCEEDED, message.databaseName, this.established, new command_monitoring_events_1.CommandSucceededEvent(this, message, options.noResponse ? void 0 : message.moreToCome ? { ok: 1 } : object ??= document.toObject(bsonOptions), started, this.description.serverConnectionId));
+              this.emitAndLogCommand(this.monitorCommands, _Connection.COMMAND_SUCCEEDED, message.databaseName, this.established, new command_monitoring_events_1.CommandSucceededEvent(this, message, message.moreToCome ? { ok: 1 } : object ??= document.toObject(bsonOptions), started, this.description.serverConnectionId));
             }
             if (responseType == null) {
               yield object ??= document.toObject(bsonOptions);
@@ -20193,8 +24089,16 @@ var require_connection = __commonJS({
             throw new error_1.MongoOperationTimeoutError("Server roundtrip time is greater than the time remaining");
           }
         }
-        if (this.socket.write(buffer))
-          return;
+        try {
+          if (this.socket.write(buffer))
+            return;
+        } catch (writeError) {
+          const networkError = new error_1.MongoNetworkError("unexpected error writing to socket", {
+            cause: writeError
+          });
+          this.onError(networkError);
+          throw networkError;
+        }
         const drainEvent = (0, utils_1.once)(this.socket, "drain", options);
         const timeout = options?.timeoutContext?.timeoutForSocketWrite;
         const drained = timeout ? Promise.race([drainEvent, timeout]) : drainEvent;
@@ -20250,13 +24154,6 @@ var require_connection = __commonJS({
       }
     };
     exports2.Connection = Connection;
-    Connection.COMMAND_STARTED = constants_1.COMMAND_STARTED;
-    Connection.COMMAND_SUCCEEDED = constants_1.COMMAND_SUCCEEDED;
-    Connection.COMMAND_FAILED = constants_1.COMMAND_FAILED;
-    Connection.CLUSTER_TIME_RECEIVED = constants_1.CLUSTER_TIME_RECEIVED;
-    Connection.CLOSE = constants_1.CLOSE;
-    Connection.PINNED = constants_1.PINNED;
-    Connection.UNPINNED = constants_1.UNPINNED;
     var SizedMessageTransform = class extends stream_1.Transform {
       constructor({ connection }) {
         super({ writableObjectMode: false, readableObjectMode: true });
@@ -20297,9 +24194,7 @@ var require_connection = __commonJS({
       async command(ns, cmd, options, responseType) {
         const { autoEncrypter } = this;
         if (!autoEncrypter) {
-          throw new error_1.MongoMissingDependencyError("No AutoEncrypter available for encryption", {
-            dependencyName: "n/a"
-          });
+          throw new error_1.MongoRuntimeError("No AutoEncrypter available for encryption");
         }
         const serverWireVersion = (0, utils_1.maxWireVersion)(this);
         if (serverWireVersion === 0) {
@@ -20465,7 +24360,7 @@ var require_connect = __commonJS({
       const options = authContext.options;
       const compressors = options.compressors ? options.compressors : [];
       const { serverApi } = authContext.connection;
-      const clientMetadata = await options.extendedMetadata;
+      const clientMetadata = await options.metadata;
       const handshakeDoc = {
         [serverApi?.version || options.loadBalanced === true ? "hello" : constants_1.LEGACY_HELLO_COMMAND]: 1,
         helloOk: true,
@@ -20933,7 +24828,7 @@ var require_errors2 = __commonJS({
         const errorMessage = message ? message : `Connection pool for ${pool.address} was cleared because another operation failed with: "${pool.serverError?.message}"`;
         super(errorMessage, pool.serverError ? { cause: pool.serverError } : void 0);
         this.address = pool.address;
-        this.addErrorLabel(error_1.MongoErrorLabel.PoolRequstedRetry);
+        this.addErrorLabel(error_1.MongoErrorLabel.PoolRequestedRetry);
       }
       get name() {
         return "MongoPoolClearedError";
@@ -21007,6 +24902,39 @@ var require_connection_pool = __commonJS({
       closed: "closed"
     });
     var ConnectionPool = class _ConnectionPool extends mongo_types_1.TypedEventEmitter {
+      static {
+        this.CONNECTION_POOL_CREATED = constants_1.CONNECTION_POOL_CREATED;
+      }
+      static {
+        this.CONNECTION_POOL_CLOSED = constants_1.CONNECTION_POOL_CLOSED;
+      }
+      static {
+        this.CONNECTION_POOL_CLEARED = constants_1.CONNECTION_POOL_CLEARED;
+      }
+      static {
+        this.CONNECTION_POOL_READY = constants_1.CONNECTION_POOL_READY;
+      }
+      static {
+        this.CONNECTION_CREATED = constants_1.CONNECTION_CREATED;
+      }
+      static {
+        this.CONNECTION_READY = constants_1.CONNECTION_READY;
+      }
+      static {
+        this.CONNECTION_CLOSED = constants_1.CONNECTION_CLOSED;
+      }
+      static {
+        this.CONNECTION_CHECK_OUT_STARTED = constants_1.CONNECTION_CHECK_OUT_STARTED;
+      }
+      static {
+        this.CONNECTION_CHECK_OUT_FAILED = constants_1.CONNECTION_CHECK_OUT_FAILED;
+      }
+      static {
+        this.CONNECTION_CHECKED_OUT = constants_1.CONNECTION_CHECKED_OUT;
+      }
+      static {
+        this.CONNECTION_CHECKED_IN = constants_1.CONNECTION_CHECKED_IN;
+      }
       constructor(server, options) {
         super();
         this.on("error", utils_1.noop);
@@ -21320,7 +25248,7 @@ var require_connection_pool = __commonJS({
           cancellationToken: this.cancellationToken,
           mongoLogger: this.mongoLogger,
           authProviders: this.server.topology.client.s.authProviders,
-          extendedMetadata: this.server.topology.client.options.extendedMetadata
+          metadata: this.server.topology.client.options.metadata
         };
         this.pending++;
         const connectionCreatedTime = (0, utils_1.now)();
@@ -21461,17 +25389,6 @@ var require_connection_pool = __commonJS({
       }
     };
     exports2.ConnectionPool = ConnectionPool;
-    ConnectionPool.CONNECTION_POOL_CREATED = constants_1.CONNECTION_POOL_CREATED;
-    ConnectionPool.CONNECTION_POOL_CLOSED = constants_1.CONNECTION_POOL_CLOSED;
-    ConnectionPool.CONNECTION_POOL_CLEARED = constants_1.CONNECTION_POOL_CLEARED;
-    ConnectionPool.CONNECTION_POOL_READY = constants_1.CONNECTION_POOL_READY;
-    ConnectionPool.CONNECTION_CREATED = constants_1.CONNECTION_CREATED;
-    ConnectionPool.CONNECTION_READY = constants_1.CONNECTION_READY;
-    ConnectionPool.CONNECTION_CLOSED = constants_1.CONNECTION_CLOSED;
-    ConnectionPool.CONNECTION_CHECK_OUT_STARTED = constants_1.CONNECTION_CHECK_OUT_STARTED;
-    ConnectionPool.CONNECTION_CHECK_OUT_FAILED = constants_1.CONNECTION_CHECK_OUT_FAILED;
-    ConnectionPool.CONNECTION_CHECKED_OUT = constants_1.CONNECTION_CHECKED_OUT;
-    ConnectionPool.CONNECTION_CHECKED_IN = constants_1.CONNECTION_CHECKED_IN;
   }
 });
 
@@ -21502,6 +25419,27 @@ var require_server = __commonJS({
       [common_1.STATE_CLOSING]: [common_1.STATE_CLOSING, common_1.STATE_CLOSED]
     });
     var Server = class _Server extends mongo_types_1.TypedEventEmitter {
+      static {
+        this.SERVER_HEARTBEAT_STARTED = constants_1.SERVER_HEARTBEAT_STARTED;
+      }
+      static {
+        this.SERVER_HEARTBEAT_SUCCEEDED = constants_1.SERVER_HEARTBEAT_SUCCEEDED;
+      }
+      static {
+        this.SERVER_HEARTBEAT_FAILED = constants_1.SERVER_HEARTBEAT_FAILED;
+      }
+      static {
+        this.CONNECT = constants_1.CONNECT;
+      }
+      static {
+        this.DESCRIPTION_RECEIVED = constants_1.DESCRIPTION_RECEIVED;
+      }
+      static {
+        this.CLOSED = constants_1.CLOSED;
+      }
+      static {
+        this.ENDED = constants_1.ENDED;
+      }
       /**
        * Create a server
        */
@@ -21780,13 +25718,6 @@ var require_server = __commonJS({
       }
     };
     exports2.Server = Server;
-    Server.SERVER_HEARTBEAT_STARTED = constants_1.SERVER_HEARTBEAT_STARTED;
-    Server.SERVER_HEARTBEAT_SUCCEEDED = constants_1.SERVER_HEARTBEAT_SUCCEEDED;
-    Server.SERVER_HEARTBEAT_FAILED = constants_1.SERVER_HEARTBEAT_FAILED;
-    Server.CONNECT = constants_1.CONNECT;
-    Server.DESCRIPTION_RECEIVED = constants_1.DESCRIPTION_RECEIVED;
-    Server.CLOSED = constants_1.CLOSED;
-    Server.ENDED = constants_1.ENDED;
     function markServerUnknown(server, error) {
       if (server.loadBalanced) {
         return;
@@ -22593,8 +26524,14 @@ var require_connection_string = __commonJS({
             source: mongoOptions.dbName
           });
         }
-        if (isAws && mongoOptions.credentials.username && !mongoOptions.credentials.password) {
-          throw new error_1.MongoMissingCredentialsError(`When using ${mongoOptions.credentials.mechanism} password must be set when a username is specified`);
+        if (isAws) {
+          const { username, password } = mongoOptions.credentials;
+          if (username || password) {
+            throw new error_1.MongoAPIError("username and password cannot be provided when using MONGODB-AWS. Credentials must be provided in a manner that can be read by the AWS SDK.");
+          }
+          if (mongoOptions.credentials.mechanismProperties.AWS_SESSION_TOKEN) {
+            throw new error_1.MongoAPIError("AWS_SESSION_TOKEN cannot be provided when using MONGODB-AWS. Credentials must be provided in a manner that can be read by the AWS SDK.");
+          }
         }
         mongoOptions.credentials.validate();
         if (mongoOptions.credentials.password === "" && mongoOptions.credentials.username === "" && mongoOptions.credentials.mechanism === providers_1.AuthMechanism.MONGODB_DEFAULT && Object.keys(mongoOptions.credentials.mechanismProperties).length === 0) {
@@ -23311,1146 +27248,9 @@ var require_connection_string = __commonJS({
       secureProtocol: { type: "any" },
       index: { type: "any" },
       // Legacy options from v3 era
-      useNewUrlParser: {
-        type: "boolean",
-        deprecated: "useNewUrlParser has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version"
-      },
-      useUnifiedTopology: {
-        type: "boolean",
-        deprecated: "useUnifiedTopology has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version"
-      },
       __skipPingOnConnect: { type: "boolean" }
     };
     exports2.DEFAULT_OPTIONS = new CaseInsensitiveMap(Object.entries(exports2.OPTIONS).filter(([, descriptor]) => descriptor.default != null).map(([k, d]) => [k, d.default]));
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/list_collections.js
-var require_list_collections = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/list_collections.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.ListCollectionsOperation = void 0;
-    var responses_1 = require_responses();
-    var utils_1 = require_utils();
-    var command_1 = require_command();
-    var operation_1 = require_operation();
-    var ListCollectionsOperation = class extends command_1.CommandOperation {
-      constructor(db, filter, options) {
-        super(db, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.CursorResponse;
-        this.options = { ...options };
-        delete this.options.writeConcern;
-        this.db = db;
-        this.filter = filter;
-        this.nameOnly = !!this.options.nameOnly;
-        this.authorizedCollections = !!this.options.authorizedCollections;
-        if (typeof this.options.batchSize === "number") {
-          this.batchSize = this.options.batchSize;
-        }
-        this.SERVER_COMMAND_RESPONSE_TYPE = this.explain ? responses_1.ExplainedCursorResponse : responses_1.CursorResponse;
-      }
-      get commandName() {
-        return "listCollections";
-      }
-      buildCommandDocument(connection) {
-        const command = {
-          listCollections: 1,
-          filter: this.filter,
-          cursor: this.batchSize ? { batchSize: this.batchSize } : {},
-          nameOnly: this.nameOnly,
-          authorizedCollections: this.authorizedCollections
-        };
-        if ((0, utils_1.maxWireVersion)(connection) >= 9 && this.options.comment !== void 0) {
-          command.comment = this.options.comment;
-        }
-        return command;
-      }
-      handleOk(response) {
-        return response;
-      }
-    };
-    exports2.ListCollectionsOperation = ListCollectionsOperation;
-    (0, operation_1.defineAspects)(ListCollectionsOperation, [
-      operation_1.Aspect.READ_OPERATION,
-      operation_1.Aspect.RETRYABLE,
-      operation_1.Aspect.CURSOR_CREATING,
-      operation_1.Aspect.SUPPORTS_RAW_DATA
-    ]);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/cursor/list_collections_cursor.js
-var require_list_collections_cursor = __commonJS({
-  "../../../node_modules/mongodb/lib/cursor/list_collections_cursor.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.ListCollectionsCursor = void 0;
-    var execute_operation_1 = require_execute_operation();
-    var list_collections_1 = require_list_collections();
-    var abstract_cursor_1 = require_abstract_cursor();
-    var ListCollectionsCursor = class _ListCollectionsCursor extends abstract_cursor_1.AbstractCursor {
-      constructor(db, filter, options) {
-        super(db.client, db.s.namespace, options);
-        this.parent = db;
-        this.filter = filter;
-        this.options = options;
-      }
-      clone() {
-        return new _ListCollectionsCursor(this.parent, this.filter, {
-          ...this.options,
-          ...this.cursorOptions
-        });
-      }
-      /** @internal */
-      async _initialize(session) {
-        const operation = new list_collections_1.ListCollectionsOperation(this.parent, this.filter, {
-          ...this.cursorOptions,
-          ...this.options,
-          session,
-          signal: this.signal
-        });
-        const response = await (0, execute_operation_1.executeOperation)(this.parent.client, operation, this.timeoutContext);
-        return { server: operation.server, session, response };
-      }
-    };
-    exports2.ListCollectionsCursor = ListCollectionsCursor;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/cursor/run_command_cursor.js
-var require_run_command_cursor = __commonJS({
-  "../../../node_modules/mongodb/lib/cursor/run_command_cursor.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.RunCommandCursor = void 0;
-    var error_1 = require_error();
-    var execute_operation_1 = require_execute_operation();
-    var get_more_1 = require_get_more();
-    var run_command_1 = require_run_command();
-    var utils_1 = require_utils();
-    var abstract_cursor_1 = require_abstract_cursor();
-    var RunCommandCursor = class extends abstract_cursor_1.AbstractCursor {
-      /**
-       * Controls the `getMore.comment` field
-       * @param comment - any BSON value
-       */
-      setComment(comment) {
-        this.getMoreOptions.comment = comment;
-        return this;
-      }
-      /**
-       * Controls the `getMore.maxTimeMS` field. Only valid when cursor is tailable await
-       * @param maxTimeMS - the number of milliseconds to wait for new data
-       */
-      setMaxTimeMS(maxTimeMS) {
-        this.getMoreOptions.maxAwaitTimeMS = maxTimeMS;
-        return this;
-      }
-      /**
-       * Controls the `getMore.batchSize` field
-       * @param batchSize - the number documents to return in the `nextBatch`
-       */
-      setBatchSize(batchSize) {
-        this.getMoreOptions.batchSize = batchSize;
-        return this;
-      }
-      /** Unsupported for RunCommandCursor */
-      clone() {
-        throw new error_1.MongoAPIError("Clone not supported, create a new cursor with db.runCursorCommand");
-      }
-      /** Unsupported for RunCommandCursor: readConcern must be configured directly on command document */
-      withReadConcern(_) {
-        throw new error_1.MongoAPIError("RunCommandCursor does not support readConcern it must be attached to the command being run");
-      }
-      /** Unsupported for RunCommandCursor: various cursor flags must be configured directly on command document */
-      addCursorFlag(_, __) {
-        throw new error_1.MongoAPIError("RunCommandCursor does not support cursor flags, they must be attached to the command being run");
-      }
-      /**
-       * Unsupported for RunCommandCursor: maxTimeMS must be configured directly on command document
-       */
-      maxTimeMS(_) {
-        throw new error_1.MongoAPIError("maxTimeMS must be configured on the command document directly, to configure getMore.maxTimeMS use cursor.setMaxTimeMS()");
-      }
-      /** Unsupported for RunCommandCursor: batchSize must be configured directly on command document */
-      batchSize(_) {
-        throw new error_1.MongoAPIError("batchSize must be configured on the command document directly, to configure getMore.batchSize use cursor.setBatchSize()");
-      }
-      /** @internal */
-      constructor(db, command, options = {}) {
-        super(db.client, (0, utils_1.ns)(db.namespace), options);
-        this.getMoreOptions = {};
-        this.db = db;
-        this.command = Object.freeze({ ...command });
-      }
-      /** @internal */
-      async _initialize(session) {
-        const operation = new run_command_1.RunCursorCommandOperation(this.db.s.namespace, this.command, {
-          ...this.cursorOptions,
-          session,
-          readPreference: this.cursorOptions.readPreference
-        });
-        const response = await (0, execute_operation_1.executeOperation)(this.client, operation, this.timeoutContext);
-        return {
-          server: operation.server,
-          session,
-          response
-        };
-      }
-      /** @internal */
-      async getMore(_batchSize) {
-        if (!this.session) {
-          throw new error_1.MongoRuntimeError("Unexpected null session. A cursor creating command should have set this");
-        }
-        const getMoreOperation = new get_more_1.GetMoreOperation(this.namespace, this.id, this.server, {
-          ...this.cursorOptions,
-          session: this.session,
-          ...this.getMoreOptions
-        });
-        return await (0, execute_operation_1.executeOperation)(this.client, getMoreOperation, this.timeoutContext);
-      }
-    };
-    exports2.RunCommandCursor = RunCommandCursor;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/indexes.js
-var require_indexes = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/indexes.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.ListIndexesOperation = exports2.DropIndexOperation = exports2.CreateIndexesOperation = void 0;
-    var responses_1 = require_responses();
-    var error_1 = require_error();
-    var utils_1 = require_utils();
-    var command_1 = require_command();
-    var operation_1 = require_operation();
-    var VALID_INDEX_OPTIONS = /* @__PURE__ */ new Set([
-      "background",
-      "unique",
-      "name",
-      "partialFilterExpression",
-      "sparse",
-      "hidden",
-      "expireAfterSeconds",
-      "storageEngine",
-      "collation",
-      "version",
-      // text indexes
-      "weights",
-      "default_language",
-      "language_override",
-      "textIndexVersion",
-      // 2d-sphere indexes
-      "2dsphereIndexVersion",
-      // 2d indexes
-      "bits",
-      "min",
-      "max",
-      // geoHaystack Indexes
-      "bucketSize",
-      // wildcard indexes
-      "wildcardProjection"
-    ]);
-    function isIndexDirection(x) {
-      return typeof x === "number" || x === "2d" || x === "2dsphere" || x === "text" || x === "geoHaystack";
-    }
-    function isSingleIndexTuple(t) {
-      return Array.isArray(t) && t.length === 2 && isIndexDirection(t[1]);
-    }
-    function constructIndexDescriptionMap(indexSpec) {
-      const key = /* @__PURE__ */ new Map();
-      const indexSpecs = !Array.isArray(indexSpec) || isSingleIndexTuple(indexSpec) ? [indexSpec] : indexSpec;
-      for (const spec of indexSpecs) {
-        if (typeof spec === "string") {
-          key.set(spec, 1);
-        } else if (Array.isArray(spec)) {
-          key.set(spec[0], spec[1] ?? 1);
-        } else if (spec instanceof Map) {
-          for (const [property, value] of spec) {
-            key.set(property, value);
-          }
-        } else if ((0, utils_1.isObject)(spec)) {
-          for (const [property, value] of Object.entries(spec)) {
-            key.set(property, value);
-          }
-        }
-      }
-      return key;
-    }
-    function resolveIndexDescription(description) {
-      const validProvidedOptions = Object.entries(description).filter(([optionName]) => VALID_INDEX_OPTIONS.has(optionName));
-      return Object.fromEntries(
-        // we support the `version` option, but the `createIndexes` command expects it to be the `v`
-        validProvidedOptions.map(([name, value]) => name === "version" ? ["v", value] : [name, value])
-      );
-    }
-    var CreateIndexesOperation = class _CreateIndexesOperation extends command_1.CommandOperation {
-      constructor(parent, collectionName, indexes, options) {
-        super(parent, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.options = options ?? {};
-        this.options.collation = void 0;
-        this.collectionName = collectionName;
-        this.indexes = indexes.map((userIndex) => {
-          const key = userIndex.key instanceof Map ? userIndex.key : new Map(Object.entries(userIndex.key));
-          const name = userIndex.name ?? Array.from(key).flat().join("_");
-          const validIndexOptions = resolveIndexDescription(userIndex);
-          return {
-            ...validIndexOptions,
-            name,
-            key
-          };
-        });
-        this.ns = parent.s.namespace;
-      }
-      static fromIndexDescriptionArray(parent, collectionName, indexes, options) {
-        return new _CreateIndexesOperation(parent, collectionName, indexes, options);
-      }
-      static fromIndexSpecification(parent, collectionName, indexSpec, options = {}) {
-        const key = constructIndexDescriptionMap(indexSpec);
-        const description = { ...options, key };
-        return new _CreateIndexesOperation(parent, collectionName, [description], options);
-      }
-      get commandName() {
-        return "createIndexes";
-      }
-      buildCommandDocument(connection) {
-        const options = this.options;
-        const indexes = this.indexes;
-        const serverWireVersion = (0, utils_1.maxWireVersion)(connection);
-        const cmd = { createIndexes: this.collectionName, indexes };
-        if (options.commitQuorum != null) {
-          if (serverWireVersion < 9) {
-            throw new error_1.MongoCompatibilityError("Option `commitQuorum` for `createIndexes` not supported on servers < 4.4");
-          }
-          cmd.commitQuorum = options.commitQuorum;
-        }
-        return cmd;
-      }
-      handleOk(_response) {
-        const indexNames = this.indexes.map((index) => index.name || "");
-        return indexNames;
-      }
-    };
-    exports2.CreateIndexesOperation = CreateIndexesOperation;
-    var DropIndexOperation = class extends command_1.CommandOperation {
-      constructor(collection, indexName, options) {
-        super(collection, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.options = options ?? {};
-        this.collection = collection;
-        this.indexName = indexName;
-        this.ns = collection.fullNamespace;
-      }
-      get commandName() {
-        return "dropIndexes";
-      }
-      buildCommandDocument(_connection) {
-        return { dropIndexes: this.collection.collectionName, index: this.indexName };
-      }
-    };
-    exports2.DropIndexOperation = DropIndexOperation;
-    var ListIndexesOperation = class extends command_1.CommandOperation {
-      constructor(collection, options) {
-        super(collection, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.CursorResponse;
-        this.options = { ...options };
-        delete this.options.writeConcern;
-        this.collectionNamespace = collection.s.namespace;
-      }
-      get commandName() {
-        return "listIndexes";
-      }
-      buildCommandDocument(connection) {
-        const serverWireVersion = (0, utils_1.maxWireVersion)(connection);
-        const cursor = this.options.batchSize ? { batchSize: this.options.batchSize } : {};
-        const command = { listIndexes: this.collectionNamespace.collection, cursor };
-        if (serverWireVersion >= 9 && this.options.comment !== void 0) {
-          command.comment = this.options.comment;
-        }
-        return command;
-      }
-      handleOk(response) {
-        return response;
-      }
-    };
-    exports2.ListIndexesOperation = ListIndexesOperation;
-    (0, operation_1.defineAspects)(ListIndexesOperation, [
-      operation_1.Aspect.READ_OPERATION,
-      operation_1.Aspect.RETRYABLE,
-      operation_1.Aspect.CURSOR_CREATING,
-      operation_1.Aspect.SUPPORTS_RAW_DATA
-    ]);
-    (0, operation_1.defineAspects)(CreateIndexesOperation, [operation_1.Aspect.WRITE_OPERATION, operation_1.Aspect.SUPPORTS_RAW_DATA]);
-    (0, operation_1.defineAspects)(DropIndexOperation, [operation_1.Aspect.WRITE_OPERATION, operation_1.Aspect.SUPPORTS_RAW_DATA]);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/create_collection.js
-var require_create_collection = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/create_collection.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.CreateCollectionOperation = void 0;
-    exports2.createCollections = createCollections;
-    var constants_1 = require_constants();
-    var responses_1 = require_responses();
-    var collection_1 = require_collection();
-    var error_1 = require_error();
-    var timeout_1 = require_timeout();
-    var utils_1 = require_utils();
-    var command_1 = require_command();
-    var execute_operation_1 = require_execute_operation();
-    var indexes_1 = require_indexes();
-    var operation_1 = require_operation();
-    var ILLEGAL_COMMAND_FIELDS = /* @__PURE__ */ new Set([
-      "w",
-      "wtimeout",
-      "timeoutMS",
-      "j",
-      "fsync",
-      "autoIndexId",
-      "pkFactory",
-      "raw",
-      "readPreference",
-      "session",
-      "readConcern",
-      "writeConcern",
-      "raw",
-      "fieldsAsRaw",
-      "useBigInt64",
-      "promoteLongs",
-      "promoteValues",
-      "promoteBuffers",
-      "bsonRegExp",
-      "serializeFunctions",
-      "ignoreUndefined",
-      "enableUtf8Validation"
-    ]);
-    var INVALID_QE_VERSION = "Driver support of Queryable Encryption is incompatible with server. Upgrade server to use Queryable Encryption.";
-    var CreateCollectionOperation = class extends command_1.CommandOperation {
-      constructor(db, name, options = {}) {
-        super(db, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.options = options;
-        this.db = db;
-        this.name = name;
-      }
-      get commandName() {
-        return "create";
-      }
-      buildCommandDocument(_connection, _session) {
-        const isOptionValid = ([k, v]) => v != null && typeof v !== "function" && !ILLEGAL_COMMAND_FIELDS.has(k);
-        return {
-          create: this.name,
-          ...Object.fromEntries(Object.entries(this.options).filter(isOptionValid))
-        };
-      }
-      handleOk(_response) {
-        return new collection_1.Collection(this.db, this.name, this.options);
-      }
-    };
-    exports2.CreateCollectionOperation = CreateCollectionOperation;
-    async function createCollections(db, name, options) {
-      const timeoutContext = timeout_1.TimeoutContext.create({
-        session: options.session,
-        serverSelectionTimeoutMS: db.client.s.options.serverSelectionTimeoutMS,
-        waitQueueTimeoutMS: db.client.s.options.waitQueueTimeoutMS,
-        timeoutMS: options.timeoutMS
-      });
-      const encryptedFields = options.encryptedFields ?? db.client.s.options.autoEncryption?.encryptedFieldsMap?.[`${db.databaseName}.${name}`];
-      if (encryptedFields) {
-        class CreateSupportingFLEv2CollectionOperation extends CreateCollectionOperation {
-          buildCommandDocument(connection, session) {
-            if (!connection.description.loadBalanced && (0, utils_1.maxWireVersion)(connection) < constants_1.MIN_SUPPORTED_QE_WIRE_VERSION) {
-              throw new error_1.MongoCompatibilityError(`${INVALID_QE_VERSION} The minimum server version required is ${constants_1.MIN_SUPPORTED_QE_SERVER_VERSION}`);
-            }
-            return super.buildCommandDocument(connection, session);
-          }
-        }
-        const escCollection = encryptedFields.escCollection ?? `enxcol_.${name}.esc`;
-        const ecocCollection = encryptedFields.ecocCollection ?? `enxcol_.${name}.ecoc`;
-        for (const collectionName of [escCollection, ecocCollection]) {
-          const createOp = new CreateSupportingFLEv2CollectionOperation(db, collectionName, {
-            clusteredIndex: {
-              key: { _id: 1 },
-              unique: true
-            },
-            session: options.session
-          });
-          await (0, execute_operation_1.executeOperation)(db.client, createOp, timeoutContext);
-        }
-        if (!options.encryptedFields) {
-          options = { ...options, encryptedFields };
-        }
-      }
-      const coll = await (0, execute_operation_1.executeOperation)(db.client, new CreateCollectionOperation(db, name, options), timeoutContext);
-      if (encryptedFields) {
-        const createIndexOp = indexes_1.CreateIndexesOperation.fromIndexSpecification(db, name, { __safeContent__: 1 }, { session: options.session });
-        await (0, execute_operation_1.executeOperation)(db.client, createIndexOp, timeoutContext);
-      }
-      return coll;
-    }
-    (0, operation_1.defineAspects)(CreateCollectionOperation, [operation_1.Aspect.WRITE_OPERATION]);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/drop.js
-var require_drop = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/drop.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.DropDatabaseOperation = exports2.DropCollectionOperation = void 0;
-    exports2.dropCollections = dropCollections;
-    var __1 = require_lib3();
-    var responses_1 = require_responses();
-    var abstract_cursor_1 = require_abstract_cursor();
-    var error_1 = require_error();
-    var timeout_1 = require_timeout();
-    var command_1 = require_command();
-    var execute_operation_1 = require_execute_operation();
-    var operation_1 = require_operation();
-    var DropCollectionOperation = class extends command_1.CommandOperation {
-      constructor(db, name, options = {}) {
-        super(db, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.options = options;
-        this.name = name;
-      }
-      get commandName() {
-        return "drop";
-      }
-      buildCommandDocument(_connection, _session) {
-        return { drop: this.name };
-      }
-      handleOk(_response) {
-        return true;
-      }
-    };
-    exports2.DropCollectionOperation = DropCollectionOperation;
-    async function dropCollections(db, name, options) {
-      const timeoutContext = timeout_1.TimeoutContext.create({
-        session: options.session,
-        serverSelectionTimeoutMS: db.client.s.options.serverSelectionTimeoutMS,
-        waitQueueTimeoutMS: db.client.s.options.waitQueueTimeoutMS,
-        timeoutMS: options.timeoutMS
-      });
-      const encryptedFieldsMap = db.client.s.options.autoEncryption?.encryptedFieldsMap;
-      let encryptedFields = options.encryptedFields ?? encryptedFieldsMap?.[`${db.databaseName}.${name}`];
-      if (!encryptedFields && encryptedFieldsMap) {
-        const listCollectionsResult = await db.listCollections({ name }, {
-          nameOnly: false,
-          session: options.session,
-          timeoutContext: new abstract_cursor_1.CursorTimeoutContext(timeoutContext, Symbol())
-        }).toArray();
-        encryptedFields = listCollectionsResult?.[0]?.options?.encryptedFields;
-      }
-      if (encryptedFields) {
-        const escCollection = encryptedFields.escCollection || `enxcol_.${name}.esc`;
-        const ecocCollection = encryptedFields.ecocCollection || `enxcol_.${name}.ecoc`;
-        for (const collectionName of [escCollection, ecocCollection]) {
-          const dropOp = new DropCollectionOperation(db, collectionName, options);
-          try {
-            await (0, execute_operation_1.executeOperation)(db.client, dropOp, timeoutContext);
-          } catch (err) {
-            if (!(err instanceof __1.MongoServerError) || err.code !== error_1.MONGODB_ERROR_CODES.NamespaceNotFound) {
-              throw err;
-            }
-          }
-        }
-      }
-      return await (0, execute_operation_1.executeOperation)(db.client, new DropCollectionOperation(db, name, options), timeoutContext);
-    }
-    var DropDatabaseOperation = class extends command_1.CommandOperation {
-      constructor(db, options) {
-        super(db, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.options = options;
-      }
-      get commandName() {
-        return "dropDatabase";
-      }
-      buildCommandDocument(_connection, _session) {
-        return { dropDatabase: 1 };
-      }
-      handleOk(_response) {
-        return true;
-      }
-    };
-    exports2.DropDatabaseOperation = DropDatabaseOperation;
-    (0, operation_1.defineAspects)(DropCollectionOperation, [operation_1.Aspect.WRITE_OPERATION]);
-    (0, operation_1.defineAspects)(DropDatabaseOperation, [operation_1.Aspect.WRITE_OPERATION]);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/profiling_level.js
-var require_profiling_level = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/profiling_level.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.ProfilingLevelOperation = void 0;
-    var bson_1 = require_bson2();
-    var responses_1 = require_responses();
-    var error_1 = require_error();
-    var command_1 = require_command();
-    var ProfilingLevelResponse = class extends responses_1.MongoDBResponse {
-      get was() {
-        return this.get("was", bson_1.BSONType.int, true);
-      }
-    };
-    var ProfilingLevelOperation = class extends command_1.CommandOperation {
-      constructor(db, options) {
-        super(db, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = ProfilingLevelResponse;
-        this.options = options;
-      }
-      get commandName() {
-        return "profile";
-      }
-      buildCommandDocument(_connection) {
-        return { profile: -1 };
-      }
-      handleOk(response) {
-        if (response.ok === 1) {
-          const was = response.was;
-          if (was === 0)
-            return "off";
-          if (was === 1)
-            return "slow_only";
-          if (was === 2)
-            return "all";
-          throw new error_1.MongoUnexpectedServerResponseError(`Illegal profiling level value ${was}`);
-        } else {
-          throw new error_1.MongoUnexpectedServerResponseError("Error with profile command");
-        }
-      }
-    };
-    exports2.ProfilingLevelOperation = ProfilingLevelOperation;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/rename.js
-var require_rename = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/rename.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.RenameOperation = void 0;
-    var responses_1 = require_responses();
-    var collection_1 = require_collection();
-    var utils_1 = require_utils();
-    var command_1 = require_command();
-    var operation_1 = require_operation();
-    var RenameOperation = class extends command_1.CommandOperation {
-      constructor(collection, newName, options) {
-        super(collection, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.collection = collection;
-        this.newName = newName;
-        this.options = options;
-        this.ns = new utils_1.MongoDBNamespace("admin", "$cmd");
-      }
-      get commandName() {
-        return "renameCollection";
-      }
-      buildCommandDocument(_connection, _session) {
-        const renameCollection = this.collection.namespace;
-        const to = this.collection.s.namespace.withCollection(this.newName).toString();
-        const dropTarget = typeof this.options.dropTarget === "boolean" ? this.options.dropTarget : false;
-        return {
-          renameCollection,
-          to,
-          dropTarget
-        };
-      }
-      handleOk(_response) {
-        return new collection_1.Collection(this.collection.db, this.newName, this.collection.s.options);
-      }
-    };
-    exports2.RenameOperation = RenameOperation;
-    (0, operation_1.defineAspects)(RenameOperation, [operation_1.Aspect.WRITE_OPERATION]);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/set_profiling_level.js
-var require_set_profiling_level = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/set_profiling_level.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.SetProfilingLevelOperation = exports2.ProfilingLevel = void 0;
-    var responses_1 = require_responses();
-    var error_1 = require_error();
-    var utils_1 = require_utils();
-    var command_1 = require_command();
-    var levelValues = /* @__PURE__ */ new Set(["off", "slow_only", "all"]);
-    exports2.ProfilingLevel = Object.freeze({
-      off: "off",
-      slowOnly: "slow_only",
-      all: "all"
-    });
-    var SetProfilingLevelOperation = class extends command_1.CommandOperation {
-      constructor(db, level, options) {
-        super(db, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.options = options;
-        switch (level) {
-          case exports2.ProfilingLevel.off:
-            this.profile = 0;
-            break;
-          case exports2.ProfilingLevel.slowOnly:
-            this.profile = 1;
-            break;
-          case exports2.ProfilingLevel.all:
-            this.profile = 2;
-            break;
-          default:
-            this.profile = 0;
-            break;
-        }
-        this.level = level;
-      }
-      get commandName() {
-        return "profile";
-      }
-      buildCommandDocument(_connection) {
-        const level = this.level;
-        if (!levelValues.has(level)) {
-          throw new error_1.MongoInvalidArgumentError(`Profiling level must be one of "${(0, utils_1.enumToString)(exports2.ProfilingLevel)}"`);
-        }
-        return { profile: this.profile };
-      }
-      handleOk(_response) {
-        return this.level;
-      }
-    };
-    exports2.SetProfilingLevelOperation = SetProfilingLevelOperation;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/stats.js
-var require_stats = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/stats.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.DbStatsOperation = void 0;
-    var responses_1 = require_responses();
-    var command_1 = require_command();
-    var operation_1 = require_operation();
-    var DbStatsOperation = class extends command_1.CommandOperation {
-      constructor(db, options) {
-        super(db, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.options = options;
-      }
-      get commandName() {
-        return "dbStats";
-      }
-      buildCommandDocument(_connection) {
-        const command = { dbStats: true };
-        if (this.options.scale != null) {
-          command.scale = this.options.scale;
-        }
-        return command;
-      }
-    };
-    exports2.DbStatsOperation = DbStatsOperation;
-    (0, operation_1.defineAspects)(DbStatsOperation, [operation_1.Aspect.READ_OPERATION]);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/db.js
-var require_db = __commonJS({
-  "../../../node_modules/mongodb/lib/db.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.Db = void 0;
-    var admin_1 = require_admin();
-    var bson_1 = require_bson2();
-    var change_stream_1 = require_change_stream();
-    var collection_1 = require_collection();
-    var CONSTANTS = require_constants2();
-    var aggregation_cursor_1 = require_aggregation_cursor();
-    var list_collections_cursor_1 = require_list_collections_cursor();
-    var run_command_cursor_1 = require_run_command_cursor();
-    var error_1 = require_error();
-    var create_collection_1 = require_create_collection();
-    var drop_1 = require_drop();
-    var execute_operation_1 = require_execute_operation();
-    var indexes_1 = require_indexes();
-    var profiling_level_1 = require_profiling_level();
-    var remove_user_1 = require_remove_user();
-    var rename_1 = require_rename();
-    var run_command_1 = require_run_command();
-    var set_profiling_level_1 = require_set_profiling_level();
-    var stats_1 = require_stats();
-    var read_concern_1 = require_read_concern();
-    var read_preference_1 = require_read_preference();
-    var utils_1 = require_utils();
-    var write_concern_1 = require_write_concern();
-    var DB_OPTIONS_ALLOW_LIST = [
-      "writeConcern",
-      "readPreference",
-      "readPreferenceTags",
-      "native_parser",
-      "forceServerObjectId",
-      "pkFactory",
-      "serializeFunctions",
-      "raw",
-      "authSource",
-      "ignoreUndefined",
-      "readConcern",
-      "retryMiliSeconds",
-      "numberOfRetries",
-      "useBigInt64",
-      "promoteBuffers",
-      "promoteLongs",
-      "bsonRegExp",
-      "enableUtf8Validation",
-      "promoteValues",
-      "compression",
-      "retryWrites",
-      "timeoutMS"
-    ];
-    var Db2 = class {
-      /**
-       * Creates a new Db instance.
-       *
-       * Db name cannot contain a dot, the server may apply more restrictions when an operation is run.
-       *
-       * @param client - The MongoClient for the database.
-       * @param databaseName - The name of the database this instance represents.
-       * @param options - Optional settings for Db construction.
-       */
-      constructor(client, databaseName, options) {
-        options = options ?? {};
-        options = (0, utils_1.filterOptions)(options, DB_OPTIONS_ALLOW_LIST);
-        if (typeof databaseName === "string" && databaseName.includes(".")) {
-          throw new error_1.MongoInvalidArgumentError(`Database names cannot contain the character '.'`);
-        }
-        this.s = {
-          // Options
-          options,
-          // Unpack read preference
-          readPreference: read_preference_1.ReadPreference.fromOptions(options),
-          // Merge bson options
-          bsonOptions: (0, bson_1.resolveBSONOptions)(options, client),
-          // Set up the primary key factory or fallback to ObjectId
-          pkFactory: options?.pkFactory ?? utils_1.DEFAULT_PK_FACTORY,
-          // ReadConcern
-          readConcern: read_concern_1.ReadConcern.fromOptions(options),
-          writeConcern: write_concern_1.WriteConcern.fromOptions(options),
-          // Namespace
-          namespace: new utils_1.MongoDBNamespace(databaseName)
-        };
-        this.client = client;
-      }
-      get databaseName() {
-        return this.s.namespace.db;
-      }
-      // Options
-      get options() {
-        return this.s.options;
-      }
-      /**
-       * Check if a secondary can be used (because the read preference is *not* set to primary)
-       */
-      get secondaryOk() {
-        return this.s.readPreference?.preference !== "primary" || false;
-      }
-      get readConcern() {
-        return this.s.readConcern;
-      }
-      /**
-       * The current readPreference of the Db. If not explicitly defined for
-       * this Db, will be inherited from the parent MongoClient
-       */
-      get readPreference() {
-        if (this.s.readPreference == null) {
-          return this.client.readPreference;
-        }
-        return this.s.readPreference;
-      }
-      get bsonOptions() {
-        return this.s.bsonOptions;
-      }
-      // get the write Concern
-      get writeConcern() {
-        return this.s.writeConcern;
-      }
-      get namespace() {
-        return this.s.namespace.toString();
-      }
-      get timeoutMS() {
-        return this.s.options?.timeoutMS;
-      }
-      /**
-       * Create a new collection on a server with the specified options. Use this to create capped collections.
-       * More information about command options available at https://www.mongodb.com/docs/manual/reference/command/create/
-       *
-       * Collection namespace validation is performed server-side.
-       *
-       * @param name - The name of the collection to create
-       * @param options - Optional settings for the command
-       */
-      async createCollection(name, options) {
-        options = (0, utils_1.resolveOptions)(this, options);
-        return await (0, create_collection_1.createCollections)(this, name, options);
-      }
-      /**
-       * Execute a command
-       *
-       * @remarks
-       * This command does not inherit options from the MongoClient.
-       *
-       * The driver will ensure the following fields are attached to the command sent to the server:
-       * - `lsid` - sourced from an implicit session or options.session
-       * - `$readPreference` - defaults to primary or can be configured by options.readPreference
-       * - `$db` - sourced from the name of this database
-       *
-       * If the client has a serverApi setting:
-       * - `apiVersion`
-       * - `apiStrict`
-       * - `apiDeprecationErrors`
-       *
-       * When in a transaction:
-       * - `readConcern` - sourced from readConcern set on the TransactionOptions
-       * - `writeConcern` - sourced from writeConcern set on the TransactionOptions
-       *
-       * Attaching any of the above fields to the command will have no effect as the driver will overwrite the value.
-       *
-       * @param command - The command to run
-       * @param options - Optional settings for the command
-       */
-      async command(command, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new run_command_1.RunCommandOperation(this.s.namespace, command, (0, utils_1.resolveOptions)(void 0, {
-          ...(0, bson_1.resolveBSONOptions)(options),
-          timeoutMS: options?.timeoutMS ?? this.timeoutMS,
-          session: options?.session,
-          readPreference: options?.readPreference,
-          signal: options?.signal
-        })));
-      }
-      /**
-       * Execute an aggregation framework pipeline against the database.
-       *
-       * @param pipeline - An array of aggregation stages to be executed
-       * @param options - Optional settings for the command
-       */
-      aggregate(pipeline = [], options) {
-        return new aggregation_cursor_1.AggregationCursor(this.client, this.s.namespace, pipeline, (0, utils_1.resolveOptions)(this, options));
-      }
-      /** Return the Admin db instance */
-      admin() {
-        return new admin_1.Admin(this);
-      }
-      /**
-       * Returns a reference to a MongoDB Collection. If it does not exist it will be created implicitly.
-       *
-       * Collection namespace validation is performed server-side.
-       *
-       * @param name - the collection name we wish to access.
-       * @returns return the new Collection instance
-       */
-      collection(name, options = {}) {
-        if (typeof options === "function") {
-          throw new error_1.MongoInvalidArgumentError("The callback form of this helper has been removed.");
-        }
-        return new collection_1.Collection(this, name, (0, utils_1.resolveOptions)(this, options));
-      }
-      /**
-       * Get all the db statistics.
-       *
-       * @param options - Optional settings for the command
-       */
-      async stats(options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new stats_1.DbStatsOperation(this, (0, utils_1.resolveOptions)(this, options)));
-      }
-      listCollections(filter = {}, options = {}) {
-        return new list_collections_cursor_1.ListCollectionsCursor(this, filter, (0, utils_1.resolveOptions)(this, options));
-      }
-      /**
-       * Rename a collection.
-       *
-       * @remarks
-       * This operation does not inherit options from the MongoClient.
-       *
-       * @param fromCollection - Name of current collection to rename
-       * @param toCollection - New name of of the collection
-       * @param options - Optional settings for the command
-       */
-      async renameCollection(fromCollection, toCollection, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new rename_1.RenameOperation(this.collection(fromCollection), toCollection, (0, utils_1.resolveOptions)(void 0, {
-          ...options,
-          new_collection: true,
-          readPreference: read_preference_1.ReadPreference.primary
-        })));
-      }
-      /**
-       * Drop a collection from the database, removing it permanently. New accesses will create a new collection.
-       *
-       * @param name - Name of collection to drop
-       * @param options - Optional settings for the command
-       */
-      async dropCollection(name, options) {
-        options = (0, utils_1.resolveOptions)(this, options);
-        return await (0, drop_1.dropCollections)(this, name, options);
-      }
-      /**
-       * Drop a database, removing it permanently from the server.
-       *
-       * @param options - Optional settings for the command
-       */
-      async dropDatabase(options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new drop_1.DropDatabaseOperation(this, (0, utils_1.resolveOptions)(this, options)));
-      }
-      /**
-       * Fetch all collections for the current db.
-       *
-       * @param options - Optional settings for the command
-       */
-      async collections(options) {
-        options = (0, utils_1.resolveOptions)(this, options);
-        const collections = await this.listCollections({}, { ...options, nameOnly: true }).toArray();
-        return collections.filter(
-          // Filter collections removing any illegal ones
-          ({ name }) => !name.includes("$")
-        ).map(({ name }) => new collection_1.Collection(this, name, this.s.options));
-      }
-      /**
-       * Creates an index on the db and collection.
-       *
-       * @param name - Name of the collection to create the index on.
-       * @param indexSpec - Specify the field to index, or an index specification
-       * @param options - Optional settings for the command
-       */
-      async createIndex(name, indexSpec, options) {
-        const indexes = await (0, execute_operation_1.executeOperation)(this.client, indexes_1.CreateIndexesOperation.fromIndexSpecification(this, name, indexSpec, options));
-        return indexes[0];
-      }
-      /**
-       * Remove a user from a database
-       *
-       * @param username - The username to remove
-       * @param options - Optional settings for the command
-       */
-      async removeUser(username, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new remove_user_1.RemoveUserOperation(this, username, (0, utils_1.resolveOptions)(this, options)));
-      }
-      /**
-       * Set the current profiling level of MongoDB
-       *
-       * @param level - The new profiling level (off, slow_only, all).
-       * @param options - Optional settings for the command
-       */
-      async setProfilingLevel(level, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new set_profiling_level_1.SetProfilingLevelOperation(this, level, (0, utils_1.resolveOptions)(this, options)));
-      }
-      /**
-       * Retrieve the current profiling Level for MongoDB
-       *
-       * @param options - Optional settings for the command
-       */
-      async profilingLevel(options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new profiling_level_1.ProfilingLevelOperation(this, (0, utils_1.resolveOptions)(this, options)));
-      }
-      async indexInformation(name, options) {
-        return await this.collection(name).indexInformation((0, utils_1.resolveOptions)(this, options));
-      }
-      /**
-       * Create a new Change Stream, watching for new changes (insertions, updates,
-       * replacements, deletions, and invalidations) in this database. Will ignore all
-       * changes to system collections.
-       *
-       * @remarks
-       * watch() accepts two generic arguments for distinct use cases:
-       * - The first is to provide the schema that may be defined for all the collections within this database
-       * - The second is to override the shape of the change stream document entirely, if it is not provided the type will default to ChangeStreamDocument of the first argument
-       *
-       * @remarks
-       * When `timeoutMS` is configured for a change stream, it will have different behaviour depending
-       * on whether the change stream is in iterator mode or emitter mode. In both cases, a change
-       * stream will time out if it does not receive a change event within `timeoutMS` of the last change
-       * event.
-       *
-       * Note that if a change stream is consistently timing out when watching a collection, database or
-       * client that is being changed, then this may be due to the server timing out before it can finish
-       * processing the existing oplog. To address this, restart the change stream with a higher
-       * `timeoutMS`.
-       *
-       * If the change stream times out the initial aggregate operation to establish the change stream on
-       * the server, then the client will close the change stream. If the getMore calls to the server
-       * time out, then the change stream will be left open, but will throw a MongoOperationTimeoutError
-       * when in iterator mode and emit an error event that returns a MongoOperationTimeoutError in
-       * emitter mode.
-       *
-       * To determine whether or not the change stream is still open following a timeout, check the
-       * {@link ChangeStream.closed} getter.
-       *
-       * @example
-       * In iterator mode, if a next() call throws a timeout error, it will attempt to resume the change stream.
-       * The next call can just be retried after this succeeds.
-       * ```ts
-       * const changeStream = collection.watch([], { timeoutMS: 100 });
-       * try {
-       *     await changeStream.next();
-       * } catch (e) {
-       *     if (e instanceof MongoOperationTimeoutError && !changeStream.closed) {
-       *       await changeStream.next();
-       *     }
-       *     throw e;
-       * }
-       * ```
-       *
-       * @example
-       * In emitter mode, if the change stream goes `timeoutMS` without emitting a change event, it will
-       * emit an error event that returns a MongoOperationTimeoutError, but will not close the change
-       * stream unless the resume attempt fails. There is no need to re-establish change listeners as
-       * this will automatically continue emitting change events once the resume attempt completes.
-       *
-       * ```ts
-       * const changeStream = collection.watch([], { timeoutMS: 100 });
-       * changeStream.on('change', console.log);
-       * changeStream.on('error', e => {
-       *     if (e instanceof MongoOperationTimeoutError && !changeStream.closed) {
-       *         // do nothing
-       *     } else {
-       *         changeStream.close();
-       *     }
-       * });
-       * ```
-       * @param pipeline - An array of {@link https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/|aggregation pipeline stages} through which to pass change stream documents. This allows for filtering (using $match) and manipulating the change stream documents.
-       * @param options - Optional settings for the command
-       * @typeParam TSchema - Type of the data being detected by the change stream
-       * @typeParam TChange - Type of the whole change stream document emitted
-       */
-      watch(pipeline = [], options = {}) {
-        if (!Array.isArray(pipeline)) {
-          options = pipeline;
-          pipeline = [];
-        }
-        return new change_stream_1.ChangeStream(this, pipeline, (0, utils_1.resolveOptions)(this, options));
-      }
-      /**
-       * A low level cursor API providing basic driver functionality:
-       * - ClientSession management
-       * - ReadPreference for server selection
-       * - Running getMores automatically when a local batch is exhausted
-       *
-       * @param command - The command that will start a cursor on the server.
-       * @param options - Configurations for running the command, bson options will apply to getMores
-       */
-      runCursorCommand(command, options) {
-        return new run_command_cursor_1.RunCommandCursor(this, command, options);
-      }
-    };
-    exports2.Db = Db2;
-    Db2.SYSTEM_NAMESPACE_COLLECTION = CONSTANTS.SYSTEM_NAMESPACE_COLLECTION;
-    Db2.SYSTEM_INDEX_COLLECTION = CONSTANTS.SYSTEM_INDEX_COLLECTION;
-    Db2.SYSTEM_PROFILE_COLLECTION = CONSTANTS.SYSTEM_PROFILE_COLLECTION;
-    Db2.SYSTEM_USER_COLLECTION = CONSTANTS.SYSTEM_USER_COLLECTION;
-    Db2.SYSTEM_COMMAND_COLLECTION = CONSTANTS.SYSTEM_COMMAND_COLLECTION;
-    Db2.SYSTEM_JS_COLLECTION = CONSTANTS.SYSTEM_JS_COLLECTION;
   }
 });
 
@@ -24479,8 +27279,7 @@ var require_mongodb_aws = __commonJS({
     var MongoDBAWS = class extends auth_provider_1.AuthProvider {
       constructor(credentialProvider) {
         super();
-        this.credentialProvider = credentialProvider;
-        this.credentialFetcher = aws_temporary_credentials_1.AWSTemporaryCredentialProvider.isAWSSDKInstalled ? new aws_temporary_credentials_1.AWSSDKCredentialProvider(credentialProvider) : new aws_temporary_credentials_1.LegacyAWSTemporaryCredentialProvider();
+        this.credentialFetcher = new aws_temporary_credentials_1.AWSSDKCredentialProvider(credentialProvider);
       }
       async auth(authContext) {
         const { connection } = authContext;
@@ -24494,9 +27293,7 @@ var require_mongodb_aws = __commonJS({
         if ((0, utils_1.maxWireVersion)(connection) < 9) {
           throw new error_1.MongoCompatibilityError("MONGODB-AWS authentication requires MongoDB version 4.4 or later");
         }
-        if (!authContext.credentials.username) {
-          authContext.credentials = await makeTempCredentials(authContext.credentials, this.credentialFetcher);
-        }
+        authContext.credentials = await makeTempCredentials(authContext.credentials, this.credentialFetcher);
         const { credentials } = authContext;
         const accessKeyId = credentials.username;
         const secretAccessKey = credentials.password;
@@ -25836,12 +28633,6 @@ var require_mongo_client_auth_providers = __commonJS({
         providers_1.AuthMechanism.MONGODB_AWS,
         ({ AWS_CREDENTIAL_PROVIDER }) => new mongodb_aws_1.MongoDBAWS(AWS_CREDENTIAL_PROVIDER)
       ],
-      [
-        providers_1.AuthMechanism.MONGODB_CR,
-        () => {
-          throw new error_1.MongoInvalidArgumentError("MONGODB-CR is no longer a supported auth mechanism in MongoDB 4.0+");
-        }
-      ],
       [providers_1.AuthMechanism.MONGODB_GSSAPI, () => new gssapi_1.GSSAPI()],
       [providers_1.AuthMechanism.MONGODB_OIDC, (properties) => new mongodb_oidc_1.MongoDBOIDC(getWorkflow(properties))],
       [providers_1.AuthMechanism.MONGODB_PLAIN, () => new plain_1.Plain()],
@@ -26539,6 +29330,45 @@ var require_executor = __commonJS({
   }
 });
 
+// ../../../node_modules/mongodb/lib/operations/end_sessions.js
+var require_end_sessions = __commonJS({
+  "../../../node_modules/mongodb/lib/operations/end_sessions.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.EndSessionsOperation = void 0;
+    var responses_1 = require_responses();
+    var command_1 = require_command();
+    var read_preference_1 = require_read_preference();
+    var utils_1 = require_utils();
+    var operation_1 = require_operation();
+    var EndSessionsOperation = class extends command_1.CommandOperation {
+      constructor(sessions) {
+        super();
+        this.writeConcern = { w: 0 };
+        this.ns = utils_1.MongoDBNamespace.fromString("admin.$cmd");
+        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
+        this.sessions = sessions;
+      }
+      buildCommandDocument(_connection, _session) {
+        return {
+          endSessions: this.sessions
+        };
+      }
+      buildOptions(timeoutContext) {
+        return {
+          timeoutContext,
+          readPreference: read_preference_1.ReadPreference.primaryPreferred
+        };
+      }
+      get commandName() {
+        return "endSessions";
+      }
+    };
+    exports2.EndSessionsOperation = EndSessionsOperation;
+    (0, operation_1.defineAspects)(EndSessionsOperation, operation_1.Aspect.WRITE_OPERATION);
+  }
+});
+
 // ../../../node_modules/mongodb/lib/sdam/server_selection_events.js
 var require_server_selection_events = __commonJS({
   "../../../node_modules/mongodb/lib/sdam/server_selection_events.js"(exports2) {
@@ -26621,6 +29451,9 @@ var require_srv_polling = __commonJS({
     };
     exports2.SrvPollingEvent = SrvPollingEvent;
     var SrvPoller = class _SrvPoller extends mongo_types_1.TypedEventEmitter {
+      static {
+        this.SRV_RECORD_DISCOVERY = "srvRecordDiscovery";
+      }
       constructor(options) {
         super();
         this.on("error", utils_1.noop);
@@ -26701,7 +29534,6 @@ var require_srv_polling = __commonJS({
       }
     };
     exports2.SrvPoller = SrvPoller;
-    SrvPoller.SRV_RECORD_DISCOVERY = "srvRecordDiscovery";
   }
 });
 
@@ -26710,7 +29542,7 @@ var require_topology = __commonJS({
   "../../../node_modules/mongodb/lib/sdam/topology.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.ServerCapabilities = exports2.Topology = void 0;
+    exports2.Topology = void 0;
     var connection_string_1 = require_connection_string();
     var constants_1 = require_constants2();
     var error_1 = require_error();
@@ -26735,6 +29567,39 @@ var require_topology = __commonJS({
       [common_1.STATE_CLOSING]: [common_1.STATE_CLOSING, common_1.STATE_CLOSED]
     });
     var Topology = class _Topology extends mongo_types_1.TypedEventEmitter {
+      static {
+        this.SERVER_OPENING = constants_1.SERVER_OPENING;
+      }
+      static {
+        this.SERVER_CLOSED = constants_1.SERVER_CLOSED;
+      }
+      static {
+        this.SERVER_DESCRIPTION_CHANGED = constants_1.SERVER_DESCRIPTION_CHANGED;
+      }
+      static {
+        this.TOPOLOGY_OPENING = constants_1.TOPOLOGY_OPENING;
+      }
+      static {
+        this.TOPOLOGY_CLOSED = constants_1.TOPOLOGY_CLOSED;
+      }
+      static {
+        this.TOPOLOGY_DESCRIPTION_CHANGED = constants_1.TOPOLOGY_DESCRIPTION_CHANGED;
+      }
+      static {
+        this.ERROR = constants_1.ERROR;
+      }
+      static {
+        this.OPEN = constants_1.OPEN;
+      }
+      static {
+        this.CONNECT = constants_1.CONNECT;
+      }
+      static {
+        this.CLOSE = constants_1.CLOSE;
+      }
+      static {
+        this.TIMEOUT = constants_1.TIMEOUT;
+      }
       /**
        * @param seedlist - a list of HostAddress instances to connect to
        */
@@ -26835,9 +29700,6 @@ var require_topology = __commonJS({
       get serverApi() {
         return this.s.options.serverApi;
       }
-      get capabilities() {
-        return new ServerCapabilities(this.lastHello());
-      }
       /** Initiate server connect */
       async connect(options) {
         this.connectionLock ??= this._connect(options);
@@ -26890,7 +29752,7 @@ var require_topology = __commonJS({
         try {
           const server = await this.selectServer((0, server_selection_1.readPreferenceServerSelector)(readPreference), selectServerOptions);
           const skipPingOnConnect = this.s.options.__skipPingOnConnect === true;
-          if (!skipPingOnConnect && this.s.credentials) {
+          if (!skipPingOnConnect) {
             const connection = await server.pool.checkOut({ timeoutContext });
             server.pool.checkIn(connection);
             stateTransition(this, common_1.STATE_CONNECTED);
@@ -27073,9 +29935,6 @@ var require_topology = __commonJS({
         if (typeof callback === "function")
           callback(void 0, true);
       }
-      get clientMetadata() {
-        return this.s.options.metadata;
-      }
       isConnected() {
         return this.s.state === common_1.STATE_CONNECTED;
       }
@@ -27107,17 +29966,6 @@ var require_topology = __commonJS({
       }
     };
     exports2.Topology = Topology;
-    Topology.SERVER_OPENING = constants_1.SERVER_OPENING;
-    Topology.SERVER_CLOSED = constants_1.SERVER_CLOSED;
-    Topology.SERVER_DESCRIPTION_CHANGED = constants_1.SERVER_DESCRIPTION_CHANGED;
-    Topology.TOPOLOGY_OPENING = constants_1.TOPOLOGY_OPENING;
-    Topology.TOPOLOGY_CLOSED = constants_1.TOPOLOGY_CLOSED;
-    Topology.TOPOLOGY_DESCRIPTION_CHANGED = constants_1.TOPOLOGY_DESCRIPTION_CHANGED;
-    Topology.ERROR = constants_1.ERROR;
-    Topology.OPEN = constants_1.OPEN;
-    Topology.CONNECT = constants_1.CONNECT;
-    Topology.CLOSE = constants_1.CLOSE;
-    Topology.TIMEOUT = constants_1.TIMEOUT;
     function closeServer(server, topology) {
       for (const event of constants_1.LOCAL_SERVER_EVENTS) {
         server.removeAllListeners(event);
@@ -27278,40 +30126,6 @@ var require_topology = __commonJS({
       const currentTopologyVersion = currentServerDescription?.topologyVersion;
       return (0, server_description_1.compareTopologyVersion)(currentTopologyVersion, incomingServerDescription.topologyVersion) > 0;
     }
-    var ServerCapabilities = class {
-      constructor(hello) {
-        this.minWireVersion = hello.minWireVersion || 0;
-        this.maxWireVersion = hello.maxWireVersion || 0;
-      }
-      get hasAggregationCursor() {
-        return true;
-      }
-      get hasWriteCommands() {
-        return true;
-      }
-      get hasTextSearch() {
-        return true;
-      }
-      get hasAuthCommands() {
-        return true;
-      }
-      get hasListCollectionsCommand() {
-        return true;
-      }
-      get hasListIndexesCommand() {
-        return true;
-      }
-      get supportsSnapshotReads() {
-        return this.maxWireVersion >= 13;
-      }
-      get commandsTakeWriteConcern() {
-        return true;
-      }
-      get commandsTakeCollation() {
-        return true;
-      }
-    };
-    exports2.ServerCapabilities = ServerCapabilities;
   }
 });
 
@@ -27322,12 +30136,12 @@ var require_mongo_client = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.MongoClient = exports2.ServerApiVersion = void 0;
     var fs_1 = require("fs");
+    var _1 = require_lib3();
     var bson_1 = require_bson2();
     var change_stream_1 = require_change_stream();
     var mongo_credentials_1 = require_mongo_credentials();
     var providers_1 = require_providers();
     var client_metadata_1 = require_client_metadata();
-    var responses_1 = require_responses();
     var connection_string_1 = require_connection_string();
     var constants_1 = require_constants2();
     var db_1 = require_db();
@@ -27336,10 +30150,9 @@ var require_mongo_client = __commonJS({
     var mongo_logger_1 = require_mongo_logger();
     var mongo_types_1 = require_mongo_types();
     var executor_1 = require_executor();
+    var end_sessions_1 = require_end_sessions();
     var execute_operation_1 = require_execute_operation();
-    var operation_1 = require_operation();
     var read_preference_1 = require_read_preference();
-    var resource_management_1 = require_resource_management();
     var server_selection_1 = require_server_selection();
     var topology_1 = require_topology();
     var sessions_1 = require_sessions();
@@ -27384,8 +30197,11 @@ var require_mongo_client = __commonJS({
         };
         this.checkForNonGenuineHosts();
       }
-      /** @internal */
-      async asyncDispose() {
+      /**
+       * @experimental
+       * An alias for {@link MongoClient.close|MongoClient.close()}.
+       */
+      async [Symbol.asyncDispose]() {
         await this.close();
       }
       /**
@@ -27397,8 +30213,7 @@ var require_mongo_client = __commonJS({
         if (isDuplicateDriverInfo)
           return;
         this.driverInfoList.push(driverInfo);
-        this.options.metadata = (0, client_metadata_1.makeClientMetadata)(this.driverInfoList, this.options);
-        this.options.extendedMetadata = (0, client_metadata_1.addContainerMetadata)(this.options.metadata).then(void 0, utils_1.squashError).then((result) => result ?? {});
+        this.options.metadata = (0, client_metadata_1.makeClientMetadata)(this.driverInfoList, this.options).then(void 0, utils_1.squashError).then((result) => result ?? {});
       }
       /** @internal */
       checkForNonGenuineHosts() {
@@ -27457,20 +30272,13 @@ var require_mongo_client = __commonJS({
         return await new executor_1.ClientBulkWriteExecutor(this, models, (0, utils_1.resolveOptions)(this, options)).execute();
       }
       /**
-       * Connect to MongoDB using a url
+       * An optional method to verify a handful of assumptions that are generally useful at application boot-time before using a MongoClient.
+       * For detailed information about the connect process see the MongoClient.connect static method documentation.
        *
-       * @remarks
-       * Calling `connect` is optional since the first operation you perform will call `connect` if it's needed.
-       * `timeoutMS` will bound the time any operation can take before throwing a timeout error.
-       * However, when the operation being run is automatically connecting your `MongoClient` the `timeoutMS` will not apply to the time taken to connect the MongoClient.
-       * This means the time to setup the `MongoClient` does not count against `timeoutMS`.
-       * If you are using `timeoutMS` we recommend connecting your client explicitly in advance of any operation to avoid this inconsistent execution time.
+       * @param url - The MongoDB connection string (supports `mongodb://` and `mongodb+srv://` schemes)
+       * @param options - Optional configuration options for the client
        *
-       * @remarks
-       * The driver will look up corresponding SRV and TXT records if the connection string starts with `mongodb+srv://`.
-       * If those look ups throw a DNS Timeout error, the driver will retry the look up once.
-       *
-       * @see docs.mongodb.org/manual/reference/connection-string/
+       * @see https://www.mongodb.com/docs/manual/reference/connection-string/
        */
       async connect() {
         if (this.connectionLock) {
@@ -27623,41 +30431,9 @@ var require_mongo_client = __commonJS({
         if (this.topology == null) {
           return;
         }
-        const selector = (0, server_selection_1.readPreferenceServerSelector)(read_preference_1.ReadPreference.primaryPreferred);
-        const topologyDescription = this.topology.description;
-        const serverDescriptions = Array.from(topologyDescription.servers.values());
-        const servers = selector(topologyDescription, serverDescriptions);
-        if (servers.length !== 0) {
-          const endSessions = Array.from(this.s.sessionPool.sessions, ({ id }) => id);
-          if (endSessions.length !== 0) {
-            try {
-              class EndSessionsOperation extends operation_1.AbstractOperation {
-                constructor() {
-                  super(...arguments);
-                  this.ns = utils_1.MongoDBNamespace.fromString("admin.$cmd");
-                  this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-                }
-                buildCommand(_connection, _session) {
-                  return {
-                    endSessions
-                  };
-                }
-                buildOptions(timeoutContext) {
-                  return {
-                    timeoutContext,
-                    readPreference: read_preference_1.ReadPreference.primaryPreferred,
-                    noResponse: true
-                  };
-                }
-                get commandName() {
-                  return "endSessions";
-                }
-              }
-              await (0, execute_operation_1.executeOperation)(this, new EndSessionsOperation());
-            } catch (error) {
-              (0, utils_1.squashError)(error);
-            }
-          }
+        const supportsSessions = this.topology.description.type === _1.TopologyType.LoadBalanced || this.topology.description.logicalSessionTimeoutMinutes != null;
+        if (supportsSessions) {
+          await endSessions(this, this.topology);
         }
         const topology = this.topology;
         this.topology = void 0;
@@ -27665,6 +30441,21 @@ var require_mongo_client = __commonJS({
         const { encrypter } = this.options;
         if (encrypter) {
           await encrypter.close(this);
+        }
+        async function endSessions(client, { description: topologyDescription }) {
+          const selector = (0, server_selection_1.readPreferenceServerSelector)(read_preference_1.ReadPreference.primaryPreferred);
+          const serverDescriptions = Array.from(topologyDescription.servers.values());
+          const servers = selector(topologyDescription, serverDescriptions);
+          if (servers.length !== 0) {
+            const endSessions2 = Array.from(client.s.sessionPool.sessions, ({ id }) => id);
+            if (endSessions2.length !== 0) {
+              try {
+                await (0, execute_operation_1.executeOperation)(client, new end_sessions_1.EndSessionsOperation(endSessions2));
+              } catch (error) {
+                (0, utils_1.squashError)(error);
+              }
+            }
+          }
         }
       }
       /**
@@ -27683,21 +30474,35 @@ var require_mongo_client = __commonJS({
         return db;
       }
       /**
-       * Connect to MongoDB using a url
+       * Creates a new MongoClient instance and immediately connects it to MongoDB.
+       * This convenience method combines `new MongoClient(url, options)` and `client.connect()` in a single step.
+       *
+       * Connect can be helpful to detect configuration issues early by validating:
+       * - **DNS Resolution**: Verifies that SRV records and hostnames in the connection string resolve DNS entries
+       * - **Network Connectivity**: Confirms that host addresses are reachable and ports are open
+       * - **TLS Configuration**: Validates SSL/TLS certificates, CA files, and encryption settings are correct
+       * - **Authentication**: Verifies that provided credentials are valid
+       * - **Server Compatibility**: Ensures the MongoDB server version is supported by this driver version
+       * - **Load Balancer Setup**: For load-balanced deployments, confirms the service is properly configured
+       *
+       * @returns A promise that resolves to the same MongoClient instance once connected
        *
        * @remarks
-       * Calling `connect` is optional since the first operation you perform will call `connect` if it's needed.
-       * `timeoutMS` will bound the time any operation can take before throwing a timeout error.
-       * However, when the operation being run is automatically connecting your `MongoClient` the `timeoutMS` will not apply to the time taken to connect the MongoClient.
-       * This means the time to setup the `MongoClient` does not count against `timeoutMS`.
-       * If you are using `timeoutMS` we recommend connecting your client explicitly in advance of any operation to avoid this inconsistent execution time.
+       * **Connection is Optional:** Calling `connect` is optional since any operation method (`find`, `insertOne`, etc.)
+       * will automatically perform these same validation steps if the client is not already connected.
+       * However, explicitly calling `connect` can make sense for:
+       * - **Fail-fast Error Detection**: Non-transient connection issues (hostname unresolved, port refused connection) are discovered immediately rather than during your first operation
+       * - **Predictable Performance**: Eliminates first connection overhead from your first database operation
        *
        * @remarks
-       * The programmatically provided options take precedence over the URI options.
+       * **Connection Pooling Impact:** Calling `connect` will populate the connection pool with one connection
+       * to a server selected by the client's configured `readPreference` (defaults to primary).
        *
        * @remarks
-       * The driver will look up corresponding SRV and TXT records if the connection string starts with `mongodb+srv://`.
-       * If those look ups throw a DNS Timeout error, the driver will retry the look up once.
+       * **Timeout Behavior:** When using `timeoutMS`, the connection establishment time does not count against
+       * the timeout for subsequent operations. This means `connect` runs without a `timeoutMS` limit, while
+       * your database operations will still respect the configured timeout. If you need predictable operation
+       * timing with `timeoutMS`, call `connect` explicitly before performing operations.
        *
        * @see https://www.mongodb.com/docs/manual/reference/connection-string/
        */
@@ -27819,2839 +30624,6 @@ var require_mongo_client = __commonJS({
       }
     };
     exports2.MongoClient = MongoClient3;
-    (0, resource_management_1.configureResourceManagement)(MongoClient3.prototype);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/resource_management.js
-var require_resource_management = __commonJS({
-  "../../../node_modules/mongodb/lib/resource_management.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.configureResourceManagement = configureResourceManagement;
-    exports2.configureExplicitResourceManagement = configureExplicitResourceManagement;
-    function configureResourceManagement(target) {
-      Symbol.asyncDispose && Object.defineProperty(target, Symbol.asyncDispose, {
-        value: async function asyncDispose() {
-          await this.asyncDispose();
-        },
-        enumerable: false,
-        configurable: true,
-        writable: true
-      });
-    }
-    function configureExplicitResourceManagement() {
-      const { MongoClient: MongoClient3 } = require_mongo_client();
-      const { ClientSession } = require_sessions();
-      const { AbstractCursor } = require_abstract_cursor();
-      const { ChangeStream } = require_change_stream();
-      configureResourceManagement(MongoClient3.prototype);
-      configureResourceManagement(ClientSession.prototype);
-      configureResourceManagement(AbstractCursor.prototype);
-      configureResourceManagement(ChangeStream.prototype);
-    }
-  }
-});
-
-// ../../../node_modules/mongodb/lib/cursor/abstract_cursor.js
-var require_abstract_cursor = __commonJS({
-  "../../../node_modules/mongodb/lib/cursor/abstract_cursor.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.CursorTimeoutContext = exports2.AbstractCursor = exports2.CursorTimeoutMode = exports2.CURSOR_FLAGS = void 0;
-    var stream_1 = require("stream");
-    var bson_1 = require_bson2();
-    var error_1 = require_error();
-    var mongo_types_1 = require_mongo_types();
-    var execute_operation_1 = require_execute_operation();
-    var get_more_1 = require_get_more();
-    var kill_cursors_1 = require_kill_cursors();
-    var read_concern_1 = require_read_concern();
-    var read_preference_1 = require_read_preference();
-    var resource_management_1 = require_resource_management();
-    var sessions_1 = require_sessions();
-    var timeout_1 = require_timeout();
-    var utils_1 = require_utils();
-    exports2.CURSOR_FLAGS = [
-      "tailable",
-      "oplogReplay",
-      "noCursorTimeout",
-      "awaitData",
-      "exhaust",
-      "partial"
-    ];
-    function removeActiveCursor() {
-      this.client.s.activeCursors.delete(this);
-    }
-    exports2.CursorTimeoutMode = Object.freeze({
-      ITERATION: "iteration",
-      LIFETIME: "cursorLifetime"
-    });
-    var AbstractCursor = class extends mongo_types_1.TypedEventEmitter {
-      /** @internal */
-      constructor(client, namespace, options = {}) {
-        super();
-        this.documents = null;
-        this.hasEmittedClose = false;
-        this.on("error", utils_1.noop);
-        if (!client.s.isMongoClient) {
-          throw new error_1.MongoRuntimeError("Cursor must be constructed with MongoClient");
-        }
-        this.cursorClient = client;
-        this.cursorNamespace = namespace;
-        this.cursorId = null;
-        this.initialized = false;
-        this.isClosed = false;
-        this.isKilled = false;
-        this.cursorOptions = {
-          readPreference: options.readPreference && options.readPreference instanceof read_preference_1.ReadPreference ? options.readPreference : read_preference_1.ReadPreference.primary,
-          ...(0, bson_1.pluckBSONSerializeOptions)(options),
-          timeoutMS: options?.timeoutContext?.csotEnabled() ? options.timeoutContext.timeoutMS : options.timeoutMS,
-          tailable: options.tailable,
-          awaitData: options.awaitData
-        };
-        if (this.cursorOptions.timeoutMS != null) {
-          if (options.timeoutMode == null) {
-            if (options.tailable) {
-              if (options.awaitData) {
-                if (options.maxAwaitTimeMS != null && options.maxAwaitTimeMS >= this.cursorOptions.timeoutMS)
-                  throw new error_1.MongoInvalidArgumentError("Cannot specify maxAwaitTimeMS >= timeoutMS for a tailable awaitData cursor");
-              }
-              this.cursorOptions.timeoutMode = exports2.CursorTimeoutMode.ITERATION;
-            } else {
-              this.cursorOptions.timeoutMode = exports2.CursorTimeoutMode.LIFETIME;
-            }
-          } else {
-            if (options.tailable && options.timeoutMode === exports2.CursorTimeoutMode.LIFETIME) {
-              throw new error_1.MongoInvalidArgumentError("Cannot set tailable cursor's timeoutMode to LIFETIME");
-            }
-            this.cursorOptions.timeoutMode = options.timeoutMode;
-          }
-        } else {
-          if (options.timeoutMode != null)
-            throw new error_1.MongoInvalidArgumentError("Cannot set timeoutMode without setting timeoutMS");
-        }
-        this.cursorOptions.omitMaxTimeMS = this.cursorOptions.timeoutMS != null && (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION && !this.cursorOptions.tailable || this.cursorOptions.tailable && !this.cursorOptions.awaitData);
-        const readConcern = read_concern_1.ReadConcern.fromOptions(options);
-        if (readConcern) {
-          this.cursorOptions.readConcern = readConcern;
-        }
-        if (typeof options.batchSize === "number") {
-          this.cursorOptions.batchSize = options.batchSize;
-        }
-        if (options.comment !== void 0) {
-          this.cursorOptions.comment = options.comment;
-        }
-        if (typeof options.maxTimeMS === "number") {
-          this.cursorOptions.maxTimeMS = options.maxTimeMS;
-        }
-        if (typeof options.maxAwaitTimeMS === "number") {
-          this.cursorOptions.maxAwaitTimeMS = options.maxAwaitTimeMS;
-        }
-        this.cursorSession = options.session ?? null;
-        this.deserializationOptions = {
-          ...this.cursorOptions,
-          validation: {
-            utf8: options?.enableUtf8Validation === false ? false : true
-          }
-        };
-        this.timeoutContext = options.timeoutContext;
-        this.signal = options.signal;
-        this.abortListener = (0, utils_1.addAbortListener)(this.signal, () => void this.close().then(void 0, utils_1.squashError));
-        this.trackCursor();
-      }
-      /**
-       * The cursor has no id until it receives a response from the initial cursor creating command.
-       *
-       * It is non-zero for as long as the database has an open cursor.
-       *
-       * The initiating command may receive a zero id if the entire result is in the `firstBatch`.
-       */
-      get id() {
-        return this.cursorId ?? void 0;
-      }
-      /** @internal */
-      get isDead() {
-        return (this.cursorId?.isZero() ?? false) || this.isClosed || this.isKilled;
-      }
-      /** @internal */
-      get client() {
-        return this.cursorClient;
-      }
-      /** @internal */
-      get server() {
-        return this.selectedServer;
-      }
-      get namespace() {
-        return this.cursorNamespace;
-      }
-      get readPreference() {
-        return this.cursorOptions.readPreference;
-      }
-      get readConcern() {
-        return this.cursorOptions.readConcern;
-      }
-      /** @internal */
-      get session() {
-        return this.cursorSession;
-      }
-      set session(clientSession) {
-        this.cursorSession = clientSession;
-      }
-      /**
-       * The cursor is closed and all remaining locally buffered documents have been iterated.
-       */
-      get closed() {
-        return this.isClosed && (this.documents?.length ?? 0) === 0;
-      }
-      /**
-       * A `killCursors` command was attempted on this cursor.
-       * This is performed if the cursor id is non zero.
-       */
-      get killed() {
-        return this.isKilled;
-      }
-      get loadBalanced() {
-        return !!this.cursorClient.topology?.loadBalanced;
-      }
-      /** @internal */
-      async asyncDispose() {
-        await this.close();
-      }
-      /** Adds cursor to client's tracking so it will be closed by MongoClient.close() */
-      trackCursor() {
-        this.cursorClient.s.activeCursors.add(this);
-        if (!this.listeners("close").includes(removeActiveCursor)) {
-          this.once("close", removeActiveCursor);
-        }
-      }
-      /** Returns current buffered documents length */
-      bufferedCount() {
-        return this.documents?.length ?? 0;
-      }
-      /** Returns current buffered documents */
-      readBufferedDocuments(number) {
-        const bufferedDocs = [];
-        const documentsToRead = Math.min(number ?? this.documents?.length ?? 0, this.documents?.length ?? 0);
-        for (let count = 0; count < documentsToRead; count++) {
-          const document = this.documents?.shift(this.deserializationOptions);
-          if (document != null) {
-            bufferedDocs.push(document);
-          }
-        }
-        return bufferedDocs;
-      }
-      async *[Symbol.asyncIterator]() {
-        this.signal?.throwIfAborted();
-        if (this.closed) {
-          return;
-        }
-        try {
-          while (true) {
-            if (this.isKilled) {
-              return;
-            }
-            if (this.closed) {
-              return;
-            }
-            if (this.cursorId != null && this.isDead && (this.documents?.length ?? 0) === 0) {
-              return;
-            }
-            const document = await this.next();
-            if (document === null) {
-              return;
-            }
-            yield document;
-            this.signal?.throwIfAborted();
-          }
-        } finally {
-          if (!this.isClosed) {
-            try {
-              await this.close();
-            } catch (error) {
-              (0, utils_1.squashError)(error);
-            }
-          }
-        }
-      }
-      stream(options) {
-        const readable = new ReadableCursorStream(this);
-        const abortListener = (0, utils_1.addAbortListener)(this.signal, function() {
-          readable.destroy(this.reason);
-        });
-        readable.once("end", () => {
-          abortListener?.[utils_1.kDispose]();
-        });
-        if (options?.transform) {
-          const transform = options.transform;
-          const transformedStream = readable.pipe(new stream_1.Transform({
-            objectMode: true,
-            highWaterMark: 1,
-            transform(chunk, _, callback) {
-              try {
-                const transformed = transform(chunk);
-                callback(void 0, transformed);
-              } catch (err) {
-                callback(err);
-              }
-            }
-          }));
-          readable.on("error", (err) => transformedStream.emit("error", err));
-          return transformedStream;
-        }
-        return readable;
-      }
-      async hasNext() {
-        this.signal?.throwIfAborted();
-        if (this.cursorId === bson_1.Long.ZERO) {
-          return false;
-        }
-        if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION && this.cursorId != null) {
-          this.timeoutContext?.refresh();
-        }
-        try {
-          do {
-            if ((this.documents?.length ?? 0) !== 0) {
-              return true;
-            }
-            await this.fetchBatch();
-          } while (!this.isDead || (this.documents?.length ?? 0) !== 0);
-        } finally {
-          if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION) {
-            this.timeoutContext?.clear();
-          }
-        }
-        return false;
-      }
-      /** Get the next available document from the cursor, returns null if no more documents are available. */
-      async next() {
-        this.signal?.throwIfAborted();
-        if (this.cursorId === bson_1.Long.ZERO) {
-          throw new error_1.MongoCursorExhaustedError();
-        }
-        if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION && this.cursorId != null) {
-          this.timeoutContext?.refresh();
-        }
-        try {
-          do {
-            const doc = this.documents?.shift(this.deserializationOptions);
-            if (doc != null) {
-              if (this.transform != null)
-                return await this.transformDocument(doc);
-              return doc;
-            }
-            await this.fetchBatch();
-          } while (!this.isDead || (this.documents?.length ?? 0) !== 0);
-        } finally {
-          if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION) {
-            this.timeoutContext?.clear();
-          }
-        }
-        return null;
-      }
-      /**
-       * Try to get the next available document from the cursor or `null` if an empty batch is returned
-       */
-      async tryNext() {
-        this.signal?.throwIfAborted();
-        if (this.cursorId === bson_1.Long.ZERO) {
-          throw new error_1.MongoCursorExhaustedError();
-        }
-        if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION && this.cursorId != null) {
-          this.timeoutContext?.refresh();
-        }
-        try {
-          let doc = this.documents?.shift(this.deserializationOptions);
-          if (doc != null) {
-            if (this.transform != null)
-              return await this.transformDocument(doc);
-            return doc;
-          }
-          await this.fetchBatch();
-          doc = this.documents?.shift(this.deserializationOptions);
-          if (doc != null) {
-            if (this.transform != null)
-              return await this.transformDocument(doc);
-            return doc;
-          }
-        } finally {
-          if (this.cursorOptions.timeoutMode === exports2.CursorTimeoutMode.ITERATION) {
-            this.timeoutContext?.clear();
-          }
-        }
-        return null;
-      }
-      /**
-       * Iterates over all the documents for this cursor using the iterator, callback pattern.
-       *
-       * If the iterator returns `false`, iteration will stop.
-       *
-       * @param iterator - The iteration callback.
-       * @deprecated - Will be removed in a future release. Use for await...of instead.
-       */
-      async forEach(iterator) {
-        this.signal?.throwIfAborted();
-        if (typeof iterator !== "function") {
-          throw new error_1.MongoInvalidArgumentError('Argument "iterator" must be a function');
-        }
-        for await (const document of this) {
-          const result = iterator(document);
-          if (result === false) {
-            break;
-          }
-        }
-      }
-      /**
-       * Frees any client-side resources used by the cursor.
-       */
-      async close(options) {
-        await this.cleanup(options?.timeoutMS);
-      }
-      /**
-       * Returns an array of documents. The caller is responsible for making sure that there
-       * is enough memory to store the results. Note that the array only contains partial
-       * results when this cursor had been previously accessed. In that case,
-       * cursor.rewind() can be used to reset the cursor.
-       */
-      async toArray() {
-        this.signal?.throwIfAborted();
-        const array = [];
-        for await (const document of this) {
-          array.push(document);
-          const docs = this.readBufferedDocuments();
-          if (this.transform != null) {
-            for (const doc of docs) {
-              array.push(await this.transformDocument(doc));
-            }
-          } else {
-            array.push(...docs);
-          }
-        }
-        return array;
-      }
-      /**
-       * Add a cursor flag to the cursor
-       *
-       * @param flag - The flag to set, must be one of following ['tailable', 'oplogReplay', 'noCursorTimeout', 'awaitData', 'partial' -.
-       * @param value - The flag boolean value.
-       */
-      addCursorFlag(flag, value) {
-        this.throwIfInitialized();
-        if (!exports2.CURSOR_FLAGS.includes(flag)) {
-          throw new error_1.MongoInvalidArgumentError(`Flag ${flag} is not one of ${exports2.CURSOR_FLAGS}`);
-        }
-        if (typeof value !== "boolean") {
-          throw new error_1.MongoInvalidArgumentError(`Flag ${flag} must be a boolean value`);
-        }
-        this.cursorOptions[flag] = value;
-        return this;
-      }
-      /**
-       * Map all documents using the provided function
-       * If there is a transform set on the cursor, that will be called first and the result passed to
-       * this function's transform.
-       *
-       * @remarks
-       *
-       * **Note** Cursors use `null` internally to indicate that there are no more documents in the cursor. Providing a mapping
-       * function that maps values to `null` will result in the cursor closing itself before it has finished iterating
-       * all documents.  This will **not** result in a memory leak, just surprising behavior.  For example:
-       *
-       * ```typescript
-       * const cursor = collection.find({});
-       * cursor.map(() => null);
-       *
-       * const documents = await cursor.toArray();
-       * // documents is always [], regardless of how many documents are in the collection.
-       * ```
-       *
-       * Other falsey values are allowed:
-       *
-       * ```typescript
-       * const cursor = collection.find({});
-       * cursor.map(() => '');
-       *
-       * const documents = await cursor.toArray();
-       * // documents is now an array of empty strings
-       * ```
-       *
-       * **Note for Typescript Users:** adding a transform changes the return type of the iteration of this cursor,
-       * it **does not** return a new instance of a cursor. This means when calling map,
-       * you should always assign the result to a new variable in order to get a correctly typed cursor variable.
-       * Take note of the following example:
-       *
-       * @example
-       * ```typescript
-       * const cursor: FindCursor<Document> = coll.find();
-       * const mappedCursor: FindCursor<number> = cursor.map(doc => Object.keys(doc).length);
-       * const keyCounts: number[] = await mappedCursor.toArray(); // cursor.toArray() still returns Document[]
-       * ```
-       * @param transform - The mapping transformation method.
-       */
-      map(transform) {
-        this.throwIfInitialized();
-        const oldTransform = this.transform;
-        if (oldTransform) {
-          this.transform = (doc) => {
-            return transform(oldTransform(doc));
-          };
-        } else {
-          this.transform = transform;
-        }
-        return this;
-      }
-      /**
-       * Set the ReadPreference for the cursor.
-       *
-       * @param readPreference - The new read preference for the cursor.
-       */
-      withReadPreference(readPreference) {
-        this.throwIfInitialized();
-        if (readPreference instanceof read_preference_1.ReadPreference) {
-          this.cursorOptions.readPreference = readPreference;
-        } else if (typeof readPreference === "string") {
-          this.cursorOptions.readPreference = read_preference_1.ReadPreference.fromString(readPreference);
-        } else {
-          throw new error_1.MongoInvalidArgumentError(`Invalid read preference: ${readPreference}`);
-        }
-        return this;
-      }
-      /**
-       * Set the ReadPreference for the cursor.
-       *
-       * @param readPreference - The new read preference for the cursor.
-       */
-      withReadConcern(readConcern) {
-        this.throwIfInitialized();
-        const resolvedReadConcern = read_concern_1.ReadConcern.fromOptions({ readConcern });
-        if (resolvedReadConcern) {
-          this.cursorOptions.readConcern = resolvedReadConcern;
-        }
-        return this;
-      }
-      /**
-       * Set a maxTimeMS on the cursor query, allowing for hard timeout limits on queries (Only supported on MongoDB 2.6 or higher)
-       *
-       * @param value - Number of milliseconds to wait before aborting the query.
-       */
-      maxTimeMS(value) {
-        this.throwIfInitialized();
-        if (typeof value !== "number") {
-          throw new error_1.MongoInvalidArgumentError("Argument for maxTimeMS must be a number");
-        }
-        this.cursorOptions.maxTimeMS = value;
-        return this;
-      }
-      /**
-       * Set the batch size for the cursor.
-       *
-       * @param value - The number of documents to return per batch. See {@link https://www.mongodb.com/docs/manual/reference/command/find/|find command documentation}.
-       */
-      batchSize(value) {
-        this.throwIfInitialized();
-        if (this.cursorOptions.tailable) {
-          throw new error_1.MongoTailableCursorError("Tailable cursor does not support batchSize");
-        }
-        if (typeof value !== "number") {
-          throw new error_1.MongoInvalidArgumentError('Operation "batchSize" requires an integer');
-        }
-        this.cursorOptions.batchSize = value;
-        return this;
-      }
-      /**
-       * Rewind this cursor to its uninitialized state. Any options that are present on the cursor will
-       * remain in effect. Iterating this cursor will cause new queries to be sent to the server, even
-       * if the resultant data has already been retrieved by this cursor.
-       */
-      rewind() {
-        if (this.timeoutContext && this.timeoutContext.owner !== this) {
-          throw new error_1.MongoAPIError(`Cannot rewind cursor that does not own its timeout context.`);
-        }
-        if (!this.initialized) {
-          return;
-        }
-        this.cursorId = null;
-        this.documents?.clear();
-        this.timeoutContext?.clear();
-        this.timeoutContext = void 0;
-        this.isClosed = false;
-        this.isKilled = false;
-        this.initialized = false;
-        this.hasEmittedClose = false;
-        this.trackCursor();
-        if (this.cursorSession?.explicit === false) {
-          if (!this.cursorSession.hasEnded) {
-            this.cursorSession.endSession().then(void 0, utils_1.squashError);
-          }
-          this.cursorSession = null;
-        }
-      }
-      /** @internal */
-      async getMore(batchSize) {
-        if (this.cursorId == null) {
-          throw new error_1.MongoRuntimeError("Unexpected null cursor id. A cursor creating command should have set this");
-        }
-        if (this.selectedServer == null) {
-          throw new error_1.MongoRuntimeError("Unexpected null selectedServer. A cursor creating command should have set this");
-        }
-        if (this.cursorSession == null) {
-          throw new error_1.MongoRuntimeError("Unexpected null session. A cursor creating command should have set this");
-        }
-        const getMoreOptions = {
-          ...this.cursorOptions,
-          session: this.cursorSession,
-          batchSize
-        };
-        const getMoreOperation = new get_more_1.GetMoreOperation(this.cursorNamespace, this.cursorId, this.selectedServer, getMoreOptions);
-        return await (0, execute_operation_1.executeOperation)(this.cursorClient, getMoreOperation, this.timeoutContext);
-      }
-      /**
-       * @internal
-       *
-       * This function is exposed for the unified test runner's createChangeStream
-       * operation.  We cannot refactor to use the abstract _initialize method without
-       * a significant refactor.
-       */
-      async cursorInit() {
-        if (this.cursorOptions.timeoutMS != null) {
-          this.timeoutContext ??= new CursorTimeoutContext(timeout_1.TimeoutContext.create({
-            serverSelectionTimeoutMS: this.client.s.options.serverSelectionTimeoutMS,
-            timeoutMS: this.cursorOptions.timeoutMS
-          }), this);
-        }
-        try {
-          this.cursorSession ??= this.cursorClient.startSession({ owner: this, explicit: false });
-          const state = await this._initialize(this.cursorSession);
-          this.cursorOptions.omitMaxTimeMS = this.cursorOptions.timeoutMS != null;
-          const response = state.response;
-          this.selectedServer = state.server;
-          this.cursorId = response.id;
-          this.cursorNamespace = response.ns ?? this.namespace;
-          this.documents = response;
-          this.initialized = true;
-        } catch (error) {
-          this.initialized = true;
-          await this.cleanup(void 0, error);
-          throw error;
-        }
-        if (this.isDead) {
-          await this.cleanup();
-        }
-        return;
-      }
-      /** @internal Attempt to obtain more documents */
-      async fetchBatch() {
-        if (this.isClosed) {
-          return;
-        }
-        if (this.isDead) {
-          await this.cleanup();
-          return;
-        }
-        if (this.cursorId == null) {
-          await this.cursorInit();
-          if ((this.documents?.length ?? 0) !== 0 || this.isDead)
-            return;
-        }
-        const batchSize = this.cursorOptions.batchSize || 1e3;
-        try {
-          const response = await this.getMore(batchSize);
-          this.cursorId = response.id;
-          this.documents = response;
-        } catch (error) {
-          try {
-            await this.cleanup(void 0, error);
-          } catch (cleanupError) {
-            (0, utils_1.squashError)(cleanupError);
-          }
-          throw error;
-        }
-        if (this.isDead) {
-          await this.cleanup();
-        }
-      }
-      /** @internal */
-      async cleanup(timeoutMS, error) {
-        this.abortListener?.[utils_1.kDispose]();
-        this.isClosed = true;
-        const timeoutContextForKillCursors = () => {
-          if (timeoutMS != null) {
-            this.timeoutContext?.clear();
-            return new CursorTimeoutContext(timeout_1.TimeoutContext.create({
-              serverSelectionTimeoutMS: this.client.s.options.serverSelectionTimeoutMS,
-              timeoutMS
-            }), this);
-          } else {
-            return this.timeoutContext?.refreshed();
-          }
-        };
-        const withEmitClose = async (fn) => {
-          try {
-            await fn();
-          } finally {
-            this.emitClose();
-          }
-        };
-        const close = async () => {
-          const session = this.cursorSession;
-          if (!session)
-            return;
-          try {
-            if (!this.isKilled && this.cursorId && !this.cursorId.isZero() && this.cursorNamespace && this.selectedServer && !session.hasEnded) {
-              this.isKilled = true;
-              const cursorId = this.cursorId;
-              this.cursorId = bson_1.Long.ZERO;
-              await (0, execute_operation_1.executeOperation)(this.cursorClient, new kill_cursors_1.KillCursorsOperation(cursorId, this.cursorNamespace, this.selectedServer, {
-                session
-              }), timeoutContextForKillCursors());
-            }
-          } catch (error2) {
-            (0, utils_1.squashError)(error2);
-          } finally {
-            if (session.owner === this) {
-              await session.endSession({ error });
-            }
-            if (!session.inTransaction()) {
-              (0, sessions_1.maybeClearPinnedConnection)(session, { error });
-            }
-          }
-        };
-        await withEmitClose(close);
-      }
-      /** @internal */
-      emitClose() {
-        try {
-          if (!this.hasEmittedClose && ((this.documents?.length ?? 0) === 0 || this.isClosed)) {
-            this.emit("close");
-          }
-        } finally {
-          this.hasEmittedClose = true;
-        }
-      }
-      /** @internal */
-      async transformDocument(document) {
-        if (this.transform == null)
-          return document;
-        try {
-          const transformedDocument = this.transform(document);
-          if (transformedDocument === null) {
-            const TRANSFORM_TO_NULL_ERROR = "Cursor returned a `null` document, but the cursor is not exhausted.  Mapping documents to `null` is not supported in the cursor transform.";
-            throw new error_1.MongoAPIError(TRANSFORM_TO_NULL_ERROR);
-          }
-          return transformedDocument;
-        } catch (transformError) {
-          try {
-            await this.close();
-          } catch (closeError) {
-            (0, utils_1.squashError)(closeError);
-          }
-          throw transformError;
-        }
-      }
-      /** @internal */
-      throwIfInitialized() {
-        if (this.initialized)
-          throw new error_1.MongoCursorInUseError();
-      }
-    };
-    exports2.AbstractCursor = AbstractCursor;
-    AbstractCursor.CLOSE = "close";
-    var ReadableCursorStream = class extends stream_1.Readable {
-      constructor(cursor) {
-        super({
-          objectMode: true,
-          autoDestroy: false,
-          highWaterMark: 1
-        });
-        this._readInProgress = false;
-        this._cursor = cursor;
-      }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      _read(size) {
-        if (!this._readInProgress) {
-          this._readInProgress = true;
-          this._readNext();
-        }
-      }
-      _destroy(error, callback) {
-        this._cursor.close().then(() => callback(error), (closeError) => callback(closeError));
-      }
-      _readNext() {
-        if (this._cursor.id === bson_1.Long.ZERO) {
-          this.push(null);
-          return;
-        }
-        this._cursor.next().then(
-          // result from next()
-          (result) => {
-            if (result == null) {
-              this.push(null);
-            } else if (this.destroyed) {
-              this._cursor.close().then(void 0, utils_1.squashError);
-            } else {
-              if (this.push(result)) {
-                return this._readNext();
-              }
-              this._readInProgress = false;
-            }
-          },
-          // error from next()
-          (err) => {
-            if (err.message.match(/server is closed/)) {
-              this._cursor.close().then(void 0, utils_1.squashError);
-              return this.push(null);
-            }
-            if (err.message.match(/operation was interrupted/)) {
-              return this.push(null);
-            }
-            return this.destroy(err);
-          }
-        ).catch((error) => {
-          this._readInProgress = false;
-          this.destroy(error);
-        });
-      }
-    };
-    (0, resource_management_1.configureResourceManagement)(AbstractCursor.prototype);
-    var CursorTimeoutContext = class _CursorTimeoutContext extends timeout_1.TimeoutContext {
-      constructor(timeoutContext, owner) {
-        super();
-        this.timeoutContext = timeoutContext;
-        this.owner = owner;
-      }
-      get serverSelectionTimeout() {
-        return this.timeoutContext.serverSelectionTimeout;
-      }
-      get connectionCheckoutTimeout() {
-        return this.timeoutContext.connectionCheckoutTimeout;
-      }
-      get clearServerSelectionTimeout() {
-        return this.timeoutContext.clearServerSelectionTimeout;
-      }
-      get timeoutForSocketWrite() {
-        return this.timeoutContext.timeoutForSocketWrite;
-      }
-      get timeoutForSocketRead() {
-        return this.timeoutContext.timeoutForSocketRead;
-      }
-      csotEnabled() {
-        return this.timeoutContext.csotEnabled();
-      }
-      refresh() {
-        if (typeof this.owner !== "symbol")
-          return this.timeoutContext.refresh();
-      }
-      clear() {
-        if (typeof this.owner !== "symbol")
-          return this.timeoutContext.clear();
-      }
-      get maxTimeMS() {
-        return this.timeoutContext.maxTimeMS;
-      }
-      get timeoutMS() {
-        return this.timeoutContext.csotEnabled() ? this.timeoutContext.timeoutMS : null;
-      }
-      refreshed() {
-        return new _CursorTimeoutContext(this.timeoutContext.refreshed(), this.owner);
-      }
-      addMaxTimeMSToCommand(command, options) {
-        this.timeoutContext.addMaxTimeMSToCommand(command, options);
-      }
-      getSocketTimeoutMS() {
-        return this.timeoutContext.getSocketTimeoutMS();
-      }
-    };
-    exports2.CursorTimeoutContext = CursorTimeoutContext;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/cursor/explainable_cursor.js
-var require_explainable_cursor = __commonJS({
-  "../../../node_modules/mongodb/lib/cursor/explainable_cursor.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.ExplainableCursor = void 0;
-    var abstract_cursor_1 = require_abstract_cursor();
-    var ExplainableCursor = class extends abstract_cursor_1.AbstractCursor {
-      resolveExplainTimeoutOptions(verbosity, options) {
-        let explain;
-        let timeout;
-        if (verbosity == null && options == null) {
-          explain = void 0;
-          timeout = void 0;
-        } else if (verbosity != null && options == null) {
-          explain = typeof verbosity !== "object" ? verbosity : "verbosity" in verbosity ? verbosity : void 0;
-          timeout = typeof verbosity === "object" && "timeoutMS" in verbosity ? verbosity : void 0;
-        } else {
-          explain = verbosity;
-          timeout = options;
-        }
-        return { timeout, explain };
-      }
-    };
-    exports2.ExplainableCursor = ExplainableCursor;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/cursor/aggregation_cursor.js
-var require_aggregation_cursor = __commonJS({
-  "../../../node_modules/mongodb/lib/cursor/aggregation_cursor.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.AggregationCursor = void 0;
-    var error_1 = require_error();
-    var explain_1 = require_explain();
-    var aggregate_1 = require_aggregate();
-    var execute_operation_1 = require_execute_operation();
-    var utils_1 = require_utils();
-    var abstract_cursor_1 = require_abstract_cursor();
-    var explainable_cursor_1 = require_explainable_cursor();
-    var AggregationCursor = class _AggregationCursor extends explainable_cursor_1.ExplainableCursor {
-      /** @internal */
-      constructor(client, namespace, pipeline = [], options = {}) {
-        super(client, namespace, options);
-        this.pipeline = pipeline;
-        this.aggregateOptions = options;
-        const lastStage = this.pipeline[this.pipeline.length - 1];
-        if (this.cursorOptions.timeoutMS != null && this.cursorOptions.timeoutMode === abstract_cursor_1.CursorTimeoutMode.ITERATION && (lastStage?.$merge != null || lastStage?.$out != null))
-          throw new error_1.MongoAPIError("Cannot use $out or $merge stage with ITERATION timeoutMode");
-      }
-      clone() {
-        const clonedOptions = (0, utils_1.mergeOptions)({}, this.aggregateOptions);
-        delete clonedOptions.session;
-        return new _AggregationCursor(this.client, this.namespace, this.pipeline, {
-          ...clonedOptions
-        });
-      }
-      map(transform) {
-        return super.map(transform);
-      }
-      /** @internal */
-      async _initialize(session) {
-        const options = {
-          ...this.aggregateOptions,
-          ...this.cursorOptions,
-          session,
-          signal: this.signal
-        };
-        if (options.explain) {
-          try {
-            (0, explain_1.validateExplainTimeoutOptions)(options, explain_1.Explain.fromOptions(options));
-          } catch {
-            throw new error_1.MongoAPIError("timeoutMS cannot be used with explain when explain is specified in aggregateOptions");
-          }
-        }
-        const aggregateOperation = new aggregate_1.AggregateOperation(this.namespace, this.pipeline, options);
-        const response = await (0, execute_operation_1.executeOperation)(this.client, aggregateOperation, this.timeoutContext);
-        return { server: aggregateOperation.server, session, response };
-      }
-      async explain(verbosity, options) {
-        const { explain, timeout } = this.resolveExplainTimeoutOptions(verbosity, options);
-        return (await (0, execute_operation_1.executeOperation)(this.client, new aggregate_1.AggregateOperation(this.namespace, this.pipeline, {
-          ...this.aggregateOptions,
-          // NOTE: order matters here, we may need to refine this
-          ...this.cursorOptions,
-          ...timeout,
-          explain: explain ?? true
-        }))).shift(this.deserializationOptions);
-      }
-      addStage(stage) {
-        this.throwIfInitialized();
-        if (this.cursorOptions.timeoutMS != null && this.cursorOptions.timeoutMode === abstract_cursor_1.CursorTimeoutMode.ITERATION && (stage.$out != null || stage.$merge != null)) {
-          throw new error_1.MongoAPIError("Cannot use $out or $merge stage with ITERATION timeoutMode");
-        }
-        this.pipeline.push(stage);
-        return this;
-      }
-      group($group) {
-        return this.addStage({ $group });
-      }
-      /** Add a limit stage to the aggregation pipeline */
-      limit($limit) {
-        return this.addStage({ $limit });
-      }
-      /** Add a match stage to the aggregation pipeline */
-      match($match) {
-        return this.addStage({ $match });
-      }
-      /** Add an out stage to the aggregation pipeline */
-      out($out) {
-        return this.addStage({ $out });
-      }
-      /**
-       * Add a project stage to the aggregation pipeline
-       *
-       * @remarks
-       * In order to strictly type this function you must provide an interface
-       * that represents the effect of your projection on the result documents.
-       *
-       * By default chaining a projection to your cursor changes the returned type to the generic {@link Document} type.
-       * You should specify a parameterized type to have assertions on your final results.
-       *
-       * @example
-       * ```typescript
-       * // Best way
-       * const docs: AggregationCursor<{ a: number }> = cursor.project<{ a: number }>({ _id: 0, a: true });
-       * // Flexible way
-       * const docs: AggregationCursor<Document> = cursor.project({ _id: 0, a: true });
-       * ```
-       *
-       * @remarks
-       * In order to strictly type this function you must provide an interface
-       * that represents the effect of your projection on the result documents.
-       *
-       * **Note for Typescript Users:** adding a transform changes the return type of the iteration of this cursor,
-       * it **does not** return a new instance of a cursor. This means when calling project,
-       * you should always assign the result to a new variable in order to get a correctly typed cursor variable.
-       * Take note of the following example:
-       *
-       * @example
-       * ```typescript
-       * const cursor: AggregationCursor<{ a: number; b: string }> = coll.aggregate([]);
-       * const projectCursor = cursor.project<{ a: number }>({ _id: 0, a: true });
-       * const aPropOnlyArray: {a: number}[] = await projectCursor.toArray();
-       *
-       * // or always use chaining and save the final cursor
-       *
-       * const cursor = coll.aggregate().project<{ a: string }>({
-       *   _id: 0,
-       *   a: { $convert: { input: '$a', to: 'string' }
-       * }});
-       * ```
-       */
-      project($project) {
-        return this.addStage({ $project });
-      }
-      /** Add a lookup stage to the aggregation pipeline */
-      lookup($lookup) {
-        return this.addStage({ $lookup });
-      }
-      /** Add a redact stage to the aggregation pipeline */
-      redact($redact) {
-        return this.addStage({ $redact });
-      }
-      /** Add a skip stage to the aggregation pipeline */
-      skip($skip) {
-        return this.addStage({ $skip });
-      }
-      /** Add a sort stage to the aggregation pipeline */
-      sort($sort) {
-        return this.addStage({ $sort });
-      }
-      /** Add a unwind stage to the aggregation pipeline */
-      unwind($unwind) {
-        return this.addStage({ $unwind });
-      }
-      /** Add a geoNear stage to the aggregation pipeline */
-      geoNear($geoNear) {
-        return this.addStage({ $geoNear });
-      }
-    };
-    exports2.AggregationCursor = AggregationCursor;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/count.js
-var require_count = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/count.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.CountOperation = void 0;
-    var responses_1 = require_responses();
-    var command_1 = require_command();
-    var operation_1 = require_operation();
-    var CountOperation = class extends command_1.CommandOperation {
-      constructor(namespace, filter, options) {
-        super({ s: { namespace } }, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.options = options;
-        this.collectionName = namespace.collection;
-        this.query = filter;
-      }
-      get commandName() {
-        return "count";
-      }
-      buildCommandDocument(_connection, _session) {
-        const options = this.options;
-        const cmd = {
-          count: this.collectionName,
-          query: this.query
-        };
-        if (typeof options.limit === "number") {
-          cmd.limit = options.limit;
-        }
-        if (typeof options.skip === "number") {
-          cmd.skip = options.skip;
-        }
-        if (options.hint != null) {
-          cmd.hint = options.hint;
-        }
-        if (typeof options.maxTimeMS === "number") {
-          cmd.maxTimeMS = options.maxTimeMS;
-        }
-        return cmd;
-      }
-      handleOk(response) {
-        return response.getNumber("n") ?? 0;
-      }
-    };
-    exports2.CountOperation = CountOperation;
-    (0, operation_1.defineAspects)(CountOperation, [operation_1.Aspect.READ_OPERATION, operation_1.Aspect.RETRYABLE, operation_1.Aspect.SUPPORTS_RAW_DATA]);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/find.js
-var require_find = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/find.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.FindOperation = void 0;
-    var responses_1 = require_responses();
-    var error_1 = require_error();
-    var sort_1 = require_sort();
-    var utils_1 = require_utils();
-    var command_1 = require_command();
-    var operation_1 = require_operation();
-    var FindOperation = class extends command_1.CommandOperation {
-      constructor(ns, filter = {}, options = {}) {
-        super(void 0, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.CursorResponse;
-        this.options = { ...options };
-        delete this.options.writeConcern;
-        this.ns = ns;
-        if (typeof filter !== "object" || Array.isArray(filter)) {
-          throw new error_1.MongoInvalidArgumentError("Query filter must be a plain object or ObjectId");
-        }
-        this.filter = filter != null && filter._bsontype === "ObjectId" ? { _id: filter } : filter;
-        this.SERVER_COMMAND_RESPONSE_TYPE = this.explain ? responses_1.ExplainedCursorResponse : responses_1.CursorResponse;
-      }
-      get commandName() {
-        return "find";
-      }
-      buildOptions(timeoutContext) {
-        return {
-          ...this.options,
-          ...this.bsonOptions,
-          documentsReturnedIn: "firstBatch",
-          session: this.session,
-          timeoutContext
-        };
-      }
-      handleOk(response) {
-        return response;
-      }
-      buildCommandDocument() {
-        return makeFindCommand(this.ns, this.filter, this.options);
-      }
-    };
-    exports2.FindOperation = FindOperation;
-    function makeFindCommand(ns, filter, options) {
-      const findCommand = {
-        find: ns.collection,
-        filter
-      };
-      if (options.sort) {
-        findCommand.sort = (0, sort_1.formatSort)(options.sort);
-      }
-      if (options.projection) {
-        let projection = options.projection;
-        if (projection && Array.isArray(projection)) {
-          projection = projection.length ? projection.reduce((result, field) => {
-            result[field] = 1;
-            return result;
-          }, {}) : { _id: 1 };
-        }
-        findCommand.projection = projection;
-      }
-      if (options.hint) {
-        findCommand.hint = (0, utils_1.normalizeHintField)(options.hint);
-      }
-      if (typeof options.skip === "number") {
-        findCommand.skip = options.skip;
-      }
-      if (typeof options.limit === "number") {
-        if (options.limit < 0) {
-          findCommand.limit = -options.limit;
-          findCommand.singleBatch = true;
-        } else {
-          findCommand.limit = options.limit;
-        }
-      }
-      if (typeof options.batchSize === "number") {
-        if (options.batchSize < 0) {
-          findCommand.limit = -options.batchSize;
-        } else {
-          if (options.batchSize === options.limit) {
-            findCommand.batchSize = options.batchSize + 1;
-          } else {
-            findCommand.batchSize = options.batchSize;
-          }
-        }
-      }
-      if (typeof options.singleBatch === "boolean") {
-        findCommand.singleBatch = options.singleBatch;
-      }
-      if (options.comment !== void 0) {
-        findCommand.comment = options.comment;
-      }
-      if (options.max) {
-        findCommand.max = options.max;
-      }
-      if (options.min) {
-        findCommand.min = options.min;
-      }
-      if (typeof options.returnKey === "boolean") {
-        findCommand.returnKey = options.returnKey;
-      }
-      if (typeof options.showRecordId === "boolean") {
-        findCommand.showRecordId = options.showRecordId;
-      }
-      if (typeof options.tailable === "boolean") {
-        findCommand.tailable = options.tailable;
-      }
-      if (typeof options.oplogReplay === "boolean") {
-        findCommand.oplogReplay = options.oplogReplay;
-      }
-      if (typeof options.timeout === "boolean") {
-        findCommand.noCursorTimeout = !options.timeout;
-      } else if (typeof options.noCursorTimeout === "boolean") {
-        findCommand.noCursorTimeout = options.noCursorTimeout;
-      }
-      if (typeof options.awaitData === "boolean") {
-        findCommand.awaitData = options.awaitData;
-      }
-      if (typeof options.allowPartialResults === "boolean") {
-        findCommand.allowPartialResults = options.allowPartialResults;
-      }
-      if (typeof options.allowDiskUse === "boolean") {
-        findCommand.allowDiskUse = options.allowDiskUse;
-      }
-      if (options.let) {
-        findCommand.let = options.let;
-      }
-      return findCommand;
-    }
-    (0, operation_1.defineAspects)(FindOperation, [
-      operation_1.Aspect.READ_OPERATION,
-      operation_1.Aspect.RETRYABLE,
-      operation_1.Aspect.EXPLAINABLE,
-      operation_1.Aspect.CURSOR_CREATING,
-      operation_1.Aspect.SUPPORTS_RAW_DATA
-    ]);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/cursor/find_cursor.js
-var require_find_cursor = __commonJS({
-  "../../../node_modules/mongodb/lib/cursor/find_cursor.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.FindCursor = exports2.FLAGS = void 0;
-    var responses_1 = require_responses();
-    var error_1 = require_error();
-    var explain_1 = require_explain();
-    var count_1 = require_count();
-    var execute_operation_1 = require_execute_operation();
-    var find_1 = require_find();
-    var sort_1 = require_sort();
-    var utils_1 = require_utils();
-    var explainable_cursor_1 = require_explainable_cursor();
-    exports2.FLAGS = [
-      "tailable",
-      "oplogReplay",
-      "noCursorTimeout",
-      "awaitData",
-      "exhaust",
-      "partial"
-    ];
-    var FindCursor = class _FindCursor extends explainable_cursor_1.ExplainableCursor {
-      /** @internal */
-      constructor(client, namespace, filter = {}, options = {}) {
-        super(client, namespace, options);
-        this.numReturned = 0;
-        this.cursorFilter = filter;
-        this.findOptions = options;
-        if (options.sort != null) {
-          this.findOptions.sort = (0, sort_1.formatSort)(options.sort);
-        }
-      }
-      clone() {
-        const clonedOptions = (0, utils_1.mergeOptions)({}, this.findOptions);
-        delete clonedOptions.session;
-        return new _FindCursor(this.client, this.namespace, this.cursorFilter, {
-          ...clonedOptions
-        });
-      }
-      map(transform) {
-        return super.map(transform);
-      }
-      /** @internal */
-      async _initialize(session) {
-        const options = {
-          ...this.findOptions,
-          // NOTE: order matters here, we may need to refine this
-          ...this.cursorOptions,
-          session,
-          signal: this.signal
-        };
-        if (options.explain) {
-          try {
-            (0, explain_1.validateExplainTimeoutOptions)(options, explain_1.Explain.fromOptions(options));
-          } catch {
-            throw new error_1.MongoAPIError("timeoutMS cannot be used with explain when explain is specified in findOptions");
-          }
-        }
-        const findOperation = new find_1.FindOperation(this.namespace, this.cursorFilter, options);
-        const response = await (0, execute_operation_1.executeOperation)(this.client, findOperation, this.timeoutContext);
-        this.numReturned = response.batchSize;
-        return { server: findOperation.server, session, response };
-      }
-      /** @internal */
-      async getMore(batchSize) {
-        const numReturned = this.numReturned;
-        if (numReturned) {
-          const limit = this.findOptions.limit;
-          batchSize = limit && limit > 0 && numReturned + batchSize > limit ? limit - numReturned : batchSize;
-          if (batchSize <= 0) {
-            try {
-              await this.close();
-            } catch (error) {
-              (0, utils_1.squashError)(error);
-            }
-            return responses_1.CursorResponse.emptyGetMore;
-          }
-        }
-        const response = await super.getMore(batchSize);
-        this.numReturned = this.numReturned + response.batchSize;
-        return response;
-      }
-      /**
-       * Get the count of documents for this cursor
-       * @deprecated Use `collection.estimatedDocumentCount` or `collection.countDocuments` instead
-       */
-      async count(options) {
-        (0, utils_1.emitWarningOnce)("cursor.count is deprecated and will be removed in the next major version, please use `collection.estimatedDocumentCount` or `collection.countDocuments` instead ");
-        if (typeof options === "boolean") {
-          throw new error_1.MongoInvalidArgumentError("Invalid first parameter to count");
-        }
-        return await (0, execute_operation_1.executeOperation)(this.client, new count_1.CountOperation(this.namespace, this.cursorFilter, {
-          ...this.findOptions,
-          // NOTE: order matters here, we may need to refine this
-          ...this.cursorOptions,
-          ...options
-        }));
-      }
-      async explain(verbosity, options) {
-        const { explain, timeout } = this.resolveExplainTimeoutOptions(verbosity, options);
-        return (await (0, execute_operation_1.executeOperation)(this.client, new find_1.FindOperation(this.namespace, this.cursorFilter, {
-          ...this.findOptions,
-          // NOTE: order matters here, we may need to refine this
-          ...this.cursorOptions,
-          ...timeout,
-          explain: explain ?? true
-        }))).shift(this.deserializationOptions);
-      }
-      /** Set the cursor query */
-      filter(filter) {
-        this.throwIfInitialized();
-        this.cursorFilter = filter;
-        return this;
-      }
-      /**
-       * Set the cursor hint
-       *
-       * @param hint - If specified, then the query system will only consider plans using the hinted index.
-       */
-      hint(hint) {
-        this.throwIfInitialized();
-        this.findOptions.hint = hint;
-        return this;
-      }
-      /**
-       * Set the cursor min
-       *
-       * @param min - Specify a $min value to specify the inclusive lower bound for a specific index in order to constrain the results of find(). The $min specifies the lower bound for all keys of a specific index in order.
-       */
-      min(min) {
-        this.throwIfInitialized();
-        this.findOptions.min = min;
-        return this;
-      }
-      /**
-       * Set the cursor max
-       *
-       * @param max - Specify a $max value to specify the exclusive upper bound for a specific index in order to constrain the results of find(). The $max specifies the upper bound for all keys of a specific index in order.
-       */
-      max(max) {
-        this.throwIfInitialized();
-        this.findOptions.max = max;
-        return this;
-      }
-      /**
-       * Set the cursor returnKey.
-       * If set to true, modifies the cursor to only return the index field or fields for the results of the query, rather than documents.
-       * If set to true and the query does not use an index to perform the read operation, the returned documents will not contain any fields.
-       *
-       * @param value - the returnKey value.
-       */
-      returnKey(value) {
-        this.throwIfInitialized();
-        this.findOptions.returnKey = value;
-        return this;
-      }
-      /**
-       * Modifies the output of a query by adding a field $recordId to matching documents. $recordId is the internal key which uniquely identifies a document in a collection.
-       *
-       * @param value - The $showDiskLoc option has now been deprecated and replaced with the showRecordId field. $showDiskLoc will still be accepted for OP_QUERY stye find.
-       */
-      showRecordId(value) {
-        this.throwIfInitialized();
-        this.findOptions.showRecordId = value;
-        return this;
-      }
-      /**
-       * Add a query modifier to the cursor query
-       *
-       * @param name - The query modifier (must start with $, such as $orderby etc)
-       * @param value - The modifier value.
-       */
-      addQueryModifier(name, value) {
-        this.throwIfInitialized();
-        if (name[0] !== "$") {
-          throw new error_1.MongoInvalidArgumentError(`${name} is not a valid query modifier`);
-        }
-        const field = name.substr(1);
-        switch (field) {
-          case "comment":
-            this.findOptions.comment = value;
-            break;
-          case "explain":
-            this.findOptions.explain = value;
-            break;
-          case "hint":
-            this.findOptions.hint = value;
-            break;
-          case "max":
-            this.findOptions.max = value;
-            break;
-          case "maxTimeMS":
-            this.findOptions.maxTimeMS = value;
-            break;
-          case "min":
-            this.findOptions.min = value;
-            break;
-          case "orderby":
-            this.findOptions.sort = (0, sort_1.formatSort)(value);
-            break;
-          case "query":
-            this.cursorFilter = value;
-            break;
-          case "returnKey":
-            this.findOptions.returnKey = value;
-            break;
-          case "showDiskLoc":
-            this.findOptions.showRecordId = value;
-            break;
-          default:
-            throw new error_1.MongoInvalidArgumentError(`Invalid query modifier: ${name}`);
-        }
-        return this;
-      }
-      /**
-       * Add a comment to the cursor query allowing for tracking the comment in the log.
-       *
-       * @param value - The comment attached to this query.
-       */
-      comment(value) {
-        this.throwIfInitialized();
-        this.findOptions.comment = value;
-        return this;
-      }
-      /**
-       * Set a maxAwaitTimeMS on a tailing cursor query to allow to customize the timeout value for the option awaitData (Only supported on MongoDB 3.2 or higher, ignored otherwise)
-       *
-       * @param value - Number of milliseconds to wait before aborting the tailed query.
-       */
-      maxAwaitTimeMS(value) {
-        this.throwIfInitialized();
-        if (typeof value !== "number") {
-          throw new error_1.MongoInvalidArgumentError("Argument for maxAwaitTimeMS must be a number");
-        }
-        this.findOptions.maxAwaitTimeMS = value;
-        return this;
-      }
-      /**
-       * Set a maxTimeMS on the cursor query, allowing for hard timeout limits on queries (Only supported on MongoDB 2.6 or higher)
-       *
-       * @param value - Number of milliseconds to wait before aborting the query.
-       */
-      maxTimeMS(value) {
-        this.throwIfInitialized();
-        if (typeof value !== "number") {
-          throw new error_1.MongoInvalidArgumentError("Argument for maxTimeMS must be a number");
-        }
-        this.findOptions.maxTimeMS = value;
-        return this;
-      }
-      /**
-       * Add a project stage to the aggregation pipeline
-       *
-       * @remarks
-       * In order to strictly type this function you must provide an interface
-       * that represents the effect of your projection on the result documents.
-       *
-       * By default chaining a projection to your cursor changes the returned type to the generic
-       * {@link Document} type.
-       * You should specify a parameterized type to have assertions on your final results.
-       *
-       * @example
-       * ```typescript
-       * // Best way
-       * const docs: FindCursor<{ a: number }> = cursor.project<{ a: number }>({ _id: 0, a: true });
-       * // Flexible way
-       * const docs: FindCursor<Document> = cursor.project({ _id: 0, a: true });
-       * ```
-       *
-       * @remarks
-       *
-       * **Note for Typescript Users:** adding a transform changes the return type of the iteration of this cursor,
-       * it **does not** return a new instance of a cursor. This means when calling project,
-       * you should always assign the result to a new variable in order to get a correctly typed cursor variable.
-       * Take note of the following example:
-       *
-       * @example
-       * ```typescript
-       * const cursor: FindCursor<{ a: number; b: string }> = coll.find();
-       * const projectCursor = cursor.project<{ a: number }>({ _id: 0, a: true });
-       * const aPropOnlyArray: {a: number}[] = await projectCursor.toArray();
-       *
-       * // or always use chaining and save the final cursor
-       *
-       * const cursor = coll.find().project<{ a: string }>({
-       *   _id: 0,
-       *   a: { $convert: { input: '$a', to: 'string' }
-       * }});
-       * ```
-       */
-      project(value) {
-        this.throwIfInitialized();
-        this.findOptions.projection = value;
-        return this;
-      }
-      /**
-       * Sets the sort order of the cursor query.
-       *
-       * @param sort - The key or keys set for the sort.
-       * @param direction - The direction of the sorting (1 or -1).
-       */
-      sort(sort, direction) {
-        this.throwIfInitialized();
-        if (this.findOptions.tailable) {
-          throw new error_1.MongoTailableCursorError("Tailable cursor does not support sorting");
-        }
-        this.findOptions.sort = (0, sort_1.formatSort)(sort, direction);
-        return this;
-      }
-      /**
-       * Allows disk use for blocking sort operations exceeding 100MB memory. (MongoDB 3.2 or higher)
-       *
-       * @remarks
-       * {@link https://www.mongodb.com/docs/manual/reference/command/find/#find-cmd-allowdiskuse | find command allowDiskUse documentation}
-       */
-      allowDiskUse(allow = true) {
-        this.throwIfInitialized();
-        if (!this.findOptions.sort) {
-          throw new error_1.MongoInvalidArgumentError('Option "allowDiskUse" requires a sort specification');
-        }
-        if (!allow) {
-          this.findOptions.allowDiskUse = false;
-          return this;
-        }
-        this.findOptions.allowDiskUse = true;
-        return this;
-      }
-      /**
-       * Set the collation options for the cursor.
-       *
-       * @param value - The cursor collation options (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
-       */
-      collation(value) {
-        this.throwIfInitialized();
-        this.findOptions.collation = value;
-        return this;
-      }
-      /**
-       * Set the limit for the cursor.
-       *
-       * @param value - The limit for the cursor query.
-       */
-      limit(value) {
-        this.throwIfInitialized();
-        if (this.findOptions.tailable) {
-          throw new error_1.MongoTailableCursorError("Tailable cursor does not support limit");
-        }
-        if (typeof value !== "number") {
-          throw new error_1.MongoInvalidArgumentError('Operation "limit" requires an integer');
-        }
-        this.findOptions.limit = value;
-        return this;
-      }
-      /**
-       * Set the skip for the cursor.
-       *
-       * @param value - The skip for the cursor query.
-       */
-      skip(value) {
-        this.throwIfInitialized();
-        if (this.findOptions.tailable) {
-          throw new error_1.MongoTailableCursorError("Tailable cursor does not support skip");
-        }
-        if (typeof value !== "number") {
-          throw new error_1.MongoInvalidArgumentError('Operation "skip" requires an integer');
-        }
-        this.findOptions.skip = value;
-        return this;
-      }
-    };
-    exports2.FindCursor = FindCursor;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/cursor/list_indexes_cursor.js
-var require_list_indexes_cursor = __commonJS({
-  "../../../node_modules/mongodb/lib/cursor/list_indexes_cursor.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.ListIndexesCursor = void 0;
-    var execute_operation_1 = require_execute_operation();
-    var indexes_1 = require_indexes();
-    var abstract_cursor_1 = require_abstract_cursor();
-    var ListIndexesCursor = class _ListIndexesCursor extends abstract_cursor_1.AbstractCursor {
-      constructor(collection, options) {
-        super(collection.client, collection.s.namespace, options);
-        this.parent = collection;
-        this.options = options;
-      }
-      clone() {
-        return new _ListIndexesCursor(this.parent, {
-          ...this.options,
-          ...this.cursorOptions
-        });
-      }
-      /** @internal */
-      async _initialize(session) {
-        const operation = new indexes_1.ListIndexesOperation(this.parent, {
-          ...this.cursorOptions,
-          ...this.options,
-          session
-        });
-        const response = await (0, execute_operation_1.executeOperation)(this.parent.client, operation, this.timeoutContext);
-        return { server: operation.server, session, response };
-      }
-    };
-    exports2.ListIndexesCursor = ListIndexesCursor;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/cursor/list_search_indexes_cursor.js
-var require_list_search_indexes_cursor = __commonJS({
-  "../../../node_modules/mongodb/lib/cursor/list_search_indexes_cursor.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.ListSearchIndexesCursor = void 0;
-    var aggregation_cursor_1 = require_aggregation_cursor();
-    var ListSearchIndexesCursor = class extends aggregation_cursor_1.AggregationCursor {
-      /** @internal */
-      constructor({ fullNamespace: ns, client }, name, options = {}) {
-        const pipeline = name == null ? [{ $listSearchIndexes: {} }] : [{ $listSearchIndexes: { name } }];
-        super(client, ns, pipeline, options);
-      }
-    };
-    exports2.ListSearchIndexesCursor = ListSearchIndexesCursor;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/distinct.js
-var require_distinct = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/distinct.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.DistinctOperation = void 0;
-    var responses_1 = require_responses();
-    var command_1 = require_command();
-    var operation_1 = require_operation();
-    var DistinctOperation = class extends command_1.CommandOperation {
-      /**
-       * Construct a Distinct operation.
-       *
-       * @param collection - Collection instance.
-       * @param key - Field of the document to find distinct values for.
-       * @param query - The query for filtering the set of documents to which we apply the distinct filter.
-       * @param options - Optional settings. See Collection.prototype.distinct for a list of options.
-       */
-      constructor(collection, key, query, options) {
-        super(collection, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.options = options ?? {};
-        this.collection = collection;
-        this.key = key;
-        this.query = query;
-      }
-      get commandName() {
-        return "distinct";
-      }
-      buildCommandDocument(_connection) {
-        const command = {
-          distinct: this.collection.collectionName,
-          key: this.key,
-          query: this.query
-        };
-        if (this.options.comment !== void 0) {
-          command.comment = this.options.comment;
-        }
-        if (this.options.hint != null) {
-          command.hint = this.options.hint;
-        }
-        return command;
-      }
-      handleOk(response) {
-        if (this.explain) {
-          return response.toObject(this.bsonOptions);
-        }
-        return response.toObject(this.bsonOptions).values;
-      }
-    };
-    exports2.DistinctOperation = DistinctOperation;
-    (0, operation_1.defineAspects)(DistinctOperation, [
-      operation_1.Aspect.READ_OPERATION,
-      operation_1.Aspect.RETRYABLE,
-      operation_1.Aspect.EXPLAINABLE,
-      operation_1.Aspect.SUPPORTS_RAW_DATA
-    ]);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/estimated_document_count.js
-var require_estimated_document_count = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/estimated_document_count.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.EstimatedDocumentCountOperation = void 0;
-    var responses_1 = require_responses();
-    var command_1 = require_command();
-    var operation_1 = require_operation();
-    var EstimatedDocumentCountOperation = class extends command_1.CommandOperation {
-      constructor(collection, options = {}) {
-        super(collection, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.options = options;
-        this.collectionName = collection.collectionName;
-      }
-      get commandName() {
-        return "count";
-      }
-      buildCommandDocument(_connection, _session) {
-        const cmd = { count: this.collectionName };
-        if (typeof this.options.maxTimeMS === "number") {
-          cmd.maxTimeMS = this.options.maxTimeMS;
-        }
-        if (this.options.comment !== void 0) {
-          cmd.comment = this.options.comment;
-        }
-        return cmd;
-      }
-      handleOk(response) {
-        return response.getNumber("n") ?? 0;
-      }
-    };
-    exports2.EstimatedDocumentCountOperation = EstimatedDocumentCountOperation;
-    (0, operation_1.defineAspects)(EstimatedDocumentCountOperation, [
-      operation_1.Aspect.READ_OPERATION,
-      operation_1.Aspect.RETRYABLE,
-      operation_1.Aspect.CURSOR_CREATING,
-      operation_1.Aspect.SUPPORTS_RAW_DATA
-    ]);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/find_and_modify.js
-var require_find_and_modify = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/find_and_modify.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.FindOneAndUpdateOperation = exports2.FindOneAndReplaceOperation = exports2.FindOneAndDeleteOperation = exports2.FindAndModifyOperation = exports2.ReturnDocument = void 0;
-    var responses_1 = require_responses();
-    var error_1 = require_error();
-    var read_preference_1 = require_read_preference();
-    var sort_1 = require_sort();
-    var utils_1 = require_utils();
-    var command_1 = require_command();
-    var operation_1 = require_operation();
-    exports2.ReturnDocument = Object.freeze({
-      BEFORE: "before",
-      AFTER: "after"
-    });
-    function configureFindAndModifyCmdBaseUpdateOpts(cmdBase, options) {
-      cmdBase.new = options.returnDocument === exports2.ReturnDocument.AFTER;
-      cmdBase.upsert = options.upsert === true;
-      if (options.bypassDocumentValidation === true) {
-        cmdBase.bypassDocumentValidation = options.bypassDocumentValidation;
-      }
-      return cmdBase;
-    }
-    var FindAndModifyOperation = class extends command_1.CommandOperation {
-      constructor(collection, query, options) {
-        super(collection, options);
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.options = options;
-        this.readPreference = read_preference_1.ReadPreference.primary;
-        this.collection = collection;
-        this.query = query;
-      }
-      get commandName() {
-        return "findAndModify";
-      }
-      buildCommandDocument(connection, _session) {
-        const options = this.options;
-        const command = {
-          findAndModify: this.collection.collectionName,
-          query: this.query,
-          remove: false,
-          new: false,
-          upsert: false
-        };
-        options.includeResultMetadata ??= false;
-        const sort = (0, sort_1.formatSort)(options.sort);
-        if (sort) {
-          command.sort = sort;
-        }
-        if (options.projection) {
-          command.fields = options.projection;
-        }
-        if (options.maxTimeMS) {
-          command.maxTimeMS = options.maxTimeMS;
-        }
-        if (options.writeConcern) {
-          command.writeConcern = options.writeConcern;
-        }
-        if (options.let) {
-          command.let = options.let;
-        }
-        if (options.comment !== void 0) {
-          command.comment = options.comment;
-        }
-        (0, utils_1.decorateWithCollation)(command, options);
-        if (options.hint) {
-          const unacknowledgedWrite = this.writeConcern?.w === 0;
-          if (unacknowledgedWrite && (0, utils_1.maxWireVersion)(connection) < 9) {
-            throw new error_1.MongoCompatibilityError("hint for the findAndModify command is only supported on MongoDB 4.4+");
-          }
-          command.hint = options.hint;
-        }
-        return command;
-      }
-      handleOk(response) {
-        const result = super.handleOk(response);
-        return this.options.includeResultMetadata ? result : result.value ?? null;
-      }
-    };
-    exports2.FindAndModifyOperation = FindAndModifyOperation;
-    var FindOneAndDeleteOperation = class extends FindAndModifyOperation {
-      constructor(collection, filter, options) {
-        if (filter == null || typeof filter !== "object") {
-          throw new error_1.MongoInvalidArgumentError('Argument "filter" must be an object');
-        }
-        super(collection, filter, options);
-      }
-      buildCommandDocument(connection, session) {
-        const document = super.buildCommandDocument(connection, session);
-        document.remove = true;
-        return document;
-      }
-    };
-    exports2.FindOneAndDeleteOperation = FindOneAndDeleteOperation;
-    var FindOneAndReplaceOperation = class extends FindAndModifyOperation {
-      constructor(collection, filter, replacement, options) {
-        if (filter == null || typeof filter !== "object") {
-          throw new error_1.MongoInvalidArgumentError('Argument "filter" must be an object');
-        }
-        if (replacement == null || typeof replacement !== "object") {
-          throw new error_1.MongoInvalidArgumentError('Argument "replacement" must be an object');
-        }
-        if ((0, utils_1.hasAtomicOperators)(replacement)) {
-          throw new error_1.MongoInvalidArgumentError("Replacement document must not contain atomic operators");
-        }
-        super(collection, filter, options);
-        this.replacement = replacement;
-      }
-      buildCommandDocument(connection, session) {
-        const document = super.buildCommandDocument(connection, session);
-        document.update = this.replacement;
-        configureFindAndModifyCmdBaseUpdateOpts(document, this.options);
-        return document;
-      }
-    };
-    exports2.FindOneAndReplaceOperation = FindOneAndReplaceOperation;
-    var FindOneAndUpdateOperation = class extends FindAndModifyOperation {
-      constructor(collection, filter, update, options) {
-        if (filter == null || typeof filter !== "object") {
-          throw new error_1.MongoInvalidArgumentError('Argument "filter" must be an object');
-        }
-        if (update == null || typeof update !== "object") {
-          throw new error_1.MongoInvalidArgumentError('Argument "update" must be an object');
-        }
-        if (!(0, utils_1.hasAtomicOperators)(update, options)) {
-          throw new error_1.MongoInvalidArgumentError("Update document requires atomic operators");
-        }
-        super(collection, filter, options);
-        this.update = update;
-        this.options = options;
-      }
-      buildCommandDocument(connection, session) {
-        const document = super.buildCommandDocument(connection, session);
-        document.update = this.update;
-        configureFindAndModifyCmdBaseUpdateOpts(document, this.options);
-        if (this.options.arrayFilters) {
-          document.arrayFilters = this.options.arrayFilters;
-        }
-        return document;
-      }
-    };
-    exports2.FindOneAndUpdateOperation = FindOneAndUpdateOperation;
-    (0, operation_1.defineAspects)(FindAndModifyOperation, [
-      operation_1.Aspect.WRITE_OPERATION,
-      operation_1.Aspect.RETRYABLE,
-      operation_1.Aspect.EXPLAINABLE,
-      operation_1.Aspect.SUPPORTS_RAW_DATA
-    ]);
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/search_indexes/create.js
-var require_create = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/search_indexes/create.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.CreateSearchIndexesOperation = void 0;
-    var responses_1 = require_responses();
-    var operation_1 = require_operation();
-    var CreateSearchIndexesOperation = class extends operation_1.AbstractOperation {
-      constructor(collection, descriptions) {
-        super();
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.collection = collection;
-        this.descriptions = descriptions;
-        this.ns = collection.fullNamespace;
-      }
-      get commandName() {
-        return "createSearchIndexes";
-      }
-      buildCommand(_connection, _session) {
-        const namespace = this.collection.fullNamespace;
-        return {
-          createSearchIndexes: namespace.collection,
-          indexes: this.descriptions
-        };
-      }
-      handleOk(response) {
-        return super.handleOk(response).indexesCreated.map((val) => val.name);
-      }
-      buildOptions(timeoutContext) {
-        return { session: this.session, timeoutContext };
-      }
-    };
-    exports2.CreateSearchIndexesOperation = CreateSearchIndexesOperation;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/search_indexes/drop.js
-var require_drop2 = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/search_indexes/drop.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.DropSearchIndexOperation = void 0;
-    var responses_1 = require_responses();
-    var error_1 = require_error();
-    var operation_1 = require_operation();
-    var DropSearchIndexOperation = class extends operation_1.AbstractOperation {
-      constructor(collection, name) {
-        super();
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.collection = collection;
-        this.name = name;
-        this.ns = collection.fullNamespace;
-      }
-      get commandName() {
-        return "dropSearchIndex";
-      }
-      buildCommand(_connection, _session) {
-        const namespace = this.collection.fullNamespace;
-        const command = {
-          dropSearchIndex: namespace.collection
-        };
-        if (typeof this.name === "string") {
-          command.name = this.name;
-        }
-        return command;
-      }
-      handleOk(_response) {
-      }
-      buildOptions(timeoutContext) {
-        return { session: this.session, timeoutContext };
-      }
-      handleError(error) {
-        const isNamespaceNotFoundError = error instanceof error_1.MongoServerError && error.code === error_1.MONGODB_ERROR_CODES.NamespaceNotFound;
-        if (!isNamespaceNotFoundError) {
-          throw error;
-        }
-      }
-    };
-    exports2.DropSearchIndexOperation = DropSearchIndexOperation;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/operations/search_indexes/update.js
-var require_update2 = __commonJS({
-  "../../../node_modules/mongodb/lib/operations/search_indexes/update.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.UpdateSearchIndexOperation = void 0;
-    var responses_1 = require_responses();
-    var operation_1 = require_operation();
-    var UpdateSearchIndexOperation = class extends operation_1.AbstractOperation {
-      constructor(collection, name, definition) {
-        super();
-        this.SERVER_COMMAND_RESPONSE_TYPE = responses_1.MongoDBResponse;
-        this.collection = collection;
-        this.name = name;
-        this.definition = definition;
-        this.ns = collection.fullNamespace;
-      }
-      get commandName() {
-        return "updateSearchIndex";
-      }
-      buildCommand(_connection, _session) {
-        const namespace = this.collection.fullNamespace;
-        return {
-          updateSearchIndex: namespace.collection,
-          name: this.name,
-          definition: this.definition
-        };
-      }
-      handleOk(_response) {
-      }
-      buildOptions(timeoutContext) {
-        return { session: this.session, timeoutContext };
-      }
-    };
-    exports2.UpdateSearchIndexOperation = UpdateSearchIndexOperation;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/collection.js
-var require_collection = __commonJS({
-  "../../../node_modules/mongodb/lib/collection.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.Collection = void 0;
-    var bson_1 = require_bson2();
-    var ordered_1 = require_ordered();
-    var unordered_1 = require_unordered();
-    var change_stream_1 = require_change_stream();
-    var aggregation_cursor_1 = require_aggregation_cursor();
-    var find_cursor_1 = require_find_cursor();
-    var list_indexes_cursor_1 = require_list_indexes_cursor();
-    var list_search_indexes_cursor_1 = require_list_search_indexes_cursor();
-    var error_1 = require_error();
-    var count_1 = require_count();
-    var delete_1 = require_delete();
-    var distinct_1 = require_distinct();
-    var estimated_document_count_1 = require_estimated_document_count();
-    var execute_operation_1 = require_execute_operation();
-    var find_and_modify_1 = require_find_and_modify();
-    var indexes_1 = require_indexes();
-    var insert_1 = require_insert();
-    var rename_1 = require_rename();
-    var create_1 = require_create();
-    var drop_1 = require_drop2();
-    var update_1 = require_update2();
-    var update_2 = require_update();
-    var read_concern_1 = require_read_concern();
-    var read_preference_1 = require_read_preference();
-    var utils_1 = require_utils();
-    var write_concern_1 = require_write_concern();
-    var Collection = class {
-      /**
-       * Create a new Collection instance
-       * @internal
-       */
-      constructor(db, name, options) {
-        this.db = db;
-        this.s = {
-          db,
-          options,
-          namespace: new utils_1.MongoDBCollectionNamespace(db.databaseName, name),
-          pkFactory: db.options?.pkFactory ?? utils_1.DEFAULT_PK_FACTORY,
-          readPreference: read_preference_1.ReadPreference.fromOptions(options),
-          bsonOptions: (0, bson_1.resolveBSONOptions)(options, db),
-          readConcern: read_concern_1.ReadConcern.fromOptions(options),
-          writeConcern: write_concern_1.WriteConcern.fromOptions(options)
-        };
-        this.client = db.client;
-      }
-      /**
-       * The name of the database this collection belongs to
-       */
-      get dbName() {
-        return this.s.namespace.db;
-      }
-      /**
-       * The name of this collection
-       */
-      get collectionName() {
-        return this.s.namespace.collection;
-      }
-      /**
-       * The namespace of this collection, in the format `${this.dbName}.${this.collectionName}`
-       */
-      get namespace() {
-        return this.fullNamespace.toString();
-      }
-      /**
-       *  @internal
-       *
-       * The `MongoDBNamespace` for the collection.
-       */
-      get fullNamespace() {
-        return this.s.namespace;
-      }
-      /**
-       * The current readConcern of the collection. If not explicitly defined for
-       * this collection, will be inherited from the parent DB
-       */
-      get readConcern() {
-        if (this.s.readConcern == null) {
-          return this.db.readConcern;
-        }
-        return this.s.readConcern;
-      }
-      /**
-       * The current readPreference of the collection. If not explicitly defined for
-       * this collection, will be inherited from the parent DB
-       */
-      get readPreference() {
-        if (this.s.readPreference == null) {
-          return this.db.readPreference;
-        }
-        return this.s.readPreference;
-      }
-      get bsonOptions() {
-        return this.s.bsonOptions;
-      }
-      /**
-       * The current writeConcern of the collection. If not explicitly defined for
-       * this collection, will be inherited from the parent DB
-       */
-      get writeConcern() {
-        if (this.s.writeConcern == null) {
-          return this.db.writeConcern;
-        }
-        return this.s.writeConcern;
-      }
-      /** The current index hint for the collection */
-      get hint() {
-        return this.s.collectionHint;
-      }
-      set hint(v) {
-        this.s.collectionHint = (0, utils_1.normalizeHintField)(v);
-      }
-      get timeoutMS() {
-        return this.s.options.timeoutMS;
-      }
-      /**
-       * Inserts a single document into MongoDB. If documents passed in do not contain the **_id** field,
-       * one will be added to each of the documents missing it by the driver, mutating the document. This behavior
-       * can be overridden by setting the **forceServerObjectId** flag.
-       *
-       * @param doc - The document to insert
-       * @param options - Optional settings for the command
-       */
-      async insertOne(doc, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new insert_1.InsertOneOperation(this, doc, (0, utils_1.resolveOptions)(this, options)));
-      }
-      /**
-       * Inserts an array of documents into MongoDB. If documents passed in do not contain the **_id** field,
-       * one will be added to each of the documents missing it by the driver, mutating the document. This behavior
-       * can be overridden by setting the **forceServerObjectId** flag.
-       *
-       * @param docs - The documents to insert
-       * @param options - Optional settings for the command
-       */
-      async insertMany(docs, options) {
-        if (!Array.isArray(docs)) {
-          throw new error_1.MongoInvalidArgumentError('Argument "docs" must be an array of documents');
-        }
-        options = (0, utils_1.resolveOptions)(this, options ?? {});
-        const acknowledged = write_concern_1.WriteConcern.fromOptions(options)?.w !== 0;
-        try {
-          const res = await this.bulkWrite(docs.map((doc) => ({ insertOne: { document: doc } })), options);
-          return {
-            acknowledged,
-            insertedCount: res.insertedCount,
-            insertedIds: res.insertedIds
-          };
-        } catch (err) {
-          if (err && err.message === "Operation must be an object with an operation key") {
-            throw new error_1.MongoInvalidArgumentError("Collection.insertMany() cannot be called with an array that has null/undefined values");
-          }
-          throw err;
-        }
-      }
-      /**
-       * Perform a bulkWrite operation without a fluent API
-       *
-       * Legal operation types are
-       * - `insertOne`
-       * - `replaceOne`
-       * - `updateOne`
-       * - `updateMany`
-       * - `deleteOne`
-       * - `deleteMany`
-       *
-       * If documents passed in do not contain the **_id** field,
-       * one will be added to each of the documents missing it by the driver, mutating the document. This behavior
-       * can be overridden by setting the **forceServerObjectId** flag.
-       *
-       * @param operations - Bulk operations to perform
-       * @param options - Optional settings for the command
-       * @throws MongoDriverError if operations is not an array
-       */
-      async bulkWrite(operations, options) {
-        if (!Array.isArray(operations)) {
-          throw new error_1.MongoInvalidArgumentError('Argument "operations" must be an array of documents');
-        }
-        options = (0, utils_1.resolveOptions)(this, options ?? {});
-        const isConnected = this.client.topology != null;
-        if (!isConnected) {
-          await (0, execute_operation_1.autoConnect)(this.client);
-        }
-        const bulk = options.ordered === false ? this.initializeUnorderedBulkOp(options) : this.initializeOrderedBulkOp(options);
-        for (const operation of operations) {
-          bulk.raw(operation);
-        }
-        return await bulk.execute({ ...options });
-      }
-      /**
-       * Update a single document in a collection
-       *
-       * The value of `update` can be either:
-       * - UpdateFilter<TSchema> - A document that contains update operator expressions,
-       * - Document[] - an aggregation pipeline.
-       *
-       * @param filter - The filter used to select the document to update
-       * @param update - The modifications to apply
-       * @param options - Optional settings for the command
-       */
-      async updateOne(filter, update, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new update_2.UpdateOneOperation(this.s.namespace, filter, update, (0, utils_1.resolveOptions)(this, options)));
-      }
-      /**
-       * Replace a document in a collection with another document
-       *
-       * @param filter - The filter used to select the document to replace
-       * @param replacement - The Document that replaces the matching document
-       * @param options - Optional settings for the command
-       */
-      async replaceOne(filter, replacement, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new update_2.ReplaceOneOperation(this.s.namespace, filter, replacement, (0, utils_1.resolveOptions)(this, options)));
-      }
-      /**
-       * Update multiple documents in a collection
-       *
-       * The value of `update` can be either:
-       * - UpdateFilter<TSchema> - A document that contains update operator expressions,
-       * - Document[] - an aggregation pipeline.
-       *
-       * @param filter - The filter used to select the document to update
-       * @param update - The modifications to apply
-       * @param options - Optional settings for the command
-       */
-      async updateMany(filter, update, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new update_2.UpdateManyOperation(this.s.namespace, filter, update, (0, utils_1.resolveOptions)(this, options)));
-      }
-      /**
-       * Delete a document from a collection
-       *
-       * @param filter - The filter used to select the document to remove
-       * @param options - Optional settings for the command
-       */
-      async deleteOne(filter = {}, options = {}) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new delete_1.DeleteOneOperation(this.s.namespace, filter, (0, utils_1.resolveOptions)(this, options)));
-      }
-      /**
-       * Delete multiple documents from a collection
-       *
-       * @param filter - The filter used to select the documents to remove
-       * @param options - Optional settings for the command
-       */
-      async deleteMany(filter = {}, options = {}) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new delete_1.DeleteManyOperation(this.s.namespace, filter, (0, utils_1.resolveOptions)(this, options)));
-      }
-      /**
-       * Rename the collection.
-       *
-       * @remarks
-       * This operation does not inherit options from the Db or MongoClient.
-       *
-       * @param newName - New name of of the collection.
-       * @param options - Optional settings for the command
-       */
-      async rename(newName, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new rename_1.RenameOperation(this, newName, (0, utils_1.resolveOptions)(void 0, {
-          ...options,
-          readPreference: read_preference_1.ReadPreference.PRIMARY
-        })));
-      }
-      /**
-       * Drop the collection from the database, removing it permanently. New accesses will create a new collection.
-       *
-       * @param options - Optional settings for the command
-       */
-      async drop(options) {
-        return await this.db.dropCollection(this.collectionName, options);
-      }
-      async findOne(filter = {}, options = {}) {
-        const { batchSize: _batchSize, noCursorTimeout: _noCursorTimeout, ...opts } = options;
-        opts.singleBatch = true;
-        const cursor = this.find(filter, opts).limit(1);
-        const result = await cursor.next();
-        await cursor.close();
-        return result;
-      }
-      find(filter = {}, options = {}) {
-        return new find_cursor_1.FindCursor(this.client, this.s.namespace, filter, (0, utils_1.resolveOptions)(this, options));
-      }
-      /**
-       * Returns the options of the collection.
-       *
-       * @param options - Optional settings for the command
-       */
-      async options(options) {
-        options = (0, utils_1.resolveOptions)(this, options);
-        const [collection] = await this.db.listCollections({ name: this.collectionName }, { ...options, nameOnly: false }).toArray();
-        if (collection == null || collection.options == null) {
-          throw new error_1.MongoAPIError(`collection ${this.namespace} not found`);
-        }
-        return collection.options;
-      }
-      /**
-       * Returns if the collection is a capped collection
-       *
-       * @param options - Optional settings for the command
-       */
-      async isCapped(options) {
-        const { capped } = await this.options(options);
-        return Boolean(capped);
-      }
-      /**
-       * Creates an index on the db and collection collection.
-       *
-       * @param indexSpec - The field name or index specification to create an index for
-       * @param options - Optional settings for the command
-       *
-       * @example
-       * ```ts
-       * const collection = client.db('foo').collection('bar');
-       *
-       * await collection.createIndex({ a: 1, b: -1 });
-       *
-       * // Alternate syntax for { c: 1, d: -1 } that ensures order of indexes
-       * await collection.createIndex([ [c, 1], [d, -1] ]);
-       *
-       * // Equivalent to { e: 1 }
-       * await collection.createIndex('e');
-       *
-       * // Equivalent to { f: 1, g: 1 }
-       * await collection.createIndex(['f', 'g'])
-       *
-       * // Equivalent to { h: 1, i: -1 }
-       * await collection.createIndex([ { h: 1 }, { i: -1 } ]);
-       *
-       * // Equivalent to { j: 1, k: -1, l: 2d }
-       * await collection.createIndex(['j', ['k', -1], { l: '2d' }])
-       * ```
-       */
-      async createIndex(indexSpec, options) {
-        const indexes = await (0, execute_operation_1.executeOperation)(this.client, indexes_1.CreateIndexesOperation.fromIndexSpecification(this, this.collectionName, indexSpec, (0, utils_1.resolveOptions)(this, options)));
-        return indexes[0];
-      }
-      /**
-       * Creates multiple indexes in the collection, this method is only supported for
-       * MongoDB 2.6 or higher. Earlier version of MongoDB will throw a command not supported
-       * error.
-       *
-       * **Note**: Unlike {@link Collection#createIndex| createIndex}, this function takes in raw index specifications.
-       * Index specifications are defined {@link https://www.mongodb.com/docs/manual/reference/command/createIndexes/| here}.
-       *
-       * @param indexSpecs - An array of index specifications to be created
-       * @param options - Optional settings for the command
-       *
-       * @example
-       * ```ts
-       * const collection = client.db('foo').collection('bar');
-       * await collection.createIndexes([
-       *   // Simple index on field fizz
-       *   {
-       *     key: { fizz: 1 },
-       *   }
-       *   // wildcard index
-       *   {
-       *     key: { '$**': 1 }
-       *   },
-       *   // named index on darmok and jalad
-       *   {
-       *     key: { darmok: 1, jalad: -1 }
-       *     name: 'tanagra'
-       *   }
-       * ]);
-       * ```
-       */
-      async createIndexes(indexSpecs, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, indexes_1.CreateIndexesOperation.fromIndexDescriptionArray(this, this.collectionName, indexSpecs, (0, utils_1.resolveOptions)(this, { ...options, maxTimeMS: void 0 })));
-      }
-      /**
-       * Drops an index from this collection.
-       *
-       * @param indexName - Name of the index to drop.
-       * @param options - Optional settings for the command
-       */
-      async dropIndex(indexName, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new indexes_1.DropIndexOperation(this, indexName, {
-          ...(0, utils_1.resolveOptions)(this, options),
-          readPreference: read_preference_1.ReadPreference.primary
-        }));
-      }
-      /**
-       * Drops all indexes from this collection.
-       *
-       * @param options - Optional settings for the command
-       */
-      async dropIndexes(options) {
-        try {
-          await (0, execute_operation_1.executeOperation)(this.client, new indexes_1.DropIndexOperation(this, "*", (0, utils_1.resolveOptions)(this, options)));
-          return true;
-        } catch (error) {
-          if (error instanceof error_1.MongoOperationTimeoutError)
-            throw error;
-          return false;
-        }
-      }
-      /**
-       * Get the list of all indexes information for the collection.
-       *
-       * @param options - Optional settings for the command
-       */
-      listIndexes(options) {
-        return new list_indexes_cursor_1.ListIndexesCursor(this, (0, utils_1.resolveOptions)(this, options));
-      }
-      /**
-       * Checks if one or more indexes exist on the collection, fails on first non-existing index
-       *
-       * @param indexes - One or more index names to check.
-       * @param options - Optional settings for the command
-       */
-      async indexExists(indexes, options) {
-        const indexNames = Array.isArray(indexes) ? indexes : [indexes];
-        const allIndexes = new Set(await this.listIndexes(options).map(({ name }) => name).toArray());
-        return indexNames.every((name) => allIndexes.has(name));
-      }
-      async indexInformation(options) {
-        return await this.indexes({
-          ...options,
-          full: options?.full ?? false
-        });
-      }
-      /**
-       * Gets an estimate of the count of documents in a collection using collection metadata.
-       * This will always run a count command on all server versions.
-       *
-       * due to an oversight in versions 5.0.0-5.0.8 of MongoDB, the count command,
-       * which estimatedDocumentCount uses in its implementation, was not included in v1 of
-       * the Stable API, and so users of the Stable API with estimatedDocumentCount are
-       * recommended to upgrade their server version to 5.0.9+ or set apiStrict: false to avoid
-       * encountering errors.
-       *
-       * @see {@link https://www.mongodb.com/docs/manual/reference/command/count/#behavior|Count: Behavior}
-       * @param options - Optional settings for the command
-       */
-      async estimatedDocumentCount(options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new estimated_document_count_1.EstimatedDocumentCountOperation(this, (0, utils_1.resolveOptions)(this, options)));
-      }
-      /**
-       * Gets the number of documents matching the filter.
-       * For a fast count of the total documents in a collection see {@link Collection#estimatedDocumentCount| estimatedDocumentCount}.
-       *
-       * Due to countDocuments using the $match aggregation pipeline stage, certain query operators cannot be used in countDocuments. This includes the $where and $near query operators, among others. Details can be found in the documentation for the $match aggregation pipeline stage.
-       *
-       * **Note**: When migrating from {@link Collection#count| count} to {@link Collection#countDocuments| countDocuments}
-       * the following query operators must be replaced:
-       *
-       * | Operator | Replacement |
-       * | -------- | ----------- |
-       * | `$where`   | [`$expr`][1] |
-       * | `$near`    | [`$geoWithin`][2] with [`$center`][3] |
-       * | `$nearSphere` | [`$geoWithin`][2] with [`$centerSphere`][4] |
-       *
-       * [1]: https://www.mongodb.com/docs/manual/reference/operator/query/expr/
-       * [2]: https://www.mongodb.com/docs/manual/reference/operator/query/geoWithin/
-       * [3]: https://www.mongodb.com/docs/manual/reference/operator/query/center/#op._S_center
-       * [4]: https://www.mongodb.com/docs/manual/reference/operator/query/centerSphere/#op._S_centerSphere
-       *
-       * @param filter - The filter for the count
-       * @param options - Optional settings for the command
-       *
-       * @see https://www.mongodb.com/docs/manual/reference/operator/query/expr/
-       * @see https://www.mongodb.com/docs/manual/reference/operator/query/geoWithin/
-       * @see https://www.mongodb.com/docs/manual/reference/operator/query/center/#op._S_center
-       * @see https://www.mongodb.com/docs/manual/reference/operator/query/centerSphere/#op._S_centerSphere
-       */
-      async countDocuments(filter = {}, options = {}) {
-        const pipeline = [];
-        pipeline.push({ $match: filter });
-        if (typeof options.skip === "number") {
-          pipeline.push({ $skip: options.skip });
-        }
-        if (typeof options.limit === "number") {
-          pipeline.push({ $limit: options.limit });
-        }
-        pipeline.push({ $group: { _id: 1, n: { $sum: 1 } } });
-        const cursor = this.aggregate(pipeline, options);
-        const doc = await cursor.next();
-        await cursor.close();
-        return doc?.n ?? 0;
-      }
-      async distinct(key, filter = {}, options = {}) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new distinct_1.DistinctOperation(this, key, filter, (0, utils_1.resolveOptions)(this, options)));
-      }
-      async indexes(options) {
-        const indexes = await this.listIndexes(options).toArray();
-        const full = options?.full ?? true;
-        if (full) {
-          return indexes;
-        }
-        const object = Object.fromEntries(indexes.map(({ name, key }) => [name, Object.entries(key)]));
-        return object;
-      }
-      async findOneAndDelete(filter, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new find_and_modify_1.FindOneAndDeleteOperation(this, filter, (0, utils_1.resolveOptions)(this, options)));
-      }
-      async findOneAndReplace(filter, replacement, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new find_and_modify_1.FindOneAndReplaceOperation(this, filter, replacement, (0, utils_1.resolveOptions)(this, options)));
-      }
-      async findOneAndUpdate(filter, update, options) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new find_and_modify_1.FindOneAndUpdateOperation(this, filter, update, (0, utils_1.resolveOptions)(this, options)));
-      }
-      /**
-       * Execute an aggregation framework pipeline against the collection, needs MongoDB \>= 2.2
-       *
-       * @param pipeline - An array of aggregation pipelines to execute
-       * @param options - Optional settings for the command
-       */
-      aggregate(pipeline = [], options) {
-        if (!Array.isArray(pipeline)) {
-          throw new error_1.MongoInvalidArgumentError('Argument "pipeline" must be an array of aggregation stages');
-        }
-        return new aggregation_cursor_1.AggregationCursor(this.client, this.s.namespace, pipeline, (0, utils_1.resolveOptions)(this, options));
-      }
-      /**
-       * Create a new Change Stream, watching for new changes (insertions, updates, replacements, deletions, and invalidations) in this collection.
-       *
-       * @remarks
-       * watch() accepts two generic arguments for distinct use cases:
-       * - The first is to override the schema that may be defined for this specific collection
-       * - The second is to override the shape of the change stream document entirely, if it is not provided the type will default to ChangeStreamDocument of the first argument
-       * @example
-       * By just providing the first argument I can type the change to be `ChangeStreamDocument<{ _id: number }>`
-       * ```ts
-       * collection.watch<{ _id: number }>()
-       *   .on('change', change => console.log(change._id.toFixed(4)));
-       * ```
-       *
-       * @example
-       * Passing a second argument provides a way to reflect the type changes caused by an advanced pipeline.
-       * Here, we are using a pipeline to have MongoDB filter for insert changes only and add a comment.
-       * No need start from scratch on the ChangeStreamInsertDocument type!
-       * By using an intersection we can save time and ensure defaults remain the same type!
-       * ```ts
-       * collection
-       *   .watch<Schema, ChangeStreamInsertDocument<Schema> & { comment: string }>([
-       *     { $addFields: { comment: 'big changes' } },
-       *     { $match: { operationType: 'insert' } }
-       *   ])
-       *   .on('change', change => {
-       *     change.comment.startsWith('big');
-       *     change.operationType === 'insert';
-       *     // No need to narrow in code because the generics did that for us!
-       *     expectType<Schema>(change.fullDocument);
-       *   });
-       * ```
-       *
-       * @remarks
-       * When `timeoutMS` is configured for a change stream, it will have different behaviour depending
-       * on whether the change stream is in iterator mode or emitter mode. In both cases, a change
-       * stream will time out if it does not receive a change event within `timeoutMS` of the last change
-       * event.
-       *
-       * Note that if a change stream is consistently timing out when watching a collection, database or
-       * client that is being changed, then this may be due to the server timing out before it can finish
-       * processing the existing oplog. To address this, restart the change stream with a higher
-       * `timeoutMS`.
-       *
-       * If the change stream times out the initial aggregate operation to establish the change stream on
-       * the server, then the client will close the change stream. If the getMore calls to the server
-       * time out, then the change stream will be left open, but will throw a MongoOperationTimeoutError
-       * when in iterator mode and emit an error event that returns a MongoOperationTimeoutError in
-       * emitter mode.
-       *
-       * To determine whether or not the change stream is still open following a timeout, check the
-       * {@link ChangeStream.closed} getter.
-       *
-       * @example
-       * In iterator mode, if a next() call throws a timeout error, it will attempt to resume the change stream.
-       * The next call can just be retried after this succeeds.
-       * ```ts
-       * const changeStream = collection.watch([], { timeoutMS: 100 });
-       * try {
-       *     await changeStream.next();
-       * } catch (e) {
-       *     if (e instanceof MongoOperationTimeoutError && !changeStream.closed) {
-       *       await changeStream.next();
-       *     }
-       *     throw e;
-       * }
-       * ```
-       *
-       * @example
-       * In emitter mode, if the change stream goes `timeoutMS` without emitting a change event, it will
-       * emit an error event that returns a MongoOperationTimeoutError, but will not close the change
-       * stream unless the resume attempt fails. There is no need to re-establish change listeners as
-       * this will automatically continue emitting change events once the resume attempt completes.
-       *
-       * ```ts
-       * const changeStream = collection.watch([], { timeoutMS: 100 });
-       * changeStream.on('change', console.log);
-       * changeStream.on('error', e => {
-       *     if (e instanceof MongoOperationTimeoutError && !changeStream.closed) {
-       *         // do nothing
-       *     } else {
-       *         changeStream.close();
-       *     }
-       * });
-       * ```
-       *
-       * @param pipeline - An array of {@link https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/|aggregation pipeline stages} through which to pass change stream documents. This allows for filtering (using $match) and manipulating the change stream documents.
-       * @param options - Optional settings for the command
-       * @typeParam TLocal - Type of the data being detected by the change stream
-       * @typeParam TChange - Type of the whole change stream document emitted
-       */
-      watch(pipeline = [], options = {}) {
-        if (!Array.isArray(pipeline)) {
-          options = pipeline;
-          pipeline = [];
-        }
-        return new change_stream_1.ChangeStream(this, pipeline, (0, utils_1.resolveOptions)(this, options));
-      }
-      /**
-       * Initiate an Out of order batch write operation. All operations will be buffered into insert/update/remove commands executed out of order.
-       *
-       * @throws MongoNotConnectedError
-       * @remarks
-       * **NOTE:** MongoClient must be connected prior to calling this method due to a known limitation in this legacy implementation.
-       * However, `collection.bulkWrite()` provides an equivalent API that does not require prior connecting.
-       */
-      initializeUnorderedBulkOp(options) {
-        return new unordered_1.UnorderedBulkOperation(this, (0, utils_1.resolveOptions)(this, options));
-      }
-      /**
-       * Initiate an In order bulk write operation. Operations will be serially executed in the order they are added, creating a new operation for each switch in types.
-       *
-       * @throws MongoNotConnectedError
-       * @remarks
-       * **NOTE:** MongoClient must be connected prior to calling this method due to a known limitation in this legacy implementation.
-       * However, `collection.bulkWrite()` provides an equivalent API that does not require prior connecting.
-       */
-      initializeOrderedBulkOp(options) {
-        return new ordered_1.OrderedBulkOperation(this, (0, utils_1.resolveOptions)(this, options));
-      }
-      /**
-       * An estimated count of matching documents in the db to a filter.
-       *
-       * **NOTE:** This method has been deprecated, since it does not provide an accurate count of the documents
-       * in a collection. To obtain an accurate count of documents in the collection, use {@link Collection#countDocuments| countDocuments}.
-       * To obtain an estimated count of all documents in the collection, use {@link Collection#estimatedDocumentCount| estimatedDocumentCount}.
-       *
-       * @deprecated use {@link Collection#countDocuments| countDocuments} or {@link Collection#estimatedDocumentCount| estimatedDocumentCount} instead
-       *
-       * @param filter - The filter for the count.
-       * @param options - Optional settings for the command
-       */
-      async count(filter = {}, options = {}) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new count_1.CountOperation(this.fullNamespace, filter, (0, utils_1.resolveOptions)(this, options)));
-      }
-      listSearchIndexes(indexNameOrOptions, options) {
-        options = typeof indexNameOrOptions === "object" ? indexNameOrOptions : options == null ? {} : options;
-        const indexName = indexNameOrOptions == null ? null : typeof indexNameOrOptions === "object" ? null : indexNameOrOptions;
-        return new list_search_indexes_cursor_1.ListSearchIndexesCursor(this, indexName, options);
-      }
-      /**
-       * Creates a single search index for the collection.
-       *
-       * @param description - The index description for the new search index.
-       * @returns A promise that resolves to the name of the new search index.
-       *
-       * @remarks Only available when used against a 7.0+ Atlas cluster.
-       */
-      async createSearchIndex(description) {
-        const [index] = await this.createSearchIndexes([description]);
-        return index;
-      }
-      /**
-       * Creates multiple search indexes for the current collection.
-       *
-       * @param descriptions - An array of `SearchIndexDescription`s for the new search indexes.
-       * @returns A promise that resolves to an array of the newly created search index names.
-       *
-       * @remarks Only available when used against a 7.0+ Atlas cluster.
-       * @returns
-       */
-      async createSearchIndexes(descriptions) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new create_1.CreateSearchIndexesOperation(this, descriptions));
-      }
-      /**
-       * Deletes a search index by index name.
-       *
-       * @param name - The name of the search index to be deleted.
-       *
-       * @remarks Only available when used against a 7.0+ Atlas cluster.
-       */
-      async dropSearchIndex(name) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new drop_1.DropSearchIndexOperation(this, name));
-      }
-      /**
-       * Updates a search index by replacing the existing index definition with the provided definition.
-       *
-       * @param name - The name of the search index to update.
-       * @param definition - The new search index definition.
-       *
-       * @remarks Only available when used against a 7.0+ Atlas cluster.
-       */
-      async updateSearchIndex(name, definition) {
-        return await (0, execute_operation_1.executeOperation)(this.client, new update_1.UpdateSearchIndexOperation(this, name, definition));
-      }
-    };
-    exports2.Collection = Collection;
-  }
-});
-
-// ../../../node_modules/mongodb/lib/cursor/change_stream_cursor.js
-var require_change_stream_cursor = __commonJS({
-  "../../../node_modules/mongodb/lib/cursor/change_stream_cursor.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.ChangeStreamCursor = void 0;
-    var change_stream_1 = require_change_stream();
-    var constants_1 = require_constants2();
-    var aggregate_1 = require_aggregate();
-    var execute_operation_1 = require_execute_operation();
-    var utils_1 = require_utils();
-    var abstract_cursor_1 = require_abstract_cursor();
-    var ChangeStreamCursor = class _ChangeStreamCursor extends abstract_cursor_1.AbstractCursor {
-      constructor(client, namespace, pipeline = [], options = {}) {
-        super(client, namespace, { ...options, tailable: true, awaitData: true });
-        this.pipeline = pipeline;
-        this.changeStreamCursorOptions = options;
-        this._resumeToken = null;
-        this.startAtOperationTime = options.startAtOperationTime ?? null;
-        if (options.startAfter) {
-          this.resumeToken = options.startAfter;
-        } else if (options.resumeAfter) {
-          this.resumeToken = options.resumeAfter;
-        }
-      }
-      set resumeToken(token) {
-        this._resumeToken = token;
-        this.emit(change_stream_1.ChangeStream.RESUME_TOKEN_CHANGED, token);
-      }
-      get resumeToken() {
-        return this._resumeToken;
-      }
-      get resumeOptions() {
-        const options = {
-          ...this.changeStreamCursorOptions
-        };
-        for (const key of ["resumeAfter", "startAfter", "startAtOperationTime"]) {
-          delete options[key];
-        }
-        if (this.resumeToken != null) {
-          if (this.changeStreamCursorOptions.startAfter && !this.hasReceived) {
-            options.startAfter = this.resumeToken;
-          } else {
-            options.resumeAfter = this.resumeToken;
-          }
-        } else if (this.startAtOperationTime != null) {
-          options.startAtOperationTime = this.startAtOperationTime;
-        }
-        return options;
-      }
-      cacheResumeToken(resumeToken) {
-        if (this.bufferedCount() === 0 && this.postBatchResumeToken) {
-          this.resumeToken = this.postBatchResumeToken;
-        } else {
-          this.resumeToken = resumeToken;
-        }
-        this.hasReceived = true;
-      }
-      _processBatch(response) {
-        const { postBatchResumeToken } = response;
-        if (postBatchResumeToken) {
-          this.postBatchResumeToken = postBatchResumeToken;
-          if (response.batchSize === 0) {
-            this.resumeToken = postBatchResumeToken;
-          }
-        }
-      }
-      clone() {
-        return new _ChangeStreamCursor(this.client, this.namespace, this.pipeline, {
-          ...this.cursorOptions
-        });
-      }
-      async _initialize(session) {
-        const aggregateOperation = new aggregate_1.AggregateOperation(this.namespace, this.pipeline, {
-          ...this.cursorOptions,
-          ...this.changeStreamCursorOptions,
-          session
-        });
-        const response = await (0, execute_operation_1.executeOperation)(session.client, aggregateOperation, this.timeoutContext);
-        const server = aggregateOperation.server;
-        this.maxWireVersion = (0, utils_1.maxWireVersion)(server);
-        if (this.startAtOperationTime == null && this.changeStreamCursorOptions.resumeAfter == null && this.changeStreamCursorOptions.startAfter == null) {
-          this.startAtOperationTime = response.operationTime;
-        }
-        this._processBatch(response);
-        this.emit(constants_1.INIT, response);
-        this.emit(constants_1.RESPONSE);
-        return { server, session, response };
-      }
-      async getMore(batchSize) {
-        const response = await super.getMore(batchSize);
-        this.maxWireVersion = (0, utils_1.maxWireVersion)(this.server);
-        this._processBatch(response);
-        this.emit(change_stream_1.ChangeStream.MORE, response);
-        this.emit(change_stream_1.ChangeStream.RESPONSE);
-        return response;
-      }
-    };
-    exports2.ChangeStreamCursor = ChangeStreamCursor;
   }
 });
 
@@ -30661,6 +30633,7 @@ var require_change_stream = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ChangeStream = void 0;
+    exports2.filterOutOptions = filterOutOptions;
     var collection_1 = require_collection();
     var constants_1 = require_constants2();
     var abstract_cursor_1 = require_abstract_cursor();
@@ -30669,17 +30642,8 @@ var require_change_stream = __commonJS({
     var error_1 = require_error();
     var mongo_client_1 = require_mongo_client();
     var mongo_types_1 = require_mongo_types();
-    var resource_management_1 = require_resource_management();
     var timeout_1 = require_timeout();
     var utils_1 = require_utils();
-    var CHANGE_STREAM_OPTIONS = [
-      "resumeAfter",
-      "startAfter",
-      "startAtOperationTime",
-      "fullDocument",
-      "fullDocumentBeforeChange",
-      "showExpandedEvents"
-    ];
     var CHANGE_DOMAIN_TYPES = {
       COLLECTION: Symbol("Collection"),
       DATABASE: Symbol("Database"),
@@ -30688,10 +30652,41 @@ var require_change_stream = __commonJS({
     var CHANGE_STREAM_EVENTS = [constants_1.RESUME_TOKEN_CHANGED, constants_1.END, constants_1.CLOSE];
     var NO_RESUME_TOKEN_ERROR = "A change stream document has been received that lacks a resume token (_id).";
     var CHANGESTREAM_CLOSED_ERROR = "ChangeStream is closed";
+    var INVALID_STAGE_OPTIONS = buildDisallowedChangeStreamOptions();
+    function filterOutOptions(options) {
+      return Object.fromEntries(Object.entries(options).filter(([k, _]) => !INVALID_STAGE_OPTIONS.has(k)));
+    }
     var ChangeStream = class _ChangeStream extends mongo_types_1.TypedEventEmitter {
-      /** @internal */
-      async asyncDispose() {
+      /**
+       * @experimental
+       * An alias for {@link ChangeStream.close|ChangeStream.close()}.
+       */
+      async [Symbol.asyncDispose]() {
         await this.close();
+      }
+      static {
+        this.RESPONSE = constants_1.RESPONSE;
+      }
+      static {
+        this.MORE = constants_1.MORE;
+      }
+      static {
+        this.INIT = constants_1.INIT;
+      }
+      static {
+        this.CLOSE = constants_1.CLOSE;
+      }
+      static {
+        this.CHANGE = constants_1.CHANGE;
+      }
+      static {
+        this.END = constants_1.END;
+      }
+      static {
+        this.ERROR = constants_1.ERROR;
+      }
+      static {
+        this.RESUME_TOKEN_CHANGED = constants_1.RESUME_TOKEN_CHANGED;
       }
       /**
        * @internal
@@ -30882,12 +30877,11 @@ var require_change_stream = __commonJS({
        *
        * @throws MongoChangeStreamError if the underlying cursor or the change stream is closed
        */
-      stream(options) {
+      stream() {
         if (this.closed) {
           throw new error_1.MongoChangeStreamError(CHANGESTREAM_CLOSED_ERROR);
         }
-        this.streamOptions = options;
-        return this.cursor.stream(options);
+        return this.cursor.stream();
       }
       /** @internal */
       _setIsEmitter() {
@@ -30908,7 +30902,7 @@ var require_change_stream = __commonJS({
        * @internal
        */
       _createChangeStreamCursor(options) {
-        const changeStreamStageOptions = (0, utils_1.filterOptions)(options, CHANGE_STREAM_OPTIONS);
+        const changeStreamStageOptions = filterOutOptions(options);
         if (this.type === CHANGE_DOMAIN_TYPES.CLUSTER) {
           changeStreamStageOptions.allChangesForCluster = true;
         }
@@ -31029,15 +31023,47 @@ var require_change_stream = __commonJS({
       }
     };
     exports2.ChangeStream = ChangeStream;
-    ChangeStream.RESPONSE = constants_1.RESPONSE;
-    ChangeStream.MORE = constants_1.MORE;
-    ChangeStream.INIT = constants_1.INIT;
-    ChangeStream.CLOSE = constants_1.CLOSE;
-    ChangeStream.CHANGE = constants_1.CHANGE;
-    ChangeStream.END = constants_1.END;
-    ChangeStream.ERROR = constants_1.ERROR;
-    ChangeStream.RESUME_TOKEN_CHANGED = constants_1.RESUME_TOKEN_CHANGED;
-    (0, resource_management_1.configureResourceManagement)(ChangeStream.prototype);
+    function buildDisallowedChangeStreamOptions() {
+      const denyList = {
+        allowDiskUse: "",
+        authdb: "",
+        batchSize: "",
+        bsonRegExp: "",
+        bypassDocumentValidation: "",
+        bypassPinningCheck: "",
+        checkKeys: "",
+        collation: "",
+        comment: "",
+        cursor: "",
+        dbName: "",
+        enableUtf8Validation: "",
+        explain: "",
+        fieldsAsRaw: "",
+        hint: "",
+        ignoreUndefined: "",
+        let: "",
+        maxAwaitTimeMS: "",
+        maxTimeMS: "",
+        omitMaxTimeMS: "",
+        out: "",
+        promoteBuffers: "",
+        promoteLongs: "",
+        promoteValues: "",
+        raw: "",
+        rawData: "",
+        readConcern: "",
+        readPreference: "",
+        serializeFunctions: "",
+        session: "",
+        timeoutContext: "",
+        timeoutMS: "",
+        timeoutMode: "",
+        useBigInt64: "",
+        willRetryWrite: "",
+        writeConcern: ""
+      };
+      return new Set(Object.keys(denyList));
+    }
   }
 });
 
@@ -31052,6 +31078,9 @@ var require_download = __commonJS({
     var error_1 = require_error();
     var timeout_1 = require_timeout();
     var GridFSBucketReadStream = class extends stream_1.Readable {
+      static {
+        this.FILE = "file";
+      }
       /**
        * @param chunks - Handle for chunks collection
        * @param files - Handle for files collection
@@ -31127,7 +31156,6 @@ var require_download = __commonJS({
       }
     };
     exports2.GridFSBucketReadStream = GridFSBucketReadStream;
-    GridFSBucketReadStream.FILE = "file";
     function throwIfInitialized(stream) {
       if (stream.s.init) {
         throw new error_1.MongoGridFSStreamError("Options cannot be changed after the stream is initialized");
@@ -31485,7 +31513,7 @@ var require_upload = __commonJS({
       }
       if (stream.state.streamEnd && stream.state.outstandingRequests === 0 && !stream.state.errored) {
         stream.done = true;
-        const gridFSFile = createFilesDoc(stream.id, stream.length, stream.chunkSizeBytes, stream.filename, stream.options.contentType, stream.options.aliases, stream.options.metadata);
+        const gridFSFile = createFilesDoc(stream.id, stream.length, stream.chunkSizeBytes, stream.filename, stream.options.metadata);
         if (isAborted(stream, callback)) {
           return;
         }
@@ -31541,7 +31569,7 @@ var require_upload = __commonJS({
       }
       await checkChunksIndex(stream);
     }
-    function createFilesDoc(_id, length, chunkSize, filename, contentType, aliases, metadata) {
+    function createFilesDoc(_id, length, chunkSize, filename, metadata) {
       const ret = {
         _id,
         length,
@@ -31549,12 +31577,6 @@ var require_upload = __commonJS({
         uploadDate: /* @__PURE__ */ new Date(),
         filename
       };
-      if (contentType) {
-        ret.contentType = contentType;
-      }
-      if (aliases) {
-        ret.aliases = aliases;
-      }
       if (metadata) {
         ret.metadata = metadata;
       }
@@ -31660,6 +31682,9 @@ var require_gridfs = __commonJS({
       chunkSizeBytes: 255 * 1024
     };
     var GridFSBucket = class extends mongo_types_1.TypedEventEmitter {
+      static {
+        this.INDEX = "index";
+      }
       constructor(db, options) {
         super();
         this.on("error", utils_1.noop);
@@ -31790,7 +31815,6 @@ var require_gridfs = __commonJS({
       }
     };
     exports2.GridFSBucket = GridFSBucket;
-    GridFSBucket.INDEX = "index";
   }
 });
 
@@ -31800,8 +31824,8 @@ var require_lib3 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.MongoRuntimeError = exports2.MongoParseError = exports2.MongoOperationTimeoutError = exports2.MongoOIDCError = exports2.MongoNotConnectedError = exports2.MongoNetworkTimeoutError = exports2.MongoNetworkError = exports2.MongoMissingDependencyError = exports2.MongoMissingCredentialsError = exports2.MongoKerberosError = exports2.MongoInvalidArgumentError = exports2.MongoGridFSStreamError = exports2.MongoGridFSChunkError = exports2.MongoGCPError = exports2.MongoExpiredSessionError = exports2.MongoError = exports2.MongoDriverError = exports2.MongoDecompressionError = exports2.MongoCursorInUseError = exports2.MongoCursorExhaustedError = exports2.MongoCompatibilityError = exports2.MongoClientClosedError = exports2.MongoClientBulkWriteExecutionError = exports2.MongoClientBulkWriteError = exports2.MongoClientBulkWriteCursorError = exports2.MongoChangeStreamError = exports2.MongoBatchReExecutionError = exports2.MongoAzureError = exports2.MongoAWSError = exports2.MongoAPIError = exports2.ExplainableCursor = exports2.ChangeStreamCursor = exports2.ClientEncryption = exports2.MongoBulkWriteError = exports2.UUID = exports2.Timestamp = exports2.ObjectId = exports2.MinKey = exports2.MaxKey = exports2.Long = exports2.Int32 = exports2.Double = exports2.Decimal128 = exports2.DBRef = exports2.Code = exports2.BSONType = exports2.BSONSymbol = exports2.BSONRegExp = exports2.Binary = exports2.BSON = void 0;
-    exports2.CommandFailedEvent = exports2.WriteConcern = exports2.ReadPreference = exports2.ReadConcern = exports2.TopologyType = exports2.ServerType = exports2.ReadPreferenceMode = exports2.ReadConcernLevel = exports2.ProfilingLevel = exports2.ReturnDocument = exports2.SeverityLevel = exports2.MongoLoggableComponent = exports2.ServerApiVersion = exports2.ExplainVerbosity = exports2.MongoErrorLabel = exports2.CursorTimeoutMode = exports2.CURSOR_FLAGS = exports2.Compressor = exports2.AuthMechanism = exports2.GSSAPICanonicalizationValue = exports2.AutoEncryptionLoggerLevel = exports2.BatchType = exports2.UnorderedBulkOperation = exports2.OrderedBulkOperation = exports2.MongoClient = exports2.ListIndexesCursor = exports2.ListCollectionsCursor = exports2.GridFSBucketWriteStream = exports2.GridFSBucketReadStream = exports2.GridFSBucket = exports2.FindCursor = exports2.Db = exports2.Collection = exports2.ClientSession = exports2.ChangeStream = exports2.CancellationToken = exports2.AggregationCursor = exports2.Admin = exports2.AbstractCursor = exports2.configureExplicitResourceManagement = exports2.MongoWriteConcernError = exports2.MongoUnexpectedServerResponseError = exports2.MongoTransactionError = exports2.MongoTopologyClosedError = exports2.MongoTailableCursorError = exports2.MongoSystemError = exports2.MongoStalePrimaryError = exports2.MongoServerSelectionError = exports2.MongoServerError = exports2.MongoServerClosedError = void 0;
-    exports2.MongoClientAuthProviders = exports2.MongoCryptKMSRequestNetworkTimeoutError = exports2.MongoCryptInvalidArgumentError = exports2.MongoCryptError = exports2.MongoCryptCreateEncryptedCollectionError = exports2.MongoCryptCreateDataKeyError = exports2.MongoCryptAzureKMSRequestError = exports2.SrvPollingEvent = exports2.WaitingForSuitableServerEvent = exports2.ServerSelectionSucceededEvent = exports2.ServerSelectionStartedEvent = exports2.ServerSelectionFailedEvent = exports2.ServerSelectionEvent = exports2.TopologyOpeningEvent = exports2.TopologyDescriptionChangedEvent = exports2.TopologyClosedEvent = exports2.ServerOpeningEvent = exports2.ServerHeartbeatSucceededEvent = exports2.ServerHeartbeatStartedEvent = exports2.ServerHeartbeatFailedEvent = exports2.ServerDescriptionChangedEvent = exports2.ServerClosedEvent = exports2.ConnectionReadyEvent = exports2.ConnectionPoolReadyEvent = exports2.ConnectionPoolMonitoringEvent = exports2.ConnectionPoolCreatedEvent = exports2.ConnectionPoolClosedEvent = exports2.ConnectionPoolClearedEvent = exports2.ConnectionCreatedEvent = exports2.ConnectionClosedEvent = exports2.ConnectionCheckOutStartedEvent = exports2.ConnectionCheckOutFailedEvent = exports2.ConnectionCheckedOutEvent = exports2.ConnectionCheckedInEvent = exports2.CommandSucceededEvent = exports2.CommandStartedEvent = void 0;
+    exports2.CommandStartedEvent = exports2.CommandFailedEvent = exports2.WriteConcern = exports2.ReadPreference = exports2.ReadConcern = exports2.TopologyType = exports2.ServerType = exports2.ReadPreferenceMode = exports2.ReadConcernLevel = exports2.ProfilingLevel = exports2.ReturnDocument = exports2.SeverityLevel = exports2.MongoLoggableComponent = exports2.ServerApiVersion = exports2.ExplainVerbosity = exports2.MongoErrorLabel = exports2.CursorTimeoutMode = exports2.CURSOR_FLAGS = exports2.Compressor = exports2.AuthMechanism = exports2.GSSAPICanonicalizationValue = exports2.AutoEncryptionLoggerLevel = exports2.BatchType = exports2.UnorderedBulkOperation = exports2.OrderedBulkOperation = exports2.MongoClient = exports2.ListIndexesCursor = exports2.ListCollectionsCursor = exports2.GridFSBucketWriteStream = exports2.GridFSBucketReadStream = exports2.GridFSBucket = exports2.FindCursor = exports2.Db = exports2.Collection = exports2.ClientSession = exports2.ChangeStream = exports2.CancellationToken = exports2.AggregationCursor = exports2.Admin = exports2.AbstractCursor = exports2.MongoWriteConcernError = exports2.MongoUnexpectedServerResponseError = exports2.MongoTransactionError = exports2.MongoTopologyClosedError = exports2.MongoTailableCursorError = exports2.MongoSystemError = exports2.MongoStalePrimaryError = exports2.MongoServerSelectionError = exports2.MongoServerError = exports2.MongoServerClosedError = void 0;
+    exports2.MongoClientAuthProviders = exports2.MongoCryptKMSRequestNetworkTimeoutError = exports2.MongoCryptInvalidArgumentError = exports2.MongoCryptError = exports2.MongoCryptCreateEncryptedCollectionError = exports2.MongoCryptCreateDataKeyError = exports2.MongoCryptAzureKMSRequestError = exports2.SrvPollingEvent = exports2.WaitingForSuitableServerEvent = exports2.ServerSelectionSucceededEvent = exports2.ServerSelectionStartedEvent = exports2.ServerSelectionFailedEvent = exports2.ServerSelectionEvent = exports2.TopologyOpeningEvent = exports2.TopologyDescriptionChangedEvent = exports2.TopologyClosedEvent = exports2.ServerOpeningEvent = exports2.ServerHeartbeatSucceededEvent = exports2.ServerHeartbeatStartedEvent = exports2.ServerHeartbeatFailedEvent = exports2.ServerDescriptionChangedEvent = exports2.ServerClosedEvent = exports2.ConnectionReadyEvent = exports2.ConnectionPoolReadyEvent = exports2.ConnectionPoolMonitoringEvent = exports2.ConnectionPoolCreatedEvent = exports2.ConnectionPoolClosedEvent = exports2.ConnectionPoolClearedEvent = exports2.ConnectionCreatedEvent = exports2.ConnectionClosedEvent = exports2.ConnectionCheckOutStartedEvent = exports2.ConnectionCheckOutFailedEvent = exports2.ConnectionCheckedOutEvent = exports2.ConnectionCheckedInEvent = exports2.CommandSucceededEvent = void 0;
     var admin_1 = require_admin();
     Object.defineProperty(exports2, "Admin", { enumerable: true, get: function() {
       return admin_1.Admin;
@@ -32056,10 +32080,6 @@ var require_lib3 = __commonJS({
     } });
     Object.defineProperty(exports2, "MongoWriteConcernError", { enumerable: true, get: function() {
       return error_1.MongoWriteConcernError;
-    } });
-    var resource_management_1 = require_resource_management();
-    Object.defineProperty(exports2, "configureExplicitResourceManagement", { enumerable: true, get: function() {
-      return resource_management_1.configureExplicitResourceManagement;
     } });
     var common_2 = require_common2();
     Object.defineProperty(exports2, "BatchType", { enumerable: true, get: function() {
