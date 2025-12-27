@@ -4,6 +4,17 @@
 
 ### 2.5-dev
 
+- feat: Manual chat rename with auto-rename toggle
+  - Added "Rename" button to tool palette (desktop and mobile)
+  - ChatRenameModal allows setting a custom title or re-enabling auto-naming
+  - When manually renamed, chats are excluded from automatic title updates
+  - Re-enabling auto-rename immediately regenerates the title using the cheap LLM
+  - New `isManuallyRenamed` field in chat metadata schema
+  - New `/api/chats/:id/regenerate-title` endpoint for title regeneration
+- feat: Dynamic browser tab title shows chat name
+  - Browser title changes to "Quilltap: {chat name}" when viewing a chat
+  - Reverts to "Quilltap - AI Chat Platform" when navigating away
+  - New `useDocumentTitle` hook for managing browser titles
 - fix: OAuth redirects now use BASE_URL instead of request.url
   - Fixes Google Auth redirect to wrong URL when hosted behind CloudFront/reverse proxy
   - OAuth callback and authorize routes now correctly redirect to the configured BASE_URL

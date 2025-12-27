@@ -6,6 +6,7 @@ import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
 import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
+import ChatRenameModal from '@/components/chat/ChatRenameModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
 import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
@@ -26,6 +27,7 @@ import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import { useDebugOptional } from '@/components/providers/debug-provider'
 import { useChatContext } from '@/components/providers/chat-context'
@@ -90,6 +92,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [mobileToolPaletteOpen, setMobileToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
+  const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
@@ -298,6 +301,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const isSingleCharacterChat = useMemo(() => {
     return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length === 1
   }, [participantsAsBase])
+
+  // Update browser tab title with chat name
+  useDocumentTitle(chat?.title ?? null)
 
   const charactersMap = useMemo((): Map<string, Character> => {
     const map = new Map<string, Character>()
@@ -770,6 +776,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const handleAddCharacter = useCallback(() => {
     clientLogger.debug('[Chat] Opening add character dialog')
     setAddCharacterDialogOpen(true)
+  }, [])
+
+  // Rename handler
+  const handleRenameClick = useCallback(() => {
+    clientLogger.debug('[Chat] Opening rename modal')
+    setRenameModalOpen(true)
   }, [])
 
   const handleCharacterAdded = useCallback(() => {
@@ -1609,6 +1621,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
           onAddCharacterClick={handleAddCharacter}
           onSettingsClick={() => setChatSettingsModalOpen(true)}
+          onRenameClick={handleRenameClick}
           onDeleteChatMemoriesClick={handleDeleteChatMemories}
           onReextractMemoriesClick={handleReextractMemories}
           onStopStreaming={stopStreaming}
@@ -1663,6 +1676,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           participants={chat?.participants || []}
           roleplayTemplateId={chat?.roleplayTemplateId}
           onSuccess={fetchChat}
+        />
+
+        <ChatRenameModal
+          isOpen={renameModalOpen}
+          onClose={() => setRenameModalOpen(false)}
+          chatId={id}
+          currentTitle={chat?.title || ''}
+          isManuallyRenamed={chat?.isManuallyRenamed ?? false}
+          onSuccess={(newTitle, isManuallyRenamed) => {
+            clientLogger.info('[Chat] Rename successful', { newTitle, isManuallyRenamed })
+            // Update local chat state with new title
+            if (chat) {
+              setChat({ ...chat, title: newTitle, isManuallyRenamed })
+            }
+          }}
         />
 
         <GenerateImageDialog

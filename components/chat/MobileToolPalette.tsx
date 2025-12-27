@@ -25,6 +25,8 @@ interface MobileToolPaletteProps {
   showAddCharacter?: boolean
   // Settings
   onSettingsClick: () => void
+  // Rename
+  onRenameClick?: () => void
   // Export
   chatId: string
   // Memory management
@@ -84,6 +86,7 @@ export default function MobileToolPalette({
   onAddCharacterClick,
   showAddCharacter = false,
   onSettingsClick,
+  onRenameClick,
   chatId,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
@@ -207,9 +210,10 @@ export default function MobileToolPalette({
         chatId,
         chatMemoryCount,
         roleplayTemplateId,
+        hasRenameCallback: !!onRenameClick,
       })
     }
-  }, [isOpen, showAddCharacter, hasImageProfile, chatPhotoCount, chatId, chatMemoryCount, roleplayTemplateId])
+  }, [isOpen, showAddCharacter, hasImageProfile, chatPhotoCount, chatId, chatMemoryCount, roleplayTemplateId, onRenameClick])
 
   // Handlers that close palette after action
   const handleAttachFileClick = () => {
@@ -240,6 +244,12 @@ export default function MobileToolPalette({
 
   const handleSettingsClick = () => {
     onSettingsClick()
+    onClose()
+  }
+
+  const handleRenameClick = () => {
+    clientLogger.debug('[MobileToolPalette] Rename clicked')
+    onRenameClick?.()
     onClose()
   }
 
@@ -365,6 +375,20 @@ export default function MobileToolPalette({
             </svg>
             <span className="qt-mobile-tool-palette-button-label">Settings</span>
           </button>
+
+          {/* Rename Chat */}
+          {onRenameClick && (
+            <button
+              type="button"
+              onClick={handleRenameClick}
+              className="qt-mobile-tool-palette-button"
+            >
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              <span className="qt-mobile-tool-palette-button-label">Rename</span>
+            </button>
+          )}
 
           {/* Export Chat */}
           <button

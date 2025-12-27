@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.0--dev.40-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.5.0--dev.41-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -538,7 +538,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [X] Stop using NextAuth (migrated to Arctic + custom JWT sessions)
 - [X] Create a native Quilltap import/export for everything
 - [X] Add "Pause" to the turn system; if a chat is marked "Pause" then nobody ever gets to talk until the user nudges somebody again, or "un-pauses" it
-- [ ] Add a "Rename" to a chat, and if the user has renamed it, never try to rename it again unless something is toggled indicating that renaming can be automatic again
+- [X] Add a "Rename" to a chat, and if the user has renamed it, never try to rename it again unless something is toggled indicating that renaming can be automatic again
 - [ ] Project support
   - [ ] Folders
   - [ ] Files (text/Markdown or binary)

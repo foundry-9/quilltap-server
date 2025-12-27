@@ -41,6 +41,7 @@ interface ChatComposerProps {
   onGenerateImageClick: () => void
   onAddCharacterClick: () => void
   onSettingsClick: () => void
+  onRenameClick?: () => void
   onDeleteChatMemoriesClick: () => void
   onReextractMemoriesClick: () => void
   onStopStreaming: () => void
@@ -98,6 +99,7 @@ export function ChatComposer({
   onGenerateImageClick,
   onAddCharacterClick,
   onSettingsClick,
+  onRenameClick,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
   onStopStreaming,
@@ -174,6 +176,7 @@ export function ChatComposer({
         onAddCharacterClick={onAddCharacterClick}
         showAddCharacter={isSingleCharacterChat}
         onSettingsClick={onSettingsClick}
+        onRenameClick={onRenameClick}
         chatId={id}
         onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
         onReextractMemoriesClick={onReextractMemoriesClick}
@@ -272,6 +275,7 @@ export function ChatComposer({
             onGalleryClick={onGalleryClick}
             onGenerateImageClick={onGenerateImageClick}
             onSettingsClick={onSettingsClick}
+            onRenameClick={onRenameClick}
             onAddCharacterClick={onAddCharacterClick}
             onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
             onReextractMemoriesClick={onReextractMemoriesClick}
