@@ -4,7 +4,7 @@
   "description": "Earl Grey theme plugin for Quilltap - A sophisticated dark theme with slate grays and blue accents",
   "main": "index.js",
   "types": "index.d.ts",
-  "author": "Foundry-9",
+  "author": "Foundry-9 LLC",
   "license": "MIT",
   "scripts": {
     "build": "node esbuild.config.mjs",

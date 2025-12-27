@@ -6,19 +6,20 @@ This guide covers everything you need to create a new authentication provider pl
 
 Authentication provider plugins enable Quilltap to support new OAuth providers for user login. Each auth plugin implements a standard interface that handles:
 
-- OAuth configuration (required)
+- Arctic OAuth provider creation (required)
+- User info fetching from the OAuth provider (required)
 - Environment variable validation (required)
 - Configuration status reporting (required)
 - UI button styling (optional)
 
 ## Architecture
 
-Quilltap uses NextAuth.js for authentication with a **lazy initialization pattern**:
+Quilltap uses **Arctic** for OAuth 2.0 flows with **custom JWT sessions**:
 
-1. Plugins register during app startup via the auth provider registry
-2. Auth options are built asynchronously when first needed
-3. NextAuth route handlers wait for plugin initialization
-4. All `getServerSession()` calls use the same cached configuration
+1. Plugins register during app startup via the Arctic provider registry
+2. OAuth routes use plugin-provided Arctic instances for auth flows
+3. JWT sessions are created after successful OAuth authentication
+4. All `getServerSession()` calls verify the JWT session cookie
 
 This ensures auth provider plugins are fully loaded before any authentication occurs.
 
@@ -78,10 +79,12 @@ cd plugins/dist/qtap-plugin-auth-myprovider
 ```typescript
 /**
  * MyProvider OAuth Authentication Provider Plugin
+ * Uses Arctic for OAuth 2.0 flows
  */
 
-import MyProviderProvider from 'next-auth/providers/myprovider';
-// Or for custom OAuth, you can create your own provider configuration
+// Import the Arctic provider for your OAuth service
+// See https://arcticjs.dev/providers for available providers
+import { MyProvider } from 'arctic';
 
 // ============================================================================
 // TYPES (duplicated to avoid import issues in standalone plugin)
@@ -100,6 +103,13 @@ interface AuthProviderConfig {
 interface ProviderConfigStatus {
   isConfigured: boolean;
   missingVars: string[];
+}
+
+interface ArcticUserInfo {
+  id: string;
+  email?: string;
+  name?: string;
+  image?: string;
 }
 
 // ============================================================================
@@ -149,18 +159,54 @@ function getConfigStatus(): ProviderConfigStatus {
 }
 
 /**
- * Create the NextAuth provider instance
+ * Create the Arctic provider instance
  * Returns null if not properly configured
  */
-function createProvider() {
+function createArcticProvider() {
   if (!isConfigured()) {
     return null;
   }
 
-  return MyProviderProvider({
-    clientId: process.env.MYPROVIDER_CLIENT_ID!,
-    clientSecret: process.env.MYPROVIDER_CLIENT_SECRET!,
+  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+  const redirectUri = `${baseUrl}/api/auth/oauth/myprovider/callback`;
+
+  return new MyProvider(
+    process.env.MYPROVIDER_CLIENT_ID!,
+    process.env.MYPROVIDER_CLIENT_SECRET!,
+    redirectUri
+  );
+}
+
+/**
+ * Get OAuth scopes for this provider
+ */
+function getScopes(): string[] {
+  return ['openid', 'email', 'profile'];
+}
+
+/**
+ * Fetch user info from the provider's API
+ * Called after successful OAuth token exchange
+ */
+async function fetchUserInfo(accessToken: string): Promise<ArcticUserInfo> {
+  const response = await fetch('https://api.myprovider.com/userinfo', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch user info');
+  }
+
+  const data = await response.json();
+
+  return {
+    id: data.sub || data.id,
+    email: data.email,
+    name: data.name,
+    image: data.picture || data.avatar,
+  };
 }
 
 // ============================================================================
@@ -171,7 +217,9 @@ module.exports = {
   config,
   isConfigured,
   getConfigStatus,
-  createProvider,
+  createArcticProvider,
+  fetchUserInfo,
+  getScopes,
 };
 ```
 
@@ -186,12 +234,12 @@ module.exports = {
   "types": "index.ts",
   "license": "MIT",
   "dependencies": {
-    "next-auth": "^4.24.0"
+    "arctic": "^2.0.0"
   }
 }
 ```
 
-**Note:** The plugin directly imports and uses the NextAuth provider. No changes to `lib/auth.ts` are required - the auth system automatically calls your plugin's `createProvider()` function.
+**Note:** The plugin uses Arctic for OAuth 2.0 flows. The auth system automatically calls your plugin's `createArcticProvider()` and `fetchUserInfo()` functions.
 
 ## Plugin Interface
 
@@ -202,8 +250,14 @@ interface AuthProviderPluginExport {
   /** Provider configuration metadata */
   config: AuthProviderConfig;
 
-  /** Factory function to create the NextAuth provider */
-  createProvider: () => OAuthConfig<unknown> | null;
+  /** Factory function to create the Arctic OAuth provider */
+  createArcticProvider: () => ArcticProviderInstance | null;
+
+  /** Fetch user info from the provider after OAuth */
+  fetchUserInfo: (accessToken: string) => Promise<ArcticUserInfo>;
+
+  /** Get OAuth scopes for authorization */
+  getScopes: () => string[];
 
   /** Check if the provider is properly configured */
   isConfigured: () => boolean;
@@ -255,16 +309,19 @@ The `authProviderConfig` section in manifest.json is validated against this sche
 1. **Plugin Discovery**: During startup, Quilltap scans `plugins/dist/` for plugins
 2. **Manifest Validation**: Each plugin's `manifest.json` is validated
 3. **Auth Plugin Detection**: Plugins with `AUTH_METHODS` capability are identified
-4. **Registration**: The auth provider registry loads and registers the plugin
+4. **Registration**: The Arctic provider registry loads and registers the plugin
 5. **Configuration Check**: `isConfigured()` is called to check env vars
 
 ### Authentication Flow
 
 1. **User visits sign-in page**: The UI shows buttons for configured providers
-2. **Lazy initialization**: `buildAuthOptionsAsync()` waits for plugins if needed
-3. **Provider creation**: `createOAuthProvider()` is called with the provider ID
-4. **NextAuth handling**: NextAuth handles the OAuth flow with the provider
-5. **Session creation**: A database session is created for the authenticated user
+2. **User clicks OAuth button**: Redirects to `/api/auth/oauth/[provider]/authorize`
+3. **Authorization**: Arctic generates auth URL with PKCE, user is redirected to provider
+4. **Callback**: Provider redirects to `/api/auth/oauth/[provider]/callback`
+5. **Token exchange**: Arctic exchanges code for tokens using PKCE verifier
+6. **User info**: Plugin's `fetchUserInfo()` is called to get user data
+7. **Account linking**: User is created or linked to existing account
+8. **Session creation**: JWT session token is created and set as httpOnly cookie
 
 ### Session Access
 
@@ -293,47 +350,55 @@ Reference implementation for OAuth providers:
 
 - **Provider ID**: `google`
 - **Required Env Vars**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-- **NextAuth Provider**: `next-auth/providers/google`
+- **Arctic Provider**: `Google` from `arctic`
+- **User Info Endpoint**: `https://openidconnect.googleapis.com/v1/userinfo`
 
 ## Adding Custom OAuth Providers
 
-For providers not built into NextAuth, create a custom OAuth configuration in your plugin's `createProvider()` function:
+For providers not built into Arctic, you can create a custom OAuth2 implementation:
 
 ```typescript
 // In your plugin's index.ts
 
-import type { OAuthConfig } from 'next-auth/providers/oauth';
+import { OAuth2Client } from 'arctic';
 
-function createProvider(): OAuthConfig<unknown> | null {
+function createArcticProvider() {
   if (!isConfigured()) {
     return null;
   }
 
+  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+  const redirectUri = `${baseUrl}/api/auth/oauth/custom/callback`;
+
+  // Create a custom OAuth2 client
+  return new OAuth2Client(
+    process.env.CUSTOM_CLIENT_ID!,
+    process.env.CUSTOM_CLIENT_SECRET!,
+    redirectUri
+  );
+}
+
+function getScopes(): string[] {
+  return ['openid', 'email', 'profile'];
+}
+
+async function fetchUserInfo(accessToken: string): Promise<ArcticUserInfo> {
+  const response = await fetch('https://api.custom.com/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const data = await response.json();
+
   return {
-    id: 'custom',
-    name: 'Custom Provider',
-    type: 'oauth',
-    authorization: {
-      url: 'https://auth.custom.com/oauth/authorize',
-      params: { scope: 'openid email profile' },
-    },
-    token: 'https://auth.custom.com/oauth/token',
-    userinfo: 'https://api.custom.com/userinfo',
-    clientId: process.env.CUSTOM_CLIENT_ID!,
-    clientSecret: process.env.CUSTOM_CLIENT_SECRET!,
-    profile(profile) {
-      return {
-        id: profile.sub,
-        name: profile.name,
-        email: profile.email,
-        image: profile.picture,
-      };
-    },
+    id: data.sub,
+    name: data.name,
+    email: data.email,
+    image: data.picture,
   };
 }
 ```
 
-This approach keeps all provider logic self-contained within the plugin.
+Arctic provides built-in support for many providers including Google, GitHub, Apple, Discord, and more. See [arcticjs.dev/providers](https://arcticjs.dev/providers) for the full list.
 
 ## Best Practices
 
@@ -408,15 +473,15 @@ Look for these log messages:
 
 ### OAuth Callback Errors
 
-1. Verify redirect URI matches exactly in provider console
-2. Check `NEXTAUTH_URL` is set correctly
-3. Ensure `NEXTAUTH_SECRET` is set
+1. Verify redirect URI matches exactly in provider console (should be `/api/auth/oauth/[provider]/callback`)
+2. Check `BASE_URL` is set correctly
+3. Ensure `JWT_SECRET` is set
 
 ### Session Errors
 
 1. Clear browser cookies and try again
-2. Check database session storage (`data/auth/sessions.jsonl`)
-3. Verify the adapter is configured correctly
+2. Check JWT session cookie is being set (`quilltap-session`)
+3. Verify `JWT_SECRET` environment variable is configured
 
 ## Directory Structure
 
@@ -436,11 +501,12 @@ Before releasing your plugin:
 - [ ] `manifest.json` has valid `authProviderConfig`
 - [ ] `capabilities` includes `AUTH_METHODS`
 - [ ] `category` is set to `AUTHENTICATION`
-- [ ] Plugin exports `config`, `isConfigured`, `getConfigStatus`, `createProvider`
-- [ ] `createProvider()` returns a valid NextAuth provider or null
-- [ ] `package.json` includes `next-auth` as a dependency
+- [ ] Plugin exports `config`, `isConfigured`, `getConfigStatus`, `createArcticProvider`, `fetchUserInfo`, `getScopes`
+- [ ] `createArcticProvider()` returns a valid Arctic provider instance or null
+- [ ] `fetchUserInfo()` returns user data in the expected format
+- [ ] `package.json` includes `arctic` as a dependency
 - [ ] Required env vars are documented
-- [ ] OAuth redirect URIs are documented
+- [ ] OAuth redirect URIs are documented (`/api/auth/oauth/[provider]/callback`)
 - [ ] Button styling looks appropriate
 
 ## See Also
@@ -448,5 +514,5 @@ Before releasing your plugin:
 - [Plugin Developer Guide](./README.md) - General plugin development
 - [LLM Provider Guide](./LLM-PROVIDER-GUIDE.md) - LLM provider plugins
 - [Auth Provider Interface](../lib/plugins/interfaces/auth-provider-plugin.ts) - TypeScript interface
-- [Auth Provider Registry](../lib/plugins/auth-provider-registry.ts) - Registration system
-- [NextAuth Documentation](https://next-auth.js.org/providers/) - NextAuth provider docs
+- [Arctic Provider Registry](../lib/auth/arctic/registry.ts) - Registration system
+- [Arctic Documentation](https://arcticjs.dev/) - Arctic OAuth library docs

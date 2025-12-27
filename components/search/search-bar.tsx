@@ -26,12 +26,19 @@ export function SearchBar() {
   // Mobile dialog state
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
-  // Global keyboard shortcut (Cmd/Ctrl + K)
+  // Global keyboard shortcut (Cmd+K on macOS, Ctrl+K on Windows/Linux)
+  // On macOS, Ctrl+K is "delete to end of line" and should not be intercepted
   useEffect(() => {
+    const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      // On macOS: only respond to Cmd+K (metaKey)
+      // On other platforms: only respond to Ctrl+K (ctrlKey)
+      const isShortcutPressed = isMac ? (e.metaKey && !e.ctrlKey) : (e.ctrlKey && !e.metaKey)
+
+      if (isShortcutPressed && e.key === 'k') {
         e.preventDefault()
-        clientLogger.debug('Search shortcut triggered (Cmd/Ctrl+K)')
+        clientLogger.debug('Search shortcut triggered', { isMac, metaKey: e.metaKey, ctrlKey: e.ctrlKey })
         // On desktop, focus the input
         // On mobile, open the dialog
         if (window.innerWidth >= 768) {

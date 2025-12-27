@@ -1,0 +1,91 @@
+/**
+ * Delete Account API Route
+ *
+ * DELETE /api/auth/delete-account
+ *
+ * Deletes the currently authenticated user's account.
+ * This is primarily used for e2e testing cleanup.
+ *
+ * Note: This does NOT delete all user data (characters, chats, etc.)
+ * Those should be deleted separately before calling this endpoint.
+ */
+
+import { NextResponse } from 'next/server';
+import { getServerSession } from '@/lib/auth/session';
+import { getRepositories } from '@/lib/repositories/factory';
+import { logger } from '@/lib/logger';
+
+interface DeleteAccountResponse {
+  success: boolean;
+  error?: string;
+}
+
+export async function DELETE(): Promise<NextResponse<DeleteAccountResponse>> {
+  try {
+    const session = await getServerSession();
+
+    if (!session?.user?.id) {
+      logger.warn('Unauthenticated delete account attempt', {
+        context: 'delete-account.DELETE',
+      });
+      return NextResponse.json(
+        { success: false, error: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
+
+    logger.info('Deleting user account', {
+      context: 'delete-account.DELETE',
+      userId,
+    });
+
+    const repos = getRepositories();
+
+    // Delete chat settings first
+    const chatSettingsCollection = await repos.users.getChatSettings(userId);
+    if (chatSettingsCollection) {
+      // Need to delete chat settings via MongoDB directly since no dedicated method exists
+      const { getMongoDatabase } = await import('@/lib/mongodb/client');
+      const db = await getMongoDatabase();
+      await db.collection('chat_settings').deleteOne({ userId });
+      logger.debug('Deleted user chat settings', {
+        context: 'delete-account.DELETE',
+        userId,
+      });
+    }
+
+    // Delete the user
+    const deleted = await repos.users.delete(userId);
+
+    if (!deleted) {
+      logger.error('Failed to delete user account', {
+        context: 'delete-account.DELETE',
+        userId,
+      });
+      return NextResponse.json(
+        { success: false, error: 'Failed to delete account' },
+        { status: 500 }
+      );
+    }
+
+    logger.info('User account deleted successfully', {
+      context: 'delete-account.DELETE',
+      userId,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    logger.error(
+      'Delete account error',
+      { context: 'delete-account.DELETE' },
+      error instanceof Error ? error : undefined
+    );
+
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

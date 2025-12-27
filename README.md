@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.1-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.5.0-green.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -21,7 +21,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 - 🧰 Tools workspace with backup/restore flows (local download or S3), cloud backup previews, and a delete-all-data card; DevConsole (development builds) surfaces server logs, browser consoles, and chat traces.
 - 🎨 Theme plugin system powered by qt-* semantic utility classes so you can ship new theme packs (Ocean, Rains, Earl Grey are included) and give users an Appearance settings tab + nav toggle for quick swaps.
 - 🖼️ Integrated image generation profiles (Google Gemini/Imagen 4, Grok, OpenAI, OpenRouter) plus an asset gallery with tagging, avatar overrides, and secure per-user storage.
-- 🔐 Google OAuth plugin, optional no-auth mode, local username/password login, and TOTP MFA backed by AES-256-GCM encrypted API keys and per-user encryption keys.
+- 🔐 Google OAuth plugin (via Arctic), optional no-auth mode, local username/password login, and TOTP MFA backed by AES-256-GCM encrypted API keys and per-user encryption keys.
 - 🐳 Docker-first deployment targeting MongoDB + S3-compatible storage with embedded MinIO and Mongo Express for local development.
 
 ## What Can It Do?
@@ -80,7 +80,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 Configure dedicated connection profiles for each provider you want to use:
 
 | Provider | Capabilities |
-|----------|--------------|
+| -------- | ------------ |
 | **OpenAI** | GPT-5/5.1 families, GPT-4o/4o-mini, GPT-4.1/4.1-mini/4.1-nano, GPT-3.5 legacy models, tool/function calling, file attachments, and image generation. |
 | **Anthropic** | Claude 4/4.5 families (Opus, Sonnet, Haiku) and Claude 3 models with streaming, image understanding, and tool/JSON output control. |
 | **Google Gemini** | Gemini 2.5 Flash/Pro with multimodal inputs, web search, plus Imagen 4 image generation through Google Generative AI. |
@@ -105,7 +105,7 @@ Quilltap is built on a modern, plugin-friendly stack:
 - **Plugin Runtime**: Providers, auth connectors, themes, upgrade scripts, and dev tooling are delivered as site plugins in `plugins/dist`, loaded according to `SITE_PLUGINS_ENABLED`.
 - **Data Store**: MongoDB 7+ holds users, chats, characters, personas, memories, embeddings, and provider metadata.
 - **File Storage**: S3-compatible storage (embedded MinIO for dev or any external S3/MinIO) stores uploads, gallery assets, and user backups under `users/{userId}/`.
-- **Authentication**: NextAuth.js 4.24 handles Google OAuth, local accounts, optional TOTP, and the AUTH_DISABLED “no-auth” mode.
+- **Authentication**: Arctic OAuth + custom JWT session management handles Google OAuth, local accounts, optional TOTP, the AUTH_DISABLED "no-auth" auto-login mode, and OAUTH_DISABLED for credentials-only login.
 - **Styling**: Tailwind CSS 4 + the qt-* semantic component class system ensures theme plugins can override every UI surface.
 - **Deployment**: Docker + Docker Compose orchestrate the Next.js app, MongoDB, MinIO, Mongo Express, and Let’s Encrypt-enabled Nginx proxies.
 - **Encryption**: User-specific AES-256-GCM keys plus a master pepper secure API keys and sensitive connection metadata at rest.
@@ -119,7 +119,7 @@ Your API keys are decrypted only when the authenticated user requests them, the 
 ### Prerequisites
 
 - **Docker and Docker Compose** (recommended)
-- **Node.js 20+** (for local development)
+- **Node.js 22+** (for local development)
 - **MongoDB** (local or MongoDB Atlas)
 - **S3-compatible storage** (embedded MinIO for development, or external S3/MinIO for production)
 - **Google OAuth credentials** (optional, for OAuth login - [Get them here](https://console.cloud.google.com/))
@@ -144,13 +144,14 @@ cp .env.example .env.local
 Edit `.env.local` and set your values:
 
 ```env
-# NextAuth
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="your-nextauth-secret-here"
+# Authentication
+BASE_URL="http://localhost:3000"
+JWT_SECRET="your-jwt-secret-here"
 
-# Authentication options
-AUTH_DISABLED="false"                # Enable only for local/offline installs
-AUTH_ANONYMOUS_USER_NAME="Anonymous User"
+# Authentication modes
+AUTH_DISABLED="false"                # Set to "true" for auto-login (local/offline installs)
+AUTH_UNAUTHENTICATED_USER_NAME="Unauthenticated Local User"
+OAUTH_DISABLED="false"               # Set to "true" to hide OAuth buttons (credentials-only)
 
 # Google OAuth (optional - get from https://console.cloud.google.com/)
 # If not configured, only email/password login will be available
@@ -185,7 +186,7 @@ S3_MODE="embedded"
 #### 3. Generate secrets
 
 ```bash
-# Generate NEXTAUTH_SECRET
+# Generate JWT_SECRET
 openssl rand -base64 32
 
 # Generate ENCRYPTION_MASTER_PEPPER
@@ -202,7 +203,7 @@ If you want to enable "Sign in with Google":
 2. Create a new project or select an existing one
 3. Enable the Google+ API
 4. Create OAuth 2.0 credentials
-5. Add authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
+5. Add authorized redirect URI: `http://localhost:3000/api/auth/oauth/google/callback`
 6. Copy the Client ID and Client Secret to your `.env.local`
 
 **Skip this step** if you only want to use email/password authentication.
@@ -299,8 +300,8 @@ cp .env.example .env.production
 
 # 2. Edit .env.production with your production values
 # Make sure to set:
-# - NEXTAUTH_URL=https://yourdomain.com
-# - Google OAuth redirect URI: https://yourdomain.com/api/auth/callback/google
+# - BASE_URL=https://yourdomain.com
+# - Google OAuth redirect URI: https://yourdomain.com/api/auth/oauth/google/callback
 # - All encryption and auth secrets
 # - MongoDB connection (MONGODB_URI, MONGODB_DATABASE)
 # - S3 configuration (S3_MODE=external, S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET, S3_REGION/S3_FORCE_PATH_STYLE)
@@ -338,7 +339,7 @@ Quilltap stores all data in MongoDB and S3-compatible storage. Backups, exports,
 - **connectionProfiles** - LLM connection configurations
 - **embeddingProfiles** - Embedding provider configurations
 - **imageProfiles** - Image generation configurations
-- **sessions/verification tokens** - Managed by NextAuth for OAuth + local login flows
+- **accounts** - OAuth provider account links (provider ID, access tokens)
 
 ### S3 Storage
 
@@ -366,9 +367,9 @@ The Tools workspace orchestrates MongoDB + S3 backups per user, so multi-tenant 
 ### Environment Variables
 
 | Variable | Description | Example |
-|----------|-------------|---------|
-| `NEXTAUTH_URL` | Your app's URL | `http://localhost:3000` |
-| `NEXTAUTH_SECRET` | Secret for NextAuth.js | Generate with `openssl rand -base64 32` |
+| -------- | ----------- | ------- |
+| `BASE_URL` | Your app's URL | `http://localhost:3000` |
+| `JWT_SECRET` | Secret for session JWT signing | Generate with `openssl rand -base64 32` |
 | `ENCRYPTION_MASTER_PEPPER` | Master encryption key | Generate with `openssl rand -base64 32` |
 | `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
 | `MONGODB_DATABASE` | MongoDB database name | `quilltap` |
@@ -376,7 +377,7 @@ The Tools workspace orchestrates MongoDB + S3 backups per user, so multi-tenant 
 S3 storage configuration:
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| -------- | ----------- | ------- |
 | `S3_MODE` | Storage mode (`embedded` or `external`) | `embedded` |
 | `S3_ENDPOINT` | S3 endpoint URL (for external mode) | - |
 | `S3_ACCESS_KEY` | S3 access key | - |
@@ -390,10 +391,11 @@ S3 storage configuration:
 Optional environment variables:
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| -------- | ----------- | ------- |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth credentials for the auth plugin | - |
-| `AUTH_DISABLED` | Disables auth and auto-creates an anonymous user (local-only) | `false` |
-| `AUTH_ANONYMOUS_USER_NAME` | Display name when `AUTH_DISABLED=true` | `Anonymous User` |
+| `AUTH_DISABLED` | Completely bypass auth, auto-login as unauthenticated user (local-only) | `false` |
+| `AUTH_UNAUTHENTICATED_USER_NAME` | Display name when `AUTH_DISABLED=true` | `Unauthenticated Local User` |
+| `OAUTH_DISABLED` | Hide OAuth buttons but keep credentials login | `false` |
 | `SITE_PLUGINS_ENABLED` | Comma-separated plugin IDs or `all` | `all` |
 | `SITE_PLUGINS_DISABLED` | Comma-separated plugins to remove even if enabled | *(empty)* |
 | `LOG_LEVEL` | Logging level (`error`, `warn`, `info`, `debug`) | `info` |
@@ -421,7 +423,7 @@ Once logged in, you'll need to:
 - **Language**: TypeScript 5.6
 - **Data Storage**: MongoDB
 - **File Storage**: S3-compatible (embedded MinIO or external S3)
-- **Authentication**: NextAuth.js 4.24 with Google OAuth, email/password login, and TOTP 2FA
+- **Authentication**: Arctic OAuth + custom JWT sessions with Google OAuth, email/password login, and TOTP 2FA
 - **Encryption**: AES-256-GCM for sensitive data
 - **Styling**: Tailwind CSS 4.1
 - **Container**: Docker + Docker Compose
@@ -461,9 +463,9 @@ Once logged in, you'll need to:
 ### Authentication issues
 
 - Verify Google OAuth credentials are correct
-- Check that redirect URI matches exactly in Google Cloud Console
-- Ensure `NEXTAUTH_URL` matches your actual URL
-- Verify `NEXTAUTH_SECRET` is set
+- Check that redirect URI matches exactly in Google Cloud Console (`/api/auth/oauth/google/callback`)
+- Ensure `BASE_URL` matches your actual URL
+- Verify `JWT_SECRET` is set
 
 ### Import/Export not working
 
@@ -489,13 +491,13 @@ Contributions are welcome! Please:
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-Copyright (c) 2025 Foundry-9
+Copyright (c) 2025 Foundry-9 LLC
 
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
 - **Author**: Charles Sebold
-- **Email**: <charles@sebold.tech>
+- **Email**: <charles.sebold@foundry-9.com>
 - **Website**: <https://foundry-9.com>
 
 ## Release History
@@ -516,7 +518,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./features/comfy_ui_local_image.md))
 - [ ] Arcadia "art deco" theme to show off what the theme system can really do
 - [ ] Fully mobile-capable media breakpoints
-  - [X] Dashboard
+  - [X] Dashboard (v2.4)
   - [ ] Chat (partially done in v2.4)
   - [ ] Characters
   - [ ] Personas
@@ -529,21 +531,26 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Can be restored quickly to basics
   - [ ] Has intimate knowledge of this application
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
-- [ ] Character build-out wizard
-  - Uses LLM of choice to fill out gaps in character fields or physical descriptions
-- [ ] Make roleplay templates besides the default one into plugins (start with "Quilltap RP")
 - [ ] Create web-only version that uses IndexedDB for everything
-- [ ] Stop using NextAuth
-- [ ] Create a native Quilltap import/export for everything
-- [ ] Add "Pause" to the turn system; if a chat is marked "Pause" then nobody ever gets to talk until the user nudges somebody again, or "un-pauses" it
-- [ ] Add a "Rename" to a chat, and if the user has renamed it, never try to rename it again unless something is toggled indicating that renaming can be automatic again
+rename it again unless something is toggled indicating that renaming can be automatic again
+- [ ] Project support
+  - [ ] Folders
+  - [ ] Files (text/Markdown or binary)
+  - [ ] Direct import/export/access
+  - [ ] Project becomes overridding context for chats, images, etc.
+backups
+- [ ] Starting a new chat should include:
+  - [ ] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
+  - [ ] A scenario prompt so you can set things up before you start
+- [ ] The plugin list should have the package.json version, not the manifest.json version
+- [ ] Search and replace in one chat, or in all chats associated with a character or persona
 
 ## Acknowledgments
 
 Built with these excellent open source projects:
 
 - [Next.js](https://nextjs.org/) - React framework
-- [NextAuth.js](https://next-auth.js.org/) - Authentication
+- [Arctic](https://arcticjs.dev/) - OAuth 2.0 library
 - [Tailwind CSS](https://tailwindcss.com/) - Styling
 - [Zod](https://zod.dev/) - TypeScript-first schema validation
 - [Docker](https://www.docker.com/) - Containerization

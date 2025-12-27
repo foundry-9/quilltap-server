@@ -22,9 +22,11 @@ const config: Config = {
     '^openai$': '<rootDir>/__mocks__/openai.ts',
     '^@anthropic-ai/sdk$': '<rootDir>/__mocks__/@anthropic-ai/sdk.ts',
     '^@google/generative-ai$': '<rootDir>/__mocks__/@google/generative-ai.ts',
+    '^arctic$': '<rootDir>/__mocks__/arctic.ts',
+    '^jose$': '<rootDir>/__mocks__/jose.ts',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(@openrouter/sdk|mongodb|bson)/)',
+    'node_modules/(?!(@openrouter/sdk|mongodb|bson|jose)/)',
   ],
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',
@@ -45,6 +47,7 @@ const config: Config = {
     '/node_modules/',
     '/.next/',
     '/__tests__/integration/',
+    '/__tests__/unit/lib/fixtures/',
   ],
   modulePathIgnorePatterns: [
     '/.next/',

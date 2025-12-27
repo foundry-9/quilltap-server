@@ -59,6 +59,10 @@ const EXTERNAL_PACKAGES = [
   // Also handle resolved path (alias resolves before external check)
   '../../../package.json',
   '*/package.json',
+  '../package.json',
+  // AWS SDK packages - these are provided by the main app and have internal package.json refs
+  '@aws-sdk/*',
+  '@smithy/*',
 ];
 
 async function build() {

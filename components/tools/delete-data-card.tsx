@@ -19,6 +19,16 @@ interface DeleteSummary {
     image: number
     embedding: number
   }
+  templates?: {
+    prompt: number
+    roleplay: number
+  }
+  sync?: {
+    instances: number
+    mappings: number
+    operations: number
+    syncApiKeys: number
+  }
 }
 
 export function DeleteDataCard() {
@@ -119,7 +129,13 @@ export function DeleteDataCard() {
       summary.backups +
       summary.profiles.connection +
       summary.profiles.image +
-      summary.profiles.embedding
+      summary.profiles.embedding +
+      (summary.templates?.prompt ?? 0) +
+      (summary.templates?.roleplay ?? 0) +
+      (summary.sync?.instances ?? 0) +
+      (summary.sync?.mappings ?? 0) +
+      (summary.sync?.operations ?? 0) +
+      (summary.sync?.syncApiKeys ?? 0)
     )
   }
 
@@ -263,6 +279,37 @@ export function DeleteDataCard() {
                             <span className="text-muted-foreground">Embedding Profiles</span>
                             <span className="qt-text-primary">{preview.profiles.embedding}</span>
                           </div>
+                          {preview.templates && (preview.templates.prompt > 0 || preview.templates.roleplay > 0) && (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Prompt Templates</span>
+                                <span className="qt-text-primary">{preview.templates.prompt}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Roleplay Templates</span>
+                                <span className="qt-text-primary">{preview.templates.roleplay}</span>
+                              </div>
+                            </>
+                          )}
+                          {preview.sync && (preview.sync.instances > 0 || preview.sync.mappings > 0 || preview.sync.operations > 0) && (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Sync Instances (reset)</span>
+                                <span className="qt-text-primary">{preview.sync.instances}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Sync Mappings</span>
+                                <span className="qt-text-primary">{preview.sync.mappings}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Sync Operations</span>
+                                <span className="qt-text-primary">{preview.sync.operations}</span>
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-1 italic">
+                                Sync instances will be reset (not deleted) - you can sync again to restore data from remote
+                              </div>
+                            </>
+                          )}
                           <div className="border-t border-border pt-2 mt-2">
                             <div className="flex justify-between font-semibold">
                               <span className="text-foreground">Total Items</span>

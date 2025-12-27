@@ -79,11 +79,14 @@ export function CheapLLMSettings({
               className="qt-select"
             >
               <option value="">Select a profile...</option>
-              {connectionProfiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name} ({profile.provider} • {profile.modelName})
-                </option>
-              ))}
+              {connectionProfiles.map((profile) => {
+                const hasApiKey = Boolean(profile.apiKey)
+                return (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name} ({profile.provider} • {profile.modelName}){!hasApiKey ? ' ⚠️ No API Key' : ''}
+                  </option>
+                )
+              })}
             </select>
             {connectionProfiles.length === 0 && !loadingProfiles && (
               <p className="mt-1 qt-text-xs text-amber-600 dark:text-amber-400">
@@ -108,11 +111,14 @@ export function CheapLLMSettings({
             className="qt-select"
           >
             <option value="">Not set</option>
-            {connectionProfiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.name} ({profile.provider} • {profile.modelName})
-              </option>
-            ))}
+            {connectionProfiles.map((profile) => {
+              const hasApiKey = Boolean(profile.apiKey)
+              return (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.provider} • {profile.modelName}){!hasApiKey ? ' ⚠️ No API Key' : ''}
+                </option>
+              )
+            })}
           </select>
         </div>
 
@@ -183,11 +189,16 @@ export function CheapLLMSettings({
             className="qt-select"
           >
             <option value="">Use default for provider</option>
-            {embeddingProfiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.name} ({profile.provider} • {profile.modelName})
-              </option>
-            ))}
+            {embeddingProfiles.map((profile) => {
+              // OpenAI requires API key, Ollama doesn't
+              const requiresApiKey = profile.provider === 'OPENAI'
+              const hasApiKey = Boolean(profile.apiKey)
+              return (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.provider} • {profile.modelName}){requiresApiKey && !hasApiKey ? ' ⚠️ No API Key' : ''}
+                </option>
+              )
+            })}
           </select>
           {embeddingProfiles.length === 0 && (
             <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">

@@ -11,6 +11,7 @@ interface ToolPaletteProps {
   onGalleryClick: () => void
   onGenerateImageClick: () => void
   onSettingsClick: () => void
+  onRenameClick?: () => void
   onAddCharacterClick?: () => void
   onDeleteChatMemoriesClick?: () => void
   onReextractMemoriesClick?: () => void
@@ -69,6 +70,7 @@ export default function ToolPalette({
   onGalleryClick,
   onGenerateImageClick,
   onSettingsClick,
+  onRenameClick,
   onAddCharacterClick,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
@@ -207,6 +209,12 @@ export default function ToolPalette({
     onClose()
   }
 
+  const handleRenameClick = () => {
+    clientLogger.debug('[ToolPalette] Rename clicked')
+    onRenameClick?.()
+    onClose()
+  }
+
   const handleAddCharacterClick = () => {
     clientLogger.debug('[ToolPalette] Add Character clicked')
     onAddCharacterClick?.()
@@ -252,6 +260,7 @@ export default function ToolPalette({
         hasAddCharacterCallback: !!onAddCharacterClick,
         hasDeleteMemoriesCallback: !!onDeleteChatMemoriesClick,
         hasReextractMemoriesCallback: !!onReextractMemoriesClick,
+        hasRenameCallback: !!onRenameClick,
         chatPhotoCount,
         hasImageProfile,
         chatId,
@@ -261,7 +270,7 @@ export default function ToolPalette({
         hasPreviewToggle: !!onTogglePreview,
       })
     }
-  }, [isOpen, showAddCharacter, onAddCharacterClick, onDeleteChatMemoriesClick, onReextractMemoriesClick, chatPhotoCount, hasImageProfile, chatId, chatMemoryCount, roleplayTemplateId, onAttachFileClick, onTogglePreview])
+  }, [isOpen, showAddCharacter, onAddCharacterClick, onDeleteChatMemoriesClick, onReextractMemoriesClick, onRenameClick, chatPhotoCount, hasImageProfile, chatId, chatMemoryCount, roleplayTemplateId, onAttachFileClick, onTogglePreview])
 
   if (!isOpen) return null
 
@@ -310,6 +319,21 @@ export default function ToolPalette({
           </svg>
           <span>Settings</span>
         </button>
+
+        {/* Rename Chat */}
+        {onRenameClick && (
+          <button
+            type="button"
+            onClick={handleRenameClick}
+            className="qt-tool-palette-button"
+            title="Rename chat"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            <span>Rename</span>
+          </button>
+        )}
 
         {/* Export Chat */}
         <button

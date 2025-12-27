@@ -95,6 +95,10 @@ export interface Chat {
   messages: Message[]
   /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
   lastTurnParticipantId?: string | null
+  /** Whether auto-responses are paused in multi-character chats */
+  isPaused?: boolean
+  /** Whether the user has manually renamed this chat (disables auto-renaming) */
+  isManuallyRenamed?: boolean
 }
 
 export interface ChatSettings {

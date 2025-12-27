@@ -8,7 +8,7 @@
 import { Collection, ObjectId } from 'mongodb';
 import { Persona, PersonaSchema, PhysicalDescription } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { MongoBaseRepository } from './base.repository';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
 
 export class PersonasRepository extends MongoBaseRepository<Persona> {
   constructor() {
@@ -127,8 +127,13 @@ export class PersonasRepository extends MongoBaseRepository<Persona> {
 
   /**
    * Create a new persona
+   * @param data The persona data
+   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
    */
-  async create(data: Omit<Persona, 'id' | 'createdAt' | 'updatedAt'>): Promise<Persona> {
+  async create(
+    data: Omit<Persona, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
+  ): Promise<Persona> {
     try {
       logger.debug('Creating new persona', {
         userId: data.userId,
@@ -136,13 +141,14 @@ export class PersonasRepository extends MongoBaseRepository<Persona> {
         collection: this.collectionName,
       });
 
-      const id = this.generateId();
+      const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
+      const createdAt = options?.createdAt || now;
 
       const persona: Persona = {
         ...data,
         id,
-        createdAt: now,
+        createdAt,
         updatedAt: now,
       };
 

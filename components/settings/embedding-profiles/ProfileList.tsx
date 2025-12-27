@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
 import { ProviderBadge } from './ProviderBadge'
+import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 import type { EmbeddingProfile } from './types'
 
 interface ProfileListProps {
@@ -84,6 +85,10 @@ export function ProfileList({
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100/50 text-green-700">
                     Default
                   </span>
+                )}
+                {/* OpenAI requires API key, Ollama doesn't */}
+                {profile.provider === 'OPENAI' && !profile.apiKey && (
+                  <MissingApiKeyBadge />
                 )}
               </div>
               <div className="grid grid-cols-2 gap-4 qt-text-small">

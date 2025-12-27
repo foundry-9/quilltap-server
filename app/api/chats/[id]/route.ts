@@ -28,6 +28,8 @@ const updateChatSchema = z.object({
   title: z.string().optional(),
   contextSummary: z.string().optional(),
   roleplayTemplateId: z.string().uuid().nullish(),
+  isPaused: z.boolean().optional(),
+  isManuallyRenamed: z.boolean().optional(),
 })
 
 // Validation schema for participant updates
@@ -403,6 +405,8 @@ export async function GET(
       contextSummary: chatMetadata.contextSummary,
       roleplayTemplateId: chatMetadata.roleplayTemplateId,
       lastTurnParticipantId: chatMetadata.lastTurnParticipantId ?? null,
+      isPaused: chatMetadata.isPaused ?? false,
+      isManuallyRenamed: chatMetadata.isManuallyRenamed ?? false,
       updatedAt: chatMetadata.updatedAt,
       createdAt: chatMetadata.createdAt,
       participants: enrichedParticipants,

@@ -14,8 +14,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
-import Image from 'next/image'
-import { signOut } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { useTheme } from '@/components/providers/theme-provider'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useDevConsoleOptional } from '@/components/providers/dev-console-provider'
@@ -31,6 +30,26 @@ interface NavUserMenuProps {
     email?: string
     image?: string | null
   }
+}
+
+/**
+ * User profile icon
+ */
+function ProfileIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  )
 }
 
 /**
@@ -73,7 +92,9 @@ function DevConsoleIcon({ className }: { className?: string }) {
 
 export function NavUserMenu({ user }: NavUserMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [authDisabled, setAuthDisabled] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   const { showNavThemeSelector } = useTheme()
   const { quickHideTags, hiddenTagIds } = useQuickHide()
@@ -81,6 +102,20 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
 
   const hasAnyHidden = hiddenTagIds.size > 0
   const hasQuickHideTags = quickHideTags.length > 0
+
+  // Check if auth is disabled (no point showing sign out if auto-logged in)
+  useEffect(() => {
+    fetch('/api/auth/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data.authDisabled) {
+          setAuthDisabled(true)
+        }
+      })
+      .catch(() => {
+        // Ignore errors, default to showing sign out
+      })
+  }, [])
 
   // Close menu when clicking outside or pressing escape
   useClickOutside(menuRef, () => setIsOpen(false), {
@@ -93,6 +128,12 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
     setIsOpen(!isOpen)
   }
 
+  const handleProfileClick = () => {
+    clientLogger.debug('Navigating to profile')
+    setIsOpen(false)
+    router.push('/profile')
+  }
+
   const handleDevConsoleClick = () => {
     if (devConsole) {
       clientLogger.debug('DevConsole toggle from user menu', { wasOpen: devConsole.isOpen })
@@ -101,9 +142,19 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
     }
   }
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     clientLogger.info('User signing out from user menu')
-    signOut({ callbackUrl: '/' })
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      router.push('/')
+    } catch (error) {
+      clientLogger.error('Sign out failed', { error })
+      // Still redirect even if logout fails - cookie will expire anyway
+      router.push('/')
+    }
   }
 
   const handleThemeSelected = () => {
@@ -122,12 +173,13 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
         aria-haspopup="menu"
       >
         {user.image ? (
-          <Image
+          // Using img instead of Image because the avatar comes from /api/files
+          // which requires auth cookies that Next.js Image optimization can't include
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={user.image}
             alt={user.name || 'User'}
-            width={32}
-            height={32}
-            className="h-8 w-8 rounded-full"
+            className="h-8 w-8 rounded-full object-cover"
           />
         ) : (
           <span className="text-sm qt-text-primary">
@@ -161,6 +213,14 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
 
             {/* Divider */}
             <div className="qt-navbar-dropdown-divider" />
+
+            {/* Profile link */}
+            <NavUserMenuItem
+              icon={<ProfileIcon className="w-4 h-4" />}
+              label="Profile"
+              onClick={handleProfileClick}
+              testId="user-menu-profile"
+            />
 
             {/* Theme selector (shown when enabled in settings) */}
             {showNavThemeSelector && (
@@ -197,18 +257,20 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
               />
             )}
 
-            {/* Show divider before sign out if there were menu items above */}
-            {(showNavThemeSelector || hasQuickHideTags || devConsole) && (
+            {/* Show divider before sign out (Profile is always above, so always show when sign out is shown) */}
+            {!authDisabled && (
               <div className="qt-navbar-dropdown-divider" />
             )}
 
-            {/* Sign Out */}
-            <NavUserMenuItem
-              icon={<SignOutIcon className="w-4 h-4" />}
-              label="Sign Out"
-              onClick={handleSignOut}
-              testId="user-menu-sign-out"
-            />
+            {/* Sign Out - hidden when AUTH_DISABLED since user is auto-logged in */}
+            {!authDisabled && (
+              <NavUserMenuItem
+                icon={<SignOutIcon className="w-4 h-4" />}
+                label="Sign Out"
+                onClick={handleSignOut}
+                testId="user-menu-sign-out"
+              />
+            )}
           </div>
         </div>
       )}

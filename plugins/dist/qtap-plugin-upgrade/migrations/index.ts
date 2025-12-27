@@ -17,6 +17,9 @@ import { migrateFilesToS3Migration } from './migrate-files-to-s3';
 import { ensureUserUsernamesMigration } from './ensure-user-usernames';
 import { inheritFileTagsMigration } from './inherit-file-tags';
 import { migrateCharacterSystemPromptsMigration } from './migrate-character-system-prompts';
+import { migrateTagStylesToTagsMigration } from './migrate-tag-styles-to-tags';
+// Plugin system migrations
+import { removeQuilltapRPBuiltinMigration } from './remove-quilltap-rp-builtin';
 
 /**
  * All available migrations.
@@ -34,6 +37,9 @@ export const migrations: Migration[] = [
   ensureUserUsernamesMigration,
   inheritFileTagsMigration,
   migrateCharacterSystemPromptsMigration,
+  migrateTagStylesToTagsMigration,
+  // Plugin system migrations
+  removeQuilltapRPBuiltinMigration,
 ];
 
 export {
@@ -48,4 +54,7 @@ export {
   ensureUserUsernamesMigration,
   inheritFileTagsMigration,
   migrateCharacterSystemPromptsMigration,
+  migrateTagStylesToTagsMigration,
+  // Plugin system migrations
+  removeQuilltapRPBuiltinMigration,
 };

@@ -5,17 +5,8 @@
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 
-// Create mock function for validateProviderConfig
-const mockValidateProviderConfig = jest.fn()
-
-// Mock dependencies FIRST (before other imports)
-jest.mock('next-auth')
-jest.mock('@/lib/encryption')
-jest.mock('@/lib/llm/plugin-factory')
-jest.mock('@/lib/repositories/factory')
-jest.mock('@/lib/plugins/provider-validation', () => ({
-  validateProviderConfig: mockValidateProviderConfig,
-}))
+// Mock dependencies - these are already mocked globally in jest.setup.ts
+// We just need to add the startup and provider registry mocks
 jest.mock('@/lib/startup', () => ({
   initializePlugins: jest.fn().mockResolvedValue({ success: true, stats: {} }),
   isPluginSystemInitialized: jest.fn().mockReturnValue(true),
@@ -33,12 +24,14 @@ import { getServerSession } from '@/lib/auth/session'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { getRepositories } from '@/lib/repositories/factory'
+import { validateProviderConfig } from '@/lib/plugins/provider-validation'
 
 // Get mocked functions
 const mockGetServerSession = jest.mocked(getServerSession)
 const mockDecryptApiKey = jest.mocked(decryptApiKey)
 const mockCreateLLMProvider = jest.mocked(createLLMProvider)
 const mockGetRepositories = jest.mocked(getRepositories)
+const mockValidateProviderConfig = jest.mocked(validateProviderConfig)
 
 // Helper to create a mock NextRequest
 function createMockRequest(body: any) {

@@ -13,6 +13,7 @@ import { encryptApiKey, maskApiKey } from '@/lib/encryption'
 import { Provider } from '@/lib/schemas/types'
 import { getAllAvailableProviders } from '@/lib/llm'
 import { logger } from '@/lib/logger'
+import { autoAssociateApiKeys } from '@/lib/api-keys/auto-associate'
 
 /**
  * GET /api/keys
@@ -129,6 +130,22 @@ export async function POST(req: NextRequest) {
       isActive: true,
     })
 
+    // Auto-associate the new key with profiles that need it
+    logger.debug('Running auto-association for new key', {
+      context: 'keys-POST',
+      keyId: newKey.id,
+      provider: newKey.provider,
+    })
+
+    const associationResult = await autoAssociateApiKeys(session.user.id, [newKey.id])
+
+    logger.info('API key created', {
+      context: 'keys-POST',
+      keyId: newKey.id,
+      provider: newKey.provider,
+      associations: associationResult.associations.length,
+    })
+
     return NextResponse.json({
       id: newKey.id,
       provider: newKey.provider,
@@ -136,6 +153,7 @@ export async function POST(req: NextRequest) {
       isActive: newKey.isActive,
       createdAt: newKey.createdAt,
       updatedAt: newKey.updatedAt,
+      associations: associationResult.associations,
     }, { status: 201 })
   } catch (error) {
     logger.error('Failed to create API key', { context: 'keys-POST' }, error instanceof Error ? error : undefined)

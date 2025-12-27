@@ -233,7 +233,7 @@ const response = await provider.sendMessage({
 ## Support
 
 For issues with the plugin, refer to:
-- Quilltap GitHub: https://github.com/Foundry-9/F9-Quilltap
+- Quilltap GitHub: https://github.com/foundry-9/F9-Quilltap
 - Anthropic Documentation: https://docs.anthropic.com
 - Anthropic Support: https://support.anthropic.com
 

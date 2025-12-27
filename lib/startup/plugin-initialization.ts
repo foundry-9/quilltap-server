@@ -11,9 +11,10 @@ import { scanPlugins, isPluginCompatible, validatePluginSecurity } from '@/lib/p
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { registerPluginRoutes, getPluginRouteRegistry, pluginRouteRegistry } from '@/lib/plugins/route-loader';
 import { initializeProviderRegistry } from '@/lib/plugins/provider-registry';
-import { registerAuthProvider, clearAuthProviders } from '@/lib/plugins/auth-provider-registry';
-import type { AuthProviderPluginExport } from '@/lib/plugins/interfaces/auth-provider-plugin';
+import { registerArcticProvider, clearArcticProviders } from '@/lib/auth/arctic/registry';
+import type { ArcticProviderPlugin } from '@/lib/auth/arctic/types';
 import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-registry';
+import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/lib/plugins/roleplay-template-registry';
 import packageJson from '@/package.json';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
@@ -354,9 +355,9 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       }
     }
 
-    // Initialize auth provider registry from enabled plugins with AUTH_METHODS capability
-    logger.debug('Initializing auth provider registry');
-    clearAuthProviders(); // Clear any previous registrations
+    // Initialize Arctic auth provider registry from enabled plugins with AUTH_METHODS capability
+    logger.debug('Initializing Arctic auth provider registry');
+    clearArcticProviders(); // Clear any previous registrations
     const authPlugins = pluginRegistry.getEnabledByCapability('AUTH_METHODS');
     if (authPlugins.length > 0) {
       for (const loadedPlugin of authPlugins) {
@@ -364,7 +365,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
           const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
 
-          logger.debug('Loading auth provider plugin module', {
+          logger.debug('Loading Arctic auth provider plugin module', {
             plugin: loadedPlugin.manifest.name,
             path: modulePath,
           });
@@ -372,33 +373,37 @@ async function performInitialization(): Promise<PluginInitializationResult> {
           // Use require() to load the compiled JavaScript module
           const pluginModule = dynamicRequire(modulePath);
 
-          // Auth plugins export config, isConfigured, getConfigStatus directly
-          const authPlugin = (pluginModule?.default || pluginModule) as AuthProviderPluginExport | undefined;
+          // Auth plugins export config, isConfigured, getConfigStatus, createArcticProvider, fetchUserInfo, getScopes
+          const authPlugin = (pluginModule?.default || pluginModule) as ArcticProviderPlugin | undefined;
 
           if (
             authPlugin &&
             typeof authPlugin.config === 'object' &&
             typeof authPlugin.isConfigured === 'function' &&
             typeof authPlugin.getConfigStatus === 'function' &&
-            typeof authPlugin.createProvider === 'function'
+            typeof authPlugin.createArcticProvider === 'function' &&
+            typeof authPlugin.fetchUserInfo === 'function' &&
+            typeof authPlugin.getScopes === 'function'
           ) {
-            registerAuthProvider(authPlugin);
-            logger.debug('Auth provider plugin registered', {
+            registerArcticProvider(authPlugin);
+            logger.debug('Arctic auth provider plugin registered', {
               plugin: loadedPlugin.manifest.name,
               providerId: authPlugin.config.providerId,
               isConfigured: authPlugin.isConfigured(),
             });
           } else {
-            logger.warn('Auth provider plugin missing required exports', {
+            logger.warn('Arctic auth provider plugin missing required exports', {
               plugin: loadedPlugin.manifest.name,
               hasConfig: typeof authPlugin?.config === 'object',
               hasIsConfigured: typeof authPlugin?.isConfigured === 'function',
               hasGetConfigStatus: typeof authPlugin?.getConfigStatus === 'function',
-              hasCreateProvider: typeof authPlugin?.createProvider === 'function',
+              hasCreateArcticProvider: typeof authPlugin?.createArcticProvider === 'function',
+              hasFetchUserInfo: typeof authPlugin?.fetchUserInfo === 'function',
+              hasGetScopes: typeof authPlugin?.getScopes === 'function',
             });
           }
         } catch (error) {
-          logger.error('Failed to load auth provider plugin module', {
+          logger.error('Failed to load Arctic auth provider plugin module', {
             plugin: loadedPlugin.manifest.name,
             error: error instanceof Error ? error.message : String(error),
           });
@@ -406,7 +411,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       }
 
       const loadedAuthPlugins = authPlugins.length;
-      logger.info('Auth provider plugins initialized', {
+      logger.info('Arctic auth provider plugins initialized', {
         total: loadedAuthPlugins,
       });
     }
@@ -420,6 +425,17 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         total: themeStats.total,
         withDarkMode: themeStats.withDarkMode,
         withCssOverrides: themeStats.withCssOverrides,
+      });
+    }
+
+    // Initialize roleplay template registry from enabled plugins with ROLEPLAY_TEMPLATE capability
+    logger.debug('Initializing roleplay template registry');
+    await initializeRoleplayTemplateRegistry();
+    const templateStats = roleplayTemplateRegistry.getStats();
+    if (templateStats.total > 0) {
+      logger.info('Roleplay template plugins initialized', {
+        total: templateStats.total,
+        templates: roleplayTemplateRegistry.getAll().map(t => t.name),
       });
     }
 
@@ -455,6 +471,8 @@ export function resetPluginSystem(): void {
   pluginRouteRegistry.skipValidation = false;
   // Reset theme registry
   themeRegistry.reset();
+  // Reset roleplay template registry
+  roleplayTemplateRegistry.reset();
   logger.debug('Plugin system reset');
 }
 

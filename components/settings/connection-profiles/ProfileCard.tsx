@@ -1,11 +1,14 @@
 import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
 import { TagBadge } from '@/components/tags/tag-badge'
+import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
 import type { ConnectionProfile } from './types'
 
 interface ProfileCardProps {
   profile: ConnectionProfile
   cheapDefaultProfileId: string | null
+  /** Whether this profile's provider requires an API key */
+  providerRequiresApiKey?: boolean
   onEdit: (profile: ConnectionProfile) => void
   onDelete: (profileId: string) => void
   deleteConfirming: string | null
@@ -20,12 +23,16 @@ interface ProfileCardProps {
 export function ProfileCard({
   profile,
   cheapDefaultProfileId,
+  providerRequiresApiKey = true,
   onEdit,
   onDelete,
   deleteConfirming,
   onDeleteConfirmChange,
   isDeleting,
 }: ProfileCardProps) {
+  // Check if API key is missing when provider requires one
+  // Show warning if: (provider requires key AND no apiKey object) OR (apiKeyId was set but key was deleted)
+  const isMissingApiKey = providerRequiresApiKey && !profile.apiKey
   return (
     <div className="border border-border rounded-lg p-4 bg-card hover:bg-accent/50">
       <div className="flex items-start justify-between">
@@ -47,6 +54,7 @@ export function ProfileCard({
                 Cheap
               </span>
             )}
+            {isMissingApiKey && <MissingApiKeyBadge />}
           </div>
           <p className="qt-text-small mt-1">
             {profile.provider} • {profile.modelName}

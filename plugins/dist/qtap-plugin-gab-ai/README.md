@@ -128,7 +128,7 @@ for await (const chunk of provider.streamMessage({
 ## Support
 
 For issues with the plugin, refer to:
-- Quilltap GitHub: https://github.com/Foundry-9/F9-Quilltap
+- Quilltap GitHub: https://github.com/foundry-9/F9-Quilltap
 - Gab AI Documentation: https://api.gab.com/docs
 
 ## License

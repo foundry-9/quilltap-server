@@ -328,7 +328,7 @@ Keep an eye on:
 For issues and information:
 - **Ollama Official**: https://ollama.ai
 - **Model Library**: https://ollama.ai/library
-- **Quilltap GitHub**: https://github.com/Foundry-9/F9-Quilltap
+- **Quilltap GitHub**: https://github.com/foundry-9/F9-Quilltap
 - **Community**: https://github.com/jmorganca/ollama/discussions
 
 ## License

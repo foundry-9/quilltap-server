@@ -2,6 +2,12 @@
 
 > **Last Updated**: 2025-11-17 (outdated)
 > **Version**: 2.0 (Revised with Next.js, OAuth, simplified stack)
+>
+> ⚠️ **Historical Note**: This document was written during initial development. Since then:
+> - **NextAuth.js has been replaced** with Arctic (OAuth 2.0) + custom JWT sessions
+> - **PostgreSQL + Prisma has been replaced** with MongoDB (native driver)
+> - Code examples referencing `next-auth` are now historical and do not reflect current implementation
+> - For current architecture, see `docs/CHANGELOG.md` and `lib/auth/` directory
 
 ## Executive Summary
 
@@ -28,13 +34,15 @@ Quilltap is a Docker-containerized Next.js web application for AI-powered rolepl
 
 ### Authentication
 
-- **Auth Framework**: NextAuth.js v5 (Auth.js)
+> **Note**: The original plan used NextAuth.js. The current implementation uses Arctic + custom JWT sessions.
+
+- **Auth Framework**: ~~NextAuth.js v5~~ → Arctic (OAuth 2.0) + custom JWT sessions
 - **Providers**:
-  - Google OAuth (v1.0)
-  - Email/Password with TOTP 2FA (v1.1, planned)
+  - Google OAuth (v1.0) - implemented via Arctic
+  - Email/Password with TOTP 2FA (v1.1, completed)
   - Apple OAuth (post-1.1)
   - GitHub OAuth (post-1.1)
-- **Session**: Database sessions (v1.0), JWT in httpOnly cookies (optional future)
+- **Session**: ~~Database sessions~~ → JWT in httpOnly cookies
 
 ### Testing
 
@@ -463,7 +471,7 @@ All Phase 1.0 deliverables met. Application is production-ready with enterprise-
 
 - [ ] Database schema migration for password and TOTP fields
 - [ ] Password utilities (bcrypt hashing, strength validation)
-- [ ] NextAuth CredentialsProvider configuration
+- [x] Custom credentials login route (replaced NextAuth CredentialsProvider)
 - [ ] User signup API endpoint and UI
 - [ ] Updated signin UI supporting both OAuth and credentials
 - [ ] TOTP utilities (secret generation, verification, backup codes)
@@ -2265,4 +2273,4 @@ Once roadmap is approved:
 
 **Project Status**: Planning Phase
 **Target v1.0 Release**: TBD
-**Maintainer**: Foundry-9
+**Maintainer**: Foundry-9 LLC

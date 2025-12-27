@@ -1,6 +1,5 @@
 "use client";
 
-import { signIn } from "next-auth/react";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -17,6 +16,7 @@ interface AuthProvider {
 
 interface AuthStatus {
   authDisabled: boolean;
+  oauthDisabled: boolean;
   hasOAuthProviders: boolean;
   providers: AuthProvider[];
   credentialsEnabled: boolean;
@@ -27,13 +27,14 @@ function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const message = searchParams.get("message");
+  const errorParam = searchParams.get("error");
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [needsTotp, setNeedsTotp] = useState(false);
   const [rememberDevice, setRememberDevice] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(errorParam || "");
   const [loading, setLoading] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [authStatusLoading, setAuthStatusLoading] = useState(true);
@@ -46,6 +47,13 @@ function SignInForm() {
         if (response.ok) {
           const data = await response.json();
           setAuthStatus(data);
+
+          // If auth is completely disabled, redirect to dashboard automatically
+          // The session will be created with the unauthenticated user
+          if (data.authDisabled) {
+            router.push('/dashboard');
+            return;
+          }
         }
       } catch (err) {
         console.error('Failed to fetch auth status:', err);
@@ -54,7 +62,7 @@ function SignInForm() {
       }
     }
     fetchAuthStatus();
-  }, []);
+  }, [router]);
 
   async function handleCredentialsSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -68,20 +76,29 @@ function SignInForm() {
         .find(row => row.startsWith('totp_trusted_device='))
         ?.split('=')[1];
 
-      const result = await signIn("credentials", {
-        username,
-        password,
-        totpCode: needsTotp ? totpCode : undefined,
-        trustedDeviceToken: trustedDeviceToken || undefined,
-        redirect: false,
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          username,
+          password,
+          totpCode: needsTotp ? totpCode : undefined,
+          trustedDeviceToken: trustedDeviceToken || undefined,
+          rememberDevice,
+        }),
       });
 
-      if (result?.error) {
-        if (result.error === "2FA code required") {
+      const result = await response.json();
+
+      if (!result.success) {
+        if (result.requires2FA) {
           setNeedsTotp(true);
           setError("Please enter your 2FA code");
         } else {
-          setError(result.error);
+          setError(result.error || "Login failed");
         }
       } else {
         // Login successful - if TOTP was verified and remember device is checked, create trusted device
@@ -90,6 +107,7 @@ function SignInForm() {
             await fetch('/api/auth/2fa/trusted-devices', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
             });
           } catch (deviceErr) {
             // Don't block login if device trust fails
@@ -105,8 +123,10 @@ function SignInForm() {
     }
   }
 
-  async function handleOAuthSignIn(providerId: string) {
-    await signIn(providerId, { callbackUrl: "/dashboard" });
+  function handleOAuthSignIn(providerId: string) {
+    // Redirect to Arctic OAuth authorization endpoint
+    const callbackUrl = encodeURIComponent("/dashboard");
+    window.location.href = `/api/auth/oauth/${providerId}/authorize?callbackUrl=${callbackUrl}`;
   }
 
   // Render Google icon SVG
@@ -141,6 +161,22 @@ function SignInForm() {
     );
   }
 
+  // Show redirecting message when auth is disabled
+  if (authStatus?.authDisabled) {
+    return (
+      <div className="qt-auth-page">
+        <div className="qt-auth-card">
+          <div className="qt-auth-header">
+            <h1 className="qt-auth-title">Redirecting...</h1>
+            <p className="qt-auth-subtitle">
+              Authentication is disabled. Redirecting to dashboard...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="qt-auth-page">
       <div className="qt-auth-card">
@@ -171,13 +207,13 @@ function SignInForm() {
         )}
 
         <div className="mt-8 space-y-4">
-          {/* OAuth Provider Buttons - dynamically rendered */}
+          {/* OAuth Provider Buttons - dynamically rendered (hidden when oauthDisabled) */}
           {authStatusLoading ? (
             <div className="qt-button qt-button-secondary w-full justify-center opacity-70">
               Loading authentication options...
             </div>
           ) : (
-            authStatus?.providers.map((provider) => (
+            !authStatus?.oauthDisabled && authStatus?.providers.map((provider) => (
               <button
                 key={provider.id}
                 onClick={() => handleOAuthSignIn(provider.id)}

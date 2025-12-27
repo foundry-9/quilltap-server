@@ -7,7 +7,7 @@
 
 import { Collection } from 'mongodb';
 import { logger } from '@/lib/logger';
-import { MongoBaseRepository } from './base.repository';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
 import { FileEntry, FileEntrySchema, FileCategory, FileSource } from '@/lib/schemas/types';
 
 /**
@@ -163,18 +163,24 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
 
   /**
    * Create new file entry
+   * @param data The file data
+   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
    */
-  async create(data: Omit<FileEntry, 'id' | 'createdAt' | 'updatedAt'>): Promise<FileEntry> {
+  async create(
+    data: Omit<FileEntry, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
+  ): Promise<FileEntry> {
     try {
       logger.debug('Creating new file', { userId: data.userId, filename: data.originalFilename });
 
-      const id = this.generateId();
+      const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
+      const createdAt = options?.createdAt || now;
 
       const newFile: FileEntry = {
         ...data,
         id,
-        createdAt: now,
+        createdAt,
         updatedAt: now,
       };
 

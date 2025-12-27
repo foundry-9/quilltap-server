@@ -22,11 +22,6 @@ if (shouldSilenceConsole) {
   })
 }
 
-// Mock next-auth before any tests import it
-jest.mock('next-auth', () => ({
-  getServerSession: jest.fn(),
-}))
-
 // Mock our session utilities to avoid running full plugin initialization in tests
 const mockGetServerSession = jest.fn().mockResolvedValue(null)
 
@@ -52,16 +47,25 @@ jest.mock('@/lib/auth/session', () => ({
   }),
 }))
 
-// Mock next-auth/react
-jest.mock('next-auth/react', () => ({
-  useSession: jest.fn(),
-  SessionProvider: ({ children }: any) => children,
+// Mock session provider for tests
+jest.mock('@/components/providers/session-provider', () => ({
+  useSession: jest.fn(() => ({
+    data: null,
+    status: 'unauthenticated',
+    update: jest.fn(),
+  })),
+  useSessionOptional: jest.fn(() => ({
+    data: null,
+    status: 'unauthenticated',
+    update: jest.fn(),
+  })),
+  Providers: ({ children }: any) => children,
 }))
 
 // Mock environment variables for tests
 // Note: NODE_ENV is read-only and set by Jest automatically
-process.env.NEXTAUTH_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000'
-process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || 'test-secret-for-unit-tests-32-chars-long!!'
+process.env.BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-for-unit-tests-32-chars-long!!'
 process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-google-client-id'
 process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-google-client-secret'
 process.env.ENCRYPTION_MASTER_PEPPER = process.env.ENCRYPTION_MASTER_PEPPER || 'test-pepper-for-unit-tests-32-chars-long!'
@@ -193,6 +197,14 @@ jest.mock('@/lib/llm/plugin-factory', () => ({
   getAllAvailableProviders: jest.fn(() => []),
   getAllAvailableImageProviders: jest.fn(() => []),
   isProviderFromPlugin: jest.fn(() => true),
+}))
+
+// Mock provider validation - default to valid
+jest.mock('@/lib/plugins/provider-validation', () => ({
+  validateProviderConfig: jest.fn().mockReturnValue({
+    valid: true,
+    errors: [],
+  }),
 }))
 
 // Mock LLM module (re-exports from plugin-factory)

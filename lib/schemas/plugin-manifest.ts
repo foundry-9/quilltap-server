@@ -34,6 +34,7 @@ export const PluginCapabilityEnum = z.enum([
   'DATABASE_BACKEND',      // Replaces/augments database
   'FILE_BACKEND',          // Replaces/augments file storage
   'UPGRADE_MIGRATION',     // Provides version upgrade migrations (runs early in startup)
+  'ROLEPLAY_TEMPLATE',     // Provides roleplay formatting templates
 ]);
 
 export type PluginCapability = z.infer<typeof PluginCapabilityEnum>;
@@ -396,6 +397,29 @@ export const ThemeConfigSchema = z.object({
 
 export type ThemeConfig = z.infer<typeof ThemeConfigSchema>;
 
+/**
+ * Roleplay template plugin configuration schema
+ *
+ * Defines the configuration for roleplay template plugins.
+ * These plugins provide formatting instructions that are prepended
+ * to character system prompts during chat.
+ */
+export const RoleplayTemplateConfigSchema = z.object({
+  /** Display name for the template (e.g., 'Quilltap RP') */
+  name: z.string().min(1).max(100).describe('Template display name'),
+
+  /** Short description of the template formatting style */
+  description: z.string().max(500).optional().describe('Template description'),
+
+  /** The full system prompt with formatting instructions */
+  systemPrompt: z.string().min(1).describe('System prompt with formatting instructions'),
+
+  /** Optional categorization tags */
+  tags: z.array(z.string()).default([]).optional().describe('Tags for categorization'),
+});
+
+export type RoleplayTemplateConfig = z.infer<typeof RoleplayTemplateConfigSchema>;
+
 // ============================================================================
 // MAIN MANIFEST SCHEMA
 // ============================================================================
@@ -506,6 +530,9 @@ export const PluginManifestSchema = z.object({
 
   /** Theme configuration (for THEME capability plugins) */
   themeConfig: ThemeConfigSchema.optional(),
+
+  /** Roleplay template configuration (for ROLEPLAY_TEMPLATE capability plugins) */
+  roleplayTemplateConfig: RoleplayTemplateConfigSchema.optional(),
 
   // ===== SECURITY & PERMISSIONS =====
   /** Permissions required by the plugin */

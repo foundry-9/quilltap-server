@@ -29,6 +29,8 @@ export interface LoadedPlugin {
   enabled: boolean;
   capabilities: PluginCapability[];
   source: PluginSource;
+  /** Version from package.json (preferred for display) */
+  packageVersion?: string;
 }
 
 export interface PluginLoadError {
@@ -54,6 +56,21 @@ const MANIFEST_FILENAME = 'manifest.json';
 // ============================================================================
 // HELPERS
 // ============================================================================
+
+/**
+ * Reads the version from a plugin's package.json
+ * @param pluginPath - Path to the plugin directory
+ * @returns Version string or undefined if not found
+ */
+async function getPackageVersion(pluginPath: string): Promise<string | undefined> {
+  try {
+    const packageJsonPath = path.join(pluginPath, 'package.json');
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
+    return packageJson.version;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Determines the source of a plugin based on its path and package.json
@@ -242,8 +259,9 @@ export async function scanPlugins(
         // Get capabilities from manifest
         const capabilities = [...manifest.capabilities];
 
-        // Determine plugin source
+        // Determine plugin source and get package version
         const source = await determinePluginSource(pluginPath);
+        const packageVersion = await getPackageVersion(pluginPath);
 
         result.plugins.push({
           manifest,
@@ -252,6 +270,7 @@ export async function scanPlugins(
           enabled: manifest.enabledByDefault ?? false,
           capabilities,
           source,
+          packageVersion,
         });
       }
     } catch (error) {
@@ -314,8 +333,9 @@ export async function loadPlugin(
   // Get capabilities from manifest
   const capabilities = [...manifest.capabilities];
 
-  // Determine plugin source
+  // Determine plugin source and get package version
   const source = await determinePluginSource(pluginPath);
+  const packageVersion = await getPackageVersion(pluginPath);
 
   return {
     manifest,
@@ -324,6 +344,7 @@ export async function loadPlugin(
     enabled: manifest.enabledByDefault ?? false,
     capabilities,
     source,
+    packageVersion,
   };
 }
 

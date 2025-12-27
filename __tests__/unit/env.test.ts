@@ -14,8 +14,7 @@ describe('Environment Validation', () => {
     // Set up minimum required environment variables
     process.env.NODE_ENV = 'test';
     process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
-    process.env.NEXTAUTH_URL = 'http://localhost:3000';
-    process.env.NEXTAUTH_SECRET = 'test-secret-key-minimum-32-characters-long';
+    process.env.BASE_URL = 'http://localhost:3000';
     process.env.GOOGLE_CLIENT_ID = 'test-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
     process.env.ENCRYPTION_MASTER_PEPPER = 'test-pepper-key-minimum-32-characters';
@@ -54,17 +53,6 @@ describe('Environment Validation', () => {
 
     const { validateEnv } = await import('@/lib/env');
     expect(() => validateEnv()).not.toThrow();
-  });
-
-  it('should fail with short NEXTAUTH_SECRET', async () => {
-    process.env.NEXTAUTH_SECRET = 'short';
-
-    jest.resetModules();
-
-    await expect(async () => {
-      const { validateEnv } = await import('@/lib/env');
-      validateEnv();
-    }).rejects.toThrow();
   });
 
   it('should fail with short ENCRYPTION_MASTER_PEPPER', async () => {

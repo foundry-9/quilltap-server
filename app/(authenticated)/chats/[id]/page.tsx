@@ -6,6 +6,7 @@ import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
 import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
+import ChatRenameModal from '@/components/chat/ChatRenameModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
 import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
@@ -26,6 +27,7 @@ import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import { useDebugOptional } from '@/components/providers/debug-provider'
 import { useChatContext } from '@/components/providers/chat-context'
@@ -90,6 +92,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [mobileToolPaletteOpen, setMobileToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
+  const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
@@ -101,6 +104,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
   const [mobileParticipantDropdownId, setMobileParticipantDropdownId] = useState<string | null>(null)
+  const [isPaused, setIsPaused] = useState(false)
 
   // Use the extracted file attachments hook
   const fileHook = useFileAttachments(id)
@@ -117,6 +121,91 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const abortControllerRef = useRef<AbortController | null>(null)
   const userStoppedStreamRef = useRef<boolean>(false)
   const hasRestoredTurnStateRef = useRef<boolean>(false)
+  const draftSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const lastSavedDraftRef = useRef<string>('')
+  const hasRestoredDraftRef = useRef<boolean>(false)
+
+  // Draft persistence - localStorage key for this chat
+  const draftStorageKey = `quilltap-draft-${id}`
+
+  // Restore draft from localStorage on mount
+  useEffect(() => {
+    if (hasRestoredDraftRef.current) return
+    hasRestoredDraftRef.current = true
+
+    try {
+      const savedDraft = localStorage.getItem(draftStorageKey)
+      if (savedDraft) {
+        clientLogger.debug('[Chat] Restoring draft from localStorage', { length: savedDraft.length })
+        setInput(savedDraft)
+        lastSavedDraftRef.current = savedDraft
+      }
+    } catch (err) {
+      clientLogger.warn('[Chat] Failed to restore draft from localStorage', { error: err })
+    }
+  }, [draftStorageKey])
+
+  // Save draft to localStorage with debouncing (5 second minimum)
+  useEffect(() => {
+    // Don't save if input hasn't changed from last save
+    if (input === lastSavedDraftRef.current) return
+
+    // Clear any existing timer
+    if (draftSaveTimerRef.current) {
+      clearTimeout(draftSaveTimerRef.current)
+    }
+
+    // Set new timer for 5 seconds
+    draftSaveTimerRef.current = setTimeout(() => {
+      try {
+        if (input.trim()) {
+          clientLogger.debug('[Chat] Saving draft to localStorage', { length: input.length })
+          localStorage.setItem(draftStorageKey, input)
+          lastSavedDraftRef.current = input
+        } else {
+          // Clear draft if input is empty
+          clientLogger.debug('[Chat] Clearing draft from localStorage (empty input)')
+          localStorage.removeItem(draftStorageKey)
+          lastSavedDraftRef.current = ''
+        }
+      } catch (err) {
+        clientLogger.warn('[Chat] Failed to save draft to localStorage', { error: err })
+      }
+    }, 5000)
+
+    // Cleanup timer on unmount or input change
+    return () => {
+      if (draftSaveTimerRef.current) {
+        clearTimeout(draftSaveTimerRef.current)
+      }
+    }
+  }, [input, draftStorageKey])
+
+  // Helper to clear draft (called on successful submission)
+  const clearDraft = useCallback(() => {
+    try {
+      clientLogger.debug('[Chat] Clearing draft after submission')
+      localStorage.removeItem(draftStorageKey)
+      lastSavedDraftRef.current = ''
+      if (draftSaveTimerRef.current) {
+        clearTimeout(draftSaveTimerRef.current)
+        draftSaveTimerRef.current = null
+      }
+    } catch (err) {
+      clientLogger.warn('[Chat] Failed to clear draft from localStorage', { error: err })
+    }
+  }, [draftStorageKey])
+
+  // Cleanup effect: abort any pending request when unmounting or chat changes
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        clientLogger.debug('[Chat] Cleanup: aborting pending request on unmount')
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+    }
+  }, [id])
 
   const chatContext = useChatContext()
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
@@ -213,6 +302,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length === 1
   }, [participantsAsBase])
 
+  // Update browser tab title with chat name
+  useDocumentTitle(chat?.title ?? null)
+
   const charactersMap = useMemo((): Map<string, Character> => {
     const map = new Map<string, Character>()
     if (!chat?.participants) return map
@@ -278,6 +370,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     inputRef as React.RefObject<HTMLTextAreaElement>,
   )
 
+  // Unpause callback for the turn management hook - needs to be defined before the hook call
+  const unpauseChat = useCallback(async () => {
+    clientLogger.debug('[Chat] Unpausing chat (from nudge)')
+    setIsPaused(false)
+    userStoppedStreamRef.current = false
+    try {
+      const response = await fetch(`/api/chats/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { isPaused: false } }),
+      })
+      if (!response.ok) {
+        clientLogger.error('[Chat] Failed to persist unpause state', { status: response.status })
+      }
+    } catch (error) {
+      clientLogger.error('[Chat] Error persisting unpause state', { error })
+    }
+  }, [id])
+
   // Use the extracted turn management hook
   const turnManagement = useTurnManagement(
     participantsAsBase,
@@ -293,6 +404,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       // Trigger continue mode - implementation below
       await triggerContinueMode(participantId)
     },
+    isPaused,
+    unpauseChat,
   )
 
   // Calculate turn state when messages change - copied from original
@@ -371,6 +484,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     })
   }, [messages, participantsAsBase, userParticipantId, charactersMap, chat?.lastTurnParticipantId])
 
+  // Initialize isPaused from chat data
+  useEffect(() => {
+    if (chat?.isPaused !== undefined) {
+      setIsPaused(chat.isPaused)
+      if (chat.isPaused) {
+        // Also set the ref to prevent auto-triggering on page load
+        userStoppedStreamRef.current = true
+      }
+    }
+  }, [chat?.isPaused])
+
   // triggerContinueMode function - large streaming logic kept in place
   const triggerContinueMode = useCallback(async (participantId: string) => {
     if (streaming || waitingForResponse) {
@@ -394,6 +518,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
 
     clientLogger.debug('[Chat] Triggering continue mode for participant', { participantId })
+
+    // Abort any existing request before starting a new one
+    if (abortControllerRef.current) {
+      clientLogger.debug('[Chat] Aborting previous request before starting new one')
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
 
     setWaitingForResponse(true)
     setStreaming(false)
@@ -505,6 +636,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setRespondingParticipantId(null)
       abortControllerRef.current = null
       scrollToBottom()
+      // Return focus to input after AI response completes
+      // Use longer timeout to let smooth scroll settle, and preventScroll to avoid conflicts
+      setTimeout(() => {
+        inputRef.current?.focus({ preventScroll: true })
+        clientLogger.debug('[Chat] Focus returned to input after continue mode')
+      }, 150)
     }
   }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages])
 
@@ -512,6 +649,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     if (!isMultiChar) {
       clientLogger.debug('[Chat] Auto-trigger skipped - not multi-character mode')
+      return
+    }
+
+    if (isPaused) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - chat is paused')
       return
     }
 
@@ -559,7 +701,39 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }, 100)
 
     return () => clearTimeout(timeoutId)
-  }, [isMultiChar, streaming, waitingForResponse, turnSelectionResult, userParticipantId, triggerContinueMode])
+  }, [isMultiChar, isPaused, streaming, waitingForResponse, turnSelectionResult, userParticipantId, triggerContinueMode])
+
+  // Function to set pause state and persist to database
+  const setPauseState = useCallback(async (paused: boolean) => {
+    clientLogger.debug('[Chat] Setting pause state', { paused, chatId: id })
+    setIsPaused(paused)
+    userStoppedStreamRef.current = paused
+
+    try {
+      const response = await fetch(`/api/chats/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { isPaused: paused } }),
+      })
+      if (!response.ok) {
+        clientLogger.error('[Chat] Failed to persist pause state', { status: response.status })
+      }
+    } catch (error) {
+      clientLogger.error('[Chat] Error persisting pause state', { error })
+    }
+  }, [id])
+
+  // Toggle pause state
+  const togglePause = useCallback(async () => {
+    const newPausedState = !isPaused
+    clientLogger.info('[Chat] Toggling pause state', { from: isPaused, to: newPausedState })
+    await setPauseState(newPausedState)
+    if (newPausedState) {
+      showInfoToast('Auto-responses paused')
+    } else {
+      showInfoToast('Auto-responses resumed')
+    }
+  }, [isPaused, setPauseState])
 
   // stopStreaming function
   const stopStreaming = useCallback(() => {
@@ -575,17 +749,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setPendingToolCalls([])
     setToolExecutionStatus(null)
     if (isMultiChar) {
-      clientLogger.debug('[Chat] Setting userStoppedStreamRef to prevent auto-triggering')
+      clientLogger.debug('[Chat] Setting userStoppedStreamRef and pausing chat')
       userStoppedStreamRef.current = true
+      // Also pause the chat persistently
+      setPauseState(true)
     }
     if (streamingContent) {
       clientLogger.debug('[Chat] Streaming stopped with partial content', {
         contentLength: streamingContent.length,
       })
-      showInfoToast('Response stopped - your turn to speak')
+      showInfoToast('Response stopped - chat paused')
     }
     setStreamingContent('')
-  }, [streamingContent, isMultiChar])
+  }, [streamingContent, isMultiChar, setPauseState])
 
   // Persist turn state effect
   useEffect(() => {
@@ -600,6 +776,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const handleAddCharacter = useCallback(() => {
     clientLogger.debug('[Chat] Opening add character dialog')
     setAddCharacterDialogOpen(true)
+  }, [])
+
+  // Rename handler
+  const handleRenameClick = useCallback(() => {
+    clientLogger.debug('[Chat] Opening rename modal')
+    setRenameModalOpen(true)
   }, [])
 
   const handleCharacterAdded = useCallback(() => {
@@ -822,6 +1004,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return () => globalThis.window?.removeEventListener('resize', handleResize)
   }, [resizeTextarea])
 
+  // Focus textarea when generation completes (streaming/waiting goes from true to false)
+  const wasGeneratingRef = useRef(false)
+  useEffect(() => {
+    const isGenerating = streaming || waitingForResponse || sending
+
+    if (wasGeneratingRef.current && !isGenerating) {
+      // Just finished generating - focus the textarea
+      clientLogger.debug('[Chat] Generation complete, focusing textarea')
+      setTimeout(() => {
+        inputRef.current?.focus({ preventScroll: true })
+      }, 100)
+    }
+
+    wasGeneratingRef.current = isGenerating
+  }, [streaming, waitingForResponse, sending])
+
   // Main sendMessage function
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -829,8 +1027,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     // Reset auto-trigger ref when user sends a message (new turn cycle starts)
     lastAutoTriggeredRef.current = null
-    // Clear the user-stopped flag - user is engaging, so auto-trigger can resume
-    userStoppedStreamRef.current = false
+    // Only clear the user-stopped flag if NOT paused - respect pause state
+    if (!isPaused) {
+      clientLogger.debug('[Chat] Clearing userStoppedStreamRef - chat is not paused')
+      userStoppedStreamRef.current = false
+    } else {
+      clientLogger.debug('[Chat] Keeping userStoppedStreamRef true - chat is paused')
+    }
 
     const userMessage = input.trim()
     const fileIds = attachedFiles.map((f) => f.id)
@@ -842,6 +1045,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       mimeType: f.mimeType,
     }))
     setInput('')
+    clearDraft()
     setAttachedFiles([])
     setSending(true)
     setWaitingForResponse(true)
@@ -1175,9 +1379,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     } finally {
       setSending(false)
       abortControllerRef.current = null
+      // Return focus to input after send completes
+      // Use longer timeout to let smooth scroll settle, and preventScroll to avoid conflicts
       setTimeout(() => {
-        inputRef.current?.focus()
-      }, 0)
+        inputRef.current?.focus({ preventScroll: true })
+        clientLogger.debug('[Chat] Focus returned to input after send')
+      }, 150)
     }
   }
 
@@ -1326,6 +1533,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   mobileParticipantDropdownId={mobileParticipantDropdownId}
                   mobileParticipantRefs={mobileParticipantRefs}
                   userParticipantId={userParticipantId}
+                  isPaused={isPaused}
+                  onTogglePause={togglePause}
                   onEditStart={messageActions.startEdit}
                   onEditSave={messageActions.saveEdit}
                   onEditCancel={messageActions.cancelEdit}
@@ -1412,6 +1621,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
           onAddCharacterClick={handleAddCharacter}
           onSettingsClick={() => setChatSettingsModalOpen(true)}
+          onRenameClick={handleRenameClick}
           onDeleteChatMemoriesClick={handleDeleteChatMemories}
           onReextractMemoriesClick={handleReextractMemories}
           onStopStreaming={stopStreaming}
@@ -1466,6 +1676,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           participants={chat?.participants || []}
           roleplayTemplateId={chat?.roleplayTemplateId}
           onSuccess={fetchChat}
+        />
+
+        <ChatRenameModal
+          isOpen={renameModalOpen}
+          onClose={() => setRenameModalOpen(false)}
+          chatId={id}
+          currentTitle={chat?.title || ''}
+          isManuallyRenamed={chat?.isManuallyRenamed ?? false}
+          onSuccess={(newTitle, isManuallyRenamed) => {
+            clientLogger.info('[Chat] Rename successful', { newTitle, isManuallyRenamed })
+            // Update local chat state with new title
+            if (chat) {
+              setChat({ ...chat, title: newTitle, isManuallyRenamed })
+            }
+          }}
         />
 
         <GenerateImageDialog
@@ -1525,6 +1750,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           isGenerating={streaming || waitingForResponse}
           userParticipantId={userParticipantId}
           respondingParticipantId={respondingParticipantId}
+          isPaused={isPaused}
+          onTogglePause={togglePause}
           onNudge={turnManagement.handleNudge}
           onQueue={turnManagement.handleQueue}
           onDequeue={turnManagement.handleDequeue}

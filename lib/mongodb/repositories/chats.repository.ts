@@ -14,7 +14,7 @@
 
 import { Collection, Filter } from 'mongodb';
 import { z } from 'zod';
-import { MongoBaseRepository } from './base.repository';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
 import {
   ChatMetadata,
   ChatMetadataBaseSchema,
@@ -197,18 +197,23 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
   /**
    * Create a new chat
    * @param data The chat data (without id, createdAt, updatedAt). Fields with defaults are optional.
+   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
    */
-  async create(data: Omit<ChatMetadataInput, 'id' | 'createdAt' | 'updatedAt'>): Promise<ChatMetadata> {
+  async create(
+    data: Omit<ChatMetadataInput, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
+  ): Promise<ChatMetadata> {
     try {
       logger.debug('Creating new chat', { userId: data.userId, title: data.title });
 
-      const id = (this as any).generateId();
+      const id = options?.id || (this as any).generateId();
       const now = (this as any).getCurrentTimestamp();
+      const createdAt = options?.createdAt || now;
 
       const chatInput = {
         ...data,
         id,
-        createdAt: now,
+        createdAt,
         updatedAt: now,
       };
 

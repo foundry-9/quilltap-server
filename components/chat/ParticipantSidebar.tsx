@@ -26,6 +26,8 @@ interface ParticipantSidebarProps {
   isGenerating: boolean
   userParticipantId: string | null
   respondingParticipantId?: string | null // The participant currently streaming a response
+  isPaused?: boolean // Whether auto-responses are paused
+  onTogglePause?: () => void // Toggle pause state
   onNudge: (participantId: string) => void
   onQueue: (participantId: string) => void
   onDequeue: (participantId: string) => void
@@ -43,6 +45,8 @@ export function ParticipantSidebar({
   isGenerating,
   userParticipantId,
   respondingParticipantId,
+  isPaused = false,
+  onTogglePause,
   onNudge,
   onQueue,
   onDequeue,
@@ -60,8 +64,9 @@ export function ParticipantSidebar({
       nextSpeakerId: turnSelectionResult?.nextSpeakerId,
       respondingParticipantId,
       isGenerating,
+      isPaused,
     })
-  }, [participants.length, turnState.queue.length, turnSelectionResult?.nextSpeakerId, respondingParticipantId, isGenerating])
+  }, [participants.length, turnState.queue.length, turnSelectionResult?.nextSpeakerId, respondingParticipantId, isGenerating, isPaused])
 
   // Sort participants: personas first (the user), then characters by displayOrder
   const sortedParticipants = useMemo(() => {
@@ -140,6 +145,31 @@ export function ParticipantSidebar({
           <div className="mt-1 qt-chat-sidebar-meta qt-chat-sidebar-queue">
             {turnState.queue.length} in queue
           </div>
+        )}
+
+        {/* Pause/Resume button */}
+        {onTogglePause && (
+          <button
+            onClick={onTogglePause}
+            className={`qt-chat-pause-button mt-3 ${isPaused ? 'qt-chat-pause-button-paused' : ''}`}
+            title={isPaused ? 'Resume auto-responses' : 'Pause auto-responses'}
+          >
+            {isPaused ? (
+              <>
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                <span>Resume</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                </svg>
+                <span>Pause</span>
+              </>
+            )}
+          </button>
         )}
       </div>
 

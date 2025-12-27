@@ -5,12 +5,17 @@
 
 import { logger } from '@/lib/logger';
 
+// ============================================================================
+// AUTH_DISABLED - Complete authentication bypass
+// ============================================================================
+
 // Cache the auth disabled state after first check
 let cachedAuthDisabled: boolean | null = null;
 
 /**
- * Determine if authentication is disabled
- * When disabled, anonymous access is allowed
+ * Determine if authentication is completely disabled
+ * When disabled, the app auto-logs in as "unauthenticatedLocalUser"
+ * and the signin page redirects to dashboard automatically.
  *
  * @returns {boolean} True if AUTH_DISABLED env var is set to 'true', false otherwise
  */
@@ -31,30 +36,92 @@ export function isAuthDisabled(): boolean {
   return cachedAuthDisabled;
 }
 
-// Cache for anonymous user config
-let cachedAnonymousUserName: string | null = null;
+// ============================================================================
+// OAUTH_DISABLED - OAuth providers disabled, credentials still work
+// ============================================================================
+
+// Cache the OAuth disabled state after first check
+let cachedOAuthDisabled: boolean | null = null;
 
 /**
- * Get the anonymous user display name
- * Used when authentication is disabled or for anonymous sessions
+ * Determine if OAuth providers are disabled
+ * When disabled, OAuth buttons are hidden but credentials login still works.
+ * Useful when OAuth providers aren't configured or not desired.
  *
- * @returns {string} The anonymous user name from AUTH_ANONYMOUS_USER_NAME env var, or default "Anonymous User"
+ * @returns {boolean} True if OAUTH_DISABLED env var is set to 'true', false otherwise
  */
-export function getAnonymousUserName(): string {
-  if (cachedAnonymousUserName !== null) {
-    return cachedAnonymousUserName;
+export function isOAuthDisabled(): boolean {
+  // Return cached value to avoid repeated env checks and logging
+  if (cachedOAuthDisabled !== null) {
+    return cachedOAuthDisabled;
   }
 
-  cachedAnonymousUserName = process.env.AUTH_ANONYMOUS_USER_NAME || 'Anonymous User';
-  return cachedAnonymousUserName;
+  cachedOAuthDisabled = process.env.OAUTH_DISABLED === 'true';
+
+  // Only log once when the value is first determined
+  logger.debug('OAuth disabled state determined', {
+    context: 'isOAuthDisabled',
+    oauthDisabled: cachedOAuthDisabled,
+  });
+
+  return cachedOAuthDisabled;
+}
+
+// ============================================================================
+// Unauthenticated User Configuration (used when AUTH_DISABLED=true)
+// ============================================================================
+
+// Cache for unauthenticated user config
+let cachedUnauthenticatedUserName: string | null = null;
+
+/**
+ * Get the unauthenticated user display name
+ * Used when AUTH_DISABLED=true for the auto-login user
+ *
+ * @returns {string} The unauthenticated user name from AUTH_UNAUTHENTICATED_USER_NAME env var,
+ *                   or default "Unauthenticated Local User"
+ */
+export function getUnauthenticatedUserName(): string {
+  if (cachedUnauthenticatedUserName !== null) {
+    return cachedUnauthenticatedUserName;
+  }
+
+  cachedUnauthenticatedUserName =
+    process.env.AUTH_UNAUTHENTICATED_USER_NAME || 'Unauthenticated Local User';
+  return cachedUnauthenticatedUserName;
 }
 
 /**
- * Get a consistent email address for anonymous users
- * Used for database records and session management when auth is disabled
+ * Get a consistent email address for the unauthenticated user
+ * Used for database records and session management when AUTH_DISABLED=true
  *
- * @returns {string} A consistent anonymous email address
+ * Note: Must be a valid email format to pass Zod validation
+ *
+ * @returns {string} A consistent unauthenticated user email address
+ */
+export function getUnauthenticatedUserEmail(): string {
+  return 'unauthenticated@localhost.localdomain';
+}
+
+// ============================================================================
+// DEPRECATED - Backward compatibility aliases
+// These functions will be removed in a future version
+// ============================================================================
+
+/**
+ * @deprecated Use getUnauthenticatedUserName() instead
+ */
+export function getAnonymousUserName(): string {
+  logger.warn('getAnonymousUserName() is deprecated, use getUnauthenticatedUserName()', {
+    context: 'getAnonymousUserName',
+  });
+  return getUnauthenticatedUserName();
+}
+
+/**
+ * @deprecated Use getUnauthenticatedUserEmail() instead
  */
 export function getAnonymousUserEmail(): string {
-  return 'anonymous@local';
+  // Note: Not logging deprecation warning here to avoid log spam during validation
+  return getUnauthenticatedUserEmail();
 }

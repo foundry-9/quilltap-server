@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-auth-google",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Google OAuth authentication provider for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
@@ -13,15 +13,16 @@
     "plugin",
     "auth",
     "google",
-    "oauth"
+    "oauth",
+    "arctic"
   ],
-  "author": "Foundry-9",
+  "author": "Foundry-9 LLC",
   "license": "MIT",
   "devDependencies": {
     "esbuild": "^0.24.0"
   },
   "peerDependencies": {
-    "next-auth": ">=4.0.0",
+    "arctic": ">=2.0.0",
     "react": ">=18.0.0"
   }
 }

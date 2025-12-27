@@ -30,20 +30,6 @@ export function useRestoreData(isOpen: boolean) {
     error: null,
   })
 
-  // Load S3 backups when dialog opens
-  useEffect(() => {
-    if (isOpen && state.step === 'source' && !state.backupsLoaded && !state.loadingBackups) {
-      loadS3Backups()
-    }
-  }, [isOpen, state.step, state.backupsLoaded, state.loadingBackups])
-
-  // Reset state when dialog closes
-  useEffect(() => {
-    if (!isOpen) {
-      setState((prev) => ({ ...prev, backupsLoaded: false }))
-    }
-  }, [isOpen])
-
   const loadS3Backups = useCallback(async () => {
     setState((prev) => ({ ...prev, loadingBackups: true }))
     try {
@@ -64,6 +50,20 @@ export function useRestoreData(isOpen: boolean) {
       setState((prev) => ({ ...prev, loadingBackups: false }))
     }
   }, [])
+
+  // Load S3 backups when dialog opens
+  useEffect(() => {
+    if (isOpen && state.step === 'source' && !state.backupsLoaded && !state.loadingBackups) {
+      loadS3Backups()
+    }
+  }, [isOpen, state.step, state.backupsLoaded, state.loadingBackups, loadS3Backups])
+
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setState((prev) => ({ ...prev, backupsLoaded: false }))
+    }
+  }, [isOpen])
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setState((prev) => ({

@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
         id: tag.id,
         name: tag.name,
         quickHide: tag.quickHide,
+        visualStyle: tag.visualStyle ?? null,
         createdAt: tag.createdAt,
         updatedAt: tag.updatedAt,
         _count: {

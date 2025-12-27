@@ -24,7 +24,7 @@ import {
   useCallback,
   useMemo,
 } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/components/providers/session-provider';
 import { clientLogger } from '@/lib/client-logger';
 import { ThemeStyleInjector } from '@/components/providers/theme-style-injector';
 import type { ThemeContextValue, ThemeProviderProps, ThemeFont, ThemeSummary } from './types';

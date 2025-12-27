@@ -12,13 +12,15 @@ import {
   RoleplayTemplateSchema,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { MongoBaseRepository } from './base.repository';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
+import { roleplayTemplateRegistry, type LoadedRoleplayTemplate } from '@/lib/plugins/roleplay-template-registry';
 
 /**
  * Built-in roleplay templates that are seeded on first access
+ * Note: Additional templates may be provided by plugins with the ROLEPLAY_TEMPLATE capability
  */
 const BUILT_IN_TEMPLATES: Omit<RoleplayTemplate, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  // Standard is listed first as the default/recommended option
+  // Standard is the default/recommended option
   {
     userId: null,
     name: 'Standard',
@@ -43,31 +45,30 @@ You must adhere to the following standard roleplay syntax for all outputs.
     isBuiltIn: true,
     tags: [],
   },
-  {
-    userId: null,
-    name: 'Quilltap RP',
-    description: 'Custom formatting protocol with dialogue as bare text, actions in [brackets], thoughts in {braces}, and OOC with // prefix.',
-    systemPrompt: `[SYSTEM INSTRUCTION: INTERACTION FORMATTING PROTOCOL]
-You must adhere to the following custom syntax for all outputs. Do NOT use standard roleplay formatting.
-
-1. SPOKEN DIALOGUE: Write as bare text. Do NOT use quotation marks.
-   - Example: Put the gun down, John.
-   - Markdown Italics (*text*) denote VOCAL EMPHASIS only, never action.
-
-2. ACTION & NARRATION: Enclose all physical movements, facial expressions, and environmental descriptions in SQUARE BRACKETS [ ].
-   - Example: [I lean back in the chair, crossing my arms.]
-
-3. INTERNAL MONOLOGUE: Enclose private thoughts and feelings in CURLY BRACES { }.
-   - Example: {He's lying to me. I can feel it.}
-
-4. META/OOC: Any Out-of-Character comments or instructions must start with "// ".
-   - Example: // The user is simulating a high-gravity environment now.
-
-5. STRICT COMPLIANCE: You must mirror this formatting in your responses. Never use asterisks for actions.`,
-    isBuiltIn: true,
-    tags: [],
-  },
+  // Additional templates (like Quilltap RP) are provided by plugins
 ];
+
+/**
+ * Convert a plugin-provided template to a RoleplayTemplate format
+ * Plugin templates use the plugin ID as their template ID
+ */
+function pluginTemplateToRoleplayTemplate(pluginTemplate: LoadedRoleplayTemplate): RoleplayTemplate {
+  // Generate a stable timestamp based on the plugin - using a fixed date for plugin templates
+  const pluginTimestamp = new Date('2025-01-01T00:00:00Z').toISOString();
+
+  return {
+    id: `plugin:${pluginTemplate.id}`, // Prefix with 'plugin:' to distinguish from DB templates
+    userId: null,
+    name: pluginTemplate.name,
+    description: pluginTemplate.description || null,
+    systemPrompt: pluginTemplate.systemPrompt,
+    isBuiltIn: true, // Plugin templates are treated as built-in (read-only)
+    pluginName: pluginTemplate.pluginName, // Include the plugin name for display
+    tags: pluginTemplate.tags,
+    createdAt: pluginTimestamp,
+    updatedAt: pluginTimestamp,
+  };
+}
 
 /**
  * Roleplay Templates Repository
@@ -81,6 +82,42 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
     logger.debug('RoleplayTemplatesRepository initialized', {
       collection: this.collectionName,
     });
+  }
+
+  // ============================================================================
+  // PLUGIN TEMPLATE HELPERS
+  // ============================================================================
+
+  /**
+   * Get all plugin-provided templates as RoleplayTemplate objects
+   */
+  private getPluginTemplates(): RoleplayTemplate[] {
+    if (!roleplayTemplateRegistry.isInitialized()) {
+      logger.debug('Roleplay template registry not yet initialized, skipping plugin templates');
+      return [];
+    }
+
+    const pluginTemplates = roleplayTemplateRegistry.getAll();
+    return pluginTemplates.map(pluginTemplateToRoleplayTemplate);
+  }
+
+  /**
+   * Get a plugin template by ID
+   */
+  private getPluginTemplateById(id: string): RoleplayTemplate | null {
+    // Check if this is a plugin template ID (prefixed with 'plugin:')
+    if (!id.startsWith('plugin:')) {
+      return null;
+    }
+
+    const pluginId = id.slice(7); // Remove 'plugin:' prefix
+    const pluginTemplate = roleplayTemplateRegistry.get(pluginId);
+
+    if (!pluginTemplate) {
+      return null;
+    }
+
+    return pluginTemplateToRoleplayTemplate(pluginTemplate);
   }
 
   // ============================================================================
@@ -158,6 +195,7 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
 
   /**
    * Find a roleplay template by ID
+   * Checks plugin templates first, then database templates
    */
   async findById(id: string): Promise<RoleplayTemplate | null> {
     try {
@@ -165,6 +203,16 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
         templateId: id,
         collection: this.collectionName,
       });
+
+      // Check if this is a plugin template
+      const pluginTemplate = this.getPluginTemplateById(id);
+      if (pluginTemplate) {
+        logger.debug('Roleplay template found in plugin registry', {
+          templateId: id,
+          name: pluginTemplate.name,
+        });
+        return pluginTemplate;
+      }
 
       // Ensure built-in templates are seeded
       await this.seedBuiltInTemplates();
@@ -190,7 +238,7 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
   }
 
   /**
-   * Find all roleplay templates
+   * Find all roleplay templates (database + plugin templates)
    */
   async findAll(): Promise<RoleplayTemplate[]> {
     try {
@@ -204,16 +252,22 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
 
       logger.debug('Retrieved roleplay templates from database', { count: docs.length });
 
-      const validated = docs
+      const dbTemplates = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
         .map((result) => result.data!);
 
-      logger.debug('All roleplay templates validated', {
-        total: docs.length,
-        validated: validated.length,
+      // Also include plugin templates
+      const pluginTemplates = this.getPluginTemplates();
+
+      const allTemplates = [...dbTemplates, ...pluginTemplates];
+
+      logger.debug('All roleplay templates combined', {
+        database: dbTemplates.length,
+        plugin: pluginTemplates.length,
+        total: allTemplates.length,
       });
-      return validated;
+      return allTemplates;
     } catch (error) {
       logger.error('Error finding all roleplay templates', {
         error: error instanceof Error ? error.message : String(error),
@@ -261,7 +315,7 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
   }
 
   /**
-   * Find all built-in roleplay templates
+   * Find all built-in roleplay templates (database + plugin templates)
    */
   async findBuiltIn(): Promise<RoleplayTemplate[]> {
     try {
@@ -275,18 +329,25 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
       const collection = await this.getCollection();
       const docs = await collection.find({ isBuiltIn: true }).toArray();
 
-      logger.debug('Retrieved built-in roleplay templates', { count: docs.length });
+      logger.debug('Retrieved built-in roleplay templates from database', { count: docs.length });
 
-      const validated = docs
+      const dbTemplates = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
         .map((result) => result.data!);
 
-      logger.debug('Built-in roleplay templates validated', {
-        total: docs.length,
-        validated: validated.length,
+      // Also include plugin templates (they are all built-in)
+      const pluginTemplates = this.getPluginTemplates();
+
+      const allBuiltIn = [...dbTemplates, ...pluginTemplates];
+
+      logger.debug('Built-in roleplay templates combined', {
+        database: dbTemplates.length,
+        plugin: pluginTemplates.length,
+        total: allBuiltIn.length,
       });
-      return validated;
+
+      return allBuiltIn;
     } catch (error) {
       logger.error('Error finding built-in roleplay templates', {
         error: error instanceof Error ? error.message : String(error),
@@ -296,7 +357,7 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
   }
 
   /**
-   * Find all templates available to a user (built-in + user's own templates)
+   * Find all templates available to a user (built-in + plugin + user's own templates)
    */
   async findAllForUser(userId: string): Promise<RoleplayTemplate[]> {
     try {
@@ -316,22 +377,29 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
         ],
       }).toArray();
 
-      logger.debug('Retrieved roleplay templates for user', {
+      logger.debug('Retrieved roleplay templates for user from database', {
         userId,
         count: docs.length,
       });
 
-      const validated = docs
+      const dbTemplates = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
         .map((result) => result.data!);
 
-      logger.debug('User available roleplay templates validated', {
+      // Also include plugin templates
+      const pluginTemplates = this.getPluginTemplates();
+
+      const allTemplates = [...dbTemplates, ...pluginTemplates];
+
+      logger.debug('User available roleplay templates combined', {
         userId,
-        total: docs.length,
-        validated: validated.length,
+        database: dbTemplates.length,
+        plugin: pluginTemplates.length,
+        total: allTemplates.length,
       });
-      return validated;
+
+      return allTemplates;
     } catch (error) {
       logger.error('Error finding all roleplay templates for user', {
         userId,
@@ -381,9 +449,12 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
 
   /**
    * Create a new roleplay template
+   * @param data The template data
+   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
    */
   async create(
-    data: Omit<RoleplayTemplate, 'id' | 'createdAt' | 'updatedAt'>
+    data: Omit<RoleplayTemplate, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
   ): Promise<RoleplayTemplate> {
     try {
       logger.debug('Creating new roleplay template', {
@@ -393,13 +464,14 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
         collection: this.collectionName,
       });
 
-      const id = this.generateId();
+      const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
+      const createdAt = options?.createdAt || now;
 
       const template: RoleplayTemplate = {
         ...data,
         id,
-        createdAt: now,
+        createdAt,
         updatedAt: now,
       };
 

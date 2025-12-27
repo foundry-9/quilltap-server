@@ -11,7 +11,7 @@ import {
   PromptTemplateSchema,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { MongoBaseRepository } from './base.repository';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
 import { loadSamplePrompts } from '@/lib/prompts/sample-prompts-loader';
 
 /**
@@ -340,9 +340,12 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
 
   /**
    * Create a new prompt template
+   * @param data The template data
+   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
    */
   async create(
-    data: Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt'>
+    data: Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
   ): Promise<PromptTemplate> {
     try {
       logger.debug('Creating new prompt template', {
@@ -352,13 +355,14 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
         collection: this.collectionName,
       });
 
-      const id = this.generateId();
+      const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
+      const createdAt = options?.createdAt || now;
 
       const template: PromptTemplate = {
         ...data,
         id,
-        createdAt: now,
+        createdAt,
         updatedAt: now,
       };
 

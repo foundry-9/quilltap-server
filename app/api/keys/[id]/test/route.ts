@@ -12,6 +12,7 @@ import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
 import { Provider } from '@/lib/schemas/types'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
+import { initializePlugins } from '@/lib/startup/plugin-initialization'
 
 /**
  * Test API key validity using the provider plugin's validateApiKey method
@@ -58,6 +59,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Ensure plugin system is initialized (idempotent)
+    await initializePlugins()
+
     const { id } = await params
     const session = await getServerSession()
     if (!session?.user?.id) {

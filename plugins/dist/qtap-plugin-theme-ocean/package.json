@@ -4,7 +4,7 @@
   "description": "Ocean theme plugin for Quilltap with layered gradients, glass panels, and custom typography",
   "main": "index.js",
   "types": "index.d.ts",
-  "author": "Foundry-9",
+  "author": "Foundry-9 LLC",
   "license": "MIT",
   "scripts": {
     "build": "node esbuild.config.mjs",

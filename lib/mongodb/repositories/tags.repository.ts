@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { Tag, TagSchema } from '@/lib/schemas/types';
 import { getMongoDatabase } from '../client';
+import { CreateOptions } from './base.repository';
 
 /**
  * MongoDB Tags Repository
@@ -256,11 +257,17 @@ export class MongoTagsRepository {
 
   /**
    * Create a new tag
+   * @param data The tag data
+   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
    */
-  async create(data: Omit<Tag, 'id' | 'createdAt' | 'updatedAt'>): Promise<Tag> {
+  async create(
+    data: Omit<Tag, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
+  ): Promise<Tag> {
     const collection = await this.getCollection();
-    const id = this.generateId();
+    const id = options?.id || this.generateId();
     const now = this.getCurrentTimestamp();
+    const createdAt = options?.createdAt || now;
 
     logger.debug('Creating new tag', {
       userId: data.userId,
@@ -276,7 +283,7 @@ export class MongoTagsRepository {
         id,
         nameLower,
         quickHide: typeof data.quickHide === 'boolean' ? data.quickHide : false,
-        createdAt: now,
+        createdAt,
         updatedAt: now,
       };
 
@@ -407,5 +414,32 @@ export class MongoTagsRepository {
       });
       throw error;
     }
+  }
+
+  /**
+   * Create or update a tag by ID.
+   * Used for sync operations where the ID is known (from remote instance).
+   * @param id The tag ID
+   * @param data The tag data
+   * @param options Options including original createdAt timestamp
+   */
+  async createOrUpdate(
+    id: string,
+    data: Omit<Tag, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: { createdAt?: string }
+  ): Promise<Tag> {
+    const existing = await this.findById(id);
+
+    if (existing) {
+      logger.debug('Tag exists, updating via createOrUpdate', { tagId: id });
+      const updated = await this.update(id, data);
+      if (!updated) {
+        throw new Error(`Failed to update tag ${id}`);
+      }
+      return updated;
+    }
+
+    logger.debug('Tag does not exist, creating via createOrUpdate', { tagId: id });
+    return this.create(data, { id, createdAt: options?.createdAt });
   }
 }

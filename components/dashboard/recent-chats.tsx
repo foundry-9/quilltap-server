@@ -105,7 +105,11 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
   const [hasInitialized, setHasInitialized] = useState(false)
 
   // Fetch recent chats from API with excluded tags
-  const fetchRecentChats = useCallback(async (excludeTagIds: string[]) => {
+  // Includes retry logic for server startup race conditions
+  const fetchRecentChats = useCallback(async (excludeTagIds: string[], retryCount = 0) => {
+    const MAX_RETRIES = 3
+    const RETRY_DELAY_MS = 1000 // Base delay, will be multiplied by retry count
+
     try {
       setLoading(true)
       const params = new URLSearchParams()
@@ -116,6 +120,7 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
 
       clientLogger.debug('Fetching recent chats', {
         excludeTagIds: excludeTagIds.length > 0 ? excludeTagIds : undefined,
+        retryCount: retryCount > 0 ? retryCount : undefined,
       })
 
       const response = await fetch(`/api/chats?${params.toString()}`, {
@@ -123,7 +128,8 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
       })
 
       if (!response.ok) {
-        throw new Error('Failed to fetch chats')
+        const errorText = await response.text().catch(() => 'Unknown error')
+        throw new Error(`Failed to fetch chats: ${response.status} ${errorText}`)
       }
 
       const data = await response.json()
@@ -136,12 +142,31 @@ export function RecentChatsSection({ chats: initialChats }: RecentChatsSectionPr
 
       setChats(transformedChats)
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
+      // Retry on failure during initial load (server might still be starting)
+      if (retryCount < MAX_RETRIES) {
+        const delay = RETRY_DELAY_MS * (retryCount + 1)
+        clientLogger.debug('Retrying recent chats fetch after delay', {
+          retryCount: retryCount + 1,
+          delayMs: delay,
+          reason: errorMessage,
+        })
+        setTimeout(() => {
+          fetchRecentChats(excludeTagIds, retryCount + 1)
+        }, delay)
+        return
+      }
+
       clientLogger.error('Error fetching recent chats', {
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
+        retriesExhausted: true,
       })
-      // On error, keep the existing chats
+      // On error after retries, keep the existing chats
     } finally {
-      setLoading(false)
+      if (retryCount === 0 || retryCount >= MAX_RETRIES) {
+        setLoading(false)
+      }
     }
   }, [])
 

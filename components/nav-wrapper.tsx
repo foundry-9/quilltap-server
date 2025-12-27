@@ -1,6 +1,6 @@
 'use client';
 
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/components/providers/session-provider';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { clientLogger } from '@/lib/client-logger';
