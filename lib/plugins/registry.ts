@@ -230,7 +230,7 @@ class PluginRegistry {
       plugins: Array.from(this.state.plugins.entries()).map(([name, plugin]) => ({
         name,
         title: plugin.manifest.title,
-        version: plugin.manifest.version,
+        version: plugin.packageVersion ?? plugin.manifest.version,
         enabled: plugin.enabled,
         capabilities: plugin.capabilities,
         path: plugin.pluginPath,

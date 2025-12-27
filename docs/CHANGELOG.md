@@ -4,6 +4,10 @@
 
 ### 2.5-dev
 
+- fix: Plugin list now displays package.json version instead of manifest.json version
+  - Added `packageVersion` field to `LoadedPlugin` interface
+  - Plugin scanning now reads version from package.json (preferred) with fallback to manifest.json
+  - Affects Settings → Plugins display
 - feat: Manual chat rename with auto-rename toggle
   - Added "Rename" button to tool palette (desktop and mobile)
   - ChatRenameModal allows setting a custom title or re-enabling auto-naming
