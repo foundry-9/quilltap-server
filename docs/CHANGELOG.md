@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 2.5-dev
+### 2.5
 
 - fix: Plugin list now displays package.json version instead of manifest.json version
   - Added `packageVersion` field to `LoadedPlugin` interface

@@ -531,29 +531,19 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Can be restored quickly to basics
   - [ ] Has intimate knowledge of this application
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
-- [X] Character build-out wizard
-  - Uses LLM of choice to fill out gaps in character fields or physical descriptions
-- [X] Make roleplay templates besides the default one into plugins (start with "Quilltap RP")
 - [ ] Create web-only version that uses IndexedDB for everything
-- [X] Stop using NextAuth (migrated to Arctic + custom JWT sessions)
-- [X] Create a native Quilltap import/export for everything
-- [X] Add "Pause" to the turn system; if a chat is marked "Pause" then nobody ever gets to talk until the user nudges somebody again, or "un-pauses" it
-- [X] Add a "Rename" to a chat, and if the user has renamed it, never try to rename it again unless something is toggled indicating that renaming can be automatic again
+rename it again unless something is toggled indicating that renaming can be automatic again
 - [ ] Project support
   - [ ] Folders
   - [ ] Files (text/Markdown or binary)
   - [ ] Direct import/export/access
   - [ ] Project becomes overridding context for chats, images, etc.
-- [X] Bug: when the textarea grows in the chat conversation footer, it doesn't shrink until you change something in it after you submit; upon submit it should reduce to normal levels with nothing in it
-- [X] Make a safely encrypted export/import for API keys, separate from backups
+backups
 - [ ] Starting a new chat should include:
   - [ ] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
   - [ ] A scenario prompt so you can set things up before you start
-- [X] Sync API
 - [ ] The plugin list should have the package.json version, not the manifest.json version
 - [ ] Search and replace in one chat, or in all chats associated with a character or persona
-- [X] non-localhost hosted Google Auth didn't set the return page correctly after login, so the dashboard ends up going to some non-functioning URL rather than the BASE_URL.
-- [X] Attaching a file to a chat doesn't seem to be working anymore.
 
 ## Acknowledgments
 
