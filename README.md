@@ -17,11 +17,14 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 
 - 🤖 Multi-provider plugins (OpenAI, Anthropic, Google Gemini, Grok, Gab AI, Ollama, OpenRouter, OpenAI-compatible APIs) with per-provider API key storage and connection profiles.
 - 🧠 Cheap LLM + embedding automation for memories, summaries, rename/replace flows, and semantic search that prefers embeddings when available.
-- 👥 Multi-character SillyTavern import wizard plus an in-app turn system with nudge/queue controls, inter-character memory sharing, and streaming avatars.
-- 🧰 Tools workspace with backup/restore flows (local download or S3), cloud backup previews, and a delete-all-data card; DevConsole (development builds) surfaces server logs, browser consoles, and chat traces.
+- 👥 Multi-character SillyTavern import wizard plus an in-app turn system with nudge/queue controls, pause/resume, inter-character memory sharing, and streaming avatars.
+- 🔄 Bidirectional sync between Quilltap instances with API key authentication, real-time progress tracking, and conflict resolution for characters, chats, memories, and more.
+- 🧙 AI Wizard for character creation with vision support - generates descriptions, personalities, system prompts, and physical descriptions from images or text.
+- 📦 Native .qtap export/import system for selective backup of characters, personas, chats, profiles, and templates with conflict resolution strategies.
+- 🧰 Tools workspace with backup/restore flows (local download or S3), cloud backup previews, native export/import, and a delete-all-data card; DevConsole (development builds) surfaces server logs, browser consoles, and chat traces.
 - 🎨 Theme plugin system powered by qt-* semantic utility classes so you can ship new theme packs (Ocean, Rains, Earl Grey are included) and give users an Appearance settings tab + nav toggle for quick swaps.
 - 🖼️ Integrated image generation profiles (Google Gemini/Imagen 4, Grok, OpenAI, OpenRouter) plus an asset gallery with tagging, avatar overrides, and secure per-user storage.
-- 🔐 Google OAuth plugin (via Arctic), optional no-auth mode, local username/password login, and TOTP MFA backed by AES-256-GCM encrypted API keys and per-user encryption keys.
+- 🔐 Arctic OAuth + custom JWT sessions with Google OAuth plugin, optional no-auth mode, local username/password login, and TOTP MFA backed by AES-256-GCM encrypted API keys and per-user encryption keys.
 - 🐳 Docker-first deployment targeting MongoDB + S3-compatible storage with embedded MinIO and Mongo Express for local development.
 
 ## What Can It Do?
@@ -29,9 +32,10 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 ### Character Management
 
 - Create richly detailed characters with personalities, physical descriptions (short/medium/long/complete tiers), memories, attachments, and example dialogues.
+- **AI Wizard**: Multi-step wizard for AI-assisted character creation and editing - generates titles, descriptions, personalities, scenarios, example dialogues, system prompts, and physical descriptions from images or existing data.
 - Use the rename/replace + template conversion interface to mass-update prompts, placeholder syntax, and SillyTavern templates across characters.
 - Favorite characters, sort lists by favorites/chat counts/name, and use quick-create APIs when migrating large libraries.
-- Import and export characters via SillyTavern’s JSON format (PNG card embedding is not supported) with automatic avatar hookup and tagging.
+- Import and export characters via SillyTavern's JSON format (PNG card embedding is not supported) with automatic avatar hookup and tagging.
 - Link personas and tag sets directly to characters so downstream chats inherit the right identity and metadata.
 
 ### Persona System
@@ -44,11 +48,12 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 ### Advanced Chat & Multi-Character Play
 
 - Real-time streaming responses with swipes, message editing/deletion, and complete chat history retention.
-- Native multi-character chats: add/remove participants mid conversation, manage turn queues, nudge idle speakers, and render streaming avatars in real time.
+- Native multi-character chats: add/remove participants mid conversation, manage turn queues, nudge idle speakers, pause/resume auto-responses, and render streaming avatars in real time.
+- **Manual chat rename**: Rename chats manually with option to re-enable auto-naming; dynamic browser tab titles show current chat name.
+- **Draft persistence**: Unsent message drafts are saved automatically and restored when you return to a chat.
 - Inter-character memory sharing plus auto-tagging and placeholder generation so scene descriptions stay consistent.
 - Multi-character SillyTavern import wizard with speaker mapping, persona assignment, and optional memory creation for each participant.
 - Development builds expose a DevConsole so engineers can read server logs, browser consoles, and chat traces without leaving the UI.
-
 - Import/export entire conversations from SillyTavern and branch them inside Quilltap with swipe histories.
 
 ### Image & Avatar Management
@@ -73,7 +78,34 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 - Memory search automatically prefers embeddings and gracefully falls back to keyword heuristics if none are configured.
 - Use the memory editor and housekeeping dialog to audit, merge, or regenerate summaries, tags, and placeholders with a couple of clicks.
 
-- Flag any connection profile as “cheap,” set a global default, or let Quilltap auto-pick the cheapest provider using real pricing fetched from OpenRouter.
+- Flag any connection profile as "cheap," set a global default, or let Quilltap auto-pick the cheapest provider using real pricing fetched from OpenRouter.
+
+### Multi-Instance Sync
+
+- **Bidirectional sync** between Quilltap instances running on different servers or devices.
+- Sync characters, personas, chats (with messages), memories, tags, roleplay templates, and prompt templates.
+- API key authentication for secure cross-instance sync through firewalls.
+- Real-time progress bar showing current phase (connecting, pulling, pushing), item being synced, and running counts.
+- **Sync direction control**: Choose between bidirectional sync, push-only (send local changes), or pull-only (fetch remote changes).
+- **Force Full Sync** option to pull/push all data regardless of timestamps - useful after local data deletion.
+- Automatic entity order enforcement ensures dependencies exist before dependents (tags before characters, etc.).
+- File content (avatars, attachments, generated images) included in sync with streaming for large files.
+- Reset Sync State button for troubleshooting sync issues.
+
+### Export & Import
+
+- **Native .qtap format**: Export wizard lets you select entity type, choose scope (all or selected), optionally include memories, and download a portable .qtap file.
+- **Selective import**: Import wizard previews entities with conflict detection, lets you choose conflict strategy (skip, overwrite, or duplicate), and remaps all foreign key relationships automatically.
+- Supports: Characters, Personas, Chats, Roleplay Templates, Prompt Templates, Connection Profiles, Image Profiles, Embedding Profiles, Tags.
+- **API key import/export**: Separate encrypted export for API keys with AES-256-GCM encryption, user passphrase protection, and HMAC integrity verification.
+- SillyTavern compatibility: Import/export characters and chats in SillyTavern JSON format (V2 spec).
+
+### User Profile & Account
+
+- **Profile page** (`/profile`): Edit display name, email, and profile avatar in one place.
+- View read-only account details: user ID, username, email verification status, creation date.
+- **Two-Factor Authentication**: Enable/disable TOTP 2FA, regenerate backup codes, manage trusted devices.
+- Accessible from user menu dropdown.
 
 ### Multi-Provider Support
 
@@ -93,7 +125,8 @@ Configure dedicated connection profiles for each provider you want to use:
 ### Security & Privacy
 
 - AES-256-GCM encryption protects every API key using per-user keys derived from the user ID plus a master pepper you control.
-- NextAuth powers authentication with plugin-based OAuth providers (Google today, more to come), local username/password login, optional TOTP 2FA, and even a no-auth flag for local/private deployments.
+- Arctic OAuth + custom JWT session management powers authentication with plugin-based OAuth providers (Google today, more to come), local username/password login, optional TOTP 2FA, and a no-auth flag for local/private deployments.
+- API key import/export uses AES-256-GCM encryption with user-provided passphrases and HMAC signatures for integrity verification.
 - Strict rate limiting, secure headers, and server-side validation guard every route; the Tools workspace can purge all user data (and cloud backups) with a single action.
 - All primary data lives in MongoDB collections while files, avatars, backups, and generated art are stored in per-user prefixes inside S3-compatible storage.
 
@@ -334,11 +367,17 @@ Quilltap stores all data in MongoDB and S3-compatible storage. Backups, exports,
 - **personas** - User persona definitions
 - **chats** - Chat metadata and message history
 - **files** - File metadata (actual files stored in S3)
-- **tags** - Tag definitions
+- **tags** - Tag definitions with visual styles
 - **memories** - Character memory data
 - **connectionProfiles** - LLM connection configurations
 - **embeddingProfiles** - Embedding provider configurations
 - **imageProfiles** - Image generation configurations
+- **promptTemplates** - User-created prompt templates
+- **roleplayTemplates** - User-created roleplay formatting templates
+- **sync_instances** - Remote Quilltap instances for sync
+- **sync_mappings** - Entity ID mappings between instances (legacy)
+- **sync_operations** - Sync operation history and status
+- **user_sync_api_keys** - API keys for authenticating sync requests
 - **accounts** - OAuth provider account links (provider ID, access tokens)
 
 ### S3 Storage
@@ -358,6 +397,8 @@ Quilltap includes a built-in backup and restore system accessible from the **Too
 - **Create Backup**: Export all your data as a ZIP file (download or save to cloud)
 - **Restore from Backup**: Import from a local file or from any S3 backup stored under `users/{userId}/backups/`
 - **Cloud Backups**: List, preview metadata, and restore S3 backups without leaving the modal
+- **Native Export/Import**: Selective .qtap export/import for specific entity types with conflict resolution strategies
+- **API Key Export/Import**: Encrypted export of API keys with passphrase protection
 - **Delete All Data**: Permanently wipe characters, personas, chats, API keys, files, and backups for the current user (after a confirmation step)
 
 The Tools workspace orchestrates MongoDB + S3 backups per user, so multi-tenant deployments can let users export their own data without sharing secrets. For admin-focused CLI procedures (cron-based `mongodump`, S3 sync, retention policies), see [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md).
@@ -436,12 +477,14 @@ Once logged in, you'll need to:
 - [Deployment Guide](docs/DEPLOYMENT.md) – Production patterns, TLS setup, cron backups, and monitoring tips.
 - [Backup & Restore Guide](docs/BACKUP-RESTORE.md) – CLI workflows for MongoDB + S3 plus retention strategies.
 - [Image Generation Guide](docs/IMAGE_GENERATION.md) – Provider-specific parameters and prompt expansion behavior.
+- [Sync API Specification](features/sync_api.md) – Multi-instance sync protocol, conflict resolution, and API reference.
 - [Development Notes](DEVELOPMENT.md) – Local dev scripts, testing commands, and repo layout.
 - [Theme Utility Classes](features/complete/theme-utility-classes.md) – Status of the qt-* semantic migration.
 - [Local User Authentication](features/complete/LOCAL_USER_AUTH.md) – Email/password and TOTP implementation details.
 - [Plugin Developer Guide](plugins/README.md) – How site plugins are structured and distributed.
 - [LLM Provider Guide](plugins/LLM-PROVIDER-GUIDE.md) – Creating new provider plugins.
 - [Auth Provider Guide](plugins/AUTH-PROVIDER-GUIDE.md) – Building OAuth/no-auth plugins.
+- [Plugin Manifest Reference](docs/PLUGIN_MANIFEST.md) – Complete schema for plugin manifests.
 
 ## Troubleshooting
 
@@ -508,6 +551,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 
 - [ ] Finish authentication changes
   - [X] Make a default no-auth option (`AUTH_DISABLED=true` env var)
+  - [X] Replace NextAuth with Arctic OAuth + custom JWT sessions (v2.5)
   - [ ] Retain site-installed plugins in `plugins/`, controlled by environment variables
   - [ ] Move user-installed plugins to `plugins/users/[login-uuid]/`
   - [ ] Add Apple, GitHub OAuth plugins
@@ -532,17 +576,14 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Has intimate knowledge of this application
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
 - [ ] Create web-only version that uses IndexedDB for everything
-rename it again unless something is toggled indicating that renaming can be automatic again
 - [ ] Project support
   - [ ] Folders
   - [ ] Files (text/Markdown or binary)
   - [ ] Direct import/export/access
-  - [ ] Project becomes overridding context for chats, images, etc.
-backups
+  - [ ] Project becomes overriding context for chats, images, etc.
 - [ ] Starting a new chat should include:
   - [ ] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
   - [ ] A scenario prompt so you can set things up before you start
-- [ ] The plugin list should have the package.json version, not the manifest.json version
 - [ ] Search and replace in one chat, or in all chats associated with a character or persona
 
 ## Acknowledgments
