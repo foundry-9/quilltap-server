@@ -25,15 +25,6 @@ export interface DebugEntryCardProps {
   entry: DebugEntry;
 }
 
-export interface DebugFiltersProps {
-  onDirectionChange?: (direction: 'all' | 'incoming' | 'outgoing') => void;
-  onStatusChange?: (status: 'all' | 'pending' | 'streaming' | 'complete' | 'error') => void;
-  onProviderChange?: (provider: string | 'all') => void;
-  selectedDirection?: 'all' | 'incoming' | 'outgoing';
-  selectedStatus?: 'all' | 'pending' | 'streaming' | 'complete' | 'error';
-  selectedProvider?: string | 'all';
-}
-
 export interface DebugPanelProps {
   maxHeight?: string;
   showLegend?: boolean;
@@ -42,8 +33,6 @@ export interface DebugPanelProps {
 // Status and direction types
 export type DebugStatus = 'pending' | 'streaming' | 'complete' | 'error';
 export type DebugDirection = 'incoming' | 'outgoing';
-export type FilterDirection = 'all' | 'incoming' | 'outgoing';
-export type FilterStatus = 'all' | 'pending' | 'streaming' | 'complete' | 'error';
 
 // Tool-related types
 export interface ToolResult {

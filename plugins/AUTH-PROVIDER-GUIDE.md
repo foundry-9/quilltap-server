@@ -513,6 +513,5 @@ Before releasing your plugin:
 
 - [Plugin Developer Guide](./README.md) - General plugin development
 - [LLM Provider Guide](./LLM-PROVIDER-GUIDE.md) - LLM provider plugins
-- [Auth Provider Interface](../lib/plugins/interfaces/auth-provider-plugin.ts) - TypeScript interface
 - [Arctic Provider Registry](../lib/auth/arctic/registry.ts) - Registration system
 - [Arctic Documentation](https://arcticjs.dev/) - Arctic OAuth library docs

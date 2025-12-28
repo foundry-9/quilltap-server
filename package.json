@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.6.0-dev.1",
+  "version": "2.6.0-dev.2",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -55,7 +55,6 @@
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",
-    "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "speakeasy": "^2.0.0",
     "zod": "^3.23.0"

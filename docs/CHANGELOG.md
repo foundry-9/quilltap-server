@@ -5,6 +5,18 @@
 ### 2.6-dev
 
 - Started v2.6.0
+- chore: Dead code cleanup
+  - Removed duplicate `components/characters/system-prompts/` directory (superseded by `system-prompts-editor/`)
+  - Removed unused `components/dashboard/nav-theme-selector.tsx` (component never integrated)
+  - Removed unused debug components: `DebugFilters.tsx`, `useDebugState.ts`
+  - Removed unused auth placeholder files: `lib/auth/anonymous-user.ts`, `lib/mongodb/auth-adapter.ts`, `lib/plugins/interfaces/auth-provider-plugin.ts`
+  - Removed completed migration scripts: `migrate-apikey-userids.ts`, `fix-file-userids.ts`, `fix-sha256-in-mongodb.ts`
+  - Removed unused dependency `rehype-raw`
+  - Removed unused barrel/index files to improve tree-shaking:
+    - `lib/chat/index.ts`, `lib/export/index.ts`, `lib/sillytavern/index.ts`, `lib/themes/index.ts`, `lib/tokens/index.ts`, `lib/repositories/index.ts`
+    - `components/debug/index.ts`, `components/memory/index.ts`, `components/providers/theme/index.ts`
+    - Various `hooks/index.ts` barrels in settings and tools components
+  - Removed unused backwards-compatibility shims: `restore-dialog.tsx`, `roleplay-templates-tab.tsx`
 
 ### 2.5.0 - Multi-Instance Sync, AI Wizard, Native Export/Import, Arctic OAuth
 
