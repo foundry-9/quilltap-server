@@ -442,7 +442,7 @@ export const ChatParticipantSchema = z.object({
   // LLM configuration (for AI characters only)
   connectionProfileId: UUIDSchema.nullable().optional(),  // Required for CHARACTER, null for PERSONA
   imageProfileId: UUIDSchema.nullable().optional(),       // Image generation profile
-  roleplayTemplateId: UUIDSchema.nullable().optional(),   // Roleplay template override for this chat
+  roleplayTemplateId: z.string().nullable().optional(),   // Roleplay template override - can be UUID or 'plugin:*' format
 
   // Per-chat customization
   systemPromptOverride: z.string().nullable().optional(),  // Custom scenario/context for this chat
@@ -483,7 +483,7 @@ export const ChatParticipantBaseSchema = z.object({
   personaId: UUIDSchema.nullable().optional(),
   connectionProfileId: UUIDSchema.nullable().optional(),
   imageProfileId: UUIDSchema.nullable().optional(),
-  roleplayTemplateId: UUIDSchema.nullable().optional(),  // Roleplay template override for this chat
+  roleplayTemplateId: z.string().nullable().optional(),  // Roleplay template override - can be UUID or 'plugin:*' format
   systemPromptOverride: z.string().nullable().optional(),
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
   displayOrder: z.number().default(0),
@@ -510,8 +510,8 @@ export const ChatMetadataSchema = z.object({
   contextSummary: z.string().nullable().optional(),
   sillyTavernMetadata: JsonSchema.nullable().optional(),
   tags: z.array(UUIDSchema).default([]),
-  /** Roleplay template for this chat (inherited from user default on creation) */
-  roleplayTemplateId: UUIDSchema.nullable().optional(),
+  /** Roleplay template for this chat - can be UUID or 'plugin:*' format */
+  roleplayTemplateId: z.string().nullable().optional(),
   /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
   lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
@@ -539,8 +539,8 @@ export const ChatMetadataBaseSchema = z.object({
   contextSummary: z.string().nullable().optional(),
   sillyTavernMetadata: JsonSchema.nullable().optional(),
   tags: z.array(UUIDSchema).default([]),
-  /** Roleplay template for this chat (inherited from user default on creation) */
-  roleplayTemplateId: UUIDSchema.nullable().optional(),
+  /** Roleplay template for this chat - can be UUID or 'plugin:*' format */
+  roleplayTemplateId: z.string().nullable().optional(),
   /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
   lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),

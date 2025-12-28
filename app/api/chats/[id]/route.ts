@@ -24,10 +24,11 @@ function getFilePath(file: FileEntry): string {
 }
 
 // Validation schema for chat updates
+// Note: roleplayTemplateId accepts any string because plugin templates use 'plugin:' prefix
 const updateChatSchema = z.object({
   title: z.string().optional(),
   contextSummary: z.string().optional(),
-  roleplayTemplateId: z.string().uuid().nullish(),
+  roleplayTemplateId: z.string().nullish(),
   isPaused: z.boolean().optional(),
   isManuallyRenamed: z.boolean().optional(),
 })
@@ -62,7 +63,8 @@ const chatUpdateRequestSchema = z.object({
   addParticipant: addParticipantSchema.optional(),
   removeParticipantId: z.string().uuid().optional(),
   // Direct roleplay template update (convenience shorthand)
-  roleplayTemplateId: z.string().uuid().nullish(),
+  // Note: accepts any string because plugin templates use 'plugin:' prefix
+  roleplayTemplateId: z.string().nullish(),
 })
 
 type Repos = ReturnType<typeof getRepositories>
