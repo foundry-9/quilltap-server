@@ -13,9 +13,9 @@ let mongoClient: MongoClient | null = null;
 let mongoDatabase: Db | null = null;
 
 /**
- * Flag to track connection state
+ * Promise used to de-dupe concurrent connection attempts
  */
-let isConnecting = false;
+let mongoClientPromise: Promise<MongoClient> | null = null;
 
 /**
  * Helper function to check if client is still connected
@@ -43,25 +43,13 @@ export async function getMongoClient(): Promise<MongoClient> {
     return mongoClient!;
   }
 
-  mongoClient = null;
-
-  // Prevent multiple simultaneous connection attempts
-  if (isConnecting) {
-    logger.debug('Connection attempt already in progress, waiting...');
-    // Wait for connection to complete
-    let attempts = 0;
-    while (isConnecting && attempts < 50) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      attempts++;
-    }
-    if (await isClientConnected(mongoClient)) {
-      return mongoClient!;
-    }
+  if (mongoClientPromise) {
+    logger.debug('Connection attempt already in progress, awaiting existing promise');
+    return mongoClientPromise;
   }
 
-  isConnecting = true;
-
-  try {
+  let connectingClient: MongoClient | null = null;
+  mongoClientPromise = (async () => {
     const config = validateMongoDBConfig();
 
     logger.debug('Attempting MongoDB connection', {
@@ -81,10 +69,10 @@ export async function getMongoClient(): Promise<MongoClient> {
       connectTimeoutMS: 10000,
     };
 
-    mongoClient = new MongoClient(config.uri, clientOptions);
+    connectingClient = new MongoClient(config.uri, clientOptions);
 
     // Establish connection
-    await mongoClient.connect();
+    await connectingClient.connect();
 
     logger.info('Successfully connected to MongoDB', {
       uri: config.uri.replace(/mongodb\+srv:\/\/.*@/, 'mongodb+srv://***@'),
@@ -92,31 +80,44 @@ export async function getMongoClient(): Promise<MongoClient> {
     });
 
     // Test the connection
-    await mongoClient.db('admin').command({ ping: 1 });
+    await connectingClient.db('admin').command({ ping: 1 });
     logger.debug('MongoDB ping successful');
 
     // Set up event listeners for connection events
-    mongoClient.on('connectionClosed', () => {
+    connectingClient.on('connectionClosed', () => {
       logger.debug('MongoDB connection closed');
     });
 
-    mongoClient.on('error', (error) => {
+    connectingClient.on('error', (error) => {
       logger.error('MongoDB client error', { error: error.message });
     });
 
-    mongoClient.on('connectionPoolClosed', () => {
+    connectingClient.on('connectionPoolClosed', () => {
       logger.debug('MongoDB connection pool closed');
     });
 
+    mongoClient = connectingClient;
     return mongoClient;
+  })();
+
+  try {
+    return await mongoClientPromise;
   } catch (error) {
     logger.error('Failed to connect to MongoDB', {
       error: error instanceof Error ? error.message : String(error),
     });
+    const clientToClose = connectingClient as MongoClient | null;
+    if (clientToClose) {
+      try {
+        await clientToClose.close();
+      } catch {
+        // Swallow close errors; we already log the connect failure.
+      }
+    }
     mongoClient = null;
     throw error;
   } finally {
-    isConnecting = false;
+    mongoClientPromise = null;
   }
 }
 
@@ -133,7 +134,6 @@ export async function getMongoDatabase(): Promise<Db> {
     return mongoDatabase;
   }
 
-  mongoClient = null;
   mongoDatabase = null;
 
   try {
@@ -191,7 +191,7 @@ export async function closeMongoConnection(): Promise<void> {
 
     mongoClient = null;
     mongoDatabase = null;
-    isConnecting = false;
+    mongoClientPromise = null;
   } catch (error) {
     logger.error('Error closing MongoDB connection', {
       error: error instanceof Error ? error.message : String(error),

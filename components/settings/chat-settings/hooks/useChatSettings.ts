@@ -45,22 +45,37 @@ export function useChatSettings(): UseChatSettingsReturn {
    * Fetch chat settings from the API
    */
   const fetchSettings = useCallback(async () => {
-    try {
-      clientLogger.debug('Fetching chat settings')
-      setLoading(true)
-      setError(null)
-      const res = await fetch('/api/chat-settings')
-      if (!res.ok) throw new Error('Failed to fetch chat settings')
-      const data = await res.json()
-      clientLogger.debug('Chat settings loaded', { settingsId: data.id })
-      setSettings(data)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-      clientLogger.error('Error fetching chat settings', { error: errorMsg })
-      setError(errorMsg)
-    } finally {
-      setLoading(false)
+    clientLogger.debug('Fetching chat settings')
+    setLoading(true)
+    setError(null)
+
+    const maxAttempts = 3
+    let lastError: string | null = null
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const res = await fetch('/api/chat-settings')
+        if (!res.ok) throw new Error('Failed to fetch chat settings')
+        const data = await res.json()
+        clientLogger.debug('Chat settings loaded', { settingsId: data.id })
+        setSettings(data)
+        lastError = null
+        break
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : 'An error occurred'
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt))
+          continue
+        }
+      }
     }
+
+    if (lastError) {
+      clientLogger.error('Error fetching chat settings', { error: lastError })
+      setError(lastError)
+    }
+
+    setLoading(false)
   }, [])
 
   /**

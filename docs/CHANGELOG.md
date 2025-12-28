@@ -4,6 +4,15 @@
 
 ### 2.6-dev
 
+- test: Stabilize Playwright e2e coverage and no-auth flows
+  - Added app smoke suite covering dashboard, entities, settings tabs, tools, profile, about
+  - Improved auth-disabled handling and session cookie setup in test helpers
+  - Added retry/backoff in test setup API calls and flaky settings tab loads
+  - Hardened selectors and chat composer waits to reduce strict-mode and timing flake
+- fix: MongoDB client connection race under concurrent requests
+  - De-dupe connection attempts with a shared promise to avoid null DB access in dev
+- fix: Settings tabs tolerate transient backend failures
+  - Retried chat settings and NPCs fetches with short backoff to avoid false error states
 - feat: Timestamp injection in system prompts
   - Configurable timestamp injection modes: disabled, conversation start only, or every message
   - Multiple format options: friendly, ISO 8601, date only, time only, or custom format

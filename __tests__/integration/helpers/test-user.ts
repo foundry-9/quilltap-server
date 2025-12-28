@@ -39,15 +39,18 @@ export interface TestResources {
   characterIds: string[]
   chatIds: string[]
   profileIds: string[]
+  personaIds: string[]
 }
 
 export class TestUserHelper {
   private prefix: string
+  private authDisabled: boolean | null = null
   public credentials: TestUserCredentials
   public resources: TestResources = {
     characterIds: [],
     chatIds: [],
     profileIds: [],
+    personaIds: [],
   }
 
   constructor(prefix: string = 'e2e_test') {
@@ -63,11 +66,97 @@ export class TestUserHelper {
     }
   }
 
+  private async isAuthDisabled(page: Page): Promise<boolean> {
+    if (this.authDisabled !== null) {
+      return this.authDisabled
+    }
+
+    try {
+      const res = await page.request.get('/api/auth/status')
+      if (res.ok()) {
+        const data = await res.json()
+        this.authDisabled = Boolean(data?.authDisabled)
+        return this.authDisabled
+      }
+    } catch (err) {
+      console.warn('Failed to fetch auth status, assuming auth enabled')
+    }
+
+    this.authDisabled = false
+    return this.authDisabled
+  }
+
+  private async ensureAuthSession(page: Page): Promise<void> {
+    if (await this.isAuthDisabled(page)) {
+      await page.goto('/dashboard')
+      await page.waitForLoadState('domcontentloaded')
+    }
+  }
+
+  private async ensureBrowserSessionCookie(page: Page, setCookieHeader?: string): Promise<void> {
+    if (!setCookieHeader) return
+
+    const match = setCookieHeader.match(/qt_session=([^;]+)/)
+    if (!match) return
+
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000'
+    let cookieUrl: string | null = null
+    try {
+      cookieUrl = new URL(baseUrl).toString()
+    } catch {
+      cookieUrl = null
+    }
+
+    if (!cookieUrl) return
+
+    await page.context().addCookies([
+      {
+        name: 'qt_session',
+        value: match[1],
+        url: cookieUrl,
+        httpOnly: true,
+        sameSite: 'Lax',
+      },
+    ])
+  }
+
+  private async postWithRetry(
+    page: Page,
+    url: string,
+    data: Record<string, unknown>,
+    maxAttempts: number = 5
+  ) {
+    let lastResponse: ReturnType<Page['request']['post']> | null = null
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const response = await page.request.post(url, { data })
+      lastResponse = response
+
+      const status = response.status()
+      if (status !== 401 && status !== 429 && status !== 503) {
+        return response
+      }
+
+      await page.waitForTimeout(2000 * attempt)
+    }
+
+    if (!lastResponse) {
+      throw new Error(`Failed to POST ${url}`)
+    }
+
+    return lastResponse
+  }
+
   /**
    * Create a new test user via signup API
    * Returns true if user was created, false if user already exists
    */
   async signup(page: Page): Promise<boolean> {
+    if (await this.isAuthDisabled(page)) {
+      console.log('Auth disabled - skipping user signup')
+      return false
+    }
+
     const signupRes = await page.request.post('/api/auth/signup', {
       data: {
         username: this.credentials.username,
@@ -96,6 +185,11 @@ export class TestUserHelper {
    * Throws if login fails
    */
   async login(page: Page): Promise<void> {
+    if (await this.isAuthDisabled(page)) {
+      await this.ensureAuthSession(page)
+      return
+    }
+
     const loginRes = await page.request.post('/api/auth/login', {
       data: {
         username: this.credentials.username,
@@ -113,6 +207,8 @@ export class TestUserHelper {
       throw new Error(`Login unsuccessful: ${JSON.stringify(loginData)}`)
     }
 
+    await this.ensureBrowserSessionCookie(page, loginRes.headers()['set-cookie'])
+
     console.log(`Logged in as: ${this.credentials.username}`)
   }
 
@@ -120,6 +216,11 @@ export class TestUserHelper {
    * Create user if needed and login
    */
   async createAndLogin(page: Page): Promise<void> {
+    if (await this.isAuthDisabled(page)) {
+      await this.ensureAuthSession(page)
+      return
+    }
+
     await this.signup(page)
     await this.login(page)
 
@@ -142,12 +243,10 @@ export class TestUserHelper {
   ): Promise<string> {
     await this.login(page)
 
-    const characterRes = await page.request.post('/api/characters', {
-      data: {
-        name: options.name || `${this.prefix} Character`,
-        description: options.description || 'A character for e2e testing',
-        firstMessage: options.firstMessage || 'Hello! I am a test character.',
-      },
+    const characterRes = await this.postWithRetry(page, '/api/characters', {
+      name: options.name || `${this.prefix} Character`,
+      description: options.description || 'A character for e2e testing',
+      firstMessage: options.firstMessage || 'Hello! I am a test character.',
     })
 
     if (!characterRes.ok()) {
@@ -161,6 +260,40 @@ export class TestUserHelper {
     console.log(`Created test character: ${characterId}`)
 
     return characterId
+  }
+
+  /**
+   * Create a test persona
+   */
+  async createPersona(
+    page: Page,
+    options: {
+      name?: string
+      title?: string
+      description?: string
+      personalityTraits?: string
+    } = {}
+  ): Promise<string> {
+    await this.login(page)
+
+    const personaRes = await this.postWithRetry(page, '/api/personas', {
+      name: options.name || `${this.prefix} Persona`,
+      title: options.title || 'Test Persona',
+      description: options.description || 'A persona for e2e testing',
+      personalityTraits: options.personalityTraits || 'curious, friendly',
+    })
+
+    if (!personaRes.ok()) {
+      const text = await personaRes.text()
+      throw new Error(`Failed to create persona: ${personaRes.status()} ${text}`)
+    }
+
+    const personaData = await personaRes.json()
+    const personaId = personaData.id
+    this.resources.personaIds.push(personaId)
+    console.log(`Created test persona: ${personaId}`)
+
+    return personaId
   }
 
   /**
@@ -215,16 +348,14 @@ export class TestUserHelper {
 
     const connectionProfileId = profileId || (await this.getOrCreateProfile(page))
 
-    const chatRes = await page.request.post('/api/chats', {
-      data: {
-        participants: [
-          {
-            type: 'CHARACTER',
-            characterId,
-            connectionProfileId,
-          },
-        ],
-      },
+    const chatRes = await this.postWithRetry(page, '/api/chats', {
+      participants: [
+        {
+          type: 'CHARACTER',
+          characterId,
+          connectionProfileId,
+        },
+      ],
     })
 
     if (!chatRes.ok()) {
@@ -266,12 +397,24 @@ export class TestUserHelper {
       console.log(`Deleted profile: ${profileId}, status: ${res.status()}`)
     }
     this.resources.profileIds = []
+
+    // Delete personas
+    for (const personaId of this.resources.personaIds) {
+      const res = await page.request.delete(`/api/personas/${personaId}`)
+      console.log(`Deleted persona: ${personaId}, status: ${res.status()}`)
+    }
+    this.resources.personaIds = []
   }
 
   /**
    * Delete the test user account
    */
   async deleteUser(page: Page): Promise<void> {
+    if (await this.isAuthDisabled(page)) {
+      console.log('Auth disabled - skipping test user deletion')
+      return
+    }
+
     await this.login(page)
 
     const res = await page.request.delete('/api/auth/delete-account')
