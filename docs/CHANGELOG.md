@@ -4,6 +4,13 @@
 
 ### 2.5
 
+- fix: Chat settings modal roleplay template selection fails for plugin templates
+  - Plugin templates use `plugin:` prefix IDs (e.g., `plugin:quilltap-rp`), not UUIDs
+  - Fixed API route validation in `app/api/chats/[id]/route.ts`
+  - Fixed MongoDB schema validation in `lib/schemas/types.ts` (4 occurrences)
+  - Changed all `roleplayTemplateId` fields from `UUIDSchema` to `z.string()`
+  - Also disabled click-outside detection while saving to prevent modal from closing
+  - Improved error logging with chatId, templateId, and error type
 - fix: Plugin list now displays package.json version instead of manifest.json version
   - Added `packageVersion` field to `LoadedPlugin` interface
   - Plugin scanning now reads version from package.json (preferred) with fallback to manifest.json
@@ -323,7 +330,7 @@
   - Logout: POST /api/auth/logout
   - Updated Google OAuth plugin to use Arctic provider
   - Removed NEXTAUTH_URL and NEXTAUTH_SECRET environment variables
-  - Added optional BASE_URL environment variable (defaults to http://localhost:3000)
+  - Added optional BASE_URL environment variable (defaults to `http://localhost:3000`)
 - feat: Plugin-provided roleplay templates (ROLEPLAY_TEMPLATE capability)
   - Added new `ROLEPLAY_TEMPLATE` plugin capability for providing roleplay formatting templates
   - Created `roleplayTemplateRegistry` to manage templates from enabled plugins

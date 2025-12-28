@@ -332,9 +332,13 @@ export default function ChatSettingsModal({
     }
   }, [isOpen])
 
+  // Disable click-outside detection while saving to prevent native select dropdown clicks
+  // from closing the modal (browser renders select options in a separate layer)
+  const isSaving = loading || roleplayTemplateSaving
+
   useClickOutside(modalRef, onClose, {
-    enabled: isOpen,
-    onEscape: onClose,
+    enabled: isOpen && !isSaving,
+    onEscape: isSaving ? undefined : onClose,
   })
 
   const fetchProfiles = async () => {
@@ -384,6 +388,8 @@ export default function ChatSettingsModal({
   const handleRoleplayTemplateChange = async (templateId: string | null) => {
     try {
       setRoleplayTemplateSaving(true)
+      clientLogger.debug('Updating roleplay template', { chatId, templateId })
+
       const res = await fetch(`/api/chats/${chatId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -391,8 +397,15 @@ export default function ChatSettingsModal({
       })
 
       if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to update roleplay template')
+        let errorMessage = 'Failed to update roleplay template'
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          // Response might not be JSON
+          errorMessage = `HTTP ${res.status}: ${res.statusText}`
+        }
+        throw new Error(errorMessage)
       }
 
       setSelectedRoleplayTemplateId(templateId)
@@ -400,8 +413,14 @@ export default function ChatSettingsModal({
       clientLogger.info('Roleplay template updated for chat', { chatId, templateId })
       onSuccess?.()
     } catch (error) {
-      clientLogger.error('Failed to update roleplay template', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast(error instanceof Error ? error.message : 'Failed to update roleplay template')
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      clientLogger.error('Failed to update roleplay template', {
+        chatId,
+        templateId,
+        error: errorMessage,
+        errorType: error?.constructor?.name || typeof error,
+      })
+      showErrorToast(errorMessage || 'Failed to update roleplay template')
     } finally {
       setRoleplayTemplateSaving(false)
     }

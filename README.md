@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.0-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.5.0--bugfix.46-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
