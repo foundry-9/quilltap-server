@@ -147,6 +147,32 @@ export class TestUserHelper {
     return lastResponse
   }
 
+  private async deleteWithRetry(
+    page: Page,
+    url: string,
+    maxAttempts: number = 5
+  ) {
+    let lastResponse: ReturnType<Page['request']['delete']> | null = null
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const response = await page.request.delete(url)
+      lastResponse = response
+
+      const status = response.status()
+      if (status !== 401 && status !== 429 && status !== 503) {
+        return response
+      }
+
+      await page.waitForTimeout(2000 * attempt)
+    }
+
+    if (!lastResponse) {
+      throw new Error(`Failed to DELETE ${url}`)
+    }
+
+    return lastResponse
+  }
+
   /**
    * Create a new test user via signup API
    * Returns true if user was created, false if user already exists
@@ -379,28 +405,28 @@ export class TestUserHelper {
 
     // Delete chats
     for (const chatId of this.resources.chatIds) {
-      const res = await page.request.delete(`/api/chats/${chatId}`)
+      const res = await this.deleteWithRetry(page, `/api/chats/${chatId}`)
       console.log(`Deleted chat: ${chatId}, status: ${res.status()}`)
     }
     this.resources.chatIds = []
 
     // Delete characters
     for (const characterId of this.resources.characterIds) {
-      const res = await page.request.delete(`/api/characters/${characterId}`)
+      const res = await this.deleteWithRetry(page, `/api/characters/${characterId}`)
       console.log(`Deleted character: ${characterId}, status: ${res.status()}`)
     }
     this.resources.characterIds = []
 
     // Delete profiles we created (not pre-existing ones)
     for (const profileId of this.resources.profileIds) {
-      const res = await page.request.delete(`/api/profiles/${profileId}`)
+      const res = await this.deleteWithRetry(page, `/api/profiles/${profileId}`)
       console.log(`Deleted profile: ${profileId}, status: ${res.status()}`)
     }
     this.resources.profileIds = []
 
     // Delete personas
     for (const personaId of this.resources.personaIds) {
-      const res = await page.request.delete(`/api/personas/${personaId}`)
+      const res = await this.deleteWithRetry(page, `/api/personas/${personaId}`)
       console.log(`Deleted persona: ${personaId}, status: ${res.status()}`)
     }
     this.resources.personaIds = []
@@ -417,7 +443,7 @@ export class TestUserHelper {
 
     await this.login(page)
 
-    const res = await page.request.delete('/api/auth/delete-account')
+    const res = await this.deleteWithRetry(page, '/api/auth/delete-account')
     if (res.ok()) {
       console.log(`Deleted user: ${this.credentials.username}`)
     } else {

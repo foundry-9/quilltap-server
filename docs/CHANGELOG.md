@@ -8,6 +8,7 @@
   - Added app smoke suite covering dashboard, entities, settings tabs, tools, profile, about
   - Improved auth-disabled handling and session cookie setup in test helpers
   - Added retry/backoff in test setup API calls and flaky settings tab loads
+  - Added retry/backoff for teardown deletes to reduce 429 cleanup failures
   - Hardened selectors and chat composer waits to reduce strict-mode and timing flake
 - fix: MongoDB client connection race under concurrent requests
   - De-dupe connection attempts with a shared promise to avoid null DB access in dev
