@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.6.0--dev.2-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.6.0--dev.3-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -581,9 +581,9 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Files (text/Markdown or binary)
   - [ ] Direct import/export/access
   - [ ] Project becomes overriding context for chats, images, etc.
-- [ ] Starting a new chat should include:
-  - [ ] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
-  - [ ] A scenario prompt so you can set things up before you start
+- [X] Starting a new chat should include:
+  - [X] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
+  - [X] A scenario prompt so you can set things up before you start
 - [ ] Search and replace in one chat, or in all chats associated with a character or persona
 
 ## Acknowledgments

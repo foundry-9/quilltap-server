@@ -17,6 +17,27 @@ The following template variables are **currently supported** in Quilltap:
 | `{{system}}` | System prompt or character's main prompt override | System instructions |
 | `{{mesExamples}}` | Character's example dialogues (formatted) | Example conversations |
 | `{{mesExamplesRaw}}` | Character's example dialogues (raw) | Unformatted examples |
+| `{{timestamp}}` | Current or fictional timestamp | `December 27, 2024 at 3:30 PM` |
+
+### Timestamp Variable
+
+The `{{timestamp}}` variable provides the current time (or a fictional time if configured). To use it:
+
+1. Enable timestamp injection in Chat Settings or when creating a new chat
+2. Disable "Auto-prepend" to use the template variable instead
+3. Place `{{timestamp}}` anywhere in your system prompt
+
+Example:
+```
+The current date and time is {{timestamp}}.
+You are {{char}}, meeting {{user}} at the appointed hour.
+```
+
+**Timestamp configuration options:**
+- **Mode**: Disabled, conversation start only, or every message
+- **Format**: Friendly, ISO 8601, date only, time only, or custom format
+- **Fictional time**: Set a base timestamp that advances with real elapsed time
+- **Auto-prepend**: Automatically adds "Current time: [timestamp]" at the start of system prompts (when enabled, `{{timestamp}}` is not needed)
 
 ### Usage Example
 

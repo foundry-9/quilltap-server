@@ -633,6 +633,12 @@ export class UsersRepository {
             colorMode: 'system',
             showNavThemeSelector: false,
           },
+          defaultTimestampConfig: {
+            mode: 'NONE',
+            format: 'FRIENDLY',
+            useFictionalTime: false,
+            autoPrepend: true,
+          },
           defaultRoleplayTemplateId,
           ...data,
         };

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { showErrorToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import type { TimestampConfig } from '@/lib/schemas/types'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { EntityTabs } from '@/components/tabs'
@@ -35,6 +36,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
+  const [scenario, setScenario] = useState<string>('')
+  const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
@@ -128,6 +131,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       selectedProfileId,
       selectedPersonaId,
       selectedImageProfileId,
+      scenario,
+      timestampConfig,
     })
     setShowChatDialog(false)
   }
@@ -295,11 +300,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           selectedProfileId={selectedProfileId}
           selectedPersonaId={selectedPersonaId}
           selectedImageProfileId={selectedImageProfileId}
+          scenario={scenario}
+          timestampConfig={timestampConfig}
           creatingChat={creatingChat}
           openedFromQuery={openedFromQuery}
           onProfileChange={setSelectedProfileId}
           onPersonaChange={setSelectedPersonaId}
           onImageProfileChange={setSelectedImageProfileId}
+          onScenarioChange={setScenario}
+          onTimestampConfigChange={setTimestampConfig}
           onCancel={() => {
             if (openedFromQuery) {
               window.location.href = '/characters'

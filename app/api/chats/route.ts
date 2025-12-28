@@ -10,7 +10,8 @@ import { decryptApiKey } from '@/lib/encryption'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
-import type { ChatEvent, ChatParticipantBase, ChatParticipantBaseInput, FileEntry } from '@/lib/schemas/types'
+import type { ChatEvent, ChatParticipantBase, ChatParticipantBaseInput, FileEntry, TimestampConfig } from '@/lib/schemas/types'
+import { TimestampConfigSchema } from '@/lib/schemas/types'
 
 type Repos = ReturnType<typeof getRepositories>
 
@@ -50,6 +51,7 @@ const createChatSchema = z.object({
   participants: z.array(createParticipantSchema).min(1, 'At least one participant is required'),
   title: z.string().optional(),
   scenario: z.string().optional(),
+  timestampConfig: TimestampConfigSchema.optional(),
 })
 
 // Helper to get enriched character for list view
@@ -542,6 +544,8 @@ export async function POST(req: NextRequest) {
       contextSummary: validatedData.scenario || null,
       tags: Array.from(buildResult.tags),
       roleplayTemplateId: defaultRoleplayTemplateId,
+      // Timestamp config: use provided value or inherit from user settings
+      timestampConfig: validatedData.timestampConfig || chatSettings?.defaultTimestampConfig || null,
       messageCount: 0,
       lastMessageAt: null,
       lastRenameCheckInterchange: 0,

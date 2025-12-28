@@ -641,6 +641,12 @@ export async function POST(
       })
     }
 
+    // Determine if this is the first user message (for timestamp START_ONLY mode)
+    const isInitialMessage = conversationMessages.filter(m => m.role === 'user').length === 0
+
+    // Get timestamp config from chat or user defaults
+    const timestampConfig = chat.timestampConfig || chatSettings?.defaultTimestampConfig || null
+
     const builtContext = await buildContext({
       provider: connectionProfile.provider,
       modelName: connectionProfile.modelName,
@@ -664,6 +670,9 @@ export async function POST(
       messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
       // Pseudo-tool support (for models without native function calling)
       pseudoToolInstructions,
+      // Timestamp injection
+      timestampConfig,
+      isInitialMessage,
     })
 
     // Log context building results for debugging

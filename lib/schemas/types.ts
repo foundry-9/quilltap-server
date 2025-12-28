@@ -184,6 +184,35 @@ export const CheapLLMSettingsSchema = z.object({
 
 export type CheapLLMSettings = z.infer<typeof CheapLLMSettingsSchema>;
 
+// ============================================================================
+// TIMESTAMP CONFIGURATION
+// ============================================================================
+
+export const TimestampModeEnum = z.enum(['NONE', 'START_ONLY', 'EVERY_MESSAGE']);
+export type TimestampMode = z.infer<typeof TimestampModeEnum>;
+
+export const TimestampFormatEnum = z.enum(['ISO8601', 'FRIENDLY', 'DATE_ONLY', 'TIME_ONLY', 'CUSTOM']);
+export type TimestampFormat = z.infer<typeof TimestampFormatEnum>;
+
+export const TimestampConfigSchema = z.object({
+  /** Whether to inject timestamps and how */
+  mode: TimestampModeEnum.default('NONE'),
+  /** How to format the timestamp */
+  format: TimestampFormatEnum.default('FRIENDLY'),
+  /** Custom format string (when format is CUSTOM) - uses date-fns format tokens */
+  customFormat: z.string().nullable().optional(),
+  /** Whether to use fictional/arbitrary timestamp instead of real time */
+  useFictionalTime: z.boolean().default(false),
+  /** Base fictional timestamp (ISO-8601 format) */
+  fictionalBaseTimestamp: z.string().nullable().optional(),
+  /** Real timestamp when the fictional base was set (for auto-increment calculation) */
+  fictionalBaseRealTime: z.string().nullable().optional(),
+  /** Whether to auto-prepend "Current time: [timestamp]" or use {{timestamp}} template variable */
+  autoPrepend: z.boolean().default(true),
+});
+
+export type TimestampConfig = z.infer<typeof TimestampConfigSchema>;
+
 export const ChatSettingsSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
@@ -204,6 +233,13 @@ export const ChatSettingsSchema = z.object({
   themePreference: ThemePreferenceSchema.default({
     activeThemeId: null,
     colorMode: 'system',
+  }),
+  /** Default timestamp configuration for new chats */
+  defaultTimestampConfig: TimestampConfigSchema.default({
+    mode: 'NONE',
+    format: 'FRIENDLY',
+    useFictionalTime: false,
+    autoPrepend: true,
   }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
@@ -512,6 +548,8 @@ export const ChatMetadataSchema = z.object({
   tags: z.array(UUIDSchema).default([]),
   /** Roleplay template for this chat - can be UUID or 'plugin:*' format */
   roleplayTemplateId: z.string().nullable().optional(),
+  /** Timestamp configuration for this chat (overrides user default) */
+  timestampConfig: TimestampConfigSchema.nullable().optional(),
   /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
   lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
@@ -541,6 +579,8 @@ export const ChatMetadataBaseSchema = z.object({
   tags: z.array(UUIDSchema).default([]),
   /** Roleplay template for this chat - can be UUID or 'plugin:*' format */
   roleplayTemplateId: z.string().nullable().optional(),
+  /** Timestamp configuration for this chat (overrides user default) */
+  timestampConfig: TimestampConfigSchema.nullable().optional(),
   /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
   lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),

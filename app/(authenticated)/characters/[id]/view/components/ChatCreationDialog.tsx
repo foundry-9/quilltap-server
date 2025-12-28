@@ -1,8 +1,10 @@
 'use client'
 
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
+import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { ConnectionProfile, Persona } from '../types'
 import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
+import type { TimestampConfig } from '@/lib/schemas/types'
 
 interface ChatCreationDialogProps {
   characterId: string
@@ -12,11 +14,15 @@ interface ChatCreationDialogProps {
   selectedProfileId: string
   selectedPersonaId: string
   selectedImageProfileId: string | null
+  scenario: string
+  timestampConfig: TimestampConfig | null
   creatingChat: boolean
   openedFromQuery: boolean
   onProfileChange: (profileId: string) => void
   onPersonaChange: (personaId: string) => void
   onImageProfileChange: (profileId: string | null) => void
+  onScenarioChange: (scenario: string) => void
+  onTimestampConfigChange: (config: TimestampConfig) => void
   onCancel: () => void
   onCreateChat: () => void
 }
@@ -29,11 +35,15 @@ export function ChatCreationDialog({
   selectedProfileId,
   selectedPersonaId,
   selectedImageProfileId,
+  scenario,
+  timestampConfig,
   creatingChat,
   openedFromQuery,
   onProfileChange,
   onPersonaChange,
   onImageProfileChange,
+  onScenarioChange,
+  onTimestampConfigChange,
   onCancel,
   onCreateChat,
 }: ChatCreationDialogProps) {
@@ -101,6 +111,29 @@ export function ChatCreationDialog({
               personaId={selectedPersonaId}
             />
           </div>
+
+          {/* Scenario Description */}
+          <div>
+            <label htmlFor="scenario" className="mb-2 block text-sm qt-text-primary">
+              Starting Scenario (Optional)
+            </label>
+            <textarea
+              id="scenario"
+              value={scenario}
+              onChange={(e) => onScenarioChange(e.target.value)}
+              placeholder="Describe the starting scenario for this chat..."
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              rows={3}
+            />
+          </div>
+
+          {/* Timestamp Configuration */}
+          <TimestampConfigCard
+            config={timestampConfig}
+            onChange={onTimestampConfigChange}
+            compact={true}
+            disabled={creatingChat}
+          />
         </div>
 
         <div className="mt-6 flex justify-end gap-3">

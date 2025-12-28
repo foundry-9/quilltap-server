@@ -13,8 +13,9 @@
  * - Includes other participants in system prompt for context
  */
 
-import { Provider, Memory, Character, Persona, ChatParticipantBase, ChatMetadataBase } from '@/lib/schemas/types'
+import { Provider, Memory, Character, Persona, ChatParticipantBase, ChatMetadataBase, TimestampConfig } from '@/lib/schemas/types'
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
+import { calculateCurrentTimestamp, shouldInjectTimestamp, formatTimestampForSystemPrompt } from '@/lib/chat/timestamp-utils'
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, SemanticSearchResult } from '@/lib/memory/memory-service'
 import { formatMessagesForProvider, buildMultiCharacterContextSection, type MultiCharacterMessage } from '@/lib/llm/message-formatter'
@@ -161,6 +162,15 @@ export interface BuildContextOptions {
 
   /** Instructions for text-based pseudo-tools (when model doesn't support native tools) */
   pseudoToolInstructions?: string
+
+  // ============================================================================
+  // Timestamp Injection
+  // ============================================================================
+
+  /** Timestamp configuration (from chat or user settings) */
+  timestampConfig?: TimestampConfig | null
+  /** Whether this is the first user message in the conversation */
+  isInitialMessage?: boolean
 }
 
 /**
@@ -207,7 +217,11 @@ export function buildSystemPrompt(
   /** Pseudo-tool instructions for models without native function calling */
   pseudoToolInstructions?: string,
   /** Selected system prompt ID from character's systemPrompts array */
-  selectedSystemPromptId?: string | null
+  selectedSystemPromptId?: string | null,
+  /** Timestamp configuration for injection */
+  timestampConfig?: TimestampConfig | null,
+  /** Whether this is the first message (for START_ONLY mode) */
+  isInitialMessage?: boolean
 ): string {
   const parts: string[] = []
 
@@ -221,9 +235,30 @@ export function buildSystemPrompt(
     persona: persona?.description || '',
   }
 
+  // Handle timestamp injection
+  if (timestampConfig && shouldInjectTimestamp(timestampConfig, isInitialMessage ?? false)) {
+    const timestamp = calculateCurrentTimestamp(timestampConfig)
+    logger.debug('[ContextManager] Injecting timestamp into system prompt', {
+      mode: timestampConfig.mode,
+      format: timestampConfig.format,
+      isFictional: timestamp.isFictional,
+      formatted: timestamp.formatted,
+      autoPrepend: timestampConfig.autoPrepend,
+    })
+
+    if (timestampConfig.autoPrepend) {
+      // Add timestamp as the first part of the system prompt
+      parts.push(formatTimestampForSystemPrompt(timestamp, true))
+    } else {
+      // Add to template context for {{timestamp}} variable
+      templateContext.timestamp = timestamp.formatted
+    }
+  }
+
   logger.debug('[ContextManager] Building system prompt with template context', {
     characterName: templateContext.char,
     userName: templateContext.user,
+    hasTimestamp: !!templateContext.timestamp,
   })
 
   // Roleplay template system prompt (formatting instructions) - prepended first
@@ -821,7 +856,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     otherParticipantsInfo,
     roleplayTemplate,
     pseudoToolInstructions,
-    selectedSystemPromptId
+    selectedSystemPromptId,
+    options.timestampConfig,
+    options.isInitialMessage
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 

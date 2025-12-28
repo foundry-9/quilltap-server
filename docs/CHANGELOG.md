@@ -4,7 +4,19 @@
 
 ### 2.6-dev
 
-- Started v2.6.0
+- feat: Timestamp injection in system prompts
+  - Configurable timestamp injection modes: disabled, conversation start only, or every message
+  - Multiple format options: friendly, ISO 8601, date only, time only, or custom format
+  - Fictional time support: set a base timestamp (e.g., 1776-07-04) that advances with real elapsed time
+  - Template variable `{{timestamp}}` for custom placement in system prompts
+  - Auto-prepend option to add "Current time: [timestamp]" at start of system prompts
+  - Global default in Chat Settings, per-chat override available
+  - New `TimestampConfigCard` component for configuration UI
+  - New `lib/chat/timestamp-utils.ts` utility module
+- feat: Scenario prompt for new chats
+  - Add optional scenario text when creating a new chat
+  - Available in both New Chat page and ChatCreationDialog
+  - Scenario is stored in chat context and used for character context
 - chore: Dead code cleanup
   - Removed duplicate `components/characters/system-prompts/` directory (superseded by `system-prompts-editor/`)
   - Removed unused `components/dashboard/nav-theme-selector.tsx` (component never integrated)
@@ -17,8 +29,9 @@
     - `components/debug/index.ts`, `components/memory/index.ts`, `components/providers/theme/index.ts`
     - Various `hooks/index.ts` barrels in settings and tools components
   - Removed unused backwards-compatibility shims: `restore-dialog.tsx`, `roleplay-templates-tab.tsx`
+- Started v2.6.0
 
-### 2.5.0 - Multi-Instance Sync, AI Wizard, Native Export/Import, Arctic OAuth
+### 2.5.1 - Roleplay template selection bug fixed
 
 - fix: Chat settings modal roleplay template selection fails for plugin templates
   - Plugin templates use `plugin:` prefix IDs (e.g., `plugin:quilltap-rp`), not UUIDs
@@ -27,6 +40,9 @@
   - Changed all `roleplayTemplateId` fields from `UUIDSchema` to `z.string()`
   - Also disabled click-outside detection while saving to prevent modal from closing
   - Improved error logging with chatId, templateId, and error type
+
+### 2.5.0 - Multi-Instance Sync, AI Wizard, Native Export/Import, Arctic OAuth
+
 - fix: Plugin list now displays package.json version instead of manifest.json version
   - Added `packageVersion` field to `LoadedPlugin` interface
   - Plugin scanning now reads version from package.json (preferred) with fallback to manifest.json

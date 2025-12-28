@@ -8,6 +8,8 @@ import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 import { getAvatarClasses } from '@/lib/avatar-styles'
+import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
+import type { TimestampConfig } from '@/lib/schemas/types'
 
 interface Character {
   id: string
@@ -67,6 +69,8 @@ export default function NewChatPage() {
   const [personas, setPersonas] = useState<Persona[]>([])
   const [selectedCharacters, setSelectedCharacters] = useState<SelectedCharacter[]>([])
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
+  const [scenario, setScenario] = useState('')
+  const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -229,6 +233,8 @@ export default function NewChatPage() {
     clientLogger.debug('[NewChat] Creating chat', {
       characterCount: selectedCharacters.length,
       hasPersona: !!selectedPersonaId,
+      hasScenario: !!scenario,
+      hasTimestampConfig: !!timestampConfig,
     })
 
     try {
@@ -251,10 +257,23 @@ export default function NewChatPage() {
         participants.push({ type: 'PERSONA' as const, personaId: selectedPersonaId })
       }
 
+      const requestBody: Record<string, unknown> = {
+        title: generateTitle(),
+        participants,
+      }
+
+      if (scenario) {
+        requestBody.scenario = scenario
+      }
+
+      if (timestampConfig) {
+        requestBody.timestampConfig = timestampConfig
+      }
+
       const res = await fetch('/api/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: generateTitle(), participants }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!res.ok) {
@@ -468,6 +487,23 @@ export default function NewChatPage() {
                 </select>
               </div>
             )}
+
+            <div className="rounded-xl border border-border bg-card p-6">
+              <h2 className="mb-4 text-lg font-semibold">Scenario (Optional)</h2>
+              <p className="mb-3 qt-text-small">Describe the starting scenario for this chat.</p>
+              <textarea
+                value={scenario}
+                onChange={(e) => setScenario(e.target.value)}
+                placeholder="e.g., You are in a cozy coffee shop on a rainy afternoon..."
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                rows={4}
+              />
+            </div>
+
+            <TimestampConfigCard
+              value={timestampConfig}
+              onChange={setTimestampConfig}
+            />
 
             <div className="flex justify-end gap-3">
               <Link href="/chats" className="rounded-lg border border-border bg-card px-6 py-2 font-medium qt-text-small transition hover:bg-muted">Cancel</Link>
