@@ -118,12 +118,12 @@ export function useImportKeys({
         }))
       }
     },
-    [wizard]
+    [wizard, setState]
   )
 
   const setPassphrase = useCallback((value: string) => {
     setState((prev) => ({ ...prev, passphrase: value, error: null }))
-  }, [])
+  }, [setState])
 
   const handleVerify = useCallback(async () => {
     if (!state.fileData || !state.passphrase) return
@@ -171,11 +171,11 @@ export function useImportKeys({
       })
       setState((prev) => ({ ...prev, error: message }))
     }
-  }, [state.fileData, state.passphrase, wizard])
+  }, [state.fileData, state.passphrase, wizard, setState])
 
   const setDuplicateHandling = useCallback((value: DuplicateHandling) => {
     setState((prev) => ({ ...prev, duplicateHandling: value }))
-  }, [])
+  }, [setState])
 
   const handleImport = useCallback(async () => {
     if (!state.fileData || !state.passphrase) return
@@ -235,7 +235,7 @@ export function useImportKeys({
         error: message,
       }))
     }
-  }, [state.fileData, state.passphrase, state.duplicateHandling, wizard, onSuccess])
+  }, [state.fileData, state.passphrase, state.duplicateHandling, wizard, onSuccess, setState])
 
   const goBack = useCallback(() => {
     // Handle special state cleanup when going back from passphrase
@@ -246,7 +246,7 @@ export function useImportKeys({
     }
     // Use wizard for step navigation
     wizard.goBack()
-  }, [state.step, wizard])
+  }, [state.step, wizard, setState])
 
   // Memoize actions to prevent unnecessary re-renders and effect re-runs
   const actions = useMemo(

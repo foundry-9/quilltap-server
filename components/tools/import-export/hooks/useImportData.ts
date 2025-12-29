@@ -111,7 +111,7 @@ export function useImportData({
         }))
       }
     },
-    [parseExportFile],
+    [parseExportFile, setState],
   )
 
   const handleFileDrop = useCallback(
@@ -150,7 +150,7 @@ export function useImportData({
         }))
       }
     },
-    [parseExportFile],
+    [parseExportFile, setState],
   )
 
   const setConflictStrategy = useCallback((strategy: 'skip' | 'overwrite' | 'duplicate') => {
@@ -159,7 +159,7 @@ export function useImportData({
       strategy,
     })
     setState((prev) => ({ ...prev, conflictStrategy: strategy as ConflictStrategy }))
-  }, [])
+  }, [setState])
 
   const setImportMemories = useCallback((value: boolean) => {
     clientLogger.debug('Import memories toggled', {
@@ -167,7 +167,7 @@ export function useImportData({
       importMemories: value,
     })
     setState((prev) => ({ ...prev, importMemories: value }))
-  }, [])
+  }, [setState])
 
   const toggleEntitySelection = useCallback((type: string, id: string) => {
     setState((prev) => {
@@ -184,7 +184,7 @@ export function useImportData({
         },
       }
     })
-  }, [])
+  }, [setState])
 
   const loadPreview = useCallback(
     async (exportData: QuilltapExport) => {
@@ -232,7 +232,7 @@ export function useImportData({
         }))
       }
     },
-    [],
+    [setState],
   )
 
   const handleNext = useCallback(async () => {
@@ -273,7 +273,7 @@ export function useImportData({
     if (currentStep === 'file' && state.exportData) {
       await loadPreview(state.exportData)
     }
-  }, [state.step, state.exportData, loadPreview])
+  }, [state.step, state.exportData, loadPreview, setState])
 
   const handleBack = useCallback(() => {
     clientLogger.debug('Moving to previous step', {
@@ -299,7 +299,7 @@ export function useImportData({
 
       return { ...prev, step: previousStep, error: null }
     })
-  }, [])
+  }, [setState])
 
   const handleImport = useCallback(async () => {
     if (!state.exportData) return
@@ -360,7 +360,7 @@ export function useImportData({
         error: message,
       }))
     }
-  }, [state.exportData, state.conflictStrategy, state.importMemories, state.selectedEntityIds, onSuccess])
+  }, [state.exportData, state.conflictStrategy, state.importMemories, state.selectedEntityIds, onSuccess, setState])
 
   return {
     state,

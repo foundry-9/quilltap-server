@@ -78,11 +78,11 @@ export function useExportKeys({
 
   const setPassphrase = useCallback((value: string) => {
     setState((prev) => ({ ...prev, passphrase: value, error: null }))
-  }, [])
+  }, [setState])
 
   const setPassphraseConfirm = useCallback((value: string) => {
     setState((prev) => ({ ...prev, passphraseConfirm: value, error: null }))
-  }, [])
+  }, [setState])
 
   const handleExport = useCallback(async () => {
     if (!isValid) return
@@ -134,7 +134,7 @@ export function useExportKeys({
       wizard.goTo('error')
       setState((prev) => ({ ...prev, exporting: false, error: message }))
     }
-  }, [isValid, state.passphrase, wizard, onSuccess])
+  }, [isValid, state.passphrase, wizard, onSuccess, setState])
 
   return {
     state,

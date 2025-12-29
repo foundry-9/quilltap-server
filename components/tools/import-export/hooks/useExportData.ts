@@ -104,7 +104,7 @@ export function useExportData({
       })
       setState((prev) => ({ ...prev, memoryCount: newMemoryCount }))
     }
-  }, [state.scope, state.selectedIds, state.availableEntities, state.entityType, state.memoryCount])
+  }, [state.scope, state.selectedIds, state.availableEntities, state.entityType, state.memoryCount, setState])
 
   const setEntityType = useCallback((type: ExportEntityType) => {
     clientLogger.debug('Entity type selected', {
@@ -118,7 +118,7 @@ export function useExportData({
       selectedIds: [],
       error: null,
     }))
-  }, [])
+  }, [setState])
 
   const setScope = useCallback((scope: 'all' | 'selected') => {
     clientLogger.debug('Export scope changed', {
@@ -130,7 +130,7 @@ export function useExportData({
       scope,
       selectedIds: scope === 'all' ? [] : prev.selectedIds,
     }))
-  }, [])
+  }, [setState])
 
   const toggleEntitySelection = useCallback((id: string) => {
     setState((prev) => {
@@ -150,7 +150,7 @@ export function useExportData({
         selectedIds: newSelectedIds,
       }
     })
-  }, [])
+  }, [setState])
 
   const setIncludeMemories = useCallback((value: boolean) => {
     clientLogger.debug('Include memories toggled', {
@@ -161,7 +161,7 @@ export function useExportData({
       ...prev,
       includeMemories: value,
     }))
-  }, [])
+  }, [setState])
 
   const loadAvailableEntities = useCallback(async (type: ExportEntityType) => {
     if (!type) return
@@ -208,7 +208,7 @@ export function useExportData({
         error: message,
       }))
     }
-  }, [])
+  }, [setState])
 
   const handleNext = useCallback(async () => {
     // Validation and step navigation based on current step
@@ -249,7 +249,7 @@ export function useExportData({
         // No action for other steps
         break
     }
-  }, [state.step, state.entityType, state.scope, state.selectedIds.length, wizard, loadAvailableEntities])
+  }, [state.step, state.entityType, state.scope, state.selectedIds.length, wizard, loadAvailableEntities, setState])
 
   const handleBack = useCallback(() => {
     // Clear error state when going back
@@ -267,7 +267,7 @@ export function useExportData({
       // Use standard back navigation for other steps
       wizard.goBack()
     }
-  }, [state.step, state.entityType, wizard])
+  }, [state.step, state.entityType, wizard, setState])
 
   const handleExport = useCallback(async () => {
     if (!state.entityType) return
@@ -341,7 +341,7 @@ export function useExportData({
         error: message,
       }))
     }
-  }, [state.entityType, state.scope, state.selectedIds, state.includeMemories, wizard, onSuccess])
+  }, [state.entityType, state.scope, state.selectedIds, state.includeMemories, wizard, onSuccess, setState])
 
   return {
     state,
