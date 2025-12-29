@@ -626,10 +626,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (isAbort) {
         clientLogger.debug('[Chat] Continue mode aborted by user')
       } else {
+        // Extract error message, handling cases where message may be undefined
+        const errorMessage = err instanceof Error
+          ? (err.message || err.name || 'Unknown error')
+          : String(err) || 'Unknown error'
+        const errorName = err instanceof Error ? err.name : 'UnknownErrorType'
+
         clientLogger.error('[Chat] Continue mode error:', {
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage,
+          errorName,
+          errorType: typeof err,
         })
-        showErrorToast(err instanceof Error ? err.message : 'Failed to generate response')
+        showErrorToast(errorMessage || 'Failed to generate response')
       }
     } finally {
       setStreaming(false)
@@ -1358,16 +1366,26 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setWaitingForResponse(false)
         setRespondingParticipantId(null)
       } else {
-        clientLogger.error('Error sending message:', { error: err instanceof Error ? err.message : String(err) })
-        showErrorToast(err instanceof Error ? err.message : 'Failed to send message')
+        // Extract error message, handling cases where message may be undefined
+        const errorMessage = err instanceof Error
+          ? (err.message || err.name || 'Unknown error')
+          : String(err) || 'Unknown error'
+        const errorName = err instanceof Error ? err.name : 'UnknownErrorType'
+
+        clientLogger.error('Error sending message:', {
+          error: errorMessage,
+          errorName,
+          errorType: typeof err,
+        })
+        showErrorToast(errorMessage || 'Failed to send message')
 
         // Debug: Mark entries as error
         if (debug?.isDebugMode) {
           if (debugEntryId) {
-            debug.updateEntry(debugEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+            debug.updateEntry(debugEntryId, { status: 'error', error: errorMessage })
           }
           if (responseEntryId) {
-            debug.updateEntry(responseEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+            debug.updateEntry(responseEntryId, { status: 'error', error: errorMessage })
           }
         }
 

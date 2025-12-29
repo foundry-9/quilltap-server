@@ -4,6 +4,12 @@
 
 ### 2.6-dev
 
+- fix: prevent "Maximum update depth exceeded" error in DevConsoleProvider
+  - Console log capture now batches updates every 100ms instead of updating state on each log
+  - Prevents render loops caused by rapid logging during chat streaming
+- fix: improve error logging in chat page to handle undefined error messages
+  - Fixed continue mode and sendMessage error handling to extract error name/type when message is undefined
+  - Prevents empty `{}` object being logged, now shows meaningful error info
 - feat: Add Search & Replace tool for bulk text replacement across messages and memories
   - Supports scoping to single chat, all chats for a character, or all chats for a persona
   - Wizard-style UI with scope selection, search/replace input, preview counts, and confirmation
