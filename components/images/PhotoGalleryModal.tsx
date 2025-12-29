@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
+import { useImageNavigation } from '@/hooks/useImageNavigation'
 import ChatGalleryImageViewModal from '@/components/chat/ChatGalleryImageViewModal'
 import ImageDetailModal from './ImageDetailModal'
 import DeletedImagePlaceholder from './DeletedImagePlaceholder'
@@ -143,26 +144,20 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     }
   }, [isOpen, loadItems])
 
+  // Reset selected index when modal closes
   useEffect(() => {
     if (!isOpen) {
       setSelectedIndex(-1)
-      return
     }
+  }, [isOpen])
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selectedIndex === -1) {
-        onClose()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    document.body.style.overflow = 'hidden'
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = ''
-    }
-  }, [isOpen, onClose, selectedIndex])
+  // Keyboard navigation (Escape only when no image is selected)
+  useImageNavigation({
+    isOpen,
+    onClose,
+    handleEscape: selectedIndex === -1, // Only close gallery when no detail view is open
+    logContext: 'PhotoGalleryModal',
+  })
 
   const handleZoomIn = () => {
     if (thumbnailSizeIndex < THUMBNAIL_SIZES.length - 1) {

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import { useImageNavigation } from '@/hooks/useImageNavigation'
 import DeletedImagePlaceholder from '../DeletedImagePlaceholder'
 import { ImageActions } from './ImageActions'
 import { ImageMetadata } from './ImageMetadata'
@@ -89,30 +90,14 @@ export default function ImageDetailModal({
     }
   }, [image, characters, personas])
 
-  // Keyboard navigation
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      } else if (e.key === 'ArrowLeft' && onPrev) {
-        onPrev()
-      } else if (e.key === 'ArrowRight' && onNext) {
-        onNext()
-      }
-    },
-    [onClose, onPrev, onNext]
-  )
-
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = 'hidden'
-    }
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = ''
-    }
-  }, [isOpen, handleKeyDown])
+  // Keyboard navigation (Escape, arrow keys)
+  useImageNavigation({
+    isOpen,
+    onClose,
+    onPrev,
+    onNext,
+    logContext: 'ImageDetailModal',
+  })
 
   if (!isOpen) return null
 

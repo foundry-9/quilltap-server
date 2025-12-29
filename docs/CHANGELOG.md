@@ -22,6 +22,10 @@
       - `image-profiles/ImageProfileModal`
       - `system-prompts-editor/PromptModal`, `system-prompts-editor/ImportModal`, `system-prompts-editor/PreviewModal`
     - Remaining modals (image lightboxes, AI wizard) have specialized behaviors not suited for BaseModal
+  - Phase 2: Image components consolidation
+    - Created `hooks/useImageNavigation.ts` for keyboard navigation (Escape, arrow keys, body scroll lock)
+    - Migrated `ImageDetailModal`, `PhotoGalleryModal`, `ChatGalleryImageViewModal` to use `useImageNavigation`
+    - Note: `useImageTags` and `ImageActions` expansion deferred (existing `useImageActions` hook suffices, different API patterns between modals)
 - refactor: API and back-end refactoring based on SRP, DRY, KISS principles
   - Phase 1: Foundation infrastructure
     - Created `/lib/api/middleware/auth.ts` with `withAuth()` wrapper extracting auth patterns from routes
