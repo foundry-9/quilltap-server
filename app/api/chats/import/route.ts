@@ -395,7 +395,7 @@ async function handleMultiCharacterImport(
       const connectionProfile = await repos.connections.findById(firstCharacterParticipant.connectionProfileId)
       if (connectionProfile) {
         // Get user's cheap LLM settings from chat settings
-        const chatSettings = await repos.users.getChatSettings(userId)
+        const chatSettings = await repos.chatSettings.findByUserId(userId)
         const cheapLLMSettings = chatSettings?.cheapLLMSettings || {
           strategy: 'PROVIDER_CHEAPEST' as const,
           userDefinedProfileId: null,

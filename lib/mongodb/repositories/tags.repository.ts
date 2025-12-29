@@ -5,70 +5,17 @@
  * Provides tag management with case-insensitive search capabilities.
  */
 
-import { Collection, ObjectId } from 'mongodb';
-import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { Tag, TagSchema } from '@/lib/schemas/types';
-import { getMongoDatabase } from '../client';
-import { CreateOptions } from './base.repository';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
 
 /**
  * MongoDB Tags Repository
  * Implements CRUD operations for tags with the same API as the JSON repository
  */
-export class MongoTagsRepository {
-  private collectionName = 'tags';
-  private schema = TagSchema;
-
-  /**
-   * Get the MongoDB collection
-   */
-  private async getCollection(): Promise<Collection> {
-    const db = await getMongoDatabase();
-    const collection = db.collection(this.collectionName);
-
-    logger.debug('Retrieved MongoDB tags collection', {
-      collectionName: this.collectionName,
-    });
-
-    return collection;
-  }
-
-  /**
-   * Validate data against schema
-   */
-  private validate(data: unknown): Tag {
-    return this.schema.parse(data) as Tag;
-  }
-
-  /**
-   * Safely validate without throwing
-   */
-  private validateSafe(data: unknown): { success: boolean; data?: Tag; error?: string } {
-    try {
-      const validated = this.validate(data);
-      return { success: true, data: validated };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Generate UUID v4
-   */
-  private generateId(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
-
-  /**
-   * Get current ISO timestamp
-   */
-  private getCurrentTimestamp(): string {
-    return new Date().toISOString();
+export class MongoTagsRepository extends MongoBaseRepository<Tag> {
+  constructor() {
+    super('tags', TagSchema);
   }
 
   /**
@@ -416,30 +363,4 @@ export class MongoTagsRepository {
     }
   }
 
-  /**
-   * Create or update a tag by ID.
-   * Used for sync operations where the ID is known (from remote instance).
-   * @param id The tag ID
-   * @param data The tag data
-   * @param options Options including original createdAt timestamp
-   */
-  async createOrUpdate(
-    id: string,
-    data: Omit<Tag, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: { createdAt?: string }
-  ): Promise<Tag> {
-    const existing = await this.findById(id);
-
-    if (existing) {
-      logger.debug('Tag exists, updating via createOrUpdate', { tagId: id });
-      const updated = await this.update(id, data);
-      if (!updated) {
-        throw new Error(`Failed to update tag ${id}`);
-      }
-      return updated;
-    }
-
-    logger.debug('Tag does not exist, creating via createOrUpdate', { tagId: id });
-    return this.create(data, { id, createdAt: options?.createdAt });
-  }
 }

@@ -1,0 +1,778 @@
+/**
+ * Chat Message Orchestrator Service
+ *
+ * Coordinates all services for handling chat message sending.
+ * This is the main entry point for the message API route.
+ */
+
+import { createServiceLogger } from '@/lib/logging/create-logger'
+import { createLLMProvider } from '@/lib/llm'
+import { requiresApiKey } from '@/lib/plugins/provider-validation'
+import {
+  selectNextSpeaker,
+  calculateTurnStateFromHistory,
+  getActiveCharacterParticipants,
+  isMultiCharacterChat,
+} from '@/lib/chat/turn-manager'
+import { z } from 'zod'
+
+import type { getRepositories } from '@/lib/repositories/factory'
+import type { MessageEvent, ConnectionProfile, ChatMetadataBase, Character, ChatSettings } from '@/lib/schemas/types'
+import type { SendMessageOptions, ToolMessage, GeneratedImage } from './types'
+import type { MemoryChatSettings } from './memory-trigger.service'
+
+import {
+  resolveRespondingParticipant,
+  loadAllParticipantData,
+  getPersonaData,
+  getRoleplayTemplate,
+} from './participant-resolver.service'
+import {
+  loadAndProcessFiles,
+  buildMessageContext,
+} from './context-builder.service'
+import {
+  processToolCalls,
+  saveToolMessages,
+  detectToolCallsInResponse,
+  createToolContext,
+} from './tool-execution.service'
+import {
+  buildTools,
+  streamMessage,
+  encodeDebugInfo,
+  encodeFallbackInfo,
+  encodeContentChunk,
+  encodeDoneEvent,
+  encodeErrorEvent,
+} from './streaming.service'
+import {
+  checkShouldUsePseudoTools,
+  buildPseudoToolSystemInstructions,
+  parsePseudoToolsFromResponse,
+  stripPseudoToolMarkersFromResponse,
+  determineEnabledToolOptions,
+  logPseudoToolUsage,
+} from './pseudo-tool.service'
+import {
+  triggerMemoryExtraction,
+  triggerInterCharacterMemory,
+  triggerContextSummaryCheck,
+} from './memory-trigger.service'
+
+const logger = createServiceLogger('ChatMessageOrchestrator')
+
+/**
+ * Validation schema for send message
+ */
+export const sendMessageSchema = z.object({
+  content: z.string().min(1, 'Message content is required'),
+  fileIds: z.array(z.string()).optional(),
+})
+
+/**
+ * Validation schema for continue mode (nudge action)
+ */
+export const continueMessageSchema = z.object({
+  continueMode: z.literal(true),
+  respondingParticipantId: z.string().uuid().optional(),
+})
+
+/**
+ * Handle sending a message and streaming the response
+ */
+export async function handleSendMessage(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  userId: string,
+  options: SendMessageOptions
+): Promise<ReadableStream<Uint8Array>> {
+  const encoder = new TextEncoder()
+
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        await processMessage(repos, chatId, userId, options, controller, encoder)
+      } catch (error) {
+        handleStreamError(error, controller, encoder)
+      }
+    },
+  })
+}
+
+/**
+ * Main message processing logic
+ */
+async function processMessage(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  userId: string,
+  options: SendMessageOptions,
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder
+): Promise<void> {
+  const isContinueMode = options.continueMode === true
+
+  // Get chat metadata
+  const chat = await repos.chats.findById(chatId)
+  if (!chat) {
+    throw new Error('Chat not found')
+  }
+
+  // Resolve responding participant
+  const participantResult = await resolveRespondingParticipant(
+    repos,
+    chat,
+    userId,
+    options.respondingParticipantId,
+    isContinueMode
+  )
+
+  const {
+    characterParticipant,
+    character,
+    connectionProfile,
+    apiKey: rawApiKey,
+    imageProfileId,
+    userParticipant,
+    userParticipantId,
+    isMultiCharacter,
+  } = participantResult
+
+  // Validate API key for providers that require it
+  let apiKey = ''
+  if (requiresApiKey(connectionProfile.provider)) {
+    if (!rawApiKey) {
+      throw new Error('No API key configured for this connection profile')
+    }
+    apiKey = rawApiKey
+  }
+
+  // Get persona data
+  const { persona, personaData } = await getPersonaData(repos, chat)
+
+  // Get chat settings
+  const chatSettings = await repos.chatSettings.findByUserId(userId)
+
+  // Get roleplay template
+  const roleplayTemplate = await getRoleplayTemplate(repos, chat, chatSettings ? { defaultRoleplayTemplateId: chatSettings.defaultRoleplayTemplateId ?? undefined } : null)
+
+  // Get image profile if configured
+  let imageProfile = null
+  if (imageProfileId) {
+    imageProfile = await repos.imageProfiles.findById(imageProfileId)
+  }
+
+  // Load participant data for multi-character chats
+  let participantCharacters = new Map()
+  let participantPersonas = new Map()
+
+  if (isMultiCharacter) {
+    const participantData = await loadAllParticipantData(
+      repos,
+      chat,
+      character,
+      personaData
+    )
+    participantCharacters = participantData.participantCharacters
+    participantPersonas = participantData.participantPersonas
+  }
+
+  // Get existing messages
+  const existingMessages = await repos.chats.getMessages(chatId)
+
+  // Process file attachments
+  const fileProcessing = await loadAndProcessFiles(
+    repos,
+    chatId,
+    userId,
+    connectionProfile,
+    options.fileIds
+  )
+
+  // Save user message (not in continue mode)
+  let userMessageId: string | null = null
+  let content = ''
+
+  if (!isContinueMode && options.content) {
+    content = options.content
+    userMessageId = crypto.randomUUID()
+    const now = new Date().toISOString()
+
+    const userMessage = {
+      id: userMessageId,
+      type: 'message' as const,
+      role: 'USER' as const,
+      content,
+      createdAt: now,
+      attachments: options.fileIds || [],
+      participantId: userParticipantId,
+    }
+
+    await repos.chats.addMessage(chatId, userMessage)
+
+    logger.debug('User message saved', {
+      messageId: userMessageId,
+      participantId: userParticipantId,
+      isMultiCharacter,
+    })
+
+    // Link file attachments
+    for (const file of fileProcessing.attachedFiles) {
+      await repos.files.addLink(file.id, userMessageId)
+    }
+  }
+
+  // Build final user message content
+  const finalUserMessageContent = isContinueMode
+    ? undefined
+    : (fileProcessing.messageContentPrefix ? fileProcessing.messageContentPrefix + content : content)
+
+  // Check for pseudo-tools
+  const enabledToolOptions = determineEnabledToolOptions(
+    imageProfileId,
+    connectionProfile.allowWebSearch
+  )
+
+  // Build tools
+  const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
+    connectionProfile,
+    imageProfileId,
+    imageProfile,
+    userId,
+    false // Will check after
+  )
+
+  const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)
+  const actualTools = usePseudoTools ? [] : tools
+
+  // Build pseudo-tool instructions if needed
+  let pseudoToolInstructions: string | undefined
+  if (usePseudoTools) {
+    pseudoToolInstructions = buildPseudoToolSystemInstructions(enabledToolOptions)
+    logPseudoToolUsage(connectionProfile.provider, connectionProfile.modelName, enabledToolOptions)
+  }
+
+  // Build message context
+  const modelParams = connectionProfile.parameters as Record<string, unknown>
+  const contextChatSettings = chatSettings ? {
+    cheapLLMSettings: chatSettings.cheapLLMSettings ? {
+      embeddingProfileId: chatSettings.cheapLLMSettings.embeddingProfileId ?? undefined,
+    } : undefined,
+    defaultTimestampConfig: chatSettings.defaultTimestampConfig,
+  } : null
+  const { builtContext, formattedMessages, isInitialMessage } = await buildMessageContext(
+    {
+      repos,
+      userId,
+      chat,
+      character,
+      characterParticipant,
+      connectionProfile,
+      persona,
+      personaData,
+      isMultiCharacter,
+      participantCharacters,
+      participantPersonas,
+      roleplayTemplate,
+      chatSettings: contextChatSettings,
+      pseudoToolInstructions,
+      newUserMessage: finalUserMessageContent,
+      isContinueMode,
+    },
+    existingMessages,
+    fileProcessing.attachmentsToSend
+  )
+
+  // Create tool context
+  const toolContext = createToolContext(
+    chatId,
+    userId,
+    character.id,
+    characterParticipant.id,
+    imageProfileId,
+    chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined
+  )
+
+  // Send debug info
+  controller.enqueue(encodeDebugInfo(encoder, {
+    builtContext,
+    connectionProfile,
+    modelParams,
+    messages: formattedMessages.map(m => ({
+      role: m.role,
+      contentLength: m.content.length,
+      hasAttachments: !!m.attachments?.length,
+    })),
+    tools: actualTools,
+    usePseudoTools,
+    enabledToolOptions: enabledToolOptions as unknown as Record<string, boolean>,
+  }))
+
+  // Send fallback processing info if any
+  if (fileProcessing.fallbackResults.length > 0) {
+    controller.enqueue(encodeFallbackInfo(encoder, fileProcessing.fallbackResults))
+  }
+
+  // Stream the response
+  let fullResponse = ''
+  let usage: { totalTokens?: number } | null = null
+  let cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null = null
+  let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
+  let rawResponse: unknown = null
+  let thoughtSignature: string | undefined
+
+  for await (const chunk of streamMessage({
+    messages: formattedMessages,
+    connectionProfile,
+    apiKey,
+    modelParams,
+    tools: actualTools,
+    useNativeWebSearch,
+  })) {
+    if (chunk.content) {
+      fullResponse += chunk.content
+      controller.enqueue(encodeContentChunk(encoder, chunk.content))
+    }
+
+    if (chunk.done) {
+      usage = chunk.usage || null
+      cacheUsage = chunk.cacheUsage || null
+      attachmentResults = chunk.attachmentResults || null
+      rawResponse = chunk.rawResponse
+      if (chunk.thoughtSignature) {
+        thoughtSignature = chunk.thoughtSignature
+        logger.debug('Captured thought signature from response', {
+          signatureLength: thoughtSignature.length,
+        })
+      }
+    }
+  }
+
+  // Process tool calls
+  let toolMessages: ToolMessage[] = []
+  let generatedImagePaths: GeneratedImage[] = []
+  let currentMessages = [...formattedMessages]
+  let currentResponse = fullResponse
+  let currentRawResponse = rawResponse
+  const MAX_TOOL_ITERATIONS = 5
+  let toolIterations = 0
+
+  // Tool call loop
+  while (currentRawResponse && toolIterations < MAX_TOOL_ITERATIONS) {
+    const toolCalls = detectToolCallsInResponse(currentRawResponse, connectionProfile.provider)
+
+    if (toolCalls.length === 0) break
+
+    toolIterations++
+    logger.debug('Processing tool calls, iteration', {
+      iteration: toolIterations,
+      toolCallCount: toolCalls.length,
+      tools: toolCalls.map(tc => tc.name),
+    })
+
+    const results = await processToolCalls(toolCalls, toolContext, controller, encoder)
+    toolMessages = [...toolMessages, ...results.toolMessages]
+    generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
+
+    // Add assistant message with tool call to conversation
+    if (currentResponse && currentResponse.trim().length > 0) {
+      currentMessages = [
+        ...currentMessages,
+        { role: 'assistant' as const, content: currentResponse, thoughtSignature, name: undefined }
+      ]
+    } else {
+      currentMessages = [
+        ...currentMessages,
+        { role: 'assistant' as const, content: '[Tool call made]', thoughtSignature, name: undefined }
+      ]
+    }
+
+    // Add tool results as user messages
+    for (const toolMsg of results.toolMessages) {
+      currentMessages = [
+        ...currentMessages,
+        { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, name: undefined }
+      ]
+    }
+
+    // Continue conversation with tool results
+    currentResponse = ''
+    currentRawResponse = null
+
+    for await (const chunk of streamMessage({
+      messages: currentMessages,
+      connectionProfile,
+      apiKey,
+      modelParams,
+      tools: actualTools,
+      useNativeWebSearch,
+    })) {
+      if (chunk.content) {
+        currentResponse += chunk.content
+        fullResponse += chunk.content
+        controller.enqueue(encodeContentChunk(encoder, chunk.content))
+      }
+
+      if (chunk.done) {
+        usage = chunk.usage || null
+        cacheUsage = chunk.cacheUsage || null
+        attachmentResults = chunk.attachmentResults || null
+        currentRawResponse = chunk.rawResponse
+        rawResponse = chunk.rawResponse
+        if (chunk.thoughtSignature) {
+          thoughtSignature = chunk.thoughtSignature
+        }
+      }
+    }
+  }
+
+  if (toolIterations >= MAX_TOOL_ITERATIONS) {
+    logger.warn('Max tool iterations reached', { iterations: toolIterations, chatId })
+  }
+
+  // Process pseudo-tools
+  if (usePseudoTools && fullResponse) {
+    const pseudoToolCalls = parsePseudoToolsFromResponse(fullResponse)
+
+    if (pseudoToolCalls.length > 0) {
+      const results = await processToolCalls(pseudoToolCalls, toolContext, controller, encoder)
+      toolMessages = [...toolMessages, ...results.toolMessages]
+      generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
+
+      const strippedResponse = stripPseudoToolMarkersFromResponse(fullResponse)
+
+      // Add stripped response and tool results to conversation
+      currentMessages = [...formattedMessages]
+      if (strippedResponse.trim()) {
+        currentMessages.push({
+          role: 'assistant' as const,
+          content: strippedResponse,
+          thoughtSignature,
+          name: undefined,
+        })
+      }
+
+      for (const toolMsg of results.toolMessages) {
+        currentMessages.push({
+          role: 'user' as const,
+          content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`,
+          thoughtSignature: undefined,
+          name: undefined,
+        })
+      }
+
+      // Continue conversation with tool results
+      let continuationResponse = ''
+      for await (const chunk of streamMessage({
+        messages: currentMessages,
+        connectionProfile,
+        apiKey,
+        modelParams,
+        tools: [],
+        useNativeWebSearch: useNativeWebSearch && !usePseudoTools,
+      })) {
+        if (chunk.content) {
+          continuationResponse += chunk.content
+          controller.enqueue(encodeContentChunk(encoder, chunk.content))
+        }
+
+        if (chunk.done) {
+          usage = chunk.usage || null
+          cacheUsage = chunk.cacheUsage || null
+          rawResponse = chunk.rawResponse
+          if (chunk.thoughtSignature) {
+            thoughtSignature = chunk.thoughtSignature
+          }
+        }
+      }
+
+      fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
+      fullResponse = stripPseudoToolMarkersFromResponse(fullResponse)
+    }
+  }
+
+  // Save assistant message
+  let assistantMessageId: string | null = null
+
+  if (fullResponse && fullResponse.trim().length > 0) {
+    assistantMessageId = await saveAssistantMessage(
+      repos,
+      chatId,
+      character,
+      characterParticipant,
+      fullResponse,
+      usage,
+      rawResponse,
+      thoughtSignature,
+      generatedImagePaths,
+      toolMessages
+    )
+
+    // Update chat timestamp
+    await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
+
+    // Calculate next speaker
+    const turnInfo = await calculateNextSpeaker(
+      repos,
+      chatId,
+      chat,
+      character,
+      characterParticipant,
+      userParticipantId
+    )
+
+    // Send done event
+    controller.enqueue(encodeDoneEvent(encoder, {
+      messageId: assistantMessageId,
+      usage,
+      cacheUsage,
+      attachmentResults,
+      toolsExecuted: toolMessages.length > 0,
+      turn: turnInfo,
+    }))
+
+    // Trigger memory extraction
+    if (chatSettings) {
+      const memoryChatSettings: MemoryChatSettings = {
+        cheapLLMSettings: chatSettings.cheapLLMSettings,
+      }
+
+      await triggerMemoryExtraction(repos, {
+        characterId: character.id,
+        characterName: character.name,
+        personaName: personaData?.name,
+        allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
+        chatId,
+        userMessage: isContinueMode ? '[Continue/Nudge - no user message]' : content,
+        assistantMessage: fullResponse,
+        sourceMessageId: assistantMessageId,
+        userId,
+        connectionProfile,
+        chatSettings: memoryChatSettings,
+      })
+
+      if (isMultiCharacter) {
+        await triggerInterCharacterMemory(repos, {
+          character,
+          characterParticipantId: characterParticipant.id,
+          assistantMessage: fullResponse,
+          assistantMessageId,
+          chatId,
+          userId,
+          connectionProfile,
+          chatSettings: memoryChatSettings,
+          existingMessages: existingMessages as MessageEvent[],
+          participants: chat.participants,
+          participantCharacters,
+        })
+      }
+
+      await triggerContextSummaryCheck(repos, {
+        chatId,
+        provider: connectionProfile.provider,
+        modelName: connectionProfile.modelName,
+        userId,
+        connectionProfile,
+        chatSettings: memoryChatSettings,
+      })
+    }
+  } else if (toolMessages.length > 0) {
+    // Save tool messages even without text response
+    const toolSaveResult = await saveToolMessages(
+      repos,
+      chatId,
+      userId,
+      toolMessages,
+      generatedImagePaths,
+      character.id
+    )
+
+    await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
+
+    controller.enqueue(encodeDoneEvent(encoder, {
+      messageId: toolSaveResult.firstToolMessageId,
+      usage,
+      cacheUsage,
+      attachmentResults,
+      toolsExecuted: true,
+    }))
+  } else {
+    // Empty response - known Gemini issue
+    logger.warn(`Empty response for chat ${chatId} - this is a known Gemini API issue`)
+    controller.enqueue(encodeDoneEvent(encoder, {
+      messageId: null,
+      usage,
+      cacheUsage,
+      attachmentResults,
+      toolsExecuted: false,
+      emptyResponse: true,
+      emptyResponseReason: 'The AI model returned an empty response. This is a known issue with some Gemini models. Please try resending your message.',
+    }))
+  }
+
+  // Close stream
+  try {
+    controller.close()
+  } catch {
+    // Already closed
+  }
+}
+
+/**
+ * Save assistant message to the chat
+ */
+async function saveAssistantMessage(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  character: { id: string; name: string },
+  characterParticipant: { id: string },
+  content: string,
+  usage: { totalTokens?: number } | null,
+  rawResponse: unknown,
+  thoughtSignature: string | undefined,
+  generatedImagePaths: GeneratedImage[],
+  toolMessages: ToolMessage[]
+): Promise<string> {
+  const assistantMessageId = crypto.randomUUID()
+  const assistantAttachments = generatedImagePaths.map(img => img.id)
+
+  const assistantMessage = {
+    id: assistantMessageId,
+    type: 'message' as const,
+    role: 'ASSISTANT' as const,
+    content,
+    createdAt: new Date().toISOString(),
+    tokenCount: usage?.totalTokens || null,
+    rawResponse: (rawResponse as Record<string, unknown>) || null,
+    attachments: assistantAttachments,
+    thoughtSignature: thoughtSignature || null,
+    participantId: characterParticipant.id,
+  }
+
+  await repos.chats.addMessage(chatId, assistantMessage)
+
+  logger.debug('Assistant message saved', {
+    messageId: assistantMessageId,
+    participantId: characterParticipant.id,
+    characterName: character.name,
+  })
+
+  // Save tool messages
+  if (toolMessages.length > 0) {
+    await saveToolMessages(
+      repos,
+      chatId,
+      '',
+      toolMessages,
+      generatedImagePaths,
+      character.id
+    )
+  }
+
+  // Link images to assistant message
+  for (const imageId of assistantAttachments) {
+    try {
+      await repos.files.addLink(imageId, assistantMessageId)
+    } catch (error) {
+      logger.warn('Failed to link image to assistant message', {
+        imageId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  return assistantMessageId
+}
+
+/**
+ * Calculate next speaker for multi-character chats
+ */
+async function calculateNextSpeaker(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  chat: ChatMetadataBase,
+  character: Character,
+  characterParticipant: { id: string },
+  userParticipantId: string | null
+): Promise<{
+  nextSpeakerId: string | null
+  reason: string
+  cycleComplete: boolean
+  isUsersTurn: boolean
+}> {
+  const updatedMessages = await repos.chats.getMessages(chatId)
+  const messageEvents = updatedMessages.filter(
+    (m): m is typeof m & { type: 'message' } => m.type === 'message'
+  ) as unknown as MessageEvent[]
+
+  const turnState = calculateTurnStateFromHistory({
+    messages: messageEvents,
+    participants: chat.participants,
+    userParticipantId,
+  })
+
+  const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants)
+  const charactersMap = new Map<string, Character>()
+
+  for (const p of activeCharacterParticipants) {
+    if (p.characterId) {
+      const char = p.id === characterParticipant.id
+        ? character
+        : await repos.characters.findById(p.characterId)
+      if (char) {
+        charactersMap.set(p.characterId, char)
+      }
+    }
+  }
+
+  const nextSpeakerResult = selectNextSpeaker(
+    chat.participants,
+    charactersMap,
+    turnState,
+    userParticipantId
+  )
+
+  logger.debug('Next speaker calculated', {
+    nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+    reason: nextSpeakerResult.reason,
+    cycleComplete: nextSpeakerResult.cycleComplete,
+    isMultiCharacter: isMultiCharacterChat(chat.participants),
+  })
+
+  return {
+    nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+    reason: nextSpeakerResult.reason,
+    cycleComplete: nextSpeakerResult.cycleComplete,
+    isUsersTurn: nextSpeakerResult.nextSpeakerId === null,
+  }
+}
+
+/**
+ * Handle stream errors
+ */
+function handleStreamError(
+  error: unknown,
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder
+): void {
+  logger.error('Streaming error', {}, error as Error)
+
+  let errorMessage = 'Unknown error'
+  let errorType = 'unknown'
+
+  if (error instanceof z.ZodError) {
+    const firstError = error.errors[0]
+    errorMessage = firstError
+      ? `Validation error: ${firstError.message} at ${firstError.path.join('.')}`
+      : 'Response validation failed'
+    errorType = 'validation'
+    logger.debug('Zod validation error details', { errors: error.errors })
+  } else if (error instanceof Error) {
+    errorMessage = error.message
+    errorType = error.name
+  }
+
+  controller.enqueue(encodeErrorEvent(encoder, 'Failed to generate response', errorType, errorMessage))
+  controller.close()
+}

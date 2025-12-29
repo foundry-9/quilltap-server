@@ -5,25 +5,11 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware'
+import { getFilePath } from '@/lib/api/middleware/file-path'
 import { executeCascadeDelete } from '@/lib/cascade-delete'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
-import type { FileEntry } from '@/lib/schemas/types'
-
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : ''
-  return `data/files/storage/${file.id}${ext}`
-}
 
 // Validation schema for updates
 const updateCharacterSchema = z.object({
@@ -40,173 +26,131 @@ const updateCharacterSchema = z.object({
 })
 
 // GET /api/characters/:id
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      const character = await repos.characters.findById(id)
 
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
+      if (!checkOwnership(character, user.id)) {
+        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+      }
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    const character = await repos.characters.findById(id)
-
-    if (!character || character.userId !== user.id) {
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 })
-    }
-
-    // Get default image from repository if present
-    let defaultImage = null
-    if (character.defaultImageId) {
-      const fileEntry = await repos.files.findById(character.defaultImageId)
-      if (fileEntry) {
-        defaultImage = {
-          id: fileEntry.id,
-          filepath: getFilePath(fileEntry),
-          url: null,
+      // Get default image from repository if present
+      let defaultImage = null
+      if (character.defaultImageId) {
+        const fileEntry = await repos.files.findById(character.defaultImageId)
+        if (fileEntry) {
+          defaultImage = {
+            id: fileEntry.id,
+            filepath: getFilePath(fileEntry),
+            url: null,
+          }
         }
       }
-    }
 
-    // Get chat count
-    const chats = await repos.chats.findByCharacterId(id)
+      // Get chat count
+      const chats = await repos.chats.findByCharacterId(id)
 
-    const enrichedCharacter = {
-      ...character,
-      defaultImage,
-      _count: {
-        chats: chats.length,
-      },
-    }
+      const enrichedCharacter = {
+        ...character,
+        defaultImage,
+        _count: {
+          chats: chats.length,
+        },
+      }
 
-    return NextResponse.json({ character: enrichedCharacter })
-  } catch (error) {
-    logger.error('Error fetching character', { context: 'GET /api/characters/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to fetch character' },
-      { status: 500 }
-    )
-  }
-}
-
-// PUT /api/characters/:id
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    // Verify character ownership
-    const existingCharacter = await repos.characters.findById(id)
-
-    if (!existingCharacter || existingCharacter.userId !== user.id) {
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 })
-    }
-
-    const body = await req.json()
-    const validatedData = updateCharacterSchema.parse(body)
-
-    const character = await repos.characters.update(id, validatedData)
-
-    // Revalidate the dashboard to reflect character changes
-    revalidatePath('/dashboard')
-
-    return NextResponse.json({ character })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
+      return NextResponse.json({ character: enrichedCharacter })
+    } catch (error) {
+      logger.error('Error fetching character', { context: 'GET /api/characters/:id' }, error instanceof Error ? error : undefined)
       return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
+        { error: 'Failed to fetch character' },
+        { status: 500 }
       )
     }
-
-    logger.error('Error updating character', { context: 'PUT /api/characters/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to update character' },
-      { status: 500 }
-    )
   }
-}
+)
+
+// PUT /api/characters/:id
+export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      // Verify character ownership
+      const existingCharacter = await repos.characters.findById(id)
+
+      if (!checkOwnership(existingCharacter, user.id)) {
+        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+      }
+
+      const body = await req.json()
+      const validatedData = updateCharacterSchema.parse(body)
+
+      const character = await repos.characters.update(id, validatedData)
+
+      // Revalidate the dashboard to reflect character changes
+      revalidatePath('/dashboard')
+
+      return NextResponse.json({ character })
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Validation error', details: error.errors },
+          { status: 400 }
+        )
+      }
+
+      logger.error('Error updating character', { context: 'PUT /api/characters/:id' }, error instanceof Error ? error : undefined)
+      return NextResponse.json(
+        { error: 'Failed to update character' },
+        { status: 500 }
+      )
+    }
+  }
+)
 
 // DELETE /api/characters/:id
 // Query params:
 //   - cascadeChats: 'true' to delete exclusive chats
 //   - cascadeImages: 'true' to delete exclusive images
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      // Verify character ownership
+      const existingCharacter = await repos.characters.findById(id)
 
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
+      if (!checkOwnership(existingCharacter, user.id)) {
+        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+      }
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+      // Parse cascade options from query params
+      const { searchParams } = new URL(req.url)
+      const cascadeChats = searchParams.get('cascadeChats') === 'true'
+      const cascadeImages = searchParams.get('cascadeImages') === 'true'
 
-    // Verify character ownership
-    const existingCharacter = await repos.characters.findById(id)
+      // Execute cascade delete
+      const result = await executeCascadeDelete(id, {
+        deleteExclusiveChats: cascadeChats,
+        deleteExclusiveImages: cascadeImages,
+      })
 
-    if (!existingCharacter || existingCharacter.userId !== user.id) {
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 })
-    }
+      if (!result.success) {
+        return NextResponse.json(
+          { error: 'Failed to delete character' },
+          { status: 500 }
+        )
+      }
 
-    // Parse cascade options from query params
-    const { searchParams } = new URL(req.url)
-    const cascadeChats = searchParams.get('cascadeChats') === 'true'
-    const cascadeImages = searchParams.get('cascadeImages') === 'true'
-
-    // Execute cascade delete
-    const result = await executeCascadeDelete(id, {
-      deleteExclusiveChats: cascadeChats,
-      deleteExclusiveImages: cascadeImages,
-    })
-
-    if (!result.success) {
+      return NextResponse.json({
+        success: true,
+        deletedChats: result.deletedChats,
+        deletedImages: result.deletedImages,
+        deletedMemories: result.deletedMemories,
+      })
+    } catch (error) {
+      logger.error('Error deleting character', { context: 'DELETE /api/characters/:id' }, error instanceof Error ? error : undefined)
       return NextResponse.json(
         { error: 'Failed to delete character' },
         { status: 500 }
       )
     }
-
-    return NextResponse.json({
-      success: true,
-      deletedChats: result.deletedChats,
-      deletedImages: result.deletedImages,
-      deletedMemories: result.deletedMemories,
-    })
-  } catch (error) {
-    logger.error('Error deleting character', { context: 'DELETE /api/characters/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to delete character' },
-      { status: 500 }
-    )
   }
-}
+)

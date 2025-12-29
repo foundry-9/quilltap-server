@@ -508,7 +508,7 @@ export async function batchProcessChatForMemories(
   }
 
   // Get chat settings for cheap LLM config
-  const chatSettings = await repos.users.getChatSettings(userId)
+  const chatSettings = await repos.chatSettings.findByUserId(userId)
   if (!chatSettings) {
     throw new Error(`Chat settings not found for user ${userId}`)
   }

@@ -1,0 +1,300 @@
+/**
+ * Participant Resolver Service
+ *
+ * Handles resolution of responding participants in chat messages,
+ * including character lookup and connection profile resolution.
+ */
+
+import { createServiceLogger } from '@/lib/logging/create-logger'
+import { resolveConnectionProfile } from '@/lib/chat/connection-resolver'
+import {
+  findUserParticipant,
+  isMultiCharacterChat,
+  getActiveCharacterParticipants,
+} from '@/lib/chat/turn-manager'
+import type { getRepositories } from '@/lib/repositories/factory'
+import type {
+  ChatMetadataBase,
+  ChatParticipantBase,
+  Character,
+  Persona,
+  ConnectionProfile,
+} from '@/lib/schemas/types'
+
+const logger = createServiceLogger('ParticipantResolverService')
+
+/**
+ * Result of participant resolution
+ */
+export interface ParticipantResolutionResult {
+  /** The character participant who will respond */
+  characterParticipant: ChatParticipantBase
+  /** The character data */
+  character: Character
+  /** The connection profile to use */
+  connectionProfile: ConnectionProfile
+  /** Decrypted API key (or empty string for keyless providers) */
+  apiKey: string
+  /** Image profile ID if configured */
+  imageProfileId: string | null
+  /** The user participant (persona) */
+  userParticipant: ChatParticipantBase | null
+  /** User participant ID */
+  userParticipantId: string | null
+  /** Whether this is a multi-character chat */
+  isMultiCharacter: boolean
+}
+
+/**
+ * All participant data for multi-character chats
+ */
+export interface AllParticipantsData {
+  /** Map of character IDs to Character data */
+  participantCharacters: Map<string, Character>
+  /** Map of persona IDs to Persona data */
+  participantPersonas: Map<string, Persona>
+}
+
+/**
+ * Resolve the responding participant for a chat message
+ */
+export async function resolveRespondingParticipant(
+  repos: ReturnType<typeof getRepositories>,
+  chat: ChatMetadataBase,
+  userId: string,
+  requestedRespondingParticipantId?: string,
+  isContinueMode: boolean = false
+): Promise<ParticipantResolutionResult> {
+  logger.debug('Resolving responding participant', {
+    chatId: chat.id,
+    requestedParticipantId: requestedRespondingParticipantId,
+    isContinueMode,
+  })
+
+  // Get user participant (persona) for turn management
+  const userParticipant = findUserParticipant(chat.participants)
+  const userParticipantId = userParticipant?.id ?? null
+
+  // Get character participant - use specified participant for continue mode, otherwise first active character
+  let characterParticipant: ChatParticipantBase | undefined
+
+  if (requestedRespondingParticipantId) {
+    // Continue mode with specific participant requested - find them
+    characterParticipant = chat.participants.find(
+      p => p.id === requestedRespondingParticipantId && p.type === 'CHARACTER' && p.isActive && p.characterId
+    )
+    if (!characterParticipant) {
+      logger.warn('Requested responding participant not found or inactive', {
+        chatId: chat.id,
+        requestedParticipantId: requestedRespondingParticipantId,
+      })
+      // Fall back to first active character
+      characterParticipant = chat.participants.find(
+        p => p.type === 'CHARACTER' && p.isActive && p.characterId
+      )
+    }
+  } else {
+    // Normal mode or continue mode without specific participant - use first active character
+    characterParticipant = chat.participants.find(
+      p => p.type === 'CHARACTER' && p.isActive && p.characterId
+    )
+  }
+
+  if (!characterParticipant?.characterId) {
+    throw new Error('No active character in chat')
+  }
+
+  // Get character
+  const character = await repos.characters.findById(characterParticipant.characterId)
+  if (!character) {
+    throw new Error('Character not found')
+  }
+
+  logger.info('Selected responding character', {
+    chatId: chat.id,
+    participantId: characterParticipant.id,
+    characterId: characterParticipant.characterId,
+    characterName: character.name,
+    isContinueMode,
+    requestedParticipantId: requestedRespondingParticipantId,
+  })
+
+  // Resolve connection profile using fallback chain
+  let resolvedConnectionProfileId: string
+  try {
+    resolvedConnectionProfileId = resolveConnectionProfile(characterParticipant, character)
+  } catch {
+    logger.error('Failed to resolve connection profile', {
+      participantId: characterParticipant.id,
+      characterId: character.id,
+      characterName: character.name,
+    })
+    throw new Error('No connection profile configured for character')
+  }
+
+  // Get connection profile with API key
+  const connectionProfile = await repos.connections.findById(resolvedConnectionProfileId)
+  if (!connectionProfile) {
+    throw new Error('Connection profile not found')
+  }
+
+  logger.debug('Using connection profile', {
+    profileId: resolvedConnectionProfileId,
+    provider: connectionProfile.provider,
+    model: connectionProfile.modelName,
+    resolvedFrom: characterParticipant.connectionProfileId ? 'participant' : 'character_default',
+  })
+
+  // Get API key if needed
+  let apiKey = ''
+  if (connectionProfile.apiKeyId) {
+    const apiKeyData = await repos.connections.findApiKeyById(connectionProfile.apiKeyId)
+    if (apiKeyData) {
+      // Import here to avoid circular dependencies
+      const { decryptApiKey } = await import('@/lib/encryption')
+      apiKey = decryptApiKey(
+        apiKeyData.ciphertext,
+        apiKeyData.iv,
+        apiKeyData.authTag,
+        userId
+      )
+    }
+  }
+
+  // Get image profile from the participant if set
+  const imageProfileId = characterParticipant.imageProfileId || null
+
+  // Detect if this is a multi-character chat
+  const isMultiCharacter = isMultiCharacterChat(chat.participants)
+
+  return {
+    characterParticipant,
+    character,
+    connectionProfile,
+    apiKey,
+    imageProfileId,
+    userParticipant,
+    userParticipantId,
+    isMultiCharacter,
+  }
+}
+
+/**
+ * Load all participant data for multi-character chats
+ */
+export async function loadAllParticipantData(
+  repos: ReturnType<typeof getRepositories>,
+  chat: ChatMetadataBase,
+  primaryCharacter: Character,
+  primaryPersona: Persona | null
+): Promise<AllParticipantsData> {
+  logger.debug('Loading all participant data for multi-character chat', {
+    participantCount: chat.participants.length,
+  })
+
+  const participantCharacters = new Map<string, Character>()
+  const participantPersonas = new Map<string, Persona>()
+
+  // Load all characters
+  for (const p of chat.participants) {
+    if (p.type === 'CHARACTER' && p.characterId && p.isActive) {
+      if (p.characterId === primaryCharacter.id) {
+        // Reuse already-loaded character
+        participantCharacters.set(p.characterId, primaryCharacter)
+      } else {
+        const char = await repos.characters.findById(p.characterId)
+        if (char) {
+          participantCharacters.set(p.characterId, char)
+        }
+      }
+    } else if (p.type === 'PERSONA' && p.personaId && p.isActive) {
+      if (primaryPersona && p.personaId === primaryPersona.id) {
+        // Reuse already-loaded persona
+        participantPersonas.set(p.personaId, primaryPersona)
+      } else {
+        const pers = await repos.personas.findById(p.personaId)
+        if (pers) {
+          participantPersonas.set(p.personaId, pers)
+        }
+      }
+    }
+  }
+
+  logger.debug('Loaded participant data', {
+    characterCount: participantCharacters.size,
+    personaCount: participantPersonas.size,
+  })
+
+  return { participantCharacters, participantPersonas }
+}
+
+/**
+ * Get persona data for a chat
+ */
+export async function getPersonaData(
+  repos: ReturnType<typeof getRepositories>,
+  chat: ChatMetadataBase
+): Promise<{ persona: { name: string; description: string } | null; personaData: Persona | null }> {
+  const personaParticipant = chat.participants.find(
+    p => p.type === 'PERSONA' && p.isActive && p.personaId
+  )
+
+  if (!personaParticipant?.personaId) {
+    return { persona: null, personaData: null }
+  }
+
+  const personaData = await repos.personas.findById(personaParticipant.personaId)
+  if (!personaData) {
+    return { persona: null, personaData: null }
+  }
+
+  return {
+    persona: { name: personaData.name, description: personaData.description },
+    personaData,
+  }
+}
+
+/**
+ * Get roleplay template for a chat, with fallback to user default
+ */
+export async function getRoleplayTemplate(
+  repos: ReturnType<typeof getRepositories>,
+  chat: ChatMetadataBase,
+  chatSettings: { defaultRoleplayTemplateId?: string } | null
+): Promise<{ systemPrompt: string } | null> {
+  let roleplayTemplateId = chat.roleplayTemplateId
+
+  // If chat doesn't have a template set (older or imported chat), inherit from user default
+  if (roleplayTemplateId === undefined || roleplayTemplateId === null) {
+    const userDefaultTemplateId = chatSettings?.defaultRoleplayTemplateId
+    if (userDefaultTemplateId) {
+      logger.debug('Auto-setting roleplay template for chat without one', {
+        chatId: chat.id,
+        templateId: userDefaultTemplateId,
+        source: 'user_default',
+      })
+      await repos.chats.update(chat.id, { roleplayTemplateId: userDefaultTemplateId })
+      roleplayTemplateId = userDefaultTemplateId
+    }
+  }
+
+  if (!roleplayTemplateId) {
+    return null
+  }
+
+  const roleplayTemplate = await repos.roleplayTemplates.findById(roleplayTemplateId)
+  if (!roleplayTemplate) {
+    return null
+  }
+
+  logger.debug('Using roleplay template', {
+    templateId: roleplayTemplate.id,
+    templateName: roleplayTemplate.name,
+    isBuiltIn: roleplayTemplate.isBuiltIn,
+    source: 'chat_setting',
+  })
+
+  return { systemPrompt: roleplayTemplate.systemPrompt }
+}
+
+export { getActiveCharacterParticipants }

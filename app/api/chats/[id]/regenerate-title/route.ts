@@ -41,7 +41,7 @@ export async function POST(
     })
 
     // Get chat settings for cheap LLM configuration
-    const chatSettings = await repos.users.getChatSettings(userId)
+    const chatSettings = await repos.chatSettings.findByUserId(userId)
 
     if (!chatSettings?.cheapLLMSettings) {
       return NextResponse.json(

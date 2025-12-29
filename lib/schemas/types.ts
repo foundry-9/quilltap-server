@@ -1,962 +1,267 @@
 /**
- * Shared Type Definitions
+ * Shared Type Definitions - Barrel File
  *
- * Central types used across the application.
+ * Central re-export file for all schema types used across the application.
  * These correspond to entity schemas stored in MongoDB.
+ *
+ * This file re-exports all types from domain-specific files for backwards
+ * compatibility with existing imports from '@/lib/schemas/types'.
+ *
+ * @module schemas/types
  */
 
-import { z } from 'zod';
-import { ThemePreferenceSchema, type ThemePreference } from '@/lib/themes/types';
+// ============================================================================
+// COMMON TYPES (version constants, enums, common schemas)
+// ============================================================================
+export {
+  // Version constants
+  SCHEMA_VERSION,
+  SYNC_PROTOCOL_VERSION,
+  // Enums
+  ProviderEnum,
+  ImageProviderEnum,
+  EmbeddingProfileProviderEnum,
+  RoleEnum,
+  ImageTagTypeEnum,
+  AvatarDisplayModeEnum,
+  // Common schemas
+  UUIDSchema,
+  TimestampSchema,
+  JsonSchema,
+  EncryptedFieldSchema,
+  HexColorSchema,
+  TagVisualStyleSchema,
+  TagStyleMapSchema,
+  // Theme re-exports
+  ThemePreferenceSchema,
+} from './common.types';
 
-// Re-export theme types for convenience
-export { ThemePreferenceSchema };
-export type { ThemePreference };
+export type {
+  Provider,
+  ImageProvider,
+  EmbeddingProfileProvider,
+  Role,
+  ImageTagType,
+  AvatarDisplayMode,
+  EncryptedField,
+  TagVisualStyle,
+  TagStyleMap,
+  ThemePreference,
+} from './common.types';
 
 // ============================================================================
-// VERSION CONSTANTS (for Sync API compatibility)
+// AUTHENTICATION TYPES
 // ============================================================================
+export {
+  TOTPSecretSchema,
+  BackupCodesSchema,
+  TOTPAttemptsSchema,
+  TrustedDeviceSchema,
+  UserSchema,
+  AccountSchema,
+  SessionSchema,
+  VerificationTokenSchema,
+  AuthAccountsSchema,
+} from './auth.types';
 
-/**
- * Current schema version for data compatibility checks.
- * Major version must match for sync to proceed between instances.
- */
-export const SCHEMA_VERSION = '2.5.0';
-
-/**
- * Sync protocol version.
- * Must match exactly between instances for sync to proceed.
- */
-export const SYNC_PROTOCOL_VERSION = '1.0';
-
-// ============================================================================
-// ENUMS
-// ============================================================================
-
-// Providers are now dynamic from plugins, so we use string validation
-export const ProviderEnum = z.string().min(1, 'Provider is required');
-export type Provider = z.infer<typeof ProviderEnum>;
-
-export const ImageProviderEnum = z.string().min(1, 'Image provider is required');
-export type ImageProvider = z.infer<typeof ImageProviderEnum>;
-
-export const EmbeddingProfileProviderEnum = z.enum(['OPENAI', 'OLLAMA', 'OPENROUTER']);
-export type EmbeddingProfileProvider = z.infer<typeof EmbeddingProfileProviderEnum>;
-
-export const RoleEnum = z.enum(['SYSTEM', 'USER', 'ASSISTANT', 'TOOL']);
-export type Role = z.infer<typeof RoleEnum>;
-
-export const ImageTagTypeEnum = z.enum(['CHARACTER', 'PERSONA', 'CHAT', 'THEME']);
-export type ImageTagType = z.infer<typeof ImageTagTypeEnum>;
-
-export const AvatarDisplayModeEnum = z.enum(['ALWAYS', 'GROUP_ONLY', 'NEVER']);
-export type AvatarDisplayMode = z.infer<typeof AvatarDisplayModeEnum>;
+export type {
+  TOTPSecret,
+  BackupCodes,
+  TOTPAttempts,
+  TrustedDevice,
+  User,
+  Account,
+  Session,
+  VerificationToken,
+  AuthAccounts,
+} from './auth.types';
 
 // ============================================================================
-// COMMON FIELDS
+// SETTINGS TYPES
 // ============================================================================
+export {
+  CheapLLMStrategyEnum,
+  EmbeddingProviderEnum,
+  CheapLLMSettingsSchema,
+  TimestampModeEnum,
+  TimestampFormatEnum,
+  TimestampConfigSchema,
+  ChatSettingsSchema,
+  GeneralSettingsSchema,
+} from './settings.types';
 
-// UUID identifier
-export const UUIDSchema = z.string().uuid();
-
-// ISO-8601 timestamp
-export const TimestampSchema = z.string().datetime().or(z.date()).transform(d => {
-  if (d instanceof Date) return d.toISOString();
-  return d;
-});
-
-// JSON field (flexible structure)
-export const JsonSchema = z.record(z.unknown());
-
-// Encryption fields (AES-256-GCM)
-export const EncryptedFieldSchema = z.object({
-  ciphertext: z.string(),
-  iv: z.string(),
-  authTag: z.string(),
-});
-
-export type EncryptedField = z.infer<typeof EncryptedFieldSchema>;
-
-// ============================================================================
-// AUTHENTICATION & USER
-// ============================================================================
-
-export const TOTPSecretSchema = EncryptedFieldSchema.extend({
-  enabled: z.boolean().default(false),
-  verifiedAt: TimestampSchema.nullable().optional(),
-});
-
-export type TOTPSecret = z.infer<typeof TOTPSecretSchema>;
-
-export const BackupCodesSchema = z.object({
-  ciphertext: z.string(),
-  iv: z.string(),
-  authTag: z.string(),
-  createdAt: TimestampSchema,
-});
-
-export type BackupCodes = z.infer<typeof BackupCodesSchema>;
-
-export const TOTPAttemptsSchema = z.object({
-  count: z.number().default(0),
-  lastAttempt: TimestampSchema.nullable().optional(),
-  lockedUntil: TimestampSchema.nullable().optional(),
-});
-
-export type TOTPAttempts = z.infer<typeof TOTPAttemptsSchema>;
-
-export const TrustedDeviceSchema = z.object({
-  id: UUIDSchema,
-  tokenHash: z.string(),
-  name: z.string(),
-  createdAt: TimestampSchema,
-  lastUsedAt: TimestampSchema,
-  expiresAt: TimestampSchema,
-});
-
-export type TrustedDevice = z.infer<typeof TrustedDeviceSchema>;
-
-export const UserSchema = z.object({
-  id: UUIDSchema,
-  username: z.string().min(3).max(50),
-  email: z.string().email().nullable().optional(),
-  name: z.string().nullable().optional(),
-  image: z.string().nullable().optional(),
-  emailVerified: TimestampSchema.nullable().optional(),
-
-  // Password authentication
-  passwordHash: z.string().nullable().optional(),
-
-  // TOTP 2FA
-  totp: TOTPSecretSchema.optional(),
-  backupCodes: BackupCodesSchema.optional(),
-  totpAttempts: TOTPAttemptsSchema.optional(),
-  trustedDevices: z.array(TrustedDeviceSchema).optional(),
-
-  // Timestamps
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type User = z.infer<typeof UserSchema>;
-
-export const HexColorSchema = z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
-
-export const TagVisualStyleSchema = z.object({
-  emoji: z.string().max(8).optional().nullable(),
-  foregroundColor: HexColorSchema.default('#1f2937'),
-  backgroundColor: HexColorSchema.default('#e5e7eb'),
-  emojiOnly: z.boolean().default(false),
-  bold: z.boolean().default(false),
-  italic: z.boolean().default(false),
-  strikethrough: z.boolean().default(false),
-});
-
-export type TagVisualStyle = z.infer<typeof TagVisualStyleSchema>;
-
-export const TagStyleMapSchema = z.record(TagVisualStyleSchema).default({});
-
-export type TagStyleMap = z.infer<typeof TagStyleMapSchema>;
+export type {
+  CheapLLMStrategy,
+  EmbeddingProvider,
+  CheapLLMSettings,
+  TimestampMode,
+  TimestampFormat,
+  TimestampConfig,
+  ChatSettings,
+  GeneralSettings,
+} from './settings.types';
 
 // ============================================================================
-// CHEAP LLM SETTINGS
+// PROFILE TYPES
 // ============================================================================
+export {
+  ApiKeySchema,
+  ConnectionProfileSchema,
+  ConnectionProfilesFileSchema,
+  ImageProfileSchema,
+  ImageProfilesFileSchema,
+  EmbeddingProfileSchema,
+  EmbeddingProfilesFileSchema,
+} from './profile.types';
 
-export const CheapLLMStrategyEnum = z.enum(['USER_DEFINED', 'PROVIDER_CHEAPEST', 'LOCAL_FIRST']);
-export type CheapLLMStrategy = z.infer<typeof CheapLLMStrategyEnum>;
-
-export const EmbeddingProviderEnum = z.enum(['SAME_PROVIDER', 'OPENAI', 'LOCAL']);
-export type EmbeddingProvider = z.infer<typeof EmbeddingProviderEnum>;
-
-export const CheapLLMSettingsSchema = z.object({
-  /** Strategy for selecting the cheap LLM provider */
-  strategy: CheapLLMStrategyEnum.default('PROVIDER_CHEAPEST'),
-  /** If USER_DEFINED, which connection profile to use */
-  userDefinedProfileId: UUIDSchema.nullable().optional(),
-  /** Global default cheap LLM profile - always use this if set */
-  defaultCheapProfileId: UUIDSchema.nullable().optional(),
-  /** Whether to fall back to local models if available */
-  fallbackToLocal: z.boolean().default(true),
-  /** Provider for generating embeddings */
-  embeddingProvider: EmbeddingProviderEnum.default('OPENAI'),
-  /** Embedding profile ID to use for text embeddings */
-  embeddingProfileId: UUIDSchema.nullable().optional(),
-});
-
-export type CheapLLMSettings = z.infer<typeof CheapLLMSettingsSchema>;
+export type {
+  ApiKey,
+  ConnectionProfile,
+  ConnectionProfilesFile,
+  ImageProfile,
+  ImageProfilesFile,
+  EmbeddingProfile,
+  EmbeddingProfilesFile,
+} from './profile.types';
 
 // ============================================================================
-// TIMESTAMP CONFIGURATION
+// CHARACTER TYPES
 // ============================================================================
+export {
+  CharacterSystemPromptSchema,
+  PhysicalDescriptionSchema,
+  CharacterSchema,
+} from './character.types';
 
-export const TimestampModeEnum = z.enum(['NONE', 'START_ONLY', 'EVERY_MESSAGE']);
-export type TimestampMode = z.infer<typeof TimestampModeEnum>;
-
-export const TimestampFormatEnum = z.enum(['ISO8601', 'FRIENDLY', 'DATE_ONLY', 'TIME_ONLY', 'CUSTOM']);
-export type TimestampFormat = z.infer<typeof TimestampFormatEnum>;
-
-export const TimestampConfigSchema = z.object({
-  /** Whether to inject timestamps and how */
-  mode: TimestampModeEnum.default('NONE'),
-  /** How to format the timestamp */
-  format: TimestampFormatEnum.default('FRIENDLY'),
-  /** Custom format string (when format is CUSTOM) - uses date-fns format tokens */
-  customFormat: z.string().nullable().optional(),
-  /** Whether to use fictional/arbitrary timestamp instead of real time */
-  useFictionalTime: z.boolean().default(false),
-  /** Base fictional timestamp (ISO-8601 format) */
-  fictionalBaseTimestamp: z.string().nullable().optional(),
-  /** Real timestamp when the fictional base was set (for auto-increment calculation) */
-  fictionalBaseRealTime: z.string().nullable().optional(),
-  /** Whether to auto-prepend "Current time: [timestamp]" or use {{timestamp}} template variable */
-  autoPrepend: z.boolean().default(true),
-});
-
-export type TimestampConfig = z.infer<typeof TimestampConfigSchema>;
-
-export const ChatSettingsSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  avatarDisplayMode: AvatarDisplayModeEnum.default('ALWAYS'),
-  avatarDisplayStyle: z.string().default('CIRCULAR'),
-  tagStyles: TagStyleMapSchema,
-  /** Cheap LLM settings for memory extraction and summarization */
-  cheapLLMSettings: CheapLLMSettingsSchema.default({
-    strategy: 'PROVIDER_CHEAPEST',
-    fallbackToLocal: true,
-    embeddingProvider: 'OPENAI',
-  }),
-  /** Profile ID to use for image description fallback (when provider doesn't support images) */
-  imageDescriptionProfileId: UUIDSchema.nullable().optional(),
-  /** Default roleplay template ID for all new chats */
-  defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),
-  /** Theme preference settings */
-  themePreference: ThemePreferenceSchema.default({
-    activeThemeId: null,
-    colorMode: 'system',
-  }),
-  /** Default timestamp configuration for new chats */
-  defaultTimestampConfig: TimestampConfigSchema.default({
-    mode: 'NONE',
-    format: 'FRIENDLY',
-    useFictionalTime: false,
-    autoPrepend: true,
-  }),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type ChatSettings = z.infer<typeof ChatSettingsSchema>;
-
-export const AccountSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  type: z.string(),
-  provider: z.string(),
-  providerAccountId: z.string(),
-  refresh_token: z.string().nullable().optional(),
-  access_token: z.string().nullable().optional(),
-  expires_at: z.number().nullable().optional(),
-  token_type: z.string().nullable().optional(),
-  scope: z.string().nullable().optional(),
-  id_token: z.string().nullable().optional(),
-  session_state: z.string().nullable().optional(),
-});
-
-export type Account = z.infer<typeof AccountSchema>;
-
-export const SessionSchema = z.object({
-  id: UUIDSchema,
-  sessionToken: z.string(),
-  userId: UUIDSchema,
-  expires: TimestampSchema,
-});
-
-export type Session = z.infer<typeof SessionSchema>;
-
-export const VerificationTokenSchema = z.object({
-  identifier: z.string(),
-  token: z.string(),
-  expires: TimestampSchema,
-});
-
-export type VerificationToken = z.infer<typeof VerificationTokenSchema>;
+export type {
+  CharacterSystemPrompt,
+  PhysicalDescription,
+  Character,
+  CharacterInput,
+} from './character.types';
 
 // ============================================================================
-// API KEYS & PROFILES
+// PERSONA TYPES
 // ============================================================================
+export {
+  PersonaSchema,
+} from './persona.types';
 
-export const ApiKeySchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  label: z.string(),
-  provider: ProviderEnum,
-  ciphertext: z.string(),
-  iv: z.string(),
-  authTag: z.string(),
-  isActive: z.boolean().default(true),
-  lastUsed: TimestampSchema.nullable().optional(),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type ApiKey = z.infer<typeof ApiKeySchema>;
-
-export const ConnectionProfileSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  name: z.string(),
-  provider: ProviderEnum,
-  apiKeyId: UUIDSchema.nullable().optional(),
-  baseUrl: z.string().nullable().optional(),
-  modelName: z.string(),
-  parameters: JsonSchema.default({}),
-  isDefault: z.boolean().default(false),
-  /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
-  isCheap: z.boolean().default(false),
-  /** Whether web search is allowed for this profile (only if provider supports it) */
-  allowWebSearch: z.boolean().default(false),
-  tags: z.array(UUIDSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type ConnectionProfile = z.infer<typeof ConnectionProfileSchema>;
+export type {
+  Persona,
+} from './persona.types';
 
 // ============================================================================
-// CHARACTER & PERSONA
+// CHAT TYPES
 // ============================================================================
-
-// Character System Prompt (embedded in Character) - named system prompts for characters
-export const CharacterSystemPromptSchema = z.object({
-  id: UUIDSchema,
-  name: z.string().min(1).max(100),
-  content: z.string().min(1),
-  isDefault: z.boolean().default(false),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type CharacterSystemPrompt = z.infer<typeof CharacterSystemPromptSchema>;
-
-// Physical Description for image generation prompts
-export const PhysicalDescriptionSchema = z.object({
-  id: UUIDSchema,
-  name: z.string().min(1),
-  shortPrompt: z.string().max(350).nullable().optional(),
-  mediumPrompt: z.string().max(500).nullable().optional(),
-  longPrompt: z.string().max(750).nullable().optional(),
-  completePrompt: z.string().max(1000).nullable().optional(),
-  fullDescription: z.string().nullable().optional(),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type PhysicalDescription = z.infer<typeof PhysicalDescriptionSchema>;
-
-export const CharacterSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  name: z.string(),
-  title: z.string().nullable().optional(),
-  description: z.string().nullable().optional(),
-  personality: z.string().nullable().optional(),
-  scenario: z.string().nullable().optional(),
-  firstMessage: z.string().nullable().optional(),
-  exampleDialogues: z.string().nullable().optional(),
-  systemPrompts: z.array(CharacterSystemPromptSchema).default([]),  // Named system prompts array
-  avatarUrl: z.string().nullable().optional(),
-  defaultImageId: UUIDSchema.nullable().optional(),
-  defaultConnectionProfileId: UUIDSchema.nullable().optional(),
-  defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),  // Default roleplay template for this character
-  sillyTavernData: JsonSchema.nullable().optional(),
-  isFavorite: z.boolean().default(false),
-  npc: z.boolean().default(false),  // NPC flag - true for ad-hoc NPCs created in chat
-  talkativeness: z.number().min(0.1).max(1.0).default(0.5),
-
-  // Relationships
-  personaLinks: z.array(z.object({
-    personaId: UUIDSchema,
-    isDefault: z.boolean(),
-  })).default([]),
-  tags: z.array(UUIDSchema).default([]),
-  avatarOverrides: z.array(z.object({
-    chatId: UUIDSchema,
-    imageId: UUIDSchema,
-  })).default([]),
-  physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
-
-  // Timestamps
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type Character = z.infer<typeof CharacterSchema>;
-
-// Input type for creating characters - makes fields with defaults optional
-export type CharacterInput = z.input<typeof CharacterSchema>;
-
-export const PersonaSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  name: z.string(),
-  title: z.string().nullable().optional(),
-  description: z.string(),
-  personalityTraits: z.string().nullable().optional(),
-  avatarUrl: z.string().nullable().optional(),
-  defaultImageId: UUIDSchema.nullable().optional(),
-  sillyTavernData: JsonSchema.nullable().optional(),
-
-  // Relationships
-  characterLinks: z.array(UUIDSchema).default([]),
-  tags: z.array(UUIDSchema).default([]),
-  physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
-
-  // Timestamps
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type Persona = z.infer<typeof PersonaSchema>;
-
-// ============================================================================
-// CHAT & MESSAGES
-// ============================================================================
-
-export const MessageEventSchema = z.object({
-  type: z.literal('message'),
-  id: UUIDSchema,
-  role: RoleEnum,
-  content: z.string(),
-  rawResponse: JsonSchema.nullable().optional(),
-  tokenCount: z.number().nullable().optional(),
-  swipeGroupId: z.string().nullable().optional(),
-  swipeIndex: z.number().nullable().optional(),
-  attachments: z.array(UUIDSchema).default([]),
-  createdAt: TimestampSchema,
-  // Debug: Memory extraction logs (Sprint 6)
-  debugMemoryLogs: z.array(z.string()).optional(),
-  // Google Gemini thought signature for thinking models (e.g., gemini-3-pro)
-  // Must be preserved and passed back for multi-turn conversations with function calling
-  thoughtSignature: z.string().nullable().optional(),
-  // Multi-character chat: which participant sent this message
-  participantId: UUIDSchema.nullable().optional(),
-});
-
-export type MessageEvent = z.infer<typeof MessageEventSchema>;
-
-export const ContextSummaryEventSchema = z.object({
-  type: z.literal('context-summary'),
-  id: UUIDSchema,
-  context: z.string(),
-  createdAt: TimestampSchema,
-});
-
-export type ContextSummaryEvent = z.infer<typeof ContextSummaryEventSchema>;
-
-export const ChatEventSchema = z.union([
+export {
   MessageEventSchema,
   ContextSummaryEventSchema,
-]);
+  ChatEventSchema,
+  ParticipantTypeEnum,
+  ChatParticipantSchema,
+  ChatParticipantBaseSchema,
+  ChatMetadataSchema,
+  ChatMetadataBaseSchema,
+  ChatMetadataLegacySchema,
+} from './chat.types';
 
-export type ChatEvent = z.infer<typeof ChatEventSchema>;
-
-// ============================================================================
-// CHAT PARTICIPANTS
-// ============================================================================
-
-export const ParticipantTypeEnum = z.enum(['CHARACTER', 'PERSONA']);
-export type ParticipantType = z.infer<typeof ParticipantTypeEnum>;
-
-export const ChatParticipantSchema = z.object({
-  id: UUIDSchema,
-
-  // Participant type and identity
-  type: ParticipantTypeEnum,
-  characterId: UUIDSchema.nullable().optional(),  // Set when type is CHARACTER
-  personaId: UUIDSchema.nullable().optional(),    // Set when type is PERSONA
-
-  // LLM configuration (for AI characters only)
-  connectionProfileId: UUIDSchema.nullable().optional(),  // Required for CHARACTER, null for PERSONA
-  imageProfileId: UUIDSchema.nullable().optional(),       // Image generation profile
-  roleplayTemplateId: z.string().nullable().optional(),   // Roleplay template override - can be UUID or 'plugin:*' format
-
-  // Per-chat customization
-  systemPromptOverride: z.string().nullable().optional(),  // Custom scenario/context for this chat
-  selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
-
-  // Display and state
-  displayOrder: z.number().default(0),   // For ordering in UI
-  isActive: z.boolean().default(true),   // Temporarily disable without removing
-
-  // Multi-character chat fields
-  hasHistoryAccess: z.boolean().default(false),  // Whether this participant can see messages from before they joined
-  joinScenario: z.string().nullable().optional(), // Custom scenario text for how they joined the chat
-
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-}).refine(
-  (data) => {
-    // Must have characterId if type is CHARACTER
-    if (data.type === 'CHARACTER') {
-      return data.characterId != null;
-    }
-    // Must have personaId if type is PERSONA
-    if (data.type === 'PERSONA') {
-      return data.personaId != null;
-    }
-    return false;
-  },
-  { message: 'CHARACTER participants must have characterId, PERSONA participants must have personaId' }
-);
-
-export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
-
-// Schema without refinements for internal use (e.g., parsing before validation)
-export const ChatParticipantBaseSchema = z.object({
-  id: UUIDSchema,
-  type: ParticipantTypeEnum,
-  characterId: UUIDSchema.nullable().optional(),
-  personaId: UUIDSchema.nullable().optional(),
-  connectionProfileId: UUIDSchema.nullable().optional(),
-  imageProfileId: UUIDSchema.nullable().optional(),
-  roleplayTemplateId: z.string().nullable().optional(),  // Roleplay template override - can be UUID or 'plugin:*' format
-  systemPromptOverride: z.string().nullable().optional(),
-  selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
-  displayOrder: z.number().default(0),
-  isActive: z.boolean().default(true),
-  hasHistoryAccess: z.boolean().default(false),
-  joinScenario: z.string().nullable().optional(),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type ChatParticipantBase = z.infer<typeof ChatParticipantBaseSchema>;
-
-// Input type for creating chat participants - makes fields with defaults optional
-export type ChatParticipantBaseInput = z.input<typeof ChatParticipantBaseSchema>;
-
-export const ChatMetadataSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-
-  // Participants array (replaces characterId, personaId, connectionProfileId, imageProfileId)
-  participants: z.array(ChatParticipantBaseSchema).default([]),
-
-  title: z.string(),
-  contextSummary: z.string().nullable().optional(),
-  sillyTavernMetadata: JsonSchema.nullable().optional(),
-  tags: z.array(UUIDSchema).default([]),
-  /** Roleplay template for this chat - can be UUID or 'plugin:*' format */
-  roleplayTemplateId: z.string().nullable().optional(),
-  /** Timestamp configuration for this chat (overrides user default) */
-  timestampConfig: TimestampConfigSchema.nullable().optional(),
-  /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
-  lastTurnParticipantId: UUIDSchema.nullable().optional(),
-  messageCount: z.number().default(0),
-  lastMessageAt: TimestampSchema.nullable().optional(),
-  lastRenameCheckInterchange: z.number().default(0),
-  /** Whether auto-responses are paused in multi-character chats */
-  isPaused: z.boolean().default(false),
-  /** Whether the user has manually renamed this chat (disables auto-renaming) */
-  isManuallyRenamed: z.boolean().default(false),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-}).refine(
-  (data) => data.participants.length > 0,
-  { message: 'Chat must have at least one participant' }
-);
-
-export type ChatMetadata = z.infer<typeof ChatMetadataSchema>;
-
-// Schema without participant validation for migration/backwards compatibility
-export const ChatMetadataBaseSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  participants: z.array(ChatParticipantBaseSchema).default([]),
-  title: z.string(),
-  contextSummary: z.string().nullable().optional(),
-  sillyTavernMetadata: JsonSchema.nullable().optional(),
-  tags: z.array(UUIDSchema).default([]),
-  /** Roleplay template for this chat - can be UUID or 'plugin:*' format */
-  roleplayTemplateId: z.string().nullable().optional(),
-  /** Timestamp configuration for this chat (overrides user default) */
-  timestampConfig: TimestampConfigSchema.nullable().optional(),
-  /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
-  lastTurnParticipantId: UUIDSchema.nullable().optional(),
-  messageCount: z.number().default(0),
-  lastMessageAt: TimestampSchema.nullable().optional(),
-  lastRenameCheckInterchange: z.number().default(0),
-  /** Whether auto-responses are paused in multi-character chats */
-  isPaused: z.boolean().default(false),
-  /** Whether the user has manually renamed this chat (disables auto-renaming) */
-  isManuallyRenamed: z.boolean().default(false),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type ChatMetadataBase = z.infer<typeof ChatMetadataBaseSchema>;
-
-// Input type for creating chats - makes fields with defaults optional
-export type ChatMetadataInput = z.input<typeof ChatMetadataBaseSchema>;
-
-// Legacy schema for migration (matches old format)
-export const ChatMetadataLegacySchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  characterId: UUIDSchema,
-  personaId: UUIDSchema.nullable().optional(),
-  connectionProfileId: UUIDSchema,
-  imageProfileId: UUIDSchema.nullable().optional(),
-  title: z.string(),
-  contextSummary: z.string().nullable().optional(),
-  sillyTavernMetadata: JsonSchema.nullable().optional(),
-  tags: z.array(UUIDSchema).default([]),
-  messageCount: z.number().default(0),
-  lastMessageAt: TimestampSchema.nullable().optional(),
-  lastRenameCheckInterchange: z.number().default(0),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type ChatMetadataLegacy = z.infer<typeof ChatMetadataLegacySchema>;
+export type {
+  MessageEvent,
+  ContextSummaryEvent,
+  ChatEvent,
+  ParticipantType,
+  ChatParticipant,
+  ChatParticipantBase,
+  ChatParticipantBaseInput,
+  ChatMetadata,
+  ChatMetadataBase,
+  ChatMetadataInput,
+  ChatMetadataLegacy,
+} from './chat.types';
 
 // ============================================================================
-// IMAGES & BINARIES
+// FILE TYPES
 // ============================================================================
+export {
+  FileSourceEnum,
+  FileCategoryEnum,
+  FileEntrySchema,
+  BinaryIndexEntrySchema,
+} from './file.types';
 
-// Legacy BinaryIndexEntry schema (for migration)
-export const BinaryIndexEntrySchema = z.object({
-  id: UUIDSchema,
-  sha256: z.string().length(64),
-  type: z.enum(['image', 'chat_file', 'avatar']),
-  userId: UUIDSchema,
-  filename: z.string(),
-  relativePath: z.string(),
-  mimeType: z.string(),
-  size: z.number(),
-  width: z.number().nullable().optional(),
-  height: z.number().nullable().optional(),
-  source: z.enum(['upload', 'import', 'generated']).default('upload'),
-  generationPrompt: z.string().nullable().optional(),
-  generationModel: z.string().nullable().optional(),
-  chatId: UUIDSchema.nullable().optional(),
-  characterId: UUIDSchema.nullable().optional(),  // For avatar overrides
-  messageId: UUIDSchema.nullable().optional(),
-  tags: z.array(UUIDSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type BinaryIndexEntry = z.infer<typeof BinaryIndexEntrySchema>;
+export type {
+  FileSource,
+  FileCategory,
+  FileEntry,
+  BinaryIndexEntry,
+} from './file.types';
 
 // ============================================================================
-// CENTRALIZED FILE MANAGEMENT
+// TAG TYPES
 // ============================================================================
+export {
+  TagSchema,
+  TagsFileSchema,
+} from './tag.types';
 
-export const FileSourceEnum = z.enum(['UPLOADED', 'GENERATED', 'IMPORTED', 'SYSTEM']);
-export type FileSource = z.infer<typeof FileSourceEnum>;
-
-export const FileCategoryEnum = z.enum(['IMAGE', 'DOCUMENT', 'AVATAR', 'ATTACHMENT', 'EXPORT']);
-export type FileCategory = z.infer<typeof FileCategoryEnum>;
-
-export const FileEntrySchema = z.object({
-  // Identity & Storage
-  id: UUIDSchema,                          // File UUID (also the base filename in storage)
-  userId: UUIDSchema,                      // Owner of the file
-  sha256: z.string().length(64),           // Content hash for deduplication
-  originalFilename: z.string(),            // Original filename from upload/generation
-  mimeType: z.string(),                    // Specific MIME type
-  size: z.number(),                        // File size in bytes
-
-  // Image metadata (if applicable)
-  width: z.number().nullable().optional(),
-  height: z.number().nullable().optional(),
-
-  // Linking - array of IDs this file is associated with
-  linkedTo: z.array(UUIDSchema).default([]),  // messageId, chatId, characterId, personaId, etc.
-
-  // Classification
-  source: FileSourceEnum,                  // Where the file came from
-  category: FileCategoryEnum,              // What type of file it is
-
-  // Generation metadata (for AI-generated files)
-  generationPrompt: z.string().nullable().optional(),
-  generationModel: z.string().nullable().optional(),
-  generationRevisedPrompt: z.string().nullable().optional(),
-  description: z.string().nullable().optional(),  // AI description or user-provided description
-
-  // Tags
-  tags: z.array(UUIDSchema).default([]),
-
-  // S3 storage reference
-  s3Key: z.string().nullable().optional(),    // Full S3 object key
-  s3Bucket: z.string().nullable().optional(), // S3 bucket name
-
-  // Timestamps
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type FileEntry = z.infer<typeof FileEntrySchema>;
+export type {
+  Tag,
+  TagsFile,
+} from './tag.types';
 
 // ============================================================================
-// TAGS
+// MEMORY TYPES
 // ============================================================================
+export {
+  MemorySourceEnum,
+  MemorySchema,
+  MemoriesFileSchema,
+} from './memory.types';
 
-export const TagSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  name: z.string(),
-  nameLower: z.string(),
-  quickHide: z.boolean().default(false),
-  visualStyle: TagVisualStyleSchema.nullable().optional(),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type Tag = z.infer<typeof TagSchema>;
-
-export const TagsFileSchema = z.object({
-  version: z.number().default(1),
-  tags: z.array(TagSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type TagsFile = z.infer<typeof TagsFileSchema>;
+export type {
+  MemorySource,
+  Memory,
+  MemoriesFile,
+} from './memory.types';
 
 // ============================================================================
-// IMAGE PROFILES
+// TEMPLATE TYPES
 // ============================================================================
+export {
+  RoleplayTemplateSchema,
+  PromptTemplateSchema,
+} from './template.types';
 
-export const ImageProfileSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  name: z.string(),
-  provider: ImageProviderEnum,
-  apiKeyId: UUIDSchema.nullable().optional(),
-  baseUrl: z.string().nullable().optional(),
-  modelName: z.string(),
-  parameters: JsonSchema.default({}),
-  isDefault: z.boolean().default(false),
-  tags: z.array(UUIDSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type ImageProfile = z.infer<typeof ImageProfileSchema>;
-
-export const ImageProfilesFileSchema = z.object({
-  version: z.number().default(1),
-  profiles: z.array(ImageProfileSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type ImageProfilesFile = z.infer<typeof ImageProfilesFileSchema>;
+export type {
+  RoleplayTemplate,
+  PromptTemplate,
+} from './template.types';
 
 // ============================================================================
-// EMBEDDING PROFILES
+// JOB TYPES
 // ============================================================================
+export {
+  BackgroundJobTypeEnum,
+  BackgroundJobStatusEnum,
+  BackgroundJobSchema,
+} from './job.types';
 
-export const EmbeddingProfileSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  name: z.string(),
-  provider: EmbeddingProfileProviderEnum,
-  apiKeyId: UUIDSchema.nullable().optional(),
-  baseUrl: z.string().nullable().optional(),
-  modelName: z.string(),
-  /** Embedding dimension size (provider-specific) */
-  dimensions: z.number().nullable().optional(),
-  isDefault: z.boolean().default(false),
-  tags: z.array(UUIDSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type EmbeddingProfile = z.infer<typeof EmbeddingProfileSchema>;
-
-export const EmbeddingProfilesFileSchema = z.object({
-  version: z.number().default(1),
-  profiles: z.array(EmbeddingProfileSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type EmbeddingProfilesFile = z.infer<typeof EmbeddingProfilesFileSchema>;
+export type {
+  BackgroundJobType,
+  BackgroundJobStatus,
+  BackgroundJob,
+} from './job.types';
 
 // ============================================================================
-// MEMORY
+// MODEL TYPES
 // ============================================================================
+export {
+  ModelTypeEnum,
+  ProviderModelSchema,
+} from './model.types';
 
-export const MemorySourceEnum = z.enum(['AUTO', 'MANUAL']);
-export type MemorySource = z.infer<typeof MemorySourceEnum>;
-
-export const MemorySchema = z.object({
-  id: UUIDSchema,
-  characterId: UUIDSchema,
-  personaId: UUIDSchema.nullable().optional(),      // Optional: specific persona interaction
-  aboutCharacterId: UUIDSchema.nullable().optional(), // Optional: memory about another character (for inter-character memories)
-  chatId: UUIDSchema.nullable().optional(),         // Optional: source chat reference
-  content: z.string(),                              // The actual memory content
-  summary: z.string(),                              // Distilled version for context injection
-  keywords: z.array(z.string()).default([]),        // For text-based search
-  tags: z.array(UUIDSchema).default([]),            // Derived from character/persona/chat tags
-  importance: z.number().min(0).max(1).default(0.5), // 0-1 scale for prioritization
-  embedding: z.array(z.number()).nullable().optional(), // Vector embedding for semantic search
-  source: MemorySourceEnum.default('MANUAL'),       // How it was created
-  sourceMessageId: UUIDSchema.nullable().optional(), // If auto-created, which message triggered it
-  lastAccessedAt: TimestampSchema.nullable().optional(), // For housekeeping decisions
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type Memory = z.infer<typeof MemorySchema>;
-
-export const MemoriesFileSchema = z.object({
-  version: z.number().default(1),
-  memories: z.array(MemorySchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type MemoriesFile = z.infer<typeof MemoriesFileSchema>;
-
-// ============================================================================
-// ROLEPLAY TEMPLATES
-// ============================================================================
-
-export const RoleplayTemplateSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema.nullable().optional(),  // null for built-in templates
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).nullable().optional(),
-  systemPrompt: z.string().min(1),           // The template content
-  isBuiltIn: z.boolean().default(false),     // Built-in templates are read-only
-  pluginName: z.string().nullable().optional(), // Plugin name if provided by a plugin
-  tags: z.array(UUIDSchema).default([]),     // Optional categorization
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type RoleplayTemplate = z.infer<typeof RoleplayTemplateSchema>;
-
-// ============================================================================
-// PROMPT TEMPLATES
-// ============================================================================
-
-// User-created prompt templates (stored in MongoDB) for reusable system prompts
-export const PromptTemplateSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema.nullable().optional(),   // null for built-in sample prompts
-  name: z.string().min(1).max(100),
-  content: z.string().min(1),                 // The prompt content (markdown)
-  description: z.string().max(500).nullable().optional(),
-  isBuiltIn: z.boolean().default(false),      // True for sample prompts from prompts/ directory
-  category: z.string().nullable().optional(), // e.g., "COMPANION", "ROMANTIC" from filename
-  modelHint: z.string().nullable().optional(), // e.g., "CLAUDE", "GPT-4O" from filename
-  tags: z.array(UUIDSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type PromptTemplate = z.infer<typeof PromptTemplateSchema>;
-
-// ============================================================================
-// BACKGROUND JOBS
-// ============================================================================
-
-export const BackgroundJobTypeEnum = z.enum([
-  'MEMORY_EXTRACTION',
-  'INTER_CHARACTER_MEMORY',
-  'CONTEXT_SUMMARY',
-  'TITLE_UPDATE',
-]);
-export type BackgroundJobType = z.infer<typeof BackgroundJobTypeEnum>;
-
-export const BackgroundJobStatusEnum = z.enum([
-  'PENDING',
-  'PROCESSING',
-  'COMPLETED',
-  'FAILED',
-  'DEAD',
-  'PAUSED',
-]);
-export type BackgroundJobStatus = z.infer<typeof BackgroundJobStatusEnum>;
-
-export const BackgroundJobSchema = z.object({
-  id: UUIDSchema,
-  userId: UUIDSchema,
-  type: BackgroundJobTypeEnum,
-  status: BackgroundJobStatusEnum.default('PENDING'),
-  payload: z.record(z.unknown()),               // Type-specific payload
-  priority: z.number().default(0),              // Higher = more urgent
-  attempts: z.number().default(0),
-  maxAttempts: z.number().default(3),
-  lastError: z.string().nullable().optional(),
-  scheduledAt: TimestampSchema,                 // When job becomes eligible to run
-  startedAt: TimestampSchema.nullable().optional(),
-  completedAt: TimestampSchema.nullable().optional(),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type BackgroundJob = z.infer<typeof BackgroundJobSchema>;
-
-// ============================================================================
-// PROVIDER MODELS
-// ============================================================================
-
-export const ModelTypeEnum = z.enum(['chat', 'image', 'embedding']);
-export type ModelType = z.infer<typeof ModelTypeEnum>;
-
-export const ProviderModelSchema = z.object({
-  id: UUIDSchema,
-  provider: ProviderEnum,
-  modelId: z.string().min(1),
-  modelType: ModelTypeEnum.default('chat'),               // Type of model (chat, image, embedding)
-  displayName: z.string(),
-  baseUrl: z.string().nullable().optional(),              // For custom endpoints
-  contextWindow: z.number().nullable().optional(),        // Max context size in tokens
-  maxOutputTokens: z.number().nullable().optional(),      // Max generation tokens
-  deprecated: z.boolean().default(false),                 // Is this model deprecated
-  experimental: z.boolean().default(false),               // Is this model experimental
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type ProviderModel = z.infer<typeof ProviderModelSchema>;
-
-// ============================================================================
-// COMPOUND OBJECTS
-// ============================================================================
-
-export const GeneralSettingsSchema = z.object({
-  version: z.number().default(1),
-  user: UserSchema,
-  chatSettings: ChatSettingsSchema,
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type GeneralSettings = z.infer<typeof GeneralSettingsSchema>;
-
-export const ConnectionProfilesFileSchema = z.object({
-  version: z.number().default(1),
-  apiKeys: z.array(ApiKeySchema).default([]),
-  llmProfiles: z.array(ConnectionProfileSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type ConnectionProfilesFile = z.infer<typeof ConnectionProfilesFileSchema>;
-
-export const AuthAccountsSchema = z.object({
-  version: z.number().default(1),
-  accounts: z.array(AccountSchema).default([]),
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type AuthAccounts = z.infer<typeof AuthAccountsSchema>;
+export type {
+  ModelType,
+  ProviderModel,
+} from './model.types';

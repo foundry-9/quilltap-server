@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.6.0--dev.6-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.6.0--dev.8-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -585,6 +585,13 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [X] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
   - [X] A scenario prompt so you can set things up before you start
 - [ ] Search and replace in one chat, or in all chats associated with a character or persona
+- [ ] Memory cascade on message changes
+  - [ ] When a message is deleted, cascade delete all memories with that `sourceMessageId`
+  - [ ] When a message is regenerated (swipe), delete the old memory so the new response can create a fresh memory
+  - [ ] Add `findBySourceMessageId()` and `deleteBySourceMessageId()` methods to memories repository
+  - [ ] Handle multi-character edge case: a single message may trigger memories for multiple characters in group chats
+  - [ ] Add confirmation dialog option: "This message has associated memories. Delete memories too?" with options to keep, delete, or regenerate
+  - [ ] Track memory provenance in UI: show which message created each auto-extracted memory with a link back to the source
 
 ## Acknowledgments
 

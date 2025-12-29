@@ -42,11 +42,11 @@ export async function GET() {
     const repos = getRepositories();
 
     // Get user's chat settings
-    let chatSettings = await repos.users.getChatSettings(session.user.id);
+    let chatSettings = await repos.chatSettings.findByUserId(session.user.id);
 
     // If no settings exist, create with defaults
     if (!chatSettings) {
-      chatSettings = await repos.users.updateChatSettings(session.user.id, {
+      chatSettings = await repos.chatSettings.updateForUser(session.user.id, {
         avatarDisplayMode: 'ALWAYS',
         avatarDisplayStyle: 'CIRCULAR',
         tagStyles: {},
@@ -149,7 +149,7 @@ export async function PUT(request: NextRequest) {
     const repos = getRepositories();
 
     // Get current settings to merge with
-    let chatSettings = await repos.users.getChatSettings(session.user.id);
+    let chatSettings = await repos.chatSettings.findByUserId(session.user.id);
     const currentPreference = chatSettings?.themePreference ?? {
       activeThemeId: null,
       colorMode: 'system',
@@ -180,7 +180,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update chat settings with new theme preference
-    chatSettings = await repos.users.updateChatSettings(session.user.id, {
+    chatSettings = await repos.chatSettings.updateForUser(session.user.id, {
       themePreference: validationResult.data,
     });
 

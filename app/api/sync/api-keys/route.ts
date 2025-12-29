@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
     const repos = getRepositories();
 
     // Create the key
-    const result = await repos.userSyncApiKeys.create(session.user.id, name);
+    const result = await repos.userSyncApiKeys.createApiKey(session.user.id, name);
 
     const duration = Date.now() - startTime;
 

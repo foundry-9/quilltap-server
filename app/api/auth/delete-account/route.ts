@@ -44,12 +44,9 @@ export async function DELETE(): Promise<NextResponse<DeleteAccountResponse>> {
     const repos = getRepositories();
 
     // Delete chat settings first
-    const chatSettingsCollection = await repos.users.getChatSettings(userId);
+    const chatSettingsCollection = await repos.chatSettings.findByUserId(userId);
     if (chatSettingsCollection) {
-      // Need to delete chat settings via MongoDB directly since no dedicated method exists
-      const { getMongoDatabase } = await import('@/lib/mongodb/client');
-      const db = await getMongoDatabase();
-      await db.collection('chat_settings').deleteOne({ userId });
+      await repos.chatSettings.delete(chatSettingsCollection.id);
       logger.debug('Deleted user chat settings', {
         context: 'delete-account.DELETE',
         userId,

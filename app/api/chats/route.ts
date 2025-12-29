@@ -519,7 +519,7 @@ export async function POST(req: NextRequest) {
     )
 
     // Get user's default roleplay template to inherit for new chat
-    const chatSettings = await repos.users.getChatSettings(user.id)
+    const chatSettings = await repos.chatSettings.findByUserId(user.id)
     const defaultRoleplayTemplateId = chatSettings?.defaultRoleplayTemplateId || null
 
     logger.debug('Creating chat with roleplay template', {

@@ -6,8 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
@@ -390,39 +389,32 @@ async function generatePhysicalDescriptions(
   return results as GeneratedPhysicalDescription
 }
 
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     // Parse and validate request
     const body = await req.json()
     const request = wizardRequestSchema.parse(body)
 
     logger.info('AI Wizard generation started', {
       context: 'POST /api/characters/ai-wizard',
-      userId: session.user.id,
+      userId: user.id,
       characterName: request.characterName,
       fieldsToGenerate: request.fieldsToGenerate,
       sourceType: request.sourceType,
     })
 
-    const repos = getRepositories()
-
     // Get primary profile
     const primaryProfile = await repos.connections.findById(request.primaryProfileId)
-    if (!primaryProfile || primaryProfile.userId !== session.user.id) {
+    if (!primaryProfile || primaryProfile.userId !== user.id) {
       return NextResponse.json({ error: 'Primary profile not found' }, { status: 404 })
     }
 
     // Get primary profile API key
     let primaryApiKey = ''
     if (primaryProfile.apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyByIdAndUserId(primaryProfile.apiKeyId, session.user.id)
+      const apiKey = await repos.connections.findApiKeyByIdAndUserId(primaryProfile.apiKeyId, user.id)
       if (apiKey) {
-        primaryApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, session.user.id)
+        primaryApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, user.id)
       }
     }
 
@@ -448,7 +440,7 @@ export async function POST(req: NextRequest) {
     if ((request.sourceType === 'upload' || request.sourceType === 'gallery') && request.imageId) {
       // Get image file
       const imageFile = await repos.files.findById(request.imageId)
-      if (!imageFile || imageFile.userId !== session.user.id) {
+      if (!imageFile || imageFile.userId !== user.id) {
         return NextResponse.json({ error: 'Image not found' }, { status: 404 })
       }
 
@@ -466,17 +458,17 @@ export async function POST(req: NextRequest) {
         }
 
         const secondaryProfile = await repos.connections.findById(request.visionProfileId)
-        if (!secondaryProfile || secondaryProfile.userId !== session.user.id) {
+        if (!secondaryProfile || secondaryProfile.userId !== user.id) {
           return NextResponse.json({ error: 'Vision profile not found' }, { status: 404 })
         }
 
         if (secondaryProfile.apiKeyId) {
           const apiKey = await repos.connections.findApiKeyByIdAndUserId(
             secondaryProfile.apiKeyId,
-            session.user.id
+            user.id
           )
           if (apiKey) {
-            visionApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, session.user.id)
+            visionApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, user.id)
           }
         }
 
@@ -580,4 +572,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

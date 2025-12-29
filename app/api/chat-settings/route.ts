@@ -85,7 +85,7 @@ async function updateChatSettings(
     updateData.defaultRoleplayTemplateId = defaultRoleplayTemplateId
   }
 
-  return repos.users.updateChatSettings(userId, updateData)
+  return repos.chatSettings.updateForUser(userId, updateData)
 }
 
 /**
@@ -105,11 +105,11 @@ export async function GET(req: NextRequest) {
 
     const repos = getRepositories()
 
-    let chatSettings = await repos.users.getChatSettings(session.user.id)
+    let chatSettings = await repos.chatSettings.findByUserId(session.user.id)
 
     // If no settings exist, create default settings via update
     if (!chatSettings) {
-      chatSettings = await repos.users.updateChatSettings(session.user.id, {
+      chatSettings = await repos.chatSettings.updateForUser(session.user.id, {
         avatarDisplayMode: 'ALWAYS',
         avatarDisplayStyle: 'CIRCULAR',
         tagStyles: {},

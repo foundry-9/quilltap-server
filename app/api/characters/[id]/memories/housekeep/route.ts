@@ -1,13 +1,13 @@
 /**
  * Memory Housekeeping API
  * POST /api/characters/:id/memories/housekeep - Run memory cleanup
+ * GET /api/characters/:id/memories/housekeep - Get housekeeping preview
  *
  * Sprint 6: Housekeeping system for automatic memory cleanup
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware'
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
@@ -30,156 +30,126 @@ const housekeepingOptionsSchema = z.object({
   dryRun: z.boolean().optional(),
 })
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: characterId } = await params
-    const session = await getServerSession()
+export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id: characterId }) => {
+    try {
+      // Verify character exists and belongs to user
+      const character = await repos.characters.findById(characterId)
+      if (!checkOwnership(character, user.id)) {
+        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+      }
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+      // Parse and validate options
+      const body = await req.json().catch(() => ({}))
+      const optionsResult = housekeepingOptionsSchema.safeParse(body)
 
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
+      if (!optionsResult.success) {
+        return NextResponse.json(
+          { error: 'Invalid options', details: optionsResult.error.errors },
+          { status: 400 }
+        )
+      }
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+      const options: HousekeepingOptions = {
+        ...optionsResult.data,
+        userId: user.id,
+      }
 
-    // Verify character exists and belongs to user
-    const character = await repos.characters.findById(characterId)
-    if (!character || character.userId !== user.id) {
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 })
-    }
+      // Get embedding profile from chat settings
+      const chatSettings = await repos.chatSettings.findByUserId(user.id)
+      if (chatSettings?.cheapLLMSettings?.embeddingProfileId) {
+        options.embeddingProfileId = chatSettings.cheapLLMSettings.embeddingProfileId
+      }
 
-    // Parse and validate options
-    const body = await req.json().catch(() => ({}))
-    const optionsResult = housekeepingOptionsSchema.safeParse(body)
+      // Run housekeeping (or preview if dryRun)
+      const result = options.dryRun
+        ? await getHousekeepingPreview(characterId, options)
+        : await runHousekeeping(characterId, options)
 
-    if (!optionsResult.success) {
+      return NextResponse.json({
+        success: true,
+        dryRun: !!options.dryRun,
+        result: {
+          deleted: result.deleted,
+          merged: result.merged,
+          kept: result.kept,
+          totalBefore: result.totalBefore,
+          totalAfter: result.totalAfter,
+          deletedIds: result.deletedIds,
+          mergedIds: result.mergedIds,
+          // Only include details in preview mode to avoid large responses
+          details: options.dryRun ? result.details : undefined,
+        },
+      })
+    } catch (error) {
+      logger.error('Error running housekeeping', {}, error instanceof Error ? error : undefined)
       return NextResponse.json(
-        { error: 'Invalid options', details: optionsResult.error.errors },
-        { status: 400 }
+        { error: 'Failed to run housekeeping' },
+        { status: 500 }
       )
     }
-
-    const options: HousekeepingOptions = {
-      ...optionsResult.data,
-      userId: user.id,
-    }
-
-    // Get embedding profile from chat settings
-    const chatSettings = await repos.users.getChatSettings(user.id)
-    if (chatSettings?.cheapLLMSettings?.embeddingProfileId) {
-      options.embeddingProfileId = chatSettings.cheapLLMSettings.embeddingProfileId
-    }
-
-    // Run housekeeping (or preview if dryRun)
-    const result = options.dryRun
-      ? await getHousekeepingPreview(characterId, options)
-      : await runHousekeeping(characterId, options)
-
-    return NextResponse.json({
-      success: true,
-      dryRun: !!options.dryRun,
-      result: {
-        deleted: result.deleted,
-        merged: result.merged,
-        kept: result.kept,
-        totalBefore: result.totalBefore,
-        totalAfter: result.totalAfter,
-        deletedIds: result.deletedIds,
-        mergedIds: result.mergedIds,
-        // Only include details in preview mode to avoid large responses
-        details: options.dryRun ? result.details : undefined,
-      },
-    })
-  } catch (error) {
-    logger.error('Error running housekeeping', {}, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to run housekeeping' },
-      { status: 500 }
-    )
   }
-}
+)
 
 /**
  * GET /api/characters/:id/memories/housekeep - Get housekeeping preview
  *
  * Returns a preview of what would be cleaned up without making changes
  */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: characterId } = await params
-    const session = await getServerSession()
+export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id: characterId }) => {
+    try {
+      // Verify character exists and belongs to user
+      const character = await repos.characters.findById(characterId)
+      if (!checkOwnership(character, user.id)) {
+        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+      }
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+      // Parse options from query params
+      const url = new URL(req.url)
+      const options: HousekeepingOptions = {
+        userId: user.id,
+      }
 
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
+      if (url.searchParams.has('maxMemories')) {
+        options.maxMemories = parseInt(url.searchParams.get('maxMemories')!, 10)
+      }
+      if (url.searchParams.has('maxAgeMonths')) {
+        options.maxAgeMonths = parseInt(url.searchParams.get('maxAgeMonths')!, 10)
+      }
+      if (url.searchParams.has('minImportance')) {
+        options.minImportance = parseFloat(url.searchParams.get('minImportance')!)
+      }
+      if (url.searchParams.has('mergeSimilar')) {
+        options.mergeSimilar = url.searchParams.get('mergeSimilar') === 'true'
+      }
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+      // Get embedding profile from chat settings
+      const chatSettings = await repos.chatSettings.findByUserId(user.id)
+      if (chatSettings?.cheapLLMSettings?.embeddingProfileId) {
+        options.embeddingProfileId = chatSettings.cheapLLMSettings.embeddingProfileId
+      }
 
-    // Verify character exists and belongs to user
-    const character = await repos.characters.findById(characterId)
-    if (!character || character.userId !== user.id) {
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 })
-    }
+      // Get preview
+      const preview = await getHousekeepingPreview(characterId, options)
 
-    // Parse options from query params
-    const url = new URL(req.url)
-    const options: HousekeepingOptions = {
-      userId: user.id,
+      return NextResponse.json({
+        success: true,
+        preview: {
+          wouldDelete: preview.deleted,
+          wouldMerge: preview.merged,
+          wouldKeep: preview.kept,
+          totalBefore: preview.totalBefore,
+          totalAfter: preview.totalAfter,
+          details: preview.details,
+        },
+      })
+    } catch (error) {
+      logger.error('Error getting housekeeping preview', {}, error instanceof Error ? error : undefined)
+      return NextResponse.json(
+        { error: 'Failed to get housekeeping preview' },
+        { status: 500 }
+      )
     }
-
-    if (url.searchParams.has('maxMemories')) {
-      options.maxMemories = parseInt(url.searchParams.get('maxMemories')!, 10)
-    }
-    if (url.searchParams.has('maxAgeMonths')) {
-      options.maxAgeMonths = parseInt(url.searchParams.get('maxAgeMonths')!, 10)
-    }
-    if (url.searchParams.has('minImportance')) {
-      options.minImportance = parseFloat(url.searchParams.get('minImportance')!)
-    }
-    if (url.searchParams.has('mergeSimilar')) {
-      options.mergeSimilar = url.searchParams.get('mergeSimilar') === 'true'
-    }
-
-    // Get embedding profile from chat settings
-    const chatSettings = await repos.users.getChatSettings(user.id)
-    if (chatSettings?.cheapLLMSettings?.embeddingProfileId) {
-      options.embeddingProfileId = chatSettings.cheapLLMSettings.embeddingProfileId
-    }
-
-    // Get preview
-    const preview = await getHousekeepingPreview(characterId, options)
-
-    return NextResponse.json({
-      success: true,
-      preview: {
-        wouldDelete: preview.deleted,
-        wouldMerge: preview.merged,
-        wouldKeep: preview.kept,
-        totalBefore: preview.totalBefore,
-        totalAfter: preview.totalAfter,
-        details: preview.details,
-      },
-    })
-  } catch (error) {
-    logger.error('Error getting housekeeping preview', {}, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to get housekeeping preview' },
-      { status: 500 }
-    )
   }
-}
+)

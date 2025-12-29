@@ -3,24 +3,10 @@
 // POST /api/characters - Create a new character
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
+import { getFilePath } from '@/lib/api/middleware/file-path'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
-import type { FileEntry } from '@/lib/schemas/types'
-
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : ''
-  return `data/files/storage/${file.id}${ext}`
-}
 
 // Validation schema
 const createCharacterSchema = z.object({
@@ -58,20 +44,8 @@ const createCharacterSchema = z.object({
 // GET /api/characters - List all characters
 // Query params:
 //   - npc: 'true' to get only NPCs, 'false' to get only non-NPCs, omit for all
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     let characters = await repos.characters.findByUserId(user.id)
 
     // Filter by NPC status if specified
@@ -136,23 +110,11 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 // POST /api/characters - Create a new character
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     const body = await req.json()
     const validatedData = createCharacterSchema.parse(body)
 
@@ -198,4 +160,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

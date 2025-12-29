@@ -4,6 +4,34 @@
 
 ### 2.6-dev
 
+- refactor: API and back-end refactoring based on SRP, DRY, KISS principles
+  - Phase 1: Foundation infrastructure
+    - Created `/lib/api/middleware/auth.ts` with `withAuth()` wrapper extracting auth patterns from routes
+    - Created `/lib/api/middleware/file-path.ts` consolidating duplicate `getFilePath()` implementations
+    - Created `/lib/api/middleware/enrichment.ts` for `enrichWithApiKey()`, `enrichWithTags()`
+    - Created `/lib/api/responses.ts` for standardized response helpers
+    - Created `/lib/logging/create-logger.ts` replacing 50+ `logger.child()` duplications
+  - Phase 2: Repository layer consolidation
+    - Migrated 8 repositories to extend `MongoBaseRepository`
+    - Split `MongoChatsRepository` into `chat-metadata.repository.ts` and `chat-messages.repository.ts`
+    - Split `/lib/schemas/types.ts` (962 lines) into domain-specific files:
+      - `auth.types.ts`, `chat.types.ts`, `character.types.ts`, `persona.types.ts`
+      - `file.types.ts`, `profile.types.ts`, `memory.types.ts`, `job.types.ts`, `common.types.ts`
+  - Phase 3: Messages route decomposition
+    - Split `/app/api/chats/[id]/messages/route.ts` (1,430 lines) into service classes:
+      - `participant-resolver.service.ts` - Character/persona resolution
+      - `context-builder.service.ts` - LLM context building
+      - `tool-execution.service.ts` - Tool detection and execution
+      - `streaming.service.ts` - Streaming response handling
+      - `pseudo-tool.service.ts` - Pseudo-tool logic
+      - `memory-trigger.service.ts` - Async memory processing
+      - `orchestrator.service.ts` - Main coordinator
+    - Route file reduced from 1,430 lines to ~130 lines
+  - Phase 4: Applied auth middleware to all character and persona API routes (31 files)
+  - Phase 5: Services layer cleanup
+    - Decomposed `/lib/chat/turn-manager.ts` (578 lines) into focused modules:
+      - `turn-manager/types.ts`, `turn-manager/state.ts`, `turn-manager/selection.ts`
+      - `turn-manager/queue.ts`, `turn-manager/utils.ts`, `turn-manager/logger.ts`
 - test: Stabilize Playwright e2e coverage and no-auth flows
   - Added app smoke suite covering dashboard, entities, settings tabs, tools, profile, about
   - Improved auth-disabled handling and session cookie setup in test helpers
