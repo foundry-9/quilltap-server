@@ -4,6 +4,7 @@
 
 ### 2.6-dev
 
+- fix: make chat creation dialog responsive with scrollable content and two-column layout on tablet+
 - refactor: UI and front-end refactoring based on SRP, DRY, KISS, YAGNI principles
   - Phase 1: Foundation hooks and components
     - Created `hooks/useDialogState.ts` consolidating dialog reset/logging pattern from 4+ hooks
