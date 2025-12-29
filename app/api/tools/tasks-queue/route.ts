@@ -90,7 +90,14 @@ export async function GET() {
     const pausedJobs = await repo.findByUserId(session.user.id, 'PAUSED');
 
     // Combine active jobs (pending + processing + failed that will retry + paused)
-    const activeJobs = [...processingJobs, ...pendingJobs, ...failedJobs.filter(j => j.attempts < j.maxAttempts), ...pausedJobs];
+    // Use a Map to deduplicate by job ID in case a job appears in multiple status arrays
+    const jobMap = new Map<string, BackgroundJob>();
+    for (const job of [...processingJobs, ...pendingJobs, ...failedJobs.filter(j => j.attempts < j.maxAttempts), ...pausedJobs]) {
+      if (!jobMap.has(job.id)) {
+        jobMap.set(job.id, job);
+      }
+    }
+    const activeJobs = Array.from(jobMap.values());
 
     // Sort by priority (descending) then scheduledAt (ascending)
     activeJobs.sort((a, b) => {

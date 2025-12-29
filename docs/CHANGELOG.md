@@ -4,6 +4,19 @@
 
 ### 2.6-dev
 
+- feat: Add message re-attribution feature
+  - New button in chat messages to re-attribute messages to different participants
+  - Works for both USER and ASSISTANT messages
+  - Automatically deletes associated memories when message is re-attributed
+  - Available in mobile action bar and desktop actions when other participants exist
+  - After re-attribution, scrolls to the updated message instead of the bottom of chat
+- fix: After deleting a message, scroll to the next message (or bottom if no next message)
+- fix: Deduplicate jobs in tasks queue API to prevent React key collision errors
+- fix: Memory regeneration now respects message participantId in multi-character chats
+  - Previously all regenerated memories went to a single character regardless of who sent the message
+  - Now looks up each assistant message's participantId to route memories to the correct character
+  - In multi-character exchanges, includes all conversation context since the last user message
+    (e.g., User → CharA → CharB → CharA will include the full exchange when generating CharA's second memory)
 - fix: prevent "Maximum update depth exceeded" error in DevConsoleProvider
   - Console log capture now batches updates every 100ms instead of updating state on each log
   - Prevents render loops caused by rapid logging during chat streaming

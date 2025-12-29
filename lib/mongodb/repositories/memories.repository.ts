@@ -767,6 +767,38 @@ export class MemoriesRepository extends MongoBaseRepository<Memory> {
   }
 
   /**
+   * Find all memories associated with a specific source message
+   * @param sourceMessageId The source message ID
+   * @returns Promise<Memory[]> Array of memories created from the message
+   */
+  async findBySourceMessageId(sourceMessageId: string): Promise<Memory[]> {
+    logger.debug('Finding memories by source message ID', { sourceMessageId });
+    try {
+      const collection = await this.getCollection();
+      const results = await collection.find({ sourceMessageId }).toArray();
+
+      const memories = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((memory): memory is Memory => memory !== null);
+
+      logger.debug('Found memories for source message', { sourceMessageId, count: memories.length });
+      return memories;
+    } catch (error) {
+      logger.error('Error finding memories by source message ID', {
+        sourceMessageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
    * Delete all memories associated with a specific chat
    * @param chatId The chat ID
    * @returns Promise<number> Number of memories deleted

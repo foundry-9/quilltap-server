@@ -11,6 +11,7 @@ import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
 import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
 import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
+import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import {
@@ -96,6 +97,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
+  const [reattributeDialogState, setReattributeDialogState] = useState<{
+    isOpen: boolean
+    messageId: string
+    currentParticipantId: string | null
+  } | null>(null)
   const [searchReplaceModalOpen, setSearchReplaceModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ id: string; name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
@@ -370,6 +376,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setInput,
     setAttachedFiles,
     inputRef as React.RefObject<HTMLTextAreaElement>,
+    messagesEndRef as React.RefObject<HTMLDivElement>,
   )
 
   // Unpause callback for the turn management hook - needs to be defined before the hook call
@@ -798,6 +805,38 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     clientLogger.info('[Chat] Character added, refreshing chat data')
     fetchChat()
   }, [fetchChat])
+
+  const handleReattribute = useCallback((messageId: string) => {
+    const message = messages.find(m => m.id === messageId)
+    if (message) {
+      clientLogger.debug('[Chat] Opening re-attribute dialog', {
+        messageId,
+        currentParticipantId: message.participantId,
+      })
+      setReattributeDialogState({
+        isOpen: true,
+        messageId,
+        currentParticipantId: message.participantId || null,
+      })
+    }
+  }, [messages])
+
+  const handleReattributed = useCallback(async () => {
+    const messageId = reattributeDialogState?.messageId
+    clientLogger.info('[Chat] Message re-attributed, refreshing chat data', { messageId })
+    setReattributeDialogState(null)
+    await fetchChat()
+    // Scroll to the reattributed message after refresh
+    if (messageId) {
+      setTimeout(() => {
+        const messageElement = document.getElementById(`message-${messageId}`)
+        if (messageElement) {
+          messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          clientLogger.debug('[Chat] Scrolled to reattributed message', { messageId })
+        }
+      }, 100) // Small delay to ensure DOM is updated
+    }
+  }, [fetchChat, reattributeDialogState?.messageId])
 
   const handleRemoveCharacter = useCallback(async (participantId: string) => {
     const participant = participantData.find(p => p.id === participantId)
@@ -1578,6 +1617,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   }}
                   onHandleRemoveCharacter={handleRemoveCharacter}
                   onHandleContinue={turnManagement.handleContinue}
+                  onReattribute={handleReattribute}
                 />
               )
             })}
@@ -1761,6 +1801,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             .filter((id): id is string => id !== null && id !== undefined) || []}
           onCharacterAdded={handleCharacterAdded}
         />
+
+        {reattributeDialogState && chat && (
+          <ReattributeMessageDialog
+            isOpen={reattributeDialogState.isOpen}
+            onClose={() => setReattributeDialogState(null)}
+            messageId={reattributeDialogState.messageId}
+            currentParticipantId={reattributeDialogState.currentParticipantId}
+            participants={chat.participants}
+            onReattributed={handleReattributed}
+          />
+        )}
 
         <SearchReplaceModal
           isOpen={searchReplaceModalOpen}

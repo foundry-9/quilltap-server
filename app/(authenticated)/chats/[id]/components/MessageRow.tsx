@@ -59,6 +59,7 @@ interface MessageRowProps {
   onHandleTalkativenessChange: (participantId: string, value: number) => void
   onHandleRemoveCharacter: (participantId: string) => void
   onHandleContinue: () => void
+  onReattribute?: (messageId: string) => void
 }
 
 function getImageAttachments(message: Message) {
@@ -104,6 +105,7 @@ export function MessageRow({
   onHandleTalkativenessChange,
   onHandleRemoveCharacter,
   onHandleContinue,
+  onReattribute,
 }: MessageRowProps) {
   const messageRowClasses = ['qt-chat-message-row']
   if (message.role === 'USER') {
@@ -114,6 +116,7 @@ export function MessageRow({
 
   return (
     <div
+      id={`message-${message.id}`}
       key={message.id}
       className={messageRowClasses.join(' ')}
     >
@@ -426,6 +429,18 @@ export function MessageRow({
                       </svg>
                     </button>
                   )}
+                  {/* Re-attribute (when other participants exist) */}
+                  {onReattribute && participantData.filter(p => p.id !== message.participantId).length > 0 && (
+                    <button
+                      onClick={() => onReattribute(message.id)}
+                      className="qt-chat-message-action-icon"
+                      title="Re-attribute to different participant"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                      </svg>
+                    </button>
+                  )}
                   {/* Resend (user messages only) */}
                   {message.role === 'USER' && showResendButton && (
                     <button
@@ -537,6 +552,14 @@ export function MessageRow({
                     ↻ Resend
                   </button>
                 )}
+                {onReattribute && participantData.filter(p => p.id !== message.participantId).length > 0 && (
+                  <button
+                    onClick={() => onReattribute(message.id)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Re-attribute
+                  </button>
+                )}
               </>
             )}
 
@@ -554,6 +577,14 @@ export function MessageRow({
                 >
                   Regenerate
                 </button>
+                {onReattribute && participantData.filter(p => p.id !== message.participantId).length > 0 && (
+                  <button
+                    onClick={() => onReattribute(message.id)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Re-attribute
+                  </button>
+                )}
 
                 {/* Swipe controls */}
                 {swipeState && swipeState.total > 1 && (

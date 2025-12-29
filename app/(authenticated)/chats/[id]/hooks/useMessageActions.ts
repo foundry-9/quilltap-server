@@ -17,6 +17,7 @@ export function useMessageActions(
   setInput: (value: string) => void,
   setAttachedFiles: (value: any[] | ((prev: any[]) => any[])) => void,
   inputRef: React.RefObject<HTMLTextAreaElement>,
+  messagesEndRef: React.RefObject<HTMLDivElement>,
 ) {
   const startEdit = (message: Message) => {
     setEditingMessageId(message.id)
@@ -50,6 +51,12 @@ export function useMessageActions(
   const deleteMessage = async (messageId: string) => {
     if (!(await showConfirmation('Are you sure you want to delete this message?'))) return
 
+    // Find the index of the message being deleted to determine scroll target
+    const messageIndex = messages.findIndex(m => m.id === messageId)
+    const nextMessage = messageIndex >= 0 && messageIndex < messages.length - 1
+      ? messages[messageIndex + 1]
+      : null
+
     try {
       const res = await fetch(`/api/messages/${messageId}`, {
         method: 'DELETE',
@@ -59,6 +66,19 @@ export function useMessageActions(
 
       // Remove message from display
       setMessages(messages.filter(m => m.id !== messageId))
+
+      // Scroll to next message or bottom after deletion
+      setTimeout(() => {
+        if (nextMessage) {
+          const nextMessageElement = document.getElementById(`message-${nextMessage.id}`)
+          if (nextMessageElement) {
+            nextMessageElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        } else {
+          // No next message, scroll to bottom
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }
+      }, 100)
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to delete message')
     }
