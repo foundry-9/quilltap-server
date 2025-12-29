@@ -26,6 +26,13 @@
     - Created `hooks/useImageNavigation.ts` for keyboard navigation (Escape, arrow keys, body scroll lock)
     - Migrated `ImageDetailModal`, `PhotoGalleryModal`, `ChatGalleryImageViewModal` to use `useImageNavigation`
     - Note: `useImageTags` and `ImageActions` expansion deferred (existing `useImageActions` hook suffices, different API patterns between modals)
+  - Phase 3: Profile management consolidation
+    - Created `components/ui/ProfileCard.tsx` generic card component with badges, metadata, actions, and delete confirmation
+    - Created `components/ui/ProfileList.tsx` generic list with sorting, empty state, and delete handling
+    - Migrated `embedding-profiles/ProfileList` to use shared `ProfileCard`
+    - Migrated `connection-profiles/ProfileCard` to use shared `ProfileCard` as base
+    - Migrated `api-keys-tab` card rendering to use shared `ProfileCard`
+    - Note: `useProfileManagement` hook deferred (existing specialized hooks have different enough structures)
 - refactor: API and back-end refactoring based on SRP, DRY, KISS principles
   - Phase 1: Foundation infrastructure
     - Created `/lib/api/middleware/auth.ts` with `withAuth()` wrapper extracting auth patterns from routes

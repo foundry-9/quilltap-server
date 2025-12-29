@@ -6,7 +6,7 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
-import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
+import { ProfileCard, ProfileCardBadge, ProfileCardMetadata } from '@/components/ui/ProfileCard'
 import { ProviderBadge } from './ProviderBadge'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 import type { EmbeddingProfile } from './types'
@@ -71,81 +71,54 @@ export function ProfileList({
         />
       )}
 
-      {profiles.toSorted((a, b) => a.name.localeCompare(b.name)).map(profile => (
-        <div
-          key={profile.id}
-          className="border border-border rounded-lg p-4 hover:border-border/70 transition bg-card"
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <h3 className="qt-text-primary">{profile.name}</h3>
-                <ProviderBadge provider={profile.provider} />
-                {profile.isDefault && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100/50 text-green-700">
-                    Default
-                  </span>
-                )}
-                {/* OpenAI requires API key, Ollama doesn't */}
-                {profile.provider === 'OPENAI' && !profile.apiKey && (
-                  <MissingApiKeyBadge />
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-4 qt-text-small">
-                <div>
-                  <p className="qt-text-xs uppercase">Model</p>
-                  <p className="font-mono text-sm text-foreground">{profile.modelName}</p>
-                </div>
-                {profile.dimensions && (
-                  <div>
-                    <p className="qt-text-xs uppercase">Dimensions</p>
-                    <p className="text-sm text-foreground">{profile.dimensions}</p>
-                  </div>
-                )}
-                {profile.apiKey && (
-                  <div>
-                    <p className="qt-text-xs uppercase">API Key</p>
-                    <p className="text-sm text-foreground">{profile.apiKey.label}</p>
-                  </div>
-                )}
-                {profile.baseUrl && (
-                  <div>
-                    <p className="qt-text-xs uppercase">Base URL</p>
-                    <p className="text-sm text-foreground">{profile.baseUrl}</p>
-                  </div>
-                )}
-              </div>
-            </div>
+      {profiles.toSorted((a, b) => a.name.localeCompare(b.name)).map(profile => {
+        // Build badges array
+        const badges: ProfileCardBadge[] = []
+        if (profile.isDefault) {
+          badges.push({ text: 'Default', variant: 'default' })
+        }
 
-            {/* Actions */}
-            <div className="flex gap-2 ml-4">
-              <button
-                onClick={() => onEdit(profile)}
-                className="px-3 py-1 text-sm text-primary hover:bg-primary/10 rounded border border-primary/50 hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                Edit
-              </button>
-              <div className="relative">
-                <button
-                  onClick={() => setDeleteConfirming(deleteConfirming === profile.id ? null : profile.id)}
-                  className="px-3 py-1 text-sm text-destructive hover:bg-destructive/10 rounded border border-destructive/50 hover:border-destructive focus:outline-none focus:ring-2 focus:ring-destructive"
-                >
-                  Delete
-                </button>
+        // Build metadata array
+        const metadata: ProfileCardMetadata[] = [
+          { label: 'Model', value: <span className="font-mono text-sm text-foreground">{profile.modelName}</span> },
+        ]
+        if (profile.dimensions) {
+          metadata.push({ label: 'Dimensions', value: profile.dimensions.toString() })
+        }
+        if (profile.apiKey) {
+          metadata.push({ label: 'API Key', value: profile.apiKey.label })
+        }
+        if (profile.baseUrl) {
+          metadata.push({ label: 'Base URL', value: profile.baseUrl })
+        }
 
-                {/* Delete Confirmation Popover */}
-                <DeleteConfirmPopover
-                  isOpen={deleteConfirming === profile.id}
-                  onCancel={() => setDeleteConfirming(null)}
-                  onConfirm={() => handleDelete(profile.id)}
-                  message="Delete this profile?"
-                  isDeleting={deleteLoading}
-                />
-              </div>
+        return (
+          <ProfileCard
+            key={profile.id}
+            title={profile.name}
+            badges={badges}
+            metadata={metadata}
+            actions={[
+              { label: 'Edit', onClick: () => onEdit(profile), variant: 'secondary' },
+            ]}
+            deleteConfig={{
+              isConfirming: deleteConfirming === profile.id,
+              onConfirmChange: (confirming) => setDeleteConfirming(confirming ? profile.id : null),
+              onConfirm: () => handleDelete(profile.id),
+              message: 'Delete this profile?',
+              isDeleting: deleteLoading,
+            }}
+          >
+            {/* Custom content: Provider badge and missing API key warning */}
+            <div className="flex items-center gap-2 mt-1 mb-2">
+              <ProviderBadge provider={profile.provider} />
+              {profile.provider === 'OPENAI' && !profile.apiKey && (
+                <MissingApiKeyBadge />
+              )}
             </div>
-          </div>
-        </div>
-      ))}
+          </ProfileCard>
+        )
+      })}
     </div>
   )
 }
