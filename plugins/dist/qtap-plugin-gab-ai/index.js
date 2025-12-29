@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.10.0";
+var VERSION = "6.15.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -5811,10 +5811,12 @@ var Responses = class extends APIResource {
    *
    * @example
    * ```ts
-   * const compactedResponse = await client.responses.compact();
+   * const compactedResponse = await client.responses.compact({
+   *   model: 'gpt-5.2',
+   * });
    * ```
    */
-  compact(body = {}, options) {
+  compact(body, options) {
     return this._client.post("/responses/compact", { body, ...options });
   }
 };
