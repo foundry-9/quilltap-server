@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
+import { useDialogStateWithFileInput } from '@/hooks/useDialogState'
 import type { ImportState, ImportStep } from '../types'
 import type { QuilltapExport, ConflictStrategy } from '@/lib/export/types'
 
@@ -45,27 +46,11 @@ export function useImportData({
   isOpen,
   onSuccess,
 }: UseImportDataOptions): UseImportDataReturn {
-  const [state, setState] = useState<ImportState>(initialState)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Reset state when dialog opens/closes
-  useEffect(() => {
-    if (!isOpen) {
-      setState(initialState)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-    }
-  }, [isOpen])
-
-  // Log when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('Import dialog opened', {
-        context: 'useImportData',
-      })
-    }
-  }, [isOpen])
+  const { state, setState, reset, fileInputRef } = useDialogStateWithFileInput({
+    isOpen,
+    initialState,
+    logContext: 'useImportData',
+  })
 
   const parseExportFile = useCallback(async (file: File): Promise<QuilltapExport> => {
     try {
@@ -376,14 +361,6 @@ export function useImportData({
       }))
     }
   }, [state.exportData, state.conflictStrategy, state.importMemories, state.selectedEntityIds, onSuccess])
-
-  const reset = useCallback(() => {
-    clientLogger.debug('Resetting import state', { context: 'useImportData' })
-    setState(initialState)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }, [])
 
   return {
     state,

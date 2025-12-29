@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
+import { useDialogState } from '@/hooks/useDialogState'
 import type { ExportState, ExportStep, AvailableEntity } from '../types'
 import type { ExportEntityType } from '@/lib/export/types'
 
@@ -42,23 +43,11 @@ export function useExportData({
   isOpen,
   onSuccess,
 }: UseExportDataOptions): UseExportDataReturn {
-  const [state, setState] = useState<ExportState>(initialState)
-
-  // Reset state when dialog opens/closes
-  useEffect(() => {
-    if (!isOpen) {
-      setState(initialState)
-    }
-  }, [isOpen])
-
-  // Log when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('Export dialog opened', {
-        context: 'useExportData',
-      })
-    }
-  }, [isOpen])
+  const { state, setState, reset } = useDialogState({
+    isOpen,
+    initialState,
+    logContext: 'useExportData',
+  })
 
   // Calculate memory count based on scope and selection
   useEffect(() => {
@@ -363,11 +352,6 @@ export function useExportData({
       }))
     }
   }, [state.entityType, state.scope, state.selectedIds, state.includeMemories, onSuccess])
-
-  const reset = useCallback(() => {
-    clientLogger.debug('Resetting export state', { context: 'useExportData' })
-    setState(initialState)
-  }, [])
 
   return {
     state,

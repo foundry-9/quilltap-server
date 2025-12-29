@@ -3,9 +3,9 @@
 import { useState, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { getErrorMessage } from '@/lib/error-utils'
-import { showSuccessToast } from '@/lib/toast'
 import type { ConnectionProfile, Tag, ApiKey, ProviderConfig } from '../types'
 
 /**
@@ -20,6 +20,7 @@ export function useConnectionProfiles() {
 
   const fetchOp = useAsyncOperation<ConnectionProfile[]>()
   const deleteOp = useAsyncOperation<any>()
+  const triggerAutoAssociate = useAutoAssociate('connection-profiles')
 
   const countMessagesPerProfile = useCallback(
     async (profilesList: ConnectionProfile[]) => {
@@ -184,30 +185,6 @@ export function useConnectionProfiles() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [] // deleteOp.execute and fetchProfiles are stable
   )
-
-  const triggerAutoAssociate = useCallback(async () => {
-    clientLogger.debug('Triggering auto-association on connection profiles tab mount')
-    try {
-      const response = await fetchJson<{
-        success: boolean
-        associations: Array<{ profileName: string; keyLabel: string }>
-      }>('/api/keys/auto-associate', { method: 'POST' })
-      if (response.ok && response.data?.associations?.length) {
-        clientLogger.info('Auto-associated profiles with API keys', {
-          count: response.data.associations.length,
-        })
-        // Show toast for each association
-        response.data.associations.forEach((assoc) => {
-          showSuccessToast(
-            `${assoc.profileName} linked to API key "${assoc.keyLabel}"`,
-            4000
-          )
-        })
-      }
-    } catch (error) {
-      clientLogger.debug('Auto-association failed (non-critical)', { error })
-    }
-  }, [])
 
   return {
     profiles,

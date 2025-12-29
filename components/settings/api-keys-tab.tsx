@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { clientLogger } from '@/lib/client-logger'
 import SectionHeader from '@/components/ui/SectionHeader'
@@ -12,7 +13,6 @@ import DeleteConfirmPopover from '@/components/ui/DeleteConfirmPopover'
 import { ApiKeyModal } from './api-keys/ApiKeyModal'
 import { ExportKeysDialog } from './api-keys/ExportKeysDialog'
 import { ImportKeysDialog } from './api-keys/ImportKeysDialog'
-import { showSuccessToast } from '@/lib/toast'
 
 interface ApiKey {
   id: string
@@ -38,6 +38,7 @@ export default function ApiKeysTab() {
   const loadKeys = useAsyncOperation<ApiKey[]>()
   const deleteKey = useAsyncOperation<void>()
   const testKey = useAsyncOperation<{ valid: boolean; error?: string }>()
+  const triggerAutoAssociate = useAutoAssociate('api-keys')
 
   const fetchApiKeysData = async () => {
     clientLogger.debug('Fetching API keys')
@@ -64,31 +65,8 @@ export default function ApiKeysTab() {
 
   // Trigger auto-association on mount (fire and forget)
   useEffect(() => {
-    const triggerAutoAssociate = async () => {
-      clientLogger.debug('Triggering auto-association on API keys tab mount')
-      try {
-        const response = await fetchJson<{
-          success: boolean
-          associations: Array<{ profileName: string; keyLabel: string }>
-        }>('/api/keys/auto-associate', { method: 'POST' })
-        if (response.ok && response.data?.associations?.length) {
-          clientLogger.info('Auto-associated profiles with API keys', {
-            count: response.data.associations.length,
-          })
-          // Show toast for each association
-          response.data.associations.forEach((assoc) => {
-            showSuccessToast(
-              `${assoc.profileName} linked to API key "${assoc.keyLabel}"`,
-              4000
-            )
-          })
-        }
-      } catch (error) {
-        clientLogger.debug('Auto-association failed (non-critical)', { error })
-      }
-    }
     triggerAutoAssociate()
-  }, [])
+  }, [triggerAutoAssociate])
 
   // Load API keys on mount
   useEffect(() => {

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
+import { useDialogStateWithFileInput } from '@/hooks/useDialogState'
 import type {
   ImportState,
   ExportFile,
@@ -48,27 +49,11 @@ export function useImportKeys({
   isOpen,
   onSuccess,
 }: UseImportKeysOptions): UseImportKeysReturn {
-  const [state, setState] = useState<ImportState>(initialState)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Reset state when dialog opens/closes
-  useEffect(() => {
-    if (!isOpen) {
-      setState(initialState)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-    }
-  }, [isOpen])
-
-  // Log when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('Import keys dialog opened', {
-        context: 'useImportKeys',
-      })
-    }
-  }, [isOpen])
+  const { state, setState, reset, fileInputRef } = useDialogStateWithFileInput({
+    isOpen,
+    initialState,
+    logContext: 'useImportKeys',
+  })
 
   const handleFileSelect = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,13 +227,6 @@ export function useImportKeys({
           return prev
       }
     })
-  }, [])
-
-  const reset = useCallback(() => {
-    setState(initialState)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
   }, [])
 
   // Memoize actions to prevent unnecessary re-renders and effect re-runs

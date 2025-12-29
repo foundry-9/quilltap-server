@@ -4,6 +4,16 @@
 
 ### 2.6-dev
 
+- refactor: UI and front-end refactoring based on SRP, DRY, KISS, YAGNI principles
+  - Phase 1: Foundation hooks and components
+    - Created `hooks/useDialogState.ts` consolidating dialog reset/logging pattern from 4+ hooks
+    - Created `hooks/useDialogStateWithFileInput.ts` variant for dialogs with file inputs
+    - Created `hooks/useWizardState.ts` for step-based wizard navigation
+    - Created `hooks/useAutoAssociate.ts` extracting duplicate auto-association logic from 4 files
+    - Created `components/ui/BaseModal.tsx` consolidating modal structure from 17 components
+    - Migrated `useExportKeys`, `useImportKeys`, `useExportData`, `useImportData` to use `useDialogState`
+    - Migrated `useEmbeddingProfiles`, `useConnectionProfiles`, `api-keys-tab`, `image-profiles-tab` to use `useAutoAssociate`
+    - Migrated `embedding-profiles/ProfileModal` to use `BaseModal` (example for remaining 16 modals)
 - refactor: API and back-end refactoring based on SRP, DRY, KISS principles
   - Phase 1: Foundation infrastructure
     - Created `/lib/api/middleware/auth.ts` with `withAuth()` wrapper extracting auth patterns from routes

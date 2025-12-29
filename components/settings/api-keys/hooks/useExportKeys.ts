@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
+import { useDialogState } from '@/hooks/useDialogState'
 import type { ExportState, ExportFile } from '../types'
 
 const MIN_PASSPHRASE_LENGTH = 8
@@ -36,23 +37,11 @@ export function useExportKeys({
   isOpen,
   onSuccess,
 }: UseExportKeysOptions): UseExportKeysReturn {
-  const [state, setState] = useState<ExportState>(initialState)
-
-  // Reset state when dialog opens/closes
-  useEffect(() => {
-    if (!isOpen) {
-      setState(initialState)
-    }
-  }, [isOpen])
-
-  // Log when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('Export keys dialog opened', {
-        context: 'useExportKeys',
-      })
-    }
-  }, [isOpen])
+  const { state, setState, reset } = useDialogState({
+    isOpen,
+    initialState,
+    logContext: 'useExportKeys',
+  })
 
   // Validate passphrase
   const passphraseError = (() => {
@@ -130,10 +119,6 @@ export function useExportKeys({
       }))
     }
   }, [isValid, state.passphrase, onSuccess])
-
-  const reset = useCallback(() => {
-    setState(initialState)
-  }, [])
 
   return {
     state,
