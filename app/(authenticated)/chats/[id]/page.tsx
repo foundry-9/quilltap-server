@@ -11,6 +11,7 @@ import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
 import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
 import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
+import { SearchReplaceModal } from '@/components/tools/search-replace'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import {
   EphemeralMessage,
@@ -95,6 +96,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
+  const [searchReplaceModalOpen, setSearchReplaceModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ id: string; name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
@@ -1624,6 +1626,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onRenameClick={handleRenameClick}
           onDeleteChatMemoriesClick={handleDeleteChatMemories}
           onReextractMemoriesClick={handleReextractMemories}
+          onSearchReplaceClick={() => setSearchReplaceModalOpen(true)}
           onStopStreaming={stopStreaming}
         />
 
@@ -1739,6 +1742,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             .map(p => p.character?.id)
             .filter((id): id is string => id !== null && id !== undefined) || []}
           onCharacterAdded={handleCharacterAdded}
+        />
+
+        <SearchReplaceModal
+          isOpen={searchReplaceModalOpen}
+          onClose={() => setSearchReplaceModalOpen(false)}
+          initialScope={{ type: 'chat', chatId: id }}
+          currentChatId={id}
+          chatTitle={chat?.title}
         />
       </div>
 

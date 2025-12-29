@@ -13,6 +13,7 @@ import { EmbeddedPhotoGallery } from '@/components/images/EmbeddedPhotoGallery'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
+import { SearchReplaceModal } from '@/components/tools/search-replace'
 
 interface Persona {
   id: string
@@ -67,6 +68,7 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
   const [error, setError] = useState<string | null>(null)
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [showAvatarSelector, setShowAvatarSelector] = useState(false)
+  const [showSearchReplaceModal, setShowSearchReplaceModal] = useState(false)
   const [persona, setPersona] = useState<Persona | null>(null)
   const [avatarRefreshKey, setAvatarRefreshKey] = useState(0)
   const [formData, setFormData] = useState({
@@ -226,12 +228,22 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
               </svg>
             </button>
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-3xl font-bold text-foreground">{persona?.name || 'Loading...'}</h1>
             {persona?.title && (
               <p className="text-muted-foreground">{persona.title}</p>
             )}
           </div>
+          <button
+            onClick={() => setShowSearchReplaceModal(true)}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted"
+            title="Search & Replace across all chats and memories for this persona"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            Search & Replace
+          </button>
         </div>
       </div>
 
@@ -373,6 +385,14 @@ export default function EditPersonaPage({ params }: { params: Promise<{ id: stri
         }}
         contextType="PERSONA"
         contextId={id}
+      />
+
+      {/* Search & Replace Modal */}
+      <SearchReplaceModal
+        isOpen={showSearchReplaceModal}
+        onClose={() => setShowSearchReplaceModal(false)}
+        initialScope={{ type: 'persona', personaId: id }}
+        personaName={persona?.name}
       />
     </div>
   )

@@ -24,6 +24,7 @@ import {
   ChatCreationDialog,
 } from './components'
 import { CHARACTER_TABS } from './constants'
+import { SearchReplaceModal } from '@/components/tools/search-replace'
 
 export default function ViewCharacterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -33,6 +34,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const quickHideActive = hiddenTagIds.size > 0
 
   const [showChatDialog, setShowChatDialog] = useState(false)
+  const [showSearchReplaceModal, setShowSearchReplaceModal] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
@@ -281,6 +283,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           avatarRefreshKey={avatarRefreshKey}
           onStartChat={handleStartChat}
           onToggleNpc={handleToggleNpc}
+          onSearchReplace={() => setShowSearchReplaceModal(true)}
           togglingNpc={togglingNpc}
         />
 
@@ -319,6 +322,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           onCreateChat={handleCreateChatClick}
         />
       )}
+
+      {/* Search & Replace Modal */}
+      <SearchReplaceModal
+        isOpen={showSearchReplaceModal}
+        onClose={() => setShowSearchReplaceModal(false)}
+        initialScope={{ type: 'character', characterId: id }}
+        characterName={character?.name}
+      />
     </div>
   )
 }

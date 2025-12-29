@@ -44,6 +44,7 @@ interface ChatComposerProps {
   onRenameClick?: () => void
   onDeleteChatMemoriesClick: () => void
   onReextractMemoriesClick: () => void
+  onSearchReplaceClick?: () => void
   onStopStreaming: () => void
 }
 
@@ -102,6 +103,7 @@ export function ChatComposer({
   onRenameClick,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
+  onSearchReplaceClick,
   onStopStreaming,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -279,6 +281,7 @@ export function ChatComposer({
             onAddCharacterClick={onAddCharacterClick}
             onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
             onReextractMemoriesClick={onReextractMemoriesClick}
+            onSearchReplaceClick={onSearchReplaceClick}
             chatPhotoCount={chatPhotoCount}
             hasImageProfile={hasImageProfile}
             showAddCharacter={isSingleCharacterChat}

@@ -757,6 +757,151 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
     }
   }
 
+  // ============================================================================
+  // SEARCH AND REPLACE OPERATIONS
+  // ============================================================================
+
+  /**
+   * Count messages containing specific text in a chat
+   * @param chatId The chat ID
+   * @param searchText Text to search for
+   * @returns Number of messages containing the text
+   */
+  async countMessagesWithText(chatId: string, searchText: string): Promise<number> {
+    try {
+      logger.debug('Counting messages with text', { chatId, searchTextLength: searchText.length });
+
+      const messages = await this.getMessages(chatId);
+      let count = 0;
+
+      for (const msg of messages) {
+        if (msg.type === 'message' && msg.content.includes(searchText)) {
+          count++;
+        }
+      }
+
+      logger.debug('Counted messages with text', { chatId, count });
+      return count;
+    } catch (error) {
+      logger.error('Failed to count messages with text', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Find messages containing specific text in a chat
+   * @param chatId The chat ID
+   * @param searchText Text to search for
+   * @returns Array of matching messages with their IDs and content
+   */
+  async findMessagesWithText(
+    chatId: string,
+    searchText: string
+  ): Promise<Array<{ messageId: string; content: string; chatId: string }>> {
+    try {
+      logger.debug('Finding messages with text', { chatId, searchTextLength: searchText.length });
+
+      const messages = await this.getMessages(chatId);
+      const matches: Array<{ messageId: string; content: string; chatId: string }> = [];
+
+      for (const msg of messages) {
+        if (msg.type === 'message' && msg.content.includes(searchText)) {
+          matches.push({
+            messageId: msg.id,
+            content: msg.content,
+            chatId,
+          });
+        }
+      }
+
+      logger.debug('Found messages with text', { chatId, matchCount: matches.length });
+      return matches;
+    } catch (error) {
+      logger.error('Failed to find messages with text', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Replace text in all messages of a chat
+   * @param chatId The chat ID
+   * @param searchText Text to find
+   * @param replaceText Text to replace with
+   * @returns Number of messages updated
+   */
+  async replaceInMessages(
+    chatId: string,
+    searchText: string,
+    replaceText: string
+  ): Promise<number> {
+    try {
+      logger.debug('Replacing text in messages', {
+        chatId,
+        searchTextLength: searchText.length,
+        replaceTextLength: replaceText.length,
+      });
+
+      const messages = await this.getMessages(chatId);
+      let updatedCount = 0;
+      let hasChanges = false;
+
+      // Process each message
+      const updatedMessages = messages.map(msg => {
+        if (msg.type === 'message' && msg.content.includes(searchText)) {
+          const newContent = msg.content.split(searchText).join(replaceText);
+          if (newContent !== msg.content) {
+            updatedCount++;
+            hasChanges = true;
+            return { ...msg, content: newContent };
+          }
+        }
+        return msg;
+      });
+
+      if (!hasChanges) {
+        logger.debug('No messages needed updating', { chatId });
+        return 0;
+      }
+
+      // Validate and update messages
+      const validated = updatedMessages.map(msg => ChatEventSchema.parse(msg));
+
+      const collection = await (this as any).getCollection();
+      const msgDb = collection.db;
+      const messagesCollection = msgDb.collection(this.messagesCollectionName);
+
+      const now = (this as any).getCurrentTimestamp();
+
+      await messagesCollection.updateOne(
+        { chatId },
+        {
+          $set: {
+            messages: validated,
+            updatedAt: now,
+          },
+        }
+      );
+
+      // Update chat metadata timestamp
+      await this.update(chatId, {});
+
+      logger.info('Replaced text in messages', { chatId, updatedCount });
+      return updatedCount;
+    } catch (error) {
+      logger.error('Failed to replace text in messages', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
   /**
    * Clear all messages from a chat
    */

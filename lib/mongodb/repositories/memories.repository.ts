@@ -810,6 +810,230 @@ export class MemoriesRepository extends MongoBaseRepository<Memory> {
     }
   }
 
+  // ============================================================================
+  // SEARCH AND REPLACE OPERATIONS
+  // ============================================================================
+
+  /**
+   * Find all memories for a specific persona
+   * @param personaId The persona ID
+   * @returns Promise<Memory[]> Array of memories associated with the persona
+   */
+  async findByPersonaId(personaId: string): Promise<Memory[]> {
+    logger.debug('Finding memories by persona ID', { personaId });
+    try {
+      const collection = await this.getCollection();
+      const results = await collection.find({ personaId }).toArray();
+
+      const memories = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((memory): memory is Memory => memory !== null);
+
+      logger.debug('Found memories for persona', { personaId, count: memories.length });
+      return memories;
+    } catch (error) {
+      logger.error('Error finding memories by persona ID', {
+        personaId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Count memories containing specific text
+   * @param characterId Optional character ID filter
+   * @param personaId Optional persona ID filter
+   * @param chatId Optional chat ID filter
+   * @param searchText Text to search for
+   * @returns Number of memories containing the text
+   */
+  async countMemoriesWithText(
+    characterId: string | null,
+    personaId: string | null,
+    chatId: string | null,
+    searchText: string
+  ): Promise<number> {
+    logger.debug('Counting memories with text', {
+      characterId,
+      personaId,
+      chatId,
+      searchTextLength: searchText.length,
+    });
+    try {
+      const collection = await this.getCollection();
+      const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+      // Build the query filter
+      const filter: Record<string, unknown> = {
+        $or: [
+          { content: { $regex: regex } },
+          { summary: { $regex: regex } },
+        ],
+      };
+
+      if (characterId) filter.characterId = characterId;
+      if (personaId) filter.personaId = personaId;
+      if (chatId) filter.chatId = chatId;
+
+      const count = await collection.countDocuments(filter);
+
+      logger.debug('Counted memories with text', { characterId, personaId, chatId, count });
+      return count;
+    } catch (error) {
+      logger.error('Error counting memories with text', {
+        characterId,
+        personaId,
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Find memories containing specific text
+   * @param characterId Optional character ID filter
+   * @param personaId Optional persona ID filter
+   * @param chatId Optional chat ID filter
+   * @param searchText Text to search for
+   * @returns Array of memories containing the text
+   */
+  async findMemoriesWithText(
+    characterId: string | null,
+    personaId: string | null,
+    chatId: string | null,
+    searchText: string
+  ): Promise<Memory[]> {
+    logger.debug('Finding memories with text', {
+      characterId,
+      personaId,
+      chatId,
+      searchTextLength: searchText.length,
+    });
+    try {
+      const collection = await this.getCollection();
+      const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+      // Build the query filter
+      const filter: Record<string, unknown> = {
+        $or: [
+          { content: { $regex: regex } },
+          { summary: { $regex: regex } },
+        ],
+      };
+
+      if (characterId) filter.characterId = characterId;
+      if (personaId) filter.personaId = personaId;
+      if (chatId) filter.chatId = chatId;
+
+      const results = await collection.find(filter).toArray();
+
+      const memories = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((memory): memory is Memory => memory !== null);
+
+      logger.debug('Found memories with text', {
+        characterId,
+        personaId,
+        chatId,
+        count: memories.length,
+      });
+      return memories;
+    } catch (error) {
+      logger.error('Error finding memories with text', {
+        characterId,
+        personaId,
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Replace text in memory content and summary for specific memories
+   * @param memoryIds Array of memory IDs to update
+   * @param searchText Text to find
+   * @param replaceText Text to replace with
+   * @returns Array of updated memories (for embedding regeneration)
+   */
+  async replaceInMemories(
+    memoryIds: string[],
+    searchText: string,
+    replaceText: string
+  ): Promise<Memory[]> {
+    logger.debug('Replacing text in memories', {
+      memoryCount: memoryIds.length,
+      searchTextLength: searchText.length,
+      replaceTextLength: replaceText.length,
+    });
+    try {
+      if (memoryIds.length === 0) {
+        logger.debug('Empty memory IDs array provided');
+        return [];
+      }
+
+      const updatedMemories: Memory[] = [];
+
+      for (const memoryId of memoryIds) {
+        const memory = await this.findById(memoryId);
+        if (!memory) {
+          logger.warn('Memory not found for replacement', { memoryId });
+          continue;
+        }
+
+        let contentChanged = false;
+        let newContent = memory.content;
+        let newSummary = memory.summary;
+
+        // Replace in content
+        if (memory.content.includes(searchText)) {
+          newContent = memory.content.split(searchText).join(replaceText);
+          contentChanged = true;
+        }
+
+        // Replace in summary
+        if (memory.summary.includes(searchText)) {
+          newSummary = memory.summary.split(searchText).join(replaceText);
+          contentChanged = true;
+        }
+
+        if (contentChanged) {
+          const updated = await this.update(memoryId, {
+            content: newContent,
+            summary: newSummary,
+          });
+
+          if (updated) {
+            updatedMemories.push(updated);
+          }
+        }
+      }
+
+      logger.info('Replaced text in memories', { updatedCount: updatedMemories.length });
+      return updatedMemories;
+    } catch (error) {
+      logger.error('Error replacing text in memories', {
+        memoryCount: memoryIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
   /**
    * Text search in memory content and summary for memories about a specific character
    * @param characterId The character who owns the memories

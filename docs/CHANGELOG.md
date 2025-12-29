@@ -4,6 +4,11 @@
 
 ### 2.6-dev
 
+- feat: Add Search & Replace tool for bulk text replacement across messages and memories
+  - Supports scoping to single chat, all chats for a character, or all chats for a persona
+  - Wizard-style UI with scope selection, search/replace input, preview counts, and confirmation
+  - Entry points from chat ToolPalette, character view page, and persona edit page
+  - Automatically regenerates memory embeddings after content changes
 - fix: make chat creation dialog responsive with scrollable content and two-column layout on tablet+
 - refactor: UI and front-end refactoring based on SRP, DRY, KISS, YAGNI principles
   - Phase 1: Foundation hooks and components

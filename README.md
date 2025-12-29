@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.6.0--dev.17-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.6.0--dev.18-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -584,7 +584,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [X] Starting a new chat should include:
   - [X] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
   - [X] A scenario prompt so you can set things up before you start
-- [ ] Search and replace in one chat, or in all chats associated with a character or persona
+- [X] Search and replace in one chat + memories associated with that chat, or in all chats (and their memories) associated with a character or persona
 - [ ] Memory cascade on message changes
   - [ ] When a message is deleted, cascade delete all memories with that `sourceMessageId`
   - [ ] When a message is regenerated (swipe), delete the old memory so the new response can create a fresh memory
