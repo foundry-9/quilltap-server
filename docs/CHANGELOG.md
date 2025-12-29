@@ -33,6 +33,18 @@
     - Migrated `connection-profiles/ProfileCard` to use shared `ProfileCard` as base
     - Migrated `api-keys-tab` card rendering to use shared `ProfileCard`
     - Note: `useProfileManagement` hook deferred (existing specialized hooks have different enough structures)
+  - Phase 4: Large component breakdown (export/import dialogs)
+    - Created shared wizard components in `components/tools/import-export/components/`:
+      - `LoadingSpinner.tsx`, `SearchInput.tsx` - utility components
+      - `WizardLoadingStep.tsx`, `WizardCompleteStep.tsx`, `WizardErrorStep.tsx` - reusable wizard steps
+    - Created export step components in `components/tools/import-export/steps/`:
+      - `ExportTypeStep.tsx`, `ExportSelectStep.tsx`, `ExportOptionsStep.tsx`
+    - Created import step components:
+      - `ImportFileStep.tsx`, `ImportPreviewStep.tsx`, `ImportOptionsStep.tsx`, `ImportCompleteStep.tsx`
+    - Created `components/tools/import-export/utils.ts` for shared utilities (formatFileSize, formatDate, toExportEntityType)
+    - Refactored `export-dialog.tsx` from 424 to ~250 lines using extracted components
+    - Refactored `import-dialog.tsx` from 565 to ~250 lines using extracted components
+    - Note: AddCharacterDialog refactoring deferred (lower priority, works well as-is)
 - refactor: API and back-end refactoring based on SRP, DRY, KISS principles
   - Phase 1: Foundation infrastructure
     - Created `/lib/api/middleware/auth.ts` with `withAuth()` wrapper extracting auth patterns from routes
