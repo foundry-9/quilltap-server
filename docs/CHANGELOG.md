@@ -12,6 +12,7 @@
     - Created `hooks/useAutoAssociate.ts` extracting duplicate auto-association logic from 4 files
     - Created `components/ui/BaseModal.tsx` consolidating modal structure from 17 components
     - Migrated `useExportKeys`, `useImportKeys`, `useExportData`, `useImportData` to use `useDialogState`
+    - Migrated `useExportKeys`, `useImportKeys`, `useExportData` to use `useWizardState` for step navigation
     - Migrated `useEmbeddingProfiles`, `useConnectionProfiles`, `api-keys-tab`, `image-profiles-tab` to use `useAutoAssociate`
     - Migrated 12 modal components to use `BaseModal`:
       - `embedding-profiles/ProfileModal`, `connection-profiles/ProfileModal`

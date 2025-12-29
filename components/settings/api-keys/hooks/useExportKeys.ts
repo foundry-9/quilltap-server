@@ -4,7 +4,8 @@ import { useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { useDialogState } from '@/hooks/useDialogState'
-import type { ExportState, ExportFile } from '../types'
+import { useWizardState } from '@/hooks/useWizardState'
+import type { ExportState, ExportFile, ExportStep } from '../types'
 
 const MIN_PASSPHRASE_LENGTH = 8
 
@@ -43,6 +44,22 @@ export function useExportKeys({
     logContext: 'useExportKeys',
   })
 
+  // Wizard step configuration
+  const wizard = useWizardState<ExportStep>(
+    {
+      initialStep: 'passphrase',
+      steps: {
+        passphrase: { next: ['exporting'] },
+        exporting: { next: ['complete', 'error'] },
+        complete: { isTerminal: true },
+        error: { prev: 'passphrase', isTerminal: true },
+      },
+      logContext: 'useExportKeys',
+    },
+    state.step,
+    (step) => setState((prev) => ({ ...prev, step }))
+  )
+
   // Validate passphrase
   const passphraseError = (() => {
     if (!state.passphrase) return null
@@ -70,7 +87,9 @@ export function useExportKeys({
   const handleExport = useCallback(async () => {
     if (!isValid) return
 
-    setState((prev) => ({ ...prev, step: 'exporting', exporting: true, error: null }))
+    // Use wizard for step navigation, setState for other state
+    wizard.goTo('exporting')
+    setState((prev) => ({ ...prev, exporting: true, error: null }))
 
     try {
       clientLogger.debug('Starting API key export', { context: 'useExportKeys' })
@@ -106,19 +125,16 @@ export function useExportKeys({
         keyCount: exportFile.keyCount,
       })
 
-      setState((prev) => ({ ...prev, step: 'complete', exporting: false }))
+      wizard.goTo('complete')
+      setState((prev) => ({ ...prev, exporting: false }))
       onSuccess?.()
     } catch (error) {
       const message = getErrorMessage(error)
       clientLogger.error('Failed to export API keys', { context: 'useExportKeys', error: message })
-      setState((prev) => ({
-        ...prev,
-        step: 'error',
-        exporting: false,
-        error: message,
-      }))
+      wizard.goTo('error')
+      setState((prev) => ({ ...prev, exporting: false, error: message }))
     }
-  }, [isValid, state.passphrase, onSuccess])
+  }, [isValid, state.passphrase, wizard, onSuccess])
 
   return {
     state,
