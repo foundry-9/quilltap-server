@@ -1,10 +1,10 @@
 'use client'
 
-import { useRef, useState, useEffect, useCallback } from 'react'
-import { useClickOutside } from '@/hooks/useClickOutside'
+import { useState, useEffect, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { TagEditor } from '@/components/tags/tag-editor'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { ModelSelector, type ModelInfo } from '../model-selector'
 import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
 import { FormActions } from '@/components/ui/FormActions'
@@ -46,8 +46,6 @@ export function ProfileModal({
   form,
   operations,
 }: ProfileModalProps) {
-  const modalRef = useRef<HTMLDivElement>(null)
-
   // Connection testing states
   const [isConnected, setIsConnected] = useState(false)
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null)
@@ -59,11 +57,6 @@ export function ProfileModal({
 
   // Test message states
   const [testMessageResult, setTestMessageResult] = useState<string | null>(null)
-
-  useClickOutside(modalRef, onClose, {
-    enabled: isOpen,
-    onEscape: onClose,
-  })
 
   // Note: No need for state reset effect - modal is keyed by profile.id so it remounts fresh
 
@@ -164,22 +157,28 @@ export function ProfileModal({
     return modelInfo?.maxOutputTokens || 128000
   }, [getSelectedModelInfo])
 
-  if (!isOpen) return null
-
   const reqs = operations.getProviderRequirements(form.formData.provider)
   const isValid = form.formData.name.trim() && form.formData.modelName.trim()
 
-  return (
-    <div className="qt-dialog-overlay">
-      <div ref={modalRef} className="qt-dialog max-w-3xl max-h-[90vh] flex flex-col">
-        <div className="qt-dialog-header">
-          <h2 className="qt-dialog-title">
-            {profile?.id ? 'Edit Connection Profile' : 'Create Connection Profile'}
-          </h2>
-        </div>
+  const footer = (
+    <FormActions
+      onCancel={handleClose}
+      onSubmit={handleFormSubmit}
+      submitLabel={operations.saveLoading ? 'Saving...' : profile?.id ? 'Update Profile' : 'Create Profile'}
+      isLoading={operations.saveLoading}
+      isDisabled={!isValid}
+    />
+  )
 
-        <div className="qt-dialog-body flex-1 overflow-y-auto">
-          <div className="space-y-4">
+  return (
+    <BaseModal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={profile?.id ? 'Edit Connection Profile' : 'Create Connection Profile'}
+      maxWidth="3xl"
+      footer={footer}
+    >
+      <div className="space-y-4">
             {/* Name and Provider Row */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -523,20 +522,8 @@ export function ProfileModal({
                 <TagEditor entityType="profile" entityId={profile.id} />
               </div>
             )}
-          </div>
-        </div>
-
-        <div className="qt-dialog-footer">
-          <FormActions
-            onCancel={handleClose}
-            onSubmit={handleFormSubmit}
-            submitLabel={operations.saveLoading ? 'Saving...' : profile?.id ? 'Update Profile' : 'Create Profile'}
-            isLoading={operations.saveLoading}
-            isDisabled={!isValid}
-          />
-        </div>
       </div>
-    </div>
+    </BaseModal>
   )
 }
 

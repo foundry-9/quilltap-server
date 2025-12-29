@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { useClickOutside } from '@/hooks/useClickOutside'
+import { BaseModal } from '@/components/ui/BaseModal'
 
 interface ConnectionProfile {
   id: string
@@ -309,7 +309,6 @@ export default function ChatSettingsModal({
   roleplayTemplateId: initialRoleplayTemplateId,
   onSuccess,
 }: Readonly<ChatSettingsModalProps>) {
-  const modalRef = useRef<HTMLDivElement>(null)
   const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
@@ -335,11 +334,6 @@ export default function ChatSettingsModal({
   // Disable click-outside detection while saving to prevent native select dropdown clicks
   // from closing the modal (browser renders select options in a separate layer)
   const isSaving = loading || roleplayTemplateSaving
-
-  useClickOutside(modalRef, onClose, {
-    enabled: isOpen && !isSaving,
-    onEscape: isSaving ? undefined : onClose,
-  })
 
   const fetchProfiles = async () => {
     try {
@@ -455,80 +449,76 @@ export default function ChatSettingsModal({
     }
   }
 
-  if (!isOpen) return null
-
   const sortedParticipants = [...participants].sort((a, b) => a.displayOrder - b.displayOrder)
 
-  return (
-    <div className="qt-dialog-overlay">
-      <div
-        ref={modalRef}
-        className="qt-dialog max-w-lg max-h-[80vh] flex flex-col"
+  const footer = (
+    <div className="flex justify-end">
+      <button
+        onClick={onClose}
+        disabled={loading}
+        className="qt-button qt-button-secondary"
       >
-        <div className="qt-dialog-header">
-          <h2 className="qt-dialog-title">Chat Settings</h2>
-        </div>
-        <div className="qt-dialog-body flex-1 overflow-y-auto">
+        Close
+      </button>
+    </div>
+  )
 
-        {/* Roleplay Template Section */}
-        <div className="mb-6">
-          <h3 className="qt-text-small font-medium mb-3">
-            Roleplay Template
-          </h3>
-          <div className="qt-card">
-            <label htmlFor="roleplay-template" className="qt-label mb-1">
-              Formatting Style
-            </label>
-            <select
-              id="roleplay-template"
-              value={selectedRoleplayTemplateId || ''}
-              onChange={(e) => handleRoleplayTemplateChange(e.target.value || null)}
-              disabled={roleplayTemplateSaving || loading}
-              className="qt-select text-sm"
-            >
-              <option value="">None (no formatting template)</option>
-              {roleplayTemplates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}{template.isBuiltIn ? ' (Built-in)' : ''}
-                </option>
-              ))}
-            </select>
-            <p className="qt-text-xs mt-2">
-              Controls how the AI formats dialogue, actions, and thoughts in this chat.
-              {roleplayTemplateSaving && <span className="ml-2">Saving...</span>}
-            </p>
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <h3 className="qt-text-small font-medium mb-3">
-            Participants ({participants.length})
-          </h3>
-
-          {sortedParticipants.map((participant) => (
-            <ParticipantEditor
-              key={participant.id}
-              participant={participant}
-              connectionProfiles={connectionProfiles}
-              imageProfiles={imageProfiles}
-              apiKeys={apiKeys}
-              onUpdate={handleParticipantUpdate}
-              loading={loading}
-            />
-          ))}
-        </div>
-        </div>
-
-        <div className="qt-dialog-footer flex justify-end">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="qt-button qt-button-secondary"
+  return (
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Chat Settings"
+      footer={footer}
+      closeOnClickOutside={!isSaving}
+      closeOnEscape={!isSaving}
+    >
+      {/* Roleplay Template Section */}
+      <div className="mb-6">
+        <h3 className="qt-text-small font-medium mb-3">
+          Roleplay Template
+        </h3>
+        <div className="qt-card">
+          <label htmlFor="roleplay-template" className="qt-label mb-1">
+            Formatting Style
+          </label>
+          <select
+            id="roleplay-template"
+            value={selectedRoleplayTemplateId || ''}
+            onChange={(e) => handleRoleplayTemplateChange(e.target.value || null)}
+            disabled={roleplayTemplateSaving || loading}
+            className="qt-select text-sm"
           >
-            Close
-          </button>
+            <option value="">None (no formatting template)</option>
+            {roleplayTemplates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name}{template.isBuiltIn ? ' (Built-in)' : ''}
+              </option>
+            ))}
+          </select>
+          <p className="qt-text-xs mt-2">
+            Controls how the AI formats dialogue, actions, and thoughts in this chat.
+            {roleplayTemplateSaving && <span className="ml-2">Saving...</span>}
+          </p>
         </div>
       </div>
-    </div>
+
+      <div className="mb-4">
+        <h3 className="qt-text-small font-medium mb-3">
+          Participants ({participants.length})
+        </h3>
+
+        {sortedParticipants.map((participant) => (
+          <ParticipantEditor
+            key={participant.id}
+            participant={participant}
+            connectionProfiles={connectionProfiles}
+            imageProfiles={imageProfiles}
+            apiKeys={apiKeys}
+            onUpdate={handleParticipantUpdate}
+            loading={loading}
+          />
+        ))}
+      </div>
+    </BaseModal>
   )
 }

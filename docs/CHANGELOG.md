@@ -13,7 +13,14 @@
     - Created `components/ui/BaseModal.tsx` consolidating modal structure from 17 components
     - Migrated `useExportKeys`, `useImportKeys`, `useExportData`, `useImportData` to use `useDialogState`
     - Migrated `useEmbeddingProfiles`, `useConnectionProfiles`, `api-keys-tab`, `image-profiles-tab` to use `useAutoAssociate`
-    - Migrated `embedding-profiles/ProfileModal` to use `BaseModal` (example for remaining 16 modals)
+    - Migrated 12 modal components to use `BaseModal`:
+      - `embedding-profiles/ProfileModal`, `connection-profiles/ProfileModal`
+      - `api-keys/ApiKeyModal`, `api-keys/ExportKeysDialog`
+      - `prompts/PromptModal`, `prompts/PreviewModal`
+      - `chat/ChatRenameModal`, `chat/ChatSettingsModal`
+      - `image-profiles/ImageProfileModal`
+      - `system-prompts-editor/PromptModal`, `system-prompts-editor/ImportModal`, `system-prompts-editor/PreviewModal`
+    - Remaining modals (image lightboxes, AI wizard) have specialized behaviors not suited for BaseModal
 - refactor: API and back-end refactoring based on SRP, DRY, KISS principles
   - Phase 1: Foundation infrastructure
     - Created `/lib/api/middleware/auth.ts` with `withAuth()` wrapper extracting auth patterns from routes
