@@ -319,8 +319,9 @@ export function ParticipantCard({
           </button>
         )}
 
-        {/* Remove button - only for characters, not user personas */}
-        {isCharacter && !isUserParticipant && onRemove && canRemove && (
+        {/* Remove button - for characters when canRemove is true
+            canRemove now includes the safety check that at least one user-controlled character remains */}
+        {isCharacter && onRemove && canRemove && (
           <button
             onClick={() => {
               clientLogger.debug('[ParticipantCard] Remove clicked', {

@@ -41,6 +41,7 @@ const updateParticipantSchema = z.object({
   systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
   isActive: z.boolean().optional(),
+  controlledBy: z.enum(['llm', 'user']).optional(),  // Who controls this participant
 })
 
 // Validation schema for adding a participant
@@ -262,9 +263,50 @@ async function handleParticipantUpdate(
     }
   }
 
+  // Get current chat state to handle impersonation changes
+  const chat = await repos.chats.findById(chatId)
+  if (!chat) {
+    return { error: 'Chat not found', status: 404 }
+  }
+
   const result = await repos.chats.updateParticipant(chatId, participantId, participantData)
   if (!result) {
     return { error: 'Participant not found', status: 404 }
+  }
+
+  // Handle impersonation array updates when controlledBy changes
+  if (participantData.controlledBy !== undefined) {
+    const currentImpersonating = chat.impersonatingParticipantIds || []
+    const isCurrentlyImpersonating = currentImpersonating.includes(participantId)
+
+    if (participantData.controlledBy === 'user' && !isCurrentlyImpersonating) {
+      // Switching to user control - add to impersonation array
+      logger.debug('[handleParticipantUpdate] Adding participant to impersonation', { chatId, participantId })
+      const newImpersonating = [...currentImpersonating, participantId]
+      await repos.chats.update(chatId, {
+        impersonatingParticipantIds: newImpersonating,
+        // Set as active typing if no one else is
+        ...(result.activeTypingParticipantId ? {} : { activeTypingParticipantId: participantId }),
+      })
+    } else if (participantData.controlledBy === 'llm' && isCurrentlyImpersonating) {
+      // Switching to LLM control - remove from impersonation array
+      logger.debug('[handleParticipantUpdate] Removing participant from impersonation', { chatId, participantId })
+      const newImpersonating = currentImpersonating.filter(id => id !== participantId)
+      const updateData: Partial<ChatMetadata> = { impersonatingParticipantIds: newImpersonating }
+
+      // Clear active typing if it was this participant
+      if (result.activeTypingParticipantId === participantId) {
+        updateData.activeTypingParticipantId = newImpersonating[0] || null
+      }
+
+      await repos.chats.update(chatId, updateData)
+    }
+
+    // Re-fetch to get updated state
+    const updatedChat = await repos.chats.findById(chatId)
+    if (updatedChat) {
+      return { chat: updatedChat }
+    }
   }
 
   return { chat: result }

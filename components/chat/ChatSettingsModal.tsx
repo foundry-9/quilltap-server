@@ -51,6 +51,7 @@ interface Participant {
   isActive: boolean
   systemPromptOverride?: string | null
   selectedSystemPromptId?: string | null
+  controlledBy?: 'llm' | 'user'
   character?: Character | null
   persona?: Persona | null
   connectionProfile?: {
@@ -66,6 +67,9 @@ interface Participant {
     modelName?: string
   } | null
 }
+
+// Special constant for user impersonation selection
+const USER_IMPERSONATION_VALUE = '__user_impersonation__'
 
 interface RoleplayTemplate {
   id: string
@@ -98,6 +102,7 @@ interface ParticipantUpdate {
   systemPromptOverride?: string | null
   selectedSystemPromptId?: string | null
   isActive?: boolean
+  controlledBy?: 'llm' | 'user'
 }
 
 function ParticipantEditor({
@@ -126,8 +131,11 @@ function ParticipantEditor({
   const systemPromptId = `system-prompt-${participant.id}`
   const activeCheckboxId = `active-${participant.id}`
 
+  // Initialize with USER_IMPERSONATION_VALUE if user-controlled, otherwise profile ID
   const [selectedConnectionProfileId, setSelectedConnectionProfileId] = useState(
-    participant.connectionProfile?.id || ''
+    participant.controlledBy === 'user'
+      ? USER_IMPERSONATION_VALUE
+      : (participant.connectionProfile?.id || '')
   )
   const [selectedImageProfileId, setSelectedImageProfileId] = useState(
     participant.imageProfile?.id || ''
@@ -142,9 +150,22 @@ function ParticipantEditor({
 
   const handleSave = () => {
     const updates: ParticipantUpdate = {}
+    const isUserImpersonation = selectedConnectionProfileId === USER_IMPERSONATION_VALUE
+    const wasUserControlled = participant.controlledBy === 'user'
 
-    if (isCharacter && selectedConnectionProfileId !== participant.connectionProfile?.id) {
-      updates.connectionProfileId = selectedConnectionProfileId
+    // Handle controlledBy and connectionProfileId changes
+    if (isCharacter) {
+      if (isUserImpersonation && !wasUserControlled) {
+        // Switching TO user control
+        updates.controlledBy = 'user'
+      } else if (!isUserImpersonation && wasUserControlled) {
+        // Switching FROM user control to LLM
+        updates.controlledBy = 'llm'
+        updates.connectionProfileId = selectedConnectionProfileId
+      } else if (!isUserImpersonation && selectedConnectionProfileId !== participant.connectionProfile?.id) {
+        // Just changing LLM profile
+        updates.connectionProfileId = selectedConnectionProfileId
+      }
     }
 
     if (selectedImageProfileId !== (participant.imageProfile?.id || '')) {
@@ -214,14 +235,19 @@ function ParticipantEditor({
               className="qt-select text-sm"
             >
               <option value="">Select a provider...</option>
-              {connectionProfiles.map((profile) => {
-                const hasKey = profileHasApiKey(profile.apiKeyId)
-                return (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name} ({profile.modelName}){!hasKey ? ' ⚠️ No API Key' : ''}
-                  </option>
-                )
-              })}
+              <option value={USER_IMPERSONATION_VALUE}>
+                User (you will type for this character)
+              </option>
+              <optgroup label="LLM Backends">
+                {connectionProfiles.map((profile) => {
+                  const hasKey = profileHasApiKey(profile.apiKeyId)
+                  return (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name} ({profile.modelName}){!hasKey ? ' ⚠️ No API Key' : ''}
+                    </option>
+                  )
+                })}
+              </optgroup>
             </select>
           </div>
 

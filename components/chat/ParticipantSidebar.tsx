@@ -113,6 +113,7 @@ export function ParticipantSidebar({
     return participants.filter(p => p.type === 'CHARACTER' && p.isActive).length
   }, [participants])
 
+
   // Include qt-desktop-only to hide sidebar on mobile (mobile uses inline participant controls in message header)
   const sidebarClasses = ['qt-chat-sidebar', 'qt-desktop-only']
   if (className) {
@@ -200,14 +201,16 @@ export function ParticipantSidebar({
           const isUserParticipant = participant.id === userParticipantId
           const isCurrentTurn = currentSpeakerId === participant.id
           const queuePos = getQueuePosition(turnState, participant.id)
-          // Can remove if there's more than one active character
-          const canRemove = activeCharacterCount > 1
           // Can skip when it's the user's turn (nextSpeakerId is null means it's user's turn)
           const canSkip = turnSelectionResult?.nextSpeakerId === null && !isGenerating
 
           // Check if this participant is being impersonated
           const isImpersonating = impersonatingParticipantIds.includes(participant.id)
           const isActiveTyping = activeTypingParticipantId === participant.id
+
+          // Can remove if there's more than one active character
+          // (all-LLM chats are supported with pause logic)
+          const canRemove = activeCharacterCount > 1
 
           return (
             <ParticipantCard

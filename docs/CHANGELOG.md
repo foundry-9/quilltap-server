@@ -4,6 +4,17 @@
 
 ### 2.6-dev
 
+- fix: Add "User (impersonation)" option when adding character to existing chat
+  - AddCharacterDialog now shows "User (you will type for this character)" option in the control dropdown
+  - Users can now add characters controlled by themselves, not just LLM-controlled characters
+  - Properly passes `controlledBy: 'user'` to the API when user impersonation is selected
+  - User-controlled participants are now automatically added to `impersonatingParticipantIds` array
+  - Auto-sets active typing participant when adding user-controlled character to a chat
+  - Active-speaker API now auto-fixes existing user-controlled characters missing from impersonation array
+  - Active-speaker API returns updated `impersonatingParticipantIds` so sidebar refreshes correctly
+  - Any character can be removed from chat as long as at least one character remains (all-LLM chats supported via pause logic)
+  - Chat Settings modal now supports switching characters between user and LLM control
+  - Participant update API now accepts `controlledBy` field and manages impersonation array accordingly
 - feat: Add npm-based plugin installation system
   - New npm search API (`/api/plugins/search`) to browse qtap-plugin-* packages from npm registry
   - New plugin install/uninstall APIs (`/api/plugins/install`, `/api/plugins/uninstall`)

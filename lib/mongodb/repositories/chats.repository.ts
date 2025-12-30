@@ -429,7 +429,29 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
       const newParticipant = ChatParticipantBaseSchema.parse(participantInput);
 
       const participants = [...chat.participants, newParticipant];
-      return await this.update(chatId, { participants });
+
+      // If adding a user-controlled participant, automatically add to impersonating array
+      const updateData: Partial<ChatMetadata> = { participants };
+      if (newParticipant.controlledBy === 'user') {
+        const impersonatingIds = [...(chat.impersonatingParticipantIds || [])];
+        if (!impersonatingIds.includes(newParticipant.id)) {
+          impersonatingIds.push(newParticipant.id);
+        }
+        updateData.impersonatingParticipantIds = impersonatingIds;
+
+        // If no active typing participant, set this one
+        if (!chat.activeTypingParticipantId) {
+          updateData.activeTypingParticipantId = newParticipant.id;
+        }
+
+        logger.debug('Auto-adding user-controlled participant to impersonation', {
+          chatId,
+          participantId: newParticipant.id,
+          impersonatingCount: impersonatingIds.length,
+        });
+      }
+
+      return await this.update(chatId, updateData);
     } catch (error) {
       logger.error('Failed to add participant to chat', {
         chatId,

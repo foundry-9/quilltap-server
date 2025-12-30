@@ -1264,7 +1264,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         throw new Error(errorData.error || 'Failed to set active speaker')
       }
 
+      const data = await res.json()
       setActiveTypingParticipantId(participantId)
+
+      // Update impersonating IDs in case the API auto-added this participant
+      if (data.impersonatingParticipantIds) {
+        setImpersonatingParticipantIds(data.impersonatingParticipantIds)
+      }
     } catch (err) {
       clientLogger.error('[Chat] Error setting active speaker', {
         error: err instanceof Error ? err.message : String(err),

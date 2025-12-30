@@ -126,13 +126,23 @@ export async function PUT(
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
     }
 
-    // Verify participant is being impersonated
-    const impersonatingIds = chat.impersonatingParticipantIds || []
+    // Check if participant is being impersonated
+    let impersonatingIds = chat.impersonatingParticipantIds || []
     if (!impersonatingIds.includes(participantId)) {
-      return NextResponse.json(
-        { error: 'Participant is not being impersonated' },
-        { status: 400 }
-      )
+      // Auto-add user-controlled participants to impersonation array
+      if (participant.controlledBy === 'user') {
+        logger.info('[Active Speaker API] Auto-adding user-controlled participant to impersonation', {
+          chatId: id,
+          participantId,
+        })
+        impersonatingIds = [...impersonatingIds, participantId]
+        await repos.chats.update(id, { impersonatingParticipantIds: impersonatingIds })
+      } else {
+        return NextResponse.json(
+          { error: 'Participant is not being impersonated' },
+          { status: 400 }
+        )
+      }
     }
 
     // Set active typing participant
@@ -160,6 +170,7 @@ export async function PUT(
       success: true,
       activeTypingParticipantId: participantId,
       characterName,
+      impersonatingParticipantIds: impersonatingIds,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
