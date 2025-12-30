@@ -28,7 +28,7 @@ jest.mock('@/lib/auth/session', () => ({
   setSessionCookie: jest.fn(),
 }));
 
-jest.mock('@/lib/auth/post-login-migrations', () => ({
+jest.mock('@/lib/auth/user-migrations', () => ({
   runPostLoginMigrations: jest.fn(),
 }));
 
@@ -69,7 +69,7 @@ const sessionMock = jest.requireMock('@/lib/auth/session') as {
   createSessionToken: jest.Mock;
   setSessionCookie: jest.Mock;
 };
-const migrationsMock = jest.requireMock('@/lib/auth/post-login-migrations') as {
+const migrationsMock = jest.requireMock('@/lib/auth/user-migrations') as {
   runPostLoginMigrations: jest.Mock;
 };
 const loggerMock = jest.requireMock('@/lib/logger') as {

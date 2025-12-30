@@ -32819,7 +32819,8 @@ __export(index_exports, {
   loadMigrationState: () => loadMigrationState,
   migrations: () => migrations,
   plugin: () => plugin,
-  runMigrations: () => runMigrations
+  runMigrations: () => runMigrations,
+  runPostLoginMigrations: () => runPostLoginMigrations
 });
 module.exports = __toCommonJS(index_exports);
 init_logger();
@@ -39232,6 +39233,348 @@ var migratePersonasToCharactersMigration = {
   }
 };
 
+// migrations/add-multi-character-fields.ts
+init_logger();
+function isMongoDBBackendEnabled8() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase9() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible8() {
+  try {
+    const db = await getMongoDatabase9();
+    await db.admin().ping();
+    return true;
+  } catch (error) {
+    logger.warn("MongoDB is not accessible for multi-character fields migration", {
+      context: "migration.add-multi-character-fields",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+async function hasCharactersNeedingMigration() {
+  try {
+    const db = await getMongoDatabase9();
+    const charactersCollection = db.collection("characters");
+    const count = await charactersCollection.countDocuments({
+      talkativeness: { $exists: false }
+    });
+    return count > 0;
+  } catch (error) {
+    logger.debug("Error checking characters for talkativeness field", {
+      context: "migration.add-multi-character-fields",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+async function hasChatsNeedingMigration() {
+  try {
+    const db = await getMongoDatabase9();
+    const chatsCollection = db.collection("chats");
+    const count = await chatsCollection.countDocuments({
+      "participants.hasHistoryAccess": { $exists: false }
+    });
+    return count > 0;
+  } catch (error) {
+    logger.debug("Error checking chats for participant fields", {
+      context: "migration.add-multi-character-fields",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+var addMultiCharacterFieldsMigration = {
+  id: "add-multi-character-fields-v1",
+  description: "Add talkativeness to characters and participantId/hasHistoryAccess to chat participants",
+  introducedInVersion: "2.4.0",
+  dependsOn: ["migrate-json-to-mongodb-v1"],
+  // Run after data migration to MongoDB
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled8()) {
+      logger.debug("MongoDB not enabled, skipping multi-character fields migration", {
+        context: "migration.add-multi-character-fields"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible8()) {
+      logger.debug("MongoDB not accessible, deferring multi-character fields migration", {
+        context: "migration.add-multi-character-fields"
+      });
+      return false;
+    }
+    const [hasCharacters, hasChats] = await Promise.all([
+      hasCharactersNeedingMigration(),
+      hasChatsNeedingMigration()
+    ]);
+    const needsRun = hasCharacters || hasChats;
+    logger.debug("Checked for multi-character fields migration need", {
+      context: "migration.add-multi-character-fields",
+      hasCharactersNeedingMigration: hasCharacters,
+      hasChatsNeedingMigration: hasChats,
+      needsRun
+    });
+    return needsRun;
+  },
+  async run() {
+    const startTime = Date.now();
+    let charactersUpdated = 0;
+    let chatsProcessed = 0;
+    let messagesUpdated = 0;
+    let participantsUpdated = 0;
+    const errors = [];
+    logger.info("Starting multi-character fields migration", {
+      context: "migration.add-multi-character-fields"
+    });
+    try {
+      const db = await getMongoDatabase9();
+      logger.debug("Step 1: Adding talkativeness to characters without it", {
+        context: "migration.add-multi-character-fields"
+      });
+      const charactersCollection = db.collection("characters");
+      const characterUpdateResult = await charactersCollection.updateMany(
+        { talkativeness: { $exists: false } },
+        { $set: { talkativeness: 0.5 } }
+      );
+      charactersUpdated = characterUpdateResult.modifiedCount;
+      logger.debug("Characters updated with talkativeness", {
+        context: "migration.add-multi-character-fields",
+        count: charactersUpdated
+      });
+      logger.debug("Step 2: Processing chats for participant field updates", {
+        context: "migration.add-multi-character-fields"
+      });
+      const chatsCollection = db.collection("chats");
+      const chatsCursor = chatsCollection.find({});
+      while (await chatsCursor.hasNext()) {
+        const chat = await chatsCursor.next();
+        if (!chat) continue;
+        chatsProcessed++;
+        try {
+          if (chat.participants && Array.isArray(chat.participants)) {
+            let participantsModified = false;
+            for (const participant of chat.participants) {
+              if (participant.hasHistoryAccess === void 0) {
+                participant.hasHistoryAccess = false;
+                participantsModified = true;
+                participantsUpdated++;
+              }
+              if (participant.joinScenario === void 0) {
+                participant.joinScenario = null;
+                participantsModified = true;
+              }
+            }
+            if (participantsModified) {
+              await chatsCollection.updateOne(
+                { _id: chat._id },
+                { $set: { participants: chat.participants } }
+              );
+            }
+            const characterParticipant = chat.participants.find(
+              (p) => p.type === "CHARACTER"
+            );
+            const personaParticipant = chat.participants.find(
+              (p) => p.type === "PERSONA"
+            );
+            if (chat.events && Array.isArray(chat.events)) {
+              let eventsModified = false;
+              for (const event of chat.events) {
+                if (event.type !== "message") continue;
+                if (event.participantId !== void 0) continue;
+                if (event.role === "ASSISTANT" && characterParticipant) {
+                  event.participantId = characterParticipant.id;
+                  messagesUpdated++;
+                  eventsModified = true;
+                } else if (event.role === "USER" && personaParticipant) {
+                  event.participantId = personaParticipant.id;
+                  messagesUpdated++;
+                  eventsModified = true;
+                } else if (event.role === "SYSTEM" || event.role === "TOOL") {
+                  event.participantId = null;
+                  eventsModified = true;
+                }
+              }
+              if (eventsModified) {
+                await chatsCollection.updateOne(
+                  { _id: chat._id },
+                  { $set: { events: chat.events } }
+                );
+              }
+            }
+          }
+        } catch (chatError) {
+          const errorMessage = chatError instanceof Error ? chatError.message : String(chatError);
+          logger.error("Error processing chat in migration", {
+            context: "migration.add-multi-character-fields",
+            chatId: chat.id,
+            error: errorMessage
+          });
+          errors.push(`Chat ${chat.id}: ${errorMessage}`);
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error("Multi-character fields migration failed", {
+        context: "migration.add-multi-character-fields",
+        error: errorMessage
+      });
+      return {
+        id: "add-multi-character-fields-v1",
+        success: false,
+        itemsAffected: charactersUpdated + messagesUpdated + participantsUpdated,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const success = errors.length === 0;
+    const durationMs = Date.now() - startTime;
+    const totalAffected = charactersUpdated + messagesUpdated + participantsUpdated;
+    logger.info("Multi-character fields migration completed", {
+      context: "migration.add-multi-character-fields",
+      success,
+      charactersUpdated,
+      chatsProcessed,
+      messagesUpdated,
+      participantsUpdated,
+      durationMs
+    });
+    return {
+      id: "add-multi-character-fields-v1",
+      success,
+      itemsAffected: totalAffected,
+      message: success ? `Updated ${charactersUpdated} characters, ${messagesUpdated} messages, ${participantsUpdated} participants` : `Updated ${totalAffected} items with ${errors.length} errors`,
+      error: errors.length > 0 ? errors.join("; ") : void 0,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
+// migrations/add-inter-character-memory-fields.ts
+init_logger();
+function isMongoDBBackendEnabled9() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase10() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible9() {
+  try {
+    const db = await getMongoDatabase10();
+    await db.admin().ping();
+    return true;
+  } catch (error) {
+    logger.warn("MongoDB is not accessible for inter-character memory fields migration", {
+      context: "migration.add-inter-character-memory-fields",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+async function hasMemoriesNeedingMigration() {
+  try {
+    const db = await getMongoDatabase10();
+    const memoriesCollection = db.collection("memories");
+    const count = await memoriesCollection.countDocuments({
+      aboutCharacterId: { $exists: false }
+    });
+    return count > 0;
+  } catch (error) {
+    logger.debug("Error checking memories for aboutCharacterId field", {
+      context: "migration.add-inter-character-memory-fields",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+var addInterCharacterMemoryFieldsMigration = {
+  id: "add-inter-character-memory-fields-v1",
+  description: "Add aboutCharacterId field to memories for character-to-character memories",
+  introducedInVersion: "2.4.0",
+  dependsOn: ["migrate-json-to-mongodb-v1", "add-multi-character-fields-v1"],
+  // Run after multi-character fields
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled9()) {
+      logger.debug("MongoDB not enabled, skipping inter-character memory fields migration", {
+        context: "migration.add-inter-character-memory-fields"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible9()) {
+      logger.debug("MongoDB not accessible, deferring inter-character memory fields migration", {
+        context: "migration.add-inter-character-memory-fields"
+      });
+      return false;
+    }
+    const needsRun = await hasMemoriesNeedingMigration();
+    logger.debug("Checked for inter-character memory fields migration need", {
+      context: "migration.add-inter-character-memory-fields",
+      needsRun
+    });
+    return needsRun;
+  },
+  async run() {
+    const startTime = Date.now();
+    let memoriesUpdated = 0;
+    logger.info("Starting inter-character memory fields migration", {
+      context: "migration.add-inter-character-memory-fields"
+    });
+    try {
+      const db = await getMongoDatabase10();
+      logger.debug("Adding aboutCharacterId field to existing memories", {
+        context: "migration.add-inter-character-memory-fields"
+      });
+      const memoriesCollection = db.collection("memories");
+      const updateResult = await memoriesCollection.updateMany(
+        { aboutCharacterId: { $exists: false } },
+        { $set: { aboutCharacterId: null } }
+      );
+      memoriesUpdated = updateResult.modifiedCount;
+      logger.debug("Memories updated with aboutCharacterId", {
+        context: "migration.add-inter-character-memory-fields",
+        count: memoriesUpdated
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error("Inter-character memory fields migration failed", {
+        context: "migration.add-inter-character-memory-fields",
+        error: errorMessage
+      });
+      return {
+        id: "add-inter-character-memory-fields-v1",
+        success: false,
+        itemsAffected: memoriesUpdated,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const durationMs = Date.now() - startTime;
+    logger.info("Inter-character memory fields migration completed successfully", {
+      context: "migration.add-inter-character-memory-fields",
+      memoriesUpdated,
+      durationMs
+    });
+    return {
+      id: "add-inter-character-memory-fields-v1",
+      success: true,
+      itemsAffected: memoriesUpdated,
+      message: `Added aboutCharacterId field to ${memoriesUpdated} memories`,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
 // migrations/index.ts
 var migrations = [
   convertOpenRouterProfilesMigration,
@@ -39249,8 +39592,122 @@ var migrations = [
   // Plugin system migrations
   removeQuilltapRPBuiltinMigration,
   // Character unification
-  migratePersonasToCharactersMigration
+  migratePersonasToCharactersMigration,
+  // Multi-character chat migrations (moved from lib/mongodb/migrations/)
+  addMultiCharacterFieldsMigration,
+  addInterCharacterMemoryFieldsMigration
 ];
+
+// user-migrations.ts
+init_logger();
+function isMongoDBBackendEnabled10() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase11() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function migrateUserCharacterSystemPrompts(userId) {
+  if (!isMongoDBBackendEnabled10()) {
+    logger.debug("MongoDB not enabled, skipping character system prompts migration", {
+      context: "user-migrations.migrateUserCharacterSystemPrompts",
+      userId
+    });
+    return;
+  }
+  const startTime = Date.now();
+  try {
+    const db = await getMongoDatabase11();
+    const charactersCollection = db.collection("characters");
+    const needsMigration = await charactersCollection.find({
+      userId,
+      systemPrompt: { $exists: true, $nin: [null, ""] },
+      $or: [
+        { systemPrompts: { $exists: false } },
+        { systemPrompts: { $size: 0 } }
+      ]
+    }).toArray();
+    if (needsMigration.length === 0) {
+      logger.debug("No characters need system prompt migration for user", {
+        context: "user-migrations.migrateUserCharacterSystemPrompts",
+        userId
+      });
+      return;
+    }
+    logger.info("Migrating character system prompts for user", {
+      context: "user-migrations.migrateUserCharacterSystemPrompts",
+      userId,
+      count: needsMigration.length
+    });
+    let migratedCount = 0;
+    let errorCount = 0;
+    for (const character of needsMigration) {
+      try {
+        if (!character.systemPrompt) {
+          continue;
+        }
+        const now = (/* @__PURE__ */ new Date()).toISOString();
+        const newSystemPrompt = {
+          id: crypto.randomUUID(),
+          name: "Default",
+          content: character.systemPrompt,
+          isDefault: true,
+          createdAt: now,
+          updatedAt: now
+        };
+        const result = await charactersCollection.updateOne(
+          { id: character.id },
+          {
+            $set: {
+              systemPrompts: [newSystemPrompt],
+              systemPrompt: null,
+              updatedAt: now
+            }
+          }
+        );
+        if (result.modifiedCount > 0) {
+          migratedCount++;
+          logger.debug("Migrated character system prompt", {
+            context: "user-migrations.migrateUserCharacterSystemPrompts",
+            characterId: character.id,
+            characterName: character.name,
+            newPromptId: newSystemPrompt.id
+          });
+        }
+      } catch (error) {
+        errorCount++;
+        logger.error("Failed to migrate character system prompt", {
+          context: "user-migrations.migrateUserCharacterSystemPrompts",
+          characterId: character.id,
+          characterName: character.name,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+    const durationMs = Date.now() - startTime;
+    logger.info("Completed character system prompt migration for user", {
+      context: "user-migrations.migrateUserCharacterSystemPrompts",
+      userId,
+      migratedCount,
+      errorCount,
+      durationMs
+    });
+  } catch (error) {
+    logger.error("Failed to run character system prompt migration for user", {
+      context: "user-migrations.migrateUserCharacterSystemPrompts",
+      userId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+async function runPostLoginMigrations(userId) {
+  logger.debug("Running post-login migrations", {
+    context: "user-migrations.runPostLoginMigrations",
+    userId
+  });
+  await migrateUserCharacterSystemPrompts(userId);
+}
 
 // index.ts
 var upgradeLogger = logger.child({
@@ -39307,5 +39764,6 @@ var index_default = plugin;
   loadMigrationState,
   migrations,
   plugin,
-  runMigrations
+  runMigrations,
+  runPostLoginMigrations
 });

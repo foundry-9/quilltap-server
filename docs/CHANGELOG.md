@@ -4,6 +4,15 @@
 
 ### 2.6-dev
 
+- refactor: Consolidate all migration files into upgrade plugin
+  - Moved `add-multi-character-fields` migration from `lib/mongodb/migrations/` to upgrade plugin
+  - Moved `add-inter-character-memory-fields` migration from `lib/mongodb/migrations/` to upgrade plugin
+  - Moved post-login migrations to upgrade plugin as `user-migrations.ts`
+  - Created thin wrapper at `lib/auth/user-migrations.ts` with dynamic imports to avoid Turbopack bundling issues
+  - Updated auth routes to use the new wrapper
+  - Removed separate MongoDB migrations directory (`lib/mongodb/migrations/`)
+  - All migration tracking now uses the unified upgrade plugin system
+  - Upgrade plugin version bumped to 1.0.11
 - refactor: Clean up remaining persona references after characters-not-personas migration
   - Updated `lib/image-gen/prompt-expansion.ts` to use characters repository instead of personas
   - Simplified `PlaceholderInfo.type` to `'character' | 'user'` (removed 'persona')

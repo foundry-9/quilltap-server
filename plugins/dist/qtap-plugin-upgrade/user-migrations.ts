@@ -1,9 +1,12 @@
 /**
- * Post-Login Migrations
+ * User Migrations
  *
  * Handles per-user data migrations that run after successful login.
  * These migrations run for the logged-in user only and handle cases
  * where startup migrations may have missed user-specific data.
+ *
+ * Note: This was moved from lib/auth/post-login-migrations.ts to consolidate
+ * all migration logic in the upgrade plugin.
  */
 
 import { logger } from '@/lib/logger';
@@ -59,7 +62,7 @@ async function migrateUserCharacterSystemPrompts(userId: string): Promise<void> 
   // Only run if MongoDB is enabled
   if (!isMongoDBBackendEnabled()) {
     logger.debug('MongoDB not enabled, skipping character system prompts migration', {
-      context: 'post-login-migrations.migrateUserCharacterSystemPrompts',
+      context: 'user-migrations.migrateUserCharacterSystemPrompts',
       userId,
     });
     return;
@@ -83,14 +86,14 @@ async function migrateUserCharacterSystemPrompts(userId: string): Promise<void> 
 
     if (needsMigration.length === 0) {
       logger.debug('No characters need system prompt migration for user', {
-        context: 'post-login-migrations.migrateUserCharacterSystemPrompts',
+        context: 'user-migrations.migrateUserCharacterSystemPrompts',
         userId,
       });
       return;
     }
 
     logger.info('Migrating character system prompts for user', {
-      context: 'post-login-migrations.migrateUserCharacterSystemPrompts',
+      context: 'user-migrations.migrateUserCharacterSystemPrompts',
       userId,
       count: needsMigration.length,
     });
@@ -131,7 +134,7 @@ async function migrateUserCharacterSystemPrompts(userId: string): Promise<void> 
         if (result.modifiedCount > 0) {
           migratedCount++;
           logger.debug('Migrated character system prompt', {
-            context: 'post-login-migrations.migrateUserCharacterSystemPrompts',
+            context: 'user-migrations.migrateUserCharacterSystemPrompts',
             characterId: character.id,
             characterName: character.name,
             newPromptId: newSystemPrompt.id,
@@ -140,7 +143,7 @@ async function migrateUserCharacterSystemPrompts(userId: string): Promise<void> 
       } catch (error) {
         errorCount++;
         logger.error('Failed to migrate character system prompt', {
-          context: 'post-login-migrations.migrateUserCharacterSystemPrompts',
+          context: 'user-migrations.migrateUserCharacterSystemPrompts',
           characterId: character.id,
           characterName: character.name,
           error: error instanceof Error ? error.message : String(error),
@@ -151,7 +154,7 @@ async function migrateUserCharacterSystemPrompts(userId: string): Promise<void> 
     const durationMs = Date.now() - startTime;
 
     logger.info('Completed character system prompt migration for user', {
-      context: 'post-login-migrations.migrateUserCharacterSystemPrompts',
+      context: 'user-migrations.migrateUserCharacterSystemPrompts',
       userId,
       migratedCount,
       errorCount,
@@ -159,7 +162,7 @@ async function migrateUserCharacterSystemPrompts(userId: string): Promise<void> 
     });
   } catch (error) {
     logger.error('Failed to run character system prompt migration for user', {
-      context: 'post-login-migrations.migrateUserCharacterSystemPrompts',
+      context: 'user-migrations.migrateUserCharacterSystemPrompts',
       userId,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -176,7 +179,7 @@ async function migrateUserCharacterSystemPrompts(userId: string): Promise<void> 
  */
 export async function runPostLoginMigrations(userId: string): Promise<void> {
   logger.debug('Running post-login migrations', {
-    context: 'post-login-migrations.runPostLoginMigrations',
+    context: 'user-migrations.runPostLoginMigrations',
     userId,
   });
 
