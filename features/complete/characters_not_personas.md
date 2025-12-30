@@ -30,11 +30,19 @@ This feature has been fully implemented across the codebase.
   - PERSONA participant type kept for existing chats
   - API endpoints accept both old and new formats
 
-## Remaining Future Enhancements (not blocking)
+## Additional Enhancements (Complete)
 
-- Memories keyed to character **and the character they are interacting with**
-  - Currently still tied to "User" for legacy data
-- All-LLM pause logic for chats where all characters are LLM-controlled
-  - Tracked via `allLLMPauseTurnCount` field (infrastructure exists)
-- When turning off impersonate on a user-controlled character, prompt for LLM profile
-  - Currently requires manual profile assignment
+- ✅ Memories keyed to character **and the character they are interacting with**
+  - `aboutCharacterId` field added to memory schema
+  - Migration `add-inter-character-memory-fields-v1` updates legacy data
+  - Repository methods: `findByCharacterAboutCharacter()`, `findByCharacterAboutCharacters()`
+  - Context manager retrieves inter-character memories for multi-character chats
+- ✅ All-LLM pause logic for chats where all characters are LLM-controlled
+  - Pause thresholds at 3, 6, 12, 24, 48... turns (logarithmic doubling)
+  - `AllLLMPauseModal` component with Continue/Stop/Take Over options
+  - Auto-continue between LLM characters with cycle detection
+  - Unit tests in `__tests__/unit/lib/chat/turn-manager.test.ts`
+- ✅ When turning off impersonate on a user-controlled character, prompt for LLM profile
+  - `SelectLLMProfileDialog` prompts user to select a connection profile
+  - Backend API accepts `newConnectionProfileId` when stopping impersonation
+  - Character automatically transitions to LLM control with selected profile
