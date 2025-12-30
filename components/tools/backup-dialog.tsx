@@ -80,7 +80,11 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to create backup')
       setError(errorMessage)
-      clientLogger.error('Backup creation failed', { error: errorMessage })
+      clientLogger.error('Backup creation failed', {
+        error: errorMessage,
+        errorType: err instanceof Error ? err.name : typeof err,
+        destination,
+      })
       showErrorToast(errorMessage)
     } finally {
       setLoading(false)

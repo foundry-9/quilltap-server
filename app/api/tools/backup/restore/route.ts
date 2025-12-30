@@ -25,6 +25,9 @@ import { downloadBackupFromS3 } from '@/lib/backup/backup-service'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
+// Extend timeout for restore operations - restores can take several minutes for large datasets
+export const maxDuration = 300 // 5 minutes
+
 const RestoreRequestSchema = z.object({
   s3Key: z.string().optional(),
   mode: z.enum(['replace', 'new-account']),

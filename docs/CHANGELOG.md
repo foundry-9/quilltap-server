@@ -4,6 +4,11 @@
 
 ### 2.6-dev
 
+- fix: Add maxDuration timeout to backup create/restore API routes
+  - Backup creation to S3 was failing on client side due to default API timeout (~30 seconds)
+  - Server completed successfully but client connection timed out before receiving response
+  - Added `maxDuration = 300` (5 minutes) to match other long-running routes like preview/import
+  - Also improved client-side error logging to capture error type for better debugging
 - feat: Add message re-attribution feature
   - New button in chat messages to re-attribute messages to different participants
   - Works for both USER and ASSISTANT messages

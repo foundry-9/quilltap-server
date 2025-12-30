@@ -22,6 +22,9 @@ import { logger } from '@/lib/logger'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
 
+// Extend timeout for backup operations - backups can take several minutes for large datasets
+export const maxDuration = 300 // 5 minutes
+
 const CreateBackupSchema = z.object({
   destination: z.enum(['download', 's3']),
   filename: z.string().optional(),
