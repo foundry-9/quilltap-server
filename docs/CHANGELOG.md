@@ -4,6 +4,22 @@
 
 ### 2.6-dev
 
+- feat: Add "User Acts As Character" virtual connection profile option
+  - Characters can now be set to user-controlled from the Profiles tab
+  - Selecting "User Acts As Character" sets `controlledBy: 'user'` on the character
+  - Selecting a real connection profile sets `controlledBy: 'llm'`
+  - Added `USER_CONTROLLED_PROFILE_ID` constant in `lib/constants/character.ts`
+- feat: Replace "Default Persona" with "Default Conversation Partner" on character Profiles tab
+  - Shows user-controlled characters instead of deprecated personas
+  - Grayed out when the character itself is user-controlled
+  - Added `defaultPartnerId` field to character schema
+  - Added `/api/characters/:id/default-partner` API route
+  - Added `controlledBy` filter to `/api/characters` API
+- fix: Remove deprecated Personas card from dashboard
+  - Personas have been merged into Characters as part of the characters-not-personas effort
+  - Dashboard now shows only Characters and Chats cards (50/50 layout on large screens)
+  - Refactored `qt-card-grid` into `qt-card-grid-2` and `qt-card-grid-3` variants
+  - Updated dashboard-cards component, page, and tests
 - fix: Add maxDuration timeout to backup create/restore API routes
   - Backup creation to S3 was failing on client side due to default API timeout (~30 seconds)
   - Server completed successfully but client connection timed out before receiving response

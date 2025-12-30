@@ -72,11 +72,11 @@ describe('Dashboard Layout', () => {
   })
 
   /**
-   * Three-column card alignment
+   * Two-card alignment (Characters and Chats)
    * Tests that all "Manage" buttons align horizontally
    */
   describe('Multi-card alignment', () => {
-    it('should align buttons horizontally across three cards', () => {
+    it('should align buttons horizontally across cards', () => {
       const cards = [
         {
           title: 'Characters',
@@ -88,11 +88,6 @@ describe('Dashboard Layout', () => {
           title: 'Chats',
           description: 'View and organize your conversations', // Medium text
           button: 'Manage Chats',
-        },
-        {
-          title: 'Personas',
-          description: 'Create and edit personas', // Short text
-          button: 'Manage Personas',
         },
       ]
 

@@ -71,6 +71,7 @@ export const CharacterSchema = z.object({
   avatarUrl: z.string().nullable().optional(),
   defaultImageId: UUIDSchema.nullable().optional(),
   defaultConnectionProfileId: UUIDSchema.nullable().optional(),
+  defaultPartnerId: UUIDSchema.nullable().optional(),  // Default user-controlled character to pair with when chatting
   defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),  // Default roleplay template for this character
   sillyTavernData: JsonSchema.nullable().optional(),
   isFavorite: z.boolean().default(false),

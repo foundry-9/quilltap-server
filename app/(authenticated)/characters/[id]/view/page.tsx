@@ -44,6 +44,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
   const [savingPersona, setSavingPersona] = useState(false)
+  const [savingPartner, setSavingPartner] = useState(false)
 
   const {
     loading,
@@ -52,6 +53,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     profiles,
     personas,
     defaultPersonaId,
+    userControlledCharacters,
+    defaultPartnerId,
     avatarRefreshKey,
     templateCounts,
     replacingTemplate,
@@ -59,12 +62,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     fetchProfiles,
     fetchPersonas,
     fetchDefaultPersona,
+    fetchUserControlledCharacters,
+    fetchDefaultPartner,
     fetchImageProfiles,
     setCharacter,
     setDefaultPersonaId,
     handleTemplateReplace,
     handleSaveConnectionProfile,
     handleSaveDefaultPersona,
+    handleSaveDefaultPartner,
     handleToggleNpc,
     togglingNpc,
   } = useCharacterView(id)
@@ -81,9 +87,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     fetchProfiles()
     fetchPersonas()
     fetchDefaultPersona()
+    fetchUserControlledCharacters()
+    fetchDefaultPartner()
     fetchImageProfiles()
     clientLogger.debug('Character view page initialized', { characterId: id })
-  }, [fetchCharacter, fetchProfiles, fetchPersonas, fetchDefaultPersona, fetchImageProfiles, id])
+  }, [fetchCharacter, fetchProfiles, fetchPersonas, fetchDefaultPersona, fetchUserControlledCharacters, fetchDefaultPartner, fetchImageProfiles, id])
 
   // Handle chat dialog opening from query params
   useEffect(() => {
@@ -159,6 +167,16 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     }
   }
 
+  const handlePartnerSave = async (partnerId: string) => {
+    setSavingPartner(true)
+    try {
+      await handleSaveDefaultPartner(partnerId)
+      clientLogger.info('Default partner saved', { partnerId })
+    } finally {
+      setSavingPartner(false)
+    }
+  }
+
   const renderTabContent = (activeTab: string) => {
     switch (activeTab) {
       case 'details':
@@ -202,13 +220,13 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             characterId={id}
             character={character}
             profiles={profiles}
-            personas={personas}
-            defaultPersonaId={defaultPersonaId}
+            userControlledCharacters={userControlledCharacters}
+            defaultPartnerId={defaultPartnerId}
             defaultImageProfileId={defaultImageProfileId}
             savingConnectionProfile={savingConnectionProfile}
-            savingPersona={savingPersona}
+            savingPartner={savingPartner}
             onConnectionProfileChange={handleConnectionProfileSave}
-            onPersonaChange={handlePersonaSave}
+            onPartnerChange={handlePartnerSave}
             onImageProfileChange={(profileId) => setDefaultImageProfileId(profileId || '')}
           />
         )

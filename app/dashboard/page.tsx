@@ -36,11 +36,10 @@ export default async function Dashboard() {
     ? await baseRepos.users.findById(userId)
     : null;
 
-  // Get all characters, chats, and personas for counts (automatically scoped to user)
-  const [allCharacters, allChats, allPersonas] = await Promise.all([
+  // Get all characters and chats for counts (automatically scoped to user)
+  const [allCharacters, allChats] = await Promise.all([
     repos ? repos.characters.findAll() : Promise.resolve([]),
     repos ? repos.chats.findAll() : Promise.resolve([]),
-    repos ? repos.personas.findAll() : Promise.resolve([]),
   ]);
 
   // Prepare minimal tag data for dashboard cards (for quick-hide filtering)
@@ -57,17 +56,10 @@ export default async function Dashboard() {
           allTagIds.push(...character.tags);
         }
       }
-      if (participant.type === 'PERSONA' && participant.personaId && repos) {
-        const persona = await repos.personas.findById(participant.personaId);
-        if (persona?.tags) {
-          allTagIds.push(...persona.tags);
-        }
-      }
     }
 
     return { id: c.id, tags: allTagIds };
   }));
-  const personaTagData = allPersonas.map(p => ({ id: p.id, tags: p.tags ?? [] }));
 
   // Get favorite characters
   const favoriteCharacters = repos
@@ -225,7 +217,6 @@ export default async function Dashboard() {
         <DashboardCards
           characters={characterTagData}
           chats={chatTagData}
-          personas={personaTagData}
         />
 
         {/* Recent Chats */}

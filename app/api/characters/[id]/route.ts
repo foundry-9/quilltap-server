@@ -22,6 +22,7 @@ const updateCharacterSchema = z.object({
   exampleDialogues: z.string().optional(),
   avatarUrl: z.string().url().optional().or(z.literal('')),
   defaultConnectionProfileId: z.string().uuid().optional().or(z.literal('').transform(() => undefined)),
+  controlledBy: z.enum(['llm', 'user']).optional(),  // Who controls this character
   npc: z.boolean().optional(),  // NPC flag for ad-hoc characters
 })
 
