@@ -4,6 +4,12 @@
 
 ### 2.6-dev
 
+- feat: Add XML tool call detection for LLMs that emit XML-style function calls
+  - Detects and executes tool calls from LLMs like DeepSeek that spontaneously emit XML tool syntax
+  - Supports multiple formats: DeepSeek (`<function_calls><invoke>`), Claude-style, generic (`<tool_call>`), and `<function_call>` variations
+  - XML tool calls are stripped from displayed messages, tool execution status shown separately
+  - Runs for ALL providers, not just pseudo-tool mode
+  - New parser in `/lib/tools/xml-tool-parser.ts` with comprehensive test coverage
 - fix: Turn manager now auto-continues in all-LLM chats
   - When all participants are LLM-controlled, turn selection no longer returns "user's turn"
   - Instead, it starts a new cycle and selects the next speaker automatically
