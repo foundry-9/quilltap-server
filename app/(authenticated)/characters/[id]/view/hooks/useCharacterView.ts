@@ -26,6 +26,7 @@ interface UseCharacterViewReturn {
   defaultPersonaId: string
   userControlledCharacters: UserControlledCharacter[]
   defaultPartnerId: string
+  defaultPartnerName: string | null
   imageProfiles: ImageProfile[]
   avatarRefreshKey: number
   templateCounts: TemplateCounts
@@ -69,9 +70,10 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [savingPartner, setSavingPartner] = useState(false)
   const [togglingNpc, setTogglingNpc] = useState(false)
 
-  // Get the default persona for template highlighting
-  const defaultPersona = personas.find(p => p.id === defaultPersonaId)
-  const defaultPersonaName = defaultPersona?.name || null
+  // Get the default partner for template highlighting ({{user}} replacement)
+  // This uses the new default conversation partner system instead of old personas
+  const defaultPartner = userControlledCharacters.find(c => c.id === defaultPartnerId)
+  const defaultPartnerName = defaultPartner?.name || null
 
   // Get the default system prompt content for template highlighting
   const defaultSystemPrompt = character?.systemPrompts?.find(p => p.isDefault) || character?.systemPrompts?.[0]
@@ -88,7 +90,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   }
 
   const templateCounts = character
-    ? countTemplateReplacements(templateFields, character.name, defaultPersonaName)
+    ? countTemplateReplacements(templateFields, character.name, defaultPartnerName)
     : { charCount: 0, userCount: 0, fieldCounts: {} }
 
   const fetchCharacter = useCallback(async () => {
@@ -221,7 +223,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const handleTemplateReplace = async (type: 'char' | 'user') => {
     if (!character) return
 
-    const nameToReplace = type === 'char' ? character.name : defaultPersonaName
+    const nameToReplace = type === 'char' ? character.name : defaultPartnerName
     const template = type === 'char' ? '{{char}}' : '{{user}}'
 
     if (!nameToReplace) return
@@ -406,6 +408,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     defaultPersonaId,
     userControlledCharacters,
     defaultPartnerId,
+    defaultPartnerName,
     imageProfiles,
     avatarRefreshKey,
     templateCounts,

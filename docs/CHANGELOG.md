@@ -4,6 +4,10 @@
 
 ### 2.6-dev
 
+- fix: Character view page now uses default conversation partner for `{{user}}` template replacement
+  - Previously used deprecated personas linked via `personaLinks`
+  - Now uses `defaultPartnerId` and user-controlled characters for template highlighting
+  - Updated `useCharacterView` hook, `CharacterDetails`, and `SystemPromptsTab` components
 - feat: Add "User Acts As Character" virtual connection profile option
   - Characters can now be set to user-controlled from the Profiles tab
   - Selecting "User Acts As Character" sets `controlledBy: 'user'` on the character

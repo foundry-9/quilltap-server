@@ -55,6 +55,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     defaultPersonaId,
     userControlledCharacters,
     defaultPartnerId,
+    defaultPartnerName,
     avatarRefreshKey,
     templateCounts,
     replacingTemplate,
@@ -78,8 +79,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const { creatingChat, handleCreateChat } = useChatCreation()
 
   const characterTagIds = character?.tags || []
-  const defaultPersona = personas.find(p => p.id === defaultPersonaId)
-  const defaultPersonaName = defaultPersona?.name || null
 
   // Initialize data on mount
   useEffect(() => {
@@ -186,7 +185,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             character={character}
             templateCounts={templateCounts}
             replacingTemplate={replacingTemplate}
-            defaultPersonaName={defaultPersonaName}
+            defaultPartnerName={defaultPartnerName}
             onTemplateReplace={handleTemplateReplace}
           />
         )
@@ -196,7 +195,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           <SystemPromptsTab
             characterId={id}
             character={character}
-            defaultPersonaName={defaultPersonaName}
+            defaultPartnerName={defaultPartnerName}
           />
         )
 
