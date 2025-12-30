@@ -11,11 +11,11 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 
 // Validation schema for the request
+// Note: 'persona' scope removed - personas are now characters with controlledBy: 'user'
 const previewRequestSchema = z.object({
   scope: z.discriminatedUnion('type', [
     z.object({ type: z.literal('chat'), chatId: z.string().uuid() }),
     z.object({ type: z.literal('character'), characterId: z.string().uuid() }),
-    z.object({ type: z.literal('persona'), personaId: z.string().uuid() }),
   ]),
   searchText: z.string().min(1, 'Search text is required'),
   replaceText: z.string(),

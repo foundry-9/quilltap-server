@@ -22,11 +22,10 @@ Quilltap includes a built-in backup and restore system accessible from the **Too
 
 The backup creates a ZIP file containing:
 
-- All characters and their metadata
-- All personas
-- Chat history and messages
+- All characters and their metadata (including user-controlled characters)
+- Chat history, messages, and impersonation state
 - Tags
-- Memories
+- Memories (including inter-character relationships)
 - Connection profiles (API keys remain encrypted)
 - Image profiles
 - Embedding profiles
@@ -79,12 +78,11 @@ For server administrators who need direct database access or want additional bac
 ### MongoDB Collections
 
 - `users` - User accounts and authentication data
-- `characters` - Character definitions and metadata
-- `personas` - User persona definitions
-- `chats` - Chat metadata and message history
+- `characters` - Character definitions and metadata (includes `controlledBy` for LLM/user control)
+- `chats` - Chat metadata, message history, and impersonation state
 - `files` - File metadata (actual files stored in S3)
 - `tags` - Tag definitions
-- `memories` - Character memory data
+- `memories` - Character memory data with inter-character relationships
 - `connectionProfiles` - LLM connection configurations
 - `embeddingProfiles` - Embedding provider configurations
 - `imageProfiles` - Image generation configurations

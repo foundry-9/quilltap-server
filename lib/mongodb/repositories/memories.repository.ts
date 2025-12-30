@@ -848,6 +848,8 @@ export class MemoriesRepository extends MongoBaseRepository<Memory> {
 
   /**
    * Find all memories for a specific persona
+   * @deprecated Use findByAboutCharacterId instead.
+   * Characters Not Personas - Phase 7: personaId is migrated to aboutCharacterId.
    * @param personaId The persona ID
    * @returns Promise<Memory[]> Array of memories associated with the persona
    */
@@ -872,6 +874,47 @@ export class MemoriesRepository extends MongoBaseRepository<Memory> {
     } catch (error) {
       logger.error('Error finding memories by persona ID', {
         personaId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Find all memories about a specific character (including former personas)
+   * Characters Not Personas - Phase 7: This replaces findByPersonaId.
+   * After migration, aboutCharacterId includes both inter-character memories
+   * and former persona-related memories.
+   * @param aboutCharacterId The character ID this memory is about
+   * @returns Promise<Memory[]> Array of memories about the character
+   */
+  async findByAboutCharacterId(aboutCharacterId: string): Promise<Memory[]> {
+    logger.debug('Finding memories by aboutCharacterId', { aboutCharacterId });
+    try {
+      const collection = await this.getCollection();
+      // Query both aboutCharacterId (new) and personaId (legacy, for backward compat)
+      const results = await collection.find({
+        $or: [
+          { aboutCharacterId },
+          { personaId: aboutCharacterId }, // Legacy support during migration
+        ],
+      }).toArray();
+
+      const memories = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((memory): memory is Memory => memory !== null);
+
+      logger.debug('Found memories about character', { aboutCharacterId, count: memories.length });
+      return memories;
+    } catch (error) {
+      logger.error('Error finding memories by aboutCharacterId', {
+        aboutCharacterId,
         error: error instanceof Error ? error.message : String(error),
       });
       return [];

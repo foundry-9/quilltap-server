@@ -48,9 +48,10 @@ export function selectNextSpeaker(
     };
   }
 
-  // Get active CHARACTER participants only (personas don't take autonomous turns)
+  // Get active LLM-controlled participants only (user-controlled don't take autonomous turns)
   const activeCharacterParticipants = participants.filter(
-    p => p.type === 'CHARACTER' && p.isActive && p.characterId
+    p => p.isActive && p.characterId &&
+    (p.controlledBy === 'llm' || (p.controlledBy === undefined && p.type === 'CHARACTER'))
   );
 
   logger.debug('[Turn Manager] Active character participants', {
@@ -72,8 +73,18 @@ export function selectNextSpeaker(
   if (activeCharacterParticipants.length === 1) {
     const onlyCharacter = activeCharacterParticipants[0];
 
-    // If they just spoke, it's user's turn
+    // If they just spoke...
     if (turnState.lastSpeakerId === onlyCharacter.id) {
+      // In all-LLM chats, let them continue speaking (monologue mode)
+      if (userParticipantId === null) {
+        logger.debug('[Turn Manager] All-LLM single character continues', { id: onlyCharacter.id });
+        return {
+          nextSpeakerId: onlyCharacter.id,
+          reason: 'only_character',
+          cycleComplete: true, // Signal cycle complete for pause logic
+        };
+      }
+      // Otherwise, it's user's turn
       logger.debug('[Turn Manager] Only character just spoke, user turn');
       return {
         nextSpeakerId: null,
@@ -113,9 +124,67 @@ export function selectNextSpeaker(
     ids: eligibleParticipants.map(p => p.id),
   });
 
-  // Step 4: If no eligible speakers, cycle is complete, user's turn
+  // Step 4: If no eligible speakers, cycle is complete
   if (eligibleParticipants.length === 0) {
-    logger.debug('[Turn Manager] No eligible speakers, cycle complete');
+    // If there's no user-controlled participant (all-LLM chat), start a new cycle
+    // instead of returning user's turn
+    if (userParticipantId === null) {
+      logger.debug('[Turn Manager] All-LLM chat cycle complete, starting new cycle');
+      // Select from all active characters except the last speaker
+      const newCycleParticipants = activeCharacterParticipants.filter(
+        p => p.id !== turnState.lastSpeakerId
+      );
+
+      if (newCycleParticipants.length > 0) {
+        // Use weighted selection for new cycle
+        const weights: Record<string, number> = {};
+        let totalWeight = 0;
+
+        for (const participant of newCycleParticipants) {
+          const character = characters.get(participant.characterId!);
+          const talkativeness = character?.talkativeness ?? 0.5;
+          weights[participant.id] = talkativeness;
+          totalWeight += talkativeness;
+        }
+
+        if (totalWeight === 0) {
+          for (const participant of newCycleParticipants) {
+            weights[participant.id] = 1;
+            totalWeight += 1;
+          }
+        }
+
+        const randomValue = Math.random() * totalWeight;
+        let cumulative = 0;
+        let selectedId: string | null = null;
+
+        for (const participant of newCycleParticipants) {
+          cumulative += weights[participant.id];
+          if (randomValue < cumulative) {
+            selectedId = participant.id;
+            break;
+          }
+        }
+
+        if (!selectedId) {
+          selectedId = newCycleParticipants[0].id;
+        }
+
+        return {
+          nextSpeakerId: selectedId,
+          reason: 'weighted_selection',
+          cycleComplete: true, // Signal that we completed a cycle (for pause logic)
+          debug: {
+            eligibleSpeakers: newCycleParticipants.map(p => p.id),
+            weights,
+            randomValue,
+            allLLMNewCycle: true,
+          },
+        };
+      }
+    }
+
+    logger.debug('[Turn Manager] No eligible speakers, cycle complete, user turn');
     return {
       nextSpeakerId: null,
       reason: 'cycle_complete',

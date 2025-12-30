@@ -16,11 +16,13 @@ interface ResultsStepProps {
 }
 
 export function ResultsStep({ result, error }: ResultsStepProps) {
+  // Log on mount (intentionally captures initial values only)
   useEffect(() => {
     clientLogger.debug('[ResultsStep] Rendered', {
       hasResult: !!result,
       hasError: !!error,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (error) {

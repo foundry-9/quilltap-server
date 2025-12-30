@@ -55,6 +55,12 @@ import {
   logPseudoToolUsage,
 } from './pseudo-tool.service'
 import {
+  parseXMLToolCalls,
+  convertXMLToToolCallRequest,
+  stripXMLToolMarkers,
+  hasXMLToolMarkers,
+} from '@/lib/tools'
+import {
   triggerMemoryExtraction,
   triggerInterCharacterMemory,
   triggerContextSummaryCheck,
@@ -429,6 +435,77 @@ async function processMessage(
 
   if (toolIterations >= MAX_TOOL_ITERATIONS) {
     logger.warn('Max tool iterations reached', { iterations: toolIterations, chatId })
+  }
+
+  // Process XML tool calls (runs for ALL providers, regardless of pseudo-tool mode)
+  // This catches LLMs that spontaneously emit XML-style function calls (e.g., DeepSeek)
+  if (fullResponse && hasXMLToolMarkers(fullResponse)) {
+    const xmlToolCalls = parseXMLToolCalls(fullResponse)
+
+    if (xmlToolCalls.length > 0) {
+      const xmlToolCallRequests = xmlToolCalls.map(convertXMLToToolCallRequest)
+
+      logger.info('Detected XML tool calls in response', {
+        count: xmlToolCallRequests.length,
+        tools: xmlToolCallRequests.map(tc => tc.name),
+        formats: xmlToolCalls.map(tc => tc.format),
+      })
+
+      const results = await processToolCalls(xmlToolCallRequests, toolContext, controller, encoder)
+      toolMessages = [...toolMessages, ...results.toolMessages]
+      generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
+
+      const strippedResponse = stripXMLToolMarkers(fullResponse)
+
+      // Add stripped response and tool results to conversation
+      currentMessages = [...formattedMessages]
+      if (strippedResponse.trim()) {
+        currentMessages.push({
+          role: 'assistant' as const,
+          content: strippedResponse,
+          thoughtSignature,
+          name: undefined,
+        })
+      }
+
+      for (const toolMsg of results.toolMessages) {
+        currentMessages.push({
+          role: 'user' as const,
+          content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`,
+          thoughtSignature: undefined,
+          name: undefined,
+        })
+      }
+
+      // Continue conversation with tool results
+      let continuationResponse = ''
+      for await (const chunk of streamMessage({
+        messages: currentMessages,
+        connectionProfile,
+        apiKey,
+        modelParams,
+        tools: actualTools,
+        useNativeWebSearch,
+      })) {
+        if (chunk.content) {
+          continuationResponse += chunk.content
+          controller.enqueue(encodeContentChunk(encoder, chunk.content))
+        }
+
+        if (chunk.done) {
+          usage = chunk.usage || null
+          cacheUsage = chunk.cacheUsage || null
+          rawResponse = chunk.rawResponse
+          if (chunk.thoughtSignature) {
+            thoughtSignature = chunk.thoughtSignature
+          }
+        }
+      }
+
+      fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
+      // Strip any remaining XML markers from the continuation
+      fullResponse = stripXMLToolMarkers(fullResponse)
+    }
   }
 
   // Process pseudo-tools

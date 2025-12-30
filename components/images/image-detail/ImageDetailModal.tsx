@@ -7,7 +7,7 @@ import DeletedImagePlaceholder from '../DeletedImagePlaceholder'
 import { ImageActions } from './ImageActions'
 import { ImageMetadata } from './ImageMetadata'
 import { useImageActions } from './hooks/useImageActions'
-import type { ImageDetailModalProps, Character, Persona } from './types'
+import type { ImageDetailModalProps, Character } from './types'
 
 export default function ImageDetailModal({
   isOpen,
@@ -18,39 +18,29 @@ export default function ImageDetailModal({
   onAvatarSet,
 }: ImageDetailModalProps) {
   const [characters, setCharacters] = useState<Character[]>([])
-  const [personas, setPersonas] = useState<Persona[]>([])
   const [loadingEntities, setLoadingEntities] = useState(true)
   const [taggedCharacterIds, setTaggedCharacterIds] = useState<Set<string>>(new Set())
-  const [taggedPersonaIds, setTaggedPersonaIds] = useState<Set<string>>(new Set())
   const [imageMissing, setImageMissing] = useState(false)
 
   const {
     taggingInProgress,
     settingAvatar,
     toggleCharacterTag,
-    togglePersonaTag,
     setAsAvatar,
     handleDownload,
-  } = useImageActions(image, characters, personas, onAvatarSet)
+  } = useImageActions(image, characters, onAvatarSet)
 
-  // Load characters and personas on mount
+  // Load characters on mount (includes former personas now with controlledBy: 'user')
   useEffect(() => {
     const loadEntities = async () => {
       try {
-        clientLogger.debug('Loading characters and personas')
+        clientLogger.debug('Loading characters')
         setLoadingEntities(true)
-        const [charsRes, personasRes] = await Promise.all([
-          fetch('/api/characters'),
-          fetch('/api/personas'),
-        ])
+        const charsRes = await fetch('/api/characters')
 
         if (charsRes.ok) {
           const charsData = await charsRes.json()
           setCharacters(charsData.characters || [])
-        }
-        if (personasRes.ok) {
-          const personasData = await personasRes.json()
-          setPersonas(personasData.personas || [])
         }
       } catch (error) {
         clientLogger.error('Failed to load entities:', {
@@ -67,28 +57,26 @@ export default function ImageDetailModal({
   }, [isOpen])
 
   // Update tagged entities when image changes
+  // Handle both CHARACTER and legacy PERSONA tags (personas are now characters)
   useEffect(() => {
     if (image.tags) {
       const charIds = new Set<string>()
-      const personaIds = new Set<string>()
 
       image.tags.forEach((tag) => {
         const tagId = tag.tagId
-        if (characters.some((c) => c.id === tagId)) {
+        // Check if this tag matches any character (includes former personas)
+        // Accept both CHARACTER and PERSONA tag types for backwards compatibility
+        if ((tag.tagType === 'CHARACTER' || tag.tagType === 'PERSONA') &&
+            characters.some((c) => c.id === tagId)) {
           charIds.add(tagId)
-        }
-        if (personas.some((p) => p.id === tagId)) {
-          personaIds.add(tagId)
         }
       })
 
       setTaggedCharacterIds(charIds)
-      setTaggedPersonaIds(personaIds)
     } else {
       setTaggedCharacterIds(new Set())
-      setTaggedPersonaIds(new Set())
     }
-  }, [image, characters, personas])
+  }, [image, characters])
 
   // Keyboard navigation (Escape, arrow keys)
   useImageNavigation({
@@ -143,14 +131,11 @@ export default function ImageDetailModal({
         {!imageMissing && (
           <ImageMetadata
             characters={characters}
-            personas={personas}
             loadingEntities={loadingEntities}
             taggedCharacterIds={taggedCharacterIds}
-            taggedPersonaIds={taggedPersonaIds}
             taggingInProgress={taggingInProgress}
             settingAvatar={settingAvatar}
             onToggleCharacterTag={toggleCharacterTag}
-            onTogglePersonaTag={togglePersonaTag}
             onSetAsAvatar={setAsAvatar}
           />
         )}

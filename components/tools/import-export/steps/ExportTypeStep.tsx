@@ -8,6 +8,17 @@ interface ExportTypeStepProps {
   onEntityTypeChange: (type: ExportEntityType) => void
 }
 
+// Entity types that can be exported (excludes 'personas' - migrated to characters)
+const EXPORTABLE_TYPES: ExportEntityType[] = [
+  'characters',
+  'chats',
+  'roleplay-templates',
+  'connection-profiles',
+  'image-profiles',
+  'embedding-profiles',
+  'tags',
+]
+
 /**
  * Step 1: Select the type of data to export
  */
@@ -21,7 +32,7 @@ export function ExportTypeStep({
         Select the type of data you want to export.
       </p>
       <div className="space-y-2">
-        {(Object.keys(ENTITY_TYPE_LABELS) as ExportEntityType[]).map((type) => (
+        {EXPORTABLE_TYPES.map((type) => (
           <label
             key={type}
             className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-colors ${

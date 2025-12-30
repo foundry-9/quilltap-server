@@ -4,11 +4,13 @@ import { useCallback, useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { countTemplateReplacements, replaceWithTemplate } from '@/components/characters/TemplateHighlighter'
+import { USER_CONTROLLED_PROFILE_ID } from '@/lib/constants/character'
 import {
   Character,
   Tag,
   ConnectionProfile,
   Persona,
+  UserControlledCharacter,
   ImageProfile,
   TemplateCounts,
   TemplateFields,
@@ -22,6 +24,9 @@ interface UseCharacterViewReturn {
   profiles: ConnectionProfile[]
   personas: Persona[]
   defaultPersonaId: string
+  userControlledCharacters: UserControlledCharacter[]
+  defaultPartnerId: string
+  defaultPartnerName: string | null
   imageProfiles: ImageProfile[]
   avatarRefreshKey: number
   templateCounts: TemplateCounts
@@ -32,14 +37,18 @@ interface UseCharacterViewReturn {
   fetchProfiles: () => Promise<void>
   fetchPersonas: () => Promise<void>
   fetchDefaultPersona: () => Promise<void>
+  fetchUserControlledCharacters: () => Promise<void>
+  fetchDefaultPartner: () => Promise<void>
   fetchImageProfiles: () => Promise<void>
   setCharacter: (char: Character | null) => void
   setDefaultPersonaId: (id: string) => void
+  setDefaultPartnerId: (id: string) => void
   setAvatarRefreshKey: (key: number) => void
   setImageProfiles: (profiles: ImageProfile[]) => void
   handleTemplateReplace: (type: 'char' | 'user') => Promise<void>
   handleSaveConnectionProfile: (profileId: string) => Promise<void>
   handleSaveDefaultPersona: (personaId: string) => Promise<void>
+  handleSaveDefaultPartner: (partnerId: string) => Promise<void>
   handleToggleNpc: () => Promise<void>
 }
 
@@ -51,16 +60,20 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
   const [personas, setPersonas] = useState<Persona[]>([])
   const [defaultPersonaId, setDefaultPersonaId] = useState<string>('')
+  const [userControlledCharacters, setUserControlledCharacters] = useState<UserControlledCharacter[]>([])
+  const [defaultPartnerId, setDefaultPartnerId] = useState<string>('')
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
   const [avatarRefreshKey, setAvatarRefreshKey] = useState(0)
   const [replacingTemplate, setReplacingTemplate] = useState<'char' | 'user' | null>(null)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
   const [savingPersona, setSavingPersona] = useState(false)
+  const [savingPartner, setSavingPartner] = useState(false)
   const [togglingNpc, setTogglingNpc] = useState(false)
 
-  // Get the default persona for template highlighting
-  const defaultPersona = personas.find(p => p.id === defaultPersonaId)
-  const defaultPersonaName = defaultPersona?.name || null
+  // Get the default partner for template highlighting ({{user}} replacement)
+  // This uses the new default conversation partner system instead of old personas
+  const defaultPartner = userControlledCharacters.find(c => c.id === defaultPartnerId)
+  const defaultPartnerName = defaultPartner?.name || null
 
   // Get the default system prompt content for template highlighting
   const defaultSystemPrompt = character?.systemPrompts?.find(p => p.isDefault) || character?.systemPrompts?.[0]
@@ -77,7 +90,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   }
 
   const templateCounts = character
-    ? countTemplateReplacements(templateFields, character.name, defaultPersonaName)
+    ? countTemplateReplacements(templateFields, character.name, defaultPartnerName)
     : { charCount: 0, userCount: 0, fieldCounts: {} }
 
   const fetchCharacter = useCallback(async () => {
@@ -173,11 +186,44 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }, [])
 
+  const fetchUserControlledCharacters = useCallback(async () => {
+    try {
+      const res = await fetch('/api/characters?controlledBy=user')
+      if (res.ok) {
+        const data = await res.json()
+        const characters = data.characters || []
+        setUserControlledCharacters(characters.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          title: c.title || null,
+        })))
+        clientLogger.debug('User-controlled characters loaded', { count: characters.length })
+      }
+    } catch (err) {
+      clientLogger.error('Failed to fetch user-controlled characters:', { error: err instanceof Error ? err.message : String(err) })
+    }
+  }, [])
+
+  const fetchDefaultPartner = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/characters/${characterId}/default-partner`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.partnerId) {
+          setDefaultPartnerId(data.partnerId)
+          clientLogger.debug('Default partner loaded', { partnerId: data.partnerId })
+        }
+      }
+    } catch (err) {
+      clientLogger.error('Failed to fetch default partner:', { error: err instanceof Error ? err.message : String(err) })
+    }
+  }, [characterId])
+
   // Handler for template replacement
   const handleTemplateReplace = async (type: 'char' | 'user') => {
     if (!character) return
 
-    const nameToReplace = type === 'char' ? character.name : defaultPersonaName
+    const nameToReplace = type === 'char' ? character.name : defaultPartnerName
     const template = type === 'char' ? '{{char}}' : '{{user}}'
 
     if (!nameToReplace) return
@@ -240,17 +286,27 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const handleSaveConnectionProfile = async (profileId: string) => {
     setSavingConnectionProfile(true)
     try {
+      // Handle the special "User Acts As Character" virtual profile
+      const isUserControlled = profileId === USER_CONTROLLED_PROFILE_ID
+      const updatePayload = isUserControlled
+        ? {
+            controlledBy: 'user' as const,
+            defaultConnectionProfileId: undefined,
+          }
+        : {
+            controlledBy: 'llm' as const,
+            defaultConnectionProfileId: profileId || undefined,
+          }
+
       const res = await fetch(`/api/characters/${characterId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          defaultConnectionProfileId: profileId || undefined,
-        }),
+        body: JSON.stringify(updatePayload),
       })
       if (!res.ok) throw new Error('Failed to update connection profile')
       await fetchCharacter()
-      showSuccessToast('Connection profile updated')
-      clientLogger.info('Connection profile saved', { profileId })
+      showSuccessToast(isUserControlled ? 'Character set to user-controlled' : 'Connection profile updated')
+      clientLogger.info('Connection profile saved', { profileId, isUserControlled })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to update connection profile')
       clientLogger.error('Failed to save connection profile', { error: err instanceof Error ? err.message : String(err) })
@@ -294,6 +350,28 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleSaveDefaultPartner = async (partnerId: string) => {
+    setSavingPartner(true)
+    try {
+      const res = await fetch(`/api/characters/${characterId}/default-partner`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partnerId: partnerId || null }),
+      })
+      if (!res.ok) throw new Error('Failed to update default partner')
+
+      setDefaultPartnerId(partnerId)
+      showSuccessToast(partnerId ? 'Default partner updated' : 'Default partner removed')
+      clientLogger.info('Default partner saved', { partnerId })
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update partner')
+      clientLogger.error('Failed to save default partner', { error: err instanceof Error ? err.message : String(err) })
+      await fetchDefaultPartner() // Revert to server state
+    } finally {
+      setSavingPartner(false)
+    }
+  }
+
   const handleToggleNpc = async () => {
     if (!character) return
     setTogglingNpc(true)
@@ -328,6 +406,9 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     profiles,
     personas,
     defaultPersonaId,
+    userControlledCharacters,
+    defaultPartnerId,
+    defaultPartnerName,
     imageProfiles,
     avatarRefreshKey,
     templateCounts,
@@ -338,14 +419,18 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     fetchProfiles,
     fetchPersonas,
     fetchDefaultPersona,
+    fetchUserControlledCharacters,
+    fetchDefaultPartner,
     fetchImageProfiles,
     setCharacter,
     setDefaultPersonaId,
+    setDefaultPartnerId,
     setAvatarRefreshKey,
     setImageProfiles,
     handleTemplateReplace,
     handleSaveConnectionProfile,
     handleSaveDefaultPersona,
+    handleSaveDefaultPartner,
     handleToggleNpc,
   }
 }

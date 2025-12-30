@@ -1,6 +1,6 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v2.4.
+Complete API reference for Quilltap v2.6.
 
 ## Table of Contents
 
@@ -17,8 +17,8 @@ Complete API reference for Quilltap v2.4.
   - [Image Profiles](#image-profiles)
   - [Characters](#characters)
   - [NPCs](#npcs)
-  - [Personas](#personas)
   - [Chats](#chats)
+  - [Impersonation](#impersonation)
   - [Messages](#messages)
   - [Memories](#memories)
   - [Tags](#tags)
@@ -431,6 +431,7 @@ List all characters.
 
 **Query Parameters**:
 - `npc=true|false` - Filter by NPC status (omit for regular characters)
+- `controlledBy=llm|user` - Filter by control mode (LLM-controlled or user-controlled)
 
 **Response**: `200 OK`
 
@@ -441,6 +442,7 @@ List all characters.
     "name": "Alice",
     "title": "The Curious",
     "description": "A friendly AI assistant",
+    "controlledBy": "llm",
     "npc": false,
     "isFavorite": true,
     "chatCount": 5,
@@ -465,6 +467,7 @@ Create a character.
   "scenario": "You're chatting with Alice",
   "firstMessage": "Hello! How can I help?",
   "exampleDialogues": "<START>\nUser: Hi\nAlice: Hello!\n<END>",
+  "controlledBy": "llm",
   "systemPrompts": [
     {
       "name": "Default",
@@ -476,9 +479,11 @@ Create a character.
 }
 ```
 
+**Note**: Set `controlledBy` to `"user"` for user-controlled characters (replaces the legacy persona system).
+
 #### `GET /api/characters/[id]`
 
-Get a character with linked personas.
+Get a character.
 
 #### `PUT /api/characters/[id]`
 
@@ -549,54 +554,6 @@ Create an NPC character.
 
 ---
 
-### Personas
-
-#### `GET /api/personas`
-
-List all personas.
-
-#### `POST /api/personas`
-
-Create a persona.
-
-**Request Body**:
-
-```json
-{
-  "name": "My Persona",
-  "displayName": "Display Name",
-  "title": "Optional Title",
-  "description": "Persona description",
-  "personalityTraits": "Curious, friendly"
-}
-```
-
-#### `GET /api/personas/[id]`
-
-Get a specific persona.
-
-#### `PUT /api/personas/[id]`
-
-Update a persona.
-
-#### `DELETE /api/personas/[id]`
-
-Delete a persona.
-
-#### `POST /api/personas/import`
-
-Import a SillyTavern persona.
-
-#### `GET /api/personas/[id]/export`
-
-Export persona as SillyTavern JSON.
-
-#### `POST /api/personas/quick-create`
-
-Quick-create a minimal persona.
-
----
-
 ### Chats
 
 #### `GET /api/chats`
@@ -611,9 +568,19 @@ List all chats for authenticated user.
     "id": "chat-uuid",
     "title": "Chat with Alice",
     "characterId": "char-uuid",
-    "personaId": "persona-uuid",
     "connectionProfileId": "profile-uuid",
-    "participants": [],
+    "participants": [
+      {
+        "id": "participant-uuid",
+        "type": "CHARACTER",
+        "characterId": "char-uuid",
+        "controlledBy": "llm",
+        "connectionProfileId": "profile-uuid"
+      }
+    ],
+    "impersonatingParticipantIds": [],
+    "activeTypingParticipantId": null,
+    "allLLMPauseTurnCount": 0,
     "createdAt": "2025-01-19T10:00:00.000Z",
     "updatedAt": "2025-01-19T12:00:00.000Z"
   }
@@ -629,12 +596,14 @@ Create a new chat.
 ```json
 {
   "characterId": "char-uuid",
-  "personaId": "persona-uuid",
   "connectionProfileId": "profile-uuid",
+  "userCharacterId": "user-char-uuid",
   "title": "Chat with Alice",
   "scenario": "Optional custom scenario"
 }
 ```
+
+**Note**: `userCharacterId` is optional - provide a user-controlled character ID to "play as" that character in the chat.
 
 #### `GET /api/chats/[id]`
 
@@ -675,6 +644,72 @@ Update turn state for multi-character chat.
 #### `POST /api/chats/[id]/queue-memories`
 
 Queue memory extraction as background job.
+
+---
+
+### Impersonation
+
+Impersonation allows users to take control of LLM-controlled characters mid-chat.
+
+#### `POST /api/chats/[id]/impersonate`
+
+Start impersonating a character in the chat.
+
+**Request Body**:
+
+```json
+{
+  "participantId": "participant-uuid"
+}
+```
+
+**Response**: `200 OK`
+
+Returns updated chat metadata with `impersonatingParticipantIds` including the new participant.
+
+#### `DELETE /api/chats/[id]/impersonate`
+
+Stop impersonating a character.
+
+**Request Body**:
+
+```json
+{
+  "participantId": "participant-uuid",
+  "newConnectionProfileId": "profile-uuid"
+}
+```
+
+**Note**: `newConnectionProfileId` is required when the character doesn't have a default connection profile. This assigns the LLM profile that will control the character after you stop impersonating.
+
+#### `GET /api/chats/[id]/impersonate`
+
+Get current impersonation state.
+
+**Response**: `200 OK`
+
+```json
+{
+  "impersonatingParticipantIds": ["participant-uuid"],
+  "activeTypingParticipantId": "participant-uuid"
+}
+```
+
+#### `PUT /api/chats/[id]/active-speaker`
+
+Set the active speaker when impersonating multiple characters.
+
+**Request Body**:
+
+```json
+{
+  "participantId": "participant-uuid"
+}
+```
+
+#### `GET /api/chats/[id]/active-speaker`
+
+Get the current active speaker.
 
 ---
 
@@ -976,11 +1011,11 @@ Update theme preference.
 
 #### `GET /api/search?q=query`
 
-Global search across characters, personas, chats.
+Global search across characters and chats.
 
 **Query Parameters**:
 - `q` - Search query (required)
-- `type` - Filter by type: `characters`, `personas`, `chats`
+- `type` - Filter by type: `characters`, `chats`
 
 ---
 
@@ -1066,7 +1101,7 @@ characters = response.json()
 
 ## Versioning
 
-Current API version: **v2.4**
+Current API version: **v2.6**
 
 The API follows semantic versioning. Breaking changes are avoided where possible.
 

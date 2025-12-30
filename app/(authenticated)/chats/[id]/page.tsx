@@ -13,6 +13,9 @@ import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdo
 import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
+import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
+import SelectLLMProfileDialog from '@/components/chat/SelectLLMProfileDialog'
+import SpeakerSelector from '@/components/chat/SpeakerSelector'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import {
   EphemeralMessage,
@@ -42,9 +45,14 @@ import {
   calculateTurnStateFromHistory,
   selectNextSpeaker,
   findUserParticipant,
+  findUserControlledParticipants,
   isMultiCharacterChat,
+  isAllLLMChat,
   getQueuePosition,
   resetCycleForUserSkip,
+  getActiveLLMParticipants,
+  shouldPauseForAllLLM,
+  getNextPauseThreshold,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 
@@ -114,6 +122,23 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [mobileParticipantDropdownId, setMobileParticipantDropdownId] = useState<string | null>(null)
   const [isPaused, setIsPaused] = useState(false)
 
+  // Impersonation state (Characters Not Personas)
+  const [impersonatingParticipantIds, setImpersonatingParticipantIds] = useState<string[]>([])
+  const [activeTypingParticipantId, setActiveTypingParticipantId] = useState<string | null>(null)
+  const [allLLMPauseTurnCount, setAllLLMPauseTurnCount] = useState(0)
+  const [allLLMPauseModalOpen, setAllLLMPauseModalOpen] = useState(false)
+  const [selectLLMProfileDialogState, setSelectLLMProfileDialogState] = useState<{
+    isOpen: boolean
+    participantId: string
+    character: {
+      id: string
+      name: string
+      defaultImage?: { id: string; filepath: string; url?: string } | null
+      avatarUrl?: string | null
+      defaultConnectionProfileId?: string | null
+    } | null
+  } | null>(null)
+
   // Use the extracted file attachments hook
   const fileHook = useFileAttachments(id)
   const { attachedFiles, setAttachedFiles, uploadingFile } = fileHook
@@ -129,9 +154,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const abortControllerRef = useRef<AbortController | null>(null)
   const userStoppedStreamRef = useRef<boolean>(false)
   const hasRestoredTurnStateRef = useRef<boolean>(false)
+  const lastAllLLMPauseTurnCountRef = useRef<number>(0) // Track turn count at last auto-pause
   const draftSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
   const lastSavedDraftRef = useRef<string>('')
   const hasRestoredDraftRef = useRef<boolean>(false)
+  // Ref for triggerContinueMode to break dependency cycle in auto-trigger useEffect
+  const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
 
   // Draft persistence - localStorage key for this chat
   const draftStorageKey = `quilltap-draft-${id}`
@@ -279,6 +307,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       type: p.type,
       characterId: p.characterId ?? (p.character?.id ?? null),
       personaId: p.personaId ?? (p.persona?.id ?? null),
+      controlledBy: p.controlledBy ?? (p.type === 'PERSONA' ? 'user' : 'llm'),
       connectionProfileId: p.connectionProfile?.id ?? null,
       imageProfileId: p.imageProfile?.id ?? null,
       systemPromptOverride: p.systemPromptOverride ?? null,
@@ -337,6 +366,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return chat.participants.map(p => ({
       id: p.id,
       type: p.type,
+      controlledBy: p.controlledBy ?? (p.type === 'PERSONA' ? 'user' : 'llm'),
       displayOrder: p.displayOrder,
       isActive: p.isActive,
       character: p.character ? {
@@ -357,6 +387,88 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       connectionProfile: p.connectionProfile,
     }))
   }, [chat?.participants])
+
+  // Characters the user can speak as (for SpeakerSelector)
+  const controlledCharacters = useMemo(() => {
+    const result: Array<{
+      participantId: string
+      characterId: string
+      name: string
+      character: {
+        defaultImage?: { id: string; filepath: string; url?: string } | null
+        avatarUrl?: string | null
+      } | null
+    }> = []
+
+    // Add user-controlled participants (PERSONA type or controlledBy: 'user')
+    for (const p of participantData) {
+      const isUserControlled = p.type === 'PERSONA' || p.controlledBy === 'user'
+      const isImpersonating = impersonatingParticipantIds.includes(p.id)
+      if ((isUserControlled || isImpersonating) && p.isActive) {
+        const entity = p.character || p.persona
+        if (entity) {
+          result.push({
+            participantId: p.id,
+            characterId: entity.id,
+            name: entity.name,
+            character: {
+              defaultImage: entity.defaultImage,
+              avatarUrl: entity.avatarUrl,
+            },
+          })
+        }
+      }
+    }
+
+    return result
+  }, [participantData, impersonatingParticipantIds])
+
+  // LLM participants for AllLLMPauseModal
+  const llmParticipants = useMemo(() => {
+    return participantData
+      .filter(p => p.type === 'CHARACTER' && p.isActive && p.controlledBy !== 'user' && !impersonatingParticipantIds.includes(p.id))
+      .map(p => ({
+        id: p.id,
+        characterId: p.character?.id || '',
+        characterName: p.character?.name || 'Unknown',
+        character: p.character ? {
+          defaultImage: p.character.defaultImage,
+          avatarUrl: p.character.avatarUrl,
+        } : null,
+      }))
+  }, [participantData, impersonatingParticipantIds])
+
+  // Check if this is an all-LLM chat (no user-controlled participants)
+  const isAllLLM = useMemo(() => {
+    return isAllLLMChat(participantsAsBase)
+  }, [participantsAsBase])
+
+  // Count turns since last user message (for all-LLM pause logic)
+  const allLLMTurnCount = useMemo(() => {
+    if (!isAllLLM) return 0
+    // Count ASSISTANT messages since the last USER message
+    let count = 0
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'USER') break
+      if (messages[i].role === 'ASSISTANT') count++
+    }
+    return count
+  }, [isAllLLM, messages])
+
+  // Compute effective next speaker for all-LLM chats (recalculates if turnSelectionResult shows null)
+  const effectiveNextSpeakerId = useMemo(() => {
+    if (!turnSelectionResult) return null
+    // If turnSelectionResult has a speaker, use it
+    if (turnSelectionResult.nextSpeakerId !== null) {
+      return turnSelectionResult.nextSpeakerId
+    }
+    // For all-LLM chats with null nextSpeakerId, recalculate to get a valid speaker
+    if (isAllLLM && participantsAsBase.length > 0 && charactersMap.size > 0) {
+      const freshResult = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
+      return freshResult.nextSpeakerId
+    }
+    return null
+  }, [turnSelectionResult, isAllLLM, participantsAsBase, charactersMap, turnState, userParticipantId])
 
   const getParticipantById = useCallback((participantId: string | null | undefined) => {
     if (!participantId || !chat?.participants) return null
@@ -398,6 +510,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [id])
 
+  // Stable callback wrapper using ref - avoids recreating on every render
+  const stableTriggerContinueMode = useCallback(
+    async (participantId: string) => {
+      await triggerContinueModeRef.current(participantId)
+    },
+    [] // Empty deps - uses ref internally
+  )
+
   // Use the extracted turn management hook
   const turnManagement = useTurnManagement(
     participantsAsBase,
@@ -409,10 +529,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setTurnState,
     setTurnSelectionResult,
     setEphemeralMessages,
-    async (participantId: string) => {
-      // Trigger continue mode - implementation below
-      await triggerContinueMode(participantId)
-    },
+    stableTriggerContinueMode,
     isPaused,
     unpauseChat,
   )
@@ -455,8 +572,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       hasRestoredTurnStateRef.current = true
       const persistedParticipantId = chat.lastTurnParticipantId
 
+      // Check if this is an all-LLM chat (no user-controlled participants)
+      const chatIsAllLLM = isAllLLMChat(participantsAsBase)
+
       if (persistedParticipantId === null) {
-        if (result.nextSpeakerId !== null) {
+        // Don't restore "user's turn" for all-LLM chats - they should auto-continue
+        if (result.nextSpeakerId !== null && !chatIsAllLLM) {
           clientLogger.debug('[Chat] Restoring persisted turn state: user\'s turn', {
             calculatedNextSpeaker: result.nextSpeakerId,
           })
@@ -465,6 +586,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             nextSpeakerId: null,
             reason: 'user_turn',
           }
+        } else if (chatIsAllLLM) {
+          clientLogger.debug('[Chat] Skipping persisted user turn for all-LLM chat', {
+            calculatedNextSpeaker: result.nextSpeakerId,
+          })
         }
       } else {
         const persistedParticipant = participantsAsBase.find(
@@ -503,6 +628,37 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
     }
   }, [chat?.isPaused])
+
+  // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
+  // This prevents immediate re-pause when user clicks Resume after page refresh
+  useEffect(() => {
+    if (chat?.isPaused && isAllLLM && allLLMTurnCount > 0) {
+      lastAllLLMPauseTurnCountRef.current = allLLMTurnCount
+      clientLogger.debug('[Chat] Initialized all-LLM pause turn count from persisted state', {
+        turnCount: allLLMTurnCount,
+      })
+    }
+  }, [chat?.isPaused, isAllLLM, allLLMTurnCount])
+
+  // Initialize impersonation state from chat metadata
+  // We intentionally only depend on specific chat properties to avoid re-running on every chat update
+  useEffect(() => {
+    const impersonatingIds = chat?.impersonatingParticipantIds
+    const activeTypingId = chat?.activeTypingParticipantId
+    const pauseTurnCount = chat?.allLLMPauseTurnCount
+
+    if (impersonatingIds && impersonatingIds.length > 0) {
+      clientLogger.debug('[Chat] Restoring impersonation state from chat', {
+        impersonatingParticipantIds: impersonatingIds,
+        activeTypingParticipantId: activeTypingId,
+      })
+      setImpersonatingParticipantIds(impersonatingIds)
+      setActiveTypingParticipantId(activeTypingId ?? null)
+    }
+    if (pauseTurnCount !== undefined) {
+      setAllLLMPauseTurnCount(pauseTurnCount)
+    }
+  }, [chat?.impersonatingParticipantIds, chat?.activeTypingParticipantId, chat?.allLLMPauseTurnCount])
 
   // triggerContinueMode function - large streaming logic kept in place
   const triggerContinueMode = useCallback(async (participantId: string) => {
@@ -662,63 +818,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages])
 
-  // Auto-trigger next character in multi-character mode
-  useEffect(() => {
-    if (!isMultiChar) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - not multi-character mode')
-      return
-    }
-
-    if (isPaused) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - chat is paused')
-      return
-    }
-
-    if (userStoppedStreamRef.current) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - user stopped streaming')
-      return
-    }
-
-    if (streaming || waitingForResponse) {
-      return
-    }
-
-    if (!turnSelectionResult) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - no turn selection result')
-      return
-    }
-
-    if (turnSelectionResult.nextSpeakerId === null) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - user\'s turn')
-      lastAutoTriggeredRef.current = null
-      return
-    }
-
-    if (turnSelectionResult.nextSpeakerId === userParticipantId) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - next speaker is user')
-      return
-    }
-
-    const nextSpeakerId = turnSelectionResult.nextSpeakerId
-
-    if (lastAutoTriggeredRef.current === nextSpeakerId) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - same participant already triggered')
-      return
-    }
-
-    clientLogger.info('[Chat] Auto-triggering next character in multi-character mode', {
-      nextSpeakerId,
-      reason: turnSelectionResult.reason,
-    })
-
-    lastAutoTriggeredRef.current = nextSpeakerId
-
-    const timeoutId = setTimeout(() => {
-      triggerContinueMode(nextSpeakerId)
-    }, 100)
-
-    return () => clearTimeout(timeoutId)
-  }, [isMultiChar, isPaused, streaming, waitingForResponse, turnSelectionResult, userParticipantId, triggerContinueMode])
+  // Keep the ref in sync with the current callback to break dependency cycle
+  triggerContinueModeRef.current = triggerContinueMode
 
   // Function to set pause state and persist to database
   const setPauseState = useCallback(async (paused: boolean) => {
@@ -739,6 +840,109 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       clientLogger.error('[Chat] Error persisting pause state', { error })
     }
   }, [id])
+
+  // Auto-trigger next character in multi-character mode
+  useEffect(() => {
+    // Debug: log state at start of effect
+    clientLogger.debug('[Chat] Auto-trigger effect running', {
+      isMultiChar,
+      isPaused,
+      streaming,
+      waitingForResponse,
+      hasAbortController: !!abortControllerRef.current,
+      hasTurnSelectionResult: !!turnSelectionResult,
+      effectiveNextSpeakerId,
+      lastAutoTriggered: lastAutoTriggeredRef.current,
+      isAllLLM,
+      allLLMTurnCount,
+      lastPausedAt: lastAllLLMPauseTurnCountRef.current,
+    })
+
+    if (!isMultiChar) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - not multi-character mode')
+      return
+    }
+
+    if (isPaused) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - chat is paused')
+      return
+    }
+
+    if (userStoppedStreamRef.current) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - user stopped streaming')
+      return
+    }
+
+    if (streaming || waitingForResponse) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - streaming or waiting')
+      return
+    }
+
+    // Also check the abort controller ref - if there's an active request, don't trigger another
+    // This catches race conditions where state hasn't updated yet
+    if (abortControllerRef.current) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - request already in progress (ref check)')
+      return
+    }
+
+    if (!turnSelectionResult) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - no turn selection result')
+      return
+    }
+
+    // Use the pre-computed effective next speaker (handles all-LLM recalculation)
+    if (effectiveNextSpeakerId === null) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - user\'s turn (effectiveNextSpeakerId is null)', {
+        turnSelectionResultNextSpeakerId: turnSelectionResult.nextSpeakerId,
+        turnSelectionResultReason: turnSelectionResult.reason,
+      })
+      lastAutoTriggeredRef.current = null
+      return
+    }
+
+    if (effectiveNextSpeakerId === userParticipantId) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - next speaker is user')
+      return
+    }
+
+    // Check if we should pause for all-LLM chat threshold
+    // Only pause if we've exceeded the last paused turn count (prevents immediate re-pause on resume)
+    if (isAllLLM && shouldPauseForAllLLM(allLLMTurnCount) && allLLMTurnCount > lastAllLLMPauseTurnCountRef.current) {
+      clientLogger.info('[Chat] All-LLM pause threshold reached, auto-pausing', {
+        turnCount: allLLMTurnCount,
+        lastPausedAt: lastAllLLMPauseTurnCountRef.current,
+        nextThreshold: getNextPauseThreshold(allLLMTurnCount),
+      })
+      // Track the turn count at which we paused
+      lastAllLLMPauseTurnCountRef.current = allLLMTurnCount
+      // Auto-pause the chat
+      setPauseState(true)
+      showInfoToast(`Auto-paused after ${allLLMTurnCount} turns. Click Resume to continue.`)
+      return
+    }
+
+    if (lastAutoTriggeredRef.current === effectiveNextSpeakerId) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - same participant already triggered')
+      return
+    }
+
+    clientLogger.info('[Chat] Auto-triggering next character in multi-character mode', {
+      nextSpeakerId: effectiveNextSpeakerId,
+      reason: turnSelectionResult.reason,
+      isAllLLM,
+      allLLMTurnCount,
+    })
+
+    lastAutoTriggeredRef.current = effectiveNextSpeakerId
+
+    const timeoutId = setTimeout(() => {
+      // Use ref to avoid dependency cycle - the ref always has the latest callback
+      triggerContinueModeRef.current(effectiveNextSpeakerId)
+    }, 100)
+
+    return () => clearTimeout(timeoutId)
+    // Note: triggerContinueMode is accessed via ref to break dependency cycle that was causing infinite updates
+  }, [isMultiChar, isPaused, streaming, waitingForResponse, turnSelectionResult, userParticipantId, isAllLLM, allLLMTurnCount, setPauseState, effectiveNextSpeakerId])
 
   // Toggle pause state
   const togglePause = useCallback(async () => {
@@ -903,6 +1107,191 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
     }
   }, [id, participantData, fetchChat, streaming, waitingForResponse, turnState.lastSpeakerId, participantsAsBase])
+
+  // Impersonation handlers
+  const handleStartImpersonation = useCallback(async (participantId: string) => {
+    const participant = participantData.find(p => p.id === participantId)
+    const characterName = participant?.character?.name || 'Character'
+
+    clientLogger.info('[Chat] Starting impersonation', {
+      participantId,
+      characterName,
+    })
+
+    try {
+      const res = await fetch(`/api/chats/${id}/impersonate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to start impersonation')
+      }
+
+      const data = await res.json()
+
+      // Update local state
+      setImpersonatingParticipantIds(data.impersonatingParticipantIds || [])
+      setActiveTypingParticipantId(data.activeTypingParticipantId || participantId)
+
+      showSuccessToast(`Now speaking as ${characterName}`)
+      clientLogger.info('[Chat] Impersonation started', { participantId, characterName })
+    } catch (err) {
+      clientLogger.error('[Chat] Error starting impersonation', {
+        error: err instanceof Error ? err.message : String(err),
+        participantId,
+      })
+      showErrorToast(err instanceof Error ? err.message : 'Failed to start impersonation')
+    }
+  }, [id, participantData])
+
+  const handleStopImpersonation = useCallback(async (participantId: string) => {
+    const participant = participantData.find(p => p.id === participantId)
+    const characterName = participant?.character?.name || 'Character'
+
+    clientLogger.info('[Chat] Stopping impersonation', {
+      participantId,
+      characterName,
+    })
+
+    // Check if we need to show the LLM profile selection dialog
+    // This is needed when the character doesn't have a default connection profile
+    const character = participant?.character
+    if (character && !participant?.connectionProfile) {
+      clientLogger.debug('[Chat] Character needs LLM profile, showing dialog', {
+        characterId: character.id,
+        characterName: character.name,
+      })
+      setSelectLLMProfileDialogState({
+        isOpen: true,
+        participantId,
+        character: {
+          id: character.id,
+          name: character.name,
+          defaultImage: character.defaultImage,
+          avatarUrl: character.avatarUrl,
+          defaultConnectionProfileId: null,
+        },
+      })
+      return
+    }
+
+    // Otherwise, stop impersonation directly
+    try {
+      const res = await fetch(`/api/chats/${id}/impersonate`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to stop impersonation')
+      }
+
+      const data = await res.json()
+
+      // Update local state
+      setImpersonatingParticipantIds(data.impersonatingParticipantIds || [])
+      setActiveTypingParticipantId(data.activeTypingParticipantId || null)
+
+      showSuccessToast(`Stopped speaking as ${characterName}`)
+      clientLogger.info('[Chat] Impersonation stopped', { participantId, characterName })
+    } catch (err) {
+      clientLogger.error('[Chat] Error stopping impersonation', {
+        error: err instanceof Error ? err.message : String(err),
+        participantId,
+      })
+      showErrorToast(err instanceof Error ? err.message : 'Failed to stop impersonation')
+    }
+  }, [id, participantData])
+
+  const handleConfirmStopImpersonation = useCallback(async (participantId: string, connectionProfileId: string) => {
+    const participant = participantData.find(p => p.id === participantId)
+    const characterName = participant?.character?.name || 'Character'
+
+    clientLogger.info('[Chat] Confirming stop impersonation with profile', {
+      participantId,
+      connectionProfileId,
+    })
+
+    try {
+      const res = await fetch(`/api/chats/${id}/impersonate`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId, newConnectionProfileId: connectionProfileId }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to stop impersonation')
+      }
+
+      const data = await res.json()
+
+      // Update local state
+      setImpersonatingParticipantIds(data.impersonatingParticipantIds || [])
+      setActiveTypingParticipantId(data.activeTypingParticipantId || null)
+
+      showSuccessToast(`${characterName} is now controlled by AI`)
+      clientLogger.info('[Chat] Impersonation stopped with profile', { participantId, connectionProfileId })
+
+      // Refresh chat to get updated participant connection profile
+      await fetchChat()
+    } catch (err) {
+      clientLogger.error('[Chat] Error stopping impersonation with profile', {
+        error: err instanceof Error ? err.message : String(err),
+        participantId,
+      })
+      showErrorToast(err instanceof Error ? err.message : 'Failed to assign LLM profile')
+    }
+  }, [id, participantData, fetchChat])
+
+  const handleSetActiveSpeaker = useCallback(async (participantId: string) => {
+    clientLogger.debug('[Chat] Setting active speaker', { participantId })
+
+    try {
+      const res = await fetch(`/api/chats/${id}/active-speaker`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to set active speaker')
+      }
+
+      setActiveTypingParticipantId(participantId)
+    } catch (err) {
+      clientLogger.error('[Chat] Error setting active speaker', {
+        error: err instanceof Error ? err.message : String(err),
+        participantId,
+      })
+      showErrorToast(err instanceof Error ? err.message : 'Failed to set active speaker')
+    }
+  }, [id])
+
+  // All-LLM pause handlers
+  const handleAllLLMContinue = useCallback((turnsToAdd: number) => {
+    clientLogger.debug('[Chat] All-LLM continue', { turnsToAdd })
+    setAllLLMPauseModalOpen(false)
+    // The turn count will be incremented by the server after each message
+  }, [])
+
+  const handleAllLLMStop = useCallback(() => {
+    clientLogger.debug('[Chat] All-LLM stop')
+    setAllLLMPauseModalOpen(false)
+    setPauseState(true)
+  }, [setPauseState])
+
+  const handleAllLLMTakeOver = useCallback(async (participantId: string) => {
+    clientLogger.debug('[Chat] All-LLM take over', { participantId })
+    setAllLLMPauseModalOpen(false)
+    await handleStartImpersonation(participantId)
+  }, [handleStartImpersonation])
 
   // Handle memories
   const handleDeleteChatMemories = useCallback(async () => {
@@ -1646,6 +2035,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </div>
         </div>
 
+        {/* Speaker Selector - shown when controlling multiple characters */}
+        {controlledCharacters.length >= 2 && (
+          <div className="qt-chat-speaker-selector px-4 py-2 border-t border-border">
+            <SpeakerSelector
+              characters={controlledCharacters}
+              activeParticipantId={activeTypingParticipantId}
+              onSelect={handleSetActiveSpeaker}
+              disabled={streaming || waitingForResponse}
+            />
+          </div>
+        )}
+
         {/* Chat Composer - using extracted component */}
         <ChatComposer
           id={id}
@@ -1820,6 +2221,30 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           currentChatId={id}
           chatTitle={chat?.title}
         />
+
+        {/* All-LLM Pause Modal */}
+        <AllLLMPauseModal
+          isOpen={allLLMPauseModalOpen}
+          onClose={() => setAllLLMPauseModalOpen(false)}
+          turnCount={allLLMPauseTurnCount}
+          nextPauseAt={getNextPauseThreshold(allLLMPauseTurnCount)}
+          participants={llmParticipants}
+          onContinue={handleAllLLMContinue}
+          onStop={handleAllLLMStop}
+          onTakeOver={handleAllLLMTakeOver}
+        />
+
+        {/* Select LLM Profile Dialog (for stopping impersonation) */}
+        {selectLLMProfileDialogState && (
+          <SelectLLMProfileDialog
+            isOpen={selectLLMProfileDialogState.isOpen}
+            onClose={() => setSelectLLMProfileDialogState(null)}
+            character={selectLLMProfileDialogState.character}
+            participantId={selectLLMProfileDialogState.participantId}
+            onConfirm={handleConfirmStopImpersonation}
+            onCancel={() => setSelectLLMProfileDialogState(null)}
+          />
+        )}
       </div>
 
       {shouldShowParticipantSidebar && (
@@ -1841,6 +2266,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           }}
           onAddCharacter={handleAddCharacter}
           onRemoveCharacter={handleRemoveCharacter}
+          impersonatingParticipantIds={impersonatingParticipantIds}
+          activeTypingParticipantId={activeTypingParticipantId}
+          onImpersonate={handleStartImpersonation}
+          onStopImpersonate={handleStopImpersonation}
         />
       )}
     </div>

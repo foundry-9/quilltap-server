@@ -1,6 +1,10 @@
 /**
  * Unit Tests for Chat Initialization
  * Tests lib/chat/initialize.ts
+ *
+ * Updated for characters-not-personas migration:
+ * - Second parameter is now userCharacterId (user-controlled character) instead of personaId
+ * - Uses CHARACTER with controlledBy='user' instead of PERSONA type
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
@@ -8,10 +12,17 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { buildChatContext } from '@/lib/chat/initialize'
 
 jest.mock('@/lib/repositories/factory')
+jest.mock('@/lib/logger', () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}))
 
 const mockGetRepositories = jest.mocked(getRepositories)
 let mockCharactersRepo: { findById: jest.Mock }
-let mockPersonasRepo: { findById: jest.Mock }
 
 describe('buildChatContext', () => {
   const now = new Date().toISOString()
@@ -31,22 +42,25 @@ describe('buildChatContext', () => {
       createdAt: now,
       updatedAt: now,
     }],
-    personaLinks: [],
+    defaultPartnerId: null,
     tags: [],
     userId: 'user-1',
     isFavorite: false,
+    controlledBy: 'llm',
     defaultImageId: null,
     createdAt: now,
     updatedAt: now,
   }
 
-  const mockPersona = {
-    id: 'persona-1',
+  // User-controlled character (replaces persona)
+  const mockUserCharacter = {
+    id: 'user-char-1',
     name: 'John',
     description: 'A curious learner',
-    personalityTraits: 'Inquisitive, friendly',
+    personality: 'Inquisitive, friendly',
     tags: [],
     userId: 'user-1',
+    controlledBy: 'user',
     defaultImageId: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -59,13 +73,9 @@ describe('buildChatContext', () => {
       findById: jest.fn(),
     }
 
-    mockPersonasRepo = {
-      findById: jest.fn(),
-    }
-
     mockGetRepositories.mockReturnValue({
       characters: mockCharactersRepo,
-      personas: mockPersonasRepo,
+      personas: {} as any,
       chats: {} as any,
       tags: {} as any,
       users: {} as any,
@@ -79,7 +89,6 @@ describe('buildChatContext', () => {
     it('should build chat context with character only', async () => {
       mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
@@ -89,42 +98,35 @@ describe('buildChatContext', () => {
         name: 'Alice',
       }))
       expect(context.firstMessage).toBe('Hello! How can I help you today?')
-      expect(context.persona).toBeNull()
+      expect(context.userCharacter).toBeNull()
       expect(context.systemPrompt).toContain('You are roleplaying as Alice')
     })
 
-    it('should build chat context with character and specified persona', async () => {
-      mockCharactersRepo.findById.mockResolvedValue({
-        ...mockCharacter,
-        personaLinks: [],
-      })
-      mockPersonasRepo.findById.mockResolvedValue(mockPersona)
+    it('should build chat context with character and specified user character', async () => {
+      // First call returns the main LLM character, second call returns the user character
+      mockCharactersRepo.findById
+        .mockResolvedValueOnce({ ...mockCharacter })
+        .mockResolvedValueOnce({ ...mockUserCharacter })
 
-      const context = await buildChatContext('char-1', 'persona-1')
+      const context = await buildChatContext('char-1', 'user-char-1')
 
-      expect(context.persona).toEqual(expect.objectContaining({
-        id: 'persona-1',
+      expect(context.userCharacter).toEqual(expect.objectContaining({
+        id: 'user-char-1',
         name: 'John',
       }))
       expect(context.systemPrompt).toContain('You are talking to John')
     })
 
-    it('should use default persona from character personas', async () => {
-      mockCharactersRepo.findById.mockResolvedValue({
-        ...mockCharacter,
-        personaLinks: [
-          {
-            personaId: 'persona-1',
-            isDefault: true,
-          },
-        ],
-      })
-      mockPersonasRepo.findById.mockResolvedValue(mockPersona)
+    it('should use default partner from character defaultPartnerId', async () => {
+      // First call returns character with defaultPartnerId, second call returns the partner
+      mockCharactersRepo.findById
+        .mockResolvedValueOnce({ ...mockCharacter, defaultPartnerId: 'user-char-1' })
+        .mockResolvedValueOnce({ ...mockUserCharacter })
 
       const context = await buildChatContext('char-1')
 
-      expect(context.persona).toEqual(expect.objectContaining({
-        id: 'persona-1',
+      expect(context.userCharacter).toEqual(expect.objectContaining({
+        id: 'user-char-1',
         name: 'John',
       }))
       expect(context.systemPrompt).toContain('You are talking to John')
@@ -141,7 +143,6 @@ describe('buildChatContext', () => {
     it('should include character name in system prompt', async () => {
       mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
@@ -152,7 +153,6 @@ describe('buildChatContext', () => {
     it('should include character description', async () => {
       mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
@@ -164,7 +164,6 @@ describe('buildChatContext', () => {
     it('should include personality', async () => {
       mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
@@ -176,7 +175,6 @@ describe('buildChatContext', () => {
     it('should include roleplay instructions', async () => {
       mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
@@ -192,7 +190,6 @@ describe('buildChatContext', () => {
         ...mockCharacter,
         exampleDialogues: null,
         systemPrompts: [],
-        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
@@ -204,13 +201,25 @@ describe('buildChatContext', () => {
     it('should trim whitespace from system prompt', async () => {
       mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
-        personaLinks: [],
       })
 
       const context = await buildChatContext('char-1')
 
       expect(context.systemPrompt).not.toMatch(/^\s/)
       expect(context.systemPrompt).not.toMatch(/\s$/)
+    })
+
+    it('should ignore LLM-controlled character when looking up user character', async () => {
+      // Character lookup returns an LLM-controlled character, not user-controlled
+      const llmCharacter = { ...mockUserCharacter, controlledBy: 'llm' }
+      mockCharactersRepo.findById
+        .mockResolvedValueOnce({ ...mockCharacter })
+        .mockResolvedValueOnce(llmCharacter)
+
+      const context = await buildChatContext('char-1', 'user-char-1')
+
+      // Should not set userCharacter since the looked up character is LLM-controlled
+      expect(context.userCharacter).toBeNull()
     })
   })
 })

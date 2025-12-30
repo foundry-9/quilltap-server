@@ -100,3 +100,13 @@ export {
   type ParsedPseudoTool,
   type ToolCallRequest,
 } from './pseudo-tool-parser';
+
+// XML Tool Call Parser (for LLMs that emit XML-style tool calls)
+export {
+  parseXMLToolCalls,
+  convertXMLToToolCallRequest,
+  stripXMLToolMarkers,
+  hasXMLToolMarkers,
+  mapXMLToolName,
+  type ParsedXMLTool,
+} from './xml-tool-parser';

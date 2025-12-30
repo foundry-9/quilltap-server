@@ -478,25 +478,30 @@
      ========================================================================== */
 
   /**
-   * Card grid - responsive grid for cards
-   * Mobile: 2 cols (compact), sm+: 2 cols, lg: 3 cols
+   * Card grid variants - responsive grids for cards
+   * Base: 2 cols (compact) with smaller gap
+   * sm+: larger gap
+   * lg: expands to max columns (2 or 3 depending on variant)
    */
-  .qt-card-grid {
+  .qt-card-grid-2,
+  .qt-card-grid-3 {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
   }
 
   @media (min-width: 640px) {
-    .qt-card-grid {
+    .qt-card-grid-2,
+    .qt-card-grid-3 {
       gap: 1.5rem;
     }
   }
 
   @media (min-width: 1024px) {
-    .qt-card-grid {
+    .qt-card-grid-3 {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+    /* qt-card-grid-2 stays at 2 columns */
   }
 
   /**

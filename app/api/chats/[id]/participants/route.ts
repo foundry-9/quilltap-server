@@ -110,6 +110,7 @@ async function enrichParticipant(participant: ChatParticipantBase, repos: Repos)
     ? await getEnrichedCharacter(participant.characterId, repos)
     : null
 
+  // Legacy: for PERSONA type, also look up persona data
   const persona = participant.type === 'PERSONA' && participant.personaId
     ? await getEnrichedPersona(participant.personaId, repos)
     : null
@@ -121,6 +122,7 @@ async function enrichParticipant(participant: ChatParticipantBase, repos: Repos)
   return {
     id: participant.id,
     type: participant.type,
+    controlledBy: participant.controlledBy || (participant.type === 'PERSONA' ? 'user' : 'llm'),
     characterId: participant.characterId,
     personaId: participant.personaId,
     displayOrder: participant.displayOrder,
@@ -137,16 +139,18 @@ async function enrichParticipant(participant: ChatParticipantBase, repos: Repos)
 }
 
 // Validation schemas
+// Note: PERSONA type is deprecated - use CHARACTER with controlledBy='user' instead
 const addParticipantSchema = z.object({
-  type: z.enum(['CHARACTER', 'PERSONA']),
+  type: z.enum(['CHARACTER', 'PERSONA']),  // PERSONA kept for backwards compatibility
   characterId: z.string().uuid().optional(),
-  personaId: z.string().uuid().optional(),
+  personaId: z.string().uuid().optional(),  // @deprecated - use characterId with controlledBy='user'
   connectionProfileId: z.string().uuid().optional(),
   imageProfileId: z.string().uuid().nullish(),
   systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
   hasHistoryAccess: z.boolean().optional(),
   joinScenario: z.string().nullish(),
+  controlledBy: z.enum(['llm', 'user']).optional(),  // Who controls this participant
 })
 
 const updateParticipantSchema = z.object({
@@ -255,18 +259,26 @@ export async function POST(
       if (!validatedData.characterId) {
         return NextResponse.json({ error: 'characterId is required for CHARACTER participants' }, { status: 400 })
       }
-      if (!validatedData.connectionProfileId) {
-        return NextResponse.json({ error: 'connectionProfileId is required for CHARACTER participants' }, { status: 400 })
-      }
 
       const character = await repos.characters.findById(validatedData.characterId)
       if (!character || character.userId !== user.id) {
         return NextResponse.json({ error: 'Character not found' }, { status: 404 })
       }
 
-      const profile = await repos.connections.findById(validatedData.connectionProfileId)
-      if (!profile || profile.userId !== user.id) {
-        return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+      // Determine if this is a user-controlled character
+      const controlledBy = validatedData.controlledBy || character.controlledBy || 'llm'
+      const isUserControlled = controlledBy === 'user'
+
+      // Connection profile is only required for LLM-controlled characters
+      if (!isUserControlled && !validatedData.connectionProfileId) {
+        return NextResponse.json({ error: 'connectionProfileId is required for LLM-controlled CHARACTER participants' }, { status: 400 })
+      }
+
+      if (validatedData.connectionProfileId) {
+        const profile = await repos.connections.findById(validatedData.connectionProfileId)
+        if (!profile || profile.userId !== user.id) {
+          return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+        }
       }
 
       // Check if character is already in the chat
@@ -290,11 +302,20 @@ export async function POST(
       }
     }
 
+    // For CHARACTER participants, determine control mode
+    let controlledByValue = validatedData.controlledBy
+    if (validatedData.type === 'CHARACTER' && validatedData.characterId && !controlledByValue) {
+      // Inherit from character's default if not explicitly specified
+      const character = await repos.characters.findById(validatedData.characterId)
+      controlledByValue = character?.controlledBy || 'llm'
+    }
+
     // Add the participant
     let result = await repos.chats.addParticipant(id, {
       type: validatedData.type,
       characterId: validatedData.characterId || null,
       personaId: validatedData.personaId || null,
+      controlledBy: controlledByValue || (validatedData.type === 'PERSONA' ? 'user' : 'llm'),
       connectionProfileId: validatedData.connectionProfileId || null,
       imageProfileId: validatedData.imageProfileId || null,
       systemPromptOverride: validatedData.systemPromptOverride || null,

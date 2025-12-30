@@ -7,9 +7,6 @@ import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import {
   Character,
-  ConnectionProfile,
-  Persona,
-  CharacterPersonaLink,
   CharacterFormData,
   CharacterEditState,
 } from '../types'
@@ -42,13 +39,8 @@ export function useCharacterEdit(id: string) {
     showUploadDialog: false,
     showAvatarSelector: false,
     character: null,
-    personas: [],
-    profiles: [],
-    defaultPersonaId: '',
-    loadingPersonas: false,
     formData: INITIAL_FORM_DATA,
     originalFormData: INITIAL_FORM_DATA,
-    originalDefaultPersonaId: '',
     avatarRefreshKey: 0,
   })
 
@@ -106,97 +98,17 @@ export function useCharacterEdit(id: string) {
   }, [id])
 
   /**
-   * Fetch available personas
-   */
-  const fetchPersonas = useCallback(async () => {
-    try {
-      clientLogger.debug('Fetching personas', { characterId: id })
-      setState((prev) => ({ ...prev, loadingPersonas: true }))
-      const res = await fetch(`/api/personas?sortByCharacter=${id}`)
-      if (!res.ok) throw new Error('Failed to fetch personas')
-      const data = await res.json()
-      setState((prev) => ({
-        ...prev,
-        personas: data,
-        loadingPersonas: false,
-      }))
-      clientLogger.debug('Personas fetched successfully', { count: data.length })
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      clientLogger.error('Error fetching personas', { error: errorMsg })
-      setState((prev) => ({ ...prev, loadingPersonas: false }))
-    }
-  }, [id])
-
-  /**
-   * Fetch default persona for this character
-   */
-  const fetchDefaultPersona = useCallback(async () => {
-    try {
-      clientLogger.debug('Fetching default persona', { characterId: id })
-      const res = await fetch(`/api/characters/${id}/personas`)
-      if (!res.ok) throw new Error('Failed to fetch linked personas')
-      const data = await res.json()
-      const defaultPersona = data.find((cp: CharacterPersonaLink) => cp.isDefault)
-      if (defaultPersona) {
-        setState((prev) => ({
-          ...prev,
-          defaultPersonaId: defaultPersona.personaId,
-          originalDefaultPersonaId: defaultPersona.personaId,
-        }))
-        clientLogger.debug('Default persona fetched', { personaId: defaultPersona.personaId })
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      clientLogger.error('Error fetching default persona', { error: errorMsg })
-    }
-  }, [id])
-
-  /**
-   * Fetch available connection profiles
-   */
-  const fetchProfiles = useCallback(async () => {
-    try {
-      clientLogger.debug('Fetching connection profiles')
-      const res = await fetch('/api/profiles')
-      if (res.ok) {
-        const data = await res.json()
-        // Map to ConnectionProfile type to ensure consistent structure
-        const profiles = data.map((p: { id: string; name: string }) => ({
-          id: p.id,
-          name: p.name,
-        }))
-        setState((prev) => ({
-          ...prev,
-          profiles,
-        }))
-        clientLogger.debug('Connection profiles fetched', { count: profiles.length })
-      } else {
-        clientLogger.warn('Failed to fetch profiles, non-OK response', { status: res.status })
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      clientLogger.error('Failed to fetch profiles', { error: errorMsg })
-    }
-  }, [])
-
-  /**
    * Initial data loading effect
    */
   useEffect(() => {
     clientLogger.debug('Initializing character edit page', { characterId: id })
     fetchCharacter()
-    fetchPersonas()
-    fetchDefaultPersona()
-    fetchProfiles()
-  }, [id, fetchCharacter, fetchPersonas, fetchDefaultPersona, fetchProfiles])
+  }, [id, fetchCharacter])
 
   /**
    * Check if form has unsaved changes
    */
-  const hasChanges =
-    JSON.stringify(state.formData) !== JSON.stringify(state.originalFormData) ||
-    state.defaultPersonaId !== state.originalDefaultPersonaId
+  const hasChanges = JSON.stringify(state.formData) !== JSON.stringify(state.originalFormData)
 
   /**
    * Handle form field changes
@@ -205,16 +117,6 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({
       ...prev,
       formData: { ...prev.formData, [e.target.name]: e.target.value },
-    }))
-  }
-
-  /**
-   * Handle default persona change
-   */
-  const handleDefaultPersonaChange = (personaId: string) => {
-    setState((prev) => ({
-      ...prev,
-      defaultPersonaId: personaId,
     }))
   }
 
@@ -241,36 +143,6 @@ export function useCharacterEdit(id: string) {
       }
 
       clientLogger.info('Character fields updated', { characterId: id })
-
-      // Handle persona linking/unlinking
-      if (state.defaultPersonaId !== state.originalDefaultPersonaId) {
-        clientLogger.debug('Updating persona associations', {
-          characterId: id,
-          oldPersonaId: state.originalDefaultPersonaId,
-          newPersonaId: state.defaultPersonaId,
-        })
-
-        // If there was a previous default persona, unlink it
-        if (state.originalDefaultPersonaId) {
-          await fetch(`/api/characters/${id}/personas?personaId=${state.originalDefaultPersonaId}`, {
-            method: 'DELETE',
-          })
-          clientLogger.debug('Persona unlinked', { personaId: state.originalDefaultPersonaId })
-        }
-
-        // If a new default persona is selected, link it
-        if (state.defaultPersonaId) {
-          await fetch(`/api/characters/${id}/personas`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              personaId: state.defaultPersonaId,
-              isDefault: true,
-            }),
-          })
-          clientLogger.debug('Persona linked', { personaId: state.defaultPersonaId })
-        }
-      }
 
       await fetchCharacter()
       setState((prev) => ({ ...prev, saving: false }))
@@ -428,7 +300,6 @@ export function useCharacterEdit(id: string) {
 
     // Methods
     handleChange,
-    handleDefaultPersonaChange,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,

@@ -4,6 +4,123 @@
 
 ### 2.6-dev
 
+- test: Add unit tests for characters-not-personas branch features
+  - Added tests for all-LLM pause logic (`lib/chat/turn-manager/all-llm-pause.ts`)
+  - Added tests for impersonate API route (`/api/chats/:id/impersonate`)
+  - Added tests for active-speaker API route (`/api/chats/:id/active-speaker`)
+  - Added tests for default-partner API route (`/api/characters/:id/default-partner`)
+  - Added tests for character constants (`lib/constants/character.ts`)
+  - 114 new tests covering core characters-not-personas functionality
+- refactor: Consolidate all migration files into upgrade plugin
+  - Moved `add-multi-character-fields` migration from `lib/mongodb/migrations/` to upgrade plugin
+  - Moved `add-inter-character-memory-fields` migration from `lib/mongodb/migrations/` to upgrade plugin
+  - Moved post-login migrations to upgrade plugin as `user-migrations.ts`
+  - Created thin wrapper at `lib/auth/user-migrations.ts` with dynamic imports to avoid Turbopack bundling issues
+  - Updated auth routes to use the new wrapper
+  - Removed separate MongoDB migrations directory (`lib/mongodb/migrations/`)
+  - All migration tracking now uses the unified upgrade plugin system
+  - Upgrade plugin version bumped to 1.0.11
+- refactor: Clean up remaining persona references after characters-not-personas migration
+  - Updated `lib/image-gen/prompt-expansion.ts` to use characters repository instead of personas
+  - Simplified `PlaceholderInfo.type` to `'character' | 'user'` (removed 'persona')
+  - Updated image gallery components to handle both CHARACTER and legacy PERSONA tags
+  - Removed 'persona' from component EntityType unions (tag-editor, physical-descriptions, embedded-gallery)
+  - Updated ImageDetailModal to only fetch characters (which now include former personas)
+  - Updated useImageActions and ImageMetadata to work with characters only
+  - Removed "Personas" from export data type selector (personas are now characters)
+  - Removed "Personas" from delete data preview and capabilities report database stats
+  - Updated restore progress to combine character and persona counts
+  - Updated search-replace scope selection to remove persona option, added character grouping by controlledBy
+  - Backwards compatibility maintained: existing PERSONA tags still recognized, old backups with personas still restorable
+- feat: Add XML tool call detection for LLMs that emit XML-style function calls
+  - Detects and executes tool calls from LLMs like DeepSeek that spontaneously emit XML tool syntax
+  - Supports multiple formats: DeepSeek (`<function_calls><invoke>`), Claude-style, generic (`<tool_call>`), and `<function_call>` variations
+  - XML tool calls are stripped from displayed messages, tool execution status shown separately
+  - Runs for ALL providers, not just pseudo-tool mode
+  - New parser in `/lib/tools/xml-tool-parser.ts` with comprehensive test coverage
+- fix: Turn manager now auto-continues in all-LLM chats
+  - When all participants are LLM-controlled, turn selection no longer returns "user's turn"
+  - Instead, it starts a new cycle and selects the next speaker automatically
+  - Single-character all-LLM chats now continue in monologue mode
+  - Pause logic applies at intervals (3, 6, 12... turns) to prevent runaway API usage
+  - Fixed: Resume button now properly triggers next speaker (no longer requires nudge)
+  - Fixed: Persisted "user's turn" state no longer overrides calculated speaker for all-LLM chats
+  - Fixed: Race condition where auto-trigger could abort an in-progress stream
+- fix: Improve chat creation page UX
+  - Character list now fills remaining vertical space on desktop layout (uses flex layout)
+  - Connection profile dropdown now includes "Play As (User)" option at the top for any character
+  - Users can now designate characters as user-controlled directly from chat creation
+  - Validation updated to require at least one LLM-controlled character per chat
+  - Character list now sorted: favorites first, then user-controlled, then by chat count, then by name/title
+- refactor: Remove duplicate Photo Gallery tab from character edit page
+  - Gallery tab was identical to the one on the view page (both use `EmbeddedPhotoGallery`)
+  - Avatar can still be changed via the edit button on the avatar in the header
+  - Gallery functionality remains available on the character view page
+- refactor: Remove deprecated "Associated Profiles" tab from character edit page
+  - Tab used old personas system which has been replaced by user-controlled characters
+  - Profile settings (connection profile, conversation partner, image profile) are available on the view page's Profiles tab
+  - Removed `CharacterSettings` component and persona-related state from `useCharacterEdit` hook
+  - Cleaned up unused types (`Persona`, `CharacterPersonaLink`, `ConnectionProfile`) from edit types
+- feat: Complete characters-not-personas migration for chat creation and context
+  - Chat creation UI now shows "Play As" selector for user-controlled characters instead of personas
+  - Chat participants now use `controlledBy: 'llm' | 'user'` to determine control mode
+  - User-controlled CHARACTER participants replace PERSONA type participants
+  - Updated `buildChatContext` in `lib/chat/initialize.ts` to use user characters instead of personas
+  - Updated chat API (`/api/chats`) to handle user-controlled character participants
+  - Updated context-manager to attribute messages to user-controlled characters
+  - PERSONA type kept for backwards compatibility with existing chats
+  - Connection profile not required for user-controlled CHARACTER participants
+- feat: Add character impersonation system for real-time control switching
+  - Users can impersonate any LLM character during chat via ParticipantCard button
+  - `SpeakerSelector` dropdown for switching between multiple impersonated characters
+  - `SelectLLMProfileDialog` prompts for LLM profile when stopping impersonation
+  - `AllLLMPauseModal` for all-LLM chats with Continue/Stop/Take Over options
+  - New API endpoints: `/api/chats/[id]/impersonate` (POST/DELETE/GET), `/api/chats/[id]/active-speaker` (PUT/GET)
+  - Impersonation state persisted in chat metadata (`impersonatingParticipantIds`, `activeTypingParticipantId`)
+- feat: Add personas-to-characters migration in upgrade plugin
+  - Automatically converts existing personas to characters with `controlledBy: 'user'`
+  - Updates PERSONA type chat participants to CHARACTER type
+  - Migrates memory references: `personaId` → `aboutCharacterId`
+  - Preserves original persona IDs as character IDs to maintain references
+- feat: Add inter-character memory support
+  - `aboutCharacterId` field added to memory schema for character-to-character memories
+  - New repository methods: `findByCharacterAboutCharacter()`, `findByCharacterAboutCharacters()`
+  - Context manager retrieves inter-character memories for multi-character chats
+- fix: Update backup/restore and import/export for characters-not-personas migration
+  - Add `defaultPartnerId` field to character UUID remapping in backup restore
+  - Add `defaultPartnerId` reconciliation in backup post-restore phase
+  - Add `defaultPartnerId` remapping in Quilltap import character reconciliation
+  - Add `aboutCharacterId` remapping in Quilltap import memory handling
+- feat: Update SillyTavern import to use characters instead of personas
+  - `importSTPersonaAsCharacter()` function for importing personas as user-controlled characters
+  - `createDefaultMappings()` now prefers characters over personas
+  - `SpeakerMapping` type includes `controlledBy` field
+- fix: Update backup/restore service for character system
+  - Added `aboutCharacterId` remapping in restore service
+  - Added impersonation state remapping for chats
+- refactor: Remove Personas from navigation and add redirects
+  - Personas link removed from sidebar navigation menu
+  - All `/personas/*` routes now redirect to `/characters`
+- fix: Character view page now uses default conversation partner for `{{user}}` template replacement
+  - Previously used deprecated personas linked via `personaLinks`
+  - Now uses `defaultPartnerId` and user-controlled characters for template highlighting
+  - Updated `useCharacterView` hook, `CharacterDetails`, and `SystemPromptsTab` components
+- feat: Add "User Acts As Character" virtual connection profile option
+  - Characters can now be set to user-controlled from the Profiles tab
+  - Selecting "User Acts As Character" sets `controlledBy: 'user'` on the character
+  - Selecting a real connection profile sets `controlledBy: 'llm'`
+  - Added `USER_CONTROLLED_PROFILE_ID` constant in `lib/constants/character.ts`
+- feat: Replace "Default Persona" with "Default Conversation Partner" on character Profiles tab
+  - Shows user-controlled characters instead of deprecated personas
+  - Grayed out when the character itself is user-controlled
+  - Added `defaultPartnerId` field to character schema
+  - Added `/api/characters/:id/default-partner` API route
+  - Added `controlledBy` filter to `/api/characters` API
+- fix: Remove deprecated Personas card from dashboard
+  - Personas have been merged into Characters as part of the characters-not-personas effort
+  - Dashboard now shows only Characters and Chats cards (50/50 layout on large screens)
+  - Refactored `qt-card-grid` into `qt-card-grid-2` and `qt-card-grid-3` variants
+  - Updated dashboard-cards component, page, and tests
 - fix: Add maxDuration timeout to backup create/restore API routes
   - Backup creation to S3 was failing on client side due to default API timeout (~30 seconds)
   - Server completed successfully but client connection timed out before receiving response

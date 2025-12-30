@@ -44,12 +44,14 @@ const createCharacterSchema = z.object({
 // GET /api/characters - List all characters
 // Query params:
 //   - npc: 'true' to get only NPCs, 'false' to get only non-NPCs, omit for all
+//   - controlledBy: 'user' or 'llm' to filter by control mode
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
     let characters = await repos.characters.findByUserId(user.id)
 
-    // Filter by NPC status if specified
     const { searchParams } = new URL(req.url)
+
+    // Filter by NPC status if specified
     const npcFilter = searchParams.get('npc')
     if (npcFilter === 'true') {
       characters = characters.filter(c => c.npc === true)
@@ -58,6 +60,17 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
       // Include characters without npc field (backwards compatibility)
       characters = characters.filter(c => !c.npc)
       logger.debug('Filtering characters to non-NPCs only', { count: characters.length })
+    }
+
+    // Filter by controlledBy if specified
+    const controlledByFilter = searchParams.get('controlledBy')
+    if (controlledByFilter === 'user') {
+      characters = characters.filter(c => c.controlledBy === 'user')
+      logger.debug('Filtering characters to user-controlled only', { count: characters.length })
+    } else if (controlledByFilter === 'llm') {
+      // Include characters without controlledBy field (backwards compatibility, default to 'llm')
+      characters = characters.filter(c => c.controlledBy === 'llm' || c.controlledBy === undefined)
+      logger.debug('Filtering characters to LLM-controlled only', { count: characters.length })
     }
 
     // Sort by createdAt descending
