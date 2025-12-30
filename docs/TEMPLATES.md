@@ -1,6 +1,6 @@
 # Template System
 
-Quilltap supports SillyTavern-compatible template variables for character and persona data. This allows for dynamic content replacement in character definitions, example dialogues, and system prompts.
+Quilltap supports SillyTavern-compatible template variables for character data. This allows for dynamic content replacement in character definitions, example dialogues, and system prompts.
 
 ## Supported Template Variables
 
@@ -9,11 +9,11 @@ The following template variables are **currently supported** in Quilltap:
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `{{char}}` | Character's name | `{{char}}` → `Alice` |
-| `{{user}}` | User/persona's name | `{{user}}` → `Bob` |
+| `{{user}}` | User-controlled character's name (or conversation partner) | `{{user}}` → `Bob` |
 | `{{description}}` | Character's description field | Full character description |
 | `{{personality}}` | Character's personality traits | Personality summary |
 | `{{scenario}}` | Current scenario/setting | Scenario description |
-| `{{persona}}` | Persona's description | User persona description |
+| `{{persona}}` | User character's description (legacy alias for user character) | User character description |
 | `{{system}}` | System prompt or character's main prompt override | System instructions |
 | `{{mesExamples}}` | Character's example dialogues (formatted) | Example conversations |
 | `{{mesExamplesRaw}}` | Character's example dialogues (raw) | Unformatted examples |
@@ -47,7 +47,7 @@ I am {{char}}, a brave warrior from the northern kingdoms.
 I have been sent to protect {{user}} on their journey.
 ```
 
-When processed with character name "Alice" and persona name "Bob":
+When processed with character name "Alice" and user character name "Bob":
 ```
 I am Alice, a brave warrior from the northern kingdoms.
 I have been sent to protect Bob on their journey.
@@ -202,10 +202,10 @@ SillyTavern uses a "Story String" concept where the entire prompt structure is d
 Template processing is handled by the `lib/templates/processor.ts` module:
 
 - `processTemplate(template, context)` - Processes a single template string
-- `buildTemplateContext(character, persona, scenario)` - Builds the context object
-- `processCharacterTemplates(character, persona, scenario)` - Processes all character fields
+- `buildTemplateContext(character, userCharacter, scenario)` - Builds the context object
+- `processCharacterTemplates(character, userCharacter, scenario)` - Processes all character fields
 
-Templates are processed during chat initialization in `lib/chat/initialize.ts`.
+Templates are processed during chat initialization in `lib/chat/initialize.ts`. The `{{user}}` variable is populated from the user-controlled character's name (or the default conversation partner if configured on the character).
 
 ### Performance Considerations
 

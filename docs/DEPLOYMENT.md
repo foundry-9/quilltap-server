@@ -291,12 +291,11 @@ All application data is stored in MongoDB and S3-compatible storage:
 ### MongoDB Collections
 
 - `users` - User accounts and authentication
-- `characters` - Character definitions
-- `personas` - User personas
-- `chats` - Chat metadata and messages
+- `characters` - Character definitions (includes `controlledBy` for LLM/user control)
+- `chats` - Chat metadata, messages, and impersonation state
 - `files` - File metadata (actual files in S3)
 - `tags` - Tag definitions
-- `memories` - Character memory data
+- `memories` - Character memory data with inter-character relationships
 - `connectionProfiles` - LLM connection configurations
 - `embeddingProfiles` - Embedding provider configurations
 - `imageProfiles` - Image generation configurations

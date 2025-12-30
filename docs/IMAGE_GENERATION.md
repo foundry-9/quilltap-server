@@ -391,8 +391,8 @@ Generate images using your configured LLM providers.
 
   // Optional: Tags to apply to generated images
   tags?: Array<{
-    tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME'
-    tagId: string (UUID of character/persona/chat/theme)
+    tagType: 'CHARACTER' | 'CHAT' | 'THEME'
+    tagId: string (UUID of character/chat/theme)
   }>
 
   // Optional: Generation options (provider-dependent)
@@ -421,7 +421,7 @@ Generate images using your configured LLM providers.
     tags: Array<{
       id: string                  // Tag ID
       imageId: string
-      tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME'
+      tagType: 'CHARACTER' | 'CHAT' | 'THEME'
       tagId: string
       createdAt: string           // ISO datetime
     }>
@@ -496,7 +496,6 @@ List all image profiles for the current user.
 
 **Query Parameters**:
 - `sortByCharacter` (optional): Character ID for tag-based sorting
-- `sortByPersona` (optional): Persona ID for tag-based sorting
 
 **Response**: Array of image profiles
 

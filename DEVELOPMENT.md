@@ -7,7 +7,7 @@ This document covers the development setup and project structure for Quilltap.
 ```text
 quilltap/
 ├── app/                      # Next.js App Router entry point
-│   ├── (authenticated)/      # Protected routes (characters, chats, personas, settings, about, tools)
+│   ├── (authenticated)/      # Protected routes (characters, chats, settings, about, tools)
 │   ├── api/                  # API route handlers (auth, chats, characters, providers, backups, etc.)
 │   ├── auth/                 # Auth flows (sign-in, OAuth callbacks, session)
 │   ├── dashboard/            # Dashboard page
@@ -16,9 +16,8 @@ quilltap/
 │   ├── layout.tsx            # Root layout (providers, themes, fonts)
 │   └── page.tsx              # Public landing page
 ├── components/               # Reusable UI components
-│   ├── chat/                 # Chat-related components
+│   ├── chat/                 # Chat-related components (including impersonation UI)
 │   ├── character/            # Character management components
-│   ├── persona/              # Persona management components
 │   ├── memory/               # Memory system components
 │   ├── settings/             # Settings tab components
 │   ├── tags/                 # Tag system components
@@ -164,12 +163,11 @@ All application data is stored in MongoDB:
 
 - **users** - User accounts and authentication
 - **api_keys** - Encrypted provider API keys
-- **characters** - Character definitions and metadata
-- **personas** - User persona definitions
-- **chats** - Chat metadata and message history
+- **characters** - Character definitions and metadata (includes `controlledBy: 'llm' | 'user'` for control mode)
+- **chats** - Chat metadata, message history, and impersonation state
 - **files** - File metadata (actual files in S3)
 - **tags** - Tag definitions
-- **memories** - Character memory data
+- **memories** - Character memory data with inter-character relationships (`aboutCharacterId`)
 - **connectionProfiles** - LLM connection configurations
 - **embeddingProfiles** - Embedding provider configurations
 - **imageProfiles** - Image generation configurations

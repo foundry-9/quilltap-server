@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.6.0--no--more--personas.34-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.6.0--no--more--personas.35-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -20,7 +20,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 - 👥 Multi-character SillyTavern import wizard plus an in-app turn system with nudge/queue controls, pause/resume, inter-character memory sharing, and streaming avatars.
 - 🔄 Bidirectional sync between Quilltap instances with API key authentication, real-time progress tracking, and conflict resolution for characters, chats, memories, and more.
 - 🧙 AI Wizard for character creation with vision support - generates descriptions, personalities, system prompts, and physical descriptions from images or text.
-- 📦 Native .qtap export/import system for selective backup of characters, personas, chats, profiles, and templates with conflict resolution strategies.
+- 📦 Native .qtap export/import system for selective backup of characters, chats, profiles, and templates with conflict resolution strategies.
 - 🧰 Tools workspace with backup/restore flows (local download or S3), cloud backup previews, native export/import, and a delete-all-data card; DevConsole (development builds) surfaces server logs, browser consoles, and chat traces.
 - 🎨 Theme plugin system powered by qt-* semantic utility classes so you can ship new theme packs (Ocean, Rains, Earl Grey are included) and give users an Appearance settings tab + nav toggle for quick swaps.
 - 🖼️ Integrated image generation profiles (Google Gemini/Imagen 4, Grok, OpenAI, OpenRouter) plus an asset gallery with tagging, avatar overrides, and secure per-user storage.
@@ -36,14 +36,16 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 - Use the rename/replace + template conversion interface to mass-update prompts, placeholder syntax, and SillyTavern templates across characters.
 - Favorite characters, sort lists by favorites/chat counts/name, and use quick-create APIs when migrating large libraries.
 - Import and export characters via SillyTavern's JSON format (PNG card embedding is not supported) with automatic avatar hookup and tagging.
-- Link personas and tag sets directly to characters so downstream chats inherit the right identity and metadata.
+- Link tag sets directly to characters so downstream chats inherit the right identity and metadata.
 
-### Persona System
+### User-Controlled Characters
 
-- Define multiple user personas with display names, backstories, and avatar images so you can swap perspectives per chat.
-- Link personas to characters for consistent interactions, shared tags, and context injection.
-- Import/export personas in SillyTavern JSON, including bundled persona sets for quick onboarding.
-- Customize persona defaults such as preferred connection profiles, default tone, or chat presets.
+- Any character can be set to user-controlled or LLM-controlled via the `controlledBy` field.
+- User-controlled characters replace the legacy persona system - create characters with backstories, avatars, and personality for yourself.
+- Start chats "playing as" any user-controlled character from the chat creation page.
+- Import SillyTavern personas as user-controlled characters automatically during import.
+- **Impersonation**: Take control of any LLM character mid-chat, or hand control back to the AI with a single click.
+- **All-LLM chats**: Create chats with no user participation where LLM characters converse autonomously with automatic pause intervals.
 
 ### Advanced Chat & Multi-Character Play
 
@@ -52,24 +54,24 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 - **Manual chat rename**: Rename chats manually with option to re-enable auto-naming; dynamic browser tab titles show current chat name.
 - **Draft persistence**: Unsent message drafts are saved automatically and restored when you return to a chat.
 - Inter-character memory sharing plus auto-tagging and placeholder generation so scene descriptions stay consistent.
-- Multi-character SillyTavern import wizard with speaker mapping, persona assignment, and optional memory creation for each participant.
+- Multi-character SillyTavern import wizard with speaker mapping, character assignment, and optional memory creation for each participant.
 - Development builds expose a DevConsole so engineers can read server logs, browser consoles, and chat traces without leaving the UI.
 - Import/export entire conversations from SillyTavern and branch them inside Quilltap with swipe histories.
 
 ### Image & Avatar Management
 
 - Upload art via file or URL, automatically store it in S3/MinIO, and tag assets for quick reuse.
-- Curate a gallery that powers character avatars, persona avatars, chat message attachments, and reference boards.
-- Assign chat-specific avatar overrides or persona-specific avatars without losing the base asset.
+- Curate a gallery that powers character avatars, chat message attachments, and reference boards.
+- Assign chat-specific avatar overrides or character-specific avatars without losing the base asset.
 - Images live inside per-user S3 folders, scoped by user ID, so exports and deletes are isolated per account.
 
 ### Image Generation
 
 - Create reusable image generation profiles for Google Gemini (Imagen 4, Gemini image models), Grok, OpenAI, and OpenRouter-backed models (Gemini 2.0/2.5/3.0 via OpenRouter).
 - Launch the generator directly from any chat, iterate on prompts, and send results back into the conversation without leaving the modal.
-- Automatically collect generated output in the gallery so you can reuse it for avatars, personas, or attachments.
+- Automatically collect generated output in the gallery so you can reuse it for avatars or attachments.
 - Configure provider-specific controls (quality, style, safety settings, aspect ratios) and set global defaults in Settings.
-- Let the cheap LLM pipeline expand prompts using character + persona descriptions (`{{Character}}`, `{{me}}`, etc.) before submitting to the provider.
+- Let the cheap LLM pipeline expand prompts using character descriptions (`{{char}}`, `{{user}}`, etc.) before submitting to the provider.
 
 ### Memory, Embeddings & Automation
 
@@ -83,7 +85,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 ### Multi-Instance Sync
 
 - **Bidirectional sync** between Quilltap instances running on different servers or devices.
-- Sync characters, personas, chats (with messages), memories, tags, roleplay templates, and prompt templates.
+- Sync characters, chats (with messages), memories, tags, roleplay templates, and prompt templates.
 - API key authentication for secure cross-instance sync through firewalls.
 - Real-time progress bar showing current phase (connecting, pulling, pushing), item being synced, and running counts.
 - **Sync direction control**: Choose between bidirectional sync, push-only (send local changes), or pull-only (fetch remote changes).
@@ -96,7 +98,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 
 - **Native .qtap format**: Export wizard lets you select entity type, choose scope (all or selected), optionally include memories, and download a portable .qtap file.
 - **Selective import**: Import wizard previews entities with conflict detection, lets you choose conflict strategy (skip, overwrite, or duplicate), and remaps all foreign key relationships automatically.
-- Supports: Characters, Personas, Chats, Roleplay Templates, Prompt Templates, Connection Profiles, Image Profiles, Embedding Profiles, Tags.
+- Supports: Characters, Chats, Roleplay Templates, Prompt Templates, Connection Profiles, Image Profiles, Embedding Profiles, Tags.
 - **API key import/export**: Separate encrypted export for API keys with AES-256-GCM encryption, user passphrase protection, and HMAC integrity verification.
 - SillyTavern compatibility: Import/export characters and chats in SillyTavern JSON format (V2 spec).
 
@@ -136,7 +138,7 @@ Quilltap is built on a modern, plugin-friendly stack:
 
 - **Frontend & Backend**: Next.js 16 (App Router) with React 19 and TypeScript 5.6 serves both the UI and API routes.
 - **Plugin Runtime**: Providers, auth connectors, themes, upgrade scripts, and dev tooling are delivered as site plugins in `plugins/dist`, loaded according to `SITE_PLUGINS_ENABLED`.
-- **Data Store**: MongoDB 7+ holds users, chats, characters, personas, memories, embeddings, and provider metadata.
+- **Data Store**: MongoDB 7+ holds users, chats, characters, memories, embeddings, and provider metadata.
 - **File Storage**: S3-compatible storage (embedded MinIO for dev or any external S3/MinIO) stores uploads, gallery assets, and user backups under `users/{userId}/`.
 - **Authentication**: Arctic OAuth + custom JWT session management handles Google OAuth, local accounts, optional TOTP, the AUTH_DISABLED "no-auth" auto-login mode, and OAUTH_DISABLED for credentials-only login.
 - **Styling**: Tailwind CSS 4 + the qt-* semantic component class system ensures theme plugins can override every UI surface.
@@ -363,12 +365,11 @@ Quilltap stores all data in MongoDB and S3-compatible storage. Backups, exports,
 
 - **users** - User accounts and authentication data
 - **api_keys** - Provider API keys encrypted per user
-- **characters** - Character definitions and metadata
-- **personas** - User persona definitions
-- **chats** - Chat metadata and message history
+- **characters** - Character definitions and metadata (includes both LLM-controlled and user-controlled characters)
+- **chats** - Chat metadata, message history, and impersonation state
 - **files** - File metadata (actual files stored in S3)
 - **tags** - Tag definitions with visual styles
-- **memories** - Character memory data
+- **memories** - Character memory data with inter-character relationships
 - **connectionProfiles** - LLM connection configurations
 - **embeddingProfiles** - Embedding provider configurations
 - **imageProfiles** - Image generation configurations
@@ -399,7 +400,7 @@ Quilltap includes a built-in backup and restore system accessible from the **Too
 - **Cloud Backups**: List, preview metadata, and restore S3 backups without leaving the modal
 - **Native Export/Import**: Selective .qtap export/import for specific entity types with conflict resolution strategies
 - **API Key Export/Import**: Encrypted export of API keys with passphrase protection
-- **Delete All Data**: Permanently wipe characters, personas, chats, API keys, files, and backups for the current user (after a confirmation step)
+- **Delete All Data**: Permanently wipe characters, chats, API keys, files, and backups for the current user (after a confirmation step)
 
 The Tools workspace orchestrates MongoDB + S3 backups per user, so multi-tenant deployments can let users export their own data without sharing secrets. For admin-focused CLI procedures (cron-based `mongodump`, S3 sync, retention policies), see [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md).
 
@@ -455,8 +456,8 @@ Once logged in, you'll need to:
 2. **Create LLM Connection Profiles**: Configure provider, model, temperature, and mark any profile as the default or "cheap"
 3. **Configure Image Profiles (optional)**: Settings → Image Profiles for OpenAI, Google Imagen, Grok, or OpenRouter image generation
 4. **Configure Embeddings & Cheap LLM settings (optional)**: Settings → Embedding Profiles and Chat Settings to pick embedding providers and Cheap LLM strategy
-5. **Create Characters**: Set up characters/personas for roleplay
-6. **Start Chatting**: Launch a new chat with a character and selected connection profile
+5. **Create Characters**: Set up LLM-controlled characters for roleplay and user-controlled characters to represent yourself
+6. **Start Chatting**: Launch a new chat with a character, select a connection profile, and optionally "play as" a user-controlled character
 
 ## Tech Stack
 
@@ -565,7 +566,6 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [X] Dashboard (v2.4)
   - [ ] Chat (partially done in v2.4)
   - [ ] Characters
-  - [ ] Personas
   - [ ] Settings
   - [ ] Tools
   - [ ] About
@@ -584,7 +584,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [X] Starting a new chat should include:
   - [X] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
   - [X] A scenario prompt so you can set things up before you start
-- [X] Search and replace in one chat + memories associated with that chat, or in all chats (and their memories) associated with a character or persona
+- [X] Search and replace in one chat + memories associated with that chat, or in all chats (and their memories) associated with a character
 - [ ] Memory cascade on message changes
   - [ ] When a message is deleted, cascade delete all memories with that `sourceMessageId`
   - [ ] When a message is regenerated (swipe), delete the old memory so the new response can create a fresh memory
