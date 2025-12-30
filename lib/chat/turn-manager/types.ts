@@ -43,6 +43,8 @@ export interface TurnSelectionResult {
     eligibleSpeakers: string[];
     weights: Record<string, number>;
     randomValue?: number;
+    /** True when this selection started a new cycle in an all-LLM chat */
+    allLLMNewCycle?: boolean;
   };
 }
 

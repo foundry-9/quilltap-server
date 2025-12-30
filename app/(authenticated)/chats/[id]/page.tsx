@@ -154,6 +154,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const abortControllerRef = useRef<AbortController | null>(null)
   const userStoppedStreamRef = useRef<boolean>(false)
   const hasRestoredTurnStateRef = useRef<boolean>(false)
+  const lastAllLLMPauseTurnCountRef = useRef<number>(0) // Track turn count at last auto-pause
   const draftSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
   const lastSavedDraftRef = useRef<string>('')
   const hasRestoredDraftRef = useRef<boolean>(false)
@@ -440,6 +441,33 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return isAllLLMChat(participantsAsBase)
   }, [participantsAsBase])
 
+  // Count turns since last user message (for all-LLM pause logic)
+  const allLLMTurnCount = useMemo(() => {
+    if (!isAllLLM) return 0
+    // Count ASSISTANT messages since the last USER message
+    let count = 0
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'USER') break
+      if (messages[i].role === 'ASSISTANT') count++
+    }
+    return count
+  }, [isAllLLM, messages])
+
+  // Compute effective next speaker for all-LLM chats (recalculates if turnSelectionResult shows null)
+  const effectiveNextSpeakerId = useMemo(() => {
+    if (!turnSelectionResult) return null
+    // If turnSelectionResult has a speaker, use it
+    if (turnSelectionResult.nextSpeakerId !== null) {
+      return turnSelectionResult.nextSpeakerId
+    }
+    // For all-LLM chats with null nextSpeakerId, recalculate to get a valid speaker
+    if (isAllLLM && participantsAsBase.length > 0 && charactersMap.size > 0) {
+      const freshResult = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
+      return freshResult.nextSpeakerId
+    }
+    return null
+  }, [turnSelectionResult, isAllLLM, participantsAsBase, charactersMap, turnState, userParticipantId])
+
   const getParticipantById = useCallback((participantId: string | null | undefined) => {
     if (!participantId || !chat?.participants) return null
     return chat.participants.find(p => p.id === participantId) ?? null
@@ -537,8 +565,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       hasRestoredTurnStateRef.current = true
       const persistedParticipantId = chat.lastTurnParticipantId
 
+      // Check if this is an all-LLM chat (no user-controlled participants)
+      const chatIsAllLLM = isAllLLMChat(participantsAsBase)
+
       if (persistedParticipantId === null) {
-        if (result.nextSpeakerId !== null) {
+        // Don't restore "user's turn" for all-LLM chats - they should auto-continue
+        if (result.nextSpeakerId !== null && !chatIsAllLLM) {
           clientLogger.debug('[Chat] Restoring persisted turn state: user\'s turn', {
             calculatedNextSpeaker: result.nextSpeakerId,
           })
@@ -547,6 +579,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             nextSpeakerId: null,
             reason: 'user_turn',
           }
+        } else if (chatIsAllLLM) {
+          clientLogger.debug('[Chat] Skipping persisted user turn for all-LLM chat', {
+            calculatedNextSpeaker: result.nextSpeakerId,
+          })
         }
       } else {
         const persistedParticipant = participantsAsBase.find(
@@ -585,6 +621,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
     }
   }, [chat?.isPaused])
+
+  // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
+  // This prevents immediate re-pause when user clicks Resume after page refresh
+  useEffect(() => {
+    if (chat?.isPaused && isAllLLM && allLLMTurnCount > 0) {
+      lastAllLLMPauseTurnCountRef.current = allLLMTurnCount
+      clientLogger.debug('[Chat] Initialized all-LLM pause turn count from persisted state', {
+        turnCount: allLLMTurnCount,
+      })
+    }
+  }, [chat?.isPaused, isAllLLM, allLLMTurnCount])
 
   // Initialize impersonation state from chat metadata
   // We intentionally only depend on specific chat properties to avoid re-running on every chat update
@@ -764,64 +811,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages])
 
-  // Auto-trigger next character in multi-character mode
-  useEffect(() => {
-    if (!isMultiChar) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - not multi-character mode')
-      return
-    }
-
-    if (isPaused) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - chat is paused')
-      return
-    }
-
-    if (userStoppedStreamRef.current) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - user stopped streaming')
-      return
-    }
-
-    if (streaming || waitingForResponse) {
-      return
-    }
-
-    if (!turnSelectionResult) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - no turn selection result')
-      return
-    }
-
-    if (turnSelectionResult.nextSpeakerId === null) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - user\'s turn')
-      lastAutoTriggeredRef.current = null
-      return
-    }
-
-    if (turnSelectionResult.nextSpeakerId === userParticipantId) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - next speaker is user')
-      return
-    }
-
-    const nextSpeakerId = turnSelectionResult.nextSpeakerId
-
-    if (lastAutoTriggeredRef.current === nextSpeakerId) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - same participant already triggered')
-      return
-    }
-
-    clientLogger.info('[Chat] Auto-triggering next character in multi-character mode', {
-      nextSpeakerId,
-      reason: turnSelectionResult.reason,
-    })
-
-    lastAutoTriggeredRef.current = nextSpeakerId
-
-    const timeoutId = setTimeout(() => {
-      triggerContinueMode(nextSpeakerId)
-    }, 100)
-
-    return () => clearTimeout(timeoutId)
-  }, [isMultiChar, isPaused, streaming, waitingForResponse, turnSelectionResult, userParticipantId, triggerContinueMode])
-
   // Function to set pause state and persist to database
   const setPauseState = useCallback(async (paused: boolean) => {
     clientLogger.debug('[Chat] Setting pause state', { paused, chatId: id })
@@ -841,6 +830,107 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       clientLogger.error('[Chat] Error persisting pause state', { error })
     }
   }, [id])
+
+  // Auto-trigger next character in multi-character mode
+  useEffect(() => {
+    // Debug: log state at start of effect
+    clientLogger.debug('[Chat] Auto-trigger effect running', {
+      isMultiChar,
+      isPaused,
+      streaming,
+      waitingForResponse,
+      hasAbortController: !!abortControllerRef.current,
+      hasTurnSelectionResult: !!turnSelectionResult,
+      effectiveNextSpeakerId,
+      lastAutoTriggered: lastAutoTriggeredRef.current,
+      isAllLLM,
+      allLLMTurnCount,
+      lastPausedAt: lastAllLLMPauseTurnCountRef.current,
+    })
+
+    if (!isMultiChar) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - not multi-character mode')
+      return
+    }
+
+    if (isPaused) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - chat is paused')
+      return
+    }
+
+    if (userStoppedStreamRef.current) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - user stopped streaming')
+      return
+    }
+
+    if (streaming || waitingForResponse) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - streaming or waiting')
+      return
+    }
+
+    // Also check the abort controller ref - if there's an active request, don't trigger another
+    // This catches race conditions where state hasn't updated yet
+    if (abortControllerRef.current) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - request already in progress (ref check)')
+      return
+    }
+
+    if (!turnSelectionResult) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - no turn selection result')
+      return
+    }
+
+    // Use the pre-computed effective next speaker (handles all-LLM recalculation)
+    if (effectiveNextSpeakerId === null) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - user\'s turn (effectiveNextSpeakerId is null)', {
+        turnSelectionResultNextSpeakerId: turnSelectionResult.nextSpeakerId,
+        turnSelectionResultReason: turnSelectionResult.reason,
+      })
+      lastAutoTriggeredRef.current = null
+      return
+    }
+
+    if (effectiveNextSpeakerId === userParticipantId) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - next speaker is user')
+      return
+    }
+
+    // Check if we should pause for all-LLM chat threshold
+    // Only pause if we've exceeded the last paused turn count (prevents immediate re-pause on resume)
+    if (isAllLLM && shouldPauseForAllLLM(allLLMTurnCount) && allLLMTurnCount > lastAllLLMPauseTurnCountRef.current) {
+      clientLogger.info('[Chat] All-LLM pause threshold reached, auto-pausing', {
+        turnCount: allLLMTurnCount,
+        lastPausedAt: lastAllLLMPauseTurnCountRef.current,
+        nextThreshold: getNextPauseThreshold(allLLMTurnCount),
+      })
+      // Track the turn count at which we paused
+      lastAllLLMPauseTurnCountRef.current = allLLMTurnCount
+      // Auto-pause the chat
+      setPauseState(true)
+      showInfoToast(`Auto-paused after ${allLLMTurnCount} turns. Click Resume to continue.`)
+      return
+    }
+
+    if (lastAutoTriggeredRef.current === effectiveNextSpeakerId) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - same participant already triggered')
+      return
+    }
+
+    clientLogger.info('[Chat] Auto-triggering next character in multi-character mode', {
+      nextSpeakerId: effectiveNextSpeakerId,
+      reason: turnSelectionResult.reason,
+      isAllLLM,
+      allLLMTurnCount,
+    })
+
+    lastAutoTriggeredRef.current = effectiveNextSpeakerId
+
+    const timeoutId = setTimeout(() => {
+      triggerContinueMode(effectiveNextSpeakerId)
+    }, 100)
+
+    return () => clearTimeout(timeoutId)
+  }, [isMultiChar, isPaused, streaming, waitingForResponse, turnSelectionResult, userParticipantId, triggerContinueMode, isAllLLM, allLLMTurnCount, setPauseState, effectiveNextSpeakerId])
 
   // Toggle pause state
   const togglePause = useCallback(async () => {

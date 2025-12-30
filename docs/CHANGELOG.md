@@ -4,6 +4,20 @@
 
 ### 2.6-dev
 
+- fix: Turn manager now auto-continues in all-LLM chats
+  - When all participants are LLM-controlled, turn selection no longer returns "user's turn"
+  - Instead, it starts a new cycle and selects the next speaker automatically
+  - Single-character all-LLM chats now continue in monologue mode
+  - Pause logic applies at intervals (3, 6, 12... turns) to prevent runaway API usage
+  - Fixed: Resume button now properly triggers next speaker (no longer requires nudge)
+  - Fixed: Persisted "user's turn" state no longer overrides calculated speaker for all-LLM chats
+  - Fixed: Race condition where auto-trigger could abort an in-progress stream
+- fix: Improve chat creation page UX
+  - Character list now fills remaining vertical space on desktop layout (uses flex layout)
+  - Connection profile dropdown now includes "Play As (User)" option at the top for any character
+  - Users can now designate characters as user-controlled directly from chat creation
+  - Validation updated to require at least one LLM-controlled character per chat
+  - Character list now sorted: favorites first, then user-controlled, then by chat count, then by name/title
 - refactor: Remove duplicate Photo Gallery tab from character edit page
   - Gallery tab was identical to the one on the view page (both use `EmbeddedPhotoGallery`)
   - Avatar can still be changed via the edit button on the avatar in the header

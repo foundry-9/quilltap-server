@@ -23,6 +23,10 @@ interface Character {
   } | null
   defaultConnectionProfileId?: string | null
   controlledBy?: 'llm' | 'user'
+  isFavorite?: boolean
+  _count?: {
+    chats: number
+  }
   systemPrompts?: Array<{
     id: string
     name: string
@@ -49,7 +53,11 @@ interface SelectedCharacter {
   connectionProfileId: string
   imageProfileId?: string | null
   selectedSystemPromptId?: string | null
+  controlledBy: 'llm' | 'user'
 }
+
+// Special value for "Play As (User)" option in connection profile dropdown
+const USER_CONTROLLED_PROFILE = '__USER_CONTROLLED__'
 
 export default function NewChatPage() {
   const router = useRouter()
@@ -126,13 +134,44 @@ export default function NewChatPage() {
   }, [loading])
 
   const filteredCharacters = useMemo(() => {
-    if (!searchQuery.trim()) return characters
-    const query = searchQuery.toLowerCase()
-    return characters.filter(
-      (c) =>
-        c.name.toLowerCase().includes(query) ||
-        (c.title?.toLowerCase().includes(query) ?? false)
-    )
+    let result = characters
+
+    // Apply search filter if present
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      result = result.filter(
+        (c) =>
+          c.name.toLowerCase().includes(query) ||
+          (c.title?.toLowerCase().includes(query) ?? false)
+      )
+    }
+
+    // Sort: favorites first, then user-controlled, then by chat count (desc), then by name, then by title
+    return [...result].sort((a, b) => {
+      // 1. Favorites first
+      const aFav = a.isFavorite ? 1 : 0
+      const bFav = b.isFavorite ? 1 : 0
+      if (bFav !== aFav) return bFav - aFav
+
+      // 2. User-controlled (Play As) characters next
+      const aUser = a.controlledBy === 'user' ? 1 : 0
+      const bUser = b.controlledBy === 'user' ? 1 : 0
+      if (bUser !== aUser) return bUser - aUser
+
+      // 3. By chat participation count (descending)
+      const aChatCount = a._count?.chats ?? 0
+      const bChatCount = b._count?.chats ?? 0
+      if (bChatCount !== aChatCount) return bChatCount - aChatCount
+
+      // 4. By name (ascending, case-insensitive)
+      const nameCompare = a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+      if (nameCompare !== 0) return nameCompare
+
+      // 5. By title (ascending, case-insensitive, nulls last)
+      const aTitle = a.title?.toLowerCase() ?? ''
+      const bTitle = b.title?.toLowerCase() ?? ''
+      return aTitle.localeCompare(bTitle)
+    })
   }, [characters, searchQuery])
 
   const selectedCharacterIds = useMemo(
@@ -159,16 +198,23 @@ export default function NewChatPage() {
       })
       setSelectedCharacters((prev) => [
         ...prev,
-        { character, connectionProfileId, imageProfileId: null, selectedSystemPromptId },
+        { character, connectionProfileId, imageProfileId: null, selectedSystemPromptId, controlledBy: 'llm' },
       ])
     }
   }
 
   const handleProfileChange = (characterId: string, profileId: string) => {
-    clientLogger.debug('[NewChat] Changing connection profile', { characterId, profileId })
+    const isUserControlled = profileId === USER_CONTROLLED_PROFILE
+    clientLogger.debug('[NewChat] Changing connection profile', { characterId, profileId, isUserControlled })
     setSelectedCharacters((prev) =>
       prev.map((sc) =>
-        sc.character.id === characterId ? { ...sc, connectionProfileId: profileId } : sc
+        sc.character.id === characterId
+          ? {
+              ...sc,
+              connectionProfileId: isUserControlled ? '' : profileId,
+              controlledBy: isUserControlled ? 'user' : 'llm',
+            }
+          : sc
       )
     )
   }
@@ -218,9 +264,17 @@ export default function NewChatPage() {
       return
     }
 
-    const charsWithoutProfile = selectedCharacters.filter((sc) => !sc.connectionProfileId)
-    if (charsWithoutProfile.length > 0) {
-      showErrorToast('Please select a connection profile for: ' + charsWithoutProfile.map((sc) => sc.character.name).join(', '))
+    // Only LLM-controlled characters need a connection profile
+    const llmCharsWithoutProfile = selectedCharacters.filter((sc) => sc.controlledBy === 'llm' && !sc.connectionProfileId)
+    if (llmCharsWithoutProfile.length > 0) {
+      showErrorToast('Please select a connection profile for: ' + llmCharsWithoutProfile.map((sc) => sc.character.name).join(', '))
+      return
+    }
+
+    // Ensure at least one LLM-controlled character exists
+    const hasLlmControlled = selectedCharacters.some((sc) => sc.controlledBy === 'llm')
+    if (!hasLlmControlled) {
+      showErrorToast('At least one character must be LLM-controlled')
       return
     }
 
@@ -243,10 +297,10 @@ export default function NewChatPage() {
       }> = selectedCharacters.map((sc) => ({
         type: 'CHARACTER' as const,
         characterId: sc.character.id,
-        connectionProfileId: sc.connectionProfileId,
+        connectionProfileId: sc.controlledBy === 'llm' ? sc.connectionProfileId : undefined,
         imageProfileId: sc.imageProfileId || undefined,
         selectedSystemPromptId: sc.selectedSystemPromptId || undefined,
-        controlledBy: 'llm' as const,
+        controlledBy: sc.controlledBy,
       }))
 
       // Add user-controlled character as a participant (replaces persona)
@@ -332,9 +386,9 @@ export default function NewChatPage() {
         )}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="rounded-xl border border-border bg-card p-6">
+          <div className="flex flex-col rounded-xl border border-border bg-card p-6 lg:max-h-[calc(100vh-12rem)]">
             <h2 className="mb-4 text-lg font-semibold">Select Characters</h2>
-            <div className="mb-4">
+            <div className="mb-4 flex-shrink-0">
               <input
                 ref={searchInputRef}
                 type="text"
@@ -344,7 +398,7 @@ export default function NewChatPage() {
                 className="w-full rounded-lg border border-border bg-background px-4 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            <div className="max-h-[500px] space-y-2 overflow-y-auto">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
               {filteredCharacters.length === 0 ? (
                 <div className="py-8 text-center qt-text-small">
                   {searchQuery ? 'No characters match your search' : 'No characters available'}
@@ -414,11 +468,12 @@ export default function NewChatPage() {
                             <div className="mt-3">
                               <label className="mb-1 block text-xs font-medium qt-text-xs">Connection Profile</label>
                               <select
-                                value={sc.connectionProfileId}
+                                value={sc.controlledBy === 'user' ? USER_CONTROLLED_PROFILE : sc.connectionProfileId}
                                 onChange={(e) => handleProfileChange(sc.character.id, e.target.value)}
                                 className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                               >
                                 <option value="">Select profile...</option>
+                                <option value={USER_CONTROLLED_PROFILE}>Play As (User)</option>
                                 {profiles.map((profile) => (
                                   <option key={profile.id} value={profile.id}>
                                     {profile.name}{profile.modelName ? ' (' + profile.modelName + ')' : ''}
@@ -512,7 +567,13 @@ export default function NewChatPage() {
               <Link href="/chats" className="rounded-lg border border-border bg-card px-6 py-2 font-medium qt-text-small transition hover:bg-muted">Cancel</Link>
               <button
                 onClick={handleCreateChat}
-                disabled={creating || selectedCharacters.length === 0 || profiles.length === 0 || selectedCharacters.some((sc) => !sc.connectionProfileId)}
+                disabled={
+                  creating ||
+                  selectedCharacters.length === 0 ||
+                  (profiles.length === 0 && selectedCharacters.some((sc) => sc.controlledBy === 'llm')) ||
+                  selectedCharacters.some((sc) => sc.controlledBy === 'llm' && !sc.connectionProfileId) ||
+                  !selectedCharacters.some((sc) => sc.controlledBy === 'llm')
+                }
                 className="rounded-lg bg-success px-6 py-2 font-semibold text-success-foreground transition hover:bg-success/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {creating ? 'Creating...' : 'Create Chat'}
