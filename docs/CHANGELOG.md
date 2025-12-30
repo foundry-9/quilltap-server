@@ -4,6 +4,11 @@
 
 ### 2.6-dev
 
+- refactor: Remove deprecated "Associated Profiles" tab from character edit page
+  - Tab used old personas system which has been replaced by user-controlled characters
+  - Profile settings (connection profile, conversation partner, image profile) are available on the view page's Profiles tab
+  - Removed `CharacterSettings` component and persona-related state from `useCharacterEdit` hook
+  - Cleaned up unused types (`Persona`, `CharacterPersonaLink`, `ConnectionProfile`) from edit types
 - feat: Complete characters-not-personas migration for chat creation and context
   - Chat creation UI now shows "Play As" selector for user-controlled characters instead of personas
   - Chat participants now use `controlledBy: 'llm' | 'user'` to determine control mode

@@ -37,11 +37,13 @@ export function SearchInputStep({
   onIncludeMessagesChange,
   onIncludeMemoriesChange,
 }: SearchInputStepProps) {
+  // Log on mount (intentionally captures initial values only)
   useEffect(() => {
     clientLogger.debug('[SearchInputStep] Rendered', {
       searchTextLength: searchText.length,
       hasPreview: !!preview,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const totalMatches = (preview?.messageMatches || 0) + (preview?.memoryMatches || 0);

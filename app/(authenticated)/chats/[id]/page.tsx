@@ -587,19 +587,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [chat?.isPaused])
 
   // Initialize impersonation state from chat metadata
+  // We intentionally only depend on specific chat properties to avoid re-running on every chat update
   useEffect(() => {
-    if (chat) {
-      if (chat.impersonatingParticipantIds && chat.impersonatingParticipantIds.length > 0) {
-        clientLogger.debug('[Chat] Restoring impersonation state from chat', {
-          impersonatingParticipantIds: chat.impersonatingParticipantIds,
-          activeTypingParticipantId: chat.activeTypingParticipantId,
-        })
-        setImpersonatingParticipantIds(chat.impersonatingParticipantIds)
-        setActiveTypingParticipantId(chat.activeTypingParticipantId ?? null)
-      }
-      if (chat.allLLMPauseTurnCount !== undefined) {
-        setAllLLMPauseTurnCount(chat.allLLMPauseTurnCount)
-      }
+    const impersonatingIds = chat?.impersonatingParticipantIds
+    const activeTypingId = chat?.activeTypingParticipantId
+    const pauseTurnCount = chat?.allLLMPauseTurnCount
+
+    if (impersonatingIds && impersonatingIds.length > 0) {
+      clientLogger.debug('[Chat] Restoring impersonation state from chat', {
+        impersonatingParticipantIds: impersonatingIds,
+        activeTypingParticipantId: activeTypingId,
+      })
+      setImpersonatingParticipantIds(impersonatingIds)
+      setActiveTypingParticipantId(activeTypingId ?? null)
+    }
+    if (pauseTurnCount !== undefined) {
+      setAllLLMPauseTurnCount(pauseTurnCount)
     }
   }, [chat?.impersonatingParticipantIds, chat?.activeTypingParticipantId, chat?.allLLMPauseTurnCount])
 

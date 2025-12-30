@@ -336,8 +336,7 @@ export const migratePersonasToCharactersMigration: Migration = {
 
         for (const chat of chatsWithPersonaParticipants) {
           try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const participants = chat.participants as any[];
+            const participants = chat.participants as Array<{ type: string; [key: string]: unknown }>;
             let modified = false;
 
             for (let i = 0; i < participants.length; i++) {

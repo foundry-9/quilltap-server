@@ -52,12 +52,13 @@ export function useSearchReplace(
   // Debounce timer ref
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Log state changes
+  // Log state changes (intentionally runs once on mount to capture initial values)
   useEffect(() => {
     clientLogger.debug('[useSearchReplace] State initialized', {
       currentStep,
       hasInitialScope: !!initialScope,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetch preview when search text changes (debounced)
