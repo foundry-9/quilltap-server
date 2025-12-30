@@ -4,6 +4,18 @@
 
 ### 2.6-dev
 
+- refactor: Clean up remaining persona references after characters-not-personas migration
+  - Updated `lib/image-gen/prompt-expansion.ts` to use characters repository instead of personas
+  - Simplified `PlaceholderInfo.type` to `'character' | 'user'` (removed 'persona')
+  - Updated image gallery components to handle both CHARACTER and legacy PERSONA tags
+  - Removed 'persona' from component EntityType unions (tag-editor, physical-descriptions, embedded-gallery)
+  - Updated ImageDetailModal to only fetch characters (which now include former personas)
+  - Updated useImageActions and ImageMetadata to work with characters only
+  - Removed "Personas" from export data type selector (personas are now characters)
+  - Removed "Personas" from delete data preview and capabilities report database stats
+  - Updated restore progress to combine character and persona counts
+  - Updated search-replace scope selection to remove persona option, added character grouping by controlledBy
+  - Backwards compatibility maintained: existing PERSONA tags still recognized, old backups with personas still restorable
 - feat: Add XML tool call detection for LLMs that emit XML-style function calls
   - Detects and executes tool calls from LLMs like DeepSeek that spontaneously emit XML tool syntax
   - Supports multiple formats: DeepSeek (`<function_calls><invoke>`), Claude-style, generic (`<tool_call>`), and `<function_call>` variations

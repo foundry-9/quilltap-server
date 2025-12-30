@@ -16,20 +16,15 @@ interface ScopeSelectionStepProps {
   currentChatId?: string;
   chatTitle?: string;
   characterName?: string;
-  personaName?: string;
 }
 
 interface Character {
   id: string;
   name: string;
+  controlledBy?: 'llm' | 'user';
 }
 
-interface Persona {
-  id: string;
-  name: string;
-}
-
-type ScopeType = 'chat' | 'character' | 'persona';
+type ScopeType = 'chat' | 'character';
 
 export function ScopeSelectionStep({
   scope,
@@ -37,42 +32,31 @@ export function ScopeSelectionStep({
   currentChatId,
   chatTitle,
   characterName,
-  personaName,
 }: ScopeSelectionStepProps) {
   const [scopeType, setScopeType] = useState<ScopeType>(
-    scope?.type || (currentChatId ? 'chat' : 'character')
+    scope?.type === 'chat' || scope?.type === 'character'
+      ? scope.type
+      : (currentChatId ? 'chat' : 'character')
   );
   const [characters, setCharacters] = useState<Character[]>([]);
-  const [personas, setPersonas] = useState<Persona[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(
     scope?.type === 'character' ? scope.characterId : ''
   );
-  const [selectedPersonaId, setSelectedPersonaId] = useState<string>(
-    scope?.type === 'persona' ? scope.personaId : ''
-  );
   const [loading, setLoading] = useState(false);
 
-  // Fetch characters and personas
+  // Fetch characters (includes former personas with controlledBy: 'user')
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [charsRes, personasRes] = await Promise.all([
-          fetch('/api/characters'),
-          fetch('/api/personas'),
-        ]);
+        const charsRes = await fetch('/api/characters');
 
         if (charsRes.ok) {
           const data = await charsRes.json();
           setCharacters(data.characters || data || []);
         }
 
-        if (personasRes.ok) {
-          const data = await personasRes.json();
-          setPersonas(data.personas || data || []);
-        }
-
-        clientLogger.debug('[ScopeSelectionStep] Fetched characters and personas');
+        clientLogger.debug('[ScopeSelectionStep] Fetched characters');
       } catch (error) {
         clientLogger.error('[ScopeSelectionStep] Error fetching data', { error });
       } finally {
@@ -89,15 +73,17 @@ export function ScopeSelectionStep({
       onScopeChange({ type: 'chat', chatId: currentChatId });
     } else if (scopeType === 'character' && selectedCharacterId) {
       onScopeChange({ type: 'character', characterId: selectedCharacterId });
-    } else if (scopeType === 'persona' && selectedPersonaId) {
-      onScopeChange({ type: 'persona', personaId: selectedPersonaId });
     }
-  }, [scopeType, currentChatId, selectedCharacterId, selectedPersonaId, onScopeChange]);
+  }, [scopeType, currentChatId, selectedCharacterId, onScopeChange]);
 
   const handleScopeTypeChange = (type: ScopeType) => {
     setScopeType(type);
     clientLogger.debug('[ScopeSelectionStep] Scope type changed', { type });
   };
+
+  // Separate characters by controlledBy for display
+  const llmCharacters = characters.filter(c => c.controlledBy !== 'user');
+  const userCharacters = characters.filter(c => c.controlledBy === 'user');
 
   return (
     <div className="space-y-6">
@@ -171,54 +157,24 @@ export function ScopeSelectionStep({
               disabled={loading}
             >
               <option value="">Select a character...</option>
-              {characters.map((char) => (
-                <option key={char.id} value={char.id}>
-                  {char.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Persona scope option */}
-        <label className={`
-          flex items-center p-4 rounded-lg border-2 cursor-pointer transition-colors
-          ${scopeType === 'persona'
-            ? 'border-primary bg-accent'
-            : 'border-border bg-background hover:border-primary/50'
-          }
-        `}>
-          <input
-            type="radio"
-            name="scopeType"
-            value="persona"
-            checked={scopeType === 'persona'}
-            onChange={() => handleScopeTypeChange('persona')}
-            className="mr-3"
-          />
-          <div className="flex-1">
-            <div className="font-medium qt-text-primary">All Chats for Persona</div>
-            <div className="text-sm qt-text-secondary">
-              Search across all conversations where you used a specific persona
-            </div>
-          </div>
-        </label>
-
-        {/* Persona selector */}
-        {scopeType === 'persona' && (
-          <div className="ml-8 mt-2">
-            <select
-              value={selectedPersonaId}
-              onChange={(e) => setSelectedPersonaId(e.target.value)}
-              className="qt-input w-full"
-              disabled={loading}
-            >
-              <option value="">Select a persona...</option>
-              {personas.map((persona) => (
-                <option key={persona.id} value={persona.id}>
-                  {persona.name}
-                </option>
-              ))}
+              {llmCharacters.length > 0 && (
+                <optgroup label="LLM Characters">
+                  {llmCharacters.map((char) => (
+                    <option key={char.id} value={char.id}>
+                      {char.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {userCharacters.length > 0 && (
+                <optgroup label="Your Characters">
+                  {userCharacters.map((char) => (
+                    <option key={char.id} value={char.id}>
+                      {char.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
         )}

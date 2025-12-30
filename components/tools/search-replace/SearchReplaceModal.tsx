@@ -27,7 +27,6 @@ export function SearchReplaceModal({
   initialScope,
   chatTitle,
   characterName,
-  personaName,
   currentChatId,
 }: SearchReplaceModalProps) {
   const {
@@ -100,7 +99,6 @@ export function SearchReplaceModal({
             currentChatId={currentChatId}
             chatTitle={chatTitle}
             characterName={characterName}
-            personaName={personaName}
           />
         );
       case 'search':

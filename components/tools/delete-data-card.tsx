@@ -240,10 +240,6 @@ export function DeleteDataCard() {
                             <span className="qt-text-primary">{preview.characters}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Personas</span>
-                            <span className="qt-text-primary">{preview.personas}</span>
-                          </div>
-                          <div className="flex justify-between">
                             <span className="text-muted-foreground">Chats</span>
                             <span className="qt-text-primary">{preview.chats}</span>
                           </div>

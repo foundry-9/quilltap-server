@@ -6,4 +6,4 @@
 'use client'
 
 export { default } from './image-detail/ImageDetailModal'
-export type { ImageDetailModalProps, ImageData, Character, Persona } from './image-detail/types'
+export type { ImageDetailModalProps, ImageData, Character } from './image-detail/types'

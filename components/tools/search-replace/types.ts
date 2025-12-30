@@ -7,11 +7,11 @@
 
 /**
  * Scope for search and replace operations
+ * Note: 'persona' type removed - personas are now characters with controlledBy: 'user'
  */
 export type SearchReplaceScope =
   | { type: 'chat'; chatId: string }
-  | { type: 'character'; characterId: string }
-  | { type: 'persona'; personaId: string };
+  | { type: 'character'; characterId: string };
 
 /**
  * Request payload for search and replace operations
@@ -74,7 +74,6 @@ export interface SearchReplaceModalProps {
   /** Entity names for display */
   chatTitle?: string;
   characterName?: string;
-  personaName?: string;
   /** Current chat ID if opened from chat context */
   currentChatId?: string;
 }

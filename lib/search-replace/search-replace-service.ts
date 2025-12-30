@@ -39,18 +39,10 @@ async function getChatIdsForScope(
       return [scope.chatId];
 
     case 'character':
-      // Get all chats where character is a participant
+      // Get all chats where character is a participant (includes former personas with controlledBy: 'user')
       const characterChats = await repos.chats.findByCharacterId(scope.characterId);
       // Filter to only user's chats
       return characterChats
-        .filter((c: ChatMetadata) => c.userId === userId)
-        .map((c: ChatMetadata) => c.id);
-
-    case 'persona':
-      // Get all chats where persona is a participant
-      const personaChats = await repos.chats.findByPersonaId(scope.personaId);
-      // Filter to only user's chats
-      return personaChats
         .filter((c: ChatMetadata) => c.userId === userId)
         .map((c: ChatMetadata) => c.id);
 
@@ -62,21 +54,19 @@ async function getChatIdsForScope(
 
 /**
  * Get memory query criteria based on scope
+ * Note: personaId removed - personas are now characters with controlledBy: 'user'
  */
 function getMemoryQueryForScope(scope: SearchReplaceScope): {
   characterId: string | null;
-  personaId: string | null;
   chatId: string | null;
 } {
   switch (scope.type) {
     case 'chat':
-      return { characterId: null, personaId: null, chatId: scope.chatId };
+      return { characterId: null, chatId: scope.chatId };
     case 'character':
-      return { characterId: scope.characterId, personaId: null, chatId: null };
-    case 'persona':
-      return { characterId: null, personaId: scope.personaId, chatId: null };
+      return { characterId: scope.characterId, chatId: null };
     default:
-      return { characterId: null, personaId: null, chatId: null };
+      return { characterId: null, chatId: null };
   }
 }
 
@@ -116,11 +106,12 @@ export async function getSearchReplacePreview(
     }
 
     // Count memory matches
+    // Note: personaId parameter removed - personas are now characters with controlledBy: 'user'
     if (request.includeMemories) {
       const memoryQuery = getMemoryQueryForScope(request.scope);
       const count = await repos.memories.countMemoriesWithText(
         memoryQuery.characterId,
-        memoryQuery.personaId,
+        null, // personaId - no longer used, personas are now characters
         memoryQuery.chatId,
         request.searchText
       );
@@ -196,13 +187,14 @@ export async function executeSearchReplace(
     }
 
     // Process memories
+    // Note: personaId parameter removed - personas are now characters with controlledBy: 'user'
     if (request.includeMemories) {
       const memoryQuery = getMemoryQueryForScope(request.scope);
       logger.debug('Finding memories to update', memoryQuery);
 
       const memoriesToUpdate = await repos.memories.findMemoriesWithText(
         memoryQuery.characterId,
-        memoryQuery.personaId,
+        null, // personaId - no longer used, personas are now characters
         memoryQuery.chatId,
         request.searchText
       );
