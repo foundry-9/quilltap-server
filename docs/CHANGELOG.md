@@ -4,6 +4,14 @@
 
 ### 2.6-dev
 
+- feat: Add npm-based plugin installation system
+  - New npm search API (`/api/plugins/search`) to browse qtap-plugin-* packages from npm registry
+  - New plugin install/uninstall APIs (`/api/plugins/install`, `/api/plugins/uninstall`)
+  - Support for site-wide and per-user plugin installations
+  - Updated manifest loader to scan plugins/site and plugins/users/{userId} directories
+  - Enhanced plugins settings tab with "Browse npm" tab for discovering and installing plugins
+  - Docker volume configuration for persistent plugin storage
+  - Plugin installer service with manifest validation, version compatibility checking, and npm install handling
 - test: Add unit tests for characters-not-personas branch features
   - Added tests for all-LLM pause logic (`lib/chat/turn-manager/all-llm-pause.ts`)
   - Added tests for impersonate API route (`/api/chats/:id/impersonate`)

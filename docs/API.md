@@ -28,6 +28,7 @@ Complete API reference for Quilltap v2.6.
   - [Themes](#themes)
   - [Search](#search)
   - [Background Jobs](#background-jobs)
+  - [Plugins](#plugins)
 
 ## Authentication
 
@@ -1040,6 +1041,160 @@ Delete a job.
 #### `GET /api/tools/tasks-queue`
 
 Get tasks queue status (UI endpoint).
+
+---
+
+### Plugins
+
+Plugin management endpoints for npm-based plugin installation.
+
+#### `GET /api/plugins`
+
+Get all registered plugins and system status.
+
+**Response:**
+```json
+{
+  "plugins": [
+    {
+      "name": "qtap-plugin-openai",
+      "title": "OpenAI Provider",
+      "version": "1.0.5",
+      "enabled": true,
+      "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER"],
+      "path": "/app/plugins/dist/qtap-plugin-openai",
+      "source": "included"
+    }
+  ],
+  "stats": {
+    "total": 15,
+    "enabled": 14,
+    "disabled": 1,
+    "errors": 0,
+    "initialized": true
+  },
+  "errors": []
+}
+```
+
+#### `PUT /api/plugins/[name]`
+
+Enable or disable a plugin.
+
+**Request Body:**
+```json
+{
+  "enabled": true
+}
+```
+
+#### `GET /api/plugins/search`
+
+Search npm registry for Quilltap plugins.
+
+**Query Parameters:**
+- `q` - Search query (appended to "qtap-plugin-" prefix)
+
+**Response:**
+```json
+{
+  "plugins": [
+    {
+      "name": "qtap-plugin-example",
+      "version": "1.0.0",
+      "description": "Example Quilltap plugin",
+      "author": "Author Name",
+      "keywords": ["quilltap", "plugin"],
+      "updated": "2024-01-15T10:30:00Z",
+      "score": 0.85
+    }
+  ]
+}
+```
+
+#### `POST /api/plugins/install`
+
+Install a plugin from npm.
+
+**Request Body:**
+```json
+{
+  "packageName": "qtap-plugin-example",
+  "scope": "user"
+}
+```
+
+- `scope` - Installation scope: `"user"` (personal) or `"site"` (shared across all users)
+
+**Response:**
+```json
+{
+  "success": true,
+  "plugin": {
+    "name": "qtap-plugin-example",
+    "title": "Example Plugin",
+    "version": "1.0.0",
+    "description": "An example plugin",
+    "capabilities": ["LLM_PROVIDER"]
+  },
+  "message": "Plugin installed successfully. Restart Quilltap to activate the plugin."
+}
+```
+
+#### `POST /api/plugins/uninstall`
+
+Uninstall an installed plugin.
+
+**Request Body:**
+```json
+{
+  "packageName": "qtap-plugin-example",
+  "scope": "user"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Plugin uninstalled successfully. Restart Quilltap to complete removal."
+}
+```
+
+**Notes:**
+- Bundled plugins cannot be uninstalled
+- Site-wide plugins require admin privileges (TODO)
+
+#### `GET /api/plugins/installed`
+
+Get all installed plugins with metadata.
+
+**Query Parameters:**
+- `scope` - Filter by scope: `"all"`, `"bundled"`, `"site"`, `"user"` (default: `"all"`)
+- `check` - Package name to check installation status
+
+**Response:**
+```json
+{
+  "plugins": [
+    {
+      "name": "qtap-plugin-openai",
+      "title": "OpenAI Provider",
+      "version": "1.0.5",
+      "description": "OpenAI LLM and image generation provider",
+      "source": "bundled",
+      "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER"],
+      "installedAt": null
+    }
+  ],
+  "counts": {
+    "total": 15,
+    "bundled": 12,
+    "site": 2,
+    "user": 1
+  }
+}
+```
 
 ---
 

@@ -80,6 +80,10 @@ services:
     container_name: quilltap-app
     expose:
       - "3000"
+    volumes:
+      # Plugin directories for npm-installed plugins
+      - plugin-site-data:/app/plugins/site
+      - plugin-user-data:/app/plugins/users
     environment:
       - NODE_ENV=production
       - BASE_URL=${BASE_URL:-https://yourdomain.com}
@@ -115,6 +119,8 @@ services:
 volumes:
   mongo-data:
   minio-data:
+  plugin-site-data:
+  plugin-user-data:
 
 networks:
   quilltap-network:
