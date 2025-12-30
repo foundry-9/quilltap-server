@@ -15,6 +15,7 @@ import { registerArcticProvider, clearArcticProviders } from '@/lib/auth/arctic/
 import type { ArcticProviderPlugin } from '@/lib/auth/arctic/types';
 import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-registry';
 import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/lib/plugins/roleplay-template-registry';
+import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugins/plugin-logger-bridge';
 import packageJson from '@/package.json';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
@@ -178,6 +179,11 @@ async function performInitialization(): Promise<PluginInitializationResult> {
   };
 
   try {
+    // Inject the logger factory before loading any plugins
+    // This allows plugins using @quilltap/plugin-utils to have their
+    // logs routed through Quilltap's core logging system
+    injectPluginLoggerFactory();
+
     // Scan for plugins
     const scanResult = await scanPlugins();
 
@@ -473,6 +479,8 @@ export function resetPluginSystem(): void {
   themeRegistry.reset();
   // Reset roleplay template registry
   roleplayTemplateRegistry.reset();
+  // Clear the plugin logger factory
+  clearPluginLoggerFactory();
   logger.debug('Plugin system reset');
 }
 

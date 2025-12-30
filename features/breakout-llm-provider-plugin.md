@@ -71,24 +71,34 @@ export interface LLMProviderPlugin {
 // ... all other shared types
 ```
 
-### 2. **Create a Utilities Package (`@quilltap/plugin-utils`)**
+### 2. **Create a Utilities Package (`@quilltap/plugin-utils`)** ✅ IMPLEMENTED
 
-For shared utilities like tool formatting:
+The `@quilltap/plugin-utils` package is now available with:
 
 ```typescript
 // @quilltap/plugin-utils
+// Tool parsers
+export function parseToolCalls(response: unknown, format: 'openai' | 'anthropic' | 'google' | 'auto'): ToolCallRequest[];
 export function parseOpenAIToolCalls(response: unknown): ToolCallRequest[];
 export function parseAnthropicToolCalls(response: unknown): ToolCallRequest[];
-// ... other shared utilities
+export function parseGoogleToolCalls(response: unknown): ToolCallRequest[];
+
+// Tool converters
+export function convertToAnthropicFormat(tool: UniversalTool): AnthropicToolDefinition;
+export function convertToGoogleFormat(tool: UniversalTool): GoogleToolDefinition;
+
+// Logger bridge - routes to Quilltap core logging when running in host
+export function createPluginLogger(pluginName: string): PluginLoggerWithChild;
 ```
 
-### 3. **Plugin Provides Its Own Logger**
+### 3. **Plugin Provides Its Own Logger** ✅ IMPLEMENTED via plugin-utils
 
-The standalone plugin would need to either:
+The `@quilltap/plugin-utils` package now provides `createPluginLogger()`:
 
-- Use a simple console-based logger
-- Accept a logger instance via configuration
-- Use a lightweight logging library
+- When running in Quilltap: Routes to core logging with plugin context (`{ plugin: 'name', module: 'plugin' }`)
+- When running standalone: Falls back to console logging with `[plugin-name]` prefix
+- Uses `globalThis` for injection to work across npm package boundaries
+- Quilltap core injects the logger factory during plugin initialization
 
 ---
 
@@ -125,14 +135,15 @@ qtap-plugin-gab-ai/
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "openai": "^6.9.0"
+    "openai": "^6.9.0",
+    "@quilltap/plugin-utils": "^1.0.0"
   },
   "peerDependencies": {
     "@quilltap/plugin-types": "^1.0.0",
     "react": ">=18.0.0"
   },
   "devDependencies": {
-    "@quilttap/plugin-types": "^1.0.0",
+    "@quilltap/plugin-types": "^1.0.0",
     "@types/react": "^18.0.0",
     "esbuild": "^0.24.0",
     "typescript": "^5.0.0"
@@ -152,64 +163,18 @@ qtap-plugin-gab-ai/
 }
 ```
 
-### Refactored `src/logger.ts` (Internal Simple Logger)
+### Refactored `src/logger.ts` (Using plugin-utils)
+
+With `@quilltap/plugin-utils`, the logger file is just a one-liner:
 
 ```typescript
-/**
- * Simple internal logger for the plugin
- * Quilltap will capture console output or plugins can check for a global logger
- */
+import { createPluginLogger } from '@quilltap/plugin-utils';
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-
-interface LogContext {
-  context?: string;
-  [key: string]: unknown;
-}
-
-class PluginLogger {
-  private prefix = '[qtap-plugin-gab-ai]';
-  private minLevel: LogLevel = 'info';
-
-  constructor() {
-    // Check for environment-based log level
-    if (typeof process !== 'undefined' && process.env?.LOG_LEVEL) {
-      this.minLevel = process.env.LOG_LEVEL as LogLevel;
-    }
-  }
-
-  private shouldLog(level: LogLevel): boolean {
-    const levels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
-    return levels.indexOf(level) >= levels.indexOf(this.minLevel);
-  }
-
-  debug(message: string, context?: LogContext): void {
-    if (this.shouldLog('debug')) {
-      console.debug(this.prefix, message, context ?? '');
-    }
-  }
-
-  info(message: string, context?: LogContext): void {
-    if (this.shouldLog('info')) {
-      console.info(this.prefix, message, context ?? '');
-    }
-  }
-
-  warn(message: string, context?: LogContext): void {
-    if (this.shouldLog('warn')) {
-      console.warn(this.prefix, message, context ?? '');
-    }
-  }
-
-  error(message: string, context?: LogContext, error?: Error): void {
-    if (this.shouldLog('error')) {
-      console.error(this.prefix, message, context ?? '', error ?? '');
-    }
-  }
-}
-
-export const logger = new PluginLogger();
+export const logger = createPluginLogger('qtap-plugin-gab-ai');
 ```
+
+When running in Quilltap, this logger routes to the core logging system with proper context tagging.
+When running standalone, it falls back to console logging with `[qtap-plugin-gab-ai]` prefix.
 
 ### Refactored `src/types.ts`
 
@@ -235,7 +200,7 @@ export type {
   ModelInfo,
   OpenAIToolDefinition,
   ToolCallRequest,
-} from '@quilttap/plugin-types';
+} from '@quilltap/plugin-types';
 ```
 
 ### Refactored `src/index.ts` (Tool Utilities Inlined or Imported)
@@ -295,7 +260,7 @@ const EXTERNAL_PACKAGES = [
   'react',
   'react-dom',
   'react/jsx-runtime',
-  '@quilttap/plugin-types',
+  '@quilltap/plugin-types',
   // Node built-ins
   'fs', 'path', 'crypto', 'http', 'https', 'url', 'util',
   'stream', 'events', 'buffer', 'os',
@@ -327,17 +292,23 @@ build();
 
 | Component | Current State | Standalone Requirement |
 |-----------|---------------|------------------------|
-| **Types** | Import from `../../../lib/` | Import from `@quilttap/plugin-types` |
-| **Logger** | Import from `../../../lib/logger` | Internal simple logger |
-| **Tool Utils** | Import from `../../../lib/llm/tool-formatting-utils` | Inline or `@quilttap/plugin-utils` |
+| **Types** | Import from `../../../lib/` | Import from `@quilltap/plugin-types` |
+| **Logger** | Import from `../../../lib/logger` | `createPluginLogger()` from `@quilltap/plugin-utils` ✅ |
+| **Tool Utils** | Import from `../../../lib/llm/tool-formatting-utils` | Import from `@quilltap/plugin-utils` ✅ |
 | **esbuild** | Resolves `@/` to project root | No alias needed |
 | **Build Output** | `index.js` in plugin root | `dist/index.js` |
 
-## Quilltap-Side Work Required
+## Quilltap-Side Work - COMPLETED
 
-1. **Publish `@quilttap/plugin-types`** - Extract and publish type definitions
-2. **Optionally publish `@quilttap/plugin-utils`** - For shared utilities like tool parsing
-3. **Update plugin loader** - Resolve types from node_modules for npm-installed plugins
-4. **Document the plugin API** - So third-party developers can build plugins
+1. ✅ **Published `@quilltap/plugin-types`** - Type definitions in `packages/plugin-types/`
+2. ✅ **Published `@quilltap/plugin-utils`** - Utilities in `packages/plugin-utils/`
+3. ✅ **Updated plugin loader** - Injects logger factory via globalThis
+4. ✅ **Documented the plugin API** - README.md files in each package
 
-Would you like me to create the full refactored standalone plugin files, or draft what the `@quilltap/plugin-types` package would look like?
+## Next Steps
+
+Publish the packages to npm:
+```bash
+cd packages/plugin-types && npm publish
+cd packages/plugin-utils && npm publish
+```

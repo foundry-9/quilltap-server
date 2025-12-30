@@ -226,7 +226,7 @@ export async function installPluginFromNpm(
       await fs.rm(pluginDir, { recursive: true, force: true });
       return { 
         success: false, 
-        error: `Plugin requires Quilltap ${manifest.compatibility?.quilltapVersion}, but you have ${quilttapVersion}` 
+        error: `Plugin requires Quilltap ${manifest.compatibility?.quilltapVersion}, but you have ${quilltapVersion}` 
       };
     }
 
@@ -758,7 +758,7 @@ export function PluginManager() {
       return;
     }
 
-    if (!confirm(`Uninstall ${packageName}? You will need to restart Quilttap after uninstalling.`)) {
+    if (!confirm(`Uninstall ${packageName}? You will need to restart Quilltap after uninstalling.`)) {
       return;
     }
 
@@ -993,7 +993,7 @@ services:
 
 1. **Package name validation**: Only allow `qtap-plugin-[a-z0-9-]+` pattern
 2. **Manifest validation**: Validate against existing JSON schema before loading
-3. **Version compatibility**: Check `quilttapVersion` in manifest.compatibility
+3. **Version compatibility**: Check `quilltapVersion` in manifest.compatibility
 4. **Scope separation**: User plugins cannot affect other users
 5. **Admin controls**: Only admins should install site-wide plugins (TODO: implement isAdmin)
 6. **Network permissions**: Consider validating manifest.permissions.network domains

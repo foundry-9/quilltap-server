@@ -4,6 +4,14 @@
 
 ### 2.6-dev
 
+- feat: Add `@quilltap/plugin-utils` package for plugin runtime utilities
+  - New `packages/plugin-utils/` directory with tool parsing and logger bridge
+  - Tool call parsers: `parseToolCalls()`, `parseOpenAIToolCalls()`, `parseAnthropicToolCalls()`, `parseGoogleToolCalls()`
+  - Tool format converters: `convertToAnthropicFormat()`, `convertToGoogleFormat()`, etc.
+  - Logger bridge: `createPluginLogger()` that routes to Quilltap core logging when running in host
+  - Uses globalThis for logger injection to work across npm package boundaries
+  - Core plugin initialization now injects logger factory for all plugins using plugin-utils
+  - New `lib/plugins/plugin-logger-bridge.ts` bridges core logger to plugin-utils
 - feat: Add `@quilltap/plugin-types` package for standalone plugin development
   - New `packages/plugin-types/` directory with TypeScript type definitions
   - Exports all types needed for third-party plugin development: LLM, tools, provider, manifest
