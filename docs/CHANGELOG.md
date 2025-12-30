@@ -4,6 +4,13 @@
 
 ### 2.6-dev
 
+- test: Add unit tests for characters-not-personas branch features
+  - Added tests for all-LLM pause logic (`lib/chat/turn-manager/all-llm-pause.ts`)
+  - Added tests for impersonate API route (`/api/chats/:id/impersonate`)
+  - Added tests for active-speaker API route (`/api/chats/:id/active-speaker`)
+  - Added tests for default-partner API route (`/api/characters/:id/default-partner`)
+  - Added tests for character constants (`lib/constants/character.ts`)
+  - 114 new tests covering core characters-not-personas functionality
 - refactor: Consolidate all migration files into upgrade plugin
   - Moved `add-multi-character-fields` migration from `lib/mongodb/migrations/` to upgrade plugin
   - Moved `add-inter-character-memory-fields` migration from `lib/mongodb/migrations/` to upgrade plugin
