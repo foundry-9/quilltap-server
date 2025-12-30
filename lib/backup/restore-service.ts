@@ -537,7 +537,7 @@ function remapBackupData(
   // Remap characters
   const remappedCharacters = data.characters.map((char) => {
     const remapped = {
-      ...remapper.remapFields(char, ['id', 'defaultImageId', 'defaultConnectionProfileId']),
+      ...remapper.remapFields(char, ['id', 'defaultImageId', 'defaultConnectionProfileId', 'defaultPartnerId']),
       ...remapper.remapArrayFields(char, ['tags']),
       userId: targetUserId,
     };
@@ -1013,6 +1013,15 @@ export async function restore(
         const newProfileId = remapId(originalChar.defaultConnectionProfileId, connectionProfileIdMap);
         if (newProfileId) {
           updates.defaultConnectionProfileId = newProfileId;
+          hasUpdates = true;
+        }
+      }
+
+      // Remap defaultPartnerId (Characters Not Personas: default user-controlled character to pair with)
+      if (originalChar.defaultPartnerId) {
+        const newPartnerId = remapId(originalChar.defaultPartnerId, characterIdMap);
+        if (newPartnerId) {
+          updates.defaultPartnerId = newPartnerId;
           hasUpdates = true;
         }
       }

@@ -58,7 +58,11 @@
   - `aboutCharacterId` field added to memory schema for character-to-character memories
   - New repository methods: `findByCharacterAboutCharacter()`, `findByCharacterAboutCharacters()`
   - Context manager retrieves inter-character memories for multi-character chats
-  - `personaId` field deprecated in favor of `aboutCharacterId`
+- fix: Update backup/restore and import/export for characters-not-personas migration
+  - Add `defaultPartnerId` field to character UUID remapping in backup restore
+  - Add `defaultPartnerId` reconciliation in backup post-restore phase
+  - Add `defaultPartnerId` remapping in Quilltap import character reconciliation
+  - Add `aboutCharacterId` remapping in Quilltap import memory handling
 - feat: Update SillyTavern import to use characters instead of personas
   - `importSTPersonaAsCharacter()` function for importing personas as user-controlled characters
   - `createDefaultMappings()` now prefers characters over personas
