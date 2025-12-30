@@ -158,6 +158,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const draftSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
   const lastSavedDraftRef = useRef<string>('')
   const hasRestoredDraftRef = useRef<boolean>(false)
+  // Ref for triggerContinueMode to break dependency cycle in auto-trigger useEffect
+  const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
 
   // Draft persistence - localStorage key for this chat
   const draftStorageKey = `quilltap-draft-${id}`
@@ -508,6 +510,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [id])
 
+  // Stable callback wrapper using ref - avoids recreating on every render
+  const stableTriggerContinueMode = useCallback(
+    async (participantId: string) => {
+      await triggerContinueModeRef.current(participantId)
+    },
+    [] // Empty deps - uses ref internally
+  )
+
   // Use the extracted turn management hook
   const turnManagement = useTurnManagement(
     participantsAsBase,
@@ -519,10 +529,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setTurnState,
     setTurnSelectionResult,
     setEphemeralMessages,
-    async (participantId: string) => {
-      // Trigger continue mode - implementation below
-      await triggerContinueMode(participantId)
-    },
+    stableTriggerContinueMode,
     isPaused,
     unpauseChat,
   )
@@ -811,6 +818,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages])
 
+  // Keep the ref in sync with the current callback to break dependency cycle
+  triggerContinueModeRef.current = triggerContinueMode
+
   // Function to set pause state and persist to database
   const setPauseState = useCallback(async (paused: boolean) => {
     clientLogger.debug('[Chat] Setting pause state', { paused, chatId: id })
@@ -926,11 +936,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     lastAutoTriggeredRef.current = effectiveNextSpeakerId
 
     const timeoutId = setTimeout(() => {
-      triggerContinueMode(effectiveNextSpeakerId)
+      // Use ref to avoid dependency cycle - the ref always has the latest callback
+      triggerContinueModeRef.current(effectiveNextSpeakerId)
     }, 100)
 
     return () => clearTimeout(timeoutId)
-  }, [isMultiChar, isPaused, streaming, waitingForResponse, turnSelectionResult, userParticipantId, triggerContinueMode, isAllLLM, allLLMTurnCount, setPauseState, effectiveNextSpeakerId])
+    // Note: triggerContinueMode is accessed via ref to break dependency cycle that was causing infinite updates
+  }, [isMultiChar, isPaused, streaming, waitingForResponse, turnSelectionResult, userParticipantId, isAllLLM, allLLMTurnCount, setPauseState, effectiveNextSpeakerId])
 
   // Toggle pause state
   const togglePause = useCallback(async () => {
