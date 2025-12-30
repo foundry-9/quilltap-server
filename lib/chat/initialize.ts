@@ -1,8 +1,10 @@
 // Chat Initialization Utility
 // Phase 0.5: Single Chat MVP
+// Updated for characters-not-personas migration
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { processCharacterTemplates } from '@/lib/templates/processor'
+import { logger } from '@/lib/logger'
 
 interface CharacterSystemPrompt {
   id: string
@@ -20,25 +22,39 @@ interface Character {
   firstMessage?: string | null
   exampleDialogues?: string | null
   systemPrompts?: CharacterSystemPrompt[]
+  defaultPartnerId?: string | null
 }
 
-interface Persona {
+/**
+ * UserCharacter represents a user-controlled character that the user "plays as"
+ * in the conversation. This replaces the old Persona concept.
+ */
+interface UserCharacter {
   id: string
   name: string
-  description: string
-  personalityTraits?: string | null
+  description?: string | null
+  personality?: string | null
 }
 
 export interface ChatContext {
   systemPrompt: string
   firstMessage: string
   character: Character
-  persona?: Persona | null
+  /** @deprecated Use userCharacter instead */
+  persona?: UserCharacter | null
+  /** The user-controlled character the user is playing as (replaces persona) */
+  userCharacter?: UserCharacter | null
 }
 
+/**
+ * Build chat context for initializing a new chat or generating responses
+ * @param characterId - The AI-controlled character ID
+ * @param userCharacterId - Optional user-controlled character ID (replaces personaId)
+ * @param customScenario - Optional custom scenario override
+ */
 export async function buildChatContext(
   characterId: string,
-  personaId?: string,
+  userCharacterId?: string,
   customScenario?: string
 ): Promise<ChatContext> {
   const repos = getRepositories()
@@ -49,21 +65,45 @@ export async function buildChatContext(
     throw new Error('Character not found')
   }
 
-  let persona: Persona | null = null
-  if (personaId) {
-    persona = await repos.personas.findById(personaId) as Persona | null
-  } else if (character.personaLinks && character.personaLinks.length > 0) {
-    // Find default persona
-    const defaultLink = character.personaLinks.find(link => link.isDefault)
-    if (defaultLink) {
-      persona = await repos.personas.findById(defaultLink.personaId) as Persona | null
+  // Look up user-controlled character (replaces persona lookup)
+  let userCharacter: UserCharacter | null = null
+  if (userCharacterId) {
+    const uc = await repos.characters.findById(userCharacterId)
+    if (uc && uc.controlledBy === 'user') {
+      userCharacter = {
+        id: uc.id,
+        name: uc.name,
+        description: uc.description,
+        personality: uc.personality,
+      }
+      logger.debug('buildChatContext: Using specified user character', {
+        context: 'chat-initialize',
+        userCharacterId,
+        userCharacterName: uc.name,
+      })
+    }
+  } else if (character.defaultPartnerId) {
+    // Fall back to character's default partner
+    const defaultPartner = await repos.characters.findById(character.defaultPartnerId)
+    if (defaultPartner && defaultPartner.controlledBy === 'user') {
+      userCharacter = {
+        id: defaultPartner.id,
+        name: defaultPartner.name,
+        description: defaultPartner.description,
+        personality: defaultPartner.personality,
+      }
+      logger.debug('buildChatContext: Using default partner', {
+        context: 'chat-initialize',
+        defaultPartnerId: character.defaultPartnerId,
+        partnerName: defaultPartner.name,
+      })
     }
   }
 
-  // Build system prompt
+  // Build system prompt (pass userCharacter as 'persona' for template compatibility)
   const systemPrompt = buildSystemPrompt({
     character,
-    persona: persona || undefined,
+    userCharacter: userCharacter || undefined,
     scenario: customScenario || character.scenario || undefined,
   })
 
@@ -71,9 +111,10 @@ export async function buildChatContext(
   const defaultSystemPrompt = getDefaultSystemPrompt(character)
 
   // Process first message with templates
+  // Note: processCharacterTemplates expects 'persona' shape for {{user}} template variable
   const processedCharacter = processCharacterTemplates({
     character,
-    persona: persona || undefined,
+    persona: userCharacter ? { name: userCharacter.name, description: userCharacter.description } : undefined,
     scenario: customScenario || character.scenario || undefined,
     systemPrompt: defaultSystemPrompt,
   })
@@ -83,7 +124,8 @@ export async function buildChatContext(
     systemPrompt,
     firstMessage,
     character,
-    persona: persona || null,
+    persona: userCharacter || null,  // For backwards compatibility
+    userCharacter: userCharacter || null,
   }
 }
 
@@ -100,20 +142,21 @@ function getDefaultSystemPrompt(character: Character): string {
 
 function buildSystemPrompt({
   character,
-  persona,
+  userCharacter,
   scenario,
 }: {
   character: Character
-  persona?: Persona
+  userCharacter?: UserCharacter
   scenario?: string | null
 }): string {
   // Get the default system prompt content
   const systemPromptContent = getDefaultSystemPrompt(character)
 
   // Process all character templates with the current context
+  // Note: processCharacterTemplates expects 'persona' shape for {{user}} template variable
   const processedCharacter = processCharacterTemplates({
     character,
-    persona,
+    persona: userCharacter ? { name: userCharacter.name, description: userCharacter.description } : undefined,
     scenario,
     systemPrompt: systemPromptContent,
   })
@@ -133,14 +176,14 @@ function buildSystemPrompt({
     prompt += `\n\nPersonality:\n${processedCharacter.personality}`
   }
 
-  // Add persona (who they're talking to)
-  if (persona) {
-    prompt += `\n\nYou are talking to ${persona.name}.`
-    if (persona.description) {
-      prompt += `\n${persona.description}`
+  // Add user character info (who the AI is talking to)
+  if (userCharacter) {
+    prompt += `\n\nYou are talking to ${userCharacter.name}.`
+    if (userCharacter.description) {
+      prompt += `\n${userCharacter.description}`
     }
-    if (persona.personalityTraits) {
-      prompt += `\nThey are: ${persona.personalityTraits}`
+    if (userCharacter.personality) {
+      prompt += `\nThey are: ${userCharacter.personality}`
     }
   }
 

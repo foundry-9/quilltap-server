@@ -4,6 +4,15 @@
 
 ### 2.6-dev
 
+- feat: Complete characters-not-personas migration for chat creation and context
+  - Chat creation UI now shows "Play As" selector for user-controlled characters instead of personas
+  - Chat participants now use `controlledBy: 'llm' | 'user'` to determine control mode
+  - User-controlled CHARACTER participants replace PERSONA type participants
+  - Updated `buildChatContext` in `lib/chat/initialize.ts` to use user characters instead of personas
+  - Updated chat API (`/api/chats`) to handle user-controlled character participants
+  - Updated context-manager to attribute messages to user-controlled characters
+  - PERSONA type kept for backwards compatibility with existing chats
+  - Connection profile not required for user-controlled CHARACTER participants
 - fix: Character view page now uses default conversation partner for `{{user}}` template replacement
   - Previously used deprecated personas linked via `personaLinks`
   - Now uses `defaultPartnerId` and user-controlled characters for template highlighting

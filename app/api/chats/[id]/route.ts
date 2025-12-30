@@ -44,16 +44,18 @@ const updateParticipantSchema = z.object({
 })
 
 // Validation schema for adding a participant
+// Note: PERSONA type is deprecated - use CHARACTER with controlledBy='user' instead
 const addParticipantSchema = z.object({
-  type: z.enum(['CHARACTER', 'PERSONA']),
+  type: z.enum(['CHARACTER', 'PERSONA']),  // PERSONA kept for backwards compatibility
   characterId: z.string().uuid().optional(),
-  personaId: z.string().uuid().optional(),
+  personaId: z.string().uuid().optional(),  // @deprecated - use characterId with controlledBy='user'
   connectionProfileId: z.string().uuid().optional(),
   imageProfileId: z.string().uuid().nullish(),
   systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
   hasHistoryAccess: z.boolean().optional(), // Phase 6: Can see messages from before joining
   joinScenario: z.string().nullish(), // Phase 6: Custom join scenario text
+  controlledBy: z.enum(['llm', 'user']).optional(),  // Who controls this participant
 })
 
 // Combined update schema
@@ -156,6 +158,7 @@ async function enrichParticipant(participant: ChatParticipantBase, repos: Repos)
     ? await getEnrichedCharacter(participant.characterId, repos)
     : null
 
+  // Legacy: for PERSONA type, also look up persona data
   const persona = participant.type === 'PERSONA' && participant.personaId
     ? await getEnrichedPersona(participant.personaId, repos)
     : null
@@ -171,6 +174,7 @@ async function enrichParticipant(participant: ChatParticipantBase, repos: Repos)
   return {
     id: participant.id,
     type: participant.type,
+    controlledBy: participant.controlledBy || (participant.type === 'PERSONA' ? 'user' : 'llm'),
     displayOrder: participant.displayOrder,
     isActive: participant.isActive,
     systemPromptOverride: participant.systemPromptOverride,
@@ -192,18 +196,26 @@ async function validateCharacterParticipant(
   if (!data.characterId) {
     return { error: 'characterId is required for CHARACTER participants', status: 400 }
   }
-  if (!data.connectionProfileId) {
-    return { error: 'connectionProfileId is required for CHARACTER participants', status: 400 }
-  }
 
   const character = await repos.characters.findById(data.characterId)
   if (!character || character.userId !== userId) {
     return { error: 'Character not found', status: 404 }
   }
 
-  const profile = await repos.connections.findById(data.connectionProfileId)
-  if (!profile || profile.userId !== userId) {
-    return { error: 'Connection profile not found', status: 404 }
+  // Determine if this is a user-controlled character
+  const controlledBy = data.controlledBy || character.controlledBy || 'llm'
+  const isUserControlled = controlledBy === 'user'
+
+  // Connection profile is only required for LLM-controlled characters
+  if (!isUserControlled && !data.connectionProfileId) {
+    return { error: 'connectionProfileId is required for LLM-controlled CHARACTER participants', status: 400 }
+  }
+
+  if (data.connectionProfileId) {
+    const profile = await repos.connections.findById(data.connectionProfileId)
+    if (!profile || profile.userId !== userId) {
+      return { error: 'Connection profile not found', status: 404 }
+    }
   }
 
   return null
@@ -276,10 +288,19 @@ async function handleAddParticipant(
     if (validationError) return validationError
   }
 
+  // For CHARACTER participants, determine control mode
+  let controlledBy = data.controlledBy
+  if (data.type === 'CHARACTER' && data.characterId && !controlledBy) {
+    // Inherit from character's default if not explicitly specified
+    const character = await repos.characters.findById(data.characterId)
+    controlledBy = character?.controlledBy || 'llm'
+  }
+
   const result = await repos.chats.addParticipant(chatId, {
     type: data.type,
     characterId: data.characterId || null,
     personaId: data.personaId || null,
+    controlledBy: controlledBy || (data.type === 'PERSONA' ? 'user' : 'llm'),
     connectionProfileId: data.connectionProfileId || null,
     imageProfileId: data.imageProfileId || null,
     systemPromptOverride: data.systemPromptOverride || null,

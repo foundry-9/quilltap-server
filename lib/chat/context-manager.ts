@@ -420,6 +420,7 @@ export function filterMessagesByHistoryAccess(
 
 /**
  * Get participant name for message attribution
+ * Supports both CHARACTER (LLM or user-controlled) and legacy PERSONA types
  */
 export function getParticipantName(
   participantId: string | null | undefined,
@@ -437,11 +438,13 @@ export function getParticipantName(
     return undefined
   }
 
+  // CHARACTER participants (both LLM and user-controlled)
   if (participant.type === 'CHARACTER' && participant.characterId) {
     const character = participantCharacters.get(participant.characterId)
     return character?.name
   }
 
+  // Legacy PERSONA participants (deprecated - use CHARACTER with controlledBy='user' instead)
   if (participant.type === 'PERSONA' && participant.personaId) {
     const persona = participantPersonas.get(participant.personaId)
     return persona?.name
@@ -504,6 +507,7 @@ export function attributeMessagesForCharacter(
 
 /**
  * Build other participants info for system prompt
+ * Supports CHARACTER (LLM and user-controlled) and legacy PERSONA types
  */
 export function buildOtherParticipantsInfo(
   respondingParticipantId: string,
@@ -524,16 +528,21 @@ export function buildOtherParticipantsInfo(
       continue
     }
 
+    // CHARACTER participants (both LLM and user-controlled)
     if (participant.type === 'CHARACTER' && participant.characterId) {
       const character = participantCharacters.get(participant.characterId)
       if (character) {
+        // For user-controlled characters, report as 'CHARACTER' type (not 'PERSONA')
+        // The controlledBy field determines behavior, not the display type
         otherParticipants.push({
           name: character.name,
           description: character.title || character.description || undefined,
           type: 'CHARACTER',
         })
       }
-    } else if (participant.type === 'PERSONA' && participant.personaId) {
+    }
+    // Legacy PERSONA participants (deprecated - use CHARACTER with controlledBy='user' instead)
+    else if (participant.type === 'PERSONA' && participant.personaId) {
       const persona = participantPersonas.get(participant.personaId)
       if (persona) {
         otherParticipants.push({
@@ -1117,15 +1126,26 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   }
 
   // Add new user message (only if provided - not in continue mode)
-  // In multi-character mode, include the user's persona name
+  // In multi-character mode, include the user's character name (or legacy persona name)
   if (newUserMessage) {
     let newUserMsgName: string | undefined
-    if (isMultiCharacter && participantPersonas) {
-      // Find the user/persona participant
-      const personaParticipant = allParticipants?.find(p => p.type === 'PERSONA' && p.isActive)
-      if (personaParticipant?.personaId) {
-        const personaData = participantPersonas.get(personaParticipant.personaId)
-        newUserMsgName = personaData?.name
+    if (isMultiCharacter && allParticipants) {
+      // First, try to find a user-controlled CHARACTER participant (new model)
+      const userCharacterParticipant = allParticipants.find(p =>
+        p.type === 'CHARACTER' && p.controlledBy === 'user' && p.isActive && p.characterId
+      )
+      if (userCharacterParticipant?.characterId && participantCharacters) {
+        const character = participantCharacters.get(userCharacterParticipant.characterId)
+        newUserMsgName = character?.name
+      }
+
+      // Fall back to legacy PERSONA participant if no user-controlled character found
+      if (!newUserMsgName && participantPersonas) {
+        const personaParticipant = allParticipants.find(p => p.type === 'PERSONA' && p.isActive)
+        if (personaParticipant?.personaId) {
+          const personaData = participantPersonas.get(personaParticipant.personaId)
+          newUserMsgName = personaData?.name
+        }
       }
     }
 

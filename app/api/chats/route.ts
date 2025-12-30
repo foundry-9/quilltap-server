@@ -37,13 +37,15 @@ type ParticipantBuildError = { error: string }
 type ParticipantBuildResult = ParticipantBuildSuccess | ParticipantBuildError
 
 // Participant schema for chat creation
+// Note: PERSONA type is deprecated - use CHARACTER with controlledBy='user' instead
 const createParticipantSchema = z.object({
-  type: z.enum(['CHARACTER', 'PERSONA']),
+  type: z.enum(['CHARACTER', 'PERSONA']),  // PERSONA kept for backwards compatibility
   characterId: z.string().uuid().optional(),
-  personaId: z.string().uuid().optional(),
+  personaId: z.string().uuid().optional(),  // @deprecated - use characterId with controlledBy='user'
   connectionProfileId: z.string().uuid().optional(),
   imageProfileId: z.string().uuid().optional(),
   systemPromptOverride: z.string().optional(),
+  controlledBy: z.enum(['llm', 'user']).optional(),  // Who controls this participant
 })
 
 // Validation schema for creating a chat
@@ -241,18 +243,26 @@ async function buildCharacterParticipant(
   if (!data.characterId) {
     return { error: 'characterId is required for CHARACTER participants' }
   }
-  if (!data.connectionProfileId) {
-    return { error: 'connectionProfileId is required for CHARACTER participants' }
-  }
 
   const character = await repos.characters.findById(data.characterId)
   if (character?.userId !== userId) {
     return { error: 'Character not found' }
   }
 
-  const profile = await repos.connections.findById(data.connectionProfileId)
-  if (profile?.userId !== userId) {
-    return { error: 'Connection profile not found' }
+  // Determine control mode: explicit controlledBy, character's default, or infer from context
+  const controlledBy = data.controlledBy || character.controlledBy || 'llm'
+  const isUserControlled = controlledBy === 'user'
+
+  // Connection profile is only required for LLM-controlled characters
+  if (!isUserControlled && !data.connectionProfileId) {
+    return { error: 'connectionProfileId is required for LLM-controlled CHARACTER participants' }
+  }
+
+  if (data.connectionProfileId) {
+    const profile = await repos.connections.findById(data.connectionProfileId)
+    if (profile?.userId !== userId) {
+      return { error: 'Connection profile not found' }
+    }
   }
 
   if (data.imageProfileId) {
@@ -267,7 +277,8 @@ async function buildCharacterParticipant(
       type: 'CHARACTER',
       characterId: data.characterId,
       personaId: null,
-      connectionProfileId: data.connectionProfileId,
+      controlledBy,
+      connectionProfileId: isUserControlled ? null : (data.connectionProfileId || null),
       imageProfileId: data.imageProfileId || null,
       systemPromptOverride: data.systemPromptOverride || null,
       displayOrder,
@@ -277,7 +288,10 @@ async function buildCharacterParticipant(
   }
 }
 
-// Helper to validate and build a persona participant
+/**
+ * @deprecated Use CHARACTER with controlledBy='user' instead
+ * Helper to validate and build a persona participant (legacy support)
+ */
 async function buildPersonaParticipant(
   data: z.infer<typeof createParticipantSchema>,
   displayOrder: number,
@@ -293,11 +307,17 @@ async function buildPersonaParticipant(
     return { error: 'Persona not found' }
   }
 
+  logger.warn('PERSONA participant type is deprecated - use CHARACTER with controlledBy=user instead', {
+    context: 'buildPersonaParticipant',
+    personaId: data.personaId,
+  })
+
   return {
     participant: {
       type: 'PERSONA',
       characterId: null,
       personaId: data.personaId,
+      controlledBy: 'user',  // Personas are always user-controlled
       connectionProfileId: null,
       imageProfileId: null,
       systemPromptOverride: data.systemPromptOverride || null,
@@ -312,7 +332,7 @@ async function buildPersonaParticipant(
 type BuildParticipantsResult = {
   participants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[]
   tags: Set<string>
-  firstCharacter: { characterId: string; personaId?: string }
+  firstCharacter: { characterId: string; userCharacterId?: string }
 } | { error: string }
 
 // Helper to build and validate all participants
@@ -323,7 +343,8 @@ async function buildAllParticipants(
 ): Promise<BuildParticipantsResult> {
   const builtParticipants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[] = []
   const allTagIds = new Set<string>()
-  let firstCharacter: { characterId: string; personaId?: string } | null = null
+  let firstLLMCharacter: { characterId: string; userCharacterId?: string } | null = null
+  let firstUserCharacterId: string | null = null
 
   for (let i = 0; i < participantsData.length; i++) {
     const participantData = participantsData[i]
@@ -341,22 +362,36 @@ async function buildAllParticipants(
       allTagIds.add(tag)
     }
 
-    // Track first character for context building
-    if (participantData.type === 'CHARACTER' && !firstCharacter && participantData.characterId) {
-      firstCharacter = { characterId: participantData.characterId }
+    // Track first LLM-controlled character for context building
+    const isUserControlled = result.participant.controlledBy === 'user'
+    if (participantData.type === 'CHARACTER' && !isUserControlled && !firstLLMCharacter && participantData.characterId) {
+      firstLLMCharacter = { characterId: participantData.characterId }
     }
 
-    // Track first persona for context building
-    if (participantData.type === 'PERSONA' && firstCharacter && !firstCharacter.personaId && participantData.personaId) {
-      firstCharacter.personaId = participantData.personaId
+    // Track first user-controlled character for context building (replaces persona)
+    if (participantData.type === 'CHARACTER' && isUserControlled && !firstUserCharacterId && participantData.characterId) {
+      firstUserCharacterId = participantData.characterId
+    }
+
+    // Legacy: Track persona as user character (for backwards compatibility)
+    if (participantData.type === 'PERSONA' && !firstUserCharacterId && participantData.personaId) {
+      // For legacy PERSONA type, we don't have a characterId - leave userCharacterId undefined
+      // The persona will be handled through the legacy buildChatContext path
+      logger.debug('Legacy PERSONA participant - persona data will be used directly', {
+        context: 'buildAllParticipants',
+        personaId: participantData.personaId,
+      })
     }
   }
 
-  if (!firstCharacter) {
-    return { error: 'At least one CHARACTER participant is required' }
+  if (!firstLLMCharacter) {
+    return { error: 'At least one LLM-controlled CHARACTER participant is required' }
   }
 
-  return { participants: builtParticipants, tags: allTagIds, firstCharacter }
+  // Attach user character ID to context
+  firstLLMCharacter.userCharacterId = firstUserCharacterId || undefined
+
+  return { participants: builtParticipants, tags: allTagIds, firstCharacter: firstLLMCharacter }
 }
 
 // Helper to create initial chat messages
@@ -514,7 +549,7 @@ export async function POST(req: NextRequest) {
 
     const context = await buildChatContext(
       buildResult.firstCharacter.characterId,
-      buildResult.firstCharacter.personaId,
+      buildResult.firstCharacter.userCharacterId,
       validatedData.scenario
     )
 

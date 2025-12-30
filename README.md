@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.6.0--no--more--personas.26-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.6.0--no--more--personas.27-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -592,6 +592,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Handle multi-character edge case: a single message may trigger memories for multiple characters in group chats
   - [ ] Add confirmation dialog option: "This message has associated memories. Delete memories too?" with options to keep, delete, or regenerate
   - [ ] Track memory provenance in UI: show which message created each auto-extracted memory with a link back to the source
+- [ ] Any files that exist in the app source code only because they are necessary for migrations should move to the migration/upgrade plugin
 
 ## Acknowledgments
 

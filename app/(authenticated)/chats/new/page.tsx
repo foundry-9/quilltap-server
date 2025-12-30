@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
-import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import type { TimestampConfig } from '@/lib/schemas/types'
@@ -23,6 +22,7 @@ interface Character {
     url?: string
   } | null
   defaultConnectionProfileId?: string | null
+  controlledBy?: 'llm' | 'user'
   systemPrompts?: Array<{
     id: string
     name: string
@@ -44,12 +44,6 @@ interface ImageProfile {
   modelName: string
 }
 
-interface Persona {
-  id: string
-  name: string
-  title?: string | null
-}
-
 interface SelectedCharacter {
   character: Character
   connectionProfileId: string
@@ -60,15 +54,14 @@ interface SelectedCharacter {
 export default function NewChatPage() {
   const router = useRouter()
   const { style } = useAvatarDisplay()
-  const { formatPersonaName } = usePersonaDisplayName()
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const [characters, setCharacters] = useState<Character[]>([])
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
-  const [personas, setPersonas] = useState<Persona[]>([])
+  const [userControlledCharacters, setUserControlledCharacters] = useState<Character[]>([])
   const [selectedCharacters, setSelectedCharacters] = useState<SelectedCharacter[]>([])
-  const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
+  const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
   const [scenario, setScenario] = useState('')
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [loading, setLoading] = useState(true)
@@ -81,17 +74,25 @@ export default function NewChatPage() {
     const fetchData = async () => {
       clientLogger.debug('[NewChat] Fetching data')
       try {
-        const [charsRes, profilesRes, imageProfilesRes, personasRes] = await Promise.all([
+        const [charsRes, profilesRes, imageProfilesRes] = await Promise.all([
           fetch('/api/characters'),
           fetch('/api/profiles'),
           fetch('/api/image-profiles'),
-          fetch('/api/personas'),
         ])
 
         if (charsRes.ok) {
           const data = await charsRes.json()
-          setCharacters(data.characters || [])
-          clientLogger.debug('[NewChat] Loaded characters', { count: data.characters?.length || 0 })
+          const allCharacters: Character[] = data.characters || []
+          // Separate LLM-controlled and user-controlled characters
+          const llmControlled = allCharacters.filter(c => c.controlledBy !== 'user')
+          const userControlled = allCharacters.filter(c => c.controlledBy === 'user')
+          setCharacters(llmControlled)
+          setUserControlledCharacters(userControlled)
+          clientLogger.debug('[NewChat] Loaded characters', {
+            total: allCharacters.length,
+            llmControlled: llmControlled.length,
+            userControlled: userControlled.length,
+          })
         }
 
         if (profilesRes.ok) {
@@ -104,12 +105,6 @@ export default function NewChatPage() {
           const data = await imageProfilesRes.json()
           setImageProfiles(data || [])
           clientLogger.debug('[NewChat] Loaded image profiles', { count: data?.length || 0 })
-        }
-
-        if (personasRes.ok) {
-          const data = await personasRes.json()
-          setPersonas(data || [])
-          clientLogger.debug('[NewChat] Loaded personas', { count: data?.length || 0 })
         }
       } catch (err) {
         clientLogger.error('[NewChat] Error fetching data', {
@@ -232,29 +227,35 @@ export default function NewChatPage() {
     setCreating(true)
     clientLogger.debug('[NewChat] Creating chat', {
       characterCount: selectedCharacters.length,
-      hasPersona: !!selectedPersonaId,
+      hasUserCharacter: !!selectedUserCharacterId,
       hasScenario: !!scenario,
       hasTimestampConfig: !!timestampConfig,
     })
 
     try {
       const participants: Array<{
-        type: 'CHARACTER' | 'PERSONA'
-        characterId?: string
-        personaId?: string
+        type: 'CHARACTER'
+        characterId: string
         connectionProfileId?: string
         imageProfileId?: string
         selectedSystemPromptId?: string
+        controlledBy?: 'llm' | 'user'
       }> = selectedCharacters.map((sc) => ({
         type: 'CHARACTER' as const,
         characterId: sc.character.id,
         connectionProfileId: sc.connectionProfileId,
         imageProfileId: sc.imageProfileId || undefined,
         selectedSystemPromptId: sc.selectedSystemPromptId || undefined,
+        controlledBy: 'llm' as const,
       }))
 
-      if (selectedPersonaId) {
-        participants.push({ type: 'PERSONA' as const, personaId: selectedPersonaId })
+      // Add user-controlled character as a participant (replaces persona)
+      if (selectedUserCharacterId) {
+        participants.push({
+          type: 'CHARACTER' as const,
+          characterId: selectedUserCharacterId,
+          controlledBy: 'user' as const,
+        })
       }
 
       const requestBody: Record<string, unknown> = {
@@ -471,18 +472,20 @@ export default function NewChatPage() {
               )}
             </div>
 
-            {personas.length > 0 && (
+            {userControlledCharacters.length > 0 && (
               <div className="rounded-xl border border-border bg-card p-6">
-                <h2 className="mb-4 text-lg font-semibold">Persona (Optional)</h2>
-                <p className="mb-3 qt-text-small">Select a persona to represent you in the conversation.</p>
+                <h2 className="mb-4 text-lg font-semibold">Play As (Optional)</h2>
+                <p className="mb-3 qt-text-small">Select a character to represent you in the conversation.</p>
                 <select
-                  value={selectedPersonaId}
-                  onChange={(e) => setSelectedPersonaId(e.target.value)}
+                  value={selectedUserCharacterId}
+                  onChange={(e) => setSelectedUserCharacterId(e.target.value)}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="">No persona</option>
-                  {personas.map((persona) => (
-                    <option key={persona.id} value={persona.id}>{formatPersonaName(persona)}</option>
+                  <option value="">No character selected</option>
+                  {userControlledCharacters.map((char) => (
+                    <option key={char.id} value={char.id}>
+                      {char.name}{char.title ? ` (${char.title})` : ''}
+                    </option>
                   ))}
                 </select>
               </div>
