@@ -1,0 +1,123 @@
+/**
+ * @quilltap/plugin-types
+ *
+ * Type definitions for Quilltap plugin development.
+ *
+ * This package provides TypeScript types and interfaces for building
+ * Quilltap plugins, including LLM providers, authentication providers,
+ * and utility plugins.
+ *
+ * @packageDocumentation
+ * @module @quilltap/plugin-types
+ */
+
+// ============================================================================
+// LLM Types
+// ============================================================================
+
+export type {
+  // Core message types
+  FileAttachment,
+  LLMMessage,
+  JSONSchemaDefinition,
+  ResponseFormat,
+  LLMParams,
+
+  // Response types
+  TokenUsage,
+  CacheUsage,
+  AttachmentResults,
+  LLMResponse,
+  StreamChunk,
+
+  // Image generation types
+  ImageGenParams,
+  GeneratedImage,
+  ImageGenResponse,
+
+  // Model metadata
+  ModelWarningLevel,
+  ModelWarning,
+  ModelMetadata,
+
+  // Provider interfaces
+  LLMProvider,
+  ImageGenProvider,
+} from './llm/base';
+
+export type {
+  // Tool definitions
+  OpenAIToolDefinition,
+  UniversalTool,
+  AnthropicToolDefinition,
+  GoogleToolDefinition,
+
+  // Tool calls
+  ToolCall,
+  ToolCallRequest,
+  ToolResult,
+  ToolFormatOptions,
+} from './llm/tools';
+
+// ============================================================================
+// Plugin Types
+// ============================================================================
+
+export type {
+  // Provider plugin types
+  ProviderMetadata,
+  ProviderConfigRequirements,
+  ProviderCapabilities,
+  AttachmentSupport,
+  ModelInfo,
+  EmbeddingModelInfo,
+  ImageGenerationModelInfo,
+  ImageProviderConstraints,
+  IconProps,
+  LLMProviderPlugin,
+  ProviderPluginExport,
+} from './plugins/provider';
+
+export type {
+  // Manifest types
+  PluginCapability,
+  PluginCategory,
+  PluginStatus,
+  PluginAuthor,
+  PluginCompatibility,
+  ProviderConfig,
+  PluginPermissions,
+  PluginManifest,
+  InstalledPluginInfo,
+} from './plugins/manifest';
+
+// ============================================================================
+// Common Types
+// ============================================================================
+
+export type { LogLevel, LogContext, PluginLogger } from './common/logger';
+
+// Error classes (these are values, not just types)
+export {
+  PluginError,
+  ApiKeyError,
+  ProviderApiError,
+  RateLimitError,
+  ConfigurationError,
+  ModelNotFoundError,
+  AttachmentError,
+  ToolExecutionError,
+} from './common/errors';
+
+// Logger factories
+export { createConsoleLogger, createNoopLogger } from './common/logger';
+
+// ============================================================================
+// Version
+// ============================================================================
+
+/**
+ * Version of the plugin-types package.
+ * Can be used at runtime to check compatibility.
+ */
+export const PLUGIN_TYPES_VERSION = '1.0.1';

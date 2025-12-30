@@ -4,6 +4,19 @@
 
 ### 2.6-dev
 
+- feat: Add `@quilltap/plugin-types` package for standalone plugin development
+  - New `packages/plugin-types/` directory with TypeScript type definitions
+  - Exports all types needed for third-party plugin development: LLM, tools, provider, manifest
+  - Includes error classes (`PluginError`, `ApiKeyError`, `ProviderApiError`, `RateLimitError`)
+  - Includes logging utilities (`createConsoleLogger`, `PluginLogger` interface)
+  - Submodule exports for granular imports (`/llm`, `/plugins`, `/common`)
+  - Full documentation in README.md and CHANGELOG.md
+  - Enables npm-publishable plugins without access to Quilltap source tree
+  - Updated all bundled provider plugins to import from `@quilltap/plugin-types`
+- fix: Resolve TypeScript type errors in provider plugins
+  - Fixed `LLMMessage.role` type compatibility by filtering out 'tool' role messages in providers that don't support them (Gab AI, Grok, OpenAI, OpenAI-compatible, OpenRouter)
+  - Fixed `stopSequences` type in Google provider to normalize `string | string[]` to `string[]`
+  - Added proper type casts for provider-specific message formats
 - fix: Add "User (impersonation)" option when adding character to existing chat
   - AddCharacterDialog now shows "User (you will type for this character)" option in the control dropdown
   - Users can now add characters controlled by themselves, not just LLM-controlled characters

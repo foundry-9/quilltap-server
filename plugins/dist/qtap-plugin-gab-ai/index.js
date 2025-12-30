@@ -7293,7 +7293,7 @@ var GabAIProvider = class {
       apiKey,
       baseURL: this.baseUrl
     });
-    const messages = params.messages.map((m) => ({
+    const messages = params.messages.filter((m) => m.role !== "tool").map((m) => ({
       role: m.role,
       content: m.content
     }));
@@ -7334,7 +7334,7 @@ var GabAIProvider = class {
       apiKey,
       baseURL: this.baseUrl
     });
-    const messages = params.messages.map((m) => ({
+    const messages = params.messages.filter((m) => m.role !== "tool").map((m) => ({
       role: m.role,
       content: m.content
     }));

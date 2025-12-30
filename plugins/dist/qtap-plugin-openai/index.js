@@ -7280,7 +7280,8 @@ var OpenAIProvider = class {
   formatMessagesWithAttachments(messages) {
     const sent = [];
     const failed = [];
-    const formattedMessages = messages.map((msg) => {
+    const filteredMessages = messages.filter((m) => m.role !== "tool");
+    const formattedMessages = filteredMessages.map((msg) => {
       if (!msg.attachments || msg.attachments.length === 0) {
         return {
           role: msg.role,

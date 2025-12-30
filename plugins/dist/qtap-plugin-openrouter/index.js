@@ -10391,7 +10391,7 @@ var OpenRouterProvider = class {
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
       xTitle: "Quilltap"
     });
-    const messages = params.messages.map((m) => ({
+    const messages = params.messages.filter((m) => m.role !== "tool").map((m) => ({
       role: m.role,
       content: m.content
     }));
@@ -10503,7 +10503,7 @@ var OpenRouterProvider = class {
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
       xTitle: "Quilltap"
     });
-    const messages = params.messages.map((m) => ({
+    const messages = params.messages.filter((m) => m.role !== "tool").map((m) => ({
       role: m.role,
       content: m.content
     }));

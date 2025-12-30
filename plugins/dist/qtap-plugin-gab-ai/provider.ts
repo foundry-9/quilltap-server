@@ -49,10 +49,13 @@ export class GabAIProvider implements LLMProvider {
     });
 
     // Strip attachments from messages (Gab AI doesn't support them)
-    const messages = params.messages.map(m => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // Filter out 'tool' role messages as Gab AI doesn't support them
+    const messages = params.messages
+      .filter(m => m.role !== 'tool')
+      .map(m => ({
+        role: m.role as 'system' | 'user' | 'assistant',
+        content: m.content,
+      }));
 
     const response = await client.chat.completions.create({
       model: params.model,
@@ -100,10 +103,13 @@ export class GabAIProvider implements LLMProvider {
     });
 
     // Strip attachments from messages (Gab AI doesn't support them)
-    const messages = params.messages.map(m => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // Filter out 'tool' role messages as Gab AI doesn't support them
+    const messages = params.messages
+      .filter(m => m.role !== 'tool')
+      .map(m => ({
+        role: m.role as 'system' | 'user' | 'assistant',
+        content: m.content,
+      }));
 
     const stream = await client.chat.completions.create({
       model: params.model,

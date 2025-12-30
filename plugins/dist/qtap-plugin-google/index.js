@@ -1728,13 +1728,14 @@ var GoogleProvider = class {
       });
     }
     const model = client.getGenerativeModel(modelConfig);
+    const stopSequences = params.stop ? Array.isArray(params.stop) ? params.stop : [params.stop] : void 0;
     const response = await model.generateContent({
       contents: messages,
       generationConfig: {
         temperature: params.temperature ?? 0.7,
         maxOutputTokens: params.maxTokens ?? 4096,
         topP: params.topP ?? 1,
-        stopSequences: params.stop
+        stopSequences
       }
     });
     const text = response.text?.() ?? "";
@@ -1819,13 +1820,14 @@ var GoogleProvider = class {
       });
     }
     const model = client.getGenerativeModel(modelConfig);
+    const stopSequences = params.stop ? Array.isArray(params.stop) ? params.stop : [params.stop] : void 0;
     const stream = await model.generateContentStream({
       contents: messages,
       generationConfig: {
         temperature: params.temperature ?? 0.7,
         maxOutputTokens: params.maxTokens ?? 4096,
         topP: params.topP ?? 1,
-        stopSequences: params.stop
+        stopSequences
       }
     });
     let chunkCount = 0;

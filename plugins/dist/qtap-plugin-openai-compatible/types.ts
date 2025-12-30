@@ -1,6 +1,6 @@
 /**
  * Type exports for OpenAI-Compatible Plugin
- * Re-exports types from the core library for use within the plugin
+ * Re-exports types from @quilltap/plugin-types for use within the plugin
  */
 
 export type {
@@ -12,15 +12,12 @@ export type {
   LLMParams,
   LLMResponse,
   StreamChunk,
-} from '../../../lib/llm/base';
-
-export type { LLMProvider } from '../../../lib/llm/base';
-export type { ImageGenProvider } from '../../../lib/image-gen/base';
-export type {
+  LLMProvider,
+  ImageGenProvider,
   LLMProviderPlugin,
   ProviderMetadata,
   ProviderConfigRequirements,
   ProviderCapabilities,
   AttachmentSupport,
   ModelInfo,
-} from '../../../lib/plugins/interfaces/provider-plugin';
+} from '@quilltap/plugin-types';

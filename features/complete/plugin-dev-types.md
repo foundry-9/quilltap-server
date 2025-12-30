@@ -1,8 +1,8 @@
-# Feature Request: Extract and Publish `@quilttap/plugin-types` Package
+# Feature Request: Extract and Publish `@quilltap/plugin-types` Package
 
 ## Overview
 
-Extract all plugin-related TypeScript type definitions from the Quilltap core into a separate npm package (`@quilttap/plugin-types`) that can be published independently. This enables third-party developers to create Quilltap plugins without needing access to the Quilltap source tree.
+Extract all plugin-related TypeScript type definitions from the Quilltap core into a separate npm package (`@quilltap/plugin-types`) that can be published independently. This enables third-party developers to create Quilltap plugins without needing access to the Quilltap source tree.
 
 ## Goals
 
@@ -35,7 +35,7 @@ import type {
   LLMParams, 
   LLMResponse,
   LLMProviderPlugin 
-} from '@quilttap/plugin-types';
+} from '@quilltap/plugin-types';
 ````
 
 ## Package Structure
@@ -467,7 +467,7 @@ export interface PluginManifest {
 
   /** Compatibility requirements */
   compatibility: {
-    quilttapVersion: string;
+    quilltapVersion: string;
     nodeVersion?: string;
   };
 
@@ -641,8 +641,8 @@ export function createConsoleLogger(prefix: string, minLevel: LogLevel = 'info')
 
 ````typescript
 /**
- * @quilttap/plugin-types
- * Type definitions for Quilttap plugin development
+ * @quilltap/plugin-types
+ * Type definitions for quilltap plugin development
  */
 
 // LLM types
@@ -712,9 +712,9 @@ export const PLUGIN_TYPES_VERSION = '1.0.0';
 
 ````json
 {
-  "name": "@quilttap/plugin-types",
+  "name": "@quilltap/plugin-types",
   "version": "1.0.0",
-  "description": "Type definitions for Quilttap plugin development",
+  "description": "Type definitions for quilltap plugin development",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "module": "dist/index.mjs",
@@ -765,7 +765,7 @@ export const PLUGIN_TYPES_VERSION = '1.0.0';
     "typescript": "^5.3.0"
   },
   "keywords": [
-    "quilttap",
+    "quilltap",
     "plugin",
     "types",
     "typescript",
@@ -775,12 +775,12 @@ export const PLUGIN_TYPES_VERSION = '1.0.0';
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/foundry-9/quilttap.git",
+    "url": "https://github.com/foundry-9/quilltap.git",
     "directory": "packages/plugin-types"
   },
-  "homepage": "https://github.com/foundry-9/quilttap/tree/main/packages/plugin-types#readme",
+  "homepage": "https://github.com/foundry-9/quilltap/tree/main/packages/plugin-types#readme",
   "bugs": {
-    "url": "https://github.com/foundry-9/quilttap/issues"
+    "url": "https://github.com/foundry-9/quilltap/issues"
   }
 }
 ````
@@ -830,18 +830,18 @@ export default defineConfig({
 });
 ````
 
-## Integration with Quilttap Core
+## Integration with quilltap Core
 
 ### Update Core Imports
 
-After publishing `@quilttap/plugin-types`, update the Quilttap core to:
+After publishing `@quilltap/plugin-types`, update the quilltap core to:
 
 1. **Add as dependency:**
 
 ````json
    {
      "dependencies": {
-       "@quilttap/plugin-types": "^1.0.0"
+       "@quilltap/plugin-types": "^1.0.0"
      }
    }
 ````
@@ -850,28 +850,28 @@ After publishing `@quilttap/plugin-types`, update the Quilttap core to:
 
 ````typescript
    // lib/llm/base.ts
-   export * from '@quilttap/plugin-types/llm';
+   export * from '@quilltap/plugin-types/llm';
    
    // lib/plugins/interfaces/provider-plugin.ts
-   export * from '@quilttap/plugin-types/plugins';
+   export * from '@quilltap/plugin-types/plugins';
 ````
 
 1. **Update bundled plugins to use the package:**
 
 ````typescript
    // plugins/dist/qtap-plugin-*/types.ts
-   export * from '@quilttap/plugin-types';
+   export * from '@quilltap/plugin-types';
 ````
 
 ### Plugin Loader Updates
 
-The plugin loader should resolve `@quilttap/plugin-types` for npm-installed plugins:
+The plugin loader should resolve `@quilltap/plugin-types` for npm-installed plugins:
 
 ````typescript
 // lib/plugins/loader.ts
 
 async function loadNpmPlugin(pluginPath: string): Promise<LLMProviderPlugin> {
-  // npm-installed plugins will have @quilttap/plugin-types as a peer dependency
+  // npm-installed plugins will have @quilltap/plugin-types as a peer dependency
   // The types are resolved from node_modules automatically
   const plugin = await import(pluginPath);
   return plugin.default ?? plugin.plugin;
@@ -888,7 +888,7 @@ async function loadNpmPlugin(pluginPath: string): Promise<LLMProviderPlugin> {
 
 ### Compatibility Matrix
 
-| plugin-types | Quilttap | Notes |
+| plugin-types | quilltap | Notes |
 | -------------- | ---------- | ------- |
 | 1.0.x | ≥1.7.0 | Initial release |
 | 1.1.x | ≥1.8.0 | Added auth plugin types |
@@ -899,13 +899,13 @@ async function loadNpmPlugin(pluginPath: string): Promise<LLMProviderPlugin> {
 ### README.md
 
 ````markdown
-# @quilttap/plugin-types
+# @quilltap/plugin-types
 
-Type definitions for building Quilttap plugins.
+Type definitions for building quilltap plugins.
 
 ## Installation
 ```bash
-npm install --save-dev @quilttap/plugin-types
+npm install --save-dev @quilltap/plugin-types
 ```
 
 ## Usage
@@ -915,7 +915,7 @@ import type {
   LLMProvider,
   LLMParams,
   LLMResponse 
-} from '@quilttap/plugin-types';
+} from '@quilltap/plugin-types';
 
 export const plugin: LLMProviderPlugin = {
   metadata: {
@@ -929,9 +929,9 @@ export const plugin: LLMProviderPlugin = {
 
 ## Documentation
 
-- [Plugin Development Guide](https://docs.quilttap.com/plugins/development)
-- [API Reference](https://docs.quilttap.com/plugins/api)
-- [Example Plugins](https://github.com/foundry-9/quilttap/tree/main/plugins/dist)
+- [Plugin Development Guide](https://docs.quilltap.com/plugins/development)
+- [API Reference](https://docs.quilltap.com/plugins/api)
+- [Example Plugins](https://github.com/foundry-9/quilltap/tree/main/plugins/dist)
 
 ## License
 

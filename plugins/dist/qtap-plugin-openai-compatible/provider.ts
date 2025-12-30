@@ -50,11 +50,13 @@ export class OpenAICompatibleProvider implements LLMProvider {
       baseURL: this.baseUrl,
     });
 
-    // Strip attachments from messages
-    const messages = params.messages.map(m => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // Strip attachments from messages and filter out 'tool' role
+    const messages = params.messages
+      .filter(m => m.role !== 'tool')
+      .map(m => ({
+        role: m.role as 'system' | 'user' | 'assistant',
+        content: m.content,
+      }));
 
     try {
       const response = await client.chat.completions.create({
@@ -110,11 +112,13 @@ export class OpenAICompatibleProvider implements LLMProvider {
       baseURL: this.baseUrl,
     });
 
-    // Strip attachments from messages
-    const messages = params.messages.map(m => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // Strip attachments from messages and filter out 'tool' role
+    const messages = params.messages
+      .filter(m => m.role !== 'tool')
+      .map(m => ({
+        role: m.role as 'system' | 'user' | 'assistant',
+        content: m.content,
+      }));
 
     try {
       const stream = await client.chat.completions.create({
