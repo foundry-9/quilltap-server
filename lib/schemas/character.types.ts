@@ -53,6 +53,10 @@ export type PhysicalDescription = z.infer<typeof PhysicalDescriptionSchema>;
 // CHARACTER
 // ============================================================================
 
+// Control mode for characters
+export const ControlledByEnum = z.enum(['llm', 'user']);
+export type ControlledBy = z.infer<typeof ControlledByEnum>;
+
 export const CharacterSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
@@ -72,6 +76,7 @@ export const CharacterSchema = z.object({
   isFavorite: z.boolean().default(false),
   npc: z.boolean().default(false),  // NPC flag - true for ad-hoc NPCs created in chat
   talkativeness: z.number().min(0.1).max(1.0).default(0.5),
+  controlledBy: ControlledByEnum.default('llm'),  // Who controls this character: 'llm' (AI) or 'user' (player)
 
   // Relationships
   personaLinks: z.array(z.object({

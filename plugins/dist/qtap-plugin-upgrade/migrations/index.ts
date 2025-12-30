@@ -20,6 +20,8 @@ import { migrateCharacterSystemPromptsMigration } from './migrate-character-syst
 import { migrateTagStylesToTagsMigration } from './migrate-tag-styles-to-tags';
 // Plugin system migrations
 import { removeQuilltapRPBuiltinMigration } from './remove-quilltap-rp-builtin';
+// Personas-to-characters migration
+import { migratePersonasToCharactersMigration } from './migrate-personas-to-characters';
 
 /**
  * All available migrations.
@@ -40,6 +42,8 @@ export const migrations: Migration[] = [
   migrateTagStylesToTagsMigration,
   // Plugin system migrations
   removeQuilltapRPBuiltinMigration,
+  // Character unification
+  migratePersonasToCharactersMigration,
 ];
 
 export {
@@ -57,4 +61,6 @@ export {
   migrateTagStylesToTagsMigration,
   // Plugin system migrations
   removeQuilltapRPBuiltinMigration,
+  // Character unification
+  migratePersonasToCharactersMigration,
 };

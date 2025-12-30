@@ -245,6 +245,7 @@ async function handleMultiCharacterImport(
       type: entityType,
       characterId: entityType === 'CHARACTER' ? entityId : null,
       personaId: entityType === 'PERSONA' ? entityId : null,
+      controlledBy: entityType === 'PERSONA' ? 'user' : 'llm',
       connectionProfileId: connectionProfileId || null,
       imageProfileId: null,
       systemPromptOverride: null,
@@ -656,6 +657,7 @@ async function handleLegacyImport(
     type: 'CHARACTER',
     characterId,
     personaId: null,
+    controlledBy: 'llm',
     connectionProfileId,
     imageProfileId: null,
     systemPromptOverride: null,
@@ -674,6 +676,7 @@ async function handleLegacyImport(
       type: 'PERSONA',
       characterId: null,
       personaId,
+      controlledBy: 'user',  // Personas are user-controlled
       connectionProfileId: null,
       imageProfileId: null,
       systemPromptOverride: null,

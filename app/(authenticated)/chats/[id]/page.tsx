@@ -279,6 +279,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       type: p.type,
       characterId: p.characterId ?? (p.character?.id ?? null),
       personaId: p.personaId ?? (p.persona?.id ?? null),
+      controlledBy: p.controlledBy ?? (p.type === 'PERSONA' ? 'user' : 'llm'),
       connectionProfileId: p.connectionProfile?.id ?? null,
       imageProfileId: p.imageProfile?.id ?? null,
       systemPromptOverride: p.systemPromptOverride ?? null,

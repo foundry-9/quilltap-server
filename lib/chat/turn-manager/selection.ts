@@ -48,9 +48,10 @@ export function selectNextSpeaker(
     };
   }
 
-  // Get active CHARACTER participants only (personas don't take autonomous turns)
+  // Get active LLM-controlled participants only (user-controlled don't take autonomous turns)
   const activeCharacterParticipants = participants.filter(
-    p => p.type === 'CHARACTER' && p.isActive && p.characterId
+    p => p.isActive && p.characterId &&
+    (p.controlledBy === 'llm' || (p.controlledBy === undefined && p.type === 'CHARACTER'))
   );
 
   logger.debug('[Turn Manager] Active character participants', {

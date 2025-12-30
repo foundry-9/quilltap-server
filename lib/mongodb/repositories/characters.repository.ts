@@ -106,6 +106,80 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
   }
 
   /**
+   * Find user-controlled characters by user ID
+   * @param userId The user ID
+   * @returns Promise<Character[]> Array of user-controlled characters
+   */
+  async findUserControlled(userId: string): Promise<Character[]> {
+    logger.debug('Finding user-controlled characters', { userId });
+    try {
+      const collection = await this.getCollection();
+      const results = await collection.find({
+        userId,
+        controlledBy: 'user',
+      }).toArray();
+
+      const characters = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((char): char is Character => char !== null);
+
+      logger.debug('Found user-controlled characters', { userId, count: characters.length });
+      return characters;
+    } catch (error) {
+      logger.error('Error finding user-controlled characters', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Find LLM-controlled characters by user ID
+   * @param userId The user ID
+   * @returns Promise<Character[]> Array of LLM-controlled characters
+   */
+  async findLLMControlled(userId: string): Promise<Character[]> {
+    logger.debug('Finding LLM-controlled characters', { userId });
+    try {
+      const collection = await this.getCollection();
+      // Include characters with no controlledBy field (defaults to llm)
+      const results = await collection.find({
+        userId,
+        $or: [
+          { controlledBy: 'llm' },
+          { controlledBy: { $exists: false } },
+        ],
+      }).toArray();
+
+      const characters = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((char): char is Character => char !== null);
+
+      logger.debug('Found LLM-controlled characters', { userId, count: characters.length });
+      return characters;
+    } catch (error) {
+      logger.error('Error finding LLM-controlled characters', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
    * Find characters with a specific tag
    * @param tagId The tag ID
    * @returns Promise<Character[]> Array of characters with the tag

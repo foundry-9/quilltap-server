@@ -15,6 +15,7 @@ import {
   RoleEnum,
 } from './common.types';
 import { TimestampConfigSchema } from './settings.types';
+import { ControlledByEnum } from './character.types';
 
 // ============================================================================
 // MESSAGE EVENTS
@@ -69,12 +70,19 @@ export const ChatParticipantSchema = z.object({
   id: UUIDSchema,
 
   // Participant type and identity
+  // NOTE: 'type' is kept for backwards compatibility during migration.
+  // Going forward, all participants are effectively CHARACTER type with controlledBy determining behavior.
   type: ParticipantTypeEnum,
-  characterId: UUIDSchema.nullable().optional(),  // Set when type is CHARACTER
-  personaId: UUIDSchema.nullable().optional(),    // Set when type is PERSONA
+  characterId: UUIDSchema.nullable().optional(),  // Set when type is CHARACTER (required after migration)
+  personaId: UUIDSchema.nullable().optional(),    // @deprecated - Set when type is PERSONA (will be removed after migration)
 
-  // LLM configuration (for AI characters only)
-  connectionProfileId: UUIDSchema.nullable().optional(),  // Required for CHARACTER, null for PERSONA
+  // Control mode - who controls this participant in this chat
+  // 'llm' = AI-controlled, 'user' = player-controlled (impersonating)
+  // Optional for backwards compatibility - defaults to 'llm' for existing participants
+  controlledBy: ControlledByEnum.optional().default('llm'),
+
+  // LLM configuration (for AI characters only, ignored when controlledBy is 'user')
+  connectionProfileId: UUIDSchema.nullable().optional(),  // Required for LLM control, null for user control
   imageProfileId: UUIDSchema.nullable().optional(),       // Image generation profile
   roleplayTemplateId: z.string().nullable().optional(),   // Roleplay template override - can be UUID or 'plugin:*' format
 
@@ -98,7 +106,7 @@ export const ChatParticipantSchema = z.object({
     if (data.type === 'CHARACTER') {
       return data.characterId != null;
     }
-    // Must have personaId if type is PERSONA
+    // Must have personaId if type is PERSONA (for backwards compatibility during migration)
     if (data.type === 'PERSONA') {
       return data.personaId != null;
     }
@@ -114,7 +122,8 @@ export const ChatParticipantBaseSchema = z.object({
   id: UUIDSchema,
   type: ParticipantTypeEnum,
   characterId: UUIDSchema.nullable().optional(),
-  personaId: UUIDSchema.nullable().optional(),
+  personaId: UUIDSchema.nullable().optional(),  // @deprecated - will be removed after migration
+  controlledBy: ControlledByEnum.optional().default('llm'),  // Who controls: 'llm' or 'user'
   connectionProfileId: UUIDSchema.nullable().optional(),
   imageProfileId: UUIDSchema.nullable().optional(),
   roleplayTemplateId: z.string().nullable().optional(),  // Roleplay template override - can be UUID or 'plugin:*' format
@@ -161,6 +170,15 @@ export const ChatMetadataSchema = z.object({
   isPaused: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
   isManuallyRenamed: z.boolean().default(false),
+
+  // Impersonation state - for when user temporarily takes control of characters
+  /** Array of participant IDs the user is currently impersonating (can be multiple) */
+  impersonatingParticipantIds: z.array(UUIDSchema).default([]),
+  /** Which impersonated participant is currently "active" for typing (user switches between controlled characters) */
+  activeTypingParticipantId: UUIDSchema.nullable().optional(),
+  /** Turns since last user input or pause (for all-LLM pause logic) */
+  allLLMPauseTurnCount: z.number().default(0),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -192,6 +210,10 @@ export const ChatMetadataBaseSchema = z.object({
   isPaused: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
   isManuallyRenamed: z.boolean().default(false),
+  // Impersonation state
+  impersonatingParticipantIds: z.array(UUIDSchema).default([]),
+  activeTypingParticipantId: UUIDSchema.nullable().optional(),
+  allLLMPauseTurnCount: z.number().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

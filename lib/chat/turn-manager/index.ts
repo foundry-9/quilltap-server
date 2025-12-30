@@ -41,6 +41,19 @@ export {
   isUsersTurn,
   getSelectionExplanation,
   findUserParticipant,
+  findUserControlledParticipants,
   getActiveCharacterParticipants,
+  getActiveLLMParticipants,
   isMultiCharacterChat,
+  isAllLLMChat,
 } from './utils';
+
+// All-LLM pause logic
+export {
+  INITIAL_PAUSE_INTERVAL,
+  getNextPauseInterval,
+  shouldPauseForAllLLM,
+  getCurrentPauseThreshold,
+  getNextPauseThreshold,
+  getTurnsUntilNextPause,
+} from './all-llm-pause';
