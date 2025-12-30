@@ -4,6 +4,10 @@
 
 ### 2.6-dev
 
+- refactor: Remove duplicate Photo Gallery tab from character edit page
+  - Gallery tab was identical to the one on the view page (both use `EmbeddedPhotoGallery`)
+  - Avatar can still be changed via the edit button on the avatar in the header
+  - Gallery functionality remains available on the character view page
 - refactor: Remove deprecated "Associated Profiles" tab from character edit page
   - Tab used old personas system which has been replaced by user-controlled characters
   - Profile settings (connection profile, conversation partner, image profile) are available on the view page's Profiles tab
