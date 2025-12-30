@@ -606,8 +606,8 @@ function remapBackupData(
   // Remap chats (complex due to participants and messages)
   const remappedChats = data.chats.map((chat) => {
     const remappedChat = {
-      ...remapper.remapFields(chat, ['id']),
-      ...remapper.remapArrayFields(chat, ['tags']),
+      ...remapper.remapFields(chat, ['id', 'activeTypingParticipantId']),
+      ...remapper.remapArrayFields(chat, ['tags', 'impersonatingParticipantIds']),
       userId: targetUserId,
     };
 
@@ -631,9 +631,9 @@ function remapBackupData(
     return remappedChat as ChatWithMessages;
   });
 
-  // Remap memories
+  // Remap memories (including aboutCharacterId for Characters Not Personas)
   const remappedMemories = data.memories.map((memory) => ({
-    ...remapper.remapFields(memory, ['id', 'characterId', 'personaId', 'chatId', 'sourceMessageId']),
+    ...remapper.remapFields(memory, ['id', 'characterId', 'personaId', 'aboutCharacterId', 'chatId', 'sourceMessageId']),
     ...remapper.remapArrayFields(memory, ['tags']),
   })) as Memory[];
 
@@ -853,6 +853,8 @@ export async function restore(
   }
 
   // 9. Memories
+  // Note: Characters Not Personas migration (Phase 7) will convert personaId to aboutCharacterId
+  // after restore if needed. For new backups, aboutCharacterId may already be set.
   moduleLogger.debug('Restoring memories', { count: data.memories.length });
   for (const memory of data.memories) {
     try {
@@ -869,7 +871,7 @@ export async function restore(
         continue;
       }
 
-      // Remap personaId if present
+      // Remap personaId if present (legacy backups)
       let newPersonaId = memoryData.personaId;
       if (memoryData.personaId) {
         newPersonaId = personaIdMap.get(memoryData.personaId) || null;
@@ -881,10 +883,24 @@ export async function restore(
         }
       }
 
+      // Remap aboutCharacterId if present (new backups with Characters Not Personas)
+      let newAboutCharacterId = memoryData.aboutCharacterId;
+      if (memoryData.aboutCharacterId) {
+        newAboutCharacterId = characterIdMap.get(memoryData.aboutCharacterId) ||
+                              personaIdMap.get(memoryData.aboutCharacterId) || null;
+        if (!newAboutCharacterId) {
+          moduleLogger.debug('Memory aboutCharacterId not found in restored entities, setting to null', {
+            memoryId: memory.id,
+            backupAboutCharacterId: memoryData.aboutCharacterId,
+          });
+        }
+      }
+
       await repos.memories.create({
         ...memoryData,
         characterId: newCharacterId,
         personaId: newPersonaId,
+        aboutCharacterId: newAboutCharacterId,
       });
     } catch (error) {
       warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);

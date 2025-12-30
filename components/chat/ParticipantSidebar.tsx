@@ -35,6 +35,11 @@ interface ParticipantSidebarProps {
   onTalkativenessChange?: (participantId: string, value: number) => void
   onAddCharacter?: () => void
   onRemoveCharacter?: (participantId: string) => void // Phase 6: Remove character from chat
+  // Impersonation support (Characters Not Personas)
+  impersonatingParticipantIds?: string[] // Participant IDs the user is impersonating
+  activeTypingParticipantId?: string | null // Which impersonated character is currently "active" for typing
+  onImpersonate?: (participantId: string) => void // Start impersonating a character
+  onStopImpersonate?: (participantId: string) => void // Stop impersonating a character
   className?: string
 }
 
@@ -54,6 +59,10 @@ export function ParticipantSidebar({
   onTalkativenessChange,
   onAddCharacter,
   onRemoveCharacter,
+  impersonatingParticipantIds = [],
+  activeTypingParticipantId,
+  onImpersonate,
+  onStopImpersonate,
   className = '',
 }: ParticipantSidebarProps) {
   // Debug logging in useEffect to avoid setState during render
@@ -65,8 +74,10 @@ export function ParticipantSidebar({
       respondingParticipantId,
       isGenerating,
       isPaused,
+      impersonatingCount: impersonatingParticipantIds.length,
+      activeTypingParticipantId,
     })
-  }, [participants.length, turnState.queue.length, turnSelectionResult?.nextSpeakerId, respondingParticipantId, isGenerating, isPaused])
+  }, [participants.length, turnState.queue.length, turnSelectionResult?.nextSpeakerId, respondingParticipantId, isGenerating, isPaused, impersonatingParticipantIds.length, activeTypingParticipantId])
 
   // Sort participants: personas first (the user), then characters by displayOrder
   const sortedParticipants = useMemo(() => {
@@ -194,6 +205,10 @@ export function ParticipantSidebar({
           // Can skip when it's the user's turn (nextSpeakerId is null means it's user's turn)
           const canSkip = turnSelectionResult?.nextSpeakerId === null && !isGenerating
 
+          // Check if this participant is being impersonated
+          const isImpersonating = impersonatingParticipantIds.includes(participant.id)
+          const isActiveTyping = activeTypingParticipantId === participant.id
+
           return (
             <ParticipantCard
               key={participant.id}
@@ -210,6 +225,10 @@ export function ParticipantSidebar({
               onRemove={onRemoveCharacter}
               canRemove={canRemove}
               canSkip={canSkip}
+              isImpersonating={isImpersonating}
+              isActiveTyping={isActiveTyping}
+              onImpersonate={onImpersonate}
+              onStopImpersonate={onStopImpersonate}
             />
           )
         })}
