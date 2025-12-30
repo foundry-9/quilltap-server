@@ -42,6 +42,33 @@
   - Updated context-manager to attribute messages to user-controlled characters
   - PERSONA type kept for backwards compatibility with existing chats
   - Connection profile not required for user-controlled CHARACTER participants
+- feat: Add character impersonation system for real-time control switching
+  - Users can impersonate any LLM character during chat via ParticipantCard button
+  - `SpeakerSelector` dropdown for switching between multiple impersonated characters
+  - `SelectLLMProfileDialog` prompts for LLM profile when stopping impersonation
+  - `AllLLMPauseModal` for all-LLM chats with Continue/Stop/Take Over options
+  - New API endpoints: `/api/chats/[id]/impersonate` (POST/DELETE/GET), `/api/chats/[id]/active-speaker` (PUT/GET)
+  - Impersonation state persisted in chat metadata (`impersonatingParticipantIds`, `activeTypingParticipantId`)
+- feat: Add personas-to-characters migration in upgrade plugin
+  - Automatically converts existing personas to characters with `controlledBy: 'user'`
+  - Updates PERSONA type chat participants to CHARACTER type
+  - Migrates memory references: `personaId` → `aboutCharacterId`
+  - Preserves original persona IDs as character IDs to maintain references
+- feat: Add inter-character memory support
+  - `aboutCharacterId` field added to memory schema for character-to-character memories
+  - New repository methods: `findByCharacterAboutCharacter()`, `findByCharacterAboutCharacters()`
+  - Context manager retrieves inter-character memories for multi-character chats
+  - `personaId` field deprecated in favor of `aboutCharacterId`
+- feat: Update SillyTavern import to use characters instead of personas
+  - `importSTPersonaAsCharacter()` function for importing personas as user-controlled characters
+  - `createDefaultMappings()` now prefers characters over personas
+  - `SpeakerMapping` type includes `controlledBy` field
+- fix: Update backup/restore service for character system
+  - Added `aboutCharacterId` remapping in restore service
+  - Added impersonation state remapping for chats
+- refactor: Remove Personas from navigation and add redirects
+  - Personas link removed from sidebar navigation menu
+  - All `/personas/*` routes now redirect to `/characters`
 - fix: Character view page now uses default conversation partner for `{{user}}` template replacement
   - Previously used deprecated personas linked via `personaLinks`
   - Now uses `defaultPartnerId` and user-controlled characters for template highlighting
