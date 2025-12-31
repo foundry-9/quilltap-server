@@ -1,6 +1,6 @@
 {
   "name": "create-quilltap-theme",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Scaffold a new Quilltap theme plugin",
   "main": "dist/index.js",
   "bin": {

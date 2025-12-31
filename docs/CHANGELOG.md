@@ -4,6 +4,10 @@
 
 ### 2.6-dev
 
+- feat: Include theme development guide in scaffolded themes
+  - `create-quilltap-theme` now creates `docs/THEME_PLUGIN_DEVELOPMENT.md` in every new theme
+  - Complete documentation is bundled locally for offline reference
+  - Updated help output and README to reflect new docs folder structure
 - feat: Add `create-quilltap-theme` scaffolding CLI package
   - New `packages/create-quilltap-theme/` directory with interactive CLI tool
   - Scaffold new theme plugins with `npm init quilltap-theme my-theme`

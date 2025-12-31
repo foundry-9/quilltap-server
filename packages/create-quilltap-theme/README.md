@@ -45,6 +45,8 @@ qtap-plugin-theme-my-theme/
 ├── esbuild.config.mjs    # Build configuration
 ├── README.md             # Documentation
 ├── .gitignore            # Git ignore rules
+├── docs/                 # Development documentation
+│   └── THEME_PLUGIN_DEVELOPMENT.md
 └── .storybook/           # Storybook setup (optional)
     ├── main.ts
     ├── preview.ts
@@ -91,6 +93,10 @@ npm publish --access public
 ```
 
 ## Documentation
+
+Every scaffolded theme includes a complete development guide at `docs/THEME_PLUGIN_DEVELOPMENT.md`.
+
+For the latest online documentation:
 
 - [Theme Plugin Development Guide](https://github.com/foundry-9/quilltap/blob/main/docs/THEME_PLUGIN_DEVELOPMENT.md)
 - [Plugin Manifest Reference](https://github.com/foundry-9/quilltap/blob/main/docs/PLUGIN_MANIFEST.md)

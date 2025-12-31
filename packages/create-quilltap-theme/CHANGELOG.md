@@ -2,6 +2,14 @@
 
 All notable changes to this package will be documented in this file.
 
+## [1.0.1] - 2025-12-31
+
+### Added
+
+- Include complete theme development guide (`docs/THEME_PLUGIN_DEVELOPMENT.md`) in every scaffolded theme
+- Updated help output to show docs folder in project structure
+- Added local documentation reference in post-scaffold instructions
+
 ## [1.0.0] - 2025-12-31
 
 ### Added

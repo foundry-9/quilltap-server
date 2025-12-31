@@ -167,6 +167,12 @@ async function scaffold(config: ThemeConfig): Promise<void> {
   copyTemplate('.gitignore.template', destPath, config, '.gitignore');
   success('Created .gitignore');
 
+  // Create docs directory with development guide
+  const docsDir = path.join(destPath, 'docs');
+  fs.mkdirSync(docsDir, { recursive: true });
+  copyTemplate('docs/THEME_PLUGIN_DEVELOPMENT.md.template', destPath, config, 'docs/THEME_PLUGIN_DEVELOPMENT.md');
+  success('Created docs/THEME_PLUGIN_DEVELOPMENT.md');
+
   // Optional: CSS overrides
   if (config.includeCssOverrides) {
     copyTemplate('styles.css.template', destPath, config, 'styles.css');
@@ -216,7 +222,8 @@ async function scaffold(config: ThemeConfig): Promise<void> {
   log(`  ${colors.cyan}npm publish --access public${colors.reset}`);
 
   log('');
-  info(`Documentation: https://github.com/foundry-9/quilltap/blob/main/docs/THEME_PLUGIN_DEVELOPMENT.md`);
+  info(`Local documentation: docs/THEME_PLUGIN_DEVELOPMENT.md`);
+  info(`Online documentation: https://github.com/foundry-9/quilltap/blob/main/docs/THEME_PLUGIN_DEVELOPMENT.md`);
   log('');
 }
 
@@ -271,6 +278,8 @@ ${colors.bold}What gets created:${colors.reset}
   ├── tsconfig.json         # TypeScript config
   ├── esbuild.config.mjs    # Build config
   ├── README.md             # Documentation
+  ├── docs/                 # Development guide
+  │   └── THEME_PLUGIN_DEVELOPMENT.md
   └── .storybook/           # Storybook setup (optional)
 `);
 }
