@@ -74,10 +74,6 @@ describe('LLM Attachment Support', () => {
       expect(mimeTypes).toEqual([])
     })
 
-    it('should return empty array for Gab AI', () => {
-      const mimeTypes = getSupportedMimeTypes('GAB_AI')
-      expect(mimeTypes).toEqual([])
-    })
   })
 
   describe('supportsFileAttachments', () => {
@@ -91,7 +87,6 @@ describe('LLM Attachment Support', () => {
     it('should return false for providers without attachment support', () => {
       expect(supportsFileAttachments('OLLAMA', 'http://localhost:11434')).toBe(false)
       expect(supportsFileAttachments('OPENROUTER')).toBe(false)
-      expect(supportsFileAttachments('GAB_AI')).toBe(false)
     })
   })
 
@@ -212,7 +207,6 @@ describe('LLM Attachment Support', () => {
       expect(PROVIDER_ATTACHMENT_CAPABILITIES.GROK).toBeDefined()
       expect(PROVIDER_ATTACHMENT_CAPABILITIES.OLLAMA).toBeDefined()
       expect(PROVIDER_ATTACHMENT_CAPABILITIES.OPENROUTER).toBeDefined()
-      expect(PROVIDER_ATTACHMENT_CAPABILITIES.GAB_AI).toBeDefined()
     })
 
     it('should correctly indicate attachment support', () => {
@@ -277,7 +271,7 @@ describe('Connection Profile Utilities', () => {
         createMockProfile('OPENAI'),
         createMockProfile('ANTHROPIC'),
         createMockProfile('OLLAMA'),
-        createMockProfile('GAB_AI'),
+        createMockProfile('OPENROUTER'),
       ]
 
       profiles[2].baseUrl = 'http://localhost:11434'

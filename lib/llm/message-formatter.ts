@@ -4,10 +4,15 @@
  *
  * Handles provider-aware message formatting for multi-character chats.
  * Provides name field support or content prefix fallback depending on provider.
+ *
+ * NOTE: Registered plugins provide message format support via messageFormat.
+ * The hardcoded PROVIDER_NAME_SUPPORT is kept as a fallback for
+ * unknown providers and backward compatibility.
  */
 
 import { Provider } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
+import { getMessageFormat } from '@/lib/plugins/provider-registry'
 
 /**
  * Provider capabilities for name field support
@@ -66,17 +71,19 @@ const PROVIDER_NAME_SUPPORT: Record<string, ProviderNameSupport> = {
     supportedRoles: ['user', 'assistant'],
     maxNameLength: 64,
   },
-  // Gab.AI - assume no name support
-  'GAB-AI': {
-    supportsNameField: false,
-    supportedRoles: [],
-  },
 }
 
 /**
  * Get name field support info for a provider
  */
 export function getProviderNameSupport(provider: Provider): ProviderNameSupport {
+  // First try the plugin registry (plugins register their own message format support)
+  const pluginFormat = getMessageFormat(provider)
+  if (pluginFormat.supportsNameField || pluginFormat.supportedRoles.length > 0) {
+    return pluginFormat
+  }
+
+  // Fall back to hardcoded support for known providers
   const normalized = provider.toUpperCase()
   const support = PROVIDER_NAME_SUPPORT[normalized]
 

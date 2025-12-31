@@ -6,6 +6,14 @@
  * - Show users which files they can attach in the UI
  * - Validate file uploads before sending
  * - Display helpful error messages when unsupported files are attached
+ *
+ * NOTE: This file is used by client components, so it cannot import from
+ * provider-registry.ts (which uses server-only code like the logger).
+ * The PROVIDER_ATTACHMENT_CAPABILITIES map is the source of truth for
+ * client-side attachment support queries.
+ *
+ * Server-side code can query the plugin registry directly for dynamic
+ * attachment capabilities from registered plugins.
  */
 
 import { Provider } from '@/lib/schemas/types'
@@ -74,11 +82,6 @@ export const PROVIDER_ATTACHMENT_CAPABILITIES = {
     description: 'No file attachments supported',
     notes: 'Varies by implementation (LM Studio, vLLM, etc.)',
   },
-  GAB_AI: {
-    supportsAttachments: false,
-    types: [],
-    description: 'No file attachments supported',
-  },
 } as const
 
 // Type for known provider keys
@@ -93,17 +96,21 @@ function isKnownProvider(provider: string): provider is KnownProvider {
  * Get supported MIME types for a provider
  * Returns an empty array if the provider doesn't support file attachments
  *
+ * NOTE: This function uses hardcoded capabilities only (client-safe).
+ * Server-side code can query the plugin registry directly for dynamic
+ * capabilities from registered plugins.
+ *
  * @param provider The LLM provider
  * @param baseUrl Optional base URL for providers that require it (Ollama, OpenAI-compatible)
  * @returns Array of supported MIME types (empty if no support)
  */
 export function getSupportedMimeTypes(provider: Provider, baseUrl?: string): string[] {
-  // Use the static provider capabilities for known providers
-  // Unknown/dynamic providers return empty array (they should register capabilities via plugins)
+  // Use hardcoded capabilities (client-safe)
   if (isKnownProvider(provider)) {
     const capabilities = PROVIDER_ATTACHMENT_CAPABILITIES[provider]
     return capabilities ? [...capabilities.types] : []
   }
+
   return []
 }
 

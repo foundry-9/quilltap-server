@@ -10998,11 +10998,31 @@ var attachmentSupport = {
   description: "File attachment support depends on the underlying model",
   notes: "OpenRouter proxies to 100+ models with varying capabilities. Some models may support image/file attachments."
 };
+var messageFormat = {
+  supportsNameField: false,
+  supportedRoles: []
+};
+var cheapModels = {
+  defaultModel: "openai/gpt-4o-mini",
+  recommendedModels: [
+    "openai/gpt-4o-mini",
+    "anthropic/claude-3-haiku",
+    "google/gemini-2.0-flash",
+    "mistralai/mistral-7b-instruct"
+  ]
+};
 var plugin = {
   metadata,
   config,
   capabilities,
   attachmentSupport,
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: "openai",
+  // OpenRouter uses OpenAI format
+  cheapModels,
+  defaultContextWindow: 128e3,
   /**
    * Factory method to create an OpenRouter LLM provider instance
    */

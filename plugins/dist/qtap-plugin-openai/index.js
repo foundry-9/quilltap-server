@@ -7762,11 +7762,26 @@ var attachmentSupport = {
   description: "Images only (JPEG, PNG, GIF, WebP)",
   notes: "Images are supported in vision-capable models like GPT-4V and GPT-4o"
 };
+var messageFormat = {
+  supportsNameField: true,
+  supportedRoles: ["user", "assistant"],
+  maxNameLength: 64
+};
+var cheapModels = {
+  defaultModel: "gpt-4o-mini",
+  recommendedModels: ["gpt-4o-mini", "gpt-3.5-turbo"]
+};
 var plugin = {
   metadata,
   config,
   capabilities,
   attachmentSupport,
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: "openai",
+  cheapModels,
+  defaultContextWindow: 128e3,
   /**
    * Factory method to create an OpenAI LLM provider instance
    */

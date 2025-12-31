@@ -20,6 +20,51 @@ interface NpmSearchResult {
 }
 
 /**
+ * Check if a package name is a valid Quilltap plugin
+ * Matches both unscoped (qtap-plugin-*) and scoped (@org/qtap-plugin-*) packages
+ */
+function isQuilltapPlugin(name: string): boolean {
+  // Unscoped: qtap-plugin-openai
+  if (name.startsWith('qtap-plugin-')) {
+    return true;
+  }
+  // Scoped: @quilltap/qtap-plugin-gab-ai, @myorg/qtap-plugin-custom
+  if (name.startsWith('@') && name.includes('/qtap-plugin-')) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Perform a single npm search query
+ */
+async function searchNpm(searchText: string): Promise<any[]> {
+  const searchUrl = new URL(NPM_REGISTRY_SEARCH_URL);
+  searchUrl.searchParams.set('text', searchText);
+  searchUrl.searchParams.set('size', '50');
+
+  const response = await fetch(searchUrl.toString(), {
+    headers: {
+      'Accept': 'application/json',
+    },
+    // Cache for 5 minutes to reduce npm requests
+    next: { revalidate: 300 },
+  });
+
+  if (!response.ok) {
+    logger.warn('npm search request failed', {
+      context: 'plugins-search-npm',
+      searchText,
+      status: response.status,
+    });
+    return [];
+  }
+
+  const data = await response.json();
+  return data.objects || [];
+}
+
+/**
  * GET /api/plugins/search
  * Search npm registry for Quilltap plugins
  */
@@ -38,41 +83,40 @@ export async function GET(req: Request) {
       query,
     });
 
-    // Build search URL - search for packages with qtap-plugin prefix
-    const searchUrl = new URL(NPM_REGISTRY_SEARCH_URL);
-    // If user provides a query, append it to our prefix search
-    const searchText = query.trim()
-      ? `qtap-plugin-${query.trim()}`
-      : 'qtap-plugin-';
-    searchUrl.searchParams.set('text', searchText);
-    searchUrl.searchParams.set('size', '50');
+    // Perform multiple searches to find both scoped and unscoped plugins
+    // npm's search API does fuzzy matching, so we need specific queries
+    const searchQueries = query.trim()
+      ? [
+          // Search for unscoped plugins with user query
+          `qtap-plugin-${query.trim()}`,
+          // Search for @quilltap scoped plugins with user query
+          `@quilltap/ ${query.trim()}`,
+        ]
+      : [
+          // Default: search for @quilltap scope (finds scoped plugins reliably)
+          '@quilltap/',
+          // Also search for unscoped plugins (qtap-plugin- prefix)
+          'qtap-plugin-',
+        ];
 
-    const response = await fetch(searchUrl.toString(), {
-      headers: {
-        'Accept': 'application/json',
-      },
-      // Cache for 5 minutes to reduce npm requests
-      next: { revalidate: 300 },
+    // Run searches in parallel
+    const searchPromises = searchQueries.map(q => searchNpm(q));
+    const results = await Promise.all(searchPromises);
+
+    // Combine and deduplicate results
+    const allObjects = results.flat();
+    const seenNames = new Set<string>();
+    const uniqueObjects = allObjects.filter(obj => {
+      const name = obj.package?.name;
+      if (!name || seenNames.has(name)) return false;
+      seenNames.add(name);
+      return true;
     });
 
-    if (!response.ok) {
-      logger.error('npm search request failed', {
-        context: 'plugins-search-GET',
-        status: response.status,
-        statusText: response.statusText,
-      });
-      return NextResponse.json(
-        { error: 'Failed to search npm registry' },
-        { status: 502 }
-      );
-    }
-
-    const data = await response.json();
-
-    // Filter to only qtap-plugin-* packages and transform results
-    const plugins: NpmSearchResult[] = (data.objects || [])
+    // Filter to only qtap-plugin-* packages (both scoped and unscoped) and transform results
+    const plugins: NpmSearchResult[] = uniqueObjects
       .filter((obj: { package: { name: string } }) =>
-        obj.package?.name?.startsWith('qtap-plugin-')
+        obj.package?.name && isQuilltapPlugin(obj.package.name)
       )
       .map((obj: {
         package: {

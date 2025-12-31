@@ -4,9 +4,14 @@
  *
  * This module fetches and caches model pricing data from providers
  * to enable cost-aware model selection for background tasks.
+ *
+ * NOTE: Registered plugins can provide pricing via getModelInfo().
+ * The getModelPricingFromRegistry function queries the registry first,
+ * falling back to FALLBACK_PRICING for unknown providers.
  */
 
 import { Provider } from '@/lib/schemas/types'
+import { getModelPricing } from '@/lib/plugins/provider-registry'
 
 /**
  * Pricing information for a model (costs per 1M tokens)
@@ -282,21 +287,6 @@ export const FALLBACK_PRICING: Record<Provider, ModelPricing[]> = {
 
   // OpenAI Compatible uses same pricing structure as source
   OPENAI_COMPATIBLE: [],
-
-  // Gab AI
-  GAB_AI: [
-    {
-      modelId: 'gab-ai-chat',
-      provider: 'GAB_AI',
-      name: 'Gab AI Chat',
-      promptCostPer1M: 0,
-      completionCostPer1M: 0,
-      contextLength: 32000,
-      supportsVision: false,
-      supportsTools: false,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-  ],
 }
 
 /**
@@ -403,4 +393,47 @@ export function calculateSavings(
 
   if (expensiveCost === 0) return 0
   return ((expensiveCost - cheaperCost) / expensiveCost) * 100
+}
+
+/**
+ * Get model pricing from the provider registry
+ * First checks plugin's getModelInfo(), then falls back to FALLBACK_PRICING
+ *
+ * @param provider The provider name
+ * @param modelId The model identifier
+ * @returns ModelPricing object or null if not found
+ */
+export function getModelPricingFromRegistry(
+  provider: Provider,
+  modelId: string
+): ModelPricing | null {
+  // First try the plugin registry
+  const registryPricing = getModelPricing(provider, modelId)
+  if (registryPricing) {
+    return {
+      modelId,
+      provider,
+      name: modelId, // Plugin doesn't provide display name in pricing
+      promptCostPer1M: registryPricing.input,
+      completionCostPer1M: registryPricing.output,
+      contextLength: null, // Would need to query separately
+      fetchedAt: new Date().toISOString(),
+    }
+  }
+
+  // Fall back to FALLBACK_PRICING
+  const providerPricing = FALLBACK_PRICING[provider]
+  if (providerPricing) {
+    const modelPricing = providerPricing.find(
+      (m: ModelPricing) =>
+        m.modelId === modelId ||
+        m.modelId.includes(modelId) ||
+        modelId.includes(m.modelId)
+    )
+    if (modelPricing) {
+      return modelPricing
+    }
+  }
+
+  return null
 }

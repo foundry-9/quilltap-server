@@ -28,7 +28,7 @@ The plugin system is **fully operational** with all LLM providers migrated to pl
 
 ### Phase 3: LLM Provider Plugins
 
-All 8 LLM providers migrated to plugins:
+All 7 LLM providers migrated to plugins:
 
 | Plugin | Provider | Chat | Images | Attachments |
 |--------|----------|------|--------|-------------|
@@ -36,7 +36,6 @@ All 8 LLM providers migrated to plugins:
 | `qtap-plugin-anthropic` | Anthropic | Yes | No | Images + PDF |
 | `qtap-plugin-google` | Google Gemini | Yes | Imagen | Images |
 | `qtap-plugin-grok` | Grok/xAI | Yes | Yes | Images |
-| `qtap-plugin-gab-ai` | Gab AI | Yes | No | No |
 | `qtap-plugin-ollama` | Ollama | Yes | No | No |
 | `qtap-plugin-openrouter` | OpenRouter | Yes | No | No |
 | `qtap-plugin-openai-compatible` | Generic | Yes | No | No |

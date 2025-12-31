@@ -165,6 +165,36 @@ export interface IconProps {
 }
 
 /**
+ * Message format support for multi-character chats
+ * Defines how the provider handles the 'name' field in messages
+ */
+export interface MessageFormatSupport {
+  /** Whether the provider supports a name field on messages */
+  supportsNameField: boolean;
+  /** Which roles support the name field */
+  supportedRoles: ('user' | 'assistant')[];
+  /** Maximum length for name field (if limited) */
+  maxNameLength?: number;
+}
+
+/**
+ * Cheap model configuration for background tasks
+ * Used for memory extraction, summarization, titling, etc.
+ */
+export interface CheapModelConfig {
+  /** The default cheap model for this provider */
+  defaultModel: string;
+  /** List of recommended cheap models */
+  recommendedModels: string[];
+}
+
+/**
+ * Tool format type for this provider
+ * Determines how tools are formatted for API calls
+ */
+export type ToolFormatType = 'openai' | 'anthropic' | 'google';
+
+/**
  * Main LLM Provider Plugin Interface
  *
  * Plugins implementing this interface can be dynamically loaded
@@ -291,6 +321,42 @@ export interface LLMProviderPlugin {
    * Only applicable for providers with imageGeneration capability
    */
   getImageProviderConstraints?: () => ImageProviderConstraints;
+
+  // =========================================================================
+  // Runtime Configuration (all optional for backward compatibility)
+  // =========================================================================
+
+  /**
+   * Message format support for multi-character contexts (optional)
+   * If not provided, defaults to no name field support
+   */
+  messageFormat?: MessageFormatSupport;
+
+  /**
+   * Token estimation multiplier (optional)
+   * Characters per token for this provider's tokenizer
+   * @default 3.5
+   */
+  charsPerToken?: number;
+
+  /**
+   * Tool format type for this provider (optional)
+   * Used for quick format detection without calling formatTools()
+   * @default 'openai'
+   */
+  toolFormat?: ToolFormatType;
+
+  /**
+   * Cheap model configuration for background tasks (optional)
+   * Used for memory extraction, summarization, titling, etc.
+   */
+  cheapModels?: CheapModelConfig;
+
+  /**
+   * Default context window when model is unknown (optional)
+   * Falls back to 8192 if not specified
+   */
+  defaultContextWindow?: number;
 }
 
 /**

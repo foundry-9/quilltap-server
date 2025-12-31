@@ -128,7 +128,6 @@ Quilltap uses a plugin-based provider system. Available providers depend on whic
 | `ANTHROPIC` | qtap-plugin-anthropic | Chat, image understanding, tool calling, prompt caching |
 | `GOOGLE` | qtap-plugin-google | Chat, image generation (Imagen 4), multimodal inputs |
 | `GROK` | qtap-plugin-grok | Chat, image generation, web search, multimodal |
-| `GAB_AI` | qtap-plugin-gab-ai | Chat (OpenAI-compatible) |
 | `OLLAMA` | qtap-plugin-ollama | Chat, embeddings (local models) |
 | `OPENROUTER` | qtap-plugin-openrouter | Chat, embeddings, image generation (200+ models) |
 | `OPENAI_COMPATIBLE` | qtap-plugin-openai-compatible | Chat (any OpenAI-format API) |

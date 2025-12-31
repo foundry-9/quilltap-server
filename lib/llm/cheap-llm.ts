@@ -7,6 +7,10 @@
  * These tasks don't require the full power of expensive models.
  *
  * Now enhanced with real pricing data from provider APIs (Sprint 2.1).
+ *
+ * NOTE: Registered plugins provide cheapModels configuration via the provider
+ * registry. The hardcoded CHEAPEST_MODEL_MAP and RECOMMENDED_CHEAP_MODELS are
+ * kept as fallbacks for unknown providers and backward compatibility.
  */
 
 import { ConnectionProfile, Provider } from '@/lib/schemas/types'
@@ -20,6 +24,7 @@ import {
   getProviderPricing,
   findCheapestAvailableModel,
 } from './pricing-fetcher'
+import { getCheapModelConfig } from '@/lib/plugins/provider-registry'
 
 /**
  * Strategy for selecting the cheap LLM provider
@@ -68,7 +73,6 @@ const CHEAPEST_MODEL_MAP: Record<Provider, string> = {
   OPENROUTER: 'openai/gpt-4o-mini', // OpenRouter format
   OLLAMA: 'llama3.2:3b', // Fast, small local model
   OPENAI_COMPATIBLE: 'gpt-4o-mini', // Default to OpenAI mini format
-  GAB_AI: 'gab-ai-chat', // Gab AI's default model
 }
 
 /**
@@ -94,7 +98,6 @@ export const RECOMMENDED_CHEAP_MODELS: Record<Provider, string[]> = {
     'gemma2:2b',
   ],
   OPENAI_COMPATIBLE: ['gpt-4o-mini', 'gpt-3.5-turbo'],
-  GAB_AI: ['gab-ai-chat'],
 }
 
 /**
@@ -107,8 +110,16 @@ export const DEFAULT_CHEAP_LLM_CONFIG: CheapLLMConfig = {
 
 /**
  * Gets the cheapest model for a given provider
+ * First checks the plugin registry, falls back to hardcoded map.
  */
 export function getCheapestModel(provider: Provider): string {
+  // First try the plugin registry
+  const registryConfig = getCheapModelConfig(provider)
+  if (registryConfig?.defaultModel) {
+    return registryConfig.defaultModel
+  }
+
+  // Fall back to hardcoded map
   return CHEAPEST_MODEL_MAP[provider]
 }
 
@@ -230,9 +241,17 @@ export function getCheapLLMProvider(
 /**
  * Checks if a model is considered a "cheap" model
  * Used to validate user-defined cheap LLM profiles
+ * First checks the plugin registry, falls back to hardcoded list.
  */
 export function isCheapModel(provider: Provider, modelName: string): boolean {
-  const recommendedModels = RECOMMENDED_CHEAP_MODELS[provider] || []
+  // First try the plugin registry
+  const registryConfig = getCheapModelConfig(provider)
+  const registryModels = registryConfig?.recommendedModels || []
+
+  // Fall back to hardcoded list
+  const recommendedModels = registryModels.length > 0
+    ? registryModels
+    : (RECOMMENDED_CHEAP_MODELS[provider] || [])
 
   // Check exact match first
   if (recommendedModels.includes(modelName)) {
@@ -333,10 +352,16 @@ export function validateCheapLLMConfig(
 
     // Warn if the selected model is not a cheap model
     if (!isCheapModel(profile.provider, profile.modelName)) {
+      // Get recommended models from registry or fallback
+      const registryConfig = getCheapModelConfig(profile.provider)
+      const recommendedModels = registryConfig?.recommendedModels?.length
+        ? registryConfig.recommendedModels
+        : RECOMMENDED_CHEAP_MODELS[profile.provider]
+
       return {
         valid: true, // Still valid, just a warning
         error: `Warning: ${profile.modelName} is not a recommended cheap model. ` +
-          `Consider using one of: ${RECOMMENDED_CHEAP_MODELS[profile.provider]?.join(', ')}`,
+          `Consider using one of: ${recommendedModels?.join(', ')}`,
       }
     }
   }
@@ -503,7 +528,7 @@ export async function getCheapLLMProviderWithPricing(
   // Find the absolute cheapest available model
   const cheapestModel = await findCheapestAvailableModel(userId, {
     excludeProviders: availableProviders.length > 0
-      ? (['OLLAMA', 'OPENROUTER', 'OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK', 'OPENAI_COMPATIBLE', 'GAB_AI'] as Provider[])
+      ? (['OLLAMA', 'OPENROUTER', 'OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK', 'OPENAI_COMPATIBLE'] as Provider[])
           .filter(p => !availableProviders.includes(p))
       : undefined,
   })

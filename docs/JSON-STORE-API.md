@@ -524,8 +524,7 @@ type Provider =
   | 'OLLAMA'
   | 'OPENROUTER'
   | 'OPENAI_COMPATIBLE'
-  | 'GROK'
-  | 'GAB_AI';
+  | 'GROK';
 
 type ImageProvider = 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN';
 

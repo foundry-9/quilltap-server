@@ -9,6 +9,22 @@ interface InstallRequestBody {
 }
 
 /**
+ * Check if a package name is a valid Quilltap plugin
+ * Matches both unscoped (qtap-plugin-*) and scoped (@org/qtap-plugin-*) packages
+ */
+function isQuilltapPlugin(name: string): boolean {
+  // Unscoped: qtap-plugin-openai
+  if (name.startsWith('qtap-plugin-')) {
+    return true;
+  }
+  // Scoped: @quilltap/qtap-plugin-gab-ai, @myorg/qtap-plugin-custom
+  if (name.startsWith('@') && name.includes('/qtap-plugin-')) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * POST /api/plugins/install
  * Install a plugin from npm registry
  */
@@ -29,9 +45,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!packageName.startsWith('qtap-plugin-')) {
+    if (!isQuilltapPlugin(packageName)) {
       return NextResponse.json(
-        { error: 'Package name must start with "qtap-plugin-"' },
+        { error: 'Package name must be a Quilltap plugin (qtap-plugin-* or @org/qtap-plugin-*)' },
         { status: 400 }
       );
     }

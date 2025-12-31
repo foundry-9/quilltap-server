@@ -7,7 +7,7 @@
 - doc: Major documentation refresh
   - Updated `DEVELOPMENT.md` with accurate project structure, MongoDB/S3 requirements, and current development workflow
   - Updated `docs/API.md` from v1.0 to v2.4 with all new endpoints (embedding profiles, image profiles, memories, templates, NPCs, background jobs, themes, etc.)
-  - Added all 8 LLM providers to API docs (OPENAI, ANTHROPIC, GOOGLE, GROK, GAB_AI, OLLAMA, OPENROUTER, OPENAI_COMPATIBLE)
+  - Added all 7 LLM providers to API docs (OPENAI, ANTHROPIC, GOOGLE, GROK, OLLAMA, OPENROUTER, OPENAI_COMPATIBLE)
   - Updated About page with mobile-responsive feature and Google Gemini/Imagen 4 image generation
   - Removed outdated references to JSON storage and added current MongoDB collections
 

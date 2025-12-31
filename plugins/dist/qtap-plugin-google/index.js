@@ -2350,11 +2350,26 @@ var attachmentSupport = {
   description: "Images only (JPEG, PNG, GIF, WebP)",
   notes: "Images are supported in Gemini models for vision analysis"
 };
+var messageFormat = {
+  supportsNameField: false,
+  supportedRoles: []
+};
+var cheapModels = {
+  defaultModel: "gemini-2.0-flash",
+  recommendedModels: ["gemini-2.0-flash", "gemini-1.5-flash"]
+};
 var plugin = {
   metadata,
   config,
   capabilities,
   attachmentSupport,
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.8,
+  // Google uses SentencePiece tokenizer, slightly more efficient
+  toolFormat: "google",
+  cheapModels,
+  defaultContextWindow: 1e6,
   /**
    * Factory method to create a Google LLM provider instance
    */

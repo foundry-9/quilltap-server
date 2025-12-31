@@ -10,7 +10,7 @@ This document tracks the migration of all LLM provider functionality into plugin
 
 This refactoring effort moves all LLM-specific code into individual plugins under `plugins/dist/`, creating a modular architecture where:
 
-1. Each LLM provider (OpenAI, Anthropic, Google, Grok, Gab AI, Ollama, OpenRouter) has its own plugin
+1. Each LLM provider (OpenAI, Anthropic, Google, Grok, Ollama, OpenRouter) has its own plugin
 2. An OpenAI-compatible plugin handles generic OpenAI-format APIs
 3. The core app can delegate to plugin providers via a hybrid factory
 4. All provider metadata (icons, names, colors) comes from plugins
@@ -27,7 +27,6 @@ This refactoring effort moves all LLM-specific code into individual plugins unde
 | `qtap-plugin-anthropic` | Anthropic | ✅ | ❌ | ✅ Images + PDF | ✅ Complete |
 | `qtap-plugin-google` | Google Gemini | ✅ | ✅ Imagen | ✅ Images | ✅ Complete |
 | `qtap-plugin-grok` | Grok/xAI | ✅ | ✅ | ✅ Images | ✅ Complete |
-| `qtap-plugin-gab-ai` | Gab AI | ✅ | ❌ | ❌ | ✅ Complete |
 | `qtap-plugin-ollama` | Ollama | ✅ | ❌ | ❌ | ✅ Complete |
 | `qtap-plugin-openrouter` | OpenRouter | ✅ | ❌ | ❌ | ✅ Complete |
 | `qtap-plugin-openai-compatible` | Generic | ✅ | ❌ | ❌ | ✅ Complete |
@@ -91,7 +90,7 @@ The legacy provider implementations have been removed and the application now us
 - [x] Removed `lib/llm/anthropic.ts`
 - [x] Removed `lib/llm/google.ts`
 - [x] Removed `lib/llm/grok.ts`
-- [x] Removed `lib/llm/gab-ai.ts`
+- [x] Removed legacy provider files from `lib/llm/`
 - [x] Removed `lib/llm/ollama.ts`
 - [x] Removed `lib/llm/openrouter.ts`
 - [x] Removed `lib/llm/openai-compatible.ts`

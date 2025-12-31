@@ -4,12 +4,36 @@
 
 ### 2.6-dev
 
-- refactor: Gab AI plugin now inherits from OpenAI-Compatible plugin
-  - OpenAICompatibleProvider moved to `@quilltap/plugin-utils` package (v1.1.0)
+- feat: Support scoped npm packages for plugin installation
+  - Plugin search now finds both unscoped (`qtap-plugin-*`) and scoped (`@org/qtap-plugin-*`) packages
+  - Install/uninstall APIs accept scoped package names
+  - Scoped packages are stored using safe directory names (`@org--qtap-plugin-*`)
+  - Enables installation of external plugins like `@quilltap/qtap-plugin-gab-ai`
+- refactor: Move provider configuration from hardcoded to plugin-registered
+  - Extended `LLMProviderPlugin` interface with new optional properties:
+    - `messageFormat` - configures name field support for multi-character chats
+    - `charsPerToken` - token estimation multiplier
+    - `toolFormat` - declares tool format type ('openai' | 'anthropic' | 'google')
+    - `cheapModels` - specifies recommended cheap models for background tasks
+    - `defaultContextWindow` - fallback context window size
+  - Added query methods to provider registry (`getMessageFormat()`, `getCharsPerToken()`, `getToolFormat()`, `getCheapModelConfig()`, `getDefaultContextWindow()`, `getModelPricing()`)
+  - Updated core lib files to query registry first, with fallback to hardcoded values:
+    - `lib/llm/attachment-support.ts`
+    - `lib/llm/message-formatter.ts`
+    - `lib/tokens/token-counter.ts`
+    - `lib/tools/registry.ts`
+    - `lib/llm/cheap-llm.ts`
+    - `lib/llm/model-context-data.ts`
+    - `lib/llm/pricing.ts`
+  - Updated all 7 provider plugins with new runtime configuration properties
+  - Benefits: Adding/removing providers now only requires adding/removing the plugin, with no changes to core lib files
+- refactor: Removed Gab AI provider plugin
+  - Removed `qtap-plugin-gab-ai` from the codebase
+  - Cleaned up all references to GAB_AI provider in lib files, components, tests, and documentation
+  - Users who need Gab AI functionality can use the `qtap-plugin-openai-compatible` plugin instead
+- refactor: OpenAICompatibleProvider moved to `@quilltap/plugin-utils` package (v1.1.0)
   - External plugins can now extend OpenAICompatibleProvider to create custom providers
   - Added `OpenAICompatibleProviderConfig` interface with `providerName`, `requireApiKey`, and `attachmentErrorMessage` options
-  - GabAIProvider reduced from 210 lines to 30 lines by extending OpenAICompatibleProvider
-  - Both bundled plugins (openai-compatible, gab-ai) now import from `@quilltap/plugin-utils`
   - Updated esbuild configs to mark `@quilltap/plugin-*` packages as external
 - feat: Add `@quilltap/plugin-utils` package for plugin runtime utilities
   - New `packages/plugin-utils/` directory with tool parsing and logger bridge

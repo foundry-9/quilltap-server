@@ -61,8 +61,41 @@ const PLUGINS_SITE_DIR = path.join(PLUGINS_BASE_DIR, 'site');
 const PLUGINS_USERS_DIR = path.join(PLUGINS_BASE_DIR, 'users');
 const PLUGINS_DIST_DIR = path.join(PLUGINS_BASE_DIR, 'dist');
 
-const PLUGIN_NAME_REGEX = /^qtap-plugin-[a-z0-9-]+$/;
+// Regex for unscoped plugins: qtap-plugin-*
+const UNSCOPED_PLUGIN_REGEX = /^qtap-plugin-[a-z0-9-]+$/;
+// Regex for scoped plugins: @org/qtap-plugin-*
+const SCOPED_PLUGIN_REGEX = /^@[a-z0-9-]+\/qtap-plugin-[a-z0-9-]+$/;
 const NPM_INSTALL_TIMEOUT = 120000; // 2 minutes
+
+/**
+ * Check if a package name is a valid Quilltap plugin
+ * Matches both unscoped (qtap-plugin-*) and scoped (@org/qtap-plugin-*) packages
+ */
+function isValidPluginName(name: string): boolean {
+  return UNSCOPED_PLUGIN_REGEX.test(name) || SCOPED_PLUGIN_REGEX.test(name);
+}
+
+/**
+ * Convert a scoped package name to a safe directory name
+ * @org/qtap-plugin-foo -> @org--qtap-plugin-foo
+ */
+function packageNameToDir(packageName: string): string {
+  if (packageName.startsWith('@')) {
+    return packageName.replace('/', '--');
+  }
+  return packageName;
+}
+
+/**
+ * Convert a directory name back to a package name
+ * @org--qtap-plugin-foo -> @org/qtap-plugin-foo
+ */
+function dirToPackageName(dirName: string): string {
+  if (dirName.startsWith('@') && dirName.includes('--')) {
+    return dirName.replace('--', '/');
+  }
+  return dirName;
+}
 
 // ============================================================================
 // INSTALLATION
@@ -88,21 +121,16 @@ export async function installPluginFromNpm(
     userId: userId ? `${userId.substring(0, 8)}...` : undefined,
   });
 
-  // Validate package name format
-  if (!packageName.startsWith('qtap-plugin-')) {
-    logger.warn('Invalid package name prefix', {
-      context: 'PluginInstaller.installPluginFromNpm',
-      packageName,
-    });
-    return { success: false, error: 'Package name must start with "qtap-plugin-"' };
-  }
-
-  if (!PLUGIN_NAME_REGEX.test(packageName)) {
+  // Validate package name format (supports both scoped and unscoped)
+  if (!isValidPluginName(packageName)) {
     logger.warn('Invalid package name format', {
       context: 'PluginInstaller.installPluginFromNpm',
       packageName,
     });
-    return { success: false, error: 'Invalid package name format. Use lowercase letters, numbers, and hyphens only.' };
+    return {
+      success: false,
+      error: 'Invalid package name. Must be qtap-plugin-* or @org/qtap-plugin-* with lowercase letters, numbers, and hyphens.'
+    };
   }
 
   // Determine installation directory
@@ -121,7 +149,9 @@ export async function installPluginFromNpm(
     pluginBaseDir = path.join(PLUGINS_USERS_DIR, userId);
   }
 
-  const pluginDir = path.join(pluginBaseDir, packageName);
+  // Convert scoped package names to safe directory names (@org/pkg -> @org--pkg)
+  const safeDirName = packageNameToDir(packageName);
+  const pluginDir = path.join(pluginBaseDir, safeDirName);
 
   logger.debug('Plugin installation directory', {
     context: 'PluginInstaller.installPluginFromNpm',
@@ -145,7 +175,7 @@ export async function installPluginFromNpm(
 
     // Initialize wrapper package.json for npm install
     const wrapperPkg = {
-      name: `${packageName}-wrapper`,
+      name: `${safeDirName}-wrapper`,
       version: '1.0.0',
       private: true,
       dependencies: {},
@@ -327,9 +357,9 @@ export async function uninstallPlugin(
     scope,
   });
 
-  // Validate package name
-  if (!packageName.startsWith('qtap-plugin-')) {
-    return { success: false, error: 'Invalid package name' };
+  // Validate package name (supports both scoped and unscoped)
+  if (!isValidPluginName(packageName)) {
+    return { success: false, error: 'Invalid package name. Must be qtap-plugin-* or @org/qtap-plugin-*' };
   }
 
   // Determine installation directory
@@ -343,7 +373,9 @@ export async function uninstallPlugin(
     pluginBaseDir = path.join(PLUGINS_USERS_DIR, userId);
   }
 
-  const pluginDir = path.join(pluginBaseDir, packageName);
+  // Convert scoped package names to safe directory names
+  const safeDirName = packageNameToDir(packageName);
+  const pluginDir = path.join(pluginBaseDir, safeDirName);
 
   try {
     // Check if plugin exists
@@ -436,21 +468,24 @@ export async function isPluginInstalled(
   packageName: string,
   userId?: string
 ): Promise<{ installed: boolean; scope?: 'bundled' | 'site' | 'user' }> {
-  // Check bundled
+  // Convert scoped package names to safe directory names for path lookups
+  const safeDirName = packageNameToDir(packageName);
+
+  // Check bundled (bundled plugins use package name directly as directory)
   const bundledPath = path.join(PLUGINS_DIST_DIR, packageName, 'manifest.json');
   if (await fs.access(bundledPath).then(() => true).catch(() => false)) {
     return { installed: true, scope: 'bundled' };
   }
 
-  // Check site
-  const sitePath = path.join(PLUGINS_SITE_DIR, packageName, 'node_modules', packageName, 'manifest.json');
+  // Check site (npm-installed plugins use safe directory name, but node_modules uses package name)
+  const sitePath = path.join(PLUGINS_SITE_DIR, safeDirName, 'node_modules', packageName, 'manifest.json');
   if (await fs.access(sitePath).then(() => true).catch(() => false)) {
     return { installed: true, scope: 'site' };
   }
 
   // Check user
   if (userId) {
-    const userPath = path.join(PLUGINS_USERS_DIR, userId, packageName, 'node_modules', packageName, 'manifest.json');
+    const userPath = path.join(PLUGINS_USERS_DIR, userId, safeDirName, 'node_modules', packageName, 'manifest.json');
     if (await fs.access(userPath).then(() => true).catch(() => false)) {
       return { installed: true, scope: 'user' };
     }
@@ -494,13 +529,22 @@ async function scanPluginDirectory(
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      if (!entry.name.startsWith('qtap-plugin-')) continue;
 
+      // Check for valid plugin directory names:
+      // - Unscoped: qtap-plugin-*
+      // - Scoped (converted): @org--qtap-plugin-*
+      const isUnscopedPlugin = entry.name.startsWith('qtap-plugin-');
+      const isScopedPlugin = entry.name.startsWith('@') && entry.name.includes('--qtap-plugin-');
+      if (!isUnscopedPlugin && !isScopedPlugin) continue;
+
+      // Convert directory name back to package name for scoped packages
+      const packageName = dirToPackageName(entry.name);
       let pluginPath = path.join(baseDir, entry.name);
 
       // For npm-installed plugins, the actual plugin is in node_modules
+      // node_modules uses the actual package name (with /), not the safe directory name
       if (source !== 'bundled') {
-        const npmPath = path.join(pluginPath, 'node_modules', entry.name);
+        const npmPath = path.join(pluginPath, 'node_modules', packageName);
         const npmExists = await fs.access(npmPath).then(() => true).catch(() => false);
         if (npmExists) {
           pluginPath = npmPath;
@@ -531,8 +575,8 @@ async function scanPluginDirectory(
           // Use manifest version
         }
 
-        // Find installation date from registry
-        const registryEntry = registry.plugins.find(p => p.name === entry.name);
+        // Find installation date from registry (uses package name, not directory name)
+        const registryEntry = registry.plugins.find(p => p.name === packageName);
 
         plugins.push({
           name: validation.data.name,

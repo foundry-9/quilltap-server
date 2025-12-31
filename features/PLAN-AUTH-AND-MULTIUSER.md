@@ -163,7 +163,7 @@ SITE_PLUGINS_ENABLED=qtap-plugin-openai,qtap-plugin-anthropic,qtap-plugin-google
 SITE_PLUGINS_ENABLED=all
 
 # Plugins to explicitly disable (overrides SITE_PLUGINS_ENABLED)
-SITE_PLUGINS_DISABLED=qtap-plugin-gab-ai
+SITE_PLUGINS_DISABLED=qtap-plugin-ollama
 ```
 
 #### Implementation

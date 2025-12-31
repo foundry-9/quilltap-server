@@ -9,6 +9,22 @@ interface UninstallRequestBody {
 }
 
 /**
+ * Check if a package name is a valid Quilltap plugin
+ * Matches both unscoped (qtap-plugin-*) and scoped (@org/qtap-plugin-*) packages
+ */
+function isQuilltapPlugin(name: string): boolean {
+  // Unscoped: qtap-plugin-openai
+  if (name.startsWith('qtap-plugin-')) {
+    return true;
+  }
+  // Scoped: @quilltap/qtap-plugin-gab-ai, @myorg/qtap-plugin-custom
+  if (name.startsWith('@') && name.includes('/qtap-plugin-')) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * POST /api/plugins/uninstall
  * Uninstall an installed plugin
  */
@@ -29,9 +45,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!packageName.startsWith('qtap-plugin-')) {
+    if (!isQuilltapPlugin(packageName)) {
       return NextResponse.json(
-        { error: 'Invalid package name' },
+        { error: 'Invalid package name - must be a Quilltap plugin' },
         { status: 400 }
       );
     }

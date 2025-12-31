@@ -55,6 +55,39 @@ const PLUGINS_SITE_DIR = path.join(process.cwd(), 'plugins', 'site');
 const PLUGINS_USERS_DIR = path.join(process.cwd(), 'plugins', 'users');
 const MANIFEST_FILENAME = 'manifest.json';
 
+/**
+ * Check if a directory name is a valid plugin directory
+ * Handles both unscoped (qtap-plugin-*) and scoped (@org--qtap-plugin-*) directories
+ */
+function isPluginDirectoryName(dirName: string): boolean {
+  // Unscoped: qtap-plugin-openai
+  if (dirName.startsWith('qtap-plugin-')) return true;
+  // Scoped (converted): @quilltap--qtap-plugin-gab-ai
+  if (dirName.startsWith('@') && dirName.includes('--qtap-plugin-')) return true;
+  return false;
+}
+
+/**
+ * Check if a package name is a valid Quilltap plugin
+ * Handles both unscoped (qtap-plugin-*) and scoped (@org/qtap-plugin-*) packages
+ */
+function isQuilltapPlugin(name: string): boolean {
+  if (name.startsWith('qtap-plugin-')) return true;
+  if (name.startsWith('@') && name.includes('/qtap-plugin-')) return true;
+  return false;
+}
+
+/**
+ * Convert a directory name back to a package name
+ * @org--qtap-plugin-foo -> @org/qtap-plugin-foo
+ */
+function dirToPackageName(dirName: string): string {
+  if (dirName.startsWith('@') && dirName.includes('--')) {
+    return dirName.replace('--', '/');
+  }
+  return dirName;
+}
+
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -104,8 +137,8 @@ async function determinePluginSource(pluginPath: string): Promise<PluginSource> 
       }
     }
 
-    // If it has a name starting with qtap-plugin- and version, likely from npm
-    if (packageJson.name?.startsWith('qtap-plugin-') && packageJson.version) {
+    // If it has a valid plugin name and version, likely from npm
+    if (packageJson.name && isQuilltapPlugin(packageJson.name) && packageJson.version) {
       return 'npm';
     }
 
@@ -236,17 +269,21 @@ export async function scanPlugins(
       // Process each potential plugin directory
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
-        // Skip non-plugin directories
-        if (!entry.name.startsWith('qtap-plugin-')) continue;
+        // Skip non-plugin directories (handles both unscoped and scoped directory names)
+        if (!isPluginDirectoryName(entry.name)) continue;
         // Skip special directories
         if (entry.name === 'registry.json') continue;
+
+        // Convert directory name back to package name for scoped packages
+        const packageName = dirToPackageName(entry.name);
 
         let pluginPath = path.join(dirPath, entry.name);
         let manifestPath = path.join(pluginPath, MANIFEST_FILENAME);
 
         // For npm-installed plugins, check inside node_modules
+        // node_modules uses the actual package name (with /), not the safe directory name
         if (isNpmInstalled) {
-          const npmPluginPath = path.join(pluginPath, 'node_modules', entry.name);
+          const npmPluginPath = path.join(pluginPath, 'node_modules', packageName);
           const npmManifestPath = path.join(npmPluginPath, MANIFEST_FILENAME);
           const npmExists = await fs.access(npmManifestPath).then(() => true).catch(() => false);
           if (npmExists) {
@@ -345,15 +382,22 @@ export async function loadPlugin(
   pluginsDir: string = PLUGINS_DIR,
   userId?: string
 ): Promise<LoadedPlugin | null> {
+  // Convert scoped package names to safe directory names for filesystem lookup
+  // @quilltap/qtap-plugin-gab-ai -> @quilltap--qtap-plugin-gab-ai
+  const safeDirName = pluginName.startsWith('@') && pluginName.includes('/')
+    ? pluginName.replace('/', '--')
+    : pluginName;
+
   // Helper to try loading from a path
   const tryLoadFromPath = async (basePath: string, isNpmInstalled: boolean): Promise<{
     pluginPath: string;
     manifestPath: string;
   } | null> => {
-    let pluginPath = path.join(basePath, pluginName);
+    let pluginPath = path.join(basePath, safeDirName);
     let manifestPath = path.join(pluginPath, MANIFEST_FILENAME);
 
     // For npm-installed plugins, check inside node_modules
+    // node_modules uses the actual package name (with /), not the safe directory name
     if (isNpmInstalled) {
       const npmPluginPath = path.join(pluginPath, 'node_modules', pluginName);
       const npmManifestPath = path.join(npmPluginPath, MANIFEST_FILENAME);

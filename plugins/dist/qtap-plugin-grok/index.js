@@ -7762,11 +7762,27 @@ var attachmentSupport = {
   description: "Images only (JPEG, PNG, GIF, WebP)",
   notes: "Images are supported in Grok models for vision capabilities"
 };
+var messageFormat = {
+  supportsNameField: true,
+  supportedRoles: ["user", "assistant"],
+  maxNameLength: 64
+};
+var cheapModels = {
+  defaultModel: "grok-2-mini",
+  recommendedModels: ["grok-2-mini"]
+};
 var plugin = {
   metadata,
   config,
   capabilities,
   attachmentSupport,
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: "openai",
+  // Grok uses OpenAI-compatible format
+  cheapModels,
+  defaultContextWindow: 131072,
   /**
    * Factory method to create a Grok LLM provider instance
    */

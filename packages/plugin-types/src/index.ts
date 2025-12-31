@@ -76,6 +76,10 @@ export type {
   IconProps,
   LLMProviderPlugin,
   ProviderPluginExport,
+  // Runtime configuration types
+  MessageFormatSupport,
+  CheapModelConfig,
+  ToolFormatType,
 } from './plugins/provider';
 
 export type {
@@ -120,4 +124,4 @@ export { createConsoleLogger, createNoopLogger } from './common/logger';
  * Version of the plugin-types package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_TYPES_VERSION = '1.0.1';
+export const PLUGIN_TYPES_VERSION = '1.0.3';

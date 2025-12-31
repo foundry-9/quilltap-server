@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.6.0--dev.48-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.6.0--dev.49-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -195,7 +195,7 @@ GOOGLE_CLIENT_SECRET="your-google-client-secret"
 
 # Plugin loader (controls which providers/themes are available)
 SITE_PLUGINS_ENABLED="all"           # or comma-separated plugin IDs
-# SITE_PLUGINS_DISABLED="qtap-plugin-gab-ai,qtap-plugin-ollama"
+# SITE_PLUGINS_DISABLED="qtap-plugin-ollama"
 
 # Encryption
 ENCRYPTION_MASTER_PEPPER="your-encryption-pepper-here"

@@ -39,7 +39,6 @@ const PROVIDERS = [
   { value: 'ANTHROPIC', label: 'Anthropic' },
   { value: 'GROK', label: 'Grok' },
   { value: 'GOOGLE', label: 'Google' },
-  { value: 'GAB_AI', label: 'Gab AI' },
   { value: 'OLLAMA', label: 'Ollama' },
   { value: 'OPENROUTER', label: 'OpenRouter' },
   { value: 'OPENAI_COMPATIBLE', label: 'OpenAI Compatible' },

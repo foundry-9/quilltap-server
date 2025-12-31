@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2025-12-30
+
+### Added
+
+- New runtime configuration types for `LLMProviderPlugin`:
+  - `MessageFormatSupport` - configures name field support for multi-character chats
+  - `CheapModelConfig` - specifies recommended cheap models for background tasks
+  - `ToolFormatType` - declares which tool format the provider uses ('openai' | 'anthropic' | 'google')
+- New optional properties on `LLMProviderPlugin`:
+  - `messageFormat?: MessageFormatSupport`
+  - `charsPerToken?: number` - token estimation multiplier (default: 3.5)
+  - `toolFormat?: ToolFormatType` - tool format type
+  - `cheapModels?: CheapModelConfig` - cheap model configuration
+  - `defaultContextWindow?: number` - fallback context window (default: 8192)
+- Added `pricing?: { input: number; output: number }` to `ModelInfo` interface
+
 ## [1.0.2] - 2025-12-30
 
 ### Fixed

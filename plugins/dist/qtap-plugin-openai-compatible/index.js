@@ -549,11 +549,27 @@ var attachmentSupport = {
   description: "File attachments are not supported. Attachment support varies by implementation.",
   notes: "Some compatible implementations may support attachments; this is a conservative default."
 };
+var messageFormat = {
+  supportsNameField: true,
+  supportedRoles: ["user", "assistant"],
+  maxNameLength: 64
+};
+var cheapModels = {
+  defaultModel: "gpt-4o-mini",
+  recommendedModels: ["gpt-4o-mini", "gpt-3.5-turbo"]
+};
 var plugin = {
   metadata,
   config,
   capabilities,
   attachmentSupport,
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: "openai",
+  cheapModels,
+  defaultContextWindow: 8192,
+  // Conservative default for unknown implementations
   /**
    * Factory method to create an OpenAI-compatible LLM provider instance
    * IMPORTANT: baseUrl is REQUIRED for this provider
