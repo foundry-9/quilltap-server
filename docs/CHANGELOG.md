@@ -4,6 +4,20 @@
 
 ### 2.6-dev
 
+- feat: Add `create-quilltap-theme` scaffolding CLI package
+  - New `packages/create-quilltap-theme/` directory with interactive CLI tool
+  - Scaffold new theme plugins with `npm init quilltap-theme my-theme`
+  - Interactive prompts for theme name, author, description, primary color
+  - Optional CSS overrides and Storybook setup
+  - Generates all required files: manifest.json, tokens.json, index.ts, etc.
+  - Support for `--yes` flag to skip prompts and use defaults
+  - Color-coded terminal output with clear next steps
+- docs: Add comprehensive Theme Plugin Development Guide
+  - New `docs/THEME_PLUGIN_DEVELOPMENT.md` with step-by-step tutorial
+  - Covers project setup, tokens, CSS overrides, fonts, Storybook, publishing
+  - Complete reference for all required color tokens
+  - Component class reference and variable documentation
+  - Troubleshooting section for common issues
 - fix: Resolve "Maximum update depth exceeded" errors in ChatComposer and DevConsoleProvider
   - ChatComposer: Converted textarea from controlled (`value={input}`) to uncontrolled (`defaultValue={input}`) to avoid React's controlled input reconciliation triggering infinite loops
   - ChatComposer: Use refs (`maxHeightRef`, `lastSyncedValueRef`) instead of state to avoid triggering re-renders during resize

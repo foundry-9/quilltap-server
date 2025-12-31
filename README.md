@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.6.0--dev.53-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.6.0--dev.54-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -593,6 +593,8 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Add confirmation dialog option: "This message has associated memories. Delete memories too?" with options to keep, delete, or regenerate
   - [ ] Track memory provenance in UI: show which message created each auto-extracted memory with a link back to the source
 - [X] Any files that exist in the app source code only because they are necessary for migrations should move to the migration/upgrade plugin
+- [ ] Hosted installations can not allow user-only plugins to be installed if they require server restarts
+- [ ] Hosted installations must automatically restart the server if site-wide plugins are installed that require restarts
 
 ## Acknowledgments
 

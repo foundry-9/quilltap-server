@@ -1,0 +1,42 @@
+{
+  "name": "create-quilltap-theme",
+  "version": "1.0.0",
+  "description": "Scaffold a new Quilltap theme plugin",
+  "main": "dist/index.js",
+  "bin": {
+    "create-quilltap-theme": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "quilltap",
+    "quilltap-plugin",
+    "quilltap-theme",
+    "theme",
+    "create",
+    "scaffold",
+    "generator",
+    "cli"
+  ],
+  "author": "Foundry-9 LLC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foundry-9/quilltap.git",
+    "directory": "packages/create-quilltap-theme"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.0.0"
+  }
+}

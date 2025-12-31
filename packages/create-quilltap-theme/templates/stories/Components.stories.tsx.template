@@ -1,0 +1,66 @@
+import React from 'react';
+import type { Meta, StoryObj } from '@storybook/react';
+import {
+  ColorPalette,
+  Typography,
+  Spacing,
+  Buttons,
+  Cards,
+  Inputs,
+  Badges,
+  Chat,
+} from '@quilltap/theme-storybook/stories';
+
+const meta: Meta = {
+  title: '{{DISPLAY_NAME}} Theme',
+};
+
+export default meta;
+
+// Color Palette
+export const Colors: StoryObj = {
+  name: 'Color Palette',
+  render: () => <ColorPalette />,
+};
+
+// Typography
+export const Fonts: StoryObj = {
+  name: 'Typography',
+  render: () => <Typography />,
+};
+
+// Spacing & Effects
+export const SpacingEffects: StoryObj = {
+  name: 'Spacing & Effects',
+  render: () => <Spacing />,
+};
+
+// Buttons
+export const ButtonComponents: StoryObj = {
+  name: 'Buttons',
+  render: () => <Buttons />,
+};
+
+// Cards
+export const CardComponents: StoryObj = {
+  name: 'Cards',
+  render: () => <Cards />,
+};
+
+// Inputs
+export const InputComponents: StoryObj = {
+  name: 'Inputs',
+  render: () => <Inputs />,
+};
+
+// Badges
+export const BadgeComponents: StoryObj = {
+  name: 'Badges',
+  render: () => <Badges />,
+};
+
+// Chat UI
+export const ChatComponents: StoryObj = {
+  name: 'Chat UI',
+  render: () => <Chat />,
+};

@@ -1,0 +1,23 @@
+{
+  "name": "{{PACKAGE_NAME}}",
+  "title": "{{DISPLAY_NAME}}",
+  "description": "{{DESCRIPTION}}",
+  "version": "1.0.0",
+  "author": {
+    "name": "{{AUTHOR_NAME}}",
+    "email": "{{AUTHOR_EMAIL}}"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "compatibility": {
+    "quilltapVersion": ">=2.2.0"
+  },
+  "capabilities": ["THEME"],
+  "category": "THEME",
+  "themeConfig": {
+    "tokensPath": "tokens.json",
+    "stylesPath": "styles.css",
+    "supportsDarkMode": true,
+    "tags": ["{{THEME_ID}}", "custom"]
+  }
+}

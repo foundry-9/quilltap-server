@@ -1,0 +1,58 @@
+/*
+ * {{DISPLAY_NAME}} Theme - Component Overrides
+ * Theme ID: {{THEME_ID}} (derived from {{PACKAGE_NAME}})
+ *
+ * This file contains Tier 3 (component-level) CSS overrides.
+ * Use this to customize component appearance beyond what tokens provide.
+ *
+ * Available CSS variables from tokens:
+ * - Colors: --theme-background, --theme-foreground, --theme-primary, etc.
+ * - Typography: --theme-font-sans, --theme-font-size-base, etc.
+ * - Spacing: --theme-radius-md, --theme-spacing-4, etc.
+ * - Effects: --theme-shadow-md, --theme-transition-normal, etc.
+ */
+
+[data-theme="{{THEME_ID}}"] {
+  /* Component variable overrides */
+  --qt-button-radius: var(--theme-radius-md);
+  --qt-card-radius: var(--theme-radius-lg);
+  --qt-input-radius: var(--theme-radius-md);
+}
+
+/* Primary button customization */
+[data-theme="{{THEME_ID}}"] .qt-button-primary {
+  transition: transform var(--theme-transition-normal) var(--theme-transition-easing),
+              box-shadow var(--theme-transition-normal) var(--theme-transition-easing);
+}
+
+[data-theme="{{THEME_ID}}"] .qt-button-primary:hover {
+  transform: translateY(-1px);
+}
+
+/* Card hover effects */
+[data-theme="{{THEME_ID}}"] .qt-card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--theme-shadow-lg);
+}
+
+/* Input focus states */
+[data-theme="{{THEME_ID}}"] .qt-input:focus,
+[data-theme="{{THEME_ID}}"] .qt-textarea:focus,
+[data-theme="{{THEME_ID}}"] .qt-select:focus {
+  border-color: var(--theme-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-primary) 20%, transparent);
+}
+
+/* Chat bubble styling */
+[data-theme="{{THEME_ID}}"] .qt-chat-bubble-user {
+  border-radius: 1rem 1rem 0.25rem 1rem;
+}
+
+[data-theme="{{THEME_ID}}"] .qt-chat-bubble-assistant {
+  border-radius: 1rem 1rem 1rem 0.25rem;
+}
+
+/* Dark mode specific overrides */
+[data-theme="{{THEME_ID}}"].dark .qt-card {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
