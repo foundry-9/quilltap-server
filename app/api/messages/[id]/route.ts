@@ -1,14 +1,16 @@
 /**
  * Message API
  * PUT /api/messages/:id - Edit a message
- * DELETE /api/messages/:id - Delete a message
+ * DELETE /api/messages/:id - Delete a message (with optional memory cascade)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
+import { deleteMemoriesBySourceMessagesWithVectors } from '@/lib/memory/memory-service'
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types'
+import type { MemoryCascadeAction } from '@/lib/schemas/settings.types'
 
 export async function PUT(
   req: NextRequest,
@@ -102,6 +104,19 @@ export async function DELETE(
     const { id } = await params
     const repos = getRepositories()
 
+    // Parse query params for memory handling
+    const { searchParams } = new URL(req.url)
+    const memoryAction = searchParams.get('memoryAction') as MemoryCascadeAction | null
+    const skipConfirmation = searchParams.get('skipConfirmation') === 'true'
+
+    logger.debug('Deleting message', {
+      endpoint: '/api/messages/[id]',
+      method: 'DELETE',
+      messageId: id,
+      memoryAction,
+      skipConfirmation,
+    })
+
     // Find the message across user's chats only (security: filter by userId)
     const userChats = await repos.chats.findByUserId(session.user.id)
     let foundChat: ChatMetadata | null = null
@@ -123,6 +138,67 @@ export async function DELETE(
 
     if (!foundMessage || !foundChat) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 })
+    }
+
+    // Collect all message IDs to be deleted (for memory cascade)
+    let messageIdsToDelete: string[] = []
+    if (foundMessage.swipeGroupId) {
+      // Get all messages in swipe group
+      messageIdsToDelete = allMessages
+        .filter(
+          (m): m is MessageEvent =>
+            m.type === 'message' && m.swipeGroupId === foundMessage!.swipeGroupId
+        )
+        .map((m) => m.id)
+    } else {
+      messageIdsToDelete = [id]
+    }
+
+    // Check for associated memories
+    const memoryCount = await repos.memories.countBySourceMessageIds(messageIdsToDelete)
+
+    // If memories exist and no action specified, return info for confirmation dialog
+    if (memoryCount > 0 && !memoryAction && !skipConfirmation) {
+      logger.debug('Message has associated memories, returning for confirmation', {
+        messageId: id,
+        memoryCount,
+        isSwipeGroup: !!foundMessage.swipeGroupId,
+      })
+
+      return NextResponse.json(
+        {
+          requiresConfirmation: true,
+          memoryCount,
+          messageIds: messageIdsToDelete,
+          isSwipeGroup: !!foundMessage.swipeGroupId,
+        },
+        { status: 200 }
+      )
+    }
+
+    // Handle memory cascade based on action
+    let memoriesDeleted = 0
+    if (memoryCount > 0 && memoryAction && memoryAction !== 'KEEP_MEMORIES') {
+      if (memoryAction === 'DELETE_MEMORIES' || memoryAction === 'REGENERATE_MEMORIES') {
+        const { deleted, vectorsRemoved } =
+          await deleteMemoriesBySourceMessagesWithVectors(messageIdsToDelete)
+
+        memoriesDeleted = deleted
+        logger.info('Cascade deleted memories with message', {
+          messageId: id,
+          memoriesDeleted: deleted,
+          vectorsRemoved,
+        })
+      }
+
+      // TODO: If REGENERATE_MEMORIES, trigger memory re-extraction job
+      // This would require getting the context around the deleted message
+      // and re-running memory extraction. For now, we just delete.
+      if (memoryAction === 'REGENERATE_MEMORIES') {
+        logger.debug('Memory regeneration requested - not yet implemented', {
+          messageId: id,
+        })
+      }
     }
 
     // If this message is part of a swipe group, delete all messages in the group
@@ -149,7 +225,10 @@ export async function DELETE(
     // Update chat's updatedAt timestamp
     await repos.chats.update(foundChat.id, {})
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      memoriesDeleted,
+    })
   } catch (error) {
     logger.error('Error deleting message', { endpoint: '/api/messages/[id]', method: 'DELETE' }, error instanceof Error ? error : undefined)
     return NextResponse.json(

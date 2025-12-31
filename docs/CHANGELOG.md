@@ -4,6 +4,17 @@
 
 ### 2.6-dev
 
+- feat: Memory cascade on message changes
+  - Memories auto-extracted from messages are now tracked with provenance links
+  - When deleting a message, user is prompted to handle associated memories (delete/keep/regenerate)
+  - When regenerating a response (swipe), old memories are automatically cleaned up
+  - Memory cards now show a "Source" link that navigates to and highlights the source message
+  - New chat settings section for configuring default memory cascade behavior
+  - Added repository methods: `deleteBySourceMessageId()`, `countBySourceMessageId()`, and bulk variants
+  - Added `deleteMemoriesBySourceMessageWithVectors()` for cascade deletion with vector store cleanup
+  - New API endpoint `/api/messages/[id]/memories` for memory count queries
+  - New `MemoryCascadeDialog` component for confirmation prompts
+  - Message navigation utilities for cross-page scroll-to-message functionality
 - feat: Include theme development guide in scaffolded themes
   - `create-quilltap-theme` now creates `docs/THEME_PLUGIN_DEVELOPMENT.md` in every new theme
   - Complete documentation is bundled locally for offline reference

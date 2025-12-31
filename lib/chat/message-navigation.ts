@@ -1,0 +1,117 @@
+/**
+ * Message Navigation Utilities
+ *
+ * Handles navigation to specific messages in chat, including
+ * scrolling and highlighting for memory provenance tracking.
+ */
+
+import { clientLogger } from '@/lib/client-logger'
+
+const SCROLL_TO_MESSAGE_KEY = 'scrollToMessageId'
+const HIGHLIGHT_MESSAGE_KEY = 'highlightMessageId'
+
+/**
+ * Navigate to a specific message in a chat.
+ * Stores the target message ID in sessionStorage for the chat page to pick up.
+ *
+ * @param chatId The chat ID to navigate to
+ * @param messageId The message ID to scroll to and highlight
+ */
+export function navigateToMessage(chatId: string, messageId: string): void {
+  clientLogger.debug('[MessageNavigation] Navigating to message', { chatId, messageId })
+
+  // Store in sessionStorage for the chat page to pick up
+  sessionStorage.setItem(SCROLL_TO_MESSAGE_KEY, messageId)
+  sessionStorage.setItem(HIGHLIGHT_MESSAGE_KEY, messageId)
+
+  // Navigate to chat
+  window.location.href = `/chats/${chatId}`
+}
+
+/**
+ * Check for pending message navigation and return the message ID.
+ * Clears the stored values after reading.
+ *
+ * @returns Object with scrollTo and highlight message IDs, or null if none
+ */
+export function getPendingMessageNavigation(): {
+  scrollTo: string | null
+  highlight: string | null
+} {
+  const scrollTo = sessionStorage.getItem(SCROLL_TO_MESSAGE_KEY)
+  const highlight = sessionStorage.getItem(HIGHLIGHT_MESSAGE_KEY)
+
+  // Clear after reading
+  sessionStorage.removeItem(SCROLL_TO_MESSAGE_KEY)
+  sessionStorage.removeItem(HIGHLIGHT_MESSAGE_KEY)
+
+  if (scrollTo || highlight) {
+    clientLogger.debug('[MessageNavigation] Retrieved pending navigation', { scrollTo, highlight })
+  }
+
+  return { scrollTo, highlight }
+}
+
+/**
+ * Scroll to a specific message element and optionally highlight it.
+ *
+ * @param messageId The message ID to scroll to
+ * @param options Options for scrolling behavior
+ */
+export function scrollToMessage(
+  messageId: string,
+  options: {
+    behavior?: ScrollBehavior
+    highlight?: boolean
+    highlightDuration?: number
+  } = {}
+): boolean {
+  const { behavior = 'smooth', highlight = true, highlightDuration = 3000 } = options
+
+  // Find the message element by data attribute
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`)
+
+  if (!messageElement) {
+    clientLogger.warn('[MessageNavigation] Message element not found', { messageId })
+    return false
+  }
+
+  clientLogger.debug('[MessageNavigation] Scrolling to message', { messageId, highlight })
+
+  // Scroll the element into view
+  messageElement.scrollIntoView({ behavior, block: 'center' })
+
+  // Add highlight effect if requested
+  if (highlight) {
+    messageElement.classList.add('memory-source-highlight')
+
+    // Remove highlight after duration
+    setTimeout(() => {
+      messageElement.classList.remove('memory-source-highlight')
+    }, highlightDuration)
+  }
+
+  return true
+}
+
+/**
+ * Set a highlight on a message element that will be cleared later.
+ *
+ * @param messageId The message ID to highlight
+ * @param duration How long to keep the highlight (ms)
+ */
+export function highlightMessage(messageId: string, duration: number = 3000): boolean {
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`)
+
+  if (!messageElement) {
+    return false
+  }
+
+  messageElement.classList.add('memory-source-highlight')
+
+  setTimeout(() => {
+    messageElement.classList.remove('memory-source-highlight')
+  }, duration)
+
+  return true
+}

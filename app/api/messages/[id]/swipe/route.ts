@@ -10,6 +10,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
+import { deleteMemoriesBySourceMessageWithVectors } from '@/lib/memory/memory-service'
 import type { ChatEvent, MessageEvent } from '@/lib/schemas/types'
 
 export async function POST(
@@ -139,6 +140,30 @@ export async function POST(
       },
       apiKey
     )
+
+    // Handle memory cleanup for the message being swiped
+    // Check user's cascade preference for swipes
+    const chatSettings = await repos.chatSettings.findByUserId(session.user.id)
+    const cascadeAction = chatSettings?.memoryCascadePreferences?.onSwipeRegenerate || 'DELETE_MEMORIES'
+
+    if (cascadeAction !== 'KEEP_MEMORIES') {
+      // Delete memories for the original message being swiped
+      const memoryCount = await repos.memories.countBySourceMessageId(id)
+
+      if (memoryCount > 0) {
+        const { deleted, vectorsRemoved } = await deleteMemoriesBySourceMessageWithVectors(id)
+        logger.debug('Deleted memories for swipe regeneration', {
+          originalMessageId: id,
+          deleted,
+          vectorsRemoved,
+          cascadeAction,
+        })
+      }
+
+      // Note: REGENERATE_MEMORIES would re-extract from new content.
+      // Since we're creating a new swipe, the memory extraction will happen
+      // naturally via the normal message flow if auto-memory is enabled.
+    }
 
     // Create new swipe message
     const newSwipe: MessageEvent = {

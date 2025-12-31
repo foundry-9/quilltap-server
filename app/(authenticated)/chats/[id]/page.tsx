@@ -14,6 +14,8 @@ import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
+import { MemoryCascadeDialog } from '@/components/ui/MemoryCascadeDialog'
+import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
 import SelectLLMProfileDialog from '@/components/chat/SelectLLMProfileDialog'
 import SpeakerSelector from '@/components/chat/SpeakerSelector'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -242,6 +244,28 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
     }
   }, [id])
+
+  // Handle scroll-to-message from memory provenance navigation
+  useEffect(() => {
+    // Only check once messages are loaded
+    if (loading || messages.length === 0) return
+
+    const pendingNav = getPendingMessageNavigation()
+    if (pendingNav.scrollTo) {
+      clientLogger.debug('[Chat] Pending message navigation found', {
+        scrollTo: pendingNav.scrollTo,
+        highlight: pendingNav.highlight,
+      })
+      // Wait a bit for DOM to be ready, then scroll
+      setTimeout(() => {
+        scrollToMessage(pendingNav.scrollTo!, {
+          behavior: 'smooth',
+          highlight: !!pendingNav.highlight,
+          highlightDuration: 3000,
+        })
+      }, 500)
+    }
+  }, [loading, messages.length])
 
   const chatContext = useChatContext()
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
@@ -489,6 +513,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setAttachedFiles,
     inputRef as React.RefObject<HTMLTextAreaElement>,
     messagesEndRef as React.RefObject<HTMLDivElement>,
+    chatSettings,
   )
 
   // Unpause callback for the turn management hook - needs to be defined before the hook call
@@ -2249,6 +2274,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             participantId={selectLLMProfileDialogState.participantId}
             onConfirm={handleConfirmStopImpersonation}
             onCancel={() => setSelectLLMProfileDialogState(null)}
+          />
+        )}
+
+        {/* Memory Cascade Confirmation Dialog */}
+        {messageActions.memoryCascadeConfirmation && (
+          <MemoryCascadeDialog
+            isOpen={true}
+            memoryCount={messageActions.memoryCascadeConfirmation.memoryCount}
+            isSwipeGroup={messageActions.memoryCascadeConfirmation.isSwipeGroup}
+            onClose={messageActions.cancelMemoryCascadeConfirmation}
+            onConfirm={messageActions.handleMemoryCascadeConfirm}
           />
         )}
       </div>

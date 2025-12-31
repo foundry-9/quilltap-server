@@ -10,6 +10,8 @@ import {
   AvatarDisplayMode,
   AvatarDisplayStyle,
   CheapLLMSettings,
+  MemoryCascadePreferences,
+  DEFAULT_MEMORY_CASCADE_PREFERENCES,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -26,6 +28,7 @@ interface UseChatSettingsReturn {
   handleAvatarStyleChange: (style: AvatarDisplayStyle) => Promise<void>
   handleCheapLLMUpdate: (updates: Partial<CheapLLMSettings>) => Promise<void>
   handleImageDescriptionProfileChange: (profileId: string | null) => Promise<void>
+  handleMemoryCascadeUpdate: (updates: Partial<MemoryCascadePreferences>) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -287,6 +290,48 @@ export function useChatSettings(): UseChatSettingsReturn {
     [fetchSettings, showSuccess]
   )
 
+  /**
+   * Update memory cascade preferences
+   */
+  const handleMemoryCascadeUpdate = useCallback(
+    async (updates: Partial<MemoryCascadePreferences>) => {
+      if (!settings) return
+
+      try {
+        clientLogger.debug('Updating memory cascade preferences', { updates })
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const currentPrefs = settings.memoryCascadePreferences || DEFAULT_MEMORY_CASCADE_PREFERENCES
+        const res = await fetch('/api/chat-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            memoryCascadePreferences: { ...currentPrefs, ...updates },
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update memory cascade preferences')
+        }
+
+        const updatedSettings = await res.json()
+        clientLogger.info('Memory cascade preferences updated successfully', { updates })
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        clientLogger.error('Failed to update memory cascade preferences', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
   return {
     settings,
     loading,
@@ -301,5 +346,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleAvatarStyleChange,
     handleCheapLLMUpdate,
     handleImageDescriptionProfileChange,
+    handleMemoryCascadeUpdate,
   }
 }

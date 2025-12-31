@@ -799,6 +799,119 @@ export class MemoriesRepository extends MongoBaseRepository<Memory> {
   }
 
   /**
+   * Delete all memories associated with a specific source message
+   * @param sourceMessageId The source message ID
+   * @returns Promise<number> Number of memories deleted
+   */
+  async deleteBySourceMessageId(sourceMessageId: string): Promise<number> {
+    logger.debug('Deleting memories by source message ID', { sourceMessageId });
+    try {
+      const collection = await this.getCollection();
+      const result = await collection.deleteMany({ sourceMessageId });
+
+      logger.debug('Deleted memories for source message', {
+        sourceMessageId,
+        deletedCount: result.deletedCount,
+      });
+      return result.deletedCount || 0;
+    } catch (error) {
+      logger.error('Error deleting memories by source message ID', {
+        sourceMessageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Delete all memories associated with multiple source messages (for swipe groups)
+   * @param sourceMessageIds Array of source message IDs
+   * @returns Promise<number> Number of memories deleted
+   */
+  async deleteBySourceMessageIds(sourceMessageIds: string[]): Promise<number> {
+    logger.debug('Deleting memories by source message IDs', {
+      count: sourceMessageIds.length,
+    });
+    try {
+      if (sourceMessageIds.length === 0) {
+        return 0;
+      }
+
+      const collection = await this.getCollection();
+      const result = await collection.deleteMany({
+        sourceMessageId: { $in: sourceMessageIds },
+      });
+
+      logger.debug('Deleted memories for source messages', {
+        requestedCount: sourceMessageIds.length,
+        deletedCount: result.deletedCount,
+      });
+      return result.deletedCount || 0;
+    } catch (error) {
+      logger.error('Error deleting memories by source message IDs', {
+        count: sourceMessageIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Count memories associated with a specific source message
+   * @param sourceMessageId The source message ID
+   * @returns Promise<number> Number of memories for the message
+   */
+  async countBySourceMessageId(sourceMessageId: string): Promise<number> {
+    logger.debug('Counting memories for source message', { sourceMessageId });
+    try {
+      const collection = await this.getCollection();
+      const count = await collection.countDocuments({ sourceMessageId });
+
+      logger.debug('Memory count for source message', { sourceMessageId, count });
+      return count;
+    } catch (error) {
+      logger.error('Error counting memories for source message', {
+        sourceMessageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Count memories associated with multiple source messages (for swipe groups)
+   * @param sourceMessageIds Array of source message IDs
+   * @returns Promise<number> Total number of memories
+   */
+  async countBySourceMessageIds(sourceMessageIds: string[]): Promise<number> {
+    logger.debug('Counting memories for source messages', {
+      count: sourceMessageIds.length,
+    });
+    try {
+      if (sourceMessageIds.length === 0) {
+        return 0;
+      }
+
+      const collection = await this.getCollection();
+      const count = await collection.countDocuments({
+        sourceMessageId: { $in: sourceMessageIds },
+      });
+
+      logger.debug('Memory count for source messages', {
+        requestedCount: sourceMessageIds.length,
+        count,
+      });
+      return count;
+    } catch (error) {
+      logger.error('Error counting memories for source messages', {
+        count: sourceMessageIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+  }
+
+  /**
    * Delete all memories associated with a specific chat
    * @param chatId The chat ID
    * @returns Promise<number> Number of memories deleted

@@ -117,6 +117,7 @@ export function MessageRow({
   return (
     <div
       id={`message-${message.id}`}
+      data-message-id={message.id}
       key={message.id}
       className={messageRowClasses.join(' ')}
     >

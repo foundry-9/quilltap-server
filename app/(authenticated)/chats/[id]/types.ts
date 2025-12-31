@@ -108,12 +108,20 @@ export interface Chat {
   allLLMPauseTurnCount?: number
 }
 
+export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'
+
+export interface MemoryCascadePreferences {
+  onMessageDelete: MemoryCascadeAction
+  onSwipeRegenerate: MemoryCascadeAction
+}
+
 export interface ChatSettings {
   id: string
   userId: string
   avatarDisplayMode: 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
   avatarDisplayStyle?: 'CIRCULAR' | 'RECTANGULAR'
   tagStyles?: Record<string, TagVisualStyle>
+  memoryCascadePreferences?: MemoryCascadePreferences
   createdAt: string
   updatedAt: string
 }

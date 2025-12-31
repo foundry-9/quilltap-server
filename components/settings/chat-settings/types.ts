@@ -9,6 +9,7 @@ export type CheapLLMStrategy = 'USER_DEFINED' | 'PROVIDER_CHEAPEST' | 'LOCAL_FIR
 export type EmbeddingProvider = 'SAME_PROVIDER' | 'OPENAI' | 'LOCAL'
 export type TimestampMode = 'NONE' | 'START_ONLY' | 'EVERY_MESSAGE'
 export type TimestampFormat = 'ISO8601' | 'FRIENDLY' | 'DATE_ONLY' | 'TIME_ONLY' | 'CUSTOM'
+export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'
 
 export interface CheapLLMSettings {
   strategy: CheapLLMStrategy
@@ -29,6 +30,11 @@ export interface TimestampConfig {
   autoPrepend: boolean
 }
 
+export interface MemoryCascadePreferences {
+  onMessageDelete: MemoryCascadeAction
+  onSwipeRegenerate: MemoryCascadeAction
+}
+
 export interface ChatSettings {
   id: string
   userId: string
@@ -37,6 +43,7 @@ export interface ChatSettings {
   cheapLLMSettings: CheapLLMSettings
   imageDescriptionProfileId?: string | null
   defaultTimestampConfig?: TimestampConfig
+  memoryCascadePreferences?: MemoryCascadePreferences
   createdAt: string
   updatedAt: string
 }
@@ -183,4 +190,39 @@ export const DEFAULT_TIMESTAMP_CONFIG: TimestampConfig = {
   format: 'FRIENDLY',
   useFictionalTime: false,
   autoPrepend: true,
+}
+
+/**
+ * Memory Cascade Action Options
+ * Defines what to do with memories when messages are deleted or regenerated
+ */
+export const MEMORY_CASCADE_ACTIONS = [
+  {
+    value: 'ASK_EVERY_TIME' as const,
+    label: 'Ask every time',
+    description: 'Show a confirmation dialog to choose what to do',
+  },
+  {
+    value: 'DELETE_MEMORIES' as const,
+    label: 'Always delete memories',
+    description: 'Automatically delete associated memories',
+  },
+  {
+    value: 'KEEP_MEMORIES' as const,
+    label: 'Always keep memories',
+    description: 'Keep memories (they will become orphaned)',
+  },
+  {
+    value: 'REGENERATE_MEMORIES' as const,
+    label: 'Delete and regenerate',
+    description: 'Delete old memories and extract new ones from context',
+  },
+] as const
+
+/**
+ * Default memory cascade preferences
+ */
+export const DEFAULT_MEMORY_CASCADE_PREFERENCES: MemoryCascadePreferences = {
+  onMessageDelete: 'ASK_EVERY_TIME',
+  onSwipeRegenerate: 'DELETE_MEMORIES',
 }

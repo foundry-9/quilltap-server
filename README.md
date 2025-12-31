@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.6.0--dev.55-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.6.0--dev.57-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -585,16 +585,17 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [X] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
   - [X] A scenario prompt so you can set things up before you start
 - [X] Search and replace in one chat + memories associated with that chat, or in all chats (and their memories) associated with a character
-- [ ] Memory cascade on message changes
-  - [ ] When a message is deleted, cascade delete all memories with that `sourceMessageId`
-  - [ ] When a message is regenerated (swipe), delete the old memory so the new response can create a fresh memory
-  - [ ] Add `findBySourceMessageId()` and `deleteBySourceMessageId()` methods to memories repository
-  - [ ] Handle multi-character edge case: a single message may trigger memories for multiple characters in group chats
-  - [ ] Add confirmation dialog option: "This message has associated memories. Delete memories too?" with options to keep, delete, or regenerate
-  - [ ] Track memory provenance in UI: show which message created each auto-extracted memory with a link back to the source
+- [X] Memory cascade on message changes
+  - [X] When a message is deleted, cascade delete all memories with that `sourceMessageId`
+  - [X] When a message is regenerated (swipe), delete the old memory so the new response can create a fresh memory
+  - [X] Add `findBySourceMessageId()` and `deleteBySourceMessageId()` methods to memories repository
+  - [X] Handle multi-character edge case: a single message may trigger memories for multiple characters in group chats
+  - [X] Add confirmation dialog option: "This message has associated memories. Delete memories too?" with options to keep, delete, or regenerate
+  - [X] Track memory provenance in UI: show which message created each auto-extracted memory with a link back to the source
 - [X] Any files that exist in the app source code only because they are necessary for migrations should move to the migration/upgrade plugin
 - [ ] Hosted installations can not allow user-only plugins to be installed if they require server restarts
 - [ ] Hosted installations must automatically restart the server if site-wide plugins are installed that require restarts
+- [ ] Running storybook for theme development produces this: `WARN Could not resolve addon "@storybook/addon-essentials", skipping. Is it installed?`
 
 ## Acknowledgments
 

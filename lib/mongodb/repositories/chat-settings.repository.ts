@@ -281,6 +281,10 @@ export class ChatSettingsRepository extends MongoBaseRepository<ChatSettings> {
             useFictionalTime: false,
             autoPrepend: true,
           },
+          memoryCascadePreferences: {
+            onMessageDelete: 'ASK_EVERY_TIME',
+            onSwipeRegenerate: 'DELETE_MEMORIES',
+          },
           defaultRoleplayTemplateId,
           ...data,
         };

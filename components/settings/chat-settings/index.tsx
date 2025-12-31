@@ -4,6 +4,7 @@ import { useChatSettings } from './hooks/useChatSettings'
 import { AvatarSettings } from './AvatarSettings'
 import { CheapLLMSettings } from './CheapLLMSettings'
 import { ImageDescriptionSettings } from './ImageDescriptionSettings'
+import { MemoryCascadeSettings } from './MemoryCascadeSettings'
 
 /**
  * ChatSettingsTab Component
@@ -11,6 +12,7 @@ import { ImageDescriptionSettings } from './ImageDescriptionSettings'
  * - Avatar display modes and styles
  * - Cheap LLM configuration
  * - Image description profiles
+ * - Memory cascade behavior
  */
 export default function ChatSettingsTab() {
   const {
@@ -26,6 +28,7 @@ export default function ChatSettingsTab() {
     handleAvatarStyleChange,
     handleCheapLLMUpdate,
     handleImageDescriptionProfileChange,
+    handleMemoryCascadeUpdate,
   } = useChatSettings()
 
   if (loading) {
@@ -80,6 +83,12 @@ export default function ChatSettingsTab() {
         loadingProfiles={loadingProfiles}
         connectionProfiles={connectionProfiles}
         onProfileChange={handleImageDescriptionProfileChange}
+      />
+
+      <MemoryCascadeSettings
+        settings={settings}
+        saving={saving}
+        onUpdate={handleMemoryCascadeUpdate}
       />
     </div>
   )

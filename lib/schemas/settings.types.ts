@@ -74,6 +74,27 @@ export const TimestampConfigSchema = z.object({
 export type TimestampConfig = z.infer<typeof TimestampConfigSchema>;
 
 // ============================================================================
+// MEMORY CASCADE PREFERENCES
+// ============================================================================
+
+export const MemoryCascadeActionEnum = z.enum([
+  'DELETE_MEMORIES',      // Delete associated memories
+  'KEEP_MEMORIES',        // Keep memories (orphan them)
+  'REGENERATE_MEMORIES',  // Delete old, regenerate new
+  'ASK_EVERY_TIME',       // Always show confirmation dialog
+]);
+export type MemoryCascadeAction = z.infer<typeof MemoryCascadeActionEnum>;
+
+export const MemoryCascadePreferencesSchema = z.object({
+  /** What to do when deleting a message with associated memories */
+  onMessageDelete: MemoryCascadeActionEnum.default('ASK_EVERY_TIME'),
+  /** What to do when generating a new swipe (regenerating response) */
+  onSwipeRegenerate: MemoryCascadeActionEnum.default('DELETE_MEMORIES'),
+});
+
+export type MemoryCascadePreferences = z.infer<typeof MemoryCascadePreferencesSchema>;
+
+// ============================================================================
 // CHAT SETTINGS
 // ============================================================================
 
@@ -104,6 +125,11 @@ export const ChatSettingsSchema = z.object({
     format: 'FRIENDLY',
     useFictionalTime: false,
     autoPrepend: true,
+  }),
+  /** Memory cascade preferences for message deletion/regeneration */
+  memoryCascadePreferences: MemoryCascadePreferencesSchema.default({
+    onMessageDelete: 'ASK_EVERY_TIME',
+    onSwipeRegenerate: 'DELETE_MEMORIES',
   }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
