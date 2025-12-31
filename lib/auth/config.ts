@@ -26,13 +26,6 @@ export function isAuthDisabled(): boolean {
   }
 
   cachedAuthDisabled = process.env.AUTH_DISABLED === 'true';
-
-  // Only log once when the value is first determined
-  logger.debug('Auth disabled state determined', {
-    context: 'isAuthDisabled',
-    authDisabled: cachedAuthDisabled,
-  });
-
   return cachedAuthDisabled;
 }
 
@@ -57,13 +50,6 @@ export function isOAuthDisabled(): boolean {
   }
 
   cachedOAuthDisabled = process.env.OAUTH_DISABLED === 'true';
-
-  // Only log once when the value is first determined
-  logger.debug('OAuth disabled state determined', {
-    context: 'isOAuthDisabled',
-    oauthDisabled: cachedOAuthDisabled,
-  });
-
   return cachedOAuthDisabled;
 }
 

@@ -174,7 +174,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     try {
       const savedDraft = localStorage.getItem(draftStorageKey)
       if (savedDraft) {
-        clientLogger.debug('[Chat] Restoring draft from localStorage', { length: savedDraft.length })
         setInput(savedDraft)
         lastSavedDraftRef.current = savedDraft
       }
@@ -197,12 +196,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     draftSaveTimerRef.current = setTimeout(() => {
       try {
         if (input.trim()) {
-          clientLogger.debug('[Chat] Saving draft to localStorage', { length: input.length })
           localStorage.setItem(draftStorageKey, input)
           lastSavedDraftRef.current = input
         } else {
           // Clear draft if input is empty
-          clientLogger.debug('[Chat] Clearing draft from localStorage (empty input)')
           localStorage.removeItem(draftStorageKey)
           lastSavedDraftRef.current = ''
         }
@@ -222,7 +219,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Helper to clear draft (called on successful submission)
   const clearDraft = useCallback(() => {
     try {
-      clientLogger.debug('[Chat] Clearing draft after submission')
       localStorage.removeItem(draftStorageKey)
       lastSavedDraftRef.current = ''
       if (draftSaveTimerRef.current) {
@@ -518,7 +514,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // Unpause callback for the turn management hook - needs to be defined before the hook call
   const unpauseChat = useCallback(async () => {
-    clientLogger.debug('[Chat] Unpausing chat (from nudge)')
     setIsPaused(false)
     userStoppedStreamRef.current = false
     try {
@@ -563,11 +558,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     if (participantsAsBase.length === 0 || messages.length === 0) return
 
-    clientLogger.debug('[Chat] Calculating turn state from messages', {
-      messageCount: messages.length,
-      participantCount: participantsAsBase.length,
-    })
-
     const messageEvents = messages.map(m => ({
       type: 'message' as const,
       id: m.id,
@@ -603,28 +593,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (persistedParticipantId === null) {
         // Don't restore "user's turn" for all-LLM chats - they should auto-continue
         if (result.nextSpeakerId !== null && !chatIsAllLLM) {
-          clientLogger.debug('[Chat] Restoring persisted turn state: user\'s turn', {
-            calculatedNextSpeaker: result.nextSpeakerId,
-          })
           result = {
             ...result,
             nextSpeakerId: null,
             reason: 'user_turn',
           }
-        } else if (chatIsAllLLM) {
-          clientLogger.debug('[Chat] Skipping persisted user turn for all-LLM chat', {
-            calculatedNextSpeaker: result.nextSpeakerId,
-          })
         }
       } else {
         const persistedParticipant = participantsAsBase.find(
           p => p.id === persistedParticipantId && p.isActive
         )
         if (persistedParticipant && result.nextSpeakerId !== persistedParticipantId) {
-          clientLogger.debug('[Chat] Restoring persisted turn state', {
-            persistedParticipantId,
-            calculatedNextSpeaker: result.nextSpeakerId,
-          })
           result = {
             ...result,
             nextSpeakerId: persistedParticipantId,
@@ -635,12 +614,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
 
     setTurnSelectionResult(result)
-
-    clientLogger.debug('[Chat] Turn state calculated', {
-      nextSpeakerId: result.nextSpeakerId,
-      reason: result.reason,
-      cycleComplete: result.cycleComplete,
-    })
   }, [messages, participantsAsBase, userParticipantId, charactersMap, chat?.lastTurnParticipantId])
 
   // Initialize isPaused from chat data
@@ -659,7 +632,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     if (chat?.isPaused && isAllLLM && allLLMTurnCount > 0) {
       lastAllLLMPauseTurnCountRef.current = allLLMTurnCount
-      clientLogger.debug('[Chat] Initialized all-LLM pause turn count from persisted state', {
+      clientLogger.debug('[Chat] Initialized all-LLM pause count from persisted state', {
         turnCount: allLLMTurnCount,
       })
     }
@@ -673,7 +646,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const pauseTurnCount = chat?.allLLMPauseTurnCount
 
     if (impersonatingIds && impersonatingIds.length > 0) {
-      clientLogger.debug('[Chat] Restoring impersonation state from chat', {
+      clientLogger.debug('[Chat] Restoring impersonation state', {
         impersonatingParticipantIds: impersonatingIds,
         activeTypingParticipantId: activeTypingId,
       })
@@ -688,7 +661,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // triggerContinueMode function - large streaming logic kept in place
   const triggerContinueMode = useCallback(async (participantId: string) => {
     if (streaming || waitingForResponse) {
-      clientLogger.debug('[Chat] Skipping continue mode - already generating')
       return
     }
 
@@ -707,11 +679,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       return
     }
 
-    clientLogger.debug('[Chat] Triggering continue mode for participant', { participantId })
 
     // Abort any existing request before starting a new one
     if (abortControllerRef.current) {
-      clientLogger.debug('[Chat] Aborting previous request before starting new one')
       abortControllerRef.current.abort()
       abortControllerRef.current = null
     }
@@ -720,7 +690,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setStreaming(false)
     setStreamingContent('')
     setRespondingParticipantId(participantId)
-    clientLogger.debug('[Chat] Set responding participant for streaming', { participantId })
 
     try {
       abortControllerRef.current = new AbortController()
@@ -794,10 +763,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setEphemeralMessages(prev =>
                   prev.filter(em => em.participantId !== participantId)
                 )
-
-                if (data.turn) {
-                  clientLogger.debug('[Chat] Turn info from continue mode', data.turn)
-                }
               }
             } catch (parseError) {
               // Rethrow actual errors (from data.error), ignore JSON parse errors
@@ -811,9 +776,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
     } catch (err) {
       const isAbort = err instanceof Error && err.name === 'AbortError'
-      if (isAbort) {
-        clientLogger.debug('[Chat] Continue mode aborted by user')
-      } else {
+      if (!isAbort) {
         // Extract error message, handling cases where message may be undefined
         const errorMessage = err instanceof Error
           ? (err.message || err.name || 'Unknown error')
@@ -838,7 +801,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       // Use longer timeout to let smooth scroll settle, and preventScroll to avoid conflicts
       setTimeout(() => {
         inputRef.current?.focus({ preventScroll: true })
-        clientLogger.debug('[Chat] Focus returned to input after continue mode')
       }, 150)
     }
   }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages])
@@ -848,7 +810,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // Function to set pause state and persist to database
   const setPauseState = useCallback(async (paused: boolean) => {
-    clientLogger.debug('[Chat] Setting pause state', { paused, chatId: id })
     setIsPaused(paused)
     userStoppedStreamRef.current = paused
 
@@ -868,67 +829,20 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // Auto-trigger next character in multi-character mode
   useEffect(() => {
-    // Debug: log state at start of effect
-    clientLogger.debug('[Chat] Auto-trigger effect running', {
-      isMultiChar,
-      isPaused,
-      streaming,
-      waitingForResponse,
-      hasAbortController: !!abortControllerRef.current,
-      hasTurnSelectionResult: !!turnSelectionResult,
-      effectiveNextSpeakerId,
-      lastAutoTriggered: lastAutoTriggeredRef.current,
-      isAllLLM,
-      allLLMTurnCount,
-      lastPausedAt: lastAllLLMPauseTurnCountRef.current,
-    })
-
-    if (!isMultiChar) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - not multi-character mode')
-      return
-    }
-
-    if (isPaused) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - chat is paused')
-      return
-    }
-
-    if (userStoppedStreamRef.current) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - user stopped streaming')
-      return
-    }
-
-    if (streaming || waitingForResponse) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - streaming or waiting')
-      return
-    }
-
-    // Also check the abort controller ref - if there's an active request, don't trigger another
-    // This catches race conditions where state hasn't updated yet
-    if (abortControllerRef.current) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - request already in progress (ref check)')
-      return
-    }
-
-    if (!turnSelectionResult) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - no turn selection result')
-      return
-    }
+    if (!isMultiChar) return
+    if (isPaused) return
+    if (userStoppedStreamRef.current) return
+    if (streaming || waitingForResponse) return
+    if (abortControllerRef.current) return
+    if (!turnSelectionResult) return
 
     // Use the pre-computed effective next speaker (handles all-LLM recalculation)
     if (effectiveNextSpeakerId === null) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - user\'s turn (effectiveNextSpeakerId is null)', {
-        turnSelectionResultNextSpeakerId: turnSelectionResult.nextSpeakerId,
-        turnSelectionResultReason: turnSelectionResult.reason,
-      })
       lastAutoTriggeredRef.current = null
       return
     }
 
-    if (effectiveNextSpeakerId === userParticipantId) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - next speaker is user')
-      return
-    }
+    if (effectiveNextSpeakerId === userParticipantId) return
 
     // Check if we should pause for all-LLM chat threshold
     // Only pause if we've exceeded the last paused turn count (prevents immediate re-pause on resume)
@@ -946,10 +860,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       return
     }
 
-    if (lastAutoTriggeredRef.current === effectiveNextSpeakerId) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - same participant already triggered')
-      return
-    }
+    if (lastAutoTriggeredRef.current === effectiveNextSpeakerId) return
 
     clientLogger.info('[Chat] Auto-triggering next character in multi-character mode', {
       nextSpeakerId: effectiveNextSpeakerId,
@@ -983,7 +894,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // stopStreaming function
   const stopStreaming = useCallback(() => {
-    clientLogger.debug('[Chat] Stopping streaming response')
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
@@ -995,13 +905,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setPendingToolCalls([])
     setToolExecutionStatus(null)
     if (isMultiChar) {
-      clientLogger.debug('[Chat] Setting userStoppedStreamRef and pausing chat')
       userStoppedStreamRef.current = true
       // Also pause the chat persistently
       setPauseState(true)
     }
     if (streamingContent) {
-      clientLogger.debug('[Chat] Streaming stopped with partial content', {
+      clientLogger.info('[Chat] Streaming stopped with partial content', {
         contentLength: streamingContent.length,
       })
       showInfoToast('Response stopped - chat paused')
@@ -1020,13 +929,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // Character management handlers
   const handleAddCharacter = useCallback(() => {
-    clientLogger.debug('[Chat] Opening add character dialog')
     setAddCharacterDialogOpen(true)
   }, [])
 
   // Rename handler
   const handleRenameClick = useCallback(() => {
-    clientLogger.debug('[Chat] Opening rename modal')
     setRenameModalOpen(true)
   }, [])
 
@@ -1038,7 +945,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const handleReattribute = useCallback((messageId: string) => {
     const message = messages.find(m => m.id === messageId)
     if (message) {
-      clientLogger.debug('[Chat] Opening re-attribute dialog', {
+      clientLogger.debug('[Chat] Opening re-attribute dialog', { // Useful for debugging message re-attribution
         messageId,
         currentParticipantId: message.participantId,
       })
@@ -1480,7 +1387,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     if (wasGeneratingRef.current && !isGenerating) {
       // Just finished generating - focus the textarea
-      clientLogger.debug('[Chat] Generation complete, focusing textarea')
       setTimeout(() => {
         inputRef.current?.focus({ preventScroll: true })
       }, 100)
@@ -1498,10 +1404,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     lastAutoTriggeredRef.current = null
     // Only clear the user-stopped flag if NOT paused - respect pause state
     if (!isPaused) {
-      clientLogger.debug('[Chat] Clearing userStoppedStreamRef - chat is not paused')
       userStoppedStreamRef.current = false
-    } else {
-      clientLogger.debug('[Chat] Keeping userStoppedStreamRef true - chat is paused')
     }
 
     const userMessage = input.trim()
@@ -1524,10 +1427,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     // For normal messages, the server uses the first active character
     const firstCharParticipant = getFirstCharacterParticipant()
     setRespondingParticipantId(firstCharParticipant?.id || null)
-    clientLogger.debug('[Chat] Set responding participant for streaming', {
-      participantId: firstCharParticipant?.id,
-      characterName: firstCharParticipant?.character?.name,
-    })
     // Reset textarea to minimum height (single line)
     if (inputRef.current) {
       inputRef.current.style.height = 'auto'
@@ -1809,7 +1708,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       const isAbort = err instanceof Error && err.name === 'AbortError'
 
       if (isAbort) {
-        clientLogger.debug('[Chat] Streaming aborted by user')
         // Debug: Mark entries as aborted
         if (debug?.isDebugMode) {
           if (debugEntryId) {
@@ -1862,7 +1760,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       // Use longer timeout to let smooth scroll settle, and preventScroll to avoid conflicts
       setTimeout(() => {
         inputRef.current?.focus({ preventScroll: true })
-        clientLogger.debug('[Chat] Focus returned to input after send')
       }, 150)
     }
   }
@@ -2033,7 +1930,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   onHandleDequeue={turnManagement.handleDequeue}
                   onHandleTalkativenessChange={(pId, value) => {
                     // Handle talkativeness change - this would need to be implemented
-                    clientLogger.debug('[Chat] Talkativeness change requested', { participantId: pId, value })
                   }}
                   onHandleRemoveCharacter={handleRemoveCharacter}
                   onHandleContinue={turnManagement.handleContinue}
@@ -2304,7 +2200,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onDequeue={turnManagement.handleDequeue}
           onSkip={turnManagement.handleContinue}
           onTalkativenessChange={(pId, value) => {
-            clientLogger.debug('[Chat] Talkativeness change', { participantId: pId, value })
           }}
           onAddCharacter={handleAddCharacter}
           onRemoveCharacter={handleRemoveCharacter}

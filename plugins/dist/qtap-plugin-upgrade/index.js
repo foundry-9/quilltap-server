@@ -32504,21 +32504,14 @@ async function isClientConnected(client) {
 }
 async function getMongoClient() {
   if (await isClientConnected(mongoClient)) {
-    logger.debug("Returning existing MongoDB client connection");
     return mongoClient;
   }
   if (mongoClientPromise) {
-    logger.debug("Connection attempt already in progress, awaiting existing promise");
     return mongoClientPromise;
   }
   let connectingClient = null;
   mongoClientPromise = (async () => {
     const config = validateMongoDBConfig();
-    logger.debug("Attempting MongoDB connection", {
-      host: config.uri.replace(/mongodb\+srv:\/\/.*@/, "mongodb+srv://***@"),
-      database: config.database,
-      maxPoolSize: config.maxPoolSize
-    });
     const clientOptions = {
       maxPoolSize: config.maxPoolSize,
       minPoolSize: 1,
@@ -32536,15 +32529,8 @@ async function getMongoClient() {
       database: config.database
     });
     await connectingClient.db("admin").command({ ping: 1 });
-    logger.debug("MongoDB ping successful");
-    connectingClient.on("connectionClosed", () => {
-      logger.debug("MongoDB connection closed");
-    });
     connectingClient.on("error", (error) => {
       logger.error("MongoDB client error", { error: error.message });
-    });
-    connectingClient.on("connectionPoolClosed", () => {
-      logger.debug("MongoDB connection pool closed");
     });
     mongoClient = connectingClient;
     return mongoClient;
@@ -32577,9 +32563,6 @@ async function getMongoDatabase() {
     const client = await getMongoClient();
     const config = validateMongoDBConfig();
     mongoDatabase = client.db(config.database);
-    logger.debug("Retrieved MongoDB database instance", {
-      database: config.database
-    });
     return mongoDatabase;
   } catch (error) {
     logger.error("Failed to get MongoDB database", {
@@ -32590,15 +32573,12 @@ async function getMongoDatabase() {
 }
 async function isMongoConnected() {
   if (!mongoClient) {
-    logger.debug("MongoDB connection status check", { connected: false });
     return false;
   }
   try {
     await mongoClient.db("admin").command({ ping: 1 });
-    logger.debug("MongoDB connection status check", { connected: true });
     return true;
   } catch {
-    logger.debug("MongoDB connection status check", { connected: false });
     mongoClient = null;
     return false;
   }
@@ -32606,9 +32586,7 @@ async function isMongoConnected() {
 async function closeMongoConnection() {
   try {
     if (mongoClient) {
-      logger.debug("Closing MongoDB connection");
       await mongoClient.close();
-      logger.debug("MongoDB connection closed successfully");
     }
     mongoClient = null;
     mongoDatabase = null;
@@ -32622,7 +32600,6 @@ async function closeMongoConnection() {
 }
 function setupMongoDBShutdownHandlers() {
   const handleShutdown = async () => {
-    logger.debug("Process shutdown signal received, closing MongoDB connection");
     await closeMongoConnection();
   };
   process.on("SIGTERM", handleShutdown);
@@ -32634,7 +32611,6 @@ function setupMongoDBShutdownHandlers() {
     await closeMongoConnection();
     process.exit(1);
   });
-  logger.debug("MongoDB shutdown handlers registered");
 }
 var import_mongodb2, mongoClient, mongoDatabase, mongoClientPromise;
 var init_client = __esm({

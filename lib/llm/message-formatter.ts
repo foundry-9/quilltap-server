@@ -271,3 +271,72 @@ export function buildMultiCharacterContextSection(
 
   return lines.join('\n')
 }
+
+/**
+ * Strip character name prefixes from the beginning of a response
+ *
+ * LLMs sometimes mimic the [Name] prefix format from the input in their responses.
+ * This function removes any such prefixes from the start of the response,
+ * including multiple occurrences across newlines.
+ *
+ * @param content The response content to clean
+ * @param characterName The responding character's name (to specifically target)
+ * @returns Cleaned content without leading name prefixes
+ */
+export function stripCharacterNamePrefix(content: string, characterName?: string): string {
+  if (!content) return content
+
+  // If we know the specific character name, build a specific pattern
+  // Otherwise, use a general pattern to match any [Name] prefix
+  let result = content
+
+  // Pattern to match [Name] at the start, possibly across multiple lines
+  // Matches: [Name], [Name]\n, [Name] \n, [Name]\n\n, etc.
+  // The name can contain letters, numbers, spaces, and common punctuation
+  const generalPrefixPattern = /^\s*\[[^\]]+\]\s*/
+
+  // If we have a specific character name, also build a specific pattern
+  // that's more targeted (case-insensitive)
+  let specificPattern: RegExp | null = null
+  if (characterName) {
+    const escapedName = characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    specificPattern = new RegExp(`^\\s*\\[${escapedName}\\]\\s*`, 'i')
+  }
+
+  // Keep stripping prefixes until we don't find any more
+  // This handles cases like "[Name]\n[Name]\n[Name]\n*content*"
+  let previousLength = -1
+  let iterations = 0
+  const MAX_ITERATIONS = 10 // Safety limit
+
+  while (result.length !== previousLength && iterations < MAX_ITERATIONS) {
+    previousLength = result.length
+    iterations++
+
+    // Try specific pattern first (if available)
+    if (specificPattern && specificPattern.test(result)) {
+      result = result.replace(specificPattern, '')
+      continue
+    }
+
+    // Then try general pattern
+    if (generalPrefixPattern.test(result)) {
+      result = result.replace(generalPrefixPattern, '')
+      continue
+    }
+
+    // No more prefixes found
+    break
+  }
+
+  if (iterations > 1) {
+    logger.debug('[MessageFormatter] Stripped character name prefixes from response', {
+      characterName,
+      prefixesStripped: iterations - 1,
+      originalLength: content.length,
+      resultLength: result.length,
+    })
+  }
+
+  return result
+}

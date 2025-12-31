@@ -9,10 +9,8 @@
  * @module components/settings/appearance/components/ThemeCard
  */
 
-import { useEffect } from 'react'
 import type { ThemeSummary } from '@/components/providers/theme-provider'
 import { BrandName } from '@/components/ui/brand-name'
-import { clientLogger } from '@/lib/client-logger'
 import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
 import type { ThemeCardProps, PreviewColors } from '../types'
 
@@ -68,15 +66,6 @@ export function ThemeCard({ theme, isActive, onSelect, disabled }: ThemeCardProp
   const description = isDefault
     ? <>The default <BrandName /> theme with a clean, professional appearance</>
     : theme.description
-
-  // Log render in useEffect to avoid state updates during render
-  useEffect(() => {
-    clientLogger.debug('ThemeCard: rendered', {
-      themeId: isDefault ? 'default' : theme?.id,
-      isActive,
-      disabled,
-    })
-  }, [isDefault, theme?.id, isActive, disabled])
 
   return (
     <button

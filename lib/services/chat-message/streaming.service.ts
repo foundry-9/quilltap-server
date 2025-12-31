@@ -149,6 +149,46 @@ export async function* streamMessage(
     thoughtSignature: m.thoughtSignature,
   })) as LLMMessage[]
 
+  // Debug log: LLM request payload
+  const requestPayload = {
+    messages: llmMessages.map(m => ({
+      role: m.role,
+      contentLength: m.content?.length || 0,
+      hasAttachments: !!(m.attachments && m.attachments.length > 0),
+      attachmentCount: m.attachments?.length || 0,
+      name: m.name,
+      hasThoughtSignature: !!m.thoughtSignature,
+    })),
+    model: connectionProfile.modelName,
+    temperature: modelParams.temperature,
+    maxTokens: modelParams.maxTokens,
+    topP: modelParams.topP,
+    toolCount: tools.length,
+    webSearchEnabled: useNativeWebSearch,
+  }
+  logger.debug('[LLM Request] streaming.service.ts:streamMessage - Sending to provider', {
+    context: 'llm-api',
+    provider: connectionProfile.provider,
+    model: connectionProfile.modelName,
+    request: JSON.stringify(requestPayload),
+  })
+  logger.debug('[LLM Request] Full message contents', {
+    context: 'llm-api-verbose',
+    provider: connectionProfile.provider,
+    model: connectionProfile.modelName,
+    messages: JSON.stringify(llmMessages.map(m => ({
+      role: m.role,
+      content: m.content,
+      name: m.name,
+    }))),
+    tools: tools.length > 0 ? JSON.stringify(tools) : undefined,
+  })
+
+  let chunkCount = 0
+  let totalContentLength = 0
+  let lastUsage: { totalTokens?: number } | undefined
+  let lastCacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | undefined
+
   for await (const chunk of provider.streamMessage(
     {
       messages: llmMessages,
@@ -162,6 +202,28 @@ export async function* streamMessage(
     },
     apiKey
   )) {
+    chunkCount++
+    if (chunk.content) {
+      totalContentLength += chunk.content.length
+    }
+    if (chunk.usage) {
+      lastUsage = chunk.usage
+    }
+    if (chunk.cacheUsage) {
+      lastCacheUsage = chunk.cacheUsage
+    }
+    if (chunk.done) {
+      logger.debug('[LLM Response] streaming.service.ts:streamMessage - Stream complete', {
+        context: 'llm-api',
+        provider: connectionProfile.provider,
+        model: connectionProfile.modelName,
+        chunkCount,
+        totalContentLength,
+        usage: lastUsage ? JSON.stringify(lastUsage) : undefined,
+        cacheUsage: lastCacheUsage ? JSON.stringify(lastCacheUsage) : undefined,
+        hasThoughtSignature: !!chunk.thoughtSignature,
+      })
+    }
     yield chunk
   }
 }

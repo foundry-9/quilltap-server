@@ -52,14 +52,6 @@ export function useSearchReplace(
   // Debounce timer ref
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Log state changes (intentionally runs once on mount to capture initial values)
-  useEffect(() => {
-    clientLogger.debug('[useSearchReplace] State initialized', {
-      currentStep,
-      hasInitialScope: !!initialScope,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Fetch preview when search text changes (debounced)
   const fetchPreview = useCallback(async () => {
@@ -72,11 +64,6 @@ export function useSearchReplace(
     setPreviewError(null);
 
     try {
-      clientLogger.debug('[useSearchReplace] Fetching preview', {
-        scope,
-        searchTextLength: searchText.length,
-      });
-
       const response = await fetch('/api/search-replace/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,7 +83,6 @@ export function useSearchReplace(
 
       const data = await response.json();
       setPreview(data);
-      clientLogger.debug('[useSearchReplace] Preview fetched', data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch preview';
       setPreviewError(message);
@@ -194,7 +180,6 @@ export function useSearchReplace(
       }
 
       setCurrentStep(nextStepId);
-      clientLogger.debug('[useSearchReplace] Navigating to next step', { nextStep: nextStepId });
     }
   }, [currentStep, execute]);
 
@@ -204,7 +189,6 @@ export function useSearchReplace(
       const prevStepId = WIZARD_STEPS[currentIndex - 1].id;
       setCurrentStep(prevStepId);
       setConfirmed(false); // Reset confirmation when going back
-      clientLogger.debug('[useSearchReplace] Navigating to previous step', { prevStep: prevStepId });
     }
   }, [currentStep]);
 
@@ -224,7 +208,6 @@ export function useSearchReplace(
     setExecutionPhase('');
     setResult(null);
     setError(null);
-    clientLogger.debug('[useSearchReplace] State reset');
   }, [initialScope]);
 
   // Computed values

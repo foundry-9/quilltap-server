@@ -39,24 +39,16 @@ async function isClientConnected(client: MongoClient | null): Promise<boolean> {
 export async function getMongoClient(): Promise<MongoClient> {
   // Return existing client if already connected
   if (await isClientConnected(mongoClient)) {
-    logger.debug('Returning existing MongoDB client connection');
     return mongoClient!;
   }
 
   if (mongoClientPromise) {
-    logger.debug('Connection attempt already in progress, awaiting existing promise');
     return mongoClientPromise;
   }
 
   let connectingClient: MongoClient | null = null;
   mongoClientPromise = (async () => {
     const config = validateMongoDBConfig();
-
-    logger.debug('Attempting MongoDB connection', {
-      host: config.uri.replace(/mongodb\+srv:\/\/.*@/, 'mongodb+srv://***@'),
-      database: config.database,
-      maxPoolSize: config.maxPoolSize,
-    });
 
     const clientOptions: MongoClientOptions = {
       maxPoolSize: config.maxPoolSize,
@@ -81,19 +73,10 @@ export async function getMongoClient(): Promise<MongoClient> {
 
     // Test the connection
     await connectingClient.db('admin').command({ ping: 1 });
-    logger.debug('MongoDB ping successful');
 
-    // Set up event listeners for connection events
-    connectingClient.on('connectionClosed', () => {
-      logger.debug('MongoDB connection closed');
-    });
-
+    // Set up error listener for connection errors
     connectingClient.on('error', (error) => {
       logger.error('MongoDB client error', { error: error.message });
-    });
-
-    connectingClient.on('connectionPoolClosed', () => {
-      logger.debug('MongoDB connection pool closed');
     });
 
     mongoClient = connectingClient;
@@ -140,11 +123,6 @@ export async function getMongoDatabase(): Promise<Db> {
     const config = validateMongoDBConfig();
 
     mongoDatabase = client.db(config.database);
-
-    logger.debug('Retrieved MongoDB database instance', {
-      database: config.database,
-    });
-
     return mongoDatabase;
   } catch (error) {
     logger.error('Failed to get MongoDB database', {
@@ -160,16 +138,13 @@ export async function getMongoDatabase(): Promise<Db> {
  */
 export async function isMongoConnected(): Promise<boolean> {
   if (!mongoClient) {
-    logger.debug('MongoDB connection status check', { connected: false });
     return false;
   }
 
   try {
     await mongoClient.db('admin').command({ ping: 1 });
-    logger.debug('MongoDB connection status check', { connected: true });
     return true;
   } catch {
-    logger.debug('MongoDB connection status check', { connected: false });
     mongoClient = null;
     return false;
   }
@@ -183,9 +158,7 @@ export async function isMongoConnected(): Promise<boolean> {
 export async function closeMongoConnection(): Promise<void> {
   try {
     if (mongoClient) {
-      logger.debug('Closing MongoDB connection');
       await mongoClient.close();
-      logger.debug('MongoDB connection closed successfully');
     }
 
     mongoClient = null;
@@ -205,7 +178,6 @@ export async function closeMongoConnection(): Promise<void> {
  */
 export function setupMongoDBShutdownHandlers(): void {
   const handleShutdown = async () => {
-    logger.debug('Process shutdown signal received, closing MongoDB connection');
     await closeMongoConnection();
   };
 
@@ -223,6 +195,4 @@ export function setupMongoDBShutdownHandlers(): void {
     await closeMongoConnection();
     process.exit(1);
   });
-
-  logger.debug('MongoDB shutdown handlers registered');
 }

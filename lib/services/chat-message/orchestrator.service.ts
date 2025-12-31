@@ -14,6 +14,7 @@ import {
   getActiveCharacterParticipants,
   isMultiCharacterChat,
 } from '@/lib/chat/turn-manager'
+import { stripCharacterNamePrefix } from '@/lib/llm/message-formatter'
 import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -573,12 +574,16 @@ async function processMessage(
   let assistantMessageId: string | null = null
 
   if (fullResponse && fullResponse.trim().length > 0) {
+    // Strip any character name prefixes that the LLM might have echoed back
+    // This handles cases where LLMs mimic the [Name] prefix format from the input
+    const cleanedResponse = stripCharacterNamePrefix(fullResponse, character.name)
+
     assistantMessageId = await saveAssistantMessage(
       repos,
       chatId,
       character,
       characterParticipant,
-      fullResponse,
+      cleanedResponse,
       usage,
       rawResponse,
       thoughtSignature,
@@ -622,7 +627,7 @@ async function processMessage(
         allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
         chatId,
         userMessage: isContinueMode ? '[Continue/Nudge - no user message]' : content,
-        assistantMessage: fullResponse,
+        assistantMessage: cleanedResponse,
         sourceMessageId: assistantMessageId,
         userId,
         connectionProfile,
@@ -633,7 +638,7 @@ async function processMessage(
         await triggerInterCharacterMemory(repos, {
           character,
           characterParticipantId: characterParticipant.id,
-          assistantMessage: fullResponse,
+          assistantMessage: cleanedResponse,
           assistantMessageId,
           chatId,
           userId,

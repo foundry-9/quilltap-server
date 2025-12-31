@@ -13,11 +13,10 @@
  * - Add character button (placeholder for Phase 6)
  */
 
-import { useMemo, useEffect } from 'react'
+import { useMemo } from 'react'
 import { ParticipantCard, type ParticipantData } from './ParticipantCard'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition } from '@/lib/chat/turn-manager'
-import { clientLogger } from '@/lib/client-logger'
 
 interface ParticipantSidebarProps {
   participants: ParticipantData[]
@@ -65,20 +64,6 @@ export function ParticipantSidebar({
   onStopImpersonate,
   className = '',
 }: ParticipantSidebarProps) {
-  // Debug logging in useEffect to avoid setState during render
-  useEffect(() => {
-    clientLogger.debug('[ParticipantSidebar] Rendered', {
-      participantCount: participants.length,
-      queueLength: turnState.queue.length,
-      nextSpeakerId: turnSelectionResult?.nextSpeakerId,
-      respondingParticipantId,
-      isGenerating,
-      isPaused,
-      impersonatingCount: impersonatingParticipantIds.length,
-      activeTypingParticipantId,
-    })
-  }, [participants.length, turnState.queue.length, turnSelectionResult?.nextSpeakerId, respondingParticipantId, isGenerating, isPaused, impersonatingParticipantIds.length, activeTypingParticipantId])
-
   // Sort participants: personas first (the user), then characters by displayOrder
   const sortedParticipants = useMemo(() => {
     return [...participants]

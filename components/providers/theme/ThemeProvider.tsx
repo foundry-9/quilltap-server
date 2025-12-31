@@ -25,7 +25,6 @@ import {
   useMemo,
 } from 'react';
 import { useSession } from '@/components/providers/session-provider';
-import { clientLogger } from '@/lib/client-logger';
 import { ThemeStyleInjector } from '@/components/providers/theme-style-injector';
 import type { ThemeContextValue, ThemeProviderProps, ThemeFont, ThemeSummary } from './types';
 import type { ColorMode } from '@/lib/themes/types';
@@ -96,11 +95,6 @@ export function ThemeProvider({
     const updateResolvedMode = (systemPrefersDark: boolean) => {
       const resolved = resolveColorMode(colorMode, systemPrefersDark);
       setResolvedColorMode(resolved);
-      clientLogger.debug('Theme: resolved color mode updated', {
-        colorMode,
-        systemPrefersDark,
-        resolved,
-      });
     };
 
     // Set initial value
@@ -149,7 +143,6 @@ export function ThemeProvider({
   const loadPreference = useCallback(async () => {
     // Don't load if not authenticated
     if (status !== 'authenticated') {
-      clientLogger.debug('Theme: skipping preference load (not authenticated)');
       setIsLoading(false);
       return;
     }
@@ -198,8 +191,6 @@ export function ThemeProvider({
 
   const setTheme = useCallback(
     async (themeId: string | null) => {
-      clientLogger.debug('Theme: setting theme', { themeId });
-
       // Update local state immediately for responsiveness
       setActiveThemeId(themeId);
 
@@ -222,8 +213,6 @@ export function ThemeProvider({
 
   const setColorMode = useCallback(
     async (mode: ColorMode) => {
-      clientLogger.debug('Theme: setting color mode', { mode });
-
       // Update local state immediately
       setColorModeState(mode);
 
@@ -241,8 +230,6 @@ export function ThemeProvider({
 
   const setShowNavThemeSelector = useCallback(
     async (show: boolean) => {
-      clientLogger.debug('Theme: setting showNavThemeSelector', { show });
-
       // Update local state immediately
       setShowNavThemeSelectorState(show);
 

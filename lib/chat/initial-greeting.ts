@@ -2,6 +2,7 @@
 // Generates a first message for a chat when no scripted greeting exists
 
 import { createLLMProvider } from '@/lib/llm'
+import { logger } from '@/lib/logger'
 
 export type GreetingRequest = {
   systemPrompt: string
@@ -33,15 +34,31 @@ export async function generateGreetingMessage({
 
   const augmentedSystemPrompt = `${systemPrompt}\n\nYou are starting a brand new conversation. Before the user says anything, open with a concise greeting that fits ${characterName}'s established voice. Keep it to one or two sentences.`
 
+  const messages = [
+    { role: 'system' as const, content: augmentedSystemPrompt },
+    {
+      role: 'user' as const,
+      content: 'The chat is beginning now. Greet the user immediately in-character and invite them to engage.',
+    },
+  ]
+
+  // Debug log: LLM request
+  logger.debug('[LLM Request] initial-greeting.ts:generateGreetingMessage', {
+    context: 'llm-api',
+    provider,
+    model: modelName,
+    characterName,
+    systemPromptLength: augmentedSystemPrompt.length,
+    messages: JSON.stringify(messages.map(m => ({
+      role: m.role,
+      contentLength: m.content.length,
+    }))),
+    params: JSON.stringify({ temperature, maxTokens: maxTokens ?? 160, topP }),
+  })
+
   const response = await providerClient.sendMessage(
     {
-      messages: [
-        { role: 'system', content: augmentedSystemPrompt },
-        {
-          role: 'user',
-          content: 'The chat is beginning now. Greet the user immediately in-character and invite them to engage.',
-        },
-      ],
+      messages,
       model: modelName,
       temperature,
       maxTokens: maxTokens ?? 160,
@@ -49,6 +66,16 @@ export async function generateGreetingMessage({
     },
     apiKey ?? ''
   )
+
+  // Debug log: LLM response
+  logger.debug('[LLM Response] initial-greeting.ts:generateGreetingMessage', {
+    context: 'llm-api',
+    provider,
+    model: modelName,
+    responseLength: response.content?.length || 0,
+    response: response.content,
+    usage: response.usage ? JSON.stringify(response.usage) : undefined,
+  })
 
   return (response.content || '').trim()
 }

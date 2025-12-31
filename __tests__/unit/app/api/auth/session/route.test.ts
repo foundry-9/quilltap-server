@@ -146,15 +146,12 @@ describe('Session API Route - GET /api/auth/session', () => {
       expect(body.expires).toBe(mockSession.expires);
     });
 
-    it('should log debug with userId when session exists', async () => {
+    it('should not log debug when session exists (noise reduction)', async () => {
       mockGetServerSession.mockResolvedValue(mockSession);
 
       await GET();
 
-      expect(mockLogger.debug).toHaveBeenCalledWith('Session fetched', {
-        context: 'session.GET',
-        userId: 'user-123',
-      });
+      expect(mockLogger.debug).not.toHaveBeenCalled();
     });
 
     it('should return correct SessionResponse shape', async () => {

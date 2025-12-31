@@ -135,16 +135,26 @@ export async function POST(req: NextRequest) {
     }
 
     // Create provider instance
-    logger.debug('Creating provider for models endpoint', {
+    const llmProvider = await createLLMProvider(provider, baseUrl)
+
+    // Debug log: Models API request
+    logger.debug('[Models Request] models/route.ts:POST', {
+      context: 'llm-api',
       provider,
       hasBaseUrl: !!baseUrl,
-      pluginSystemInitialized: isPluginSystemInitialized(),
-      context: 'POST /api/models',
+      baseUrl: baseUrl || undefined,
     })
-    const llmProvider = await createLLMProvider(provider, baseUrl)
 
     // Get available models
     const models = await llmProvider.getAvailableModels(decryptedKey)
+
+    // Debug log: Models API response
+    logger.debug('[Models Response] models/route.ts:POST', {
+      context: 'llm-api',
+      provider,
+      modelCount: models.length,
+      models: JSON.stringify(models.slice(0, 20)), // Log first 20 models
+    })
 
     // Get model metadata (warnings, recommendations) if the provider supports it
     const modelMetadata = llmProvider.getModelsWithMetadata

@@ -105,19 +105,35 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Debug log: Image generation request
+    const imageGenRequest = {
+      prompt,
+      model: profile.modelName,
+      n: options.n,
+      size: options.size,
+      quality: options.quality,
+      style: options.style,
+      aspectRatio: options.aspectRatio,
+    }
+    logger.debug('[Image Generation Request] images/generate/route.ts:POST', {
+      context: 'llm-api',
+      provider: profile.provider,
+      model: profile.modelName,
+      promptLength: prompt.length,
+      request: JSON.stringify(imageGenRequest),
+    })
+
     // Generate images
-    const imageGenResponse = await provider.generateImage(
-      {
-        prompt,
-        model: profile.modelName,
-        n: options.n,
-        size: options.size,
-        quality: options.quality,
-        style: options.style,
-        aspectRatio: options.aspectRatio,
-      },
-      decryptedKey
-    )
+    const imageGenResponse = await provider.generateImage(imageGenRequest, decryptedKey)
+
+    // Debug log: Image generation response
+    logger.debug('[Image Generation Response] images/generate/route.ts:POST', {
+      context: 'llm-api',
+      provider: profile.provider,
+      model: profile.modelName,
+      imageCount: imageGenResponse.images.length,
+      imageSizes: imageGenResponse.images.map(img => img.data.length),
+    })
 
     // Save generated images to S3 and create database records
     const savedImages = await Promise.all(

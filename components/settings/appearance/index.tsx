@@ -15,8 +15,6 @@
  * @module components/settings/appearance
  */
 
-import { useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAppearanceSettings } from './hooks/useAppearanceSettings'
 import { DisplayOptions } from './DisplayOptions'
 import { ThemeSelector } from './ThemeSelector'
@@ -70,18 +68,6 @@ export default function AppearanceTab() {
     handleColorModeChange,
     handleNavThemeSelectorChange,
   } = useAppearanceSettings()
-
-  // Log render in useEffect to avoid state updates during render
-  useEffect(() => {
-    clientLogger.debug('AppearanceTab: rendered', {
-      activeThemeId,
-      colorMode,
-      resolvedColorMode,
-      themesCount: availableThemes.length,
-      isLoading,
-      error,
-    })
-  }, [activeThemeId, colorMode, resolvedColorMode, availableThemes.length, isLoading, error])
 
   // Loading state
   if (isLoading) {

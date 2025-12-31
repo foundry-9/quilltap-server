@@ -4,6 +4,37 @@
 
 ### 2.6-dev
 
+- feat: Add comprehensive LLM API debug logging
+  - All LLM API calls now log request and response details at debug level
+  - Chat messages: Log request payload, provider/model, streaming stats, and usage
+  - Cheap LLM tasks: Log all memory extraction, summarization, titling, and image prompt crafting calls
+  - Embeddings: Log OpenAI, Ollama, and OpenRouter embedding API calls
+  - Image generation: Log both direct API and tool-based image generation requests
+  - Greeting generation: Log initial character greeting LLM calls
+  - File attachment fallback: Log image description generation calls
+  - Provider testing: Log test message API calls
+  - Model discovery: Log getAvailableModels API calls
+  - All logs use consistent format with `context: 'llm-api'` for easy filtering
+- fix: Strip duplicate character name prefixes from LLM responses
+  - LLMs sometimes mimic the `[Character Name]` prefix format from multi-character chat input
+  - Added `stripCharacterNamePrefix()` function in message-formatter.ts
+  - Strips multiple consecutive prefixes (handles cases like `[Name]\n[Name]\n[Name]\n*content*`)
+  - Applied before saving messages and triggering memory extraction
+- refactor: Remove verbose MongoDB, repository, and UI debug logs
+  - Removed connection closed/pool closed event listeners
+  - Removed ping successful, connection status check, and shutdown handler logs
+  - Removed "Getting MongoDB repositories" and "Returning cached repositories" logs
+  - Removed useSearchReplace hook debug logs (state init, preview fetch, navigation, reset)
+  - Removed chat page debug logs (~30+ items): auto-trigger, turn state, draft saving, focus, dialogs
+  - Removed ParticipantSidebar render logging
+  - Removed ThemeStyleInjector CSS injection logging
+  - Removed theme-utils fetch/load debug logs (loading/loaded theme tokens/preferences/themes)
+  - Removed ThemeProvider lifecycle debug logs (color mode, skipping preference load, setting theme/mode)
+  - Removed appearance settings debug logs (DisplayOptions, ColorModeSelector, ThemeCard, ThemeSelector, AppearanceTab)
+  - Removed "Session fetched" debug log from session API route (called on every page load)
+  - Removed "Click outside detected" debug log from useClickOutside hook
+  - Removed "Auth disabled state determined" and "OAuth disabled state determined" debug logs
+  - Kept only error logs, warnings for failures, and initial connection/initialization info logs
 - refactor: Reduce verbose debug logging in MongoDB repositories
   - Removed ~2,900 debug log entries per typical session
   - Eliminated cache hit logs ("Returning existing MongoDB database instance")
