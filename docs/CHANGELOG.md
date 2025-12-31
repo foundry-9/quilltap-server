@@ -4,6 +4,13 @@
 
 ### 2.6-dev
 
+- refactor: Gab AI plugin now inherits from OpenAI-Compatible plugin
+  - OpenAICompatibleProvider moved to `@quilltap/plugin-utils` package (v1.1.0)
+  - External plugins can now extend OpenAICompatibleProvider to create custom providers
+  - Added `OpenAICompatibleProviderConfig` interface with `providerName`, `requireApiKey`, and `attachmentErrorMessage` options
+  - GabAIProvider reduced from 210 lines to 30 lines by extending OpenAICompatibleProvider
+  - Both bundled plugins (openai-compatible, gab-ai) now import from `@quilltap/plugin-utils`
+  - Updated esbuild configs to mark `@quilltap/plugin-*` packages as external
 - feat: Add `@quilltap/plugin-utils` package for plugin runtime utilities
   - New `packages/plugin-utils/` directory with tool parsing and logger bridge
   - Tool call parsers: `parseToolCalls()`, `parseOpenAIToolCalls()`, `parseAnthropicToolCalls()`, `parseGoogleToolCalls()`

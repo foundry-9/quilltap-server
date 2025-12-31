@@ -6,6 +6,9 @@
  * - Chat completion using Gab AI language models
  * - Support for streaming responses
  * - Text-only interactions (no file attachments)
+ *
+ * Implementation note: GabAIProvider extends OpenAICompatibleProvider,
+ * inheriting all the OpenAI-compatible logic with Gab-specific configuration.
  */
 
 import type { LLMProviderPlugin } from './types';
@@ -65,6 +68,9 @@ const attachmentSupport = {
 /**
  * The Gab AI Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
+ *
+ * Note: The underlying GabAIProvider extends OpenAICompatibleProvider,
+ * so all the core functionality is inherited from the openai-compatible plugin.
  */
 export const plugin: LLMProviderPlugin = {
   metadata,
@@ -144,7 +150,7 @@ export const plugin: LLMProviderPlugin = {
 
   /**
    * Format tools from OpenAI format to OpenAI format
-   * Gab AI uses OpenAI format, with Grok constraints applied if needed
+   * Gab AI uses OpenAI format (inherited from OpenAI-compatible)
    *
    * @param tools Array of tools in OpenAI format
    * @returns Array of tools in OpenAI format

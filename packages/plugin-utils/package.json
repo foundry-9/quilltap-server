@@ -1,6 +1,6 @@
 {
   "name": "@quilltap/plugin-utils",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Utility functions for Quilltap plugin development",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,6 +20,11 @@
       "types": "./dist/logging/index.d.ts",
       "import": "./dist/logging/index.mjs",
       "require": "./dist/logging/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.mjs",
+      "require": "./dist/providers/index.js"
     }
   },
   "files": [
@@ -37,14 +42,19 @@
     "@quilltap/plugin-types": "^1.0.0"
   },
   "peerDependencies": {
-    "@quilltap/plugin-types": "^1.0.0"
+    "@quilltap/plugin-types": "^1.0.0",
+    "openai": "^4.0.0 || ^5.0.0 || ^6.0.0"
   },
   "peerDependenciesMeta": {
     "@quilltap/plugin-types": {
       "optional": false
+    },
+    "openai": {
+      "optional": true
     }
   },
   "devDependencies": {
+    "openai": "^6.15.0",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0"
   },

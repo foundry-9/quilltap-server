@@ -2,6 +2,24 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [1.1.0] - 2025-12-30
+
+### Added
+
+- **OpenAI-Compatible Provider Base Class**
+  - `OpenAICompatibleProvider` - Reusable base class for OpenAI-compatible LLM providers
+  - `OpenAICompatibleProviderConfig` - Configuration interface for customizing providers
+  - Supports streaming and non-streaming chat completions
+  - Configurable API key requirements (`requireApiKey` option)
+  - Customizable provider name for logging (`providerName` option)
+  - Customizable attachment error messages (`attachmentErrorMessage` option)
+  - Includes API key validation and model listing
+  - Uses the plugin logger bridge for consistent logging
+  - Peer dependency on `openai` package (optional, only needed if using this provider)
+
+- **New Export Path**
+  - `@quilltap/plugin-utils/providers` - Direct import path for provider base classes
+
 ## [1.0.0] - 2025-12-30
 
 ### Added

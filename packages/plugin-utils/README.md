@@ -110,6 +110,46 @@ When running standalone:
 | `createConsoleLogger(prefix, minLevel?)` | Create a standalone console logger |
 | `createNoopLogger()` | Create a no-op logger |
 
+### OpenAI-Compatible Provider Base Class
+
+Create custom LLM providers for OpenAI-compatible APIs with minimal code:
+
+```typescript
+import { OpenAICompatibleProvider } from '@quilltap/plugin-utils';
+
+// Create a provider for any OpenAI-compatible API
+export class MyLLMProvider extends OpenAICompatibleProvider {
+  constructor() {
+    super({
+      baseUrl: 'https://api.my-llm-service.com/v1',
+      providerName: 'MyLLM',
+      requireApiKey: true,
+      attachmentErrorMessage: 'MyLLM does not support file attachments',
+    });
+  }
+}
+```
+
+This gives you a complete `LLMProvider` implementation with:
+- Streaming and non-streaming chat completions
+- API key validation
+- Model listing
+- Proper error handling and logging
+
+**Configuration Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `baseUrl` | `string` | (required) | API endpoint URL with version path |
+| `providerName` | `string` | `'OpenAICompatible'` | Name used in log messages |
+| `requireApiKey` | `boolean` | `false` | Whether API key is mandatory |
+| `attachmentErrorMessage` | `string` | (default message) | Error shown for attachment failures |
+
+**Note:** Requires `openai` as a peer dependency:
+```bash
+npm install openai
+```
+
 ## Example: Complete Plugin Provider
 
 ```typescript
