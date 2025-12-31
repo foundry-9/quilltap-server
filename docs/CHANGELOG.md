@@ -4,6 +4,26 @@
 
 ### 2.6-dev
 
+- feat: Add `@quilltap/theme-storybook` package for theme plugin development
+  - New `packages/theme-storybook/` directory with complete theme development kit
+  - Provides Quilltap default theme tokens CSS (`quilltap-defaults.css`)
+  - Provides all qt-* component classes CSS (`qt-components.css`)
+  - Storybook preset for easy configuration
+  - ThemeDecorator for theme/color mode switching
+  - Comprehensive story components for all UI elements:
+    - ColorPalette, Typography, Spacing (design tokens)
+    - Buttons, Cards, Inputs, Badges, Avatars (components)
+    - Dialogs, Tabs (interactive elements)
+    - Chat (Quilltap-specific messaging UI)
+    - ThemeComparison (side-by-side preview)
+  - Complete README.md with usage guide and theme token reference
+  - Enables standalone theme plugin development without full Quilltap installation
+- refactor: Theme plugins now use @quilltap/plugin-utils for logging
+  - Migrated all three theme plugins (ocean, earl-grey, rains) from `@/lib/logger` to `createPluginLogger`
+  - Theme plugins now follow the same pattern as standalone npm-installable plugins
+  - Added `@quilltap/plugin-utils` as peerDependency to theme plugin package.json files
+  - Updated esbuild configs to mark @quilltap packages as external
+  - This enables theme plugins to work identically whether bundled or installed from npm
 - feat: Self-contained theme plugin architecture
   - Theme plugins now support module-based loading (similar to provider plugins)
   - Themes can embed tokens, CSS overrides, and fonts directly in the module export

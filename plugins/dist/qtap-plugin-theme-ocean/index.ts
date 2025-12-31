@@ -8,7 +8,9 @@
  * @module qtap-plugin-theme-ocean
  */
 
-import { logger } from '@/lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-theme-ocean');
 
 /**
  * Plugin initialization
@@ -17,7 +19,6 @@ import { logger } from '@/lib/logger';
  */
 export function initialize(): void {
   logger.debug('Ocean theme plugin loaded', {
-    plugin: 'qtap-plugin-theme-ocean',
     version: '1.1.0',
   });
 }
