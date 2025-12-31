@@ -133,7 +133,9 @@ export function DevConsoleProvider({ children }: { children: ReactNode }) {
   const flushTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Flush pending logs to state (batched)
-  const flushPendingLogs = useCallback(() => {
+  // Use a ref to hold the flush function to avoid dependency issues in useEffect
+  const flushPendingLogsRef = useRef<() => void>(() => {});
+  flushPendingLogsRef.current = () => {
     if (pendingLogsRef.current.length === 0) return;
 
     const logsToAdd = pendingLogsRef.current;
@@ -143,7 +145,7 @@ export function DevConsoleProvider({ children }: { children: ReactNode }) {
       const updated = [...prev, ...logsToAdd];
       return updated.slice(-500);
     });
-  }, []);
+  };
 
   // Setup browser console capture
   useEffect(() => {
@@ -175,7 +177,7 @@ export function DevConsoleProvider({ children }: { children: ReactNode }) {
         if (!flushTimeoutRef.current) {
           flushTimeoutRef.current = setTimeout(() => {
             flushTimeoutRef.current = null;
-            flushPendingLogs();
+            flushPendingLogsRef.current();
           }, 100); // Batch logs every 100ms
         }
       };
@@ -200,7 +202,8 @@ export function DevConsoleProvider({ children }: { children: ReactNode }) {
         flushTimeoutRef.current = null;
       }
     };
-  }, [flushPendingLogs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run once on mount
 
   // Setup server log SSE connection
   useEffect(() => {

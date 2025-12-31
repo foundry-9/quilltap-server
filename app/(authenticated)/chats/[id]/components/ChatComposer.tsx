@@ -1,11 +1,14 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useLayoutEffect, useState, useCallback } from 'react'
 import ToolPalette from '@/components/chat/ToolPalette'
 import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import MessageContent from '@/components/chat/MessageContent'
 import { clientLogger } from '@/lib/client-logger'
 import type { AttachedFile } from '../types'
+
+// Use useLayoutEffect on client, useEffect on server (for SSR compatibility)
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
 interface ChatComposerProps {
   id: string
@@ -110,7 +113,25 @@ export function ChatComposer({
   const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const desktopToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const maxHeight = getTextareaMaxHeight()
+  // Track the last value we synced to detect external changes
+  const lastSyncedValueRef = useRef(input)
+
+  // Calculate maxHeight once on mount and update on resize
+  const maxHeightRef = useRef(getTextareaMaxHeight())
+
+  useEffect(() => {
+    const handleResize = () => {
+      maxHeightRef.current = getTextareaMaxHeight()
+      if (inputRef.current) {
+        resizeTextarea(inputRef.current, maxHeightRef.current)
+      }
+    }
+
+    globalThis.window?.addEventListener('resize', handleResize)
+    return () => {
+      globalThis.window?.removeEventListener('resize', handleResize)
+    }
+  }, [])
 
   // Handler that triggers the file input click - the file input lives in this component
   const handleAttachFileClick = () => {
@@ -120,13 +141,37 @@ export function ChatComposer({
     onAttachFileClick?.()
   }
 
-  // Resize textarea when input changes (including when cleared after submission)
-  useEffect(() => {
-    if (inputRef.current) {
-      clientLogger.debug('[ChatComposer] Resizing textarea on input change', { inputLength: input.length })
-      resizeTextarea(inputRef.current, maxHeight)
+  // Sync textarea value when input prop changes externally (e.g., after submission clears it)
+  // Use useLayoutEffect to update DOM before paint and avoid flicker
+  useIsomorphicLayoutEffect(() => {
+    const textarea = inputRef.current
+    if (!textarea) return
+
+    // Only sync if the input prop changed externally (not from our own onChange)
+    if (input !== lastSyncedValueRef.current) {
+      // Check if this is an external change (value doesn't match what's in the textarea)
+      if (textarea.value !== input) {
+        clientLogger.debug('[ChatComposer] Syncing external input change', {
+          from: textarea.value.length,
+          to: input.length,
+        })
+        textarea.value = input
+        resizeTextarea(textarea, maxHeightRef.current)
+      }
+      lastSyncedValueRef.current = input
     }
-  }, [input, maxHeight])
+  }, [input])
+
+  // onChange handler - simple, no guards needed since we're using uncontrolled input
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value
+    lastSyncedValueRef.current = newValue
+    setInput(newValue)
+    // Resize immediately after value change
+    if (inputRef.current) {
+      resizeTextarea(inputRef.current, maxHeightRef.current)
+    }
+  }, [setInput])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && e.shiftKey) {
@@ -135,19 +180,24 @@ export function ChatComposer({
       const textarea = e.currentTarget
       const start = textarea.selectionStart
       const end = textarea.selectionEnd
-      const newValue = input.substring(0, start) + '\n' + input.substring(end)
+      const currentValue = textarea.value
+      const newValue = currentValue.substring(0, start) + '\n' + currentValue.substring(end)
+      // Update the textarea directly (uncontrolled)
+      textarea.value = newValue
+      lastSyncedValueRef.current = newValue
       setInput(newValue)
       // Move cursor after the inserted newline
       setTimeout(() => {
         textarea.selectionStart = textarea.selectionEnd = start + 1
-        resizeTextarea(textarea, maxHeight)
+        resizeTextarea(textarea, maxHeightRef.current)
       }, 0)
     } else if (e.key === 'Enter' && !e.shiftKey) {
       // Enter (without Shift): submit form
       e.preventDefault()
-      if (input.trim() || attachedFiles.length > 0) {
-        const form = e.currentTarget.form
-        const textarea = e.currentTarget
+      const textarea = e.currentTarget
+      const currentValue = textarea.value
+      if (currentValue.trim() || attachedFiles.length > 0) {
+        const form = textarea.form
         if (form) {
           form.dispatchEvent(new Event('submit', { bubbles: true }))
           // Re-focus textarea after form dispatch to prevent focus loss
@@ -372,13 +422,8 @@ export function ChatComposer({
           ) : (
             <textarea
               ref={inputRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value)
-                if (inputRef.current) {
-                  resizeTextarea(inputRef.current, maxHeight)
-                }
-              }}
+              defaultValue={input}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               disabled={sending || !hasActiveCharacters}
               rows={1}

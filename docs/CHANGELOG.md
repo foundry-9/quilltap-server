@@ -4,6 +4,13 @@
 
 ### 2.6-dev
 
+- fix: Resolve "Maximum update depth exceeded" errors in ChatComposer and DevConsoleProvider
+  - ChatComposer: Converted textarea from controlled (`value={input}`) to uncontrolled (`defaultValue={input}`) to avoid React's controlled input reconciliation triggering infinite loops
+  - ChatComposer: Use refs (`maxHeightRef`, `lastSyncedValueRef`) instead of state to avoid triggering re-renders during resize
+  - ChatComposer: Added `useIsomorphicLayoutEffect` to sync external input changes (e.g., clearing after submission) before paint
+  - DevConsoleProvider: Changed `flushPendingLogs` from useCallback to a ref pattern to avoid useEffect dependency issues
+  - DevConsoleProvider: Made console capture useEffect run only once on mount with empty dependency array
+  - Root cause: React 19/Next.js 16's stricter handling of controlled inputs and useEffect dependencies was causing cascading re-renders
 - feat: Add `@quilltap/theme-storybook` package for theme plugin development
   - New `packages/theme-storybook/` directory with complete theme development kit
   - Provides Quilltap default theme tokens CSS (`quilltap-defaults.css`)
