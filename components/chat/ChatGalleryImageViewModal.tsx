@@ -377,7 +377,7 @@ export default function ChatGalleryImageViewModal({
             height={400}
           />
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img
             src={file.url}
             alt={file.filename}

@@ -253,7 +253,7 @@ export default function ImageModal({
       >
         {/* Using regular img instead of Next.js Image because authenticated API routes
             require session cookies, which Next.js image optimization doesn't forward */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        { }
         <img
           src={src}
           alt={filename}

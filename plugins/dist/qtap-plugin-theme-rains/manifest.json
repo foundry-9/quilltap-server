@@ -15,20 +15,37 @@
     "quilltapVersion": ">=2.2.0",
     "nodeVersion": ">=18.0.0"
   },
-  "capabilities": ["THEME"],
+  "capabilities": [
+    "THEME"
+  ],
   "category": "THEME",
   "typescript": true,
   "frontend": "NONE",
   "styling": "CSS_MODULES",
   "enabledByDefault": true,
   "status": "STABLE",
-  "keywords": ["theme", "rains", "brown", "amber", "warm", "dark", "earthy", "autumn"],
+  "keywords": [
+    "theme",
+    "rains",
+    "brown",
+    "amber",
+    "warm",
+    "dark",
+    "earthy",
+    "autumn"
+  ],
   "themeConfig": {
     "tokensPath": "tokens.json",
     "stylesPath": "styles.css",
     "supportsDarkMode": true,
     "previewImage": "preview.png",
-    "tags": ["rains", "brown", "warm", "earthy", "cozy"],
+    "tags": [
+      "rains",
+      "brown",
+      "warm",
+      "earthy",
+      "cozy"
+    ],
     "fonts": [
       {
         "family": "Fira Code",
@@ -44,7 +61,8 @@
         "style": "normal",
         "display": "swap"
       }
-    ]
+    ],
+    "useModule": true
   },
   "permissions": {
     "fileSystem": [],

@@ -373,10 +373,10 @@ export type ThemeFontDefinition = z.infer<typeof ThemeFontDefinitionSchema>;
  * (colors, typography, spacing) plus optional component CSS overrides.
  */
 export const ThemeConfigSchema = z.object({
-  /** Theme tokens file path (relative to plugin root) */
+  /** Theme tokens file path (relative to plugin root) - used for file-based loading */
   tokensPath: z.string().default('tokens.json').describe('Path to theme tokens JSON file'),
 
-  /** Optional component overrides CSS file path (relative to plugin root) */
+  /** Optional component overrides CSS file path (relative to plugin root) - used for file-based loading */
   stylesPath: z.string().optional().describe('Path to component override CSS file'),
 
   /** Whether this theme supports dark mode (default: true) */
@@ -391,8 +391,16 @@ export const ThemeConfigSchema = z.object({
   /** Theme tags for categorization */
   tags: z.array(z.string()).default([]).optional().describe('Tags for theme discovery'),
 
-  /** Custom fonts bundled with the theme */
+  /** Custom fonts bundled with the theme - used for file-based loading */
   fonts: z.array(ThemeFontDefinitionSchema).default([]).optional().describe('Custom fonts to load'),
+
+  /**
+   * Whether to use module-based loading (self-contained theme).
+   * When true (default), the registry will try to load the theme from the main entry point
+   * as a ThemePlugin export. If module loading fails, it falls back to file-based loading.
+   * Set to false to force file-based loading (tokens.json + styles.css).
+   */
+  useModule: z.boolean().default(true).optional().describe('Use module-based self-contained loading'),
 });
 
 export type ThemeConfig = z.infer<typeof ThemeConfigSchema>;

@@ -95,6 +95,20 @@ export type {
   InstalledPluginInfo,
 } from './plugins/manifest';
 
+export type {
+  // Theme plugin types
+  ColorPalette,
+  Typography,
+  Spacing,
+  Effects,
+  ThemeTokens,
+  FontDefinition,
+  EmbeddedFont,
+  ThemeMetadata,
+  ThemePlugin,
+  ThemePluginExport,
+} from './plugins/theme';
+
 // ============================================================================
 // Common Types
 // ============================================================================
@@ -124,4 +138,4 @@ export { createConsoleLogger, createNoopLogger } from './common/logger';
  * Version of the plugin-types package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_TYPES_VERSION = '1.0.3';
+export const PLUGIN_TYPES_VERSION = '1.1.0';

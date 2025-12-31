@@ -15,20 +15,36 @@
     "quilltapVersion": ">=2.2.0",
     "nodeVersion": ">=18.0.0"
   },
-  "capabilities": ["THEME"],
+  "capabilities": [
+    "THEME"
+  ],
   "category": "THEME",
   "typescript": true,
   "frontend": "NONE",
   "styling": "CSS_MODULES",
   "enabledByDefault": true,
   "status": "STABLE",
-  "keywords": ["theme", "earl-grey", "dark", "slate", "blue", "elegant", "sophisticated"],
+  "keywords": [
+    "theme",
+    "earl-grey",
+    "dark",
+    "slate",
+    "blue",
+    "elegant",
+    "sophisticated"
+  ],
   "themeConfig": {
     "tokensPath": "tokens.json",
     "stylesPath": "styles.css",
     "supportsDarkMode": true,
     "previewImage": "preview.png",
-    "tags": ["earl-grey", "dark", "slate", "blue", "elegant"],
+    "tags": [
+      "earl-grey",
+      "dark",
+      "slate",
+      "blue",
+      "elegant"
+    ],
     "fonts": [
       {
         "family": "Rethink Sans",
@@ -44,7 +60,8 @@
         "style": "normal",
         "display": "swap"
       }
-    ]
+    ],
+    "useModule": true
   },
   "permissions": {
     "fileSystem": [],

@@ -160,7 +160,7 @@ export function DescriptionSourceStep({
           {uploadedImageUrl ? (
             <div className="space-y-3">
               <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-border">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                { }
                 <img
                   src={uploadedImageUrl}
                   alt="Uploaded"
@@ -231,7 +231,7 @@ export function DescriptionSourceStep({
           {selectedGalleryImageUrl ? (
             <div className="space-y-3">
               <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-border">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                { }
                 <img
                   src={selectedGalleryImageUrl}
                   alt="Selected"

@@ -29,3 +29,16 @@ export type {
   PluginManifest,
   InstalledPluginInfo,
 } from './manifest';
+
+export type {
+  ColorPalette,
+  Typography,
+  Spacing,
+  Effects,
+  ThemeTokens,
+  FontDefinition,
+  EmbeddedFont,
+  ThemeMetadata,
+  ThemePlugin,
+  ThemePluginExport,
+} from './theme';

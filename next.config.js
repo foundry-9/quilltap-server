@@ -110,6 +110,18 @@ const nextConfig = {
       }
     }
 
+    // Suppress warnings about dynamic requires in plugin loading code
+    // These are intentional - plugins are loaded at runtime using require()
+    config.ignoreWarnings = config.ignoreWarnings || [];
+    config.ignoreWarnings.push({
+      module: /lib\/startup\/plugin-initialization\.ts/,
+      message: /Can't resolve/,
+    });
+    config.ignoreWarnings.push({
+      module: /lib\/themes\/theme-registry\.ts/,
+      message: /Can't resolve/,
+    });
+
     // Production optimizations
     if (process.env.NODE_ENV === 'production') {
       config.optimization = {

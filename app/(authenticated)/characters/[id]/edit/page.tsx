@@ -172,7 +172,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           {/* Avatar Display */}
           <div className="relative">
             {avatarSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
+               
               <img
                 key={`${character?.defaultImageId || 'no-image'}-${avatarRefreshKey}`}
                 src={avatarSrc}

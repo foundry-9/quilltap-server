@@ -27,7 +27,7 @@ export interface PluginLoggerWithChild extends PluginLogger {
  * Stored on globalThis to work across different npm package copies
  */
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __quilltap_logger_factory:
     | ((pluginName: string) => PluginLoggerWithChild)
     | undefined;

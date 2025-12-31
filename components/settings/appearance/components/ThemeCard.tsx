@@ -97,7 +97,7 @@ export function ThemeCard({ theme, isActive, onSelect, disabled }: ThemeCardProp
       {/* Theme Preview */}
       <div className="w-full h-20 rounded-md mb-3 overflow-hidden border border-border">
         {theme?.preview ? (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img
             src={theme.preview}
             alt={`${name} theme preview`}

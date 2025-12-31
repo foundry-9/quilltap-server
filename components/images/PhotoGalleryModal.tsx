@@ -265,7 +265,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
                   className="w-full h-full absolute inset-0 !p-2"
                 />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
+                 
                 <img
                   src={src}
                   alt={alt}

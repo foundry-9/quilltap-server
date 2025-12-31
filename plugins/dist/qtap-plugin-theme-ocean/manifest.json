@@ -15,20 +15,35 @@
     "quilltapVersion": ">=2.2.0",
     "nodeVersion": ">=18.0.0"
   },
-  "capabilities": ["THEME"],
+  "capabilities": [
+    "THEME"
+  ],
   "category": "THEME",
   "typescript": true,
   "frontend": "NONE",
   "styling": "CSS_MODULES",
   "enabledByDefault": true,
   "status": "STABLE",
-  "keywords": ["theme", "ocean", "blue", "teal", "calming", "dark", "light"],
+  "keywords": [
+    "theme",
+    "ocean",
+    "blue",
+    "teal",
+    "calming",
+    "dark",
+    "light"
+  ],
   "themeConfig": {
     "tokensPath": "tokens.json",
     "stylesPath": "styles.css",
     "supportsDarkMode": true,
     "previewImage": "preview.png",
-    "tags": ["ocean", "blue", "calming", "nature"],
+    "tags": [
+      "ocean",
+      "blue",
+      "calming",
+      "nature"
+    ],
     "fonts": [
       {
         "family": "DM Sans",
@@ -51,7 +66,8 @@
         "style": "normal",
         "display": "swap"
       }
-    ]
+    ],
+    "useModule": true
   },
   "permissions": {
     "fileSystem": [],

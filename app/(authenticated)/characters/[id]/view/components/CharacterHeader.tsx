@@ -43,7 +43,7 @@ export function CharacterHeader({
       <div className="flex flex-grow items-center gap-4">
         <div className="relative">
           {getAvatarSrc() ? (
-            // eslint-disable-next-line @next/next/no-img-element
+             
             <img
               key={`${character?.defaultImageId || 'no-image'}-${avatarRefreshKey}`}
               src={getAvatarSrc()!}

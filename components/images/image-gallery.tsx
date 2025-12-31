@@ -145,7 +145,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
                 className="w-full h-full absolute inset-0"
               />
             ) : (
-              // eslint-disable-next-line @next/next/no-img-element
+               
               <img
                 src={image.url || (image.filepath.startsWith('/') ? image.filepath : `/${image.filepath}`)}
                 alt={image.filename}

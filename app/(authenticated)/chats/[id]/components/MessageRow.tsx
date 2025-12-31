@@ -142,7 +142,7 @@ export function MessageRow({
             <div className="qt-chat-message-mobile-speaker">
               <div className="qt-chat-message-mobile-avatar">
                 {getAvatarSrc(messageAvatar) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+                   
                   <img
                     src={getAvatarSrc(messageAvatar)!}
                     alt={messageAvatar.name}
@@ -225,7 +225,7 @@ export function MessageRow({
                         title={entity.name}
                       >
                         {pAvatarSrc ? (
-                          // eslint-disable-next-line @next/next/no-img-element
+                           
                           <img src={pAvatarSrc} alt={entity.name} />
                         ) : (
                           <span className="qt-mobile-participant-avatar-initial">
@@ -347,7 +347,7 @@ export function MessageRow({
                       type="button"
                       className="qt-button qt-chat-attachment-button"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      { }
                       <img
                         src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
                         alt={attachment.filename}

@@ -423,6 +423,48 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     }
 
     // Initialize theme registry from enabled plugins with THEME capability
+    // First, load module-based themes (self-contained) via dynamic require
+    logger.debug('Loading module-based theme plugins');
+    const themePlugins = pluginRegistry.getEnabledByCapability('THEME');
+    for (const loadedPlugin of themePlugins) {
+      // Check if plugin uses module-based loading
+      const themeConfig = loadedPlugin.manifest.themeConfig;
+      if (themeConfig?.useModule === false) {
+        continue; // Skip - will be loaded file-based
+      }
+
+      try {
+        const mainFile = loadedPlugin.manifest.main || 'index.js';
+        const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+
+        if (!existsSync(modulePath)) {
+          continue; // No module file, will fall back to file-based
+        }
+
+        logger.debug('Loading theme plugin module', {
+          plugin: loadedPlugin.manifest.name,
+          path: modulePath,
+        });
+
+        // Use require() to load the compiled JavaScript module
+        const pluginModule = dynamicRequire(modulePath);
+        const themePlugin = pluginModule?.plugin || pluginModule?.default?.plugin;
+
+        if (themePlugin?.tokens) {
+          themeRegistry.registerThemeModule(loadedPlugin, themePlugin);
+          logger.debug('Theme module registered', {
+            plugin: loadedPlugin.manifest.name,
+          });
+        }
+      } catch (error) {
+        logger.debug('Failed to load theme as module, will try file-based', {
+          plugin: loadedPlugin.manifest.name,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Then initialize the registry (handles file-based themes and default theme)
     logger.debug('Initializing theme registry');
     await initializeThemeRegistry();
     const themeStats = themeRegistry.getStats();

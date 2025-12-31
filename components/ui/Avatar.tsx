@@ -148,7 +148,7 @@ export function Avatar({
   const avatarElement = (
     <div className={containerClasses} style={containerStyle}>
       {avatarSrc ? (
-        // eslint-disable-next-line @next/next/no-img-element
+         
         <img
           src={avatarSrc}
           alt={name}

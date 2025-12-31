@@ -4,6 +4,25 @@
 
 ### 2.6-dev
 
+- feat: Self-contained theme plugin architecture
+  - Theme plugins now support module-based loading (similar to provider plugins)
+  - Themes can embed tokens, CSS overrides, and fonts directly in the module export
+  - Added `ThemePlugin` interface to `@quilltap/plugin-types` (v1.1.0):
+    - `ThemeMetadata`, `ThemeTokens`, `ColorPalette`, `Typography`, `Spacing`, `Effects`
+    - `FontDefinition`, `EmbeddedFont` for self-contained font embedding
+  - Updated theme registry to try module-based loading first, with file-based fallback
+  - Added `useModule` field to `themeConfig` in plugin manifest schema
+  - Created `scripts/convert-theme-to-module.ts` for converting file-based themes
+  - Migrated all existing themes (ocean, earl-grey, rains) to self-contained format
+- feat: Storybook setup for theme plugin development
+  - Added Storybook 10.x with Next.js and Tailwind CSS v4 support
+  - Created theme decorator for switching between themes and light/dark modes
+  - Added foundation stories (Colors, Typography, Spacing)
+  - Added interactive component stories (Button, Input, Tabs)
+  - Added surface component stories (Card, Dialog)
+  - Added chat component stories (ChatMessage, Composer, Participant)
+  - Added content component stories (Badge, Avatar, EmptyState, Loading)
+  - Theme developers can use `npm run storybook` to preview effects
 - feat: Support scoped npm packages for plugin installation
   - Plugin search now finds both unscoped (`qtap-plugin-*`) and scoped (`@org/qtap-plugin-*`) packages
   - Install/uninstall APIs accept scoped package names
