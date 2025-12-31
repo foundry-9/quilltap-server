@@ -130,7 +130,6 @@ export async function getMongoClient(): Promise<MongoClient> {
 export async function getMongoDatabase(): Promise<Db> {
   // Return existing database if client is connected
   if (mongoDatabase && await isClientConnected(mongoClient)) {
-    logger.debug('Returning existing MongoDB database instance');
     return mongoDatabase;
   }
 

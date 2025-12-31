@@ -6,6 +6,7 @@ In preparation for projects and files, we need a new layout for the desktop UI.
 
 - No more dashboard
 - Left sidebar with tree views, always visible, contents might change with context but not yet
+  - Button to push to fold sidebar in and out
   - Projects (when they are done)
   - Files (when they are done)
   - Characters (favorites and top-conversation-participants at the top, ends with a link to Characters page)

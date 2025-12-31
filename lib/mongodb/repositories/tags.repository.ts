@@ -24,17 +24,11 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
   async findById(id: string): Promise<Tag | null> {
     const collection = await this.getCollection();
 
-    logger.debug('Finding tag by ID', {
-      tagId: id,
-    });
-
     try {
       const tag = await collection.findOne({ id });
 
       if (!tag) {
-        logger.debug('Tag not found', {
-          tagId: id,
-        });
+        logger.debug('Tag not found', { tagId: id });
         return null;
       }
 
@@ -49,10 +43,6 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
         });
         return null;
       }
-
-      logger.debug('Tag found by ID', {
-        tagId: id,
-      });
 
       return validationResult.data || null;
     } catch (error) {
@@ -70,14 +60,8 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
   async findAll(): Promise<Tag[]> {
     const collection = await this.getCollection();
 
-    logger.debug('Finding all tags');
-
     try {
       const tags = await collection.find({}).toArray();
-
-      logger.debug('Retrieved all tags', {
-        count: tags.length,
-      });
 
       // Map MongoDB documents to Tag objects, removing _id field
       const validatedTags: Tag[] = [];
@@ -108,17 +92,8 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
   async findByUserId(userId: string): Promise<Tag[]> {
     const collection = await this.getCollection();
 
-    logger.debug('Finding tags by user ID', {
-      userId,
-    });
-
     try {
       const tags = await collection.find({ userId }).toArray();
-
-      logger.debug('Retrieved tags by user ID', {
-        userId,
-        count: tags.length,
-      });
 
       // Map MongoDB documents to Tag objects, removing _id field
       const validatedTags: Tag[] = [];
@@ -152,12 +127,6 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
     const collection = await this.getCollection();
     const nameLower = name.toLowerCase();
 
-    logger.debug('Finding tag by name', {
-      userId,
-      name,
-      nameLower,
-    });
-
     try {
       const tag = await collection.findOne({
         userId,
@@ -165,11 +134,6 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
       });
 
       if (!tag) {
-        logger.debug('Tag not found by name', {
-          userId,
-          name,
-          nameLower,
-        });
         return null;
       }
 
@@ -185,11 +149,6 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
         });
         return null;
       }
-
-      logger.debug('Tag found by name', {
-        userId,
-        name,
-      });
 
       return validationResult.data || null;
     } catch (error) {
@@ -215,11 +174,6 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
     const id = options?.id || this.generateId();
     const now = this.getCurrentTimestamp();
     const createdAt = options?.createdAt || now;
-
-    logger.debug('Creating new tag', {
-      userId: data.userId,
-      name: data.name,
-    });
 
     try {
       // Auto-generate nameLower from name if not provided
@@ -264,10 +218,6 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
 
-    logger.debug('Updating tag', {
-      tagId: id,
-    });
-
     try {
       // Prepare update data
       const updateData: any = {
@@ -278,11 +228,6 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
       // If name is being updated, update nameLower as well
       if (data.name) {
         updateData.nameLower = data.name.toLowerCase();
-        logger.debug('Tag name being updated, recalculating nameLower', {
-          tagId: id,
-          newName: data.name,
-          newNameLower: updateData.nameLower,
-        });
       }
 
       // Remove id and createdAt to prevent accidental overwrites
@@ -333,10 +278,6 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
    */
   async delete(id: string): Promise<boolean> {
     const collection = await this.getCollection();
-
-    logger.debug('Deleting tag', {
-      tagId: id,
-    });
 
     try {
       const result = await collection.deleteOne({ id });

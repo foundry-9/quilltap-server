@@ -35,7 +35,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
 
   constructor() {
     super('chats', ChatMetadataBaseSchema);
-    logger.debug('Initialized MongoChatsRepository');
   }
 
   /**
@@ -45,9 +44,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
     try {
       const db = await (this as any).getCollection(); // Reuse parent's getCollection pattern
       const dbInstance = (await (this as any).getCollection()).db;
-      logger.debug('Retrieved chat messages collection', {
-        collection: this.messagesCollectionName
-      });
       return dbInstance.collection(this.messagesCollectionName);
     } catch (error) {
       logger.error('Failed to get chat messages collection', {
@@ -63,7 +59,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findById(id: string): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Finding chat by ID', { chatId: id });
       const collection = await (this as any).getCollection();
       const chat = await collection.findOne({ id });
 
@@ -72,9 +67,7 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         return null;
       }
 
-      const validated = this.validate(chat);
-      logger.debug('Chat found and validated', { chatId: id });
-      return validated;
+      return this.validate(chat);
     } catch (error) {
       logger.error('Failed to find chat by ID', {
         chatId: id,
@@ -89,13 +82,9 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findAll(): Promise<ChatMetadata[]> {
     try {
-      logger.debug('Finding all chats');
       const collection = await (this as any).getCollection();
       const chats = await collection.find({}).toArray();
-
-      const validated = chats.map((chat: unknown) => this.validate(chat));
-      logger.debug('Found all chats', { count: validated.length });
-      return validated;
+      return chats.map((chat: unknown) => this.validate(chat));
     } catch (error) {
       logger.error('Failed to find all chats', {
         error: error instanceof Error ? error.message : String(error),
@@ -109,13 +98,9 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findByUserId(userId: string): Promise<ChatMetadata[]> {
     try {
-      logger.debug('Finding chats by user ID', { userId });
       const collection = await (this as any).getCollection();
       const chats = await collection.find({ userId }).toArray();
-
-      const validated = chats.map((chat: unknown) => this.validate(chat));
-      logger.debug('Found chats for user', { userId, count: validated.length });
-      return validated;
+      return chats.map((chat: unknown) => this.validate(chat));
     } catch (error) {
       logger.error('Failed to find chats by user ID', {
         userId,
@@ -130,16 +115,12 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findByCharacterId(characterId: string): Promise<ChatMetadata[]> {
     try {
-      logger.debug('Finding chats by character ID', { characterId });
       const collection = await (this as any).getCollection();
       const chats = await collection.find({
         'participants.type': 'CHARACTER',
         'participants.characterId': characterId,
       }).toArray();
-
-      const validated = chats.map((chat: unknown) => this.validate(chat));
-      logger.debug('Found chats with character', { characterId, count: validated.length });
-      return validated;
+      return chats.map((chat: unknown) => this.validate(chat));
     } catch (error) {
       logger.error('Failed to find chats by character ID', {
         characterId,
@@ -154,16 +135,12 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findByPersonaId(personaId: string): Promise<ChatMetadata[]> {
     try {
-      logger.debug('Finding chats by persona ID', { personaId });
       const collection = await (this as any).getCollection();
       const chats = await collection.find({
         'participants.type': 'PERSONA',
         'participants.personaId': personaId,
       }).toArray();
-
-      const validated = chats.map((chat: unknown) => this.validate(chat));
-      logger.debug('Found chats with persona', { personaId, count: validated.length });
-      return validated;
+      return chats.map((chat: unknown) => this.validate(chat));
     } catch (error) {
       logger.error('Failed to find chats by persona ID', {
         personaId,
@@ -178,13 +155,9 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findByTag(tagId: string): Promise<ChatMetadata[]> {
     try {
-      logger.debug('Finding chats by tag', { tagId });
       const collection = await (this as any).getCollection();
       const chats = await collection.find({ tags: tagId }).toArray();
-
-      const validated = chats.map((chat: unknown) => this.validate(chat));
-      logger.debug('Found chats with tag', { tagId, count: validated.length });
-      return validated;
+      return chats.map((chat: unknown) => this.validate(chat));
     } catch (error) {
       logger.error('Failed to find chats by tag', {
         tagId,
@@ -204,7 +177,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
     options?: CreateOptions
   ): Promise<ChatMetadata> {
     try {
-      logger.debug('Creating new chat', { userId: data.userId, title: data.title });
 
       const id = options?.id || (this as any).generateId();
       const now = (this as any).getCurrentTimestamp();
@@ -256,7 +228,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async update(id: string, data: Partial<ChatMetadata>): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Updating chat', { chatId: id });
 
       const now = (this as any).getCurrentTimestamp();
       const collection = await (this as any).getCollection();
@@ -281,9 +252,7 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         return null;
       }
 
-      const validated = this.validate(result);
-      logger.debug('Chat updated successfully', { chatId: id });
-      return validated;
+      return this.validate(result);
     } catch (error) {
       logger.error('Failed to update chat', {
         chatId: id,
@@ -298,8 +267,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting chat', { chatId: id });
-
       const collection = await (this as any).getCollection();
       const result = await collection.deleteOne({ id } as Filter<ChatMetadata>);
 
@@ -313,7 +280,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         const messagesCollection = await (this as any).getCollection();
         const msgDb = messagesCollection.db;
         await msgDb.collection(this.messagesCollectionName).deleteOne({ chatId: id });
-        logger.debug('Chat messages deleted', { chatId: id });
       } catch (error) {
         logger.warn('Failed to delete chat messages', {
           chatId: id,
@@ -321,7 +287,7 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         });
       }
 
-      logger.info('Chat deleted successfully', { chatId: id });
+      logger.info('Chat deleted', { chatId: id });
       return true;
     } catch (error) {
       logger.error('Failed to delete chat', {
@@ -785,8 +751,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async getMessages(chatId: string): Promise<ChatEvent[]> {
     try {
-      logger.debug('Getting messages for chat', { chatId });
-
       const collection = await (this as any).getCollection();
       const msgDb = collection.db;
       const messagesCollection = msgDb.collection(this.messagesCollectionName);
@@ -794,14 +758,11 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
       const messagesDoc = await messagesCollection.findOne({ chatId });
 
       if (!messagesDoc) {
-        logger.debug('No messages document found', { chatId });
         return [];
       }
 
       const messages = (messagesDoc as any).messages || [];
-      const validated = messages.map((msg: any) => ChatEventSchema.parse(msg));
-      logger.debug('Retrieved messages for chat', { chatId, count: validated.length });
-      return validated;
+      return messages.map((msg: any) => ChatEventSchema.parse(msg));
     } catch (error) {
       logger.error('Failed to get messages for chat', {
         chatId,
@@ -964,10 +925,7 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async getMessageCount(chatId: string): Promise<number> {
     try {
-      logger.debug('Getting message count for chat', { chatId });
-
       const messages = await this.getMessages(chatId);
-      logger.debug('Retrieved message count', { chatId, count: messages.length });
       return messages.length;
     } catch (error) {
       logger.error('Failed to get message count for chat', {

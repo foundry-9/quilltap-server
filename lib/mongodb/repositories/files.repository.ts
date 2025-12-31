@@ -17,7 +17,6 @@ import { FileEntry, FileEntrySchema, FileCategory, FileSource } from '@/lib/sche
 export class FilesRepository extends MongoBaseRepository<FileEntry> {
   constructor() {
     super('files', FileEntrySchema);
-    logger.debug('FilesRepository initialized', { collection: this.collectionName });
   }
 
   /**
@@ -25,12 +24,10 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async findById(id: string): Promise<FileEntry | null> {
     try {
-      logger.debug('Finding file by ID', { fileId: id });
       const collection = await this.getCollection();
       const file = await collection.findOne({ id });
 
       if (file) {
-        logger.debug('File found', { fileId: id });
         return this.validate(file);
       }
 
@@ -47,11 +44,8 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async findAll(): Promise<FileEntry[]> {
     try {
-      logger.debug('Finding all files');
       const collection = await this.getCollection();
       const files = await collection.find({}).toArray();
-
-      logger.debug('Files retrieved', { count: files.length });
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding all files', { error: error instanceof Error ? error.message : String(error) });
@@ -64,11 +58,8 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async findBySha256(sha256: string): Promise<FileEntry[]> {
     try {
-      logger.debug('Finding files by SHA256', { sha256 });
       const collection = await this.getCollection();
       const files = await collection.find({ sha256 }).toArray();
-
-      logger.debug('Files found by SHA256', { sha256, count: files.length });
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding files by SHA256', { sha256, error: error instanceof Error ? error.message : String(error) });
@@ -81,11 +72,8 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async findByCategory(category: FileCategory): Promise<FileEntry[]> {
     try {
-      logger.debug('Finding files by category', { category });
       const collection = await this.getCollection();
       const files = await collection.find({ category }).toArray();
-
-      logger.debug('Files found by category', { category, count: files.length });
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding files by category', { category, error: error instanceof Error ? error.message : String(error) });
@@ -98,11 +86,8 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async findBySource(source: FileSource): Promise<FileEntry[]> {
     try {
-      logger.debug('Finding files by source', { source });
       const collection = await this.getCollection();
       const files = await collection.find({ source }).toArray();
-
-      logger.debug('Files found by source', { source, count: files.length });
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding files by source', { source, error: error instanceof Error ? error.message : String(error) });
@@ -115,11 +100,8 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async findByLinkedTo(entityId: string): Promise<FileEntry[]> {
     try {
-      logger.debug('Finding files linked to entity', { entityId });
       const collection = await this.getCollection();
       const files = await collection.find({ linkedTo: entityId }).toArray();
-
-      logger.debug('Files found linked to entity', { entityId, count: files.length });
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding files linked to entity', { entityId, error: error instanceof Error ? error.message : String(error) });
@@ -132,11 +114,8 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async findByTag(tagId: string): Promise<FileEntry[]> {
     try {
-      logger.debug('Finding files by tag', { tagId });
       const collection = await this.getCollection();
       const files = await collection.find({ tags: tagId }).toArray();
-
-      logger.debug('Files found by tag', { tagId, count: files.length });
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding files by tag', { tagId, error: error instanceof Error ? error.message : String(error) });
@@ -149,11 +128,8 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async findByUserId(userId: string): Promise<FileEntry[]> {
     try {
-      logger.debug('Finding files by user ID', { userId });
       const collection = await this.getCollection();
       const files = await collection.find({ userId }).toArray();
-
-      logger.debug('Files found for user', { userId, count: files.length });
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding files by user ID', { userId, error: error instanceof Error ? error.message : String(error) });
@@ -171,7 +147,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
     options?: CreateOptions
   ): Promise<FileEntry> {
     try {
-      logger.debug('Creating new file', { userId: data.userId, filename: data.originalFilename });
 
       const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
@@ -206,7 +181,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async update(id: string, data: Partial<Omit<FileEntry, 'id' | 'createdAt'>>): Promise<FileEntry | null> {
     try {
-      logger.debug('Updating file', { fileId: id });
 
       const now = this.getCurrentTimestamp();
       const updateData = {
@@ -241,7 +215,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting file', { fileId: id });
 
       const collection = await this.getCollection();
       const result = await collection.deleteOne({ id });
@@ -264,7 +237,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async addLink(fileId: string, entityId: string): Promise<FileEntry | null> {
     try {
-      logger.debug('Adding link to file', { fileId, entityId });
 
       const collection = await this.getCollection();
       const result = await collection.findOneAndUpdate(
@@ -294,7 +266,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async removeLink(fileId: string, entityId: string): Promise<FileEntry | null> {
     try {
-      logger.debug('Removing link from file', { fileId, entityId });
 
       const collection = await this.getCollection();
       const result = await collection.findOneAndUpdate(
@@ -324,7 +295,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async addTag(fileId: string, tagId: string): Promise<FileEntry | null> {
     try {
-      logger.debug('Adding tag to file', { fileId, tagId });
 
       const collection = await this.getCollection();
       const result = await collection.findOneAndUpdate(
@@ -354,7 +324,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async removeTag(fileId: string, tagId: string): Promise<FileEntry | null> {
     try {
-      logger.debug('Removing tag from file', { fileId, tagId });
 
       const collection = await this.getCollection();
       const result = await collection.findOneAndUpdate(
@@ -384,7 +353,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
    */
   async updateS3Reference(fileId: string, s3Key: string, s3Bucket: string): Promise<FileEntry | null> {
     try {
-      logger.debug('Updating S3 reference for file', { fileId, s3Key, s3Bucket });
 
       const collection = await this.getCollection();
       const result = await collection.findOneAndUpdate(

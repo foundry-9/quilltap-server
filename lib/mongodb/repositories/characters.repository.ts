@@ -12,7 +12,6 @@ import { logger } from '@/lib/logger';
 export class CharactersRepository extends MongoBaseRepository<Character> {
   constructor() {
     super('characters', CharacterSchema);
-    logger.debug('CharactersRepository initialized');
   }
 
   /**
@@ -21,7 +20,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character | null> The character if found, null otherwise
    */
   async findById(id: string): Promise<Character | null> {
-    logger.debug('Finding character by ID', { characterId: id });
     try {
       const collection = await this.getCollection();
       const result = await collection.findOne({ id });
@@ -31,9 +29,7 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
         return null;
       }
 
-      const validated = this.validate(result);
-      logger.debug('Character found and validated', { characterId: id });
-      return validated;
+      return this.validate(result);
     } catch (error) {
       logger.error('Error finding character by ID', {
         characterId: id,
@@ -48,12 +44,11 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character[]> Array of all characters
    */
   async findAll(): Promise<Character[]> {
-    logger.debug('Finding all characters');
     try {
       const collection = await this.getCollection();
       const results = await collection.find({}).toArray();
 
-      const characters = results
+      return results
         .map((doc) => {
           const validation = this.validateSafe(doc);
           if (validation.success && validation.data) {
@@ -62,9 +57,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
           return null;
         })
         .filter((char): char is Character => char !== null);
-
-      logger.debug('Retrieved all characters', { count: characters.length });
-      return characters;
     } catch (error) {
       logger.error('Error finding all characters', {
         error: error instanceof Error ? error.message : String(error),
@@ -79,12 +71,11 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character[]> Array of characters belonging to the user
    */
   async findByUserId(userId: string): Promise<Character[]> {
-    logger.debug('Finding characters by user ID', { userId });
     try {
       const collection = await this.getCollection();
       const results = await collection.find({ userId }).toArray();
 
-      const characters = results
+      return results
         .map((doc) => {
           const validation = this.validateSafe(doc);
           if (validation.success && validation.data) {
@@ -93,9 +84,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
           return null;
         })
         .filter((char): char is Character => char !== null);
-
-      logger.debug('Found characters for user', { userId, count: characters.length });
-      return characters;
     } catch (error) {
       logger.error('Error finding characters by user ID', {
         userId,
@@ -111,7 +99,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character[]> Array of user-controlled characters
    */
   async findUserControlled(userId: string): Promise<Character[]> {
-    logger.debug('Finding user-controlled characters', { userId });
     try {
       const collection = await this.getCollection();
       const results = await collection.find({
@@ -119,7 +106,7 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
         controlledBy: 'user',
       }).toArray();
 
-      const characters = results
+      return results
         .map((doc) => {
           const validation = this.validateSafe(doc);
           if (validation.success && validation.data) {
@@ -128,9 +115,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
           return null;
         })
         .filter((char): char is Character => char !== null);
-
-      logger.debug('Found user-controlled characters', { userId, count: characters.length });
-      return characters;
     } catch (error) {
       logger.error('Error finding user-controlled characters', {
         userId,
@@ -146,7 +130,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character[]> Array of LLM-controlled characters
    */
   async findLLMControlled(userId: string): Promise<Character[]> {
-    logger.debug('Finding LLM-controlled characters', { userId });
     try {
       const collection = await this.getCollection();
       // Include characters with no controlledBy field (defaults to llm)
@@ -158,7 +141,7 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
         ],
       }).toArray();
 
-      const characters = results
+      return results
         .map((doc) => {
           const validation = this.validateSafe(doc);
           if (validation.success && validation.data) {
@@ -167,9 +150,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
           return null;
         })
         .filter((char): char is Character => char !== null);
-
-      logger.debug('Found LLM-controlled characters', { userId, count: characters.length });
-      return characters;
     } catch (error) {
       logger.error('Error finding LLM-controlled characters', {
         userId,
@@ -185,12 +165,11 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character[]> Array of characters with the tag
    */
   async findByTag(tagId: string): Promise<Character[]> {
-    logger.debug('Finding characters by tag', { tagId });
     try {
       const collection = await this.getCollection();
       const results = await collection.find({ tags: { $in: [tagId] } }).toArray();
 
-      const characters = results
+      return results
         .map((doc) => {
           const validation = this.validateSafe(doc);
           if (validation.success && validation.data) {
@@ -199,9 +178,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
           return null;
         })
         .filter((char): char is Character => char !== null);
-
-      logger.debug('Found characters with tag', { tagId, count: characters.length });
-      return characters;
     } catch (error) {
       logger.error('Error finding characters by tag', {
         tagId,
@@ -221,7 +197,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
     data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<Character> {
-    logger.debug('Creating new character', { userId: data.userId, name: data.name });
     try {
       const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
@@ -239,7 +214,7 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       const collection = await this.getCollection();
       await collection.insertOne(validated as any);
 
-      logger.debug('Character created successfully', { characterId: id, userId: data.userId });
+      logger.info('Character created', { characterId: id, userId: data.userId, name: data.name });
       return validated;
     } catch (error) {
       logger.error('Error creating character', {
@@ -258,7 +233,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
   async update(id: string, data: Partial<Character>): Promise<Character | null> {
-    logger.debug('Updating character', { characterId: id });
     try {
       const existing = await this.findById(id);
       if (!existing) {
@@ -280,7 +254,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
 
       await collection.updateOne({ id }, { $set: validated as any });
 
-      logger.debug('Character updated successfully', { characterId: id });
       return validated;
     } catch (error) {
       logger.error('Error updating character', {
@@ -297,7 +270,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<boolean> True if character was deleted, false if not found
    */
   async delete(id: string): Promise<boolean> {
-    logger.debug('Deleting character', { characterId: id });
     try {
       const collection = await this.getCollection();
       const result = await collection.deleteOne({ id });
@@ -307,7 +279,7 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
         return false;
       }
 
-      logger.debug('Character deleted successfully', { characterId: id });
+      logger.info('Character deleted', { characterId: id });
       return true;
     } catch (error) {
       logger.error('Error deleting character', {

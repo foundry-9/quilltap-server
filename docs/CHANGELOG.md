@@ -4,6 +4,12 @@
 
 ### 2.6-dev
 
+- refactor: Reduce verbose debug logging in MongoDB repositories
+  - Removed ~2,900 debug log entries per typical session
+  - Eliminated cache hit logs ("Returning existing MongoDB database instance")
+  - Removed successful validation logs (only failures are useful)
+  - Removed entry/exit log pairs for lookup operations
+  - Kept "not found" logs for debugging missing data issues
 - feat: Memory cascade on message changes
   - Memories auto-extracted from messages are now tracked with provenance links
   - When deleting a message, user is prompted to handle associated memories (delete/keep/regenerate)

@@ -39,7 +39,6 @@ export abstract class MongoBaseRepository<T> {
   protected async getCollection(): Promise<Collection> {
     try {
       const db = await getMongoDatabase();
-      logger.debug('Retrieved MongoDB collection', { collection: this.collectionName });
       return db.collection(this.collectionName);
     } catch (error) {
       logger.error('Failed to get MongoDB collection', {
@@ -56,7 +55,6 @@ export abstract class MongoBaseRepository<T> {
   protected validate(data: unknown): T {
     try {
       const validated = this.schema.parse(data) as T;
-      logger.debug('Data validation successful', { collection: this.collectionName });
       return validated;
     } catch (error) {
       logger.error('Data validation failed', {
@@ -87,7 +85,6 @@ export abstract class MongoBaseRepository<T> {
    * Generate UUID v4
    */
   protected generateId(): string {
-    logger.debug('Generating UUID v4', { collection: this.collectionName });
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
       const r = (Math.random() * 16) | 0;
       const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -99,9 +96,7 @@ export abstract class MongoBaseRepository<T> {
    * Get current ISO-8601 timestamp
    */
   protected getCurrentTimestamp(): string {
-    const timestamp = new Date().toISOString();
-    logger.debug('Generated timestamp', { collection: this.collectionName, timestamp });
-    return timestamp;
+    return new Date().toISOString();
   }
 
   /**

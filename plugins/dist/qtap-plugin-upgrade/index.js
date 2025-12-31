@@ -32570,7 +32570,6 @@ async function getMongoClient() {
 }
 async function getMongoDatabase() {
   if (mongoDatabase && await isClientConnected(mongoClient)) {
-    logger.debug("Returning existing MongoDB database instance");
     return mongoDatabase;
   }
   mongoDatabase = null;
