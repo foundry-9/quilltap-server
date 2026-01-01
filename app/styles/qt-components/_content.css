@@ -9,6 +9,20 @@
 
 @layer components {
   /* ==========================================================================
+     PAGE CONTAINER
+     ========================================================================== */
+
+  /**
+   * Page container that respects content width toggle
+   * Replaces manual container + max-w-* classes in page components
+   */
+  .qt-page-container {
+    @apply w-full mx-auto px-4 py-8;
+    max-width: var(--qt-page-max-width);
+    transition: max-width 200ms ease-out;
+  }
+
+  /* ==========================================================================
      BADGES - Shared base styles
      ========================================================================== */
 

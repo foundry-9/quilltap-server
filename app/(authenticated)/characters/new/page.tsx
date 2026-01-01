@@ -148,7 +148,7 @@ export default function NewCharacterPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-[800px]">
+    <div className="qt-page-container">
       <div className="mb-8">
         <Link
           href="/characters"

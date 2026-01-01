@@ -228,7 +228,7 @@ export default function ChatsPage() {
   }
 
   return (
-    <div className="chat-page container mx-auto max-w-5xl px-4 py-8 text-foreground">
+    <div className="chat-page qt-page-container text-foreground">
       <style>{`
         @keyframes arrowFlash {
           0% {

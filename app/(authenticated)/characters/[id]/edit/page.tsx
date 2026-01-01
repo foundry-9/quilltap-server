@@ -159,7 +159,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   const avatarSrc = getAvatarSrc()
 
   return (
-    <div className="character-edit container mx-auto max-w-5xl px-4 py-8 text-foreground">
+    <div className="character-edit qt-page-container text-foreground">
       {/* Header Section */}
       <div className="mb-8">
         <button

@@ -159,7 +159,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-5xl">
+    <div className="qt-page-container">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Settings</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-2">Manage your API keys, connection profiles, and plugins</p>

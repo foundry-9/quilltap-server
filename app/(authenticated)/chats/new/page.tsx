@@ -367,8 +367,8 @@ export default function NewChatPage() {
   }
 
   return (
-    <div className="min-h-screen px-4 py-8 text-foreground">
-      <div className="mx-auto max-w-6xl">
+    <div className="qt-page-container min-h-screen text-foreground">
+      <div>
         <Link href="/chats" className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80">
           ← Back to Chats
         </Link>

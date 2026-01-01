@@ -222,6 +222,9 @@
 
   --qt-chat-message-row-max-width: 800px;
 
+  /* Page container width - respects content width toggle */
+  --qt-page-max-width: 64rem;
+
   --qt-chat-sidebar-width: 20rem;
   --qt-chat-sidebar-bg: var(--color-card);
   --qt-chat-sidebar-border: var(--color-border);

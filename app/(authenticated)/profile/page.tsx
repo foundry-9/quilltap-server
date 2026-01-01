@@ -87,7 +87,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto max-w-3xl px-4 py-8">
+      <div className="qt-page-container">
         <div className="flex items-center justify-center py-12">
           <div className="qt-text-muted">Loading profile...</div>
         </div>
@@ -97,7 +97,7 @@ export default function ProfilePage() {
 
   if (error || !profile) {
     return (
-      <div className="container mx-auto max-w-3xl px-4 py-8">
+      <div className="qt-page-container">
         <div className="qt-alert-error">
           {error || 'Failed to load profile'}
         </div>
@@ -109,7 +109,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-8">
+    <div className="qt-page-container">
       {/* Header */}
       <div className="mb-8">
         <Link

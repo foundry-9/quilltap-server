@@ -9,7 +9,7 @@ export default function AboutPage() {
   const copyrightYears = currentYear > 2025 ? `2025-${currentYear}` : '2025'
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-5xl">
+    <div className="qt-page-container">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold">About <BrandName /></h1>

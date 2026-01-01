@@ -4,6 +4,12 @@
 
 ### 2.6-dev
 
+- feat: Full-width toggle affects all pages
+  - Added --qt-page-max-width CSS variable (default: 64rem)
+  - ContentWidthProvider now sets page width alongside chat message width
+  - New .qt-page-container CSS class with smooth width transition
+  - Updated all authenticated pages to use qt-page-container
+  - Pages expand to full width when toggle is on (viewport >= 1000px)
 - feat: Sidebar message count badges
   - Display message count as a badge (flush right) for each chat in the sidebar
   - Shows "999+" for chats with over 999 messages

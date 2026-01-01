@@ -27,6 +27,8 @@ const STORAGE_KEY = 'quilltap.contentWidth.isWide'
 const WIDE_VIEWPORT_MIN = 1000
 const NARROW_WIDTH = '800px'
 const WIDE_WIDTH = '100%'
+const NARROW_PAGE_WIDTH = '64rem'
+const WIDE_PAGE_WIDTH = '100%'
 
 const ContentWidthContext = createContext<ContentWidthContextValue | null>(null)
 
@@ -98,19 +100,22 @@ export function ContentWidthProvider({ children }: { children: React.ReactNode }
     return () => mediaQuery.removeEventListener('change', updateCanApply)
   }, [])
 
-  // Apply CSS variable based on preference and viewport
+  // Apply CSS variables based on preference and viewport
   useEffect(() => {
     if (typeof window === 'undefined') return
     const root = document.documentElement
 
     const shouldApplyWide = isWide && canApplyWide
-    const width = shouldApplyWide ? WIDE_WIDTH : NARROW_WIDTH
+    const chatWidth = shouldApplyWide ? WIDE_WIDTH : NARROW_WIDTH
+    const pageWidth = shouldApplyWide ? WIDE_PAGE_WIDTH : NARROW_PAGE_WIDTH
 
-    root.style.setProperty('--qt-chat-message-row-max-width', width)
-    clientLogger.debug('Applied content width CSS variable', {
+    root.style.setProperty('--qt-chat-message-row-max-width', chatWidth)
+    root.style.setProperty('--qt-page-max-width', pageWidth)
+    clientLogger.debug('Applied content width CSS variables', {
       isWide,
       canApplyWide,
-      appliedWidth: width
+      appliedChatWidth: chatWidth,
+      appliedPageWidth: pageWidth
     })
   }, [isWide, canApplyWide])
 

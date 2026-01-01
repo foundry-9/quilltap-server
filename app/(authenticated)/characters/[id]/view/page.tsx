@@ -285,8 +285,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   }
 
   return (
-    <div className="character-view min-h-screen px-4 py-8 text-foreground">
-      <div className="mx-auto max-w-5xl">
+    <div className="character-view qt-page-container min-h-screen text-foreground">
+      <div>
         <Link
           href={character?.npc ? '/settings?tab=npcs' : '/characters'}
           className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"

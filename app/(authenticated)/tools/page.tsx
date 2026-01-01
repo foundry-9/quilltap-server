@@ -10,7 +10,7 @@ import { BrandName } from '@/components/ui/brand-name'
 
 export default function ToolsPage() {
   return (
-    <div className="container mx-auto px-4 py-8 max-w-5xl">
+    <div className="qt-page-container">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Tools</h1>
