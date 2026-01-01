@@ -4,6 +4,9 @@
 
 ### 2.6-dev
 
+- feat: Add About link to profile menu in sidebar
+  - Added InfoIcon component for the About menu item
+  - Links to /about page for version info, tech stack, and project details
 - fix: Chat page content being cut off by page toolbar
   - Changed main element to flex column layout so children size correctly
   - Updated DevConsoleLayout to use flex-1 min-h-0 instead of h-full

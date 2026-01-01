@@ -73,6 +73,27 @@ function DevConsoleIcon({ className }: { className?: string }) {
 }
 
 /**
+ * Info/About icon
+ */
+function InfoIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4" />
+      <path d="M12 8h.01" />
+    </svg>
+  )
+}
+
+/**
  * Chevron up icon
  */
 function ChevronUpIcon({ className }: { className?: string }) {
@@ -135,6 +156,13 @@ export function ProfileMenu() {
     setIsOpen(false)
     if (isMobile) closeMobile()
     router.push('/profile')
+  }
+
+  const handleAboutClick = () => {
+    clientLogger.debug('Navigating to about from sidebar')
+    setIsOpen(false)
+    if (isMobile) closeMobile()
+    router.push('/about')
   }
 
   const handleDevConsoleClick = () => {
@@ -212,6 +240,16 @@ export function ProfileMenu() {
             >
               <ProfileIcon className="w-4 h-4" />
               Profile
+            </button>
+
+            {/* About link */}
+            <button
+              type="button"
+              onClick={handleAboutClick}
+              className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors"
+            >
+              <InfoIcon className="w-4 h-4" />
+              About
             </button>
 
             {/* DevConsole toggle */}
