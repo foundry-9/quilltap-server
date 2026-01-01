@@ -38,6 +38,10 @@
   --qt-button-destructive-fg: var(--color-destructive-foreground);
   --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 90%, black);
 
+  --qt-button-success-bg: var(--color-success);
+  --qt-button-success-fg: hsl(0 0% 10%); /* Dark text for contrast on bright green */
+  --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
+
   /* Card variables */
   --qt-card-radius: var(--radius-lg);
   --qt-card-padding: 1.5rem;
@@ -162,6 +166,26 @@
 
 .qt-button-destructive:hover:not(:disabled) {
   background-color: var(--qt-button-destructive-hover-bg);
+}
+
+.qt-button-success {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition: all 150ms;
+  cursor: pointer;
+  background-color: var(--qt-button-success-bg);
+  color: var(--qt-button-success-fg);
+}
+
+.qt-button-success:hover:not(:disabled) {
+  background-color: var(--qt-button-success-hover-bg);
 }
 
 .qt-button-sm {

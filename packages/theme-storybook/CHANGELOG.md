@@ -2,6 +2,13 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.3] - 2026-01-01
+
+### Added
+- Success button variant (`qt-button-success`) as standalone class with full styling
+- CSS variables: `--qt-button-success-bg`, `--qt-button-success-fg`, `--qt-button-success-hover-bg`
+- Dark foreground text for proper contrast on bright green background
+
 ## [1.0.2] - 2025-12-31
 
 ### Changed

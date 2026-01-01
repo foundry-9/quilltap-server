@@ -38,6 +38,10 @@
   --qt-button-destructive-fg: var(--color-destructive-foreground);
   --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 90%, black);
 
+  --qt-button-success-bg: var(--color-success);
+  --qt-button-success-fg: hsl(0 0% 10%); /* Dark text for contrast on bright green */
+  --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
+
   /* ==========================================================================
      STATUS TOKENS
      ========================================================================== */

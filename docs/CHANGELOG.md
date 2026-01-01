@@ -4,6 +4,24 @@
 
 ### 2.6-dev
 
+- feat: Improved favorite character cards on home page
+  - Character titles now wrap fully instead of truncating
+  - Added "Chat" button with icon under each favorite character
+  - Chat buttons flush at bottom of cards regardless of title length
+  - Cards centered on page using flexbox layout with fixed widths
+  - QuickChatDialog component for starting chats directly from home page
+  - useQuickChat hook for managing chat creation state
+  - Dialog uses user-controlled characters ("Play As") instead of personas
+  - Fetches default partner from character settings
+- feat: Add qt-button-success class to theme system
+  - Standalone button class with full styling (no base class required)
+  - Includes icon support, proper padding, rounded corners, shadow
+  - @quilltap/theme-storybook 1.0.3: Added success button variant
+- fix: Improve success button contrast
+  - Changed --theme-success-foreground to dark text (hsl 0 0% 10%)
+  - Applies to both light and dark modes for proper contrast on bright green
+- chore: Move Next.js dev indicator to bottom-right
+  - Added devIndicators.position config in next.config.js
 - feat: New UI layout with left sidebar navigation
   - Replaced top navbar with persistent left sidebar
   - Sidebar includes: Projects (coming soon), Files (coming soon), Characters, Chats sections

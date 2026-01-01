@@ -3,6 +3,11 @@ const nextConfig = {
   // Standalone output for Docker deployments
   output: 'standalone',
 
+  // Dev indicator position (bottom-right instead of default bottom-left)
+  devIndicators: {
+    position: 'bottom-right',
+  },
+
   // External packages that the main app needs at runtime
   // NOTE: LLM provider SDKs are now bundled INTO plugin output files, so they
   // don't need to be listed here. Only packages used directly by the main app
