@@ -44,21 +44,21 @@ test.describe('Chat Flow Integration Tests', () => {
     await testUser.createAndLogin(page)
   })
 
-  test('should display dashboard when authenticated', async ({ page }) => {
+  test('should display home page when authenticated', async ({ page }) => {
     await testUser.login(page)
-    await page.goto('/dashboard')
+    await page.goto('/')
     await page.waitForLoadState('domcontentloaded')
 
-    // Verify we're on the dashboard, not redirected to signin
+    // Verify we're on the home page, not redirected to signin
     expect(page.url()).not.toContain('/auth/signin')
-    expect(page.url()).toContain('/dashboard')
+    expect(page.url().endsWith('/') || page.url().endsWith(':3000')).toBe(true)
   })
 
   test('should create a character', async ({ page }) => {
     await testUser.login(page)
 
     // Navigate to characters page
-    await page.goto('/dashboard')
+    await page.goto('/')
     await page.waitForLoadState('domcontentloaded')
 
     // Click the "+" button to create a new character

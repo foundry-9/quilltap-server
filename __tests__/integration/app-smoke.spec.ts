@@ -80,9 +80,9 @@ test.describe('App Smoke Tests', () => {
     testChatId = await testUser.createChat(page, testCharacterId)
   })
 
-  test('dashboard shows core sections', async ({ page }) => {
+  test('home page shows core sections', async ({ page }) => {
     await testUser.login(page)
-    await page.goto('/dashboard')
+    await page.goto('/')
     await expect(page.getByRole('heading', { name: 'Recent Chats' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Characters', exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Chats', exact: true })).toBeVisible()

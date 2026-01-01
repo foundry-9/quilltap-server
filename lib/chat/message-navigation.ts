@@ -83,11 +83,11 @@ export function scrollToMessage(
 
   // Add highlight effect if requested
   if (highlight) {
-    messageElement.classList.add('memory-source-highlight')
+    messageElement.classList.add('qt-memory-source-highlight')
 
     // Remove highlight after duration
     setTimeout(() => {
-      messageElement.classList.remove('memory-source-highlight')
+      messageElement.classList.remove('qt-memory-source-highlight')
     }, highlightDuration)
   }
 

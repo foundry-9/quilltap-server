@@ -4,6 +4,14 @@
 
 ### 2.6-dev
 
+- refactor: Deprecate dashboard route, migrate to qt-* class naming
+  - All /dashboard links now point to / (home page)
+  - Dashboard route redirects to home for backwards compatibility
+  - Renamed memory-source-highlight to qt-memory-source-highlight
+  - Removed unused dashboard-cards.tsx and recent-chats.tsx components
+  - Removed dashboard-card CSS class from _surfaces.css
+  - Nav menu item changed from "Dashboard" to "Home"
+  - OAuth callbacks default to / instead of /dashboard
 - feat: Remove header, move brand logo to sidebar
   - Removed AppHeader from layout, replaced with PageToolbar in main content
   - PageToolbar contains centered search bar and full-width toggle

@@ -19,7 +19,7 @@ import { useNavbarCollapse } from "@/hooks/useNavbarCollapse";
  * The migration plugin converts existing personas to characters.
  */
 const MENU_ITEMS: NavMenuItem[] = [
-  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/', label: 'Home' },
   { href: '/characters', label: 'Characters' },
   // Personas removed - see characters_not_personas.md feature spec
   { href: '/chats', label: 'Chats' },

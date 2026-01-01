@@ -1280,12 +1280,12 @@
   /**
    * Highlight animation for message when navigated from memory source link
    */
-  .memory-source-highlight {
+  .qt-memory-source-highlight {
     animation: memory-highlight-pulse 1s ease-in-out 2;
     position: relative;
   }
 
-  .memory-source-highlight::after {
+  .qt-memory-source-highlight::after {
     content: '';
     position: absolute;
     inset: -4px;

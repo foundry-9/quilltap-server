@@ -294,7 +294,7 @@ describe('OAuth Callback Route', () => {
 
       mockRetrieveOAuthState.mockReturnValue({
         codeVerifier: 'verifier-123',
-        callbackUrl: '/dashboard',
+        callbackUrl: '/',
       });
       mockGetArcticProvider.mockReturnValue(null);
 
@@ -320,7 +320,7 @@ describe('OAuth Callback Route', () => {
 
       mockRetrieveOAuthState.mockReturnValue({
         codeVerifier: 'verifier-123',
-        callbackUrl: '/dashboard',
+        callbackUrl: '/',
       });
 
       const mockProviderInstance = {
@@ -358,7 +358,7 @@ describe('OAuth Callback Route', () => {
 
       mockRetrieveOAuthState.mockReturnValue({
         codeVerifier: 'verifier-123',
-        callbackUrl: '/dashboard',
+        callbackUrl: '/',
       });
 
       const mockTokens = {
@@ -404,7 +404,7 @@ describe('OAuth Callback Route', () => {
 
       mockRetrieveOAuthState.mockReturnValue({
         codeVerifier: 'verifier-123',
-        callbackUrl: '/dashboard',
+        callbackUrl: '/',
       });
 
       const mockTokens = {
@@ -638,7 +638,7 @@ describe('OAuth Callback Route', () => {
     it('should catch and log unexpected errors', async () => {
       mockRetrieveOAuthState.mockReturnValue({
         codeVerifier: 'verifier-123',
-        callbackUrl: '/dashboard',
+        callbackUrl: '/',
       });
 
       const mockProviderInstance = {
@@ -700,7 +700,7 @@ describe('OAuth Callback Route', () => {
     it('should handle user without email (use username as fallback)', async () => {
       mockRetrieveOAuthState.mockReturnValue({
         codeVerifier: 'verifier-123',
-        callbackUrl: '/dashboard',
+        callbackUrl: '/',
       });
 
       const mockTokens = {
@@ -764,7 +764,7 @@ describe('OAuth Callback Route', () => {
     it('should work with different OAuth providers', async () => {
       mockRetrieveOAuthState.mockReturnValue({
         codeVerifier: 'verifier-123',
-        callbackUrl: '/dashboard',
+        callbackUrl: '/',
       });
 
       const mockTokens = {

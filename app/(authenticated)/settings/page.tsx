@@ -173,10 +173,10 @@ export default function SettingsPage() {
       {/* Back Link */}
       <div className="mt-8">
         <Link
-          href="/dashboard"
+          href="/"
           className="text-blue-600 dark:text-blue-400 hover:underline"
         >
-          ← Back to Dashboard
+          ← Back to Home
         </Link>
       </div>
     </div>

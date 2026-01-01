@@ -87,8 +87,8 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
       const character = await repos.characters.update(id, validatedData)
 
-      // Revalidate the dashboard to reflect character changes
-      revalidatePath('/dashboard')
+      // Revalidate the home page to reflect character changes
+      revalidatePath('/')
 
       return NextResponse.json({ character })
     } catch (error) {

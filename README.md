@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.6.0--dev.66-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.6.0--dev.68-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -563,7 +563,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./features/comfy_ui_local_image.md))
 - [ ] Arcadia "art deco" theme to show off what the theme system can really do
 - [ ] Fully mobile-capable media breakpoints
-  - [X] Dashboard (v2.4)
+  - [ ] Home
   - [ ] Chat (partially done in v2.4)
   - [ ] Characters
   - [ ] Settings

@@ -101,8 +101,8 @@ export default function ProfilePage() {
         <div className="qt-alert-error">
           {error || 'Failed to load profile'}
         </div>
-        <Link href="/dashboard" className="qt-button qt-button-secondary mt-4 inline-block">
-          Return to Dashboard
+        <Link href="/" className="qt-button qt-button-secondary mt-4 inline-block">
+          Return to Home
         </Link>
       </div>
     )
@@ -113,10 +113,10 @@ export default function ProfilePage() {
       {/* Header */}
       <div className="mb-8">
         <Link
-          href="/dashboard"
+          href="/"
           className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
         >
-          ← Back to Dashboard
+          ← Back to Home
         </Link>
         <h1 className="text-3xl font-bold">Profile</h1>
         <p className="qt-text-muted mt-2">

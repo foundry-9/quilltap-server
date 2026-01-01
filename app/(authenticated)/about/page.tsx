@@ -194,10 +194,10 @@ export default function AboutPage() {
       {/* Back Link */}
       <div className="mt-8">
         <Link
-          href="/dashboard"
+          href="/"
           className="text-blue-600 dark:text-blue-400 hover:underline"
         >
-          &larr; Back to Dashboard
+          &larr; Back to Home
         </Link>
       </div>
     </div>

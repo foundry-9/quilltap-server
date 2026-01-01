@@ -53,7 +53,7 @@ export function NavLogoMenu({ isCollapsed, menuItems }: NavLogoMenuProps) {
   // When not collapsed, just render a simple link to dashboard
   if (!isCollapsed) {
     return (
-      <Link href="/dashboard" className="text-foreground">
+      <Link href="/" className="text-foreground">
         <BrandLogo size="md" />
       </Link>
     );

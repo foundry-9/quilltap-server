@@ -88,7 +88,7 @@ export class TestUserHelper {
 
   private async ensureAuthSession(page: Page): Promise<void> {
     if (await this.isAuthDisabled(page)) {
-      await page.goto('/dashboard')
+      await page.goto('/')
       await page.waitForLoadState('domcontentloaded')
     }
   }
@@ -250,8 +250,8 @@ export class TestUserHelper {
     await this.signup(page)
     await this.login(page)
 
-    // Verify we can access the dashboard
-    await page.goto('/dashboard')
+    // Verify we can access the home page
+    await page.goto('/')
     await page.waitForLoadState('domcontentloaded')
     expect(page.url()).not.toContain('/auth/signin')
   }
