@@ -4,6 +4,20 @@
 
 ### 2.6-dev
 
+- feat: Sidebar message count badges
+  - Display message count as a badge (flush right) for each chat in the sidebar
+  - Shows "999+" for chats with over 999 messages
+  - Hidden when sidebar is collapsed, shown in tooltip instead
+- feat: Resizable sidebar width
+  - Drag the right edge of the sidebar to resize (256px min, 512px max)
+  - Width persisted to localStorage (immediate) and MongoDB (debounced)
+  - Cross-tab synchronization of width changes
+  - Added CSS variables: --qt-left-sidebar-min-width, --qt-left-sidebar-max-width
+  - Resize handle hidden when collapsed or on mobile
+- feat: Sidebar Width setting in Appearance
+  - New "Sidebar Width" section in Settings > Appearance
+  - Shows current width with "Reset to Default" button
+  - sidebarWidth field added to ChatSettings schema
 - feat: Improved favorite character cards on home page
   - Character titles now wrap fully instead of truncating
   - Added "Chat" button with icon under each favorite character

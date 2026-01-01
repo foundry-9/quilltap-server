@@ -119,6 +119,8 @@ export const ChatSettingsSchema = z.object({
     activeThemeId: null,
     colorMode: 'system',
   }),
+  /** Sidebar width in pixels (256-512, default: 256) */
+  sidebarWidth: z.number().min(256).max(512).default(256).optional(),
   /** Default timestamp configuration for new chats */
   defaultTimestampConfig: TimestampConfigSchema.default({
     mode: 'NONE',

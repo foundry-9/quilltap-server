@@ -28,6 +28,7 @@ interface Chat {
   updatedAt: string
   participants: ChatParticipant[]
   characterTags?: string[]
+  messageCount?: number
 }
 
 /**
@@ -71,13 +72,14 @@ function ChatItem({
   const displayName = getChatDisplayName(chat)
   const firstParticipant = chat.participants[0]
   const avatarSrc = firstParticipant?.avatarUrl
+  const messageCount = chat.messageCount || 0
 
   return (
     <Link
       href={`/chats/${chat.id}`}
       className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
       onClick={onClick}
-      title={isCollapsed ? displayName : undefined}
+      title={isCollapsed ? `${displayName} (${messageCount} messages)` : undefined}
     >
       {avatarSrc ? (
         <img
@@ -91,7 +93,14 @@ function ChatItem({
         </div>
       )}
       {!isCollapsed && (
-        <span className="qt-left-sidebar-item-label">{displayName}</span>
+        <>
+          <span className="qt-left-sidebar-item-label">{displayName}</span>
+          {messageCount > 0 && (
+            <span className="ml-auto px-1.5 py-0.5 text-xs bg-muted text-muted-foreground rounded-full flex-shrink-0">
+              {messageCount > 999 ? '999+' : messageCount}
+            </span>
+          )}
+        </>
       )}
     </Link>
   )

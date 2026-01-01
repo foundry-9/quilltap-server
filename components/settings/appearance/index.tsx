@@ -17,6 +17,7 @@
 
 import { useAppearanceSettings } from './hooks/useAppearanceSettings'
 import { DisplayOptions } from './DisplayOptions'
+import { SidebarWidthControl } from './SidebarWidthControl'
 import { ThemeSelector } from './ThemeSelector'
 import { DebugThemeInfo } from './components/DebugThemeInfo'
 
@@ -86,6 +87,9 @@ export default function AppearanceTab() {
         onColorModeChange={handleColorModeChange}
         onNavThemeSelectorChange={handleNavThemeSelectorChange}
       />
+
+      {/* Sidebar Width */}
+      <SidebarWidthControl />
 
       {/* Theme Selector */}
       <ThemeSelector

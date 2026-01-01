@@ -137,7 +137,10 @@
      LEFT SIDEBAR VARIABLES (App Navigation)
      ========================================================================== */
   --qt-left-sidebar-width: 16rem;
+  --qt-left-sidebar-min-width: 16rem;
+  --qt-left-sidebar-max-width: 32rem;
   --qt-left-sidebar-collapsed-width: 4rem;
+  --qt-left-sidebar-resize-handle-width: 4px;
   --qt-left-sidebar-bg: var(--color-background);
   --qt-left-sidebar-border: var(--color-border);
   --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;

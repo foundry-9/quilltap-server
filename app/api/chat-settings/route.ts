@@ -24,7 +24,8 @@ async function updateChatSettings(
   cheapLLMSettings?: unknown,
   imageDescriptionProfileId?: string | null,
   themePreference?: unknown,
-  defaultRoleplayTemplateId?: string | null
+  defaultRoleplayTemplateId?: string | null,
+  sidebarWidth?: number
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -83,6 +84,14 @@ async function updateChatSettings(
       }
     }
     updateData.defaultRoleplayTemplateId = defaultRoleplayTemplateId
+  }
+  if (typeof sidebarWidth !== 'undefined') {
+    // Validate sidebar width range (256-512)
+    if (typeof sidebarWidth !== 'number' || sidebarWidth < 256 || sidebarWidth > 512) {
+      throw new Error('Invalid sidebar width (must be 256-512)')
+    }
+    updateData.sidebarWidth = sidebarWidth
+    logger.debug('Updating sidebar width', { userId, sidebarWidth })
   }
 
   return repos.chatSettings.updateForUser(userId, updateData)
@@ -145,7 +154,7 @@ async function handleSettingsUpdate(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings, imageDescriptionProfileId, themePreference, defaultRoleplayTemplateId } = body
+    const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings, imageDescriptionProfileId, themePreference, defaultRoleplayTemplateId, sidebarWidth } = body
 
     const chatSettings = await updateChatSettings(
       session.user.id,
@@ -155,7 +164,8 @@ async function handleSettingsUpdate(req: NextRequest) {
       cheapLLMSettings,
       imageDescriptionProfileId,
       themePreference,
-      defaultRoleplayTemplateId
+      defaultRoleplayTemplateId,
+      sidebarWidth
     )
 
     return NextResponse.json(chatSettings)

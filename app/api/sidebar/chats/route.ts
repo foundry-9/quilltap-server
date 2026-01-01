@@ -86,6 +86,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
         updatedAt: chat.updatedAt || chat.createdAt,
         participants,
         characterTags: [...new Set(characterTags)], // Deduplicate
+        messageCount: chat.messageCount || 0,
       }
     })
 

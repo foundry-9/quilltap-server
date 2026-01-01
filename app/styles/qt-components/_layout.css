@@ -681,6 +681,40 @@
     }
   }
 
+  /**
+   * Resize handle - draggable edge for width adjustment
+   */
+  .qt-left-sidebar-resize-handle {
+    @apply absolute top-0 bottom-0 right-0;
+    width: var(--qt-left-sidebar-resize-handle-width);
+    cursor: col-resize;
+    background: transparent;
+    transition: background 150ms ease;
+    z-index: 10;
+  }
+
+  .qt-left-sidebar-resize-handle:hover,
+  .qt-left-sidebar-resize-handle-active {
+    background: var(--color-primary);
+  }
+
+  /* Hide resize handle when collapsed */
+  .qt-left-sidebar-collapsed .qt-left-sidebar-resize-handle {
+    @apply hidden;
+  }
+
+  /* Hide resize handle on mobile */
+  @media (max-width: 767px) {
+    .qt-left-sidebar-resize-handle {
+      @apply hidden;
+    }
+  }
+
+  /* Prevent text selection while resizing */
+  .qt-left-sidebar-resizing {
+    user-select: none;
+  }
+
   /* ==========================================================================
      APP LAYOUT
      ========================================================================== */

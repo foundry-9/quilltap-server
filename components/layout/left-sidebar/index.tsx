@@ -10,6 +10,7 @@
 
 import { useEffect } from 'react'
 import { useSidebar } from '@/components/providers/sidebar-provider'
+import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { SidebarHeader } from './sidebar-header'
 import { SidebarSection } from './sidebar-section'
 import { SidebarFooter } from './sidebar-footer'
@@ -57,11 +58,12 @@ function FileIcon({ className }: { className?: string }) {
 }
 
 export function LeftSidebar() {
-  const { isCollapsed, isMobileOpen, closeMobile, isMobile } = useSidebar()
+  const { isCollapsed, isMobileOpen, closeMobile, isMobile, width } = useSidebar()
+  const { handleRef, isResizing, startResize } = useSidebarResize()
 
   useEffect(() => {
-    clientLogger.debug('LeftSidebar mounted', { isCollapsed, isMobile })
-  }, [isCollapsed, isMobile])
+    clientLogger.debug('LeftSidebar mounted', { isCollapsed, isMobile, width })
+  }, [isCollapsed, isMobile, width])
 
   // Build sidebar classes
   const sidebarClasses = [
@@ -69,6 +71,9 @@ export function LeftSidebar() {
     isCollapsed && 'qt-left-sidebar-collapsed',
     isMobileOpen && 'qt-left-sidebar-mobile-open',
   ].filter(Boolean).join(' ')
+
+  // Apply custom width when not collapsed and not on mobile
+  const sidebarStyle = !isCollapsed && !isMobile ? { width: `${width}px` } : undefined
 
   return (
     <>
@@ -82,7 +87,7 @@ export function LeftSidebar() {
       )}
 
       {/* Sidebar */}
-      <aside className={sidebarClasses} aria-label="Main navigation">
+      <aside className={sidebarClasses} style={sidebarStyle} aria-label="Main navigation">
         <SidebarHeader />
 
         <div className="qt-left-sidebar-content">
@@ -110,6 +115,16 @@ export function LeftSidebar() {
         </div>
 
         <SidebarFooter />
+
+        {/* Resize handle */}
+        <div
+          ref={handleRef}
+          className={`qt-left-sidebar-resize-handle ${isResizing ? 'qt-left-sidebar-resize-handle-active' : ''}`}
+          onMouseDown={startResize}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+        />
       </aside>
     </>
   )
