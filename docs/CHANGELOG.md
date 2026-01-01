@@ -4,6 +4,7 @@
 
 ### 2.6-dev
 
+- fix: Add missing `@storybook/addon-essentials` to create-quilltap-theme scaffolded projects
 - feat: Add roleplay template plugin types and utilities
   - Added `RoleplayTemplatePlugin`, `RoleplayTemplateConfig`, `RoleplayTemplateMetadata` types to `@quilltap/plugin-types`
   - Added `ROLEPLAY_TEMPLATE` capability and `TEMPLATE` category to plugin system

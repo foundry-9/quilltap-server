@@ -37,6 +37,7 @@
     "@quilltap/plugin-types": "^1.0.0",
     "@quilltap/plugin-utils": "^1.0.0",
     "@quilltap/theme-storybook": "^1.0.0",
+    "@storybook/addon-essentials": "^8.0.0",
     "@storybook/react": "^8.0.0",
     "@storybook/react-vite": "^8.0.0",
     "esbuild": "^0.20.0",
