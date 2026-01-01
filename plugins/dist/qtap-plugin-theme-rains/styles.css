@@ -1,9 +1,9 @@
 /**
- * Rains Theme - Warm earthy dark styling
+ * Rains Theme - ChatGPT-inspired dark mode with warm greys
  *
  * This theme uses the qt-* semantic class system for consistent,
- * themeable component styling. It features warm browns and amber
- * accents inspired by rain-soaked autumn evenings.
+ * themeable component styling. Features warm neutral greys with
+ * a characteristic clay/orange accent.
  */
 
 /* ============================================================================
@@ -52,14 +52,14 @@
   scrollbar-color: hsl(var(--border-300) / 0.35) transparent;
 
   /* ============================================================================
-     RAINS COLOR PALETTE - Warm earthy tones
+     RAINS COLOR PALETTE - ChatGPT-inspired warm greys
      ============================================================================ */
 
-  /* Accent Colors - Warm amber/orange brand */
-  --accent-brand: 15 63.1% 59.6%;
-  --accent-main-000: 15 54.2% 51.2%;
-  --accent-main-100: 15 63.1% 59.6%;
-  --accent-main-200: 15 63.1% 59.6%;
+  /* Accent Colors - Clay/orange brand */
+  --accent-brand: 15 55% 59%;
+  --accent-main-000: 15 45% 52%;
+  --accent-main-100: 15 55% 59%;
+  --accent-main-200: 15 55% 59%;
   --accent-main-900: 0 0% 0%;
 
   /* Pro/Purple Accent */
@@ -74,19 +74,19 @@
   --accent-secondary-200: 210 70.9% 51.6%;
   --accent-secondary-900: 210 55.9% 24.6%;
 
-  /* Background Tones - Warm browns */
-  --bg-000: 30 8% 18.4%;
-  --bg-100: 30 10% 14.5%;
-  --bg-200: 28 12% 11.8%;
-  --bg-300: 25 14% 7.6%;
-  --bg-400: 20 10% 3%;
+  /* Background Tones - Warm dark greys */
+  --bg-000: 0 0% 23%;      /* #3a3a3a - hover states */
+  --bg-100: 0 0% 19%;      /* #303030 - elements */
+  --bg-200: 0 0% 13%;      /* #212121 - main bg */
+  --bg-300: 0 0% 10%;      /* #1a1a1a - sidebar */
+  --bg-400: 0 0% 6%;
   --bg-500: 0 0% 0%;
 
   /* Border Tones */
-  --border-100: 35 20% 84.5%;
-  --border-200: 35 20% 84.5%;
-  --border-300: 35 18% 70%;
-  --border-400: 35 15% 60%;
+  --border-100: 0 0% 85%;
+  --border-200: 0 0% 70%;
+  --border-300: 0 0% 40%;
+  --border-400: 0 0% 30%;
 
   /* Status Colors */
   --danger-000: 0 98.4% 75.1%;
@@ -106,29 +106,29 @@
 
   /* On-Color Text */
   --oncolor-100: 0 0% 100%;
-  --oncolor-200: 40 12% 97.1%;
-  --oncolor-300: 40 12% 97.1%;
+  --oncolor-200: 0 0% 97%;
+  --oncolor-300: 0 0% 97%;
 
-  /* Pictogram Tones - Warm grays */
-  --pictogram-100: 32 10% 29.2%;
-  --pictogram-200: 30 9% 23.3%;
-  --pictogram-300: 30 8% 18.4%;
-  --pictogram-400: 30 10% 14.5%;
+  /* Pictogram Tones - Warm greys */
+  --pictogram-100: 0 0% 30%;
+  --pictogram-200: 0 0% 24%;
+  --pictogram-300: 0 0% 19%;
+  --pictogram-400: 0 0% 13%;
 
-  /* Text Colors - Warm cream */
-  --text-000: 48 33.3% 97.1%;
-  --text-100: 48 33.3% 97.1%;
-  --text-200: 50 9% 73.7%;
-  --text-300: 50 9% 73.7%;
-  --text-400: 48 4.8% 59.2%;
-  --text-500: 48 4.8% 59.2%;
+  /* Text Colors */
+  --text-000: 0 0% 93%;     /* #ececec - primary */
+  --text-100: 0 0% 93%;
+  --text-200: 0 0% 62%;     /* #9e9e9e - secondary */
+  --text-300: 0 0% 62%;
+  --text-400: 0 0% 40%;     /* #666666 - muted */
+  --text-500: 0 0% 40%;
 
   /* Always Colors */
   --always-white: 0 0% 100%;
   --always-black: 0 0% 0%;
 
   /* ============================================================================
-     FONT STACKS
+     FONT STACKS (PRESERVED FROM ORIGINAL)
      ============================================================================ */
   --default-font-family: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
   --default-mono-font-family: "Fira Code", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -152,40 +152,48 @@
   /* ============================================================================
      SURFACE & SHADOW VARIABLES
      ============================================================================ */
-  --surface-base: hsl(var(--bg-100));
-  --surface-raised: hsl(var(--bg-000));
-  --surface-muted: hsl(var(--bg-200));
-  --surface-deep: hsl(var(--bg-300));
-  --stroke-soft: hsl(var(--border-300) / 0.15);
-  --stroke-strong: hsl(var(--border-100) / 0.25);
-  --card-shadow: 0 45px 120px -70px hsl(var(--always-black) / 0.9);
-  --chat-shadow: 0 24px 60px -40px hsl(var(--always-black) / 0.85);
+  --surface-base: hsl(var(--bg-200));
+  --surface-raised: hsl(var(--bg-100));
+  --surface-muted: hsl(var(--bg-300));
+  --surface-deep: hsl(var(--bg-400));
+  --stroke-soft: hsl(var(--always-white) / 0.05);
+  --stroke-strong: hsl(var(--always-white) / 0.08);
+  --card-shadow: 0 4px 6px hsl(var(--always-black) / 0.1);
+  --chat-shadow: 0 2px 4px hsl(var(--always-black) / 0.1);
 
   /* Apply base colors */
-  background-color: hsl(var(--bg-100));
+  background-color: hsl(var(--bg-200));
   color: hsl(var(--text-000));
-  border-color: hsl(var(--border-100));
+  border-color: hsl(var(--border-300) / 0.2);
   outline-color: hsl(var(--accent-secondary-100));
+
+  /* ============================================================================
+     SPACING & RADIUS - ChatGPT-inspired
+     ============================================================================ */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
 
   /* ============================================================================
      QT-* VARIABLE OVERRIDES
      ============================================================================ */
 
   /* Button Variables */
-  --qt-button-radius: 1rem;
-  --qt-button-primary-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.95), hsl(var(--accent-main-000)));
+  --qt-button-radius: var(--radius-sm);
+  --qt-button-primary-bg: hsl(var(--accent-brand));
   --qt-button-primary-fg: hsl(var(--oncolor-100));
-  --qt-button-primary-hover-bg: linear-gradient(135deg, hsl(var(--accent-main-000)), hsl(var(--accent-brand)));
-  --qt-button-primary-shadow: 0 18px 40px -22px hsl(var(--accent-brand) / 0.65);
+  --qt-button-primary-hover-bg: hsl(var(--accent-main-000));
+  --qt-button-primary-shadow: none;
 
-  --qt-button-secondary-bg: hsl(var(--bg-200) / 0.9);
-  --qt-button-secondary-fg: hsl(var(--text-300));
-  --qt-button-secondary-border: var(--stroke-soft);
-  --qt-button-secondary-hover-bg: hsl(var(--bg-200));
+  --qt-button-secondary-bg: hsl(var(--bg-100));
+  --qt-button-secondary-fg: hsl(var(--text-200));
+  --qt-button-secondary-border: var(--stroke-strong);
+  --qt-button-secondary-hover-bg: hsl(var(--bg-000));
 
   --qt-button-ghost-bg: transparent;
-  --qt-button-ghost-fg: hsl(var(--text-300));
-  --qt-button-ghost-hover-bg: hsl(var(--bg-200) / 0.65);
+  --qt-button-ghost-fg: hsl(var(--text-200));
+  --qt-button-ghost-hover-bg: hsl(var(--bg-100));
 
   --qt-button-destructive-bg: hsl(var(--danger-100));
   --qt-button-destructive-fg: hsl(var(--oncolor-100));
@@ -209,116 +217,116 @@
   --qt-status-danger-border: hsl(var(--danger-100) / 0.5);
 
   /* Card Variables */
-  --qt-card-radius: 0.75rem;
+  --qt-card-radius: var(--radius-md);
   --qt-card-bg: var(--surface-raised);
   --qt-card-fg: hsl(var(--text-000));
-  --qt-card-border: var(--stroke-soft);
+  --qt-card-border: var(--stroke-strong);
   --qt-card-border-opacity: 1;
   --qt-card-shadow: var(--card-shadow);
-  --qt-card-shadow-hover: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+  --qt-card-shadow-hover: 0 4px 8px hsl(var(--always-black) / 0.15);
 
   /* Input Variables */
-  --qt-input-radius: 0.5rem;
-  --qt-input-bg: hsl(var(--bg-000) / 0.95);
+  --qt-input-radius: var(--radius-md);
+  --qt-input-bg: hsl(var(--bg-100));
   --qt-input-fg: hsl(var(--text-000));
-  --qt-input-border: hsl(var(--border-300) / 0.45);
-  --qt-input-placeholder: hsl(var(--text-400));
+  --qt-input-border: var(--stroke-strong);
+  --qt-input-placeholder: hsl(var(--text-200));
   --qt-input-focus-ring: hsl(var(--accent-secondary-100));
 
   /* Navbar Variables */
   --qt-navbar-height: 4rem;
-  --qt-navbar-bg: hsl(var(--bg-200) / 0.95);
-  --qt-navbar-border: hsl(var(--border-300) / 0.35);
-  --qt-navbar-blur: blur(14px);
-  --qt-navbar-shadow: 0 20px 50px -40px hsl(var(--always-black) / 0.8);
+  --qt-navbar-bg: hsl(var(--bg-300));
+  --qt-navbar-border: var(--stroke-soft);
+  --qt-navbar-blur: blur(0);
+  --qt-navbar-shadow: none;
   --qt-navbar-link-padding-x: 0.75rem;
   --qt-navbar-link-padding-y: 0.5rem;
-  --qt-navbar-link-radius: 0.5rem;
-  --qt-navbar-link-fg: hsl(var(--text-100));
-  --qt-navbar-link-hover-bg: hsl(var(--bg-000) / 0.6);
-  --qt-navbar-link-active-bg: hsl(var(--accent-brand) / 0.15);
+  --qt-navbar-link-radius: var(--radius-sm);
+  --qt-navbar-link-fg: hsl(var(--text-000));
+  --qt-navbar-link-hover-bg: hsl(var(--bg-100));
+  --qt-navbar-link-active-bg: hsl(var(--bg-100));
 
   /* Sidebar Variables */
-  --qt-sidebar-width: 16rem;
-  --qt-sidebar-bg: linear-gradient(180deg, hsl(var(--bg-200) / 0.95), hsl(var(--bg-300) / 0.9));
-  --qt-sidebar-border: hsl(var(--border-300) / 0.25);
+  --qt-sidebar-width: 260px;
+  --qt-sidebar-bg: hsl(var(--bg-300));
+  --qt-sidebar-border: var(--stroke-soft);
   --qt-sidebar-item-padding-x: 0.75rem;
-  --qt-sidebar-item-padding-y: 0.5rem;
-  --qt-sidebar-item-radius: 0.5rem;
-  --qt-sidebar-item-hover-bg: hsl(var(--bg-200) / 0.65);
-  --qt-sidebar-item-active-bg: hsl(var(--accent-brand) / 0.14);
+  --qt-sidebar-item-padding-y: 0.625rem;
+  --qt-sidebar-item-radius: var(--radius-sm);
+  --qt-sidebar-item-hover-bg: hsl(var(--bg-100));
+  --qt-sidebar-item-active-bg: hsl(var(--bg-100));
   --qt-sidebar-item-active-border: hsl(var(--accent-brand));
 
   /* Panel/Dialog/Popover Variables */
-  --qt-panel-radius: 0.75rem;
+  --qt-panel-radius: var(--radius-md);
   --qt-panel-bg: var(--surface-raised);
-  --qt-panel-border: var(--stroke-soft);
+  --qt-panel-border: var(--stroke-strong);
   --qt-panel-shadow: var(--card-shadow);
 
-  --qt-dialog-radius: 1.25rem;
-  --qt-dialog-bg: linear-gradient(170deg, hsl(var(--bg-200)), hsl(var(--bg-100)));
-  --qt-dialog-border: hsl(var(--border-300) / 0.4);
-  --qt-dialog-shadow: 0 50px 140px -80px hsl(var(--always-black) / 0.95);
+  --qt-dialog-radius: var(--radius-md);
+  --qt-dialog-bg: hsl(var(--bg-100));
+  --qt-dialog-border: var(--stroke-strong);
+  --qt-dialog-shadow: 0 4px 6px hsl(var(--always-black) / 0.1);
   --qt-dialog-backdrop: hsl(var(--always-black) / 0.7);
 
-  --qt-popover-radius: 0.75rem;
+  --qt-popover-radius: var(--radius-md);
   --qt-popover-bg: var(--surface-raised);
   --qt-popover-fg: hsl(var(--text-000));
-  --qt-popover-border: hsl(var(--border-300) / 0.4);
+  --qt-popover-border: var(--stroke-strong);
   --qt-popover-shadow: var(--card-shadow);
 
   /* Chat Variables */
-  --qt-chat-message-radius: 0.75rem;
+  --qt-chat-message-radius: var(--radius-md);
   --qt-chat-message-padding: 1rem;
   --qt-chat-message-shadow: var(--chat-shadow);
 
-  --qt-chat-user-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--accent-main-000) / 0.85));
-  --qt-chat-user-fg: hsl(var(--oncolor-100));
-  --qt-chat-user-border: hsl(var(--accent-brand) / 0.45);
+  --qt-chat-user-bg: hsl(var(--bg-100));
+  --qt-chat-user-fg: hsl(var(--text-000));
+  --qt-chat-user-border: var(--stroke-strong);
   --qt-chat-user-font: var(--font-user-message);
 
-  --qt-chat-assistant-bg: linear-gradient(160deg, hsl(var(--bg-100) / 0.85), hsl(var(--pictogram-200) / 0.9));
+  --qt-chat-assistant-bg: hsl(var(--bg-200));
   --qt-chat-assistant-fg: hsl(var(--text-200));
-  --qt-chat-assistant-border: hsl(var(--border-300) / 0.45);
+  --qt-chat-assistant-border: var(--stroke-soft);
   --qt-chat-assistant-font: var(--font-claude-response);
 
   --qt-chat-composer-bg: hsl(var(--bg-100));
-  --qt-chat-composer-border: hsl(var(--stroke-soft));
-  --qt-chat-composer-radius: 0.75rem;
-  --qt-chat-composer-padding-x: 1.25rem;
-  --qt-chat-composer-padding-y: 1.25rem;
+  --qt-chat-composer-border: var(--stroke-strong);
+  --qt-chat-composer-radius: var(--radius-md);
+  --qt-chat-composer-padding-x: 0.75rem;
+  --qt-chat-composer-padding-y: 0.75rem;
 
-  --qt-chat-toolbar-gap: 0.75rem;
+  --qt-chat-toolbar-gap: 0.5rem;
   --qt-chat-toolbar-button-bg: hsl(var(--bg-200));
   --qt-chat-toolbar-button-fg: hsl(var(--text-200));
-  --qt-chat-toolbar-button-hover-bg: hsl(var(--bg-000) / 0.8);
-  --qt-chat-toolbar-button-border: hsl(var(--border-300) / 0.4);
+  --qt-chat-toolbar-button-hover-bg: hsl(var(--bg-000));
+  --qt-chat-toolbar-button-border: var(--stroke-soft);
 
-  --qt-chat-attachment-border: hsl(var(--border-300) / 0.4);
+  --qt-chat-attachment-border: var(--stroke-strong);
   --qt-chat-attachment-hover-border: hsl(var(--accent-brand) / 0.55);
   --qt-chat-attachment-overlay: rgb(0 0 0 / 0.55);
 
   --qt-chat-sidebar-width: 21rem;
-  --qt-chat-sidebar-bg: hsl(var(--bg-100));
-  --qt-chat-sidebar-border: hsl(var(--border-300) / 0.35);
-  --qt-chat-sidebar-header-border: hsl(var(--border-300) / 0.35);
+  --qt-chat-sidebar-bg: hsl(var(--bg-300));
+  --qt-chat-sidebar-border: var(--stroke-soft);
+  --qt-chat-sidebar-header-border: var(--stroke-soft);
   --qt-chat-sidebar-muted: hsl(var(--text-400));
   --qt-chat-sidebar-heading: hsl(var(--text-000));
 
-  --qt-participant-card-radius: 0.75rem;
-  --qt-participant-card-bg: hsl(var(--bg-200) / 0.8);
-  --qt-participant-card-border: hsl(var(--border-300) / 0.35);
+  --qt-participant-card-radius: var(--radius-sm);
+  --qt-participant-card-bg: hsl(var(--bg-100));
+  --qt-participant-card-border: var(--stroke-strong);
   --qt-participant-card-active-border: hsl(var(--accent-brand) / 0.6);
-  --qt-participant-card-active-shadow: 0 0 15px hsl(var(--accent-brand) / 0.25);
+  --qt-participant-card-active-shadow: none;
 
   /* Badge Variables */
-  --qt-badge-radius: 9999px;
+  --qt-badge-radius: var(--radius-lg);
   --qt-badge-padding-x: 0.75rem;
   --qt-badge-padding-y: 0.25rem;
-  --qt-badge-font-size: 0.875rem;
-  --qt-badge-font-weight: 600;
+  --qt-badge-font-size: 0.8rem;
+  --qt-badge-font-weight: 500;
 
-  --qt-badge-primary-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.9), hsl(var(--accent-main-000)));
+  --qt-badge-primary-bg: hsl(var(--accent-brand));
   --qt-badge-primary-fg: hsl(var(--oncolor-100));
   --qt-badge-secondary-bg: hsl(var(--bg-200));
   --qt-badge-secondary-fg: hsl(var(--text-200));
@@ -333,15 +341,15 @@
   --qt-avatar-size-sm: 2rem;
   --qt-avatar-size-lg: 3rem;
   --qt-avatar-size-xl: 4rem;
-  --qt-avatar-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--pictogram-200)));
+  --qt-avatar-bg: hsl(var(--bg-100));
   --qt-avatar-fg: hsl(var(--text-000));
-  --qt-avatar-border: hsl(var(--border-300) / 0.4);
+  --qt-avatar-border: var(--stroke-soft);
 
   /* Code Block Variables */
-  --qt-code-radius: 0.5rem;
-  --qt-code-bg: hsl(var(--pictogram-200));
+  --qt-code-radius: var(--radius-sm);
+  --qt-code-bg: hsl(var(--bg-300));
   --qt-code-fg: hsl(var(--text-000));
-  --qt-code-border: hsl(var(--border-200) / 0.35);
+  --qt-code-border: var(--stroke-soft);
   --qt-code-font: var(--font-mono);
 
   /* Link Variables */
@@ -351,62 +359,62 @@
   --qt-link-decoration-hover: underline;
 
   /* Footer Variables */
-  --qt-footer-bg: hsl(var(--bg-200));
-  --qt-footer-border: hsl(var(--border-300) / 0.35);
-  --qt-footer-fg: hsl(var(--text-300));
+  --qt-footer-bg: hsl(var(--bg-300));
+  --qt-footer-border: var(--stroke-soft);
+  --qt-footer-fg: hsl(var(--text-200));
   --qt-footer-link-hover: hsl(var(--text-000));
 
   /* Brand Variables */
   --qt-brand-fg: hsl(var(--text-000));
 
   /* Content Area Variables */
-  --qt-content-bg: var(--surface-raised);
+  --qt-content-bg: var(--surface-base);
   --qt-content-fg: hsl(var(--text-000));
   --qt-content-scroll-bg: var(--surface-base);
 
   /* Typography Variables */
   --qt-heading-font: var(--font-serif);
-  --qt-text-secondary-fg: hsl(var(--text-300));
+  --qt-text-secondary-fg: hsl(var(--text-200));
 
   /* Empty State Variables */
   --qt-empty-state-icon-color: hsl(var(--text-400));
   --qt-empty-state-title-color: hsl(var(--text-100));
-  --qt-empty-state-description-color: hsl(var(--text-300));
+  --qt-empty-state-description-color: hsl(var(--text-200));
 
   /* Mobile Tool Palette Variables */
   --qt-mobile-composer-input-min-height: 2.5rem;
   --qt-mobile-tool-palette-max-height: 50vh;
-  --qt-mobile-tool-palette-bg: hsl(var(--bg-200));
-  --qt-mobile-tool-palette-border: hsl(var(--border-300) / 0.4);
+  --qt-mobile-tool-palette-bg: hsl(var(--bg-100));
+  --qt-mobile-tool-palette-border: var(--stroke-strong);
 
   /* Auth Page Variables */
-  --qt-auth-page-bg: linear-gradient(135deg, hsl(var(--bg-100)), hsl(var(--bg-200)));
-  --qt-auth-card-bg: linear-gradient(170deg, hsl(var(--bg-200)), hsl(var(--bg-100)));
+  --qt-auth-page-bg: hsl(var(--bg-200));
+  --qt-auth-card-bg: hsl(var(--bg-100));
   --qt-auth-card-fg: hsl(var(--text-000));
   --qt-auth-title-fg: hsl(var(--text-000));
   --qt-auth-subtitle-fg: hsl(var(--text-400));
   --qt-auth-label-fg: hsl(var(--text-000));
   --qt-auth-hint-fg: hsl(var(--text-400));
   --qt-auth-footer-fg: hsl(var(--text-400));
-  --qt-auth-divider-color: hsl(var(--border-300) / 0.4);
+  --qt-auth-divider-color: var(--stroke-strong);
 
   /* ==========================================================================
      TAB VARIABLES
      ========================================================================== */
-  --qt-tab-radius: 0.5rem 0.5rem 0 0;
+  --qt-tab-radius: var(--radius-sm) var(--radius-sm) 0 0;
   --qt-tab-padding-x: 1rem;
   --qt-tab-padding-y: 0.625rem;
   --qt-tab-gap: 0;
   --qt-tab-group-gap: 0;
   --qt-tab-bg: transparent;
   --qt-tab-fg: hsl(var(--text-400));
-  --qt-tab-border: hsl(var(--border-300) / 0.35);
-  --qt-tab-hover-bg: hsl(var(--bg-200) / 0.5);
+  --qt-tab-border: var(--stroke-soft);
+  --qt-tab-hover-bg: hsl(var(--bg-100) / 0.5);
   --qt-tab-hover-fg: hsl(var(--text-200));
   --qt-tab-active-bg: var(--surface-raised);
   --qt-tab-active-fg: hsl(var(--accent-brand));
-  --qt-tab-active-border: hsl(var(--border-300) / 0.35);
-  --qt-tab-divider-color: hsl(var(--border-300) / 0.35);
+  --qt-tab-active-border: var(--stroke-soft);
+  --qt-tab-divider-color: var(--stroke-soft);
 
   /* ==========================================================================
      ROLEPLAY ANNOTATION VARIABLES
@@ -415,7 +423,7 @@
   --qt-rp-dialogue-bg: transparent;
 
   --qt-rp-narration-color: hsl(var(--text-200));
-  --qt-rp-narration-bg: hsl(var(--bg-300) / 0.9);
+  --qt-rp-narration-bg: hsl(var(--bg-300));
   --qt-rp-narration-style: normal;
   --qt-rp-narration-padding: 0.125rem 0.375rem;
   --qt-rp-narration-radius: 0.25rem;
@@ -442,12 +450,12 @@
   /* ==========================================================================
      DEVCONSOLE VARIABLES
      ========================================================================== */
-  --qt-devconsole-bg: hsl(var(--bg-100));
-  --qt-devconsole-header-bg: hsl(var(--bg-200));
+  --qt-devconsole-bg: hsl(var(--bg-200));
+  --qt-devconsole-header-bg: hsl(var(--bg-100));
   --qt-devconsole-tabs-bg: hsl(var(--bg-300));
-  --qt-devconsole-content-bg: hsl(var(--bg-100));
-  --qt-devconsole-footer-bg: hsl(var(--bg-200));
-  --qt-devconsole-border: hsl(var(--border-300) / 0.4);
+  --qt-devconsole-content-bg: hsl(var(--bg-200));
+  --qt-devconsole-footer-bg: hsl(var(--bg-100));
+  --qt-devconsole-border: var(--stroke-strong);
 
   --qt-log-error-bg: hsl(0 40% 12%);
   --qt-log-error-fg: hsl(var(--danger-000));
@@ -463,13 +471,13 @@
   --qt-log-info-fg: hsl(var(--accent-secondary-000));
   --qt-log-info-border: hsl(var(--accent-secondary-100));
 
-  --qt-log-debug-bg: hsl(var(--bg-200));
+  --qt-log-debug-bg: hsl(var(--bg-100));
   --qt-log-debug-fg: hsl(var(--text-400));
-  --qt-log-debug-border: hsl(var(--border-300) / 0.5);
+  --qt-log-debug-border: var(--stroke-soft);
 
-  --qt-log-default-bg: hsl(var(--bg-200) / 0.5);
-  --qt-log-default-fg: hsl(var(--text-300));
-  --qt-log-default-border: hsl(var(--border-300) / 0.4);
+  --qt-log-default-bg: hsl(var(--bg-100) / 0.5);
+  --qt-log-default-fg: hsl(var(--text-200));
+  --qt-log-default-border: var(--stroke-soft);
 
   --qt-debug-outgoing-bg: hsl(210 35% 14%);
   --qt-debug-outgoing-border: hsl(var(--accent-secondary-100));
@@ -530,58 +538,34 @@
 
 /* ============================================================================
    QT-* CLASS OVERRIDES
-   These provide special effects (gradients, transforms) not possible via variables
+   Minimal overrides - most styling through variables
    ============================================================================ */
 
-/* Primary Button - Gradient background with lift effect */
+/* Primary Button - Solid with simple hover */
 [data-theme="rains"] .qt-button-primary {
-  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.95), hsl(var(--accent-main-000)));
+  background: hsl(var(--accent-brand));
   color: hsl(var(--oncolor-100));
-  border: 1px solid hsl(var(--accent-brand) / 0.65);
-  box-shadow: 0 18px 40px -22px hsl(var(--accent-brand) / 0.65);
+  border: none;
+  box-shadow: none;
+  transition: background-color 0.2s;
 }
 
 [data-theme="rains"] .qt-button-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, hsl(var(--accent-main-000)), hsl(var(--accent-brand)));
-  box-shadow: 0 22px 50px -24px hsl(var(--accent-brand) / 0.85);
-  transform: translateY(-1px);
+  background: hsl(var(--accent-main-000));
 }
 
-/* Card - Enhanced hover with border glow */
+/* Card - Subtle hover effect */
 [data-theme="rains"] .qt-card:hover,
 [data-theme="rains"] .qt-card-interactive:hover {
-  border-color: hsl(var(--accent-brand) / 0.45);
+  border-color: hsl(var(--border-300) / 0.3);
 }
 
-/* Chat Messages - Enhanced hover effect */
+/* Chat Messages - Minimal hover */
 [data-theme="rains"] .qt-chat-message:hover {
-  border-color: hsl(var(--accent-secondary-000) / 0.35);
-  box-shadow: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+  border-color: hsl(var(--border-300) / 0.25);
 }
 
-/* User Message - Gradient background */
-[data-theme="rains"] .qt-chat-message-user {
-  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--accent-main-000) / 0.85));
-}
-
-/* Assistant Message - Gradient background */
-[data-theme="rains"] .qt-chat-message-assistant {
-  background: linear-gradient(160deg, hsl(var(--bg-100) / 0.85), hsl(var(--pictogram-200) / 0.9));
-}
-
-/* Dialog - Gradient background */
-[data-theme="rains"] .qt-dialog {
-  background: linear-gradient(170deg, hsl(var(--bg-200)), hsl(var(--bg-100)));
-}
-
-/* Dialog overlay - Backdrop blur */
-[data-theme="rains"] .qt-dialog-overlay {
-  background: hsl(var(--always-black) / 0.7);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-
-/* Headings - Serif font */
+/* Headings - Serif font (preserved typography) */
 [data-theme="rains"] h1,
 [data-theme="rains"] h2,
 [data-theme="rains"] h3,
@@ -592,30 +576,12 @@
   font-family: var(--font-serif);
 }
 
-/* Navbar - Gradient with backdrop blur */
-[data-theme="rains"] .qt-navbar {
-  background: linear-gradient(180deg, hsl(var(--bg-200) / 0.9), hsl(var(--bg-200) / 0.75));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-
-/* Sidebar - Gradient background */
-[data-theme="rains"] .qt-sidebar {
-  background: linear-gradient(180deg, hsl(var(--bg-200) / 0.95), hsl(var(--bg-300) / 0.9));
-}
-
-/* Active sidebar item - Brand accent */
+/* Sidebar item - Active state */
 [data-theme="rains"] .qt-sidebar-item-active {
-  background: hsl(var(--accent-brand) / 0.14);
-  border-left: 3px solid hsl(var(--accent-brand));
+  background: hsl(var(--bg-100));
 }
 
-/* Primary Badge - Gradient background */
-[data-theme="rains"] .qt-badge-primary {
-  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.9), hsl(var(--accent-main-000)));
-}
-
-/* Entity type badges - Warm variations */
+/* Entity type badges */
 [data-theme="rains"] .qt-badge-character {
   background: hsl(210 35% 15%);
   color: hsl(var(--accent-secondary-000));
@@ -691,10 +657,10 @@
 
 [data-theme="rains"] .qt-badge-source-manual {
   background: hsl(var(--bg-300));
-  color: hsl(var(--text-300));
+  color: hsl(var(--text-200));
 }
 
-/* Alert overrides - Warm variations */
+/* Alert overrides */
 [data-theme="rains"] .qt-alert-error {
   background: hsl(var(--danger-900) / 0.35);
   border-color: hsl(var(--danger-100) / 0.5);
@@ -719,11 +685,6 @@
   color: hsl(var(--accent-secondary-000));
 }
 
-/* Avatar - Gradient background */
-[data-theme="rains"] .qt-avatar {
-  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--pictogram-200)));
-}
-
 /* Navbar link styling */
 [data-theme="rains"] .qt-navbar-link,
 [data-theme="rains"] .qt-navbar-link-active {
@@ -744,44 +705,41 @@
   color: hsl(var(--text-000));
 }
 
-/* Empty state title - Serif font */
+/* Empty state title - Serif font (preserved typography) */
 [data-theme="rains"] .qt-empty-state-title {
   font-family: Georgia, "Times New Roman", Times, serif;
 }
 
-/* Auth title - Serif font */
+/* Auth title - Serif font (preserved typography) */
 [data-theme="rains"] .qt-auth-title {
   font-family: Georgia, "Times New Roman", Times, serif;
 }
 
-/* Auth card - Gradient background */
+/* Auth card */
 [data-theme="rains"] .qt-auth-card {
-  background: linear-gradient(170deg, hsl(var(--bg-200)), hsl(var(--bg-100)));
-  border: 1px solid hsl(var(--border-300) / 0.4);
-  box-shadow: 0 50px 140px -80px hsl(var(--always-black) / 0.95);
-  border-radius: 1.25rem;
+  background: hsl(var(--bg-100));
+  border: 1px solid var(--stroke-strong);
+  box-shadow: var(--card-shadow);
+  border-radius: var(--radius-md);
 }
 
 /* Tab styling */
 [data-theme="rains"] .qt-tab {
-  border-bottom: 1px solid hsl(var(--border-300) / 0.35);
+  border-bottom: 1px solid var(--stroke-soft);
   margin-bottom: -1px;
 }
 
 [data-theme="rains"] .qt-tab-active {
   border-bottom-color: transparent;
-  box-shadow: 0 -2px 8px -4px hsl(var(--always-black) / 0.3);
 }
 
 /* Participant card styling */
 [data-theme="rains"] .qt-participant-card-active {
   border-color: hsl(var(--accent-brand) / 0.6);
-  box-shadow: 0 0 15px hsl(var(--accent-brand) / 0.25);
 }
 
 [data-theme="rains"] .qt-participant-turn-dot {
   background: hsl(var(--accent-brand));
-  box-shadow: 0 0 8px hsl(var(--accent-brand) / 0.6);
 }
 
 /* Input focus states */
@@ -789,7 +747,7 @@
 [data-theme="rains"] .qt-textarea:focus,
 [data-theme="rains"] .qt-select:focus {
   border-color: hsl(var(--accent-secondary-100));
-  box-shadow: 0 0 0 3px hsl(var(--accent-secondary-000) / 0.2);
+  box-shadow: 0 0 0 2px hsl(var(--accent-secondary-000) / 0.15);
 }
 
 /* ============================================================================
@@ -801,17 +759,16 @@
 }
 
 [data-theme="rains"] ::-webkit-scrollbar-track {
-  background: hsl(var(--bg-300));
-  border-radius: 999px;
+  background: transparent;
 }
 
 [data-theme="rains"] ::-webkit-scrollbar-thumb {
-  background: hsl(var(--border-200) / 0.55);
+  background: hsl(var(--border-300) / 0.35);
   border-radius: 999px;
 }
 
 [data-theme="rains"] ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--border-200) / 0.75);
+  background: hsl(var(--border-300) / 0.55);
 }
 
 /* ============================================================================
@@ -825,31 +782,15 @@
 [data-theme="rains"] :focus-visible {
   outline: 2px solid hsl(var(--accent-secondary-100));
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px hsl(var(--accent-secondary-000) / 0.2);
 }
 
 /* ============================================================================
    ANIMATIONS
    ============================================================================ */
-@keyframes rains-drip {
-  0%, 100% {
-    transform: translateY(0);
-    opacity: 1;
-  }
-  50% {
-    transform: translateY(-3px);
-    opacity: 0.85;
-  }
-}
-
-[data-theme="rains"] .loading-indicator {
-  animation: rains-drip 1.2s ease-in-out infinite;
-}
-
 @keyframes rains-fade-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -858,7 +799,7 @@
 }
 
 [data-theme="rains"] .message-enter {
-  animation: rains-fade-in 0.25s ease-out forwards;
+  animation: rains-fade-in 0.2s ease-out forwards;
 }
 
 @keyframes skeleton-shimmer {
@@ -873,9 +814,9 @@
 [data-theme="rains"] .qt-skeleton {
   background: linear-gradient(
     90deg,
-    hsl(var(--bg-200)) 25%,
+    hsl(var(--bg-100)) 25%,
     hsl(var(--bg-000) / 0.5) 50%,
-    hsl(var(--bg-200)) 75%
+    hsl(var(--bg-100)) 75%
   );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
