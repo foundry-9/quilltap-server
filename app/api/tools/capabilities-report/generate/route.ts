@@ -5,22 +5,17 @@
  * Generates a new capabilities report and saves it to S3
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { generateAndSaveReport } from '@/lib/tools/capabilities-report';
 import { getErrorMessage } from '@/lib/errors';
 
 const moduleLogger = logger.child({ module: 'api:capabilities-report:generate' });
 
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = session.user.id;
+    const userId = user.id;
     moduleLogger.info('Generating capabilities report', { userId });
 
     const result = await generateAndSaveReport(userId);
@@ -48,4 +43,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

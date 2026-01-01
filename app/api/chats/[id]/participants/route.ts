@@ -9,30 +9,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler, getFilePath } from '@/lib/api/middleware'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
-import type { ChatParticipantBase, ChatMetadata, FileEntry } from '@/lib/schemas/types'
+import type { ChatParticipantBase, FileEntry } from '@/lib/schemas/types'
+import type { RepositoryContainer } from '@/lib/repositories/factory'
 
 // Disable caching for this route
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : ''
-  return `data/files/storage/${file.id}${ext}`
-}
-
-type Repos = ReturnType<typeof getRepositories>
+type Repos = RepositoryContainer
 
 // Helper to get enriched character data
 async function getEnrichedCharacter(characterId: string, repos: Repos) {
@@ -172,384 +159,324 @@ const removeParticipantSchema = z.object({
  * GET /api/chats/:id/participants
  * List all participants with enriched data
  */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
+export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }, { id }) => {
+    try {
+      logger.debug('[Participants API] GET request', { chatId: id })
 
-    logger.debug('[Participants API] GET request', { chatId: id })
+      const chat = await repos.chats.findById(id)
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      if (!chat || chat.userId !== user.id) {
+        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+      }
+
+      const enrichedParticipants = await Promise.all(
+        chat.participants.map(p => enrichParticipant(p, repos))
+      )
+
+      logger.debug('[Participants API] GET success', {
+        chatId: id,
+        participantCount: enrichedParticipants.length,
+      })
+
+      return NextResponse.json({ participants: enrichedParticipants })
+    } catch (error) {
+      logger.error('[Participants API] GET error', { context: 'GET /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
+      return NextResponse.json({ error: 'Failed to fetch participants' }, { status: 500 })
     }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    const chat = await repos.chats.findById(id)
-
-    if (!chat || chat.userId !== user.id) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
-
-    const enrichedParticipants = await Promise.all(
-      chat.participants.map(p => enrichParticipant(p, repos))
-    )
-
-    logger.debug('[Participants API] GET success', {
-      chatId: id,
-      participantCount: enrichedParticipants.length,
-    })
-
-    return NextResponse.json({ participants: enrichedParticipants })
-  } catch (error) {
-    logger.error('[Participants API] GET error', { context: 'GET /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to fetch participants' }, { status: 500 })
   }
-}
+)
 
 /**
  * POST /api/chats/:id/participants
  * Add a new participant to the chat
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
+export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }, { id }) => {
+    try {
+      const chat = await repos.chats.findById(id)
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    const chat = await repos.chats.findById(id)
-
-    if (!chat || chat.userId !== user.id) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
-
-    const body = await req.json()
-    const validatedData = addParticipantSchema.parse(body)
-
-    logger.debug('[Participants API] POST request', {
-      chatId: id,
-      type: validatedData.type,
-      characterId: validatedData.characterId,
-      personaId: validatedData.personaId,
-    })
-
-    // Validate CHARACTER participant
-    if (validatedData.type === 'CHARACTER') {
-      if (!validatedData.characterId) {
-        return NextResponse.json({ error: 'characterId is required for CHARACTER participants' }, { status: 400 })
+      if (!chat || chat.userId !== user.id) {
+        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
       }
 
-      const character = await repos.characters.findById(validatedData.characterId)
-      if (!character || character.userId !== user.id) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
-      }
+      const body = await req.json()
+      const validatedData = addParticipantSchema.parse(body)
 
-      // Determine if this is a user-controlled character
-      const controlledBy = validatedData.controlledBy || character.controlledBy || 'llm'
-      const isUserControlled = controlledBy === 'user'
+      logger.debug('[Participants API] POST request', {
+        chatId: id,
+        type: validatedData.type,
+        characterId: validatedData.characterId,
+        personaId: validatedData.personaId,
+      })
 
-      // Connection profile is only required for LLM-controlled characters
-      if (!isUserControlled && !validatedData.connectionProfileId) {
-        return NextResponse.json({ error: 'connectionProfileId is required for LLM-controlled CHARACTER participants' }, { status: 400 })
-      }
+      // Validate CHARACTER participant
+      if (validatedData.type === 'CHARACTER') {
+        if (!validatedData.characterId) {
+          return NextResponse.json({ error: 'characterId is required for CHARACTER participants' }, { status: 400 })
+        }
 
-      if (validatedData.connectionProfileId) {
-        const profile = await repos.connections.findById(validatedData.connectionProfileId)
-        if (!profile || profile.userId !== user.id) {
-          return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+        const character = await repos.characters.findById(validatedData.characterId)
+        if (!character || character.userId !== user.id) {
+          return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        }
+
+        // Determine if this is a user-controlled character
+        const controlledBy = validatedData.controlledBy || character.controlledBy || 'llm'
+        const isUserControlled = controlledBy === 'user'
+
+        // Connection profile is only required for LLM-controlled characters
+        if (!isUserControlled && !validatedData.connectionProfileId) {
+          return NextResponse.json({ error: 'connectionProfileId is required for LLM-controlled CHARACTER participants' }, { status: 400 })
+        }
+
+        if (validatedData.connectionProfileId) {
+          const profile = await repos.connections.findById(validatedData.connectionProfileId)
+          if (!profile || profile.userId !== user.id) {
+            return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+          }
+        }
+
+        // Check if character is already in the chat
+        const existingParticipant = chat.participants.find(
+          p => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && p.isActive
+        )
+        if (existingParticipant) {
+          return NextResponse.json({ error: 'Character is already in this chat' }, { status: 400 })
         }
       }
 
-      // Check if character is already in the chat
-      const existingParticipant = chat.participants.find(
-        p => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && p.isActive
-      )
-      if (existingParticipant) {
-        return NextResponse.json({ error: 'Character is already in this chat' }, { status: 400 })
-      }
-    }
+      // Validate PERSONA participant
+      if (validatedData.type === 'PERSONA') {
+        if (!validatedData.personaId) {
+          return NextResponse.json({ error: 'personaId is required for PERSONA participants' }, { status: 400 })
+        }
 
-    // Validate PERSONA participant
-    if (validatedData.type === 'PERSONA') {
-      if (!validatedData.personaId) {
-        return NextResponse.json({ error: 'personaId is required for PERSONA participants' }, { status: 400 })
+        const persona = await repos.personas.findById(validatedData.personaId)
+        if (!persona || persona.userId !== user.id) {
+          return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+        }
       }
 
-      const persona = await repos.personas.findById(validatedData.personaId)
-      if (!persona || persona.userId !== user.id) {
-        return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+      // For CHARACTER participants, determine control mode
+      let controlledByValue = validatedData.controlledBy
+      if (validatedData.type === 'CHARACTER' && validatedData.characterId && !controlledByValue) {
+        // Inherit from character's default if not explicitly specified
+        const character = await repos.characters.findById(validatedData.characterId)
+        controlledByValue = character?.controlledBy || 'llm'
       }
-    }
 
-    // For CHARACTER participants, determine control mode
-    let controlledByValue = validatedData.controlledBy
-    if (validatedData.type === 'CHARACTER' && validatedData.characterId && !controlledByValue) {
-      // Inherit from character's default if not explicitly specified
-      const character = await repos.characters.findById(validatedData.characterId)
-      controlledByValue = character?.controlledBy || 'llm'
-    }
+      // Add the participant
+      let result = await repos.chats.addParticipant(id, {
+        type: validatedData.type,
+        characterId: validatedData.characterId || null,
+        personaId: validatedData.personaId || null,
+        controlledBy: controlledByValue || (validatedData.type === 'PERSONA' ? 'user' : 'llm'),
+        connectionProfileId: validatedData.connectionProfileId || null,
+        imageProfileId: validatedData.imageProfileId || null,
+        systemPromptOverride: validatedData.systemPromptOverride || null,
+        displayOrder: validatedData.displayOrder ?? chat.participants.length,
+        isActive: true,
+        hasHistoryAccess: validatedData.hasHistoryAccess ?? false,
+        joinScenario: validatedData.joinScenario || null,
+      })
 
-    // Add the participant
-    let result = await repos.chats.addParticipant(id, {
-      type: validatedData.type,
-      characterId: validatedData.characterId || null,
-      personaId: validatedData.personaId || null,
-      controlledBy: controlledByValue || (validatedData.type === 'PERSONA' ? 'user' : 'llm'),
-      connectionProfileId: validatedData.connectionProfileId || null,
-      imageProfileId: validatedData.imageProfileId || null,
-      systemPromptOverride: validatedData.systemPromptOverride || null,
-      displayOrder: validatedData.displayOrder ?? chat.participants.length,
-      isActive: true,
-      hasHistoryAccess: validatedData.hasHistoryAccess ?? false,
-      joinScenario: validatedData.joinScenario || null,
-    })
+      if (!result) {
+        return NextResponse.json({ error: 'Failed to add participant' }, { status: 500 })
+      }
 
-    if (!result) {
-      return NextResponse.json({ error: 'Failed to add participant' }, { status: 500 })
-    }
+      // If adding a CHARACTER, merge the character's tags into the chat
+      if (validatedData.type === 'CHARACTER' && validatedData.characterId) {
+        const character = await repos.characters.findById(validatedData.characterId)
+        if (character && character.tags && character.tags.length > 0) {
+          const existingTagIds = new Set(result.tags || [])
+          const newTags = character.tags.filter((tagId: string) => !existingTagIds.has(tagId))
 
-    // If adding a CHARACTER, merge the character's tags into the chat
-    if (validatedData.type === 'CHARACTER' && validatedData.characterId) {
-      const character = await repos.characters.findById(validatedData.characterId)
-      if (character && character.tags && character.tags.length > 0) {
-        const existingTagIds = new Set(result.tags || [])
-        const newTags = character.tags.filter((tagId: string) => !existingTagIds.has(tagId))
+          if (newTags.length > 0) {
+            logger.debug('[Participants API] Adding character tags to chat', {
+              chatId: id,
+              characterId: validatedData.characterId,
+              characterName: character.name,
+              existingTagCount: existingTagIds.size,
+              newTagCount: newTags.length,
+            })
 
-        if (newTags.length > 0) {
-          logger.debug('[Participants API] Adding character tags to chat', {
-            chatId: id,
-            characterId: validatedData.characterId,
-            characterName: character.name,
-            existingTagCount: existingTagIds.size,
-            newTagCount: newTags.length,
-          })
-
-          const mergedTags = [...(result.tags || []), ...newTags]
-          const updatedChat = await repos.chats.update(id, { tags: mergedTags })
-          if (updatedChat) {
-            result = updatedChat
+            const mergedTags = [...(result.tags || []), ...newTags]
+            const updatedChat = await repos.chats.update(id, { tags: mergedTags })
+            if (updatedChat) {
+              result = updatedChat
+            }
           }
         }
       }
-    }
 
-    // Return enriched participant data
-    const newParticipant = result.participants.find(
-      p => (validatedData.type === 'CHARACTER' && p.characterId === validatedData.characterId) ||
-           (validatedData.type === 'PERSONA' && p.personaId === validatedData.personaId)
-    )
-
-    const enrichedParticipant = newParticipant
-      ? await enrichParticipant(newParticipant, repos)
-      : null
-
-    logger.info('[Participants API] POST success - participant added', {
-      chatId: id,
-      participantId: newParticipant?.id,
-      type: validatedData.type,
-    })
-
-    return NextResponse.json({
-      participant: enrichedParticipant,
-      chat: result,
-    }, { status: 201 })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
+      // Return enriched participant data
+      const newParticipant = result.participants.find(
+        p => (validatedData.type === 'CHARACTER' && p.characterId === validatedData.characterId) ||
+             (validatedData.type === 'PERSONA' && p.personaId === validatedData.personaId)
       )
-    }
 
-    logger.error('[Participants API] POST error', { context: 'POST /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to add participant' }, { status: 500 })
+      const enrichedParticipant = newParticipant
+        ? await enrichParticipant(newParticipant, repos)
+        : null
+
+      logger.info('[Participants API] POST success - participant added', {
+        chatId: id,
+        participantId: newParticipant?.id,
+        type: validatedData.type,
+      })
+
+      return NextResponse.json({
+        participant: enrichedParticipant,
+        chat: result,
+      }, { status: 201 })
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Validation error', details: error.errors },
+          { status: 400 }
+        )
+      }
+
+      logger.error('[Participants API] POST error', { context: 'POST /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
+      return NextResponse.json({ error: 'Failed to add participant' }, { status: 500 })
+    }
   }
-}
+)
 
 /**
  * PATCH /api/chats/:id/participants
  * Update a participant's settings
  */
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
+export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }, { id }) => {
+    try {
+      const chat = await repos.chats.findById(id)
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    const chat = await repos.chats.findById(id)
-
-    if (!chat || chat.userId !== user.id) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
-
-    const body = await req.json()
-    const validatedData = updateParticipantSchema.parse(body)
-
-    logger.debug('[Participants API] PATCH request', {
-      chatId: id,
-      participantId: validatedData.participantId,
-    })
-
-    const { participantId, ...updateData } = validatedData
-
-    // Validate connection profile if updating
-    if (updateData.connectionProfileId) {
-      const profile = await repos.connections.findById(updateData.connectionProfileId)
-      if (!profile || profile.userId !== user.id) {
-        return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+      if (!chat || chat.userId !== user.id) {
+        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
       }
+
+      const body = await req.json()
+      const validatedData = updateParticipantSchema.parse(body)
+
+      logger.debug('[Participants API] PATCH request', {
+        chatId: id,
+        participantId: validatedData.participantId,
+      })
+
+      const { participantId, ...updateData } = validatedData
+
+      // Validate connection profile if updating
+      if (updateData.connectionProfileId) {
+        const profile = await repos.connections.findById(updateData.connectionProfileId)
+        if (!profile || profile.userId !== user.id) {
+          return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+        }
+      }
+
+      const result = await repos.chats.updateParticipant(id, participantId, updateData)
+
+      if (!result) {
+        return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
+      }
+
+      // Return enriched participant data
+      const updatedParticipant = result.participants.find(p => p.id === participantId)
+      const enrichedParticipant = updatedParticipant
+        ? await enrichParticipant(updatedParticipant, repos)
+        : null
+
+      logger.info('[Participants API] PATCH success - participant updated', {
+        chatId: id,
+        participantId,
+      })
+
+      return NextResponse.json({
+        participant: enrichedParticipant,
+        chat: result,
+      })
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Validation error', details: error.errors },
+          { status: 400 }
+        )
+      }
+
+      logger.error('[Participants API] PATCH error', { context: 'PATCH /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
+      return NextResponse.json({ error: 'Failed to update participant' }, { status: 500 })
     }
-
-    const result = await repos.chats.updateParticipant(id, participantId, updateData)
-
-    if (!result) {
-      return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
-    }
-
-    // Return enriched participant data
-    const updatedParticipant = result.participants.find(p => p.id === participantId)
-    const enrichedParticipant = updatedParticipant
-      ? await enrichParticipant(updatedParticipant, repos)
-      : null
-
-    logger.info('[Participants API] PATCH success - participant updated', {
-      chatId: id,
-      participantId,
-    })
-
-    return NextResponse.json({
-      participant: enrichedParticipant,
-      chat: result,
-    })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
-    logger.error('[Participants API] PATCH error', { context: 'PATCH /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to update participant' }, { status: 500 })
   }
-}
+)
 
 /**
  * DELETE /api/chats/:id/participants
  * Remove a participant from the chat (soft delete via isActive: false)
  */
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
+export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }, { id }) => {
+    try {
+      const chat = await repos.chats.findById(id)
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+      if (!chat || chat.userId !== user.id) {
+        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+      }
 
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
+      const body = await req.json()
+      const validatedData = removeParticipantSchema.parse(body)
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+      logger.debug('[Participants API] DELETE request', {
+        chatId: id,
+        participantId: validatedData.participantId,
+      })
 
-    const chat = await repos.chats.findById(id)
+      // Find the participant to be removed
+      const participantToRemove = chat.participants.find(p => p.id === validatedData.participantId)
+      if (!participantToRemove) {
+        return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
+      }
 
-    if (!chat || chat.userId !== user.id) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
+      // Prevent removing the user's persona
+      if (participantToRemove.type === 'PERSONA') {
+        return NextResponse.json({ error: 'Cannot remove your persona from the chat' }, { status: 400 })
+      }
 
-    const body = await req.json()
-    const validatedData = removeParticipantSchema.parse(body)
+      // Count active characters
+      const activeCharacters = chat.participants.filter(p => p.type === 'CHARACTER' && p.isActive)
+      if (activeCharacters.length <= 1 && participantToRemove.type === 'CHARACTER') {
+        return NextResponse.json({ error: 'Cannot remove the last character from the chat' }, { status: 400 })
+      }
 
-    logger.debug('[Participants API] DELETE request', {
-      chatId: id,
-      participantId: validatedData.participantId,
-    })
+      const result = await repos.chats.removeParticipant(id, validatedData.participantId)
 
-    // Find the participant to be removed
-    const participantToRemove = chat.participants.find(p => p.id === validatedData.participantId)
-    if (!participantToRemove) {
-      return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
-    }
+      if (!result) {
+        return NextResponse.json({ error: 'Failed to remove participant' }, { status: 500 })
+      }
 
-    // Prevent removing the user's persona
-    if (participantToRemove.type === 'PERSONA') {
-      return NextResponse.json({ error: 'Cannot remove your persona from the chat' }, { status: 400 })
-    }
+      logger.info('[Participants API] DELETE success - participant removed', {
+        chatId: id,
+        participantId: validatedData.participantId,
+      })
 
-    // Count active characters
-    const activeCharacters = chat.participants.filter(p => p.type === 'CHARACTER' && p.isActive)
-    if (activeCharacters.length <= 1 && participantToRemove.type === 'CHARACTER') {
-      return NextResponse.json({ error: 'Cannot remove the last character from the chat' }, { status: 400 })
-    }
+      return NextResponse.json({
+        success: true,
+        chat: result,
+      })
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Validation error', details: error.errors },
+          { status: 400 }
+        )
+      }
 
-    const result = await repos.chats.removeParticipant(id, validatedData.participantId)
+      if (error instanceof Error && error.message.includes('last participant')) {
+        return NextResponse.json({ error: 'Cannot remove the last participant from a chat' }, { status: 400 })
+      }
 
-    if (!result) {
+      logger.error('[Participants API] DELETE error', { context: 'DELETE /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
       return NextResponse.json({ error: 'Failed to remove participant' }, { status: 500 })
     }
-
-    logger.info('[Participants API] DELETE success - participant removed', {
-      chatId: id,
-      participantId: validatedData.participantId,
-    })
-
-    return NextResponse.json({
-      success: true,
-      chat: result,
-    })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
-    if (error instanceof Error && error.message.includes('last participant')) {
-      return NextResponse.json({ error: 'Cannot remove the last participant from a chat' }, { status: 400 })
-    }
-
-    logger.error('[Participants API] DELETE error', { context: 'DELETE /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to remove participant' }, { status: 500 })
   }
-}
+)

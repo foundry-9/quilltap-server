@@ -6,8 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
@@ -37,20 +36,8 @@ const getModelsSchema = z.object({
  *   models: string[]
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     // Validate request body
     const body = await req.json()
     const { provider, apiKeyId, baseUrl } = getModelsSchema.parse(body)
@@ -58,7 +45,7 @@ export async function POST(req: NextRequest) {
     // Get API key if provided (security: verify ownership)
     let decryptedKey = ''
     if (apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyByIdAndUserId(apiKeyId, session.user.id)
+      const apiKey = await repos.connections.findApiKeyByIdAndUserId(apiKeyId, user.id)
 
       if (!apiKey) {
         return NextResponse.json(
@@ -237,4 +224,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

@@ -5,9 +5,8 @@
  * POST /api/profiles/test-message - Send a test message to verify provider functionality
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
@@ -46,21 +45,11 @@ const testMessageSchema = z.object({
  *   }
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     // Validate request body
     const body = await req.json()
     const { provider, apiKeyId, baseUrl, modelName, parameters = {} } = testMessageSchema.parse(body)
-
-    const repos = getRepositories()
 
     // Get API key if provided
     let decryptedKey = ''
@@ -78,7 +67,7 @@ export async function POST(req: NextRequest) {
         apiKey.ciphertext,
         apiKey.iv,
         apiKey.authTag,
-        session.user.id
+        user.id
       )
     }
 
@@ -255,4 +244,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

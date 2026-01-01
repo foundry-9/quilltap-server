@@ -1,17 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { disableTOTP } from '@/lib/auth/totp'
 import { logger } from '@/lib/logger'
 
-export async function POST(req: NextRequest) {
-  const session = await getServerSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const success = await disableTOTP(session.user.id)
+    const success = await disableTOTP(user.id)
 
     if (!success) {
       return NextResponse.json(
@@ -30,4 +24,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

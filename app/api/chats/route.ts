@@ -3,8 +3,7 @@
 // POST /api/chats - Create a new chat with participants
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize'
 import { decryptApiKey } from '@/lib/encryption'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
@@ -12,8 +11,9 @@ import { logger } from '@/lib/logger'
 import { z } from 'zod'
 import type { ChatEvent, ChatParticipantBase, ChatParticipantBaseInput, FileEntry, TimestampConfig } from '@/lib/schemas/types'
 import { TimestampConfigSchema } from '@/lib/schemas/types'
+import type { RepositoryContainer } from '@/lib/repositories/factory'
 
-type Repos = ReturnType<typeof getRepositories>
+type Repos = RepositoryContainer
 
 /**
  * Get the filepath for a file based on storage type
@@ -125,20 +125,8 @@ async function enrichParticipantSummary(participant: ChatParticipantBase, repos:
 }
 
 // GET /api/chats - List all chats
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     // Parse query parameters
     const { searchParams } = new URL(req.url)
     const excludeTagIdsParam = searchParams.get('excludeTagIds')
@@ -231,7 +219,7 @@ export async function GET(req: NextRequest) {
     logger.error('Error fetching chats', { context: 'GET /api/chats' }, error instanceof Error ? error : undefined)
     return NextResponse.json({ error: 'Failed to fetch chats' }, { status: 500 })
   }
-}
+})
 
 // Helper to validate and build a character participant
 async function buildCharacterParticipant(
@@ -525,20 +513,8 @@ function defaultGreeting(characterName: string): string {
 }
 
 // POST /api/chats - Create a new chat
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     const body = await req.json()
     const validatedData = createChatSchema.parse(body)
 
@@ -612,4 +588,4 @@ export async function POST(req: NextRequest) {
     logger.error('Error creating chat', { context: 'POST /api/chats' }, error instanceof Error ? error : undefined)
     return NextResponse.json({ error: 'Failed to create chat' }, { status: 500 })
   }
-}
+})

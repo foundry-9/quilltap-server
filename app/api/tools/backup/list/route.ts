@@ -14,33 +14,24 @@
  * }
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { listS3Backups } from '@/lib/backup/backup-service'
 import { logger } from '@/lib/logger'
 
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession()
-
-    if (!session?.user?.id) {
-      logger.warn('List backups attempted without authentication', {
-        context: 'GET /api/tools/backup/list',
-      })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     logger.debug('Listing S3 backups', {
       context: 'GET /api/tools/backup/list',
-      userId: session.user.id,
+      userId: user.id,
     })
 
     // List all backups for this user
-    const backups = await listS3Backups(session.user.id)
+    const backups = await listS3Backups(user.id)
 
     logger.info('Backups listed', {
       context: 'GET /api/tools/backup/list',
-      userId: session.user.id,
+      userId: user.id,
       count: backups.length,
     })
 
@@ -67,4 +58,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

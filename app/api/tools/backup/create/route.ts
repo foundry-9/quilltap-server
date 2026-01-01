@@ -16,7 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { createBackup, saveBackupToS3 } from '@/lib/backup/backup-service'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
@@ -54,45 +54,36 @@ function startCleanup() {
   }, CLEANUP_INTERVAL_MS)
 }
 
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   startCleanup()
 
   try {
-    const session = await getServerSession()
-
-    if (!session?.user?.id) {
-      logger.warn('Backup create attempted without authentication', {
-        context: 'POST /api/tools/backup/create',
-      })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const body = await req.json()
     const { destination, filename } = CreateBackupSchema.parse(body)
 
     logger.info('Creating backup', {
       context: 'POST /api/tools/backup/create',
-      userId: session.user.id,
+      userId: user.id,
       destination,
     })
 
     // Create the backup
-    const { zipBuffer, manifest } = await createBackup(session.user.id)
+    const { zipBuffer, manifest } = await createBackup(user.id)
 
     logger.debug('Backup created', {
       context: 'POST /api/tools/backup/create',
-      userId: session.user.id,
+      userId: user.id,
       zipSize: zipBuffer.length,
       entityCounts: manifest.counts,
     })
 
     if (destination === 's3') {
       // Save to S3
-      const s3Key = await saveBackupToS3(session.user.id, zipBuffer, filename)
+      const s3Key = await saveBackupToS3(user.id, zipBuffer, filename)
 
       logger.info('Backup saved to S3', {
         context: 'POST /api/tools/backup/create',
-        userId: session.user.id,
+        userId: user.id,
         s3Key,
       })
 
@@ -110,7 +101,7 @@ export async function POST(req: NextRequest) {
 
       logger.info('Backup stored for download', {
         context: 'POST /api/tools/backup/create',
-        userId: session.user.id,
+        userId: user.id,
         backupId,
         expiresInMinutes: BACKUP_EXPIRY_MS / 60 / 1000,
       })
@@ -142,7 +133,7 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 // Export for testing purposes
 export { temporaryBackups }

@@ -5,9 +5,8 @@
  * POST /api/images/generate - Generate images using LLM providers
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { logger } from '@/lib/logger'
@@ -57,23 +56,16 @@ const generateImageSchema = z.object({
  *   }
  * }
  */
-export async function POST(request: NextRequest) {
+export const POST = createAuthenticatedHandler(async (request, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     // Validate request body
     const body = await request.json()
     const { prompt, profileId, tags, options = {} } = generateImageSchema.parse(body)
 
-    const repos = getRepositories()
-
     // Load and validate connection profile
     const profile = await repos.connections.findById(profileId)
 
-    if (!profile || profile.userId !== session.user.id) {
+    if (!profile || profile.userId !== user.id) {
       return NextResponse.json(
         { error: 'Connection profile not found' },
         { status: 404 }
@@ -89,7 +81,7 @@ export async function POST(request: NextRequest) {
           apiKey.ciphertext,
           apiKey.iv,
           apiKey.authTag,
-          session.user.id
+          user.id
         )
       }
     }
@@ -159,9 +151,9 @@ export async function POST(request: NextRequest) {
         const linkedTo = tags?.map(t => t.tagId) || []
 
         // Upload to S3
-        const s3Key = buildS3Key(session.user.id, fileId, filename, category)
+        const s3Key = buildS3Key(user.id, fileId, filename, category)
         await uploadS3File(s3Key, imageBuffer, generatedImage.mimeType, {
-          userId: session.user.id,
+          userId: user.id,
           fileId,
           category,
           filename,
@@ -170,7 +162,7 @@ export async function POST(request: NextRequest) {
         logger.debug('Uploaded generated image to S3', { fileId, s3Key, size: imageBuffer.length })
 
         // Inherit tags from linked entities
-        const inheritedTags = await getInheritedTags(linkedTo, session.user.id)
+        const inheritedTags = await getInheritedTags(linkedTo, user.id)
 
         logger.debug('Inherited tags for generated image', {
           context: 'images-generate',
@@ -182,7 +174,7 @@ export async function POST(request: NextRequest) {
         // Create database record using files repository (FileEntry format)
         const file = await repos.files.create({
           sha256,
-          userId: session.user.id,
+          userId: user.id,
           originalFilename: filename,
           mimeType: generatedImage.mimeType,
           size: imageBuffer.length,
@@ -239,4 +231,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

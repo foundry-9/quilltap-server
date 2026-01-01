@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
+import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
 
 // Mock dependencies - these are already mocked globally in jest.setup.ts
 // We just need to add the startup and provider registry mocks
@@ -17,6 +18,9 @@ jest.mock('@/lib/plugins/provider-registry', () => ({
     getStats: jest.fn().mockReturnValue({ total: 8 }),
   },
 }))
+
+// Mock the repositories factory
+jest.mock('@/lib/repositories/factory')
 
 // Import after mocking
 import { POST as testMessage } from '@/app/api/profiles/test-message/route'
@@ -52,32 +56,17 @@ describe('POST /api/profiles/test-message', () => {
   }
 
   beforeEach(() => {
+    // Create fresh mock repositories for each test
+    const mockRepos = createMockRepositoryContainer()
+    mockGetRepositories.mockReturnValue(mockRepos)
+
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
 
     // Set up repository mocks
-    mockConnectionsRepo = {
-      getAllApiKeys: jest.fn(),
-      findApiKeyById: jest.fn(),
-      createApiKey: jest.fn(),
-      updateApiKey: jest.fn(),
-      deleteApiKey: jest.fn(),
-      findByUserId: jest.fn(),
-      findById: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    }
+    mockConnectionsRepo = mockRepos.connections
 
-    mockGetRepositories.mockReturnValue({
-      connections: mockConnectionsRepo,
-      characters: {},
-      personas: {},
-      chats: {},
-      tags: {},
-      users: {},
-      images: {},
-      imageProfiles: {},
-    })
+    // Setup auth mocks with repositories
+    setupAuthMocks(mockGetServerSession, mockRepos)
 
     // Default: validation passes
     mockValidateProviderConfig.mockReturnValue({

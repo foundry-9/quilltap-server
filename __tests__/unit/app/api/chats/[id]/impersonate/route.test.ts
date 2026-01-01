@@ -10,10 +10,15 @@
 
 import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals'
 import { NextRequest } from 'next/server'
+import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
+
+// Create mock repos before jest.mock
+const mockRepos = createMockRepositoryContainer()
 
 // Mock dependencies before imports
 jest.mock('@/lib/repositories/factory', () => ({
-  getRepositories: jest.fn(),
+  getRepositories: jest.fn(() => mockRepos),
+  getUserRepositories: jest.fn(),
 }))
 
 jest.mock('@/lib/auth/session', () => ({
@@ -26,12 +31,14 @@ jest.mock('@/lib/logger', () => ({
     debug: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
+    child: jest.fn(function() { return this }),
   },
 }))
 
 // Get mocked modules using requireMock
 const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as {
   getRepositories: jest.Mock
+  getUserRepositories: jest.Mock
 }
 const sessionMock = jest.requireMock('@/lib/auth/session') as {
   getServerSession: jest.Mock
@@ -42,6 +49,7 @@ const loggerMock = jest.requireMock('@/lib/logger') as {
     debug: jest.Mock
     warn: jest.Mock
     error: jest.Mock
+    child: jest.Mock
   }
 }
 
@@ -176,14 +184,13 @@ describe('Impersonation API Route', () => {
       findById: jest.fn(),
     }
 
-    mockGetRepositories.mockReturnValue({
-      chats: mockChatsRepo,
-      characters: mockCharactersRepo,
-      connections: mockConnectionsRepo,
-    } as any)
+    // Override specific repos in the mock container for this test
+    mockRepos.chats = { ...mockRepos.chats, ...mockChatsRepo } as any
+    mockRepos.characters = { ...mockRepos.characters, ...mockCharactersRepo } as any
+    mockRepos.connections = { ...mockRepos.connections, ...mockConnectionsRepo } as any
 
-    // Default session mock
-    mockGetServerSession.mockResolvedValue(mockSession)
+    // Setup auth mocks (sets up session and user in repos)
+    setupAuthMocks(mockGetServerSession, mockRepos)
 
     // Fresh import of route handlers for each test
     jest.isolateModules(() => {

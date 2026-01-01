@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema, type AvatarDisplayMode } from '@/lib/schemas/types'
@@ -102,23 +102,13 @@ async function updateChatSettings(
  * Get chat settings for the authenticated user
  * Returns default settings if none exist
  */
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    const repos = getRepositories()
-
-    let chatSettings = await repos.chatSettings.findByUserId(session.user.id)
+    let chatSettings = await repos.chatSettings.findByUserId(user.id)
 
     // If no settings exist, create default settings via update
     if (!chatSettings) {
-      chatSettings = await repos.chatSettings.updateForUser(session.user.id, {
+      chatSettings = await repos.chatSettings.updateForUser(user.id, {
         avatarDisplayMode: 'ALWAYS',
         avatarDisplayStyle: 'CIRCULAR',
         tagStyles: {},
@@ -138,26 +128,18 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 /**
  * Handle settings update for both POST and PUT
  */
-async function handleSettingsUpdate(req: NextRequest) {
+async function handleSettingsUpdate(req: NextRequest, { user }: AuthenticatedContext) {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     const body = await req.json()
     const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings, imageDescriptionProfileId, themePreference, defaultRoleplayTemplateId, sidebarWidth } = body
 
     const chatSettings = await updateChatSettings(
-      session.user.id,
+      user.id,
       avatarDisplayMode,
       avatarDisplayStyle,
       tagStyles,
@@ -184,14 +166,14 @@ async function handleSettingsUpdate(req: NextRequest) {
  * POST /api/chat-settings
  * Update chat settings for the authenticated user (legacy, for backwards compatibility)
  */
-export async function POST(req: NextRequest) {
-  return handleSettingsUpdate(req)
-}
+export const POST = createAuthenticatedHandler(async (req: NextRequest, context: AuthenticatedContext) => {
+  return handleSettingsUpdate(req, context)
+})
 
 /**
  * PUT /api/chat-settings
  * Update chat settings for the authenticated user
  */
-export async function PUT(req: NextRequest) {
-  return handleSettingsUpdate(req)
-}
+export const PUT = createAuthenticatedHandler(async (req: NextRequest, context: AuthenticatedContext) => {
+  return handleSettingsUpdate(req, context)
+})

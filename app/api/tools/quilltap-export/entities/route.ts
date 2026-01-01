@@ -4,23 +4,18 @@
  * Returns available entities for export selection
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import type { ExportEntityType } from '@/lib/export/types';
 
 const moduleLogger = logger.child({ module: 'api:quilltap-export-entities' });
 
-export async function GET(request: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = session.user.id;
-    const { searchParams } = new URL(request.url);
+    const userId = user.id;
+    const { searchParams } = new URL(req.url);
     const type = searchParams.get('type') as ExportEntityType | null;
 
     if (!type) {
@@ -154,4 +149,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

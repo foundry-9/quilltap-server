@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextRequest, NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { getInstalledPlugins, isPluginInstalled } from '@/lib/plugins/installer';
 
@@ -11,13 +11,8 @@ import { getInstalledPlugins, isPluginInstalled } from '@/lib/plugins/installer'
  * - scope: 'all' | 'bundled' | 'site' | 'user' (default: 'all')
  * - check: package name to check if installed (optional)
  */
-export async function GET(req: Request) {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { searchParams } = new URL(req.url);
     const scope = (searchParams.get('scope') || 'all') as 'all' | 'bundled' | 'site' | 'user';
     const checkPackage = searchParams.get('check');
@@ -29,7 +24,7 @@ export async function GET(req: Request) {
         package: checkPackage,
       });
 
-      const status = await isPluginInstalled(checkPackage, session.user.id);
+      const status = await isPluginInstalled(checkPackage, user.id);
       return NextResponse.json({
         package: checkPackage,
         installed: status.installed,
@@ -41,10 +36,10 @@ export async function GET(req: Request) {
     logger.debug('Fetching installed plugins', {
       context: 'plugins-installed-GET',
       scope,
-      userId: session.user.id.substring(0, 8),
+      userId: user.id.substring(0, 8),
     });
 
-    const plugins = await getInstalledPlugins(scope, session.user.id);
+    const plugins = await getInstalledPlugins(scope, user.id);
 
     // Transform to a cleaner format for the frontend
     const formattedPlugins = plugins.map(plugin => ({
@@ -87,4 +82,4 @@ export async function GET(req: Request) {
       { status: 500 }
     );
   }
-}
+});

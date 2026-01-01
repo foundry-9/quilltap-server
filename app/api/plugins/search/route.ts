@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextRequest, NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 
 const NPM_REGISTRY_SEARCH_URL = 'https://registry.npmjs.org/-/v1/search';
@@ -68,13 +68,8 @@ async function searchNpm(searchText: string): Promise<any[]> {
  * GET /api/plugins/search
  * Search npm registry for Quilltap plugins
  */
-export async function GET(req: Request) {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('q') || '';
 
@@ -166,4 +161,4 @@ export async function GET(req: Request) {
       { status: 500 }
     );
   }
-}
+});

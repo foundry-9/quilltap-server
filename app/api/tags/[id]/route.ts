@@ -3,8 +3,7 @@
 // DELETE /api/tags/[id] - Delete a tag
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { z } from 'zod'
 import type { Tag } from '@/lib/schemas/types'
 import { TagVisualStyleSchema } from '@/lib/schemas/types'
@@ -23,24 +22,9 @@ const updateTagSchema = z
   )
 
 // PUT /api/tags/[id] - Update tag name
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
   try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     const tagId = id
 
     // Verify tag exists and belongs to user
@@ -104,27 +88,12 @@ export async function PUT(
       { status: 500 }
     )
   }
-}
+})
 
 // DELETE /api/tags/[id] - Delete a tag
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
   try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     const tagId = id
 
     // Verify tag exists and belongs to user
@@ -149,4 +118,4 @@ export async function DELETE(
       { status: 500 }
     )
   }
-}
+})

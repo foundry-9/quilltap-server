@@ -4,8 +4,8 @@
  * POST /api/tools/quilltap-import - Preview import file contents and detect conflicts
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { previewImport, type QuilltapExport } from '@/lib/import/quilltap-import-service';
@@ -64,34 +64,26 @@ function parseExportFile(content: string): unknown {
  *   warnings: string[]
  * }
  */
-export async function POST(request: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Quilltap import preview attempted without authentication', {
-        context: 'POST /api/tools/quilltap-import',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const contentType = request.headers.get('content-type') || '';
+    const contentType = req.headers.get('content-type') || '';
     let exportData: unknown;
 
     logger.info('Processing Quilltap import preview request', {
       context: 'POST /api/tools/quilltap-import',
-      userId: session.user.id,
+      userId: user.id,
       contentType,
     });
 
     if (contentType.includes('multipart/form-data')) {
       // Handle FormData with file upload
-      const formData = await request.formData();
+      const formData = await req.formData();
       const file = formData.get('file') as File | null;
 
       if (!file) {
         logger.warn('Quilltap import preview missing file', {
           context: 'POST /api/tools/quilltap-import',
-          userId: session.user.id,
+          userId: user.id,
         });
         return NextResponse.json({ error: 'No file provided' }, { status: 400 });
       }
@@ -99,7 +91,7 @@ export async function POST(request: NextRequest) {
       if (file.size > MAX_FILE_SIZE) {
         logger.warn('Quilltap import file too large', {
           context: 'POST /api/tools/quilltap-import',
-          userId: session.user.id,
+          userId: user.id,
           fileSize: file.size,
           maxSize: MAX_FILE_SIZE,
         });
@@ -111,7 +103,7 @@ export async function POST(request: NextRequest) {
 
       logger.debug('Reading uploaded export file', {
         context: 'POST /api/tools/quilltap-import',
-        userId: session.user.id,
+        userId: user.id,
         fileName: file.name,
         fileSize: file.size,
       });
@@ -120,12 +112,12 @@ export async function POST(request: NextRequest) {
       exportData = parseExportFile(text);
     } else {
       // Handle JSON body
-      const body = await request.json();
+      const body = await req.json();
 
       if (!body.exportData) {
         logger.warn('Quilltap import preview missing exportData', {
           context: 'POST /api/tools/quilltap-import',
-          userId: session.user.id,
+          userId: user.id,
         });
         return NextResponse.json(
           { error: 'Missing required field: exportData' },
@@ -140,7 +132,7 @@ export async function POST(request: NextRequest) {
     if (!validateExportFile(exportData)) {
       logger.warn('Invalid export file format', {
         context: 'POST /api/tools/quilltap-import',
-        userId: session.user.id,
+        userId: user.id,
       });
       return NextResponse.json(
         {
@@ -154,15 +146,15 @@ export async function POST(request: NextRequest) {
 
     logger.info('Export file validated', {
       context: 'POST /api/tools/quilltap-import',
-      userId: session.user.id,
+      userId: user.id,
       exportType: exported.manifest.exportType,
     });
 
-    const preview = await previewImport(session.user.id, exported);
+    const preview = await previewImport(user.id, exported);
 
     logger.debug('Quilltap import preview generated', {
       context: 'POST /api/tools/quilltap-import',
-      userId: session.user.id,
+      userId: user.id,
       entityTypes: Object.keys(preview.entities),
       conflictCounts: preview.conflictCounts,
     });
@@ -179,4 +171,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

@@ -4,11 +4,11 @@
 // DELETE /api/chats/:id - Delete chat
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { z } from 'zod'
 import type { ChatParticipantBase, ChatMetadata, FileEntry } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
+import type { RepositoryContainer } from '@/lib/repositories/factory'
 
 /**
  * Get the filepath for a file based on storage type
@@ -70,7 +70,7 @@ const chatUpdateRequestSchema = z.object({
   roleplayTemplateId: z.string().nullish(),
 })
 
-type Repos = ReturnType<typeof getRepositories>
+type Repos = RepositoryContainer
 
 // Helper to get enriched character data
 async function getEnrichedCharacter(characterId: string, repos: Repos) {
@@ -405,86 +405,72 @@ async function handleRemoveParticipant(
 }
 
 // GET /api/chats/:id
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
+    try {
+      const chatMetadata = await repos.chats.findById(id)
+
+      if (!chatMetadata || chatMetadata.userId !== user.id) {
+        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+      }
+
+      const enrichedParticipants = await Promise.all(
+        chatMetadata.participants.map(p => enrichParticipant(p, repos))
+      )
+
+      const chatEvents = await repos.chats.getMessages(id)
+      const messages = await Promise.all(
+        chatEvents
+          .filter(event => event.type === 'message')
+          .map(async event => {
+            if (event.type !== 'message') return null
+
+            // Get attachments from repository using linkedTo
+            const linkedFiles = await repos.files.findByLinkedTo(event.id)
+            const attachments = linkedFiles.map(file => ({
+              id: file.id,
+              filename: file.originalFilename,
+              filepath: getFilePath(file),
+              mimeType: file.mimeType,
+            }))
+
+            return {
+              id: event.id,
+              role: event.role,
+              content: event.content,
+              tokenCount: event.tokenCount || null,
+              createdAt: event.createdAt,
+              swipeGroupId: event.swipeGroupId || null,
+              swipeIndex: event.swipeIndex || null,
+              participantId: event.participantId || null,
+              attachments,
+              debugMemoryLogs: event.debugMemoryLogs || undefined,
+            }
+          })
+      ).then(results => results.filter(Boolean))
+
+      const chat = {
+        id: chatMetadata.id,
+        title: chatMetadata.title,
+        contextSummary: chatMetadata.contextSummary,
+        roleplayTemplateId: chatMetadata.roleplayTemplateId,
+        lastTurnParticipantId: chatMetadata.lastTurnParticipantId ?? null,
+        isPaused: chatMetadata.isPaused ?? false,
+        isManuallyRenamed: chatMetadata.isManuallyRenamed ?? false,
+        updatedAt: chatMetadata.updatedAt,
+        createdAt: chatMetadata.createdAt,
+        participants: enrichedParticipants,
+        user: { id: user.id, name: user.name, image: user.image },
+        messages,
+      }
+
+      return NextResponse.json({ chat })
+    } catch (error) {
+      logger.error('Error fetching chat', { context: 'GET /api/chats/:id' }, error instanceof Error ? error : undefined)
+      return NextResponse.json({ error: 'Failed to fetch chat' }, { status: 500 })
     }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    const chatMetadata = await repos.chats.findById(id)
-
-    if (!chatMetadata || chatMetadata.userId !== user.id) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
-
-    const enrichedParticipants = await Promise.all(
-      chatMetadata.participants.map(p => enrichParticipant(p, repos))
-    )
-
-    const chatEvents = await repos.chats.getMessages(id)
-    const messages = await Promise.all(
-      chatEvents
-        .filter(event => event.type === 'message')
-        .map(async event => {
-          if (event.type !== 'message') return null
-
-          // Get attachments from repository using linkedTo
-          const linkedFiles = await repos.files.findByLinkedTo(event.id)
-          const attachments = linkedFiles.map(file => ({
-            id: file.id,
-            filename: file.originalFilename,
-            filepath: getFilePath(file),
-            mimeType: file.mimeType,
-          }))
-
-          return {
-            id: event.id,
-            role: event.role,
-            content: event.content,
-            tokenCount: event.tokenCount || null,
-            createdAt: event.createdAt,
-            swipeGroupId: event.swipeGroupId || null,
-            swipeIndex: event.swipeIndex || null,
-            participantId: event.participantId || null,
-            attachments,
-            debugMemoryLogs: event.debugMemoryLogs || undefined,
-          }
-        })
-    ).then(results => results.filter(Boolean))
-
-    const chat = {
-      id: chatMetadata.id,
-      title: chatMetadata.title,
-      contextSummary: chatMetadata.contextSummary,
-      roleplayTemplateId: chatMetadata.roleplayTemplateId,
-      lastTurnParticipantId: chatMetadata.lastTurnParticipantId ?? null,
-      isPaused: chatMetadata.isPaused ?? false,
-      isManuallyRenamed: chatMetadata.isManuallyRenamed ?? false,
-      updatedAt: chatMetadata.updatedAt,
-      createdAt: chatMetadata.createdAt,
-      participants: enrichedParticipants,
-      user: { id: user.id, name: user.name, image: user.image },
-      messages,
-    }
-
-    return NextResponse.json({ chat })
-  } catch (error) {
-    logger.error('Error fetching chat', { context: 'GET /api/chats/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to fetch chat' }, { status: 500 })
   }
-}
+)
 
 // Helper to process all chat update operations
 async function processChatUpdates(
@@ -558,89 +544,61 @@ async function processChatUpdates(
 }
 
 // PUT /api/chats/:id
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
+    try {
+      const existingChat = await repos.chats.findById(id)
 
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
+      if (!existingChat || existingChat.userId !== user.id) {
+        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+      }
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+      const body = await req.json()
+      const validatedData = chatUpdateRequestSchema.parse(body)
 
-    const existingChat = await repos.chats.findById(id)
+      const result = await processChatUpdates(id, existingChat, validatedData, user.id, repos)
 
-    if (!existingChat || existingChat.userId !== user.id) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
+      if ('error' in result) {
+        return NextResponse.json({ error: result.error }, { status: result.status })
+      }
 
-    const body = await req.json()
-    const validatedData = chatUpdateRequestSchema.parse(body)
-
-    const result = await processChatUpdates(id, existingChat, validatedData, user.id, repos)
-
-    if ('error' in result) {
-      return NextResponse.json({ error: result.error }, { status: result.status })
-    }
-
-    const enrichedParticipants = await Promise.all(
-      result.chat.participants.map(p => enrichParticipant(p, repos))
-    )
-
-    return NextResponse.json({
-      chat: { ...result.chat, participants: enrichedParticipants }
-    })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
+      const enrichedParticipants = await Promise.all(
+        result.chat.participants.map(p => enrichParticipant(p, repos))
       )
-    }
 
-    logger.error('Error updating chat', { context: 'PUT /api/chats/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to update chat' }, { status: 500 })
+      return NextResponse.json({
+        chat: { ...result.chat, participants: enrichedParticipants }
+      })
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Validation error', details: error.errors },
+          { status: 400 }
+        )
+      }
+
+      logger.error('Error updating chat', { context: 'PUT /api/chats/:id' }, error instanceof Error ? error : undefined)
+      return NextResponse.json({ error: 'Failed to update chat' }, { status: 500 })
+    }
   }
-}
+)
 
 // DELETE /api/chats/:id
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
+    try {
+      const existingChat = await repos.chats.findById(id)
+
+      if (!existingChat || existingChat.userId !== user.id) {
+        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+      }
+
+      await repos.chats.delete(id)
+
+      return NextResponse.json({ success: true })
+    } catch (error) {
+      logger.error('Error deleting chat', { context: 'DELETE /api/chats/:id' }, error instanceof Error ? error : undefined)
+      return NextResponse.json({ error: 'Failed to delete chat' }, { status: 500 })
     }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    const existingChat = await repos.chats.findById(id)
-
-    if (!existingChat || existingChat.userId !== user.id) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
-
-    await repos.chats.delete(id)
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    logger.error('Error deleting chat', { context: 'DELETE /api/chats/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to delete chat' }, { status: 500 })
   }
-}
+)

@@ -8,8 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
@@ -22,108 +21,92 @@ import {
 /**
  * POST - Send a message to a chat and receive a streaming response
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
+export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
+    try {
+      // Verify chat ownership
+      const chat = await repos.chats.findById(id)
+      if (!chat || chat.userId !== user.id) {
+        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+      }
 
-    // Authenticate user
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+      // Parse request body
+      const body = await req.json()
+      const isContinueMode = body.continueMode === true
 
-    // Get repositories and verify user
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+      // Validate request based on mode
+      if (isContinueMode) {
+        const parsed = continueMessageSchema.parse(body)
+        logger.debug('[Chat Messages API] Continue mode request', {
+          chatId: id,
+          respondingParticipantId: parsed.respondingParticipantId,
+        })
 
-    // Verify chat ownership
-    const chat = await repos.chats.findById(id)
-    if (!chat || chat.userId !== user.id) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
+        // Handle the message via orchestrator
+        const stream = await handleSendMessage(repos, id, user.id, {
+          continueMode: true,
+          respondingParticipantId: parsed.respondingParticipantId,
+        })
 
-    // Parse request body
-    const body = await req.json()
-    const isContinueMode = body.continueMode === true
+        return new NextResponse(stream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+          },
+        })
+      } else {
+        const parsed = sendMessageSchema.parse(body)
+        logger.debug('[Chat Messages API] Send message request', {
+          chatId: id,
+          contentLength: parsed.content.length,
+          fileCount: parsed.fileIds?.length || 0,
+        })
 
-    // Validate request based on mode
-    if (isContinueMode) {
-      const parsed = continueMessageSchema.parse(body)
-      logger.debug('[Chat Messages API] Continue mode request', {
-        chatId: id,
-        respondingParticipantId: parsed.respondingParticipantId,
-      })
+        // Handle the message via orchestrator
+        const stream = await handleSendMessage(repos, id, user.id, {
+          content: parsed.content,
+          fileIds: parsed.fileIds,
+          continueMode: false,
+        })
 
-      // Handle the message via orchestrator
-      const stream = await handleSendMessage(repos, id, user.id, {
-        continueMode: true,
-        respondingParticipantId: parsed.respondingParticipantId,
-      })
+        return new NextResponse(stream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+          },
+        })
+      }
+    } catch (error) {
+      // Handle validation errors
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Validation error', details: error.errors },
+          { status: 400 }
+        )
+      }
 
-      return new NextResponse(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      })
-    } else {
-      const parsed = sendMessageSchema.parse(body)
-      logger.debug('[Chat Messages API] Send message request', {
-        chatId: id,
-        contentLength: parsed.content.length,
-        fileCount: parsed.fileIds?.length || 0,
-      })
+      // Handle known error types
+      if (error instanceof Error) {
+        const message = error.message
 
-      // Handle the message via orchestrator
-      const stream = await handleSendMessage(repos, id, user.id, {
-        content: parsed.content,
-        fileIds: parsed.fileIds,
-        continueMode: false,
-      })
+        // Map common errors to appropriate status codes
+        if (message === 'Chat not found' || message === 'Character not found' || message === 'Connection profile not found') {
+          return NextResponse.json({ error: message }, { status: 404 })
+        }
 
-      return new NextResponse(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      })
-    }
-  } catch (error) {
-    // Handle validation errors
-    if (error instanceof z.ZodError) {
+        if (message === 'No active character in chat' || message === 'No connection profile configured for character' || message === 'No API key configured for this connection profile') {
+          return NextResponse.json({ error: message }, { status: 400 })
+        }
+      }
+
+      // Generic error handling
+      logger.error('[Chat Messages API] Error sending message', {}, error as Error)
       return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
+        { error: 'Failed to send message' },
+        { status: 500 }
       )
     }
-
-    // Handle known error types
-    if (error instanceof Error) {
-      const message = error.message
-
-      // Map common errors to appropriate status codes
-      if (message === 'Chat not found' || message === 'Character not found' || message === 'Connection profile not found') {
-        return NextResponse.json({ error: message }, { status: 404 })
-      }
-
-      if (message === 'No active character in chat' || message === 'No connection profile configured for character' || message === 'No API key configured for this connection profile') {
-        return NextResponse.json({ error: message }, { status: 400 })
-      }
-    }
-
-    // Generic error handling
-    logger.error('[Chat Messages API] Error sending message', {}, error as Error)
-    return NextResponse.json(
-      { error: 'Failed to send message' },
-      { status: 500 }
-    )
   }
-}
+)

@@ -3,8 +3,8 @@
 // POST /api/tags - Create a new tag
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getUserRepositories, getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
+import { getUserRepositories } from '@/lib/repositories/factory'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
 
@@ -14,22 +14,10 @@ const createTagSchema = z.object({
 })
 
 // GET /api/tags - List or search tags
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const baseRepos = getRepositories()
-    const user = await baseRepos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     // Use user-scoped repositories for automatic filtering
-    const repos = getUserRepositories(session.user.id)
+    const repos = getUserRepositories(user.id)
 
     const searchParams = req.nextUrl.searchParams
     const search = searchParams.get('search')
@@ -82,25 +70,13 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 // POST /api/tags - Create a new tag
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const baseRepos = getRepositories()
-    const user = await baseRepos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     // Use user-scoped repositories
-    const repos = getUserRepositories(session.user.id)
+    const repos = getUserRepositories(user.id)
 
     const body = await req.json()
     const validatedData = createTagSchema.parse(body)
@@ -108,7 +84,7 @@ export async function POST(req: NextRequest) {
     const nameLower = validatedData.name.toLowerCase()
 
     logger.debug('Checking for existing tag', {
-      userId: session.user.id,
+      userId: user.id,
       tagName: validatedData.name,
       nameLower,
     })
@@ -118,7 +94,7 @@ export async function POST(req: NextRequest) {
 
     if (existingTag) {
       logger.debug('Found existing tag, returning it instead of creating duplicate', {
-        userId: session.user.id,
+        userId: user.id,
         tagName: validatedData.name,
         existingTagId: existingTag.id,
       })
@@ -134,7 +110,7 @@ export async function POST(req: NextRequest) {
     })
 
     logger.info('Created new tag', {
-      userId: session.user.id,
+      userId: user.id,
       tagId: tag.id,
       tagName: tag.name,
     })
@@ -154,4 +130,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

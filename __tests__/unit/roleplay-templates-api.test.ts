@@ -12,6 +12,10 @@ import {
 } from '@/app/api/roleplay-templates/[id]/route'
 import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
+import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
+
+// Create mock repos before jest.mock
+const mockRepos = createMockRepositoryContainer()
 
 const mockGetServerSession = jest.mocked(getServerSession)
 const mockGetRepositories = jest.mocked(getRepositories)
@@ -79,9 +83,14 @@ beforeEach(() => {
     delete: jest.fn(),
   }
 
-  mockGetRepositories.mockReturnValue({
-    roleplayTemplates: mockRoleplayRepo,
-  } as any)
+  // Setup getRepositories to return mockRepos
+  mockGetRepositories.mockReturnValue(mockRepos)
+
+  // Setup auth mocks
+  setupAuthMocks(mockGetServerSession as jest.Mock, mockRepos)
+
+  // Update the mock repos with specific test repo instances
+  mockRepos.roleplayTemplates = mockRoleplayRepo as any
 
   mockGetServerSession.mockResolvedValue(defaultSession as any)
 })

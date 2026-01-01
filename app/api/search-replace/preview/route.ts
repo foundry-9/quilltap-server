@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import { getSearchReplacePreview } from '@/lib/search-replace/search-replace-service';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -23,19 +23,9 @@ const previewRequestSchema = z.object({
   includeMemories: z.boolean().default(true),
 });
 
-export async function POST(request: NextRequest) {
+export const POST = createAuthenticatedHandler(async (request: NextRequest, { user }: AuthenticatedContext) => {
   try {
     logger.debug('POST /api/search-replace/preview - Getting preview');
-
-    // Check authentication
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Unauthorized search-replace preview attempt');
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
 
     // Parse and validate request body
     const body = await request.json();
@@ -56,7 +46,7 @@ export async function POST(request: NextRequest) {
     // Get preview counts
     const preview = await getSearchReplacePreview(
       validatedRequest,
-      session.user.id
+      user.id
     );
 
     logger.debug('Search-replace preview complete', preview);
@@ -71,4 +61,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

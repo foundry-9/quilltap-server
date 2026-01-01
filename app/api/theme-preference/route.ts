@@ -6,8 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/repositories/factory';
+import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import { themeRegistry } from '@/lib/themes/theme-registry';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
 import { logger } from '@/lib/logger';
@@ -24,29 +23,19 @@ import { ThemePreferenceSchema, type ThemePreference } from '@/lib/themes/types'
  *   customOverrides?: Record<string, string>;
  * }
  */
-export async function GET() {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
     logger.debug('Fetching theme preference', {
       context: 'GET /api/theme-preference',
-      userId: session.user.id,
+      userId: user.id,
     });
 
-    const repos = getRepositories();
-
     // Get user's chat settings
-    let chatSettings = await repos.chatSettings.findByUserId(session.user.id);
+    let chatSettings = await repos.chatSettings.findByUserId(user.id);
 
     // If no settings exist, create with defaults
     if (!chatSettings) {
-      chatSettings = await repos.chatSettings.updateForUser(session.user.id, {
+      chatSettings = await repos.chatSettings.updateForUser(user.id, {
         avatarDisplayMode: 'ALWAYS',
         avatarDisplayStyle: 'CIRCULAR',
         tagStyles: {},
@@ -67,7 +56,7 @@ export async function GET() {
 
     logger.debug('Theme preference retrieved', {
       context: 'GET /api/theme-preference',
-      userId: session.user.id,
+      userId: user.id,
       activeThemeId: themePreference.activeThemeId,
       colorMode: themePreference.colorMode,
     });
@@ -84,7 +73,7 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * PUT /api/theme-preference
@@ -99,21 +88,13 @@ export async function GET() {
  *
  * Response format: Updated ThemePreference
  */
-export async function PUT(request: NextRequest) {
+export const PUT = createAuthenticatedHandler(async (request: NextRequest, { user, repos }: AuthenticatedContext) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
     const body = await request.json();
 
     logger.debug('Updating theme preference', {
       context: 'PUT /api/theme-preference',
-      userId: session.user.id,
+      userId: user.id,
       body,
     });
 
@@ -146,10 +127,8 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const repos = getRepositories();
-
     // Get current settings to merge with
-    let chatSettings = await repos.chatSettings.findByUserId(session.user.id);
+    let chatSettings = await repos.chatSettings.findByUserId(user.id);
     const currentPreference = chatSettings?.themePreference ?? {
       activeThemeId: null,
       colorMode: 'system',
@@ -170,7 +149,7 @@ export async function PUT(request: NextRequest) {
     if (!validationResult.success) {
       logger.warn('Theme preference validation failed', {
         context: 'PUT /api/theme-preference',
-        userId: session.user.id,
+        userId: user.id,
         errors: validationResult.error.errors,
       });
       return NextResponse.json(
@@ -180,7 +159,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update chat settings with new theme preference
-    chatSettings = await repos.chatSettings.updateForUser(session.user.id, {
+    chatSettings = await repos.chatSettings.updateForUser(user.id, {
       themePreference: validationResult.data,
     });
 
@@ -193,7 +172,7 @@ export async function PUT(request: NextRequest) {
 
     logger.info('Theme preference updated', {
       context: 'PUT /api/theme-preference',
-      userId: session.user.id,
+      userId: user.id,
       activeThemeId: validationResult.data.activeThemeId,
       colorMode: validationResult.data.colorMode,
     });
@@ -210,4 +189,4 @@ export async function PUT(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

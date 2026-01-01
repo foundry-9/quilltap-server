@@ -10,10 +10,15 @@
 
 import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
 import { NextRequest } from 'next/server';
+import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories';
+
+// Create mock repos before jest.mock
+const mockRepos = createMockRepositoryContainer();
 
 // Mock dependencies before imports
 jest.mock('@/lib/repositories/factory', () => ({
-  getRepositories: jest.fn(),
+  getRepositories: jest.fn(() => mockRepos),
+  getUserRepositories: jest.fn(),
 }));
 
 jest.mock('@/lib/auth/session', () => ({
@@ -196,6 +201,9 @@ describe('Turn API Route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    // Setup auth mocks
+    setupAuthMocks(mockGetServerSession as jest.Mock, mockRepos);
+
     // Setup mock repositories
     mockChatsRepo = {
       findById: jest.fn(),
@@ -206,12 +214,11 @@ describe('Turn API Route', () => {
       findById: jest.fn(),
     };
 
-    mockGetRepositories.mockReturnValue({
-      chats: mockChatsRepo,
-      characters: mockCharactersRepo,
-    } as any);
+    // Update the mock repos with specific test repo instances
+    mockRepos.chats = mockChatsRepo as any;
+    mockRepos.characters = mockCharactersRepo as any;
 
-    // Default session mock
+    // Default session mock (additional to setupAuthMocks)
     mockGetServerSession.mockResolvedValue(mockSession);
 
     // Default turn manager mocks

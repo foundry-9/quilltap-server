@@ -8,9 +8,8 @@
  * Supported providers: OpenAI, Ollama
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import type { EmbeddingProfileProvider } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 
@@ -18,20 +17,10 @@ import { logger } from '@/lib/logger'
  * GET /api/embedding-profiles
  * List all embedding profiles for the authenticated user
  */
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    const repos = getRepositories()
-
     // Get all embedding profiles for user
-    const profiles = await repos.embeddingProfiles.findByUserId(session.user.id)
+    const profiles = await repos.embeddingProfiles.findByUserId(user.id)
 
     // Enrich with API key info and tags
     const enrichedProfiles = await Promise.all(
@@ -82,7 +71,7 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 /**
  * POST /api/embedding-profiles
@@ -98,16 +87,8 @@ export async function GET(req: NextRequest) {
  *   isDefault?: boolean
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     const body = await req.json()
     const {
       name,
@@ -150,8 +131,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const repos = getRepositories()
-
     // Validate apiKeyId if provided
     if (apiKeyId) {
       const apiKey = await repos.connections.findApiKeyById(apiKeyId)
@@ -165,7 +144,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check for duplicate name
-    const existingProfile = await repos.embeddingProfiles.findByName(session.user.id, name.trim())
+    const existingProfile = await repos.embeddingProfiles.findByName(user.id, name.trim())
 
     if (existingProfile) {
       return NextResponse.json(
@@ -176,12 +155,12 @@ export async function POST(req: NextRequest) {
 
     // If setting as default, unset other defaults
     if (isDefault) {
-      await repos.embeddingProfiles.unsetAllDefaults(session.user.id)
+      await repos.embeddingProfiles.unsetAllDefaults(user.id)
     }
 
     // Create profile
     const profile = await repos.embeddingProfiles.create({
-      userId: session.user.id,
+      userId: user.id,
       name: name.trim(),
       provider: provider as EmbeddingProfileProvider,
       apiKeyId: apiKeyId || null,
@@ -214,4 +193,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

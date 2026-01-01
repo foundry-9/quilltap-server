@@ -4,9 +4,13 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
 import type { BackgroundJob } from '@/lib/schemas/types'
+import { createMockRepositoryContainer, setupAuthMocks } from '@/__tests__/unit/lib/fixtures/mock-repositories'
 import { getServerSession } from '@/lib/auth/session'
 import { startProcessor, stopProcessor, getProcessorStatus } from '@/lib/background-jobs/processor'
 import { BackgroundJobsRepository } from '@/lib/mongodb/repositories/background-jobs.repository'
+
+// Mock repositories factory
+jest.mock('@/lib/repositories/factory')
 
 jest.mock('@/lib/auth/session', () => ({
   getServerSession: jest.fn(),
@@ -19,7 +23,10 @@ jest.mock('@/lib/background-jobs/processor', () => ({
   getProcessorStatus: jest.fn(),
 }))
 
+import { getRepositories } from '@/lib/repositories/factory'
+
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>
+const mockGetRepositories = jest.mocked(getRepositories)
 let getStatsSpy: jest.SpyInstance<Promise<any>, [string?]>
 let findByUserIdSpy: jest.SpyInstance<Promise<any>, [string, string?]>
 const processorMock = jest.requireMock('@/lib/background-jobs/processor') as {
@@ -36,6 +43,12 @@ let POST: typeof import('@/app/api/tools/tasks-queue/route').POST
 describe('Tasks Queue API Route', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+
+    // Create and setup mock repositories
+    const mockRepos = createMockRepositoryContainer()
+    mockGetRepositories.mockReturnValue(mockRepos)
+    setupAuthMocks(mockGetServerSession, mockRepos, { id: 'user-123', email: 'u@example.com' })
+
     jest.isolateModules(() => {
       const repoModule = require('@/lib/mongodb/repositories/background-jobs.repository')
       getStatsSpy = jest.spyOn(repoModule.BackgroundJobsRepository.prototype, 'getStats').mockResolvedValue({
@@ -57,9 +70,6 @@ describe('Tasks Queue API Route', () => {
     mockStartProcessor.mockImplementation(() => {})
     mockStopProcessor.mockImplementation(() => {})
     mockGetProcessorStatus.mockReturnValue({ running: false, processing: false })
-    mockGetServerSession.mockResolvedValue({
-      user: { id: 'user-123', email: 'u@example.com' },
-    } as any)
   })
 
   afterEach(() => {

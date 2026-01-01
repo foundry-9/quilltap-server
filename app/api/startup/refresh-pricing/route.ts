@@ -7,25 +7,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { refreshPricingCache, isCacheFresh } from '@/lib/llm/pricing-fetcher'
 import { logger } from '@/lib/logger'
 
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     // Check if we should force refresh
     const body = await req.json().catch(() => ({}))
     const forceRefresh = body.force === true
@@ -63,15 +50,10 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     return NextResponse.json({
       isFresh: isCacheFresh(),
     })
@@ -82,4 +64,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

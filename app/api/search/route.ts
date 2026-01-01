@@ -2,7 +2,7 @@
 // GET /api/search?q=query&types=chats,characters,personas,tags,memories&limit=40
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { getUserRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import type { Tag } from '@/lib/schemas/types'
@@ -181,17 +181,12 @@ function findMatchedField(
 }
 
 // GET /api/search - Global search
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user }: AuthenticatedContext) => {
   const startTime = Date.now()
 
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      searchLogger.debug('Search request unauthorized')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getUserRepositories(session.user.id)
+    // Use user-scoped repositories for automatic filtering
+    const repos = getUserRepositories(user.id)
 
     const searchParams = req.nextUrl.searchParams
     const query = searchParams.get('q')?.trim()
@@ -222,7 +217,7 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(Math.max(1, parseInt(limitParam || '40', 10) || 40), 100)
 
     searchLogger.debug('Executing global search', {
-      userId: session.user.id,
+      userId: user.id,
       query,
       types,
       limit,
@@ -699,7 +694,7 @@ export async function GET(req: NextRequest) {
 
     const duration = Date.now() - startTime
     searchLogger.info('Global search completed', {
-      userId: session.user.id,
+      userId: user.id,
       query,
       types,
       totalResults: results.length,
@@ -722,4 +717,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

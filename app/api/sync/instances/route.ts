@@ -5,11 +5,10 @@
  * POST /api/sync/instances - Create a new sync instance
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/repositories/factory';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { encryptApiKey } from '@/lib/encryption';
 import { CreateSyncInstance } from '@/lib/sync/types';
 import { testRemoteConnection } from '@/lib/sync/remote-client';
@@ -27,25 +26,16 @@ const CreateInstanceSchema = z.object({
  *
  * List all sync instances for the authenticated user.
  */
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   const startTime = Date.now();
 
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Sync instances GET requested without authentication', {
-        context: 'api:sync:instances',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     logger.debug('Getting sync instances', {
       context: 'api:sync:instances',
-      userId: session.user.id,
+      userId: user.id,
     });
 
-    const repos = getRepositories();
-    const instances = await repos.syncInstances.findByUserId(session.user.id);
+    const instances = await repos.syncInstances.findByUserId(user.id);
 
     // Remove sensitive data (encrypted API keys) from response
     const sanitizedInstances = instances.map((instance) => ({
@@ -65,7 +55,7 @@ export async function GET(req: NextRequest) {
 
     logger.info('Sync instances GET complete', {
       context: 'api:sync:instances',
-      userId: session.user.id,
+      userId: user.id,
       instanceCount: sanitizedInstances.length,
       durationMs: duration,
     });
@@ -82,25 +72,17 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
 
 /**
  * POST /api/sync/instances
  *
  * Create a new sync instance.
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   const startTime = Date.now();
 
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Sync instances POST requested without authentication', {
-        context: 'api:sync:instances',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     // Parse request body
     let body: unknown;
     try {
@@ -108,7 +90,7 @@ export async function POST(req: NextRequest) {
     } catch {
       logger.warn('Sync instances POST received invalid JSON', {
         context: 'api:sync:instances',
-        userId: session.user.id,
+        userId: user.id,
       });
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
@@ -118,7 +100,7 @@ export async function POST(req: NextRequest) {
     if (!parseResult.success) {
       logger.warn('Sync instances POST received invalid request', {
         context: 'api:sync:instances',
-        userId: session.user.id,
+        userId: user.id,
         errors: parseResult.error.errors,
       });
       return NextResponse.json(
@@ -131,19 +113,17 @@ export async function POST(req: NextRequest) {
 
     logger.info('Creating sync instance', {
       context: 'api:sync:instances',
-      userId: session.user.id,
+      userId: user.id,
       name,
       url,
     });
 
-    const repos = getRepositories();
-
     // Check if instance with same URL already exists
-    const existingInstance = await repos.syncInstances.findByUserAndUrl(session.user.id, url);
+    const existingInstance = await repos.syncInstances.findByUserAndUrl(user.id, url);
     if (existingInstance) {
       logger.warn('Sync instance with URL already exists', {
         context: 'api:sync:instances',
-        userId: session.user.id,
+        userId: user.id,
         url,
       });
       return NextResponse.json(
@@ -157,7 +137,7 @@ export async function POST(req: NextRequest) {
     if (!connectionTest.success) {
       logger.warn('Failed to connect to remote sync instance', {
         context: 'api:sync:instances',
-        userId: session.user.id,
+        userId: user.id,
         url,
         error: connectionTest.error,
       });
@@ -171,7 +151,7 @@ export async function POST(req: NextRequest) {
     if (connectionTest.versionInfo && !connectionTest.versionInfo.compatible) {
       logger.warn('Remote sync instance is not compatible', {
         context: 'api:sync:instances',
-        userId: session.user.id,
+        userId: user.id,
         url,
         reason: connectionTest.versionInfo.reason,
       });
@@ -182,7 +162,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Encrypt the API key
-    const encryptedResult = encryptApiKey(apiKey, session.user.id);
+    const encryptedResult = encryptApiKey(apiKey, user.id);
     const encryptedApiKey = {
       ciphertext: encryptedResult.encrypted,
       iv: encryptedResult.iv,
@@ -191,7 +171,7 @@ export async function POST(req: NextRequest) {
 
     // Create the instance
     const instanceData: CreateSyncInstance = {
-      userId: session.user.id,
+      userId: user.id,
       name,
       url,
       apiKey: encryptedApiKey,
@@ -213,7 +193,7 @@ export async function POST(req: NextRequest) {
 
     logger.info('Sync instance created', {
       context: 'api:sync:instances',
-      userId: session.user.id,
+      userId: user.id,
       instanceId: instance.id,
       name,
       url,
@@ -249,4 +229,4 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

@@ -4,8 +4,8 @@
  * Provides status information about the background jobs (cheap LLM) queue.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { BackgroundJobsRepository } from '@/lib/mongodb/repositories/background-jobs.repository';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
@@ -68,26 +68,20 @@ function getJobTypeName(type: string): string {
  * GET /api/tools/tasks-queue
  * Returns queue statistics and pending/processing jobs
  */
-export async function GET() {
+export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Unauthorized access to tasks queue API');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    logger.debug('Fetching tasks queue status', { userId: session.user.id });
+    logger.debug('Fetching tasks queue status', { userId: user.id });
 
     const repo = new BackgroundJobsRepository();
 
     // Get overall stats for the user
-    const stats = await repo.getStats(session.user.id);
+    const stats = await repo.getStats(user.id);
 
     // Get pending, processing, failed, and paused jobs for the user
-    const pendingJobs = await repo.findByUserId(session.user.id, 'PENDING');
-    const processingJobs = await repo.findByUserId(session.user.id, 'PROCESSING');
-    const failedJobs = await repo.findByUserId(session.user.id, 'FAILED');
-    const pausedJobs = await repo.findByUserId(session.user.id, 'PAUSED');
+    const pendingJobs = await repo.findByUserId(user.id, 'PENDING');
+    const processingJobs = await repo.findByUserId(user.id, 'PROCESSING');
+    const failedJobs = await repo.findByUserId(user.id, 'FAILED');
+    const pausedJobs = await repo.findByUserId(user.id, 'PAUSED');
 
     // Combine active jobs (pending + processing + failed that will retry + paused)
     // Use a Map to deduplicate by job ID in case a job appears in multiple status arrays
@@ -135,7 +129,7 @@ export async function GET() {
     const processorStatus = getProcessorStatus();
 
     logger.debug('Tasks queue status retrieved', {
-      userId: session.user.id,
+      userId: user.id,
       activeJobCount: activeJobs.length,
       totalEstimatedTokens,
       processorRunning: processorStatus.running,
@@ -163,21 +157,15 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * POST /api/tools/tasks-queue
  * Control the queue processor (start/stop)
  */
-export async function POST(request: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Unauthorized access to tasks queue control API');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
+    const body = await req.json();
     const { action } = body;
 
     if (!action || !['start', 'stop'].includes(action)) {
@@ -188,7 +176,7 @@ export async function POST(request: NextRequest) {
     }
 
     logger.info('Tasks queue control action', {
-      userId: session.user.id,
+      userId: user.id,
       action,
     });
 
@@ -201,7 +189,7 @@ export async function POST(request: NextRequest) {
     const processorStatus = getProcessorStatus();
 
     logger.debug('Tasks queue processor status updated', {
-      userId: session.user.id,
+      userId: user.id,
       action,
       running: processorStatus.running,
     });
@@ -220,4 +208,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

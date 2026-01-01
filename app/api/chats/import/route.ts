@@ -8,8 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { importSTChat } from '@/lib/sillytavern/chat'
 import { logger } from '@/lib/logger'
 import { generateContextSummaryAsync } from '@/lib/chat/context-summary'
@@ -17,6 +16,7 @@ import { enqueueMemoryExtractionBatch, ensureProcessorRunning, type MessagePair 
 import type { ChatParticipantBase, FileEntry, Character, Persona } from '@/lib/schemas/types'
 import type { SpeakerMapping } from '@/lib/sillytavern/multi-char-parser'
 import { getErrorMessage } from '@/lib/errors'
+import type { RepositoryContainer } from '@/lib/repositories/factory'
 
 /**
  * Get the filepath for a file based on storage type
@@ -57,24 +57,17 @@ function parseSendDate(sendDate: number | string): Date {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed
 }
 
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    const session = await getServerSession()
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const body = await req.json()
-    const repos = getRepositories()
 
     // Detect which mode we're in based on request body
     if (body.mappings) {
       // Multi-character mode
-      return handleMultiCharacterImport(body, session.user.id, repos)
+      return handleMultiCharacterImport(body, user.id, repos)
     } else {
       // Legacy single-character mode
-      return handleLegacyImport(body, session.user.id, repos)
+      return handleLegacyImport(body, user.id, repos)
     }
   } catch (error) {
     const errorMessage = getErrorMessage(error, 'Failed to import chat')
@@ -84,7 +77,7 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 /**
  * Handle multi-character import with speaker mappings
@@ -99,7 +92,7 @@ async function handleMultiCharacterImport(
     title?: string
   },
   userId: string,
-  repos: ReturnType<typeof getRepositories>
+  repos: RepositoryContainer
 ) {
   const { chatData, mappings, defaultConnectionProfileId, triggerTitleGeneration, createMemories, title } = body
 
@@ -573,7 +566,7 @@ async function handleLegacyImport(
     title?: string
   },
   userId: string,
-  repos: ReturnType<typeof getRepositories>
+  repos: RepositoryContainer
 ) {
   const { chatData, characterId, connectionProfileId, personaId, title } = body
 

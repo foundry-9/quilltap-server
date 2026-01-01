@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextRequest, NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { installPluginFromNpm, type PluginScope } from '@/lib/plugins/installer';
 
@@ -28,13 +28,8 @@ function isQuilltapPlugin(name: string): boolean {
  * POST /api/plugins/install
  * Install a plugin from npm registry
  */
-export async function POST(req: Request) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const body: InstallRequestBody = await req.json();
     const { packageName, scope = 'user' } = body;
 
@@ -63,7 +58,7 @@ export async function POST(req: Request) {
       context: 'plugins-install-POST',
       packageName,
       scope,
-      userId: session.user.id.substring(0, 8),
+      userId: user.id.substring(0, 8),
     });
 
     // TODO: Add admin check for site-wide plugins
@@ -79,7 +74,7 @@ export async function POST(req: Request) {
     const result = await installPluginFromNpm(
       packageName,
       scope,
-      scope === 'user' ? session.user.id : undefined
+      scope === 'user' ? user.id : undefined
     );
 
     if (!result.success) {
@@ -124,4 +119,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
+});

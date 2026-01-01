@@ -4,9 +4,8 @@
  * PATCH /api/user/profile/avatar - Set or clear user's profile image
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/repositories/factory';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import type { FileEntry } from '@/lib/schemas/types';
@@ -31,18 +30,9 @@ const avatarSchema = z.object({
  * - Belong to the authenticated user
  * - Have category 'IMAGE' or 'AVATAR'
  */
-export async function PATCH(request: NextRequest) {
+export const PATCH = createAuthenticatedHandler(async (request, { user, repos }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.debug('Unauthorized profile avatar update - no session', {
-        context: 'PATCH /api/user/profile/avatar',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = session.user.id;
-    const repos = getRepositories();
+    const userId = user.id;
 
     logger.debug('Processing profile avatar update', {
       context: 'PATCH /api/user/profile/avatar',
@@ -180,4 +170,4 @@ export async function PATCH(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
