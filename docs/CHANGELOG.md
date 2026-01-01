@@ -4,6 +4,14 @@
 
 ### 2.6-dev
 
+- feat: Add roleplay template plugin types and utilities
+  - Added `RoleplayTemplatePlugin`, `RoleplayTemplateConfig`, `RoleplayTemplateMetadata` types to `@quilltap/plugin-types`
+  - Added `ROLEPLAY_TEMPLATE` capability and `TEMPLATE` category to plugin system
+  - Added `createRoleplayTemplatePlugin()` and `createSingleTemplatePlugin()` utilities to `@quilltap/plugin-utils`
+  - Added validation utilities: `validateTemplateConfig()`, `validateRoleplayTemplatePlugin()`
+  - New export path: `@quilltap/plugin-utils/roleplay-templates`
+  - Updated Quilltap RP template plugin to use new types and utilities
+- docs: Add TEMPLATE_PLUGIN_DEVELOPMENT.md guide for creating roleplay template plugins
 - feat: Add comprehensive LLM API debug logging
   - All LLM API calls now log request and response details at debug level
   - Chat messages: Log request payload, provider/model, streaming stats, and usage

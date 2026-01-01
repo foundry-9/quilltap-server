@@ -93,6 +93,26 @@ export type {
 } from './providers';
 
 // ============================================================================
+// Roleplay Template Utilities
+// ============================================================================
+
+export {
+  // Builder functions
+  createRoleplayTemplatePlugin,
+  createSingleTemplatePlugin,
+
+  // Validation utilities
+  validateTemplateConfig,
+  validateRoleplayTemplatePlugin,
+} from './roleplay-templates';
+
+export type {
+  // Builder option types
+  CreateRoleplayTemplatePluginOptions,
+  CreateSingleTemplatePluginOptions,
+} from './roleplay-templates';
+
+// ============================================================================
 // Version
 // ============================================================================
 
@@ -100,4 +120,4 @@ export type {
  * Version of the plugin-utils package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_UTILS_VERSION = '1.1.0';
+export const PLUGIN_UTILS_VERSION = '1.2.0';

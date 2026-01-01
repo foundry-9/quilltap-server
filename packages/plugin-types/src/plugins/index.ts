@@ -42,3 +42,10 @@ export type {
   ThemePlugin,
   ThemePluginExport,
 } from './theme';
+
+export type {
+  RoleplayTemplateConfig,
+  RoleplayTemplateMetadata,
+  RoleplayTemplatePlugin,
+  RoleplayTemplatePluginExport,
+} from './roleplay-template';

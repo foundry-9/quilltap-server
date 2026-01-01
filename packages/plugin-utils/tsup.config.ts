@@ -6,6 +6,7 @@ export default defineConfig({
     'tools/index': 'src/tools/index.ts',
     'logging/index': 'src/logging/index.ts',
     'providers/index': 'src/providers/index.ts',
+    'roleplay-templates/index': 'src/roleplay-templates/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-12-31
+
+### Added
+
+- Roleplay template plugin types:
+  - `RoleplayTemplatePlugin` main interface for roleplay template plugins
+  - `RoleplayTemplateMetadata` for template identification and display
+  - `RoleplayTemplateConfig` for individual template configuration
+  - `RoleplayTemplatePluginExport` standard export type
+- Added `ROLEPLAY_TEMPLATE` to `PluginCapability` type
+- Added `TEMPLATE` to `PluginCategory` type
+- Exported roleplay template types via `@quilltap/plugin-types/plugins`
+
 ## [1.1.0] - 2025-12-31
 
 ### Added

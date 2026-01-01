@@ -12,6 +12,7 @@ export type PluginCapability =
   | 'AUTH_PROVIDER'
   | 'STORAGE_BACKEND'
   | 'THEME'
+  | 'ROLEPLAY_TEMPLATE'
   | 'UTILITY';
 
 /**
@@ -22,6 +23,7 @@ export type PluginCategory =
   | 'AUTH'
   | 'STORAGE'
   | 'UI'
+  | 'TEMPLATE'
   | 'UTILITY';
 
 /**

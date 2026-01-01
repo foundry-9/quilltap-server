@@ -16,6 +16,9 @@ const projectRoot = resolve(__dirname, '..', '..', '..');
 
 // Packages that should NOT be bundled - they're provided by the main app at runtime
 const EXTERNAL_PACKAGES = [
+  // Quilltap plugin packages (provided by main app or resolved from node_modules)
+  '@quilltap/plugin-types',
+  '@quilltap/plugin-utils',
   // React (provided by main app)
   'react',
   'react-dom',

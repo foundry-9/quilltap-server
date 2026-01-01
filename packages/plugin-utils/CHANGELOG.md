@@ -2,6 +2,21 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [1.2.0] - 2025-12-31
+
+### Added
+
+- **Roleplay Template Plugin Utilities**
+  - `createRoleplayTemplatePlugin()` - Create roleplay template plugins with full control
+  - `createSingleTemplatePlugin()` - Simplified helper for single-template plugins
+  - `validateTemplateConfig()` - Validate individual template configurations
+  - `validateRoleplayTemplatePlugin()` - Validate complete roleplay template plugins
+  - `CreateRoleplayTemplatePluginOptions` - Options interface for full control
+  - `CreateSingleTemplatePluginOptions` - Simplified options for single templates
+
+- **New Export Path**
+  - `@quilltap/plugin-utils/roleplay-templates` - Direct import path for roleplay template utilities
+
 ## [1.1.0] - 2025-12-30
 
 ### Added

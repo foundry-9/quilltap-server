@@ -563,6 +563,7 @@ export const PluginManifestSchema = z.object({
   category: z.enum([
     'PROVIDER',
     'THEME',
+    'TEMPLATE',
     'INTEGRATION',
     'UTILITY',
     'ENHANCEMENT',
