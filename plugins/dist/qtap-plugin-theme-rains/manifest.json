@@ -3,7 +3,7 @@
   "name": "qtap-plugin-theme-rains",
   "title": "Rains",
   "description": "A warm, earthy dark theme with rich browns and amber accents, inspired by rain-soaked autumn evenings",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -47,6 +47,13 @@
       "cozy"
     ],
     "fonts": [
+      {
+        "family": "Inter",
+        "src": "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYAZ9hjp-Ek-_0ew.woff2",
+        "weight": "300",
+        "style": "normal",
+        "display": "swap"
+      },
       {
         "family": "Fira Code",
         "src": "fonts/FiraCode-Regular.woff2",
