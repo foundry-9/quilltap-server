@@ -4,6 +4,17 @@
 
 ### 2.6-dev
 
+- fix: Chat page content being cut off by page toolbar
+  - Changed main element to flex column layout so children size correctly
+  - Updated DevConsoleLayout to use flex-1 min-h-0 instead of h-full
+  - Ensures page toolbar takes its natural height and content fills remaining space
+- fix: Ocean theme participant sidebar contrast issues (v1.2.5)
+  - Increased participant card background opacity from 0.85 to 0.95 for better readability
+  - Added explicit text colors for participant names, status labels, and talkativeness labels
+  - Fixed "You" and "AI" badge contrast with proper background/text colors
+  - Fixed Queue, Skip, and Nudge button contrast
+  - Added proper dark mode overrides for all participant card elements
+  - Removed unnecessary text shadows that were causing visual issues with new opaque backgrounds
 - refactor: Completely redesign Ocean theme (v1.2.4)
   - New quirky, childlike aesthetic evoking underwater serenity
   - Coral reef background image visible on all main layout pages

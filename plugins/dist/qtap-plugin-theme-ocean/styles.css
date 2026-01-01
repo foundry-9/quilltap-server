@@ -292,7 +292,7 @@
   --qt-chat-sidebar-heading: hsl(var(--text-000));
 
   --qt-participant-card-radius: var(--radius-md);
-  --qt-participant-card-bg: hsl(var(--always-white) / 0.85);
+  --qt-participant-card-bg: hsl(var(--always-white) / 0.95);
   --qt-participant-card-border: var(--stroke-soft);
   --qt-participant-card-active-border: hsl(var(--accent-teal));
   --qt-participant-card-active-shadow: 0 4px 12px -4px hsl(var(--accent-teal) / 0.3);
@@ -650,12 +650,6 @@
   text-shadow: var(--ocean-text-shadow-strong);
 }
 
-/* Participant card names when floating over background */
-[data-theme="ocean"] .qt-participant-card-name,
-[data-theme="ocean"] .qt-participant-card-status {
-  text-shadow: var(--ocean-text-shadow);
-}
-
 /* Message toolbar buttons on user messages - need more contrast on coral */
 [data-theme="ocean"] .qt-chat-message-row-user .qt-chat-message-actions button,
 [data-theme="ocean"] .qt-chat-message-row-user .qt-chat-message-actions svg {
@@ -952,7 +946,17 @@
   background: hsl(var(--bg-dark-100) / 0.9);
 }
 
-/* Participant card styling */
+/* ============================================================================
+   PARTICIPANT SIDEBAR & CARDS - Enhanced Contrast
+   ============================================================================ */
+
+/* Participant cards - more opaque background for better text readability */
+[data-theme="ocean"] .qt-participant-card,
+[data-theme="ocean"] .qt-participant-card-active {
+  background: hsl(var(--always-white) / 0.95);
+  backdrop-filter: blur(12px);
+}
+
 [data-theme="ocean"] .qt-participant-card-active {
   border-color: hsl(var(--accent-teal));
   box-shadow: 0 4px 12px -4px hsl(var(--accent-teal) / 0.3);
@@ -960,6 +964,113 @@
 
 [data-theme="ocean"] .qt-participant-turn-dot {
   background: hsl(var(--accent-teal));
+}
+
+/* Participant card text - explicit dark colors for contrast */
+[data-theme="ocean"] .qt-participant-card-name {
+  color: hsl(var(--text-000));
+  font-weight: 600;
+  text-shadow: none;
+}
+
+[data-theme="ocean"] .qt-participant-card-status {
+  color: hsl(var(--text-100));
+  text-shadow: none;
+}
+
+/* Talkativeness and other labels within participant cards */
+[data-theme="ocean"] .qt-participant-card .qt-text-xs,
+[data-theme="ocean"] .qt-participant-card-active .qt-text-xs,
+[data-theme="ocean"] .participant-card .qt-text-xs {
+  color: hsl(var(--text-100));
+}
+
+/* Badges inside participant cards - ensure good contrast */
+[data-theme="ocean"] .qt-participant-card .qt-badge-secondary,
+[data-theme="ocean"] .qt-participant-card-active .qt-badge-secondary,
+[data-theme="ocean"] .participant-card .qt-badge-secondary {
+  background: hsl(var(--bg-300));
+  color: hsl(var(--text-000));
+  border: 1px solid hsl(var(--border-200));
+}
+
+[data-theme="ocean"] .qt-participant-card .qt-badge-info,
+[data-theme="ocean"] .qt-participant-card-active .qt-badge-info,
+[data-theme="ocean"] .participant-card .qt-badge-info {
+  background: hsl(var(--info-100) / 0.2);
+  color: hsl(var(--info-200));
+  border: 1px solid hsl(var(--info-100) / 0.4);
+}
+
+/* Buttons inside participant cards */
+[data-theme="ocean"] .qt-participant-card .qt-button-secondary,
+[data-theme="ocean"] .qt-participant-card-active .qt-button-secondary,
+[data-theme="ocean"] .participant-card .qt-button-secondary {
+  background: hsl(var(--always-white));
+  color: hsl(var(--text-000));
+  border: 1px solid hsl(var(--border-200));
+}
+
+[data-theme="ocean"] .qt-participant-card .qt-button-secondary:hover,
+[data-theme="ocean"] .qt-participant-card-active .qt-button-secondary:hover,
+[data-theme="ocean"] .participant-card .qt-button-secondary:hover {
+  background: hsl(var(--bg-200));
+}
+
+/* Turn indicator button styling */
+[data-theme="ocean"] .qt-participant-turn-indicator {
+  background: hsl(var(--accent-teal) / 0.15);
+  color: hsl(var(--accent-teal-dark));
+  border: 1px solid hsl(var(--accent-teal) / 0.4);
+}
+
+/* Range slider within participant cards */
+[data-theme="ocean"] .qt-participant-card input[type="range"],
+[data-theme="ocean"] .qt-participant-card-active input[type="range"],
+[data-theme="ocean"] .participant-card input[type="range"] {
+  accent-color: hsl(var(--coral-pink));
+}
+
+/* Dark mode overrides for participant cards */
+.dark[data-theme="ocean"] .qt-participant-card,
+.dark[data-theme="ocean"] .qt-participant-card-active {
+  background: hsl(var(--bg-dark-100) / 0.95);
+}
+
+.dark[data-theme="ocean"] .qt-participant-card-name {
+  color: hsl(var(--text-000));
+}
+
+.dark[data-theme="ocean"] .qt-participant-card-status {
+  color: hsl(var(--text-100));
+}
+
+.dark[data-theme="ocean"] .qt-participant-card .qt-text-xs,
+.dark[data-theme="ocean"] .qt-participant-card-active .qt-text-xs,
+.dark[data-theme="ocean"] .participant-card .qt-text-xs {
+  color: hsl(var(--text-100));
+}
+
+.dark[data-theme="ocean"] .qt-participant-card .qt-badge-secondary,
+.dark[data-theme="ocean"] .qt-participant-card-active .qt-badge-secondary,
+.dark[data-theme="ocean"] .participant-card .qt-badge-secondary {
+  background: hsl(var(--bg-dark-300));
+  color: hsl(var(--text-000));
+  border: 1px solid hsl(195 40% 30%);
+}
+
+.dark[data-theme="ocean"] .qt-participant-card .qt-button-secondary,
+.dark[data-theme="ocean"] .qt-participant-card-active .qt-button-secondary,
+.dark[data-theme="ocean"] .participant-card .qt-button-secondary {
+  background: hsl(var(--bg-dark-200));
+  color: hsl(var(--text-000));
+  border: 1px solid hsl(195 40% 30%);
+}
+
+.dark[data-theme="ocean"] .qt-participant-card .qt-button-secondary:hover,
+.dark[data-theme="ocean"] .qt-participant-card-active .qt-button-secondary:hover,
+.dark[data-theme="ocean"] .participant-card .qt-button-secondary:hover {
+  background: hsl(var(--bg-dark-300));
 }
 
 /* Input focus states */

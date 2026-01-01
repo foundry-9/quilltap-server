@@ -61,7 +61,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     <div className="qt-app-layout">
       <LeftSidebar />
       <div className="qt-app-main">
-        <main className="flex-1 min-h-0 overflow-auto sm:overflow-hidden">
+        <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <PageToolbar />
           <DevConsoleLayout>
             {children}
