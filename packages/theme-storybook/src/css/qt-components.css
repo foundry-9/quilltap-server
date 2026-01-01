@@ -77,6 +77,8 @@
   --qt-avatar-size-xl: 4rem;
   --qt-avatar-bg: var(--color-muted);
   --qt-avatar-fg: var(--color-muted-foreground);
+  --qt-avatar-name-fg: var(--color-foreground);
+  --qt-avatar-title-fg: var(--color-muted-foreground);
 
   /* Dialog variables */
   --qt-dialog-radius: var(--radius-lg);
@@ -426,6 +428,31 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.qt-avatar-labels {
+  text-align: center;
+  margin-top: 0.25rem;
+}
+
+.qt-avatar-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--qt-avatar-name-fg);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.qt-avatar-title {
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--qt-avatar-title-fg);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 /* ==========================================================================

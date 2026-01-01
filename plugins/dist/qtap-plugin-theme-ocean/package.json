@@ -1,7 +1,7 @@
 {
   "name": "qtap-plugin-theme-ocean",
-  "version": "1.1.22",
-  "description": "Ocean theme plugin for Quilltap with layered gradients, glass panels, and custom typography",
+  "version": "1.2.4",
+  "description": "A quirky, childlike Ocean theme for Quilltap featuring a coral reef background, sea life colors, bubbly rounded corners, and playful animations",
   "main": "index.js",
   "types": "index.d.ts",
   "author": "Foundry-9 LLC",
@@ -21,7 +21,10 @@
     "quilltap",
     "theme",
     "ocean",
-    "blue",
-    "teal"
+    "underwater",
+    "coral reef",
+    "playful",
+    "childlike",
+    "whimsical"
   ]
 }

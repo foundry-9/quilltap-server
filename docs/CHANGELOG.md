@@ -4,6 +4,25 @@
 
 ### 2.6-dev
 
+- refactor: Completely redesign Ocean theme (v1.2.4)
+  - New quirky, childlike aesthetic evoking underwater serenity
+  - Coral reef background image visible on all main layout pages
+  - Transparent layout containers (qt-app-layout, qt-app-main, qt-page, etc.) so body background shows through
+  - Text shadows on headings/titles for readability over busy background
+  - Text shadows on chat avatar names/titles for readability
+  - Improved contrast for user message toolbar buttons (white icons on coral)
+  - Color palette inspired by sea life: coral pink primary, teal accent, jellyfish purple, octopus orange, seaweed green
+  - Bubbly rounded corners throughout with bouncy animations
+  - Glass-effect panels with backdrop blur
+  - Updated to match modern theme structure (qt-* variables)
+  - Full dark mode support
+  - Added Nunito font (regular + bold) for playful rounded typography
+- feat: Add qt-avatar-name and qt-avatar-title utility classes
+  - New themeable CSS classes for Avatar name/title display
+  - Uses --qt-avatar-name-fg and --qt-avatar-title-fg CSS variables
+  - Added to Avatar component in components/ui/Avatar.tsx
+  - @quilltap/theme-storybook v1.0.4: Added avatar label classes and CSS variables
+  - create-quilltap-theme v1.0.4: Document avatar CSS variables in template
 - feat: User-controlled character toggle on characters page and view page
   - Added user icon toggle next to favorite star on /characters page
   - Added favorite and user-controlled toggles to /characters/[id]/view header

@@ -2,8 +2,8 @@
   "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-theme-ocean",
   "title": "Ocean",
-  "description": "A bioluminescent ocean theme with layered gradients, glass panels, and gentle motion for a focused-yet-expressive chat experience",
-  "version": "1.1.18",
+  "description": "A quirky, childlike theme evoking the serenity of life underwater in a beautiful coral reef. Features vibrant sea life colors, bubbly rounded corners, glass-effect panels, and playful animations.",
+  "version": "1.2.4",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -27,10 +27,13 @@
   "keywords": [
     "theme",
     "ocean",
-    "blue",
+    "underwater",
+    "coral reef",
+    "playful",
+    "childlike",
+    "whimsical",
     "teal",
-    "calming",
-    "dark",
+    "coral",
     "light"
   ],
   "themeConfig": {
@@ -40,22 +43,23 @@
     "previewImage": "preview.png",
     "tags": [
       "ocean",
-      "blue",
-      "calming",
-      "nature"
+      "underwater",
+      "playful",
+      "coral reef",
+      "whimsical"
     ],
     "fonts": [
       {
-        "family": "DM Sans",
-        "src": "fonts/DMSans-latin.woff2",
-        "weight": "400 700",
+        "family": "Nunito",
+        "src": "fonts/Nunito-Regular.woff2",
+        "weight": "400",
         "style": "normal",
         "display": "swap"
       },
       {
-        "family": "DM Sans",
-        "src": "fonts/DMSans-latin-ext.woff2",
-        "weight": "400 700",
+        "family": "Nunito",
+        "src": "fonts/Nunito-Bold.woff2",
+        "weight": "700",
         "style": "normal",
         "display": "swap"
       },

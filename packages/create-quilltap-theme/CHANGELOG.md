@@ -2,6 +2,12 @@
 
 All notable changes to this package will be documented in this file.
 
+## [1.0.4] - 2026-01-01
+
+### Added
+
+- Document avatar CSS variables (`--qt-avatar-name-fg`, `--qt-avatar-title-fg`) in styles.css template
+
 ## [1.0.3] - 2025-12-31
 
 ### Added

@@ -241,6 +241,31 @@
     @apply ring-2 ring-background;
   }
 
+  /**
+   * Avatar labels container (name + title below avatar)
+   */
+  .qt-avatar-labels {
+    @apply text-center mt-1;
+  }
+
+  /**
+   * Avatar name text
+   * Themeable for contrast on different backgrounds
+   */
+  .qt-avatar-name {
+    @apply text-sm font-semibold line-clamp-2;
+    color: var(--qt-avatar-name-fg, var(--color-foreground));
+  }
+
+  /**
+   * Avatar title/subtitle text
+   * Themeable for contrast on different backgrounds
+   */
+  .qt-avatar-title {
+    @apply text-xs italic line-clamp-2;
+    color: var(--qt-avatar-title-fg, var(--color-muted-foreground));
+  }
+
   /* ==========================================================================
      CODE BLOCKS
      ========================================================================== */

@@ -26,6 +26,10 @@
  * - --qt-app-header-bg: var(--color-background)
  * - --qt-app-header-border: var(--color-border)
  * - --qt-app-header-blur: blur(8px)
+ *
+ * Avatar variables:
+ * - --qt-avatar-name-fg: var(--color-foreground) (color for avatar name text)
+ * - --qt-avatar-title-fg: var(--color-muted-foreground) (color for avatar title/subtitle)
  */
 
 [data-theme="{{THEME_ID}}"] {

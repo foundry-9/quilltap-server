@@ -2,6 +2,13 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.4] - 2026-01-01
+
+### Added
+- Avatar label classes (`qt-avatar-labels`, `qt-avatar-name`, `qt-avatar-title`)
+- CSS variables: `--qt-avatar-name-fg`, `--qt-avatar-title-fg` for theming avatar text
+- Themes can now customize avatar name/title colors (useful for backgrounds with images)
+
 ## [1.0.3] - 2026-01-01
 
 ### Added
