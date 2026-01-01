@@ -8,6 +8,7 @@ In preparation for projects and files, we needed a new layout for the desktop UI
 
 - No more dashboard (redirects to home page)
 - Left sidebar with tree views, always visible, contents might change with context but not yet
+  - Brand logo at top (quill icon when collapsed, full Quilltap logo when expanded) - links to home
   - Button to push to fold sidebar in and out (collapsed state persisted to localStorage)
   - Projects (placeholder - "Coming soon")
   - Files (placeholder - "Coming soon")
@@ -18,8 +19,7 @@ In preparation for projects and files, we needed a new layout for the desktop UI
   - Themes button - links to appearance settings if theme selector is enabled
   - Quick-hide button - links to appearance settings if quick-hide tags exist
   - Profile menu - your avatar, your username/email address, links to profile page, dev console if available, sign out button
-- Header
-  - Quilltap logo with link built-in to home page
+- Page Toolbar (at top of main content area, not a fixed header)
   - Centered search bar
   - Auto-widen full-screen toggle button
   - Hamburger menu on mobile to open sidebar overlay
@@ -31,10 +31,10 @@ In preparation for projects and files, we needed a new layout for the desktop UI
 ### New Components
 
 - `components/layout/app-layout.tsx` - Root layout wrapper
-- `components/layout/app-header.tsx` - Simplified header
+- `components/layout/page-toolbar.tsx` - Page toolbar with search and full-width toggle
 - `components/layout/left-sidebar/` - Sidebar components
   - `index.tsx` - Main sidebar
-  - `sidebar-header.tsx` - Collapse toggle
+  - `sidebar-header.tsx` - Brand logo and collapse toggle
   - `sidebar-section.tsx` - Section container
   - `sidebar-item.tsx` - Navigation item
   - `sidebar-footer.tsx` - Footer with actions
@@ -42,6 +42,10 @@ In preparation for projects and files, we needed a new layout for the desktop UI
   - `chats-section.tsx` - Chats list
   - `profile-menu.tsx` - User profile dropdown
 - `components/providers/sidebar-provider.tsx` - Sidebar state management
+
+### Deprecated Components
+
+- `components/layout/app-header.tsx` - Replaced by page-toolbar.tsx (file remains for reference)
 
 ### New API Endpoints
 
@@ -51,7 +55,13 @@ In preparation for projects and files, we needed a new layout for the desktop UI
 ### CSS Classes (in `app/styles/qt-components/`)
 
 - `_variables.css` - Added `--qt-left-sidebar-*` and `--qt-app-header-*` variables
-- `_layout.css` - Added `.qt-left-sidebar-*`, `.qt-app-layout`, `.qt-app-header-*`, `.qt-hamburger` classes
+- `_layout.css` - Added:
+  - `.qt-left-sidebar-*` - Left sidebar and its subcomponents
+  - `.qt-left-sidebar-brand` - Brand logo in sidebar header
+  - `.qt-app-layout` - Root layout container
+  - `.qt-page-toolbar` - Page toolbar (search bar and actions)
+  - `.qt-hamburger` - Mobile hamburger menu button
+  - `.qt-app-header-*` - Deprecated header styles (kept for reference)
 
 ### Modified Files
 

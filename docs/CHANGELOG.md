@@ -4,6 +4,12 @@
 
 ### 2.6-dev
 
+- feat: Remove header, move brand logo to sidebar
+  - Removed AppHeader from layout, replaced with PageToolbar in main content
+  - PageToolbar contains centered search bar and full-width toggle
+  - Brand logo moved to sidebar header (quill icon when collapsed, full logo when expanded)
+  - Added qt-page-toolbar and qt-left-sidebar-brand CSS classes
+  - Hamburger menu still visible on mobile for sidebar access
 - feat: Full-width toggle affects all pages
   - Added --qt-page-max-width CSS variable (default: 64rem)
   - ContentWidthProvider now sets page width alongside chat message width

@@ -434,17 +434,38 @@
   }
 
   /**
-   * Sidebar header - collapse toggle area
+   * Sidebar header - brand logo and collapse toggle
    */
   .qt-left-sidebar-header {
-    @apply flex items-center justify-between px-4;
+    @apply flex items-center justify-between px-3;
     @apply border-b shrink-0;
     height: var(--qt-left-sidebar-header-height);
     border-color: var(--qt-left-sidebar-border);
   }
 
   .qt-left-sidebar-collapsed .qt-left-sidebar-header {
-    @apply justify-center px-2;
+    @apply flex-col justify-center items-center gap-2 px-2 py-3;
+    height: auto;
+  }
+
+  /**
+   * Brand logo in sidebar header
+   */
+  .qt-left-sidebar-brand {
+    @apply flex items-center;
+    @apply transition-opacity duration-150;
+  }
+
+  .qt-left-sidebar-brand:hover {
+    @apply opacity-80;
+  }
+
+  .qt-left-sidebar-brand-icon {
+    @apply flex-shrink-0;
+  }
+
+  .qt-left-sidebar-collapsed .qt-left-sidebar-brand {
+    @apply justify-center;
   }
 
   /**
@@ -735,7 +756,45 @@
   }
 
   /**
+   * Page toolbar - top toolbar with search and actions
+   * Appears at the top of page content, not as a fixed header
+   */
+  .qt-page-toolbar {
+    @apply flex items-center justify-between px-4 py-3;
+    @apply sticky top-0 z-30;
+    background: var(--qt-app-header-bg);
+    backdrop-filter: var(--qt-app-header-blur);
+    -webkit-backdrop-filter: var(--qt-app-header-blur);
+  }
+
+  .qt-page-toolbar-left {
+    @apply flex items-center;
+    /* Reserve space for hamburger on mobile, empty on desktop */
+    min-width: 2.5rem;
+  }
+
+  .qt-page-toolbar-center {
+    @apply flex-1 flex justify-center px-4;
+    max-width: 32rem;
+  }
+
+  .qt-page-toolbar-right {
+    @apply flex items-center gap-2;
+    /* Balance with left section */
+    min-width: 2.5rem;
+    justify-content: flex-end;
+  }
+
+  /* On desktop, hide the left placeholder when hamburger is hidden */
+  @media (min-width: 768px) {
+    .qt-page-toolbar-left {
+      min-width: 0;
+    }
+  }
+
+  /**
    * App header - simplified with logo, search, actions
+   * @deprecated Use qt-page-toolbar instead
    */
   .qt-app-header {
     @apply flex items-center justify-between px-4;

@@ -14,7 +14,7 @@ import { usePathname } from 'next/navigation'
 import { useSession } from '@/components/providers/session-provider'
 import { SidebarProvider } from '@/components/providers/sidebar-provider'
 import { LeftSidebar } from './left-sidebar'
-import { AppHeader } from './app-header'
+import { PageToolbar } from './page-toolbar'
 import FooterWrapper from '@/components/footer-wrapper'
 import { DevConsoleLayout } from '@/components/debug/DevConsole'
 import { clientLogger } from '@/lib/client-logger'
@@ -61,8 +61,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     <div className="qt-app-layout">
       <LeftSidebar />
       <div className="qt-app-main">
-        <AppHeader />
         <main className="flex-1 min-h-0 overflow-auto sm:overflow-hidden">
+          <PageToolbar />
           <DevConsoleLayout>
             {children}
           </DevConsoleLayout>
