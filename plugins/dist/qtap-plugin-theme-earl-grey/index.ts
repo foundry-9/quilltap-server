@@ -18,7 +18,7 @@ const logger = createPluginLogger('qtap-plugin-theme-earl-grey');
  */
 export function initialize(): void {
   logger.debug('Earl Grey theme plugin loaded', {
-    version: '1.0.0',
+    version: '1.2.0',
   });
 }
 
@@ -27,7 +27,7 @@ export function initialize(): void {
  */
 export const metadata = {
   name: 'qtap-plugin-theme-earl-grey',
-  version: '1.0.0',
+  version: '1.2.0',
   type: 'THEME',
 } as const;
 

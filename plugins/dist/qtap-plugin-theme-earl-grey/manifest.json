@@ -2,8 +2,8 @@
   "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-theme-earl-grey",
   "title": "Earl Grey",
-  "description": "A sophisticated dark theme with deep slate grays and soft blue accents, inspired by the elegance of classic earl grey tea",
-  "version": "1.0.0",
+  "description": "A high-contrast dark theme inspired by modern AI chat interfaces, with pure black sidebar, charcoal main area, and clean minimal styling",
+  "version": "1.2.0",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -41,9 +41,9 @@
     "tags": [
       "earl-grey",
       "dark",
-      "slate",
-      "blue",
-      "elegant"
+      "minimal",
+      "high-contrast",
+      "modern"
     ],
     "fonts": [
       {

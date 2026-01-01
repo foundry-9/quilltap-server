@@ -29,12 +29,12 @@ var import_plugin_utils = require("@quilltap/plugin-utils");
 var logger = (0, import_plugin_utils.createPluginLogger)("qtap-plugin-theme-earl-grey");
 function initialize() {
   logger.debug("Earl Grey theme plugin loaded", {
-    version: "1.0.0"
+    version: "1.2.0"
   });
 }
 var metadata = {
   name: "qtap-plugin-theme-earl-grey",
-  version: "1.0.0",
+  version: "1.2.0",
   type: "THEME"
 };
 var earlGreyThemePlugin = {
