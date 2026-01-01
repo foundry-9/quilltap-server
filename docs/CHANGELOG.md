@@ -4,6 +4,12 @@
 
 ### 2.6-dev
 
+- refactor: Migrate 101 API routes to createAuthenticatedHandler middleware
+  - Phase 1 of backend refactoring to enforce SRP, DRY, KISS, YAGNI principles
+  - Eliminated ~1,500 lines of duplicated session/user lookup code across routes
+  - Added mock repository fixtures (createMockRepositoryContainer, setupAuthMocks)
+  - Updated 15 test files to work with new auth middleware mocking pattern
+  - Routes migrated: auth, chats, profiles, plugins, sync, tools, tags, search
 - feat: Add About link to profile menu in sidebar
   - Added InfoIcon component for the About menu item
   - Links to /about page for version info, tech stack, and project details
