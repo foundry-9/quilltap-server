@@ -55,7 +55,7 @@ var plugin = (0, import_plugin_utils.createSingleTemplatePlugin)({
     url: "https://foundry-9.com"
   },
   tags: ["quilltap", "custom", "brackets", "braces"],
-  version: "1.0.1",
+  version: "1.0.2",
   enableLogging: true
 });
 function initialize() {
@@ -63,10 +63,11 @@ function initialize() {
 }
 var metadata = {
   name: "qtap-plugin-template-quilltap-rp",
-  version: "1.0.1",
+  version: "1.0.2",
   type: "ROLEPLAY_TEMPLATE"
 };
-var index_default = { plugin, initialize, metadata };
+var pluginExport = { plugin, initialize, metadata };
+var index_default = pluginExport;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   initialize,

@@ -73,7 +73,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     handleSaveDefaultPersona,
     handleSaveDefaultPartner,
     handleToggleNpc,
+    handleToggleFavorite,
+    handleToggleControlledBy,
     togglingNpc,
+    togglingFavorite,
+    togglingControlledBy,
   } = useCharacterView(id)
 
   const { creatingChat, handleCreateChat } = useChatCreation()
@@ -300,8 +304,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           avatarRefreshKey={avatarRefreshKey}
           onStartChat={handleStartChat}
           onToggleNpc={handleToggleNpc}
+          onToggleFavorite={handleToggleFavorite}
+          onToggleControlledBy={handleToggleControlledBy}
           onSearchReplace={() => setShowSearchReplaceModal(true)}
           togglingNpc={togglingNpc}
+          togglingFavorite={togglingFavorite}
+          togglingControlledBy={togglingControlledBy}
         />
 
         {/* Tabbed Content */}

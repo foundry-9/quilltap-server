@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 // Using native img tag instead of next/image because /api/files/* routes
 // are dynamic API endpoints that can't go through Next.js image optimization
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
@@ -10,6 +11,7 @@ import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
 import { clientLogger } from '@/lib/client-logger'
+import { processTemplate } from '@/lib/templates/processor'
 
 interface Character {
   id: string
@@ -24,6 +26,9 @@ interface Character {
     url?: string
   }
   isFavorite: boolean
+  controlledBy: 'llm' | 'user'
+  npc: boolean
+  defaultPartnerName?: string | null
   createdAt: string
   tags?: string[]
   _count: {
@@ -39,20 +44,25 @@ export default function CharactersPage() {
   const [deleteDialogCharacter, setDeleteDialogCharacter] = useState<Character | null>(null)
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
+  const router = useRouter()
 
   const visibleCharacters = useMemo(
     () => characters
       .filter(character => !shouldHideByIds(character.tags || []))
       .sort((a, b) => {
-        // 1. Favorites first
+        // 1. NPCs last
+        if (a.npc !== b.npc) {
+          return a.npc ? 1 : -1
+        }
+        // 2. Favorites first
         if (a.isFavorite !== b.isFavorite) {
           return a.isFavorite ? -1 : 1
         }
-        // 2. Then by chat count (descending)
+        // 3. Then by chat count (descending)
         if (a._count.chats !== b._count.chats) {
           return b._count.chats - a._count.chats
         }
-        // 3. Then alphabetically by name (case-insensitive)
+        // 4. Then alphabetically by name (case-insensitive)
         return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
       }),
     [characters, shouldHideByIds]
@@ -73,8 +83,8 @@ export default function CharactersPage() {
 
   const fetchCharacters = async () => {
     try {
-      clientLogger.debug('Characters page: fetching non-NPC characters only')
-      const res = await fetch('/api/characters?npc=false')
+      clientLogger.debug('Characters page: fetching all characters')
+      const res = await fetch('/api/characters')
       if (!res.ok) throw new Error('Failed to fetch characters')
       const data = await res.json()
       setCharacters(data.characters)
@@ -133,6 +143,27 @@ export default function CharactersPage() {
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle favorite')
     }
+  }
+
+  const toggleControlledBy = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault()
+    try {
+      const res = await fetch(`/api/characters/${id}/controlled-by`, { method: 'PATCH' })
+      if (!res.ok) throw new Error('Failed to toggle controlled-by')
+      const data = await res.json()
+      setCharacters(characters.map((c) => (c.id === id ? { ...c, controlledBy: data.character.controlledBy } : c)))
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle controlled-by')
+    }
+  }
+
+  const handleCardClick = (e: React.MouseEvent, characterId: string) => {
+    // Don't navigate if clicking on a button, link, or interactive element
+    const target = e.target as HTMLElement
+    if (target.closest('button') || target.closest('a')) {
+      return
+    }
+    router.push(`/characters/${characterId}/view`)
   }
 
   const handleImport = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -204,11 +235,12 @@ export default function CharactersPage() {
           </Link>
         </div>
       ) : (
-        <div className="character-card-grid mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="character-card-grid mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {visibleCharacters.map((character) => (
             <div
               key={character.id}
-              className="qt-entity-card character-card"
+              className="qt-entity-card character-card cursor-pointer hover:border-primary/50 transition-colors"
+              onClick={(e) => handleCardClick(e, character.id)}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center flex-grow gap-4">
@@ -238,17 +270,40 @@ export default function CharactersPage() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={(e) => toggleFavorite(e, character.id)}
-                  className="ml-2 text-2xl text-amber-400 transition-transform hover:scale-110"
-                  title={character.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                >
-                  {character.isFavorite ? '⭐' : '☆'}
-                </button>
+                <div className="flex items-center gap-1 ml-2">
+                  <button
+                    onClick={(e) => toggleFavorite(e, character.id)}
+                    className="text-2xl text-amber-400 transition-transform hover:scale-110"
+                    title={character.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    {character.isFavorite ? '⭐' : '☆'}
+                  </button>
+                  <button
+                    onClick={(e) => toggleControlledBy(e, character.id)}
+                    className="text-amber-400 transition-transform hover:scale-110"
+                    title={character.controlledBy === 'user' ? 'Switch to LLM control' : 'Switch to user control'}
+                  >
+                    {character.controlledBy === 'user' ? (
+                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <p className="line-clamp-3 qt-text-small">
-                {character.description}
+                {processTemplate(character.description || '', {
+                  char: character.name,
+                  user: character.controlledBy === 'user'
+                    ? character.name
+                    : (character.defaultPartnerName || 'User')
+                })}
               </p>
 
               <div className="qt-entity-card-actions character-card-actions">
@@ -262,17 +317,6 @@ export default function CharactersPage() {
                   </svg>
                   Chat
                 </Link>
-                <Link
-                  href={`/characters/${character.id}/view`}
-                  className="character-card__action inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"
-                  title="View character details"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  View
-                </Link>
                 <a
                   href={`/api/characters/${character.id}/export?format=json`}
                   className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted"
@@ -284,7 +328,7 @@ export default function CharactersPage() {
                 </a>
                 <button
                   onClick={() => openDeleteDialog(character)}
-                  className="character-card__action inline-flex items-center justify-center rounded-lg bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground shadow-sm transition hover:bg-destructive/90"
+                  className="character-card__action qt-button-destructive shadow-sm"
                   title="Delete this character"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

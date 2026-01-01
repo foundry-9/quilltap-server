@@ -468,6 +468,32 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
     }
   }
 
+  /**
+   * Set controlled-by status for a character
+   * @param characterId The character ID
+   * @param controlledBy Who controls the character: 'llm' or 'user'
+   * @returns Promise<Character | null> The updated character if found, null otherwise
+   */
+  async setControlledBy(characterId: string, controlledBy: 'llm' | 'user'): Promise<Character | null> {
+    logger.debug('Setting controlledBy status for character', { characterId, controlledBy });
+    try {
+      const result = await this.update(characterId, { controlledBy });
+
+      if (result) {
+        logger.debug('ControlledBy status updated', { characterId, controlledBy });
+      }
+
+      return result;
+    } catch (error) {
+      logger.error('Error setting controlledBy status', {
+        characterId,
+        controlledBy,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
   // ============================================================================
   // PHYSICAL DESCRIPTION OPERATIONS
   // ============================================================================

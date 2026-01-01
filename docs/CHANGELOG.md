@@ -4,6 +4,12 @@
 
 ### 2.6-dev
 
+- feat: User-controlled character toggle on characters page and view page
+  - Added user icon toggle next to favorite star on /characters page
+  - Added favorite and user-controlled toggles to /characters/[id]/view header
+  - New PATCH /api/characters/[id]/controlled-by endpoint for toggling controlledBy
+  - Added setControlledBy() method to characters repository
+  - Solid user icon when user-controlled, outline when LLM-controlled
 - refactor: Deprecate dashboard route, migrate to qt-* class naming
   - All /dashboard links now point to / (home page)
   - Dashboard route redirects to home for backwards compatibility

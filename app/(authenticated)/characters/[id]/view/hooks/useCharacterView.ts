@@ -32,6 +32,8 @@ interface UseCharacterViewReturn {
   templateCounts: TemplateCounts
   replacingTemplate: 'char' | 'user' | null
   togglingNpc: boolean
+  togglingFavorite: boolean
+  togglingControlledBy: boolean
   fetchCharacter: () => Promise<void>
   fetchTags: () => Promise<void>
   fetchProfiles: () => Promise<void>
@@ -50,6 +52,8 @@ interface UseCharacterViewReturn {
   handleSaveDefaultPersona: (personaId: string) => Promise<void>
   handleSaveDefaultPartner: (partnerId: string) => Promise<void>
   handleToggleNpc: () => Promise<void>
+  handleToggleFavorite: () => Promise<void>
+  handleToggleControlledBy: () => Promise<void>
 }
 
 export function useCharacterView(characterId: string): UseCharacterViewReturn {
@@ -69,6 +73,8 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [savingPersona, setSavingPersona] = useState(false)
   const [savingPartner, setSavingPartner] = useState(false)
   const [togglingNpc, setTogglingNpc] = useState(false)
+  const [togglingFavorite, setTogglingFavorite] = useState(false)
+  const [togglingControlledBy, setTogglingControlledBy] = useState(false)
 
   // Get the default partner for template highlighting ({{user}} replacement)
   // This uses the new default conversation partner system instead of old personas
@@ -398,6 +404,46 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleToggleFavorite = async () => {
+    if (!character) return
+    setTogglingFavorite(true)
+    try {
+      const res = await fetch(`/api/characters/${characterId}/favorite`, { method: 'PATCH' })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to toggle favorite')
+      }
+      const data = await res.json()
+      setCharacter({ ...character, isFavorite: data.character.isFavorite })
+      clientLogger.info('Character favorite toggled', { characterId, isFavorite: data.character.isFavorite })
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle favorite')
+      clientLogger.error('Failed to toggle favorite', { error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setTogglingFavorite(false)
+    }
+  }
+
+  const handleToggleControlledBy = async () => {
+    if (!character) return
+    setTogglingControlledBy(true)
+    try {
+      const res = await fetch(`/api/characters/${characterId}/controlled-by`, { method: 'PATCH' })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to toggle controlled-by')
+      }
+      const data = await res.json()
+      setCharacter({ ...character, controlledBy: data.character.controlledBy })
+      clientLogger.info('Character controlledBy toggled', { characterId, controlledBy: data.character.controlledBy })
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle controlled-by')
+      clientLogger.error('Failed to toggle controlled-by', { error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setTogglingControlledBy(false)
+    }
+  }
+
   return {
     loading,
     error,
@@ -414,6 +460,8 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     templateCounts,
     replacingTemplate,
     togglingNpc,
+    togglingFavorite,
+    togglingControlledBy,
     fetchCharacter,
     fetchTags,
     fetchProfiles,
@@ -432,5 +480,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleSaveDefaultPersona,
     handleSaveDefaultPartner,
     handleToggleNpc,
+    handleToggleFavorite,
+    handleToggleControlledBy,
   }
 }

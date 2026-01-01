@@ -76,7 +76,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     // Sort by createdAt descending
     characters.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-    // Enrich characters with related data (defaultImage and chat count)
+    // Enrich characters with related data (defaultImage, chat count, default partner name)
     const enrichedCharacters = await Promise.all(
       characters.map(async (character) => {
         // Get default image from repository if present
@@ -92,6 +92,15 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           }
         }
 
+        // Get default partner name if set
+        let defaultPartnerName: string | null = null
+        if (character.defaultPartnerId) {
+          const partner = await repos.characters.findById(character.defaultPartnerId)
+          if (partner) {
+            defaultPartnerName = partner.name
+          }
+        }
+
         // Get chat count for this character
         const chats = await repos.chats.findByCharacterId(character.id)
 
@@ -104,6 +113,8 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           defaultImageId: character.defaultImageId,
           defaultImage,
           isFavorite: character.isFavorite,
+          controlledBy: character.controlledBy ?? 'llm',
+          defaultPartnerName,
           npc: character.npc ?? false,
           createdAt: character.createdAt,
           tags: character.tags || [],

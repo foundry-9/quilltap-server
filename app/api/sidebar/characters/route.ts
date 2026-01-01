@@ -9,9 +9,9 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
   try {
     logger.debug('Fetching sidebar characters', { userId: user.id })
 
-    // Get all non-NPC characters
+    // Get all non-NPC, LLM-controlled characters (exclude user-controlled characters)
     let characters = await repos.characters.findByUserId(user.id)
-    characters = characters.filter(c => !c.npc)
+    characters = characters.filter(c => !c.npc && c.controlledBy !== 'user')
 
     // Get chat counts for each character
     const chats = await repos.chats.findByUserId(user.id)

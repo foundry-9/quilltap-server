@@ -202,7 +202,6 @@ export function DevConsoleProvider({ children }: { children: ReactNode }) {
         flushTimeoutRef.current = null;
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only run once on mount
 
   // Setup server log SSE connection

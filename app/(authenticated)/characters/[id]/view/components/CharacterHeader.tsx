@@ -10,8 +10,12 @@ interface CharacterHeaderProps {
   avatarRefreshKey: number
   onStartChat: () => void
   onToggleNpc: () => void
+  onToggleFavorite: () => void
+  onToggleControlledBy: () => void
   onSearchReplace?: () => void
   togglingNpc?: boolean
+  togglingFavorite?: boolean
+  togglingControlledBy?: boolean
 }
 
 export function CharacterHeader({
@@ -20,8 +24,12 @@ export function CharacterHeader({
   avatarRefreshKey,
   onStartChat,
   onToggleNpc,
+  onToggleFavorite,
+  onToggleControlledBy,
   onSearchReplace,
   togglingNpc = false,
+  togglingFavorite = false,
+  togglingControlledBy = false,
 }: CharacterHeaderProps) {
   const getAvatarSrc = () => {
     let src = null
@@ -59,9 +67,36 @@ export function CharacterHeader({
           )}
         </div>
         <div>
-          <h1 className="text-3xl font-semibold">
-            {character?.name || 'Loading...'}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-semibold">
+              {character?.name || 'Loading...'}
+            </h1>
+            <button
+              onClick={onToggleFavorite}
+              disabled={togglingFavorite}
+              className="text-2xl text-amber-400 transition-transform hover:scale-110 disabled:opacity-50"
+              title={character?.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              {character?.isFavorite ? '⭐' : '☆'}
+            </button>
+            <button
+              onClick={onToggleControlledBy}
+              disabled={togglingControlledBy}
+              className="text-amber-400 transition-transform hover:scale-110 disabled:opacity-50"
+              title={character?.controlledBy === 'user' ? 'Switch to LLM control' : 'Switch to user control'}
+            >
+              {character?.controlledBy === 'user' ? (
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+              ) : (
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              )}
+            </button>
+          </div>
           {character?.title && (
             <p className="qt-text-small">{character.title}</p>
           )}

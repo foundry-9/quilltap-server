@@ -53,6 +53,7 @@ export interface Character {
   defaultImageId?: string
   defaultConnectionProfileId?: string
   controlledBy?: 'llm' | 'user'
+  isFavorite?: boolean
   npc?: boolean
   defaultImage?: {
     id: string
