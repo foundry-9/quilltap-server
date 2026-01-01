@@ -301,18 +301,22 @@
    */
   .qt-heading-1 {
     @apply text-3xl font-bold tracking-tight;
+    font-family: var(--qt-heading-font);
   }
 
   .qt-heading-2 {
     @apply text-2xl font-semibold tracking-tight;
+    font-family: var(--qt-heading-font);
   }
 
   .qt-heading-3 {
     @apply text-xl font-semibold;
+    font-family: var(--qt-heading-font);
   }
 
   .qt-heading-4 {
     @apply text-lg font-semibold;
+    font-family: var(--qt-heading-font);
   }
 
   /**

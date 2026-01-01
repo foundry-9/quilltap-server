@@ -365,6 +365,7 @@
   --qt-content-scroll-bg: var(--surface-base);
 
   /* Typography Variables */
+  --qt-heading-font: var(--font-serif);
   --qt-text-secondary-fg: hsl(var(--text-300));
 
   /* Empty State Variables */
@@ -580,9 +581,15 @@
   -webkit-backdrop-filter: blur(4px);
 }
 
-/* Dialog title - Serif font */
+/* Headings - Serif font */
+[data-theme="rains"] h1,
+[data-theme="rains"] h2,
+[data-theme="rains"] h3,
+[data-theme="rains"] h4,
+[data-theme="rains"] h5,
+[data-theme="rains"] h6,
 [data-theme="rains"] .qt-dialog-title {
-  font-family: Georgia, "Times New Roman", Times, serif;
+  font-family: var(--font-serif);
 }
 
 /* Navbar - Gradient with backdrop blur */
