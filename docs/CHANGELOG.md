@@ -4,6 +4,33 @@
 
 ### 2.6-dev
 
+- feat: New UI layout with left sidebar navigation
+  - Replaced top navbar with persistent left sidebar
+  - Sidebar includes: Projects (coming soon), Files (coming soon), Characters, Chats sections
+  - Footer with Settings, Tools, Themes, Quick Hide buttons and Profile menu
+  - Collapsible sidebar (desktop) with persistent state in localStorage
+  - Mobile: overlay drawer from left with hamburger trigger
+  - Simplified header with logo, centered search bar, and width toggle
+  - New home page with welcome message, favorites, and "Start Chat" button
+  - Dashboard page now redirects to home for backwards compatibility
+  - New API endpoints: /api/sidebar/characters, /api/sidebar/chats
+  - All components use qt-* utility classes for theme support
+- fix: New UI layout bug fixes
+  - "Start a Chat" button now links to /chats/new (character selection)
+  - Header logo now uses proper BrandLogo component
+  - Avatar photos now display correctly on home page favorite characters
+  - Settings link corrected to /settings, removed redundant /dashboard/settings
+  - Tools link corrected to /tools
+  - Removed "Navigation" text from sidebar header
+  - Themes button now opens popout menu with theme selector
+  - Quick Hide button now opens popout menu with tag toggles
+  - Sidebar text and icons now use standard foreground color
+  - Sidebar characters and chats now respect quick-hide tag filtering
+  - Avatar images fetched by defaultImageId first, then by linkedTo array
+  - Sidebar character items now use Avatar component for consistency
+- chore: Update theme packages with left sidebar CSS
+  - @quilltap/theme-storybook 1.0.1: Added sidebar and app layout CSS classes
+  - create-quilltap-theme 1.0.3: Document sidebar variables in templates
 - fix: Add missing `@storybook/addon-essentials` to create-quilltap-theme scaffolded projects
 - feat: Add roleplay template plugin types and utilities
   - Added `RoleplayTemplatePlugin`, `RoleplayTemplateConfig`, `RoleplayTemplateMetadata` types to `@quilltap/plugin-types`

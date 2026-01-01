@@ -10,6 +10,22 @@
  * - Typography: --theme-font-sans, --theme-font-size-base, etc.
  * - Spacing: --theme-radius-md, --theme-spacing-4, etc.
  * - Effects: --theme-shadow-md, --theme-transition-normal, etc.
+ *
+ * Left Sidebar variables (for customizing app navigation):
+ * - --qt-left-sidebar-width: 16rem (expanded width)
+ * - --qt-left-sidebar-collapsed-width: 4rem (collapsed icon-only width)
+ * - --qt-left-sidebar-bg: var(--color-background)
+ * - --qt-left-sidebar-border: var(--color-border)
+ * - --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease
+ * - --qt-left-sidebar-header-height: 4rem
+ * - --qt-left-sidebar-section-title-fg: var(--color-muted-foreground)
+ * - --qt-left-sidebar-overlay-bg: rgb(0 0 0 / 0.5) (mobile backdrop)
+ *
+ * App Header variables:
+ * - --qt-app-header-height: 4rem
+ * - --qt-app-header-bg: var(--color-background)
+ * - --qt-app-header-border: var(--color-border)
+ * - --qt-app-header-blur: blur(8px)
  */
 
 [data-theme="{{THEME_ID}}"] {

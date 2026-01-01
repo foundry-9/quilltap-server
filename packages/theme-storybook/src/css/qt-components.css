@@ -578,3 +578,198 @@
 .qt-border {
   border-color: var(--color-border);
 }
+
+/* ==========================================================================
+   LEFT SIDEBAR COMPONENTS
+   ========================================================================== */
+
+.qt-left-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-right: 1px solid var(--qt-left-sidebar-border);
+  width: var(--qt-left-sidebar-width);
+  background: var(--qt-left-sidebar-bg);
+  transition: var(--qt-left-sidebar-transition);
+  z-index: var(--qt-left-sidebar-z);
+}
+
+.qt-left-sidebar-collapsed {
+  width: var(--qt-left-sidebar-collapsed-width);
+}
+
+.qt-left-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--qt-left-sidebar-border);
+  height: var(--qt-left-sidebar-header-height);
+  flex-shrink: 0;
+}
+
+.qt-left-sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.qt-left-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  padding: var(--qt-left-sidebar-section-padding);
+}
+
+.qt-left-sidebar-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+  padding: 0 0.5rem;
+  color: var(--qt-left-sidebar-section-title-fg);
+}
+
+.qt-left-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+
+.qt-left-sidebar-item:hover {
+  background-color: var(--color-muted);
+}
+
+.qt-left-sidebar-item-active {
+  background-color: var(--color-accent);
+  color: var(--color-primary);
+}
+
+.qt-left-sidebar-item-icon {
+  flex-shrink: 0;
+  width: var(--qt-left-sidebar-item-icon-size);
+  height: var(--qt-left-sidebar-item-icon-size);
+  color: var(--color-foreground);
+}
+
+.qt-left-sidebar-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-foreground);
+}
+
+.qt-left-sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-top: 1px solid var(--qt-left-sidebar-border);
+  padding: 0.75rem;
+  flex-shrink: 0;
+}
+
+.qt-left-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--qt-left-sidebar-overlay-bg);
+  z-index: var(--qt-left-sidebar-overlay-z);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 300ms ease, visibility 300ms ease;
+}
+
+.qt-left-sidebar-overlay-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ==========================================================================
+   APP LAYOUT COMPONENTS
+   ========================================================================== */
+
+.qt-app-layout {
+  display: flex;
+  height: 100vh;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+.qt-app-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.qt-app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--qt-app-header-border);
+  height: var(--qt-app-header-height);
+  background: var(--qt-app-header-bg);
+  backdrop-filter: var(--qt-app-header-blur);
+  -webkit-backdrop-filter: var(--qt-app-header-blur);
+  flex-shrink: 0;
+}
+
+.qt-app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.qt-app-header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 0 1rem;
+  max-width: 32rem;
+}
+
+.qt-app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.qt-hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--color-foreground);
+  transition: background-color 150ms;
+}
+
+.qt-hamburger:hover {
+  background-color: var(--color-muted);
+}
+
+@media (max-width: 767px) {
+  .qt-hamburger {
+    display: flex;
+  }
+
+  .qt-left-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+  }
+
+  .qt-left-sidebar-mobile-open {
+    transform: translateX(0);
+  }
+}

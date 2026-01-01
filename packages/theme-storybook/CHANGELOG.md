@@ -2,6 +2,20 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.2] - 2025-12-31
+
+### Changed
+- Sidebar navigation icons and labels now use standard foreground color
+
+## [1.0.1] - 2025-12-31
+
+### Added
+- Left sidebar CSS variables (`--qt-left-sidebar-*`) for theme customization
+- App header CSS variables (`--qt-app-header-*`) for theme customization
+- Left sidebar component classes (`.qt-left-sidebar-*`)
+- App layout component classes (`.qt-app-layout`, `.qt-app-main`, `.qt-app-header-*`)
+- Mobile-responsive hamburger menu class (`.qt-hamburger`)
+
 ## [1.0.0] - 2025-12-31
 
 ### Added
