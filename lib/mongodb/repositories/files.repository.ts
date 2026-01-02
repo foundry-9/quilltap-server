@@ -54,6 +54,32 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
   }
 
   /**
+   * Find multiple files by their IDs in a single query
+   * @param ids Array of file IDs
+   * @returns Promise<FileEntry[]> Array of found files (may be shorter than input if some IDs don't exist)
+   */
+  async findByIds(ids: string[]): Promise<FileEntry[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    try {
+      const collection = await this.getCollection();
+      const files = await collection.find({ id: { $in: ids } }).toArray();
+
+      const validatedFiles = files.map((file: unknown) => this.validate(file));
+      logger.debug('Found files by IDs', { requestedCount: ids.length, foundCount: validatedFiles.length });
+      return validatedFiles;
+    } catch (error) {
+      logger.error('Error finding files by IDs', {
+        idCount: ids.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Find files by SHA256 content hash (for deduplication)
    */
   async findBySha256(sha256: string): Promise<FileEntry[]> {

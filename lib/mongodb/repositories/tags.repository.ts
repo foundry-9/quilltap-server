@@ -121,6 +121,45 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
   }
 
   /**
+   * Find multiple tags by their IDs in a single query
+   * @param ids Array of tag IDs
+   * @returns Promise<Tag[]> Array of found tags (may be shorter than input if some IDs don't exist)
+   */
+  async findByIds(ids: string[]): Promise<Tag[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const collection = await this.getCollection();
+
+    try {
+      const tags = await collection.find({ id: { $in: ids } }).toArray();
+
+      const validatedTags: Tag[] = [];
+      for (const tag of tags) {
+        const { _id, ...tagData } = tag as any;
+        const validationResult = this.validateSafe(tagData);
+        if (validationResult.success && validationResult.data) {
+          validatedTags.push(validationResult.data);
+        } else {
+          logger.warn('Skipping invalid tag during findByIds', {
+            error: validationResult.error,
+          });
+        }
+      }
+
+      logger.debug('Found tags by IDs', { requestedCount: ids.length, foundCount: validatedTags.length });
+      return validatedTags;
+    } catch (error) {
+      logger.error('Error finding tags by IDs', {
+        idCount: ids.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Find tag by name (case-insensitive)
    */
   async findByName(userId: string, name: string): Promise<Tag | null> {

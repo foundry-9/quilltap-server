@@ -4,6 +4,13 @@
 
 ### 2.6-dev
 
+- refactor: Phase 4 - Add batch query methods to eliminate N+1 patterns
+  - Added `findByIds()` to tags, characters, and files repositories for batched lookups
+  - Added `findByDefaultImageId()` and `findByAvatarOverrideImageId()` to characters repository
+  - Added `findByDefaultImageId()` to personas repository
+  - Updated `enrichWithTags()` in `lib/api/middleware/enrichment.ts` to use batched query
+  - Updated `enrichTags()` in `lib/services/chat-enrichment.service.ts` to use batched query
+  - Refactored `lib/cascade-delete.ts` to use targeted queries instead of `findAll()` + filter pattern
 - refactor: Phase 3 - User-scoped repository refactoring
   - Created generic `UserScopedRepository` base class with common CRUD operations
   - Created `UserScopedTaggableRepository` for entities with tag support (findByTag, addTag, removeTag)

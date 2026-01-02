@@ -68,10 +68,10 @@ export async function enrichWithApiKey(
 }
 
 /**
- * Enrich an entity with tag details
+ * Enrich an entity with tag details (batched)
  *
  * Common pattern for entities that have a tags array of IDs.
- * Resolves each tag ID to its full tag object.
+ * Resolves all tag IDs in a single batched query for efficiency.
  *
  * @param tagIds - Array of tag IDs from the entity
  * @param repos - Repository container for data access
@@ -92,14 +92,21 @@ export async function enrichWithTags(
     return [];
   }
 
-  const tagDetails = await Promise.all(
-    tagIds.map(async (tagId) => {
-      const tag = await repos.tags.findById(tagId);
-      return tag ? { tagId, tag } : null;
-    })
-  );
+  // Use batched query instead of N+1 individual queries
+  const tags = await repos.tags.findByIds(tagIds);
 
-  return tagDetails.filter((t): t is EnrichedTag => t !== null);
+  // Map to enriched format, preserving order from input tagIds
+  const tagMap = new Map(tags.map(tag => [tag.id, tag]));
+  const enriched: EnrichedTag[] = [];
+
+  for (const tagId of tagIds) {
+    const tag = tagMap.get(tagId);
+    if (tag) {
+      enriched.push({ tagId, tag });
+    }
+  }
+
+  return enriched;
 }
 
 /**

@@ -418,20 +418,32 @@ export async function enrichParticipantDetail(
 // ============================================================================
 
 /**
- * Enrich tag IDs to full tag objects
+ * Enrich tag IDs to full tag objects (batched)
+ * Uses a single query to fetch all tags for efficiency.
  */
 export async function enrichTags(
   tagIds: string[],
   repos: Repos
 ): Promise<EnrichedTag[]> {
-  const tags = await Promise.all(
-    tagIds.map(async (tagId) => {
-      const tag = await repos.tags.findById(tagId)
-      return tag ? { tag: { id: tag.id, name: tag.name } } : null
-    })
-  )
+  if (tagIds.length === 0) {
+    return []
+  }
 
-  return tags.filter((t): t is EnrichedTag => t !== null)
+  // Use batched query instead of N+1 individual queries
+  const tags = await repos.tags.findByIds(tagIds)
+
+  // Map to enriched format, preserving order from input tagIds
+  const tagMap = new Map(tags.map(tag => [tag.id, tag]))
+  const enriched: EnrichedTag[] = []
+
+  for (const tagId of tagIds) {
+    const tag = tagMap.get(tagId)
+    if (tag) {
+      enriched.push({ tag: { id: tag.id, name: tag.name } })
+    }
+  }
+
+  return enriched
 }
 
 // ============================================================================

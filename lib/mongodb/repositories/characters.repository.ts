@@ -160,6 +160,99 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
   }
 
   /**
+   * Find multiple characters by their IDs in a single query
+   * @param ids Array of character IDs
+   * @returns Promise<Character[]> Array of found characters (may be shorter than input if some IDs don't exist)
+   */
+  async findByIds(ids: string[]): Promise<Character[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    try {
+      const collection = await this.getCollection();
+      const results = await collection.find({ id: { $in: ids } }).toArray();
+
+      const characters = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((char): char is Character => char !== null);
+
+      logger.debug('Found characters by IDs', { requestedCount: ids.length, foundCount: characters.length });
+      return characters;
+    } catch (error) {
+      logger.error('Error finding characters by IDs', {
+        idCount: ids.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Find characters that use a specific image as their default
+   * @param imageId The image file ID
+   * @returns Promise<Character[]> Array of characters using this image as default
+   */
+  async findByDefaultImageId(imageId: string): Promise<Character[]> {
+    try {
+      const collection = await this.getCollection();
+      const results = await collection.find({ defaultImageId: imageId }).toArray();
+
+      return results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((char): char is Character => char !== null);
+    } catch (error) {
+      logger.error('Error finding characters by default image ID', {
+        imageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Find characters that use a specific image in their avatar overrides
+   * @param imageId The image file ID
+   * @returns Promise<Character[]> Array of characters using this image in overrides
+   */
+  async findByAvatarOverrideImageId(imageId: string): Promise<Character[]> {
+    try {
+      const collection = await this.getCollection();
+      const results = await collection.find({
+        'avatarOverrides.imageId': imageId,
+      }).toArray();
+
+      return results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((char): char is Character => char !== null);
+    } catch (error) {
+      logger.error('Error finding characters by avatar override image ID', {
+        imageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
    * Find characters with a specific tag
    * @param tagId The tag ID
    * @returns Promise<Character[]> Array of characters with the tag
