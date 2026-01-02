@@ -4,6 +4,19 @@
 
 ### 2.6-dev
 
+- refactor: Phase 5 - Large service decomposition
+  - Decomposed `lib/chat/context-manager.ts` (1,266 lines) into focused modules:
+    - `lib/chat/context/system-prompt-builder.ts` - System prompt construction with template processing
+    - `lib/chat/context/memory-injector.ts` - Memory and summary formatting for context
+    - `lib/chat/context/message-attribution.ts` - Multi-character message attribution and filtering
+    - `lib/chat/context/message-selector.ts` - Token-budget-aware message selection
+  - Extracted `lib/services/search/` module from `app/api/search/route.ts` (721 lines → 73 lines):
+    - `search-utils.ts` - Query parsing, matching, and snippet creation
+    - `types.ts` - Search type definitions
+    - `global-search.service.ts` - Unified search across all entity types
+  - Extracted `lib/import/sillytavern-import-service.ts` from `app/api/chats/import/route.ts` (763 lines → 131 lines):
+    - Consolidates multi-character and legacy import logic
+    - Reuses existing STChat types from sillytavern module
 - refactor: Phase 4 - Add batch query methods to eliminate N+1 patterns
   - Added `findByIds()` to tags, characters, and files repositories for batched lookups
   - Added `findByDefaultImageId()` and `findByAvatarOverrideImageId()` to characters repository

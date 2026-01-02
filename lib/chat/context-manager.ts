@@ -13,15 +13,55 @@
  * - Includes other participants in system prompt for context
  */
 
-import { Provider, Memory, Character, Persona, ChatParticipantBase, ChatMetadataBase, TimestampConfig } from '@/lib/schemas/types'
+import { Provider, Character, Persona, ChatParticipantBase, ChatMetadataBase, TimestampConfig } from '@/lib/schemas/types'
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
-import { calculateCurrentTimestamp, shouldInjectTimestamp, formatTimestampForSystemPrompt } from '@/lib/chat/timestamp-utils'
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
-import { searchMemoriesSemantic, SemanticSearchResult } from '@/lib/memory/memory-service'
-import { formatMessagesForProvider, buildMultiCharacterContextSection, type MultiCharacterMessage } from '@/lib/llm/message-formatter'
+import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
-import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
+
+// Import from extracted modules
+import {
+  buildSystemPrompt,
+  buildOtherParticipantsInfo,
+  type OtherParticipantInfo,
+} from './context/system-prompt-builder'
+import {
+  formatMemoriesForContext,
+  formatInterCharacterMemoriesForContext,
+  formatSummaryForContext,
+  type DebugMemoryInfo,
+} from './context/memory-injector'
+import {
+  filterMessagesByHistoryAccess,
+  getParticipantName,
+  attributeMessagesForCharacter,
+  findUserParticipantName,
+  type MessageWithParticipant,
+} from './context/message-attribution'
+import {
+  selectRecentMessages,
+  type SelectableMessage,
+} from './context/message-selector'
+
+// Re-export types from extracted modules for backwards compatibility
+export type { OtherParticipantInfo } from './context/system-prompt-builder'
+export type { MessageWithParticipant } from './context/message-attribution'
+export type { SelectableMessage } from './context/message-selector'
+
+// Re-export functions from extracted modules for backwards compatibility
+export {
+  buildSystemPrompt,
+  buildOtherParticipantsInfo,
+  formatMemoriesForContext,
+  formatInterCharacterMemoriesForContext,
+  formatSummaryForContext,
+  filterMessagesByHistoryAccess,
+  getParticipantName,
+  attributeMessagesForCharacter,
+  selectRecentMessages,
+}
 
 /**
  * Message format expected by the context manager
@@ -91,21 +131,6 @@ export interface BuiltContext {
   debugSummary?: string
   /** Debug info: the system prompt that was built */
   debugSystemPrompt?: string
-}
-
-/**
- * Extended message format for multi-character context building
- * Includes participantId for attribution
- */
-export interface MessageWithParticipant {
-  role: string
-  content: string
-  id?: string
-  thoughtSignature?: string | null
-  /** Which participant sent this message (for multi-character attribution) */
-  participantId?: string | null
-  /** When the message was created (for history access filtering) */
-  createdAt?: string
 }
 
 /**
@@ -189,607 +214,6 @@ export function calculateContextBudget(
     summaryBudget: allocation.conversationSummary,
     recentMessagesBudget: allocation.recentMessages,
     responseReserve: allocation.responseReserve,
-  }
-}
-
-/**
- * Other participant info for multi-character system prompts
- */
-export interface OtherParticipantInfo {
-  name: string
-  description?: string
-  type: 'CHARACTER' | 'PERSONA'
-}
-
-/**
- * Build the system prompt for a character
- * Supports both single-character and multi-character scenarios
- * Processes {{char}}, {{user}}, and other template variables in all prompts
- */
-export function buildSystemPrompt(
-  character: Character,
-  persona?: { name: string; description: string } | null,
-  systemPromptOverride?: string | null,
-  /** For multi-character chats: info about other participants */
-  otherParticipants?: OtherParticipantInfo[],
-  /** Roleplay template to prepend (formatting instructions) */
-  roleplayTemplate?: { systemPrompt: string } | null,
-  /** Pseudo-tool instructions for models without native function calling */
-  pseudoToolInstructions?: string,
-  /** Selected system prompt ID from character's systemPrompts array */
-  selectedSystemPromptId?: string | null,
-  /** Timestamp configuration for injection */
-  timestampConfig?: TimestampConfig | null,
-  /** Whether this is the first message (for START_ONLY mode) */
-  isInitialMessage?: boolean
-): string {
-  const parts: string[] = []
-
-  // Build template context for {{char}}, {{user}}, etc. replacement
-  const templateContext: TemplateContext = {
-    char: character.name,
-    user: persona?.name || 'User',
-    description: character.description || '',
-    personality: character.personality || '',
-    scenario: character.scenario || '',
-    persona: persona?.description || '',
-  }
-
-  // Handle timestamp injection
-  if (timestampConfig && shouldInjectTimestamp(timestampConfig, isInitialMessage ?? false)) {
-    const timestamp = calculateCurrentTimestamp(timestampConfig)
-    logger.debug('[ContextManager] Injecting timestamp into system prompt', {
-      mode: timestampConfig.mode,
-      format: timestampConfig.format,
-      isFictional: timestamp.isFictional,
-      formatted: timestamp.formatted,
-      autoPrepend: timestampConfig.autoPrepend,
-    })
-
-    if (timestampConfig.autoPrepend) {
-      // Add timestamp as the first part of the system prompt
-      parts.push(formatTimestampForSystemPrompt(timestamp, true))
-    } else {
-      // Add to template context for {{timestamp}} variable
-      templateContext.timestamp = timestamp.formatted
-    }
-  }
-
-  logger.debug('[ContextManager] Building system prompt with template context', {
-    characterName: templateContext.char,
-    userName: templateContext.user,
-    hasTimestamp: !!templateContext.timestamp,
-  })
-
-  // Roleplay template system prompt (formatting instructions) - prepended first
-  // Process templates to replace {{char}} and {{user}}
-  if (roleplayTemplate?.systemPrompt) {
-    const processedRoleplayPrompt = processTemplate(roleplayTemplate.systemPrompt, templateContext)
-    logger.debug('Prepending roleplay template to system prompt', {
-      templatePromptLength: roleplayTemplate.systemPrompt.length,
-      processedLength: processedRoleplayPrompt.length,
-      hasTemplateVars: roleplayTemplate.systemPrompt.includes('{{'),
-    })
-    parts.push(processedRoleplayPrompt)
-  }
-
-  // Pseudo-tool instructions (for models without native function calling)
-  // Added after roleplay template so tool usage instructions are seen early
-  // Note: These typically don't contain {{char}}/{{user}} but process anyway for consistency
-  if (pseudoToolInstructions) {
-    const processedToolInstructions = processTemplate(pseudoToolInstructions, templateContext)
-    logger.debug('[ContextManager] Adding pseudo-tool instructions', {
-      instructionsLength: pseudoToolInstructions.length,
-    })
-    parts.push(processedToolInstructions)
-  }
-
-  // Base system prompt - priority: override > selected prompt > default systemPrompt
-  if (systemPromptOverride) {
-    const processedOverride = processTemplate(systemPromptOverride, templateContext)
-    logger.debug('[ContextManager] Using system prompt override', {
-      overrideLength: systemPromptOverride.length,
-      processedLength: processedOverride.length,
-    })
-    parts.push(processedOverride)
-  } else {
-    // Check for selected system prompt from character's prompts array
-    let systemPromptContent: string | null = null
-
-    if (selectedSystemPromptId && character.systemPrompts) {
-      const selectedPrompt = character.systemPrompts.find(p => p.id === selectedSystemPromptId)
-      if (selectedPrompt) {
-        systemPromptContent = selectedPrompt.content
-        logger.debug('[ContextManager] Using selected system prompt', {
-          characterId: character.id,
-          promptId: selectedSystemPromptId,
-          promptName: selectedPrompt.name,
-          contentLength: selectedPrompt.content.length,
-        })
-      } else {
-        logger.debug('[ContextManager] Selected system prompt not found in character prompts', {
-          characterId: character.id,
-          selectedPromptId: selectedSystemPromptId,
-          availablePromptCount: character.systemPrompts.length,
-        })
-      }
-    }
-
-    // Fall back to default prompt in array, then legacy systemPrompt field
-    if (!systemPromptContent && character.systemPrompts) {
-      const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
-      if (defaultPrompt) {
-        systemPromptContent = defaultPrompt.content
-        logger.debug('[ContextManager] Using default system prompt from array', {
-          characterId: character.id,
-          promptId: defaultPrompt.id,
-          promptName: defaultPrompt.name,
-          contentLength: defaultPrompt.content.length,
-        })
-      }
-    }
-
-    if (systemPromptContent) {
-      // Process templates in the system prompt content
-      const processedSystemPrompt = processTemplate(systemPromptContent, templateContext)
-      parts.push(processedSystemPrompt)
-    } else {
-      logger.debug('[ContextManager] No system prompt found for character', {
-        characterId: character.id,
-        selectedSystemPromptId,
-        hasSystemPrompts: !!(character.systemPrompts && character.systemPrompts.length > 0),
-      })
-    }
-  }
-
-  // Character personality - process templates
-  if (character.personality) {
-    const processedPersonality = processTemplate(character.personality, templateContext)
-    parts.push(`\n## Character Personality\n${processedPersonality}`)
-  }
-
-  // Scenario/setting - process templates
-  if (character.scenario) {
-    const processedScenario = processTemplate(character.scenario, templateContext)
-    parts.push(`\n## Scenario\n${processedScenario}`)
-  }
-
-  // Example dialogues for style reference - process templates
-  if (character.exampleDialogues) {
-    const processedDialogues = processTemplate(character.exampleDialogues, templateContext)
-    parts.push(`\n## Example Dialogue Style\n${processedDialogues}`)
-  }
-
-  // Persona information if provided (single-character mode)
-  // In multi-character mode, the persona is included in otherParticipants
-  if (persona && (!otherParticipants || otherParticipants.length === 0)) {
-    parts.push(`\n## User Persona\nYou are speaking with ${persona.name}. ${persona.description}`)
-  }
-
-  // Multi-character context section
-  if (otherParticipants && otherParticipants.length > 0) {
-    const multiCharSection = buildMultiCharacterContextSection(
-      otherParticipants,
-      character.name
-    )
-    if (multiCharSection) {
-      parts.push(multiCharSection)
-    }
-  }
-
-  return parts.join('\n\n').trim()
-}
-
-/**
- * Filter messages based on participant's history access
- * If hasHistoryAccess is false, only include messages after the participant joined
- */
-export function filterMessagesByHistoryAccess(
-  messages: MessageWithParticipant[],
-  participant: ChatParticipantBase
-): MessageWithParticipant[] {
-  // If participant has full history access, return all messages
-  if (participant.hasHistoryAccess) {
-    logger.debug('[ContextManager] Participant has full history access', {
-      participantId: participant.id,
-    })
-    return messages
-  }
-
-  // Otherwise, filter to only messages after the participant joined
-  const participantJoinTime = new Date(participant.createdAt).getTime()
-
-  const filteredMessages = messages.filter(msg => {
-    if (!msg.createdAt) {
-      // If no createdAt, include the message (shouldn't happen)
-      return true
-    }
-    const msgTime = new Date(msg.createdAt).getTime()
-    return msgTime >= participantJoinTime
-  })
-
-  logger.debug('[ContextManager] Filtered messages by history access', {
-    participantId: participant.id,
-    joinTime: participant.createdAt,
-    originalCount: messages.length,
-    filteredCount: filteredMessages.length,
-  })
-
-  return filteredMessages
-}
-
-/**
- * Get participant name for message attribution
- * Supports both CHARACTER (LLM or user-controlled) and legacy PERSONA types
- */
-export function getParticipantName(
-  participantId: string | null | undefined,
-  participantCharacters: Map<string, Character>,
-  participantPersonas: Map<string, Persona>,
-  allParticipants: ChatParticipantBase[]
-): string | undefined {
-  if (!participantId) {
-    return undefined
-  }
-
-  // Find the participant
-  const participant = allParticipants.find(p => p.id === participantId)
-  if (!participant) {
-    return undefined
-  }
-
-  // CHARACTER participants (both LLM and user-controlled)
-  if (participant.type === 'CHARACTER' && participant.characterId) {
-    const character = participantCharacters.get(participant.characterId)
-    return character?.name
-  }
-
-  // Legacy PERSONA participants (deprecated - use CHARACTER with controlledBy='user' instead)
-  if (participant.type === 'PERSONA' && participant.personaId) {
-    const persona = participantPersonas.get(participant.personaId)
-    return persona?.name
-  }
-
-  return undefined
-}
-
-/**
- * Attribute messages for multi-character context
- * Converts messages to the responding character's perspective:
- * - Messages from the responding character → role: assistant
- * - Messages from other characters → role: user, with name
- * - Messages from user/persona → role: user, with name
- */
-export function attributeMessagesForCharacter(
-  messages: MessageWithParticipant[],
-  respondingParticipantId: string,
-  participantCharacters: Map<string, Character>,
-  participantPersonas: Map<string, Persona>,
-  allParticipants: ChatParticipantBase[]
-): MultiCharacterMessage[] {
-  logger.debug('[ContextManager] Attributing messages for character', {
-    respondingParticipantId,
-    messageCount: messages.length,
-  })
-
-  return messages.map(msg => {
-    const participantName = getParticipantName(
-      msg.participantId,
-      participantCharacters,
-      participantPersonas,
-      allParticipants
-    )
-
-    // Determine role based on who sent the message
-    let role: 'user' | 'assistant' = 'user'
-
-    if (msg.participantId === respondingParticipantId) {
-      // Message from the responding character → assistant role
-      role = 'assistant'
-    } else if (msg.role.toUpperCase() === 'ASSISTANT') {
-      // Message from another character (was stored as ASSISTANT) → user role
-      // The name attribution will distinguish them
-      role = 'user'
-    } else {
-      // USER messages stay as user role
-      role = 'user'
-    }
-
-    return {
-      role,
-      content: msg.content,
-      name: participantName,
-      participantId: msg.participantId || undefined,
-      thoughtSignature: msg.thoughtSignature,
-    }
-  })
-}
-
-/**
- * Build other participants info for system prompt
- * Supports CHARACTER (LLM and user-controlled) and legacy PERSONA types
- */
-export function buildOtherParticipantsInfo(
-  respondingParticipantId: string,
-  allParticipants: ChatParticipantBase[],
-  participantCharacters: Map<string, Character>,
-  participantPersonas: Map<string, Persona>
-): OtherParticipantInfo[] {
-  const otherParticipants: OtherParticipantInfo[] = []
-
-  for (const participant of allParticipants) {
-    // Skip the responding participant
-    if (participant.id === respondingParticipantId) {
-      continue
-    }
-
-    // Skip inactive participants
-    if (!participant.isActive) {
-      continue
-    }
-
-    // CHARACTER participants (both LLM and user-controlled)
-    if (participant.type === 'CHARACTER' && participant.characterId) {
-      const character = participantCharacters.get(participant.characterId)
-      if (character) {
-        // For user-controlled characters, report as 'CHARACTER' type (not 'PERSONA')
-        // The controlledBy field determines behavior, not the display type
-        otherParticipants.push({
-          name: character.name,
-          description: character.title || character.description || undefined,
-          type: 'CHARACTER',
-        })
-      }
-    }
-    // Legacy PERSONA participants (deprecated - use CHARACTER with controlledBy='user' instead)
-    else if (participant.type === 'PERSONA' && participant.personaId) {
-      const persona = participantPersonas.get(participant.personaId)
-      if (persona) {
-        otherParticipants.push({
-          name: persona.name,
-          description: persona.description || undefined,
-          type: 'PERSONA',
-        })
-      }
-    }
-  }
-
-  return otherParticipants
-}
-
-/**
- * Format memories for injection into context
- */
-export function formatMemoriesForContext(
-  memories: SemanticSearchResult[],
-  maxTokens: number,
-  provider: Provider
-): {
-  content: string
-  tokenCount: number
-  memoriesUsed: number
-  debugMemories: Array<{ summary: string; importance: number; score: number }>
-} {
-  if (memories.length === 0) {
-    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
-  }
-
-  const memoryParts: string[] = ['## Relevant Memories']
-  let currentTokens = estimateTokens('## Relevant Memories\n', provider)
-  let memoriesUsed = 0
-  const debugMemories: Array<{ summary: string; importance: number; score: number }> = []
-
-  // Sort by relevance score (highest first)
-  const sortedMemories = [...memories].sort((a, b) => {
-    // First by score, then by importance
-    const scoreDiff = b.score - a.score
-    if (Math.abs(scoreDiff) > 0.1) return scoreDiff
-    return b.memory.importance - a.memory.importance
-  })
-
-  for (const { memory, score } of sortedMemories) {
-    // Use summary for context (more concise)
-    const memoryLine = `- ${memory.summary}`
-    const lineTokens = estimateTokens(memoryLine + '\n', provider)
-
-    if (currentTokens + lineTokens > maxTokens) {
-      break
-    }
-
-    memoryParts.push(memoryLine)
-    currentTokens += lineTokens
-    memoriesUsed++
-    debugMemories.push({
-      summary: memory.summary,
-      importance: memory.importance,
-      score,
-    })
-  }
-
-  if (memoriesUsed === 0) {
-    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
-  }
-
-  return {
-    content: memoryParts.join('\n'),
-    tokenCount: currentTokens,
-    memoriesUsed,
-    debugMemories,
-  }
-}
-
-/**
- * Format inter-character memories for injection into context
- * These are memories that the responding character has about other characters in the chat
- */
-export function formatInterCharacterMemoriesForContext(
-  memories: Memory[],
-  characterNames: Map<string, string>, // aboutCharacterId -> character name
-  maxTokens: number,
-  provider: Provider
-): {
-  content: string
-  tokenCount: number
-  memoriesUsed: number
-  debugMemories: Array<{ aboutCharacterName: string; summary: string; importance: number }>
-} {
-  if (memories.length === 0) {
-    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
-  }
-
-  const memoryParts: string[] = ['## Memories About Other Characters']
-  let currentTokens = estimateTokens('## Memories About Other Characters\n', provider)
-  let memoriesUsed = 0
-  const debugMemories: Array<{ aboutCharacterName: string; summary: string; importance: number }> = []
-
-  // Group memories by character
-  const memoriesByCharacter = new Map<string, Memory[]>()
-  for (const memory of memories) {
-    if (memory.aboutCharacterId) {
-      const existing = memoriesByCharacter.get(memory.aboutCharacterId) || []
-      existing.push(memory)
-      memoriesByCharacter.set(memory.aboutCharacterId, existing)
-    }
-  }
-
-  // Sort memories within each character by importance
-  for (const [characterId, charMemories] of memoriesByCharacter) {
-    const characterName = characterNames.get(characterId) || 'Unknown'
-    const sortedMemories = [...charMemories].sort((a, b) => b.importance - a.importance)
-
-    for (const memory of sortedMemories) {
-      const memoryLine = `- About ${characterName}: ${memory.summary}`
-      const lineTokens = estimateTokens(memoryLine + '\n', provider)
-
-      if (currentTokens + lineTokens > maxTokens) {
-        break
-      }
-
-      memoryParts.push(memoryLine)
-      currentTokens += lineTokens
-      memoriesUsed++
-      debugMemories.push({
-        aboutCharacterName: characterName,
-        summary: memory.summary,
-        importance: memory.importance,
-      })
-    }
-  }
-
-  if (memoriesUsed === 0) {
-    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
-  }
-
-  return {
-    content: memoryParts.join('\n'),
-    tokenCount: currentTokens,
-    memoriesUsed,
-    debugMemories,
-  }
-}
-
-/**
- * Format conversation summary for context
- */
-export function formatSummaryForContext(
-  summary: string,
-  maxTokens: number,
-  provider: Provider
-): { content: string; tokenCount: number } {
-  if (!summary || summary.trim().length === 0) {
-    return { content: '', tokenCount: 0 }
-  }
-
-  const header = '## Previous Conversation Summary'
-  const fullContent = `${header}\n${summary}`
-  const fullTokens = estimateTokens(fullContent, provider)
-
-  if (fullTokens <= maxTokens) {
-    return { content: fullContent, tokenCount: fullTokens }
-  }
-
-  // Truncate summary to fit
-  const headerTokens = estimateTokens(header + '\n', provider)
-  const availableForSummary = maxTokens - headerTokens
-  const truncatedSummary = truncateToTokenLimit(summary, availableForSummary, provider)
-
-  return {
-    content: `${header}\n${truncatedSummary}`,
-    tokenCount: estimateTokens(`${header}\n${truncatedSummary}`, provider),
-  }
-}
-
-/**
- * Extended message type with optional participant info
- */
-export interface SelectableMessage {
-  role: string
-  content: string
-  id?: string
-  thoughtSignature?: string | null
-  name?: string
-  participantId?: string | null
-}
-
-/**
- * Select recent messages to fit within token budget
- * Supports both single-character and multi-character message formats
- */
-export function selectRecentMessages(
-  messages: Array<SelectableMessage>,
-  maxTokens: number,
-  provider: Provider
-): { messages: Array<SelectableMessage>; tokenCount: number; truncated: boolean } {
-  if (messages.length === 0) {
-    return { messages: [], tokenCount: 0, truncated: false }
-  }
-
-  const selectedMessages: Array<SelectableMessage> = []
-  let totalTokens = 0
-  let truncated = false
-
-  // Work backwards from most recent
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i]
-    // Account for potential name prefix in token count
-    const nameOverhead = msg.name ? estimateTokens(`[${msg.name}] `, provider) : 0
-    const msgTokens = estimateTokens(msg.content, provider) + nameOverhead + 4 // +4 for message overhead
-
-    if (totalTokens + msgTokens > maxTokens) {
-      truncated = true
-      break
-    }
-
-    // Preserve all fields including name and participantId
-    selectedMessages.unshift({
-      role: msg.role,
-      content: msg.content,
-      thoughtSignature: msg.thoughtSignature,
-      name: msg.name,
-      participantId: msg.participantId,
-    })
-    totalTokens += msgTokens
-  }
-
-  // Ensure we have at least the last message if possible
-  if (selectedMessages.length === 0 && messages.length > 0) {
-    const lastMsg = messages[messages.length - 1]
-    selectedMessages.push({
-      role: lastMsg.role,
-      content: lastMsg.content,
-      thoughtSignature: lastMsg.thoughtSignature,
-      name: lastMsg.name,
-      participantId: lastMsg.participantId,
-    })
-    const nameOverhead = lastMsg.name ? estimateTokens(`[${lastMsg.name}] `, provider) : 0
-    totalTokens = estimateTokens(lastMsg.content, provider) + nameOverhead + 4
-    truncated = true
-  }
-
-  return {
-    messages: selectedMessages,
-    tokenCount: totalTokens,
-    truncated,
   }
 }
 
@@ -893,7 +317,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   let memoryContent = ''
   let memoryTokens = 0
   let memoriesIncluded = 0
-  let debugMemories: Array<{ summary: string; importance: number; score: number }> = []
+  let debugMemories: DebugMemoryInfo[] = []
 
   // In continue mode (no newUserMessage), use the last message content for memory search
   // or skip memory search if there are no messages
@@ -1054,7 +478,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       thoughtSignature: msg.thoughtSignature,
     }))
 
-    // Prepend join scenario as a system note if present
+    // Prepend join scenario to final system prompt if present
     if (joinScenarioContent) {
       // Add join scenario to final system prompt instead of as a separate message
       finalSystemPrompt += `\n\n## How You Entered This Conversation\n${joinScenarioContent}`
@@ -1129,24 +553,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // In multi-character mode, include the user's character name (or legacy persona name)
   if (newUserMessage) {
     let newUserMsgName: string | undefined
-    if (isMultiCharacter && allParticipants) {
-      // First, try to find a user-controlled CHARACTER participant (new model)
-      const userCharacterParticipant = allParticipants.find(p =>
-        p.type === 'CHARACTER' && p.controlledBy === 'user' && p.isActive && p.characterId
-      )
-      if (userCharacterParticipant?.characterId && participantCharacters) {
-        const character = participantCharacters.get(userCharacterParticipant.characterId)
-        newUserMsgName = character?.name
-      }
-
-      // Fall back to legacy PERSONA participant if no user-controlled character found
-      if (!newUserMsgName && participantPersonas) {
-        const personaParticipant = allParticipants.find(p => p.type === 'PERSONA' && p.isActive)
-        if (personaParticipant?.personaId) {
-          const personaData = participantPersonas.get(personaParticipant.personaId)
-          newUserMsgName = personaData?.name
-        }
-      }
+    if (isMultiCharacter && allParticipants && participantCharacters && participantPersonas) {
+      newUserMsgName = findUserParticipantName(allParticipants, participantCharacters, participantPersonas)
     }
 
     contextMessages.push({
