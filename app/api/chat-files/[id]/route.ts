@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
+import { notFound, badRequest, serverError, unauthorized, validationError } from '@/lib/api/responses'
 import { deleteFile as deleteS3File } from '@/lib/s3/operations'
 
 const tagSchema = z.object({
@@ -39,7 +40,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!fileEntry) {
         logger.debug('POST /api/chat-files/[id] - File not found', { fileId: id })
-        return NextResponse.json({ error: 'File not found' }, { status: 404 })
+        return notFound('File')
       }
 
       // Verify file belongs to user
@@ -49,7 +50,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           fileUserId: fileEntry.userId,
           sessionUserId: user.id,
         })
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        return unauthorized()
       }
 
       // Verify the file is linked to a chat
@@ -59,7 +60,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           fileId: id,
           linkedTo: fileEntry.linkedTo,
         })
-        return NextResponse.json({ error: 'File is not associated with a chat' }, { status: 400 })
+        return badRequest('File is not associated with a chat')
       }
 
       // Verify chat belongs to user
@@ -72,7 +73,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           chatUserId: chat?.userId,
           sessionUserId: user.id,
         })
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        return unauthorized()
       }
 
       // Verify the tagged entity exists and belongs to user
@@ -86,7 +87,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
             characterUserId: character?.userId,
             sessionUserId: user.id,
           })
-          return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+          return notFound('Character')
         }
         logger.debug('POST /api/chat-files/[id] - Character verified', {
           fileId: id,
@@ -103,7 +104,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
             personaUserId: persona?.userId,
             sessionUserId: user.id,
           })
-          return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+          return notFound('Persona')
         }
         logger.debug('POST /api/chat-files/[id] - Persona verified', {
           fileId: id,
@@ -160,13 +161,10 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       )
 
       if (error instanceof z.ZodError) {
-        return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 })
+        return validationError(error)
       }
 
-      return NextResponse.json(
-        { error: 'Failed to tag file', details: error instanceof Error ? error.message : String(error) },
-        { status: 500 }
-      )
+      return serverError('Failed to tag file')
     }
   }
 )
@@ -188,7 +186,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!fileEntry) {
         logger.debug('DELETE /api/chat-files/[id] - File not found', { fileId: id })
-        return NextResponse.json({ error: 'File not found' }, { status: 404 })
+        return notFound('File')
       }
 
       // Verify file belongs to user
@@ -198,7 +196,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           fileUserId: fileEntry.userId,
           sessionUserId: user.id,
         })
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        return unauthorized()
       }
 
       // Verify the file is linked to a chat
@@ -208,7 +206,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           fileId: id,
           linkedTo: fileEntry.linkedTo,
         })
-        return NextResponse.json({ error: 'File is not associated with a chat' }, { status: 400 })
+        return badRequest('File is not associated with a chat')
       }
 
       // Verify chat belongs to user
@@ -221,7 +219,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           chatUserId: chat?.userId,
           sessionUserId: user.id,
         })
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        return unauthorized()
       }
 
       // Delete from S3 if file has S3 key
@@ -251,7 +249,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!deleted) {
         logger.debug('DELETE /api/chat-files/[id] - File metadata not found', { fileId: id })
-        return NextResponse.json({ error: 'File not found' }, { status: 404 })
+        return notFound('File')
       }
 
       logger.debug('DELETE /api/chat-files/[id] - File deleted successfully', {
@@ -266,10 +264,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         { context: 'DELETE /api/chat-files/[id]' },
         error instanceof Error ? error : undefined
       )
-      return NextResponse.json(
-        { error: 'Failed to delete file', details: error instanceof Error ? error.message : String(error) },
-        { status: 500 }
-      )
+      return serverError('Failed to delete file')
     }
   }
 )

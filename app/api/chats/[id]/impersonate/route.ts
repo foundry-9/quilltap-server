@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
 
 // Validation schema for POST request (start impersonation)
 const startImpersonationSchema = z.object({
@@ -39,7 +40,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Get chat metadata
       const chat = await repos.chats.findById(id)
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       logger.debug('[Impersonate API] Getting impersonation state', {
@@ -69,10 +70,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       logger.error('[Impersonate API] Error getting impersonation state:', {}, error as Error)
-      return NextResponse.json(
-        { error: 'Failed to get impersonation state' },
-        { status: 500 }
-      )
+      return serverError('Failed to get impersonation state')
     }
   }
 )
@@ -89,7 +87,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // Get chat metadata
       const chat = await repos.chats.findById(id)
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       // Parse and validate request body
@@ -104,16 +102,16 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify participant exists and is active
       const participant = chat.participants.find(p => p.id === participantId)
       if (!participant) {
-        return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
+        return notFound('Participant')
       }
       if (!participant.isActive) {
-        return NextResponse.json({ error: 'Participant is not active' }, { status: 400 })
+        return badRequest('Participant is not active')
       }
 
       // Add impersonation
       const updatedChat = await repos.chats.addImpersonation(id, participantId)
       if (!updatedChat) {
-        return NextResponse.json({ error: 'Failed to start impersonation' }, { status: 500 })
+        return serverError('Failed to start impersonation')
       }
 
       // Get character name if available
@@ -140,17 +138,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('[Impersonate API] Error starting impersonation:', {}, error as Error)
-      return NextResponse.json(
-        { error: 'Failed to start impersonation' },
-        { status: 500 }
-      )
+      return serverError('Failed to start impersonation')
     }
   }
 )
@@ -167,7 +159,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       // Get chat metadata
       const chat = await repos.chats.findById(id)
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       // Parse and validate request body
@@ -183,13 +175,13 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify participant exists
       const participant = chat.participants.find(p => p.id === participantId)
       if (!participant) {
-        return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
+        return notFound('Participant')
       }
 
       // Remove impersonation
       let updatedChat = await repos.chats.removeImpersonation(id, participantId)
       if (!updatedChat) {
-        return NextResponse.json({ error: 'Failed to stop impersonation' }, { status: 500 })
+        return serverError('Failed to stop impersonation')
       }
 
       // If a new connection profile was provided, update the participant
@@ -197,7 +189,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         // Verify connection profile exists and belongs to user
         const profile = await repos.connections.findById(newConnectionProfileId)
         if (!profile || profile.userId !== user.id) {
-          return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+          return notFound('Connection profile')
         }
 
         // Update participant with new connection profile and set controlledBy to 'llm'
@@ -240,17 +232,11 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('[Impersonate API] Error stopping impersonation:', {}, error as Error)
-      return NextResponse.json(
-        { error: 'Failed to stop impersonation' },
-        { status: 500 }
-      )
+      return serverError('Failed to stop impersonation')
     }
   }
 )

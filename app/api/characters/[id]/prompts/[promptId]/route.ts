@@ -10,6 +10,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 
 const updatePromptSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -33,7 +34,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; promptId: stri
           characterId,
           userId: user.id,
         });
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+        return notFound('Character');
       }
 
       if (character.userId !== user.id) {
@@ -42,7 +43,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; promptId: stri
           userId: user.id,
           ownerId: character.userId,
         });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return badRequest('Forbidden');
       }
 
       const prompt = character.systemPrompts?.find((p) => p.id === promptId);
@@ -53,7 +54,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; promptId: stri
           promptId,
           userId: user.id,
         });
-        return NextResponse.json({ error: 'Prompt not found' }, { status: 404 });
+        return notFound('Prompt');
       }
 
       logger.debug('Retrieved character system prompt', {
@@ -68,10 +69,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; promptId: stri
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      return NextResponse.json(
-        { error: 'Failed to fetch character prompt' },
-        { status: 500 }
-      );
+      return serverError('Failed to fetch character prompt');
     }
   }
 );
@@ -96,7 +94,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; promptId: stri
           characterId,
           userId: user.id,
         });
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+        return notFound('Character');
       }
 
       if (character.userId !== user.id) {
@@ -105,7 +103,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; promptId: stri
           userId: user.id,
           ownerId: character.userId,
         });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return badRequest('Forbidden');
       }
 
       // Verify prompt exists
@@ -116,7 +114,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; promptId: stri
           promptId,
           userId: user.id,
         });
-        return NextResponse.json({ error: 'Prompt not found' }, { status: 404 });
+        return notFound('Prompt');
       }
 
       const updates: Record<string, unknown> = {};
@@ -132,10 +130,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; promptId: stri
           promptId,
           userId: user.id,
         });
-        return NextResponse.json(
-          { error: 'Failed to update system prompt' },
-          { status: 500 }
-        );
+        return serverError('Failed to update system prompt');
       }
 
       logger.info('Character system prompt updated', {
@@ -149,16 +144,13 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; promptId: stri
     } catch (error) {
       if (error instanceof z.ZodError) {
         logger.warn('Invalid character prompt update data', { errors: error.errors });
-        return NextResponse.json({ error: error.errors }, { status: 400 });
+        return validationError(error);
       }
       logger.error('Error updating character system prompt', {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      return NextResponse.json(
-        { error: 'Failed to update character prompt' },
-        { status: 500 }
-      );
+      return serverError('Failed to update character prompt');
     }
   }
 );
@@ -180,7 +172,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; promptId: s
           characterId,
           userId: user.id,
         });
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+        return notFound('Character');
       }
 
       if (character.userId !== user.id) {
@@ -189,7 +181,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; promptId: s
           userId: user.id,
           ownerId: character.userId,
         });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return badRequest('Forbidden');
       }
 
       // Verify prompt exists
@@ -200,7 +192,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; promptId: s
           promptId,
           userId: user.id,
         });
-        return NextResponse.json({ error: 'Prompt not found' }, { status: 404 });
+        return notFound('Prompt');
       }
 
       const deleted = await repos.characters.deleteSystemPrompt(characterId, promptId);
@@ -211,10 +203,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; promptId: s
           promptId,
           userId: user.id,
         });
-        return NextResponse.json(
-          { error: 'Failed to delete system prompt' },
-          { status: 500 }
-        );
+        return serverError('Failed to delete system prompt');
       }
 
       logger.info('Character system prompt deleted', {
@@ -229,10 +218,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; promptId: s
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      return NextResponse.json(
-        { error: 'Failed to delete character prompt' },
-        { status: 500 }
-      );
+      return serverError('Failed to delete character prompt');
     }
   }
 );

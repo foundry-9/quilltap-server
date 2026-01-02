@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler, getFilePath } from '@/lib/api/middleware'
 import { uploadChatFile } from '@/lib/chat-files-v2'
 import { logger } from '@/lib/logger'
+import { notFound, badRequest, serverError } from '@/lib/api/responses'
 
 // POST /api/chats/:id/files - Upload a file
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
@@ -15,7 +16,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const chat = await repos.chats.findById(chatId)
 
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       // Get the file from form data
@@ -23,7 +24,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const file = formData.get('file') as File | null
 
       if (!file) {
-        return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+        return badRequest('No file provided')
       }
 
       // Upload the file (creates file entry automatically)
@@ -52,14 +53,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           error.message.includes('Invalid file type') ||
           error.message.includes('File size exceeds')
         ) {
-          return NextResponse.json({ error: error.message }, { status: 400 })
+          return badRequest(error.message)
         }
       }
 
-      return NextResponse.json(
-        { error: 'Failed to upload file' },
-        { status: 500 }
-      )
+      return serverError('Failed to upload file')
     }
   }
 )
@@ -72,7 +70,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const chat = await repos.chats.findById(chatId)
 
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       // Get all files linked to this chat from repository
@@ -98,10 +96,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       logger.error('Error listing chat files:', {}, error as Error)
-      return NextResponse.json(
-        { error: 'Failed to list files' },
-        { status: 500 }
-      )
+      return serverError('Failed to list files')
     }
   }
 )

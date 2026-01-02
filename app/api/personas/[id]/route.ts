@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler, checkOwnership, getFilePath } from '@/lib/api/middleware'
+import { notFound, serverError } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 
 // GET /api/personas/:id
@@ -16,7 +17,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const persona = await repos.personas.findById(id)
 
       if (!checkOwnership(persona, user.id)) {
-        return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+        return notFound('Persona')
       }
 
       // Get default image from repository if present
@@ -57,10 +58,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json(enrichedPersona)
     } catch (error) {
       logger.error('Error fetching persona', { context: 'GET /api/personas/:id' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to fetch persona' },
-        { status: 500 }
-      )
+      return serverError('Failed to fetch persona')
     }
   }
 )
@@ -73,7 +71,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       const existing = await repos.personas.findById(id)
 
       if (!checkOwnership(existing, user.id)) {
-        return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+        return notFound('Persona')
       }
 
       const body = await req.json()
@@ -109,10 +107,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       logger.error('Error updating persona', { context: 'PUT /api/personas/:id' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to update persona' },
-        { status: 500 }
-      )
+      return serverError('Failed to update persona')
     }
   }
 )
@@ -125,7 +120,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const existing = await repos.personas.findById(id)
 
       if (!checkOwnership(existing, user.id)) {
-        return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+        return notFound('Persona')
       }
 
       // Note: We don't delete the image file when deleting a persona
@@ -136,10 +131,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ success: true })
     } catch (error) {
       logger.error('Error deleting persona', { context: 'DELETE /api/personas/:id' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to delete persona' },
-        { status: 500 }
-      )
+      return serverError('Failed to delete persona')
     }
   }
 )

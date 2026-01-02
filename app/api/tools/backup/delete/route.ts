@@ -17,6 +17,7 @@ import { NextResponse } from 'next/server'
 import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { deleteBackupFromS3 } from '@/lib/backup/backup-service'
 import { logger } from '@/lib/logger'
+import { badRequest, forbidden, serverError } from '@/lib/api/responses'
 
 export const DELETE = createAuthenticatedHandler(async (req, { user }) => {
   try {
@@ -24,7 +25,7 @@ export const DELETE = createAuthenticatedHandler(async (req, { user }) => {
     const { s3Key } = body
 
     if (!s3Key || typeof s3Key !== 'string') {
-      return NextResponse.json({ error: 'Missing s3Key parameter' }, { status: 400 })
+      return badRequest('Missing s3Key parameter')
     }
 
     // Security check: ensure the backup key belongs to this user
@@ -35,7 +36,7 @@ export const DELETE = createAuthenticatedHandler(async (req, { user }) => {
         userId: user.id,
         s3Key,
       })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+      return forbidden()
     }
 
     logger.debug('Deleting backup from S3', {
@@ -59,9 +60,6 @@ export const DELETE = createAuthenticatedHandler(async (req, { user }) => {
       { context: 'DELETE /api/tools/backup/delete' },
       error instanceof Error ? error : undefined
     )
-    return NextResponse.json(
-      { error: 'Failed to delete backup' },
-      { status: 500 }
-    )
+    return serverError('Failed to delete backup')
   }
 })

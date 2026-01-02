@@ -14,6 +14,7 @@ import { z } from 'zod'
 import { logger } from '@/lib/logger'
 import type { ChatParticipantBase, FileEntry } from '@/lib/schemas/types'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
 
 // Disable caching for this route
 export const dynamic = 'force-dynamic'
@@ -167,7 +168,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const chat = await repos.chats.findById(id)
 
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       const enrichedParticipants = await Promise.all(
@@ -182,7 +183,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ participants: enrichedParticipants })
     } catch (error) {
       logger.error('[Participants API] GET error', { context: 'GET /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
-      return NextResponse.json({ error: 'Failed to fetch participants' }, { status: 500 })
+      return serverError('Failed to fetch participants')
     }
   }
 )
@@ -197,7 +198,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const chat = await repos.chats.findById(id)
 
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       const body = await req.json()
@@ -213,12 +214,12 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // Validate CHARACTER participant
       if (validatedData.type === 'CHARACTER') {
         if (!validatedData.characterId) {
-          return NextResponse.json({ error: 'characterId is required for CHARACTER participants' }, { status: 400 })
+          return badRequest('characterId is required for CHARACTER participants')
         }
 
         const character = await repos.characters.findById(validatedData.characterId)
         if (!character || character.userId !== user.id) {
-          return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+          return notFound('Character')
         }
 
         // Determine if this is a user-controlled character
@@ -227,13 +228,13 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
         // Connection profile is only required for LLM-controlled characters
         if (!isUserControlled && !validatedData.connectionProfileId) {
-          return NextResponse.json({ error: 'connectionProfileId is required for LLM-controlled CHARACTER participants' }, { status: 400 })
+          return badRequest('connectionProfileId is required for LLM-controlled CHARACTER participants')
         }
 
         if (validatedData.connectionProfileId) {
           const profile = await repos.connections.findById(validatedData.connectionProfileId)
           if (!profile || profile.userId !== user.id) {
-            return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+            return notFound('Connection profile')
           }
         }
 
@@ -242,19 +243,19 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           p => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && p.isActive
         )
         if (existingParticipant) {
-          return NextResponse.json({ error: 'Character is already in this chat' }, { status: 400 })
+          return badRequest('Character is already in this chat')
         }
       }
 
       // Validate PERSONA participant
       if (validatedData.type === 'PERSONA') {
         if (!validatedData.personaId) {
-          return NextResponse.json({ error: 'personaId is required for PERSONA participants' }, { status: 400 })
+          return badRequest('personaId is required for PERSONA participants')
         }
 
         const persona = await repos.personas.findById(validatedData.personaId)
         if (!persona || persona.userId !== user.id) {
-          return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+          return notFound('Persona')
         }
       }
 
@@ -282,7 +283,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       })
 
       if (!result) {
-        return NextResponse.json({ error: 'Failed to add participant' }, { status: 500 })
+        return serverError('Failed to add participant')
       }
 
       // If adding a CHARACTER, merge the character's tags into the chat
@@ -332,14 +333,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       }, { status: 201 })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('[Participants API] POST error', { context: 'POST /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
-      return NextResponse.json({ error: 'Failed to add participant' }, { status: 500 })
+      return serverError('Failed to add participant')
     }
   }
 )
@@ -354,7 +352,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
       const chat = await repos.chats.findById(id)
 
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       const body = await req.json()
@@ -371,14 +369,14 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
       if (updateData.connectionProfileId) {
         const profile = await repos.connections.findById(updateData.connectionProfileId)
         if (!profile || profile.userId !== user.id) {
-          return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+          return notFound('Connection profile')
         }
       }
 
       const result = await repos.chats.updateParticipant(id, participantId, updateData)
 
       if (!result) {
-        return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
+        return notFound('Participant')
       }
 
       // Return enriched participant data
@@ -398,14 +396,11 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('[Participants API] PATCH error', { context: 'PATCH /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
-      return NextResponse.json({ error: 'Failed to update participant' }, { status: 500 })
+      return serverError('Failed to update participant')
     }
   }
 )
@@ -420,7 +415,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const chat = await repos.chats.findById(id)
 
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       const body = await req.json()
@@ -434,24 +429,24 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       // Find the participant to be removed
       const participantToRemove = chat.participants.find(p => p.id === validatedData.participantId)
       if (!participantToRemove) {
-        return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
+        return notFound('Participant')
       }
 
       // Prevent removing the user's persona
       if (participantToRemove.type === 'PERSONA') {
-        return NextResponse.json({ error: 'Cannot remove your persona from the chat' }, { status: 400 })
+        return badRequest('Cannot remove your persona from the chat')
       }
 
       // Count active characters
       const activeCharacters = chat.participants.filter(p => p.type === 'CHARACTER' && p.isActive)
       if (activeCharacters.length <= 1 && participantToRemove.type === 'CHARACTER') {
-        return NextResponse.json({ error: 'Cannot remove the last character from the chat' }, { status: 400 })
+        return badRequest('Cannot remove the last character from the chat')
       }
 
       const result = await repos.chats.removeParticipant(id, validatedData.participantId)
 
       if (!result) {
-        return NextResponse.json({ error: 'Failed to remove participant' }, { status: 500 })
+        return serverError('Failed to remove participant')
       }
 
       logger.info('[Participants API] DELETE success - participant removed', {
@@ -465,18 +460,15 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       if (error instanceof Error && error.message.includes('last participant')) {
-        return NextResponse.json({ error: 'Cannot remove the last participant from a chat' }, { status: 400 })
+        return badRequest('Cannot remove the last participant from a chat')
       }
 
       logger.error('[Participants API] DELETE error', { context: 'DELETE /api/chats/:id/participants' }, error instanceof Error ? error : undefined)
-      return NextResponse.json({ error: 'Failed to remove participant' }, { status: 500 })
+      return serverError('Failed to remove participant')
     }
   }
 )

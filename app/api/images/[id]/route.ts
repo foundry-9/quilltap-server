@@ -8,16 +8,11 @@
 
 import { NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { getFilePath } from '@/lib/api/middleware/file-path';
 import { deleteFile as deleteS3File, downloadFile as downloadS3File } from '@/lib/s3/operations';
+import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import type { FileEntry } from '@/lib/schemas/types';
-
-/**
- * Get the filepath for an image - always returns API path for S3-backed files
- */
-function getFilePath(image: FileEntry): string {
-  return `/api/files/${image.id}`;
-}
 
 /**
  * GET /api/images/:id
@@ -32,7 +27,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!image) {
         logger.debug('GET /api/images/[id] - Image not found', { imageId: id });
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+        return notFound('Image');
       }
 
       // Verify image belongs to user
@@ -42,13 +37,13 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           ownerId: image.userId,
         });
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+        return notFound('Image');
       }
 
       // Verify file category
       if (image.category !== 'IMAGE' && image.category !== 'AVATAR') {
         logger.debug('GET /api/images/[id] - File is not an image', { imageId: id, category: image.category });
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+        return notFound('Image');
       }
 
       // Count usages by checking related entities
@@ -99,10 +94,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       });
     } catch (error) {
       logger.error('Error fetching image:', { context: 'GET /api/images/[id]' }, error as Error);
-      return NextResponse.json(
-        { error: 'Failed to fetch image', details: error instanceof Error ? error.message : String(error) },
-        { status: 500 }
-      );
+      return serverError('Failed to fetch image');
     }
   }
 );
@@ -121,7 +113,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!image) {
         logger.debug('DELETE /api/images/[id] - Image not found', { imageId: id });
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+        return notFound('Image');
       }
 
       // Verify image belongs to user
@@ -131,13 +123,13 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           ownerId: image.userId,
         });
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+        return notFound('Image');
       }
 
       // Verify file category
       if (image.category !== 'IMAGE' && image.category !== 'AVATAR') {
         logger.debug('DELETE /api/images/[id] - File is not an image', { imageId: id, category: image.category });
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+        return notFound('Image');
       }
 
       // Check if the underlying file actually exists in S3 (to detect orphaned metadata)
@@ -208,14 +200,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           personasUsingAsDefault: personasUsingAsDefault.length,
           chatAvatarOverrides: chatAvatarOverrides.length,
         });
-        return NextResponse.json(
-          {
-            error: 'Image is in use',
-            details:
-              'This image is currently being used as an avatar or in chat overrides. Please remove all usages before deleting.',
-          },
-          { status: 400 }
-        );
+        return badRequest('Image is in use', 'This image is currently being used as an avatar or in chat overrides. Please remove all usages before deleting.');
       }
 
       // Delete from S3 if file has s3Key
@@ -238,7 +223,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!deleted) {
         logger.warn('DELETE /api/images/[id] - Failed to delete file metadata', { imageId: id });
-        return NextResponse.json({ error: 'Failed to delete image' }, { status: 500 });
+        return serverError('Failed to delete image');
       }
 
       logger.debug('DELETE /api/images/[id] - Image deleted successfully', {
@@ -249,10 +234,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ data: { success: true } });
     } catch (error) {
       logger.error('Error deleting image:', { context: 'DELETE /api/images/[id]' }, error as Error);
-      return NextResponse.json(
-        { error: 'Failed to delete image', details: error instanceof Error ? error.message : String(error) },
-        { status: 500 }
-      );
+      return serverError('Failed to delete image');
     }
   }
 );

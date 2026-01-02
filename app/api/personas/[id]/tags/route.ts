@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
+import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
 
@@ -20,11 +21,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const persona = await repos.personas.findById(id)
 
       if (!persona) {
-        return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+        return notFound('Persona')
       }
 
       if (persona.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       // Get tag details for each tag ID
@@ -47,10 +48,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ tags: validTags })
     } catch (error) {
       logger.error('Error fetching persona tags', { context: 'personas-tags-GET' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to fetch persona tags' },
-        { status: 500 }
-      )
+      return serverError('Failed to fetch persona tags')
     }
   }
 )
@@ -63,11 +61,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const persona = await repos.personas.findById(id)
 
       if (!persona) {
-        return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+        return notFound('Persona')
       }
 
       if (persona.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       const body = await req.json()
@@ -77,11 +75,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const tag = await repos.tags.findById(validatedData.tagId)
 
       if (!tag) {
-        return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+        return notFound('Tag')
       }
 
       if (tag.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       // Add tag to persona
@@ -90,17 +88,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ tag }, { status: 201 })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('Error adding tag to persona', { context: 'personas-tags-POST' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to add tag to persona' },
-        { status: 500 }
-      )
+      return serverError('Failed to add tag to persona')
     }
   }
 )
@@ -112,21 +104,18 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const tagId = req.nextUrl.searchParams.get('tagId')
 
       if (!tagId) {
-        return NextResponse.json(
-          { error: 'tagId query parameter is required' },
-          { status: 400 }
-        )
+        return badRequest('tagId query parameter is required')
       }
 
       // Verify persona exists and belongs to user
       const persona = await repos.personas.findById(id)
 
       if (!persona) {
-        return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+        return notFound('Persona')
       }
 
       if (persona.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       // Remove tag from persona
@@ -135,10 +124,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ success: true })
     } catch (error) {
       logger.error('Error removing tag from persona', { context: 'personas-tags-DELETE' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to remove tag from persona' },
-        { status: 500 }
-      )
+      return serverError('Failed to remove tag from persona')
     }
   }
 )

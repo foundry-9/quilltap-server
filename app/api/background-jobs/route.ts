@@ -10,6 +10,7 @@ import { getQueueStats, enqueueJob, ensureProcessorRunning, getProcessorStatus }
 import { BackgroundJobTypeEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
+import { badRequest, serverError } from '@/lib/api/responses';
 
 /**
  * GET /api/background-jobs
@@ -55,7 +56,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     logger.error('[BackgroundJobs API] Error in GET', { error: errorMessage });
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return serverError(errorMessage);
   }
 });
 
@@ -71,17 +72,11 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user }
     // Validate type
     const typeValidation = BackgroundJobTypeEnum.safeParse(type);
     if (!typeValidation.success) {
-      return NextResponse.json(
-        { error: `Invalid job type. Must be one of: ${BackgroundJobTypeEnum.options.join(', ')}` },
-        { status: 400 }
-      );
+      return badRequest(`Invalid job type. Must be one of: ${BackgroundJobTypeEnum.options.join(', ')}`);
     }
 
     if (!payload || typeof payload !== 'object') {
-      return NextResponse.json(
-        { error: 'Payload is required and must be an object' },
-        { status: 400 }
-      );
+      return badRequest('Payload is required and must be an object');
     }
 
     logger.info('[BackgroundJobs API] Creating job', {
@@ -101,6 +96,6 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user }
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     logger.error('[BackgroundJobs API] Error in POST', { error: errorMessage });
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return serverError(errorMessage);
   }
 });

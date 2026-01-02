@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
 
 // Validation schema for PUT request
 const setActiveSpeakerSchema = z.object({
@@ -30,7 +31,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Get chat metadata
       const chat = await repos.chats.findById(id)
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       logger.debug('[Active Speaker API] Getting active speaker', {
@@ -68,10 +69,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       logger.error('[Active Speaker API] Error getting active speaker:', {}, error as Error)
-      return NextResponse.json(
-        { error: 'Failed to get active speaker' },
-        { status: 500 }
-      )
+      return serverError('Failed to get active speaker')
     }
   }
 )
@@ -88,7 +86,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       // Get chat metadata
       const chat = await repos.chats.findById(id)
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       // Parse and validate request body
@@ -103,7 +101,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify participant exists
       const participant = chat.participants.find(p => p.id === participantId)
       if (!participant) {
-        return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
+        return notFound('Participant')
       }
 
       // Check if participant is being impersonated
@@ -118,17 +116,14 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           impersonatingIds = [...impersonatingIds, participantId]
           await repos.chats.update(id, { impersonatingParticipantIds: impersonatingIds })
         } else {
-          return NextResponse.json(
-            { error: 'Participant is not being impersonated' },
-            { status: 400 }
-          )
+          return badRequest('Participant is not being impersonated')
         }
       }
 
       // Set active typing participant
       const updatedChat = await repos.chats.setActiveTypingParticipant(id, participantId)
       if (!updatedChat) {
-        return NextResponse.json({ error: 'Failed to set active speaker' }, { status: 500 })
+        return serverError('Failed to set active speaker')
       }
 
       // Get character name if available
@@ -154,17 +149,11 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('[Active Speaker API] Error setting active speaker:', {}, error as Error)
-      return NextResponse.json(
-        { error: 'Failed to set active speaker' },
-        { status: 500 }
-      )
+      return serverError('Failed to set active speaker')
     }
   }
 )

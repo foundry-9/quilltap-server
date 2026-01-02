@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
+import { badRequest, serverError } from '@/lib/api/responses';
 import type { ExportEntityType } from '@/lib/export/types';
 
 const moduleLogger = logger.child({ module: 'api:quilltap-export-entities' });
@@ -19,7 +20,7 @@ export const GET = createAuthenticatedHandler(async (req, { user }) => {
     const type = searchParams.get('type') as ExportEntityType | null;
 
     if (!type) {
-      return NextResponse.json({ error: 'Missing type parameter' }, { status: 400 });
+      return badRequest('Missing type parameter');
     }
 
     moduleLogger.debug('Fetching entities for export', { userId, type });
@@ -126,7 +127,7 @@ export const GET = createAuthenticatedHandler(async (req, { user }) => {
       }
 
       default:
-        return NextResponse.json({ error: `Unknown entity type: ${type}` }, { status: 400 });
+        return badRequest(`Unknown entity type: ${type}`);
     }
 
     moduleLogger.info('Entities fetched for export', {
@@ -144,9 +145,6 @@ export const GET = createAuthenticatedHandler(async (req, { user }) => {
     moduleLogger.error('Failed to fetch entities for export', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: 'Failed to fetch entities' },
-      { status: 500 }
-    );
+    return serverError('Failed to fetch entities');
   }
 });

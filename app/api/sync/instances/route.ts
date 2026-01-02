@@ -12,6 +12,7 @@ import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { encryptApiKey } from '@/lib/encryption';
 import { CreateSyncInstance } from '@/lib/sync/types';
 import { testRemoteConnection } from '@/lib/sync/remote-client';
+import { notFound, badRequest, conflict, serverError, validationError, created } from '@/lib/api/responses';
 
 // Schema for creating a new sync instance
 const CreateInstanceSchema = z.object({
@@ -70,7 +71,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
       durationMs: duration,
     });
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return serverError();
   }
 });
 
@@ -92,7 +93,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         context: 'api:sync:instances',
         userId: user.id,
       });
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+      return badRequest('Invalid JSON body');
     }
 
     // Validate request
@@ -103,10 +104,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         userId: user.id,
         errors: parseResult.error.errors,
       });
-      return NextResponse.json(
-        { error: 'Invalid request', details: parseResult.error.errors },
-        { status: 400 }
-      );
+      return validationError(parseResult.error);
     }
 
     const { name, url, apiKey, isActive } = parseResult.data;
@@ -126,10 +124,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         userId: user.id,
         url,
       });
-      return NextResponse.json(
-        { error: 'A sync instance with this URL already exists' },
-        { status: 409 }
-      );
+      return conflict('A sync instance with this URL already exists');
     }
 
     // Test connection to remote instance
@@ -141,10 +136,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         url,
         error: connectionTest.error,
       });
-      return NextResponse.json(
-        { error: `Failed to connect to remote instance: ${connectionTest.error}` },
-        { status: 400 }
-      );
+      return badRequest(`Failed to connect to remote instance: ${connectionTest.error}`);
     }
 
     // Check version compatibility
@@ -155,10 +147,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         url,
         reason: connectionTest.versionInfo.reason,
       });
-      return NextResponse.json(
-        { error: `Remote instance is not compatible: ${connectionTest.versionInfo.reason}` },
-        { status: 400 }
-      );
+      return badRequest(`Remote instance is not compatible: ${connectionTest.versionInfo.reason}`);
     }
 
     // Encrypt the API key
@@ -201,23 +190,20 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     });
 
     // Return sanitized instance (without API key)
-    return NextResponse.json(
-      {
-        instance: {
-          id: instance.id,
-          name: instance.name,
-          url: instance.url,
-          isActive: instance.isActive,
-          lastSyncAt: instance.lastSyncAt,
-          lastSyncStatus: instance.lastSyncStatus,
-          schemaVersion: connectionTest.versionInfo?.versionInfo?.schemaVersion,
-          appVersion: connectionTest.versionInfo?.versionInfo?.appVersion,
-          createdAt: instance.createdAt,
-          updatedAt: instance.updatedAt,
-        },
+    return created({
+      instance: {
+        id: instance.id,
+        name: instance.name,
+        url: instance.url,
+        isActive: instance.isActive,
+        lastSyncAt: instance.lastSyncAt,
+        lastSyncStatus: instance.lastSyncStatus,
+        schemaVersion: connectionTest.versionInfo?.versionInfo?.schemaVersion,
+        appVersion: connectionTest.versionInfo?.versionInfo?.appVersion,
+        createdAt: instance.createdAt,
+        updatedAt: instance.updatedAt,
       },
-      { status: 201 }
-    );
+    });
   } catch (error) {
     const duration = Date.now() - startTime;
 
@@ -227,6 +213,6 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       durationMs: duration,
     });
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return serverError();
   }
 });

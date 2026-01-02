@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { exportSTChatAsJSONL } from '@/lib/sillytavern/chat'
 import { logger } from '@/lib/logger'
+import { notFound, serverError } from '@/lib/api/responses'
 
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (_req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
@@ -15,7 +16,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const chat = await repos.chats.findById(id)
 
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       // Get messages (filter for message events only, not context-summary events)
@@ -25,12 +26,12 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Get character from participants
       const characterParticipant = chat.participants.find(p => p.type === 'CHARACTER' && p.characterId)
       if (!characterParticipant?.characterId) {
-        return NextResponse.json({ error: 'No character in chat' }, { status: 404 })
+        return notFound('No character in chat')
       }
 
       const character = await repos.characters.findById(characterParticipant.characterId)
       if (!character) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       // Get persona from participants if present
@@ -79,10 +80,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       logger.error('Error exporting chat', { operation: 'chatExport' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to export chat' },
-        { status: 500 }
-      )
+      return serverError('Failed to export chat')
     }
   }
 )

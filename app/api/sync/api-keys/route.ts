@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { badRequest, serverError, validationError, created } from '@/lib/api/responses';
 
 // Schema for creating a new API key
 const CreateApiKeySchema = z.object({
@@ -62,7 +63,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
       durationMs: duration,
     });
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return serverError();
   }
 });
 
@@ -85,7 +86,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         context: 'api:sync:api-keys',
         userId: user.id,
       });
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+      return badRequest('Invalid JSON body');
     }
 
     // Validate request
@@ -96,10 +97,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         userId: user.id,
         errors: parseResult.error.errors,
       });
-      return NextResponse.json(
-        { error: 'Invalid request', details: parseResult.error.errors },
-        { status: 400 }
-      );
+      return validationError(parseResult.error);
     }
 
     const { name } = parseResult.data;
@@ -125,20 +123,17 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     });
 
     // Return the key with the plaintext (only time it's shown)
-    return NextResponse.json(
-      {
-        key: {
-          id: result.key.id,
-          name: result.key.name,
-          keyPrefix: result.key.keyPrefix,
-          isActive: result.key.isActive,
-          createdAt: result.key.createdAt,
-          updatedAt: result.key.updatedAt,
-        },
-        plaintextKey: result.plaintextKey,
+    return created({
+      key: {
+        id: result.key.id,
+        name: result.key.name,
+        keyPrefix: result.key.keyPrefix,
+        isActive: result.key.isActive,
+        createdAt: result.key.createdAt,
+        updatedAt: result.key.updatedAt,
       },
-      { status: 201 }
-    );
+      plaintextKey: result.plaintextKey,
+    });
   } catch (error) {
     const duration = Date.now() - startTime;
 
@@ -148,6 +143,6 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       durationMs: duration,
     });
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return serverError();
   }
 });

@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
+import { badRequest, notFound, serverError } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { deleteMemoryWithVector } from '@/lib/memory/memory-service'
 import type { ChatEvent, MessageEvent, ChatMetadata, ChatParticipant } from '@/lib/schemas/types'
@@ -20,10 +21,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!newParticipantId) {
         logger.warn('Re-attribution missing newParticipantId', { messageId })
-        return NextResponse.json(
-          { error: 'newParticipantId is required' },
-          { status: 400 }
-        )
+        return badRequest('newParticipantId is required')
       }
 
       logger.debug('Processing message re-attribution', { messageId, newParticipantId })
@@ -51,7 +49,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!foundMessage || !foundChat) {
         logger.warn('Message not found for re-attribution', { messageId, userId: user.id })
-        return NextResponse.json({ error: 'Message not found' }, { status: 404 })
+        return notFound('Message')
       }
 
       // Validate the target participant exists in the chat
@@ -65,10 +63,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           chatId: foundChat.id,
           newParticipantId,
         })
-        return NextResponse.json(
-          { error: 'Target participant not found in chat' },
-          { status: 400 }
-        )
+        return badRequest('Target participant not found in chat')
       }
 
       // Find and delete memories associated with this message
@@ -134,10 +129,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         endpoint: '/api/messages/[id]/reattribute',
         method: 'POST',
       }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to re-attribute message' },
-        { status: 500 }
-      )
+      return serverError('Failed to re-attribute message')
     }
   }
 )

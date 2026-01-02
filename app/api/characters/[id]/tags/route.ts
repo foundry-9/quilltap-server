@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
+import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses'
 
 const addTagSchema = z.object({
   tagId: z.string().uuid(),
@@ -22,11 +23,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const character = await repos.characters.findById(characterId)
 
       if (!character) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       if (character.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       // Get tag details for each tag ID
@@ -49,10 +50,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ tags: validTags })
     } catch (error) {
       logger.error('Error fetching character tags', { context: 'GET /api/characters/[id]/tags' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to fetch character tags' },
-        { status: 500 }
-      )
+      return serverError('Failed to fetch character tags')
     }
   }
 )
@@ -67,11 +65,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const character = await repos.characters.findById(characterId)
 
       if (!character) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       if (character.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       const body = await req.json()
@@ -81,11 +79,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const tag = await repos.tags.findById(validatedData.tagId)
 
       if (!tag) {
-        return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+        return notFound('Tag')
       }
 
       if (tag.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       // Add tag to character
@@ -94,17 +92,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ tag }, { status: 201 })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('Error adding tag to character', { context: 'POST /api/characters/[id]/tags' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to add tag to character' },
-        { status: 500 }
-      )
+      return serverError('Failed to add tag to character')
     }
   }
 )
@@ -117,21 +109,18 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const tagId = req.nextUrl.searchParams.get('tagId')
 
       if (!tagId) {
-        return NextResponse.json(
-          { error: 'tagId query parameter is required' },
-          { status: 400 }
-        )
+        return badRequest('tagId query parameter is required')
       }
 
       // Verify character exists and belongs to user
       const character = await repos.characters.findById(characterId)
 
       if (!character) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       if (character.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       // Remove tag from character
@@ -140,10 +129,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ success: true })
     } catch (error) {
       logger.error('Error removing tag from character', { context: 'DELETE /api/characters/[id]/tags' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to remove tag from character' },
-        { status: 500 }
-      )
+      return serverError('Failed to remove tag from character')
     }
   }
 )

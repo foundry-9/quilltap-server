@@ -26,6 +26,7 @@ import {
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
 import type { MessageEvent, Character } from '@/lib/schemas/types'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
 
 // Validation schema for POST request
 const turnActionSchema = z.object({
@@ -52,7 +53,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Get chat metadata
       const chat = await repos.chats.findById(id)
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       logger.debug('[Turn API] Getting turn state', {
@@ -141,10 +142,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       logger.error('[Turn API] Error getting turn state:', {}, error as Error)
-      return NextResponse.json(
-        { error: 'Failed to get turn state' },
-        { status: 500 }
-      )
+      return serverError('Failed to get turn state')
     }
   }
 )
@@ -162,7 +160,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // Get chat metadata
       const chat = await repos.chats.findById(id)
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       // Parse and validate request body
@@ -178,10 +176,10 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify participant exists and is active
       const participant = chat.participants.find(p => p.id === participantId)
       if (!participant) {
-        return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
+        return notFound('Participant')
       }
       if (!participant.isActive) {
-        return NextResponse.json({ error: 'Participant is not active' }, { status: 400 })
+        return badRequest('Participant is not active')
       }
 
       // Get user participant
@@ -280,17 +278,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('[Turn API] Error processing turn action:', {}, error as Error)
-      return NextResponse.json(
-        { error: 'Failed to process turn action' },
-        { status: 500 }
-      )
+      return serverError('Failed to process turn action')
     }
   }
 )
@@ -307,7 +299,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
       // Get chat metadata to verify ownership
       const chat = await repos.chats.findById(id)
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       // Parse and validate request body
@@ -323,7 +315,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
       if (lastTurnParticipantId !== null) {
         const participant = chat.participants.find(p => p.id === lastTurnParticipantId)
         if (!participant) {
-          return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
+          return notFound('Participant')
         }
         if (!participant.isActive) {
           // If the participant is no longer active, set to null (user's turn)
@@ -349,17 +341,11 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('[Turn API] Error persisting turn state:', {}, error as Error)
-      return NextResponse.json(
-        { error: 'Failed to persist turn state' },
-        { status: 500 }
-      )
+      return serverError('Failed to persist turn state')
     }
   }
 )

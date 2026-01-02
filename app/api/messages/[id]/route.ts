@@ -6,6 +6,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
+import { badRequest, notFound, serverError } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { deleteMemoriesBySourceMessagesWithVectors } from '@/lib/memory/memory-service'
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types'
@@ -18,10 +19,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       const { content } = body
 
       if (!content) {
-        return NextResponse.json(
-          { error: 'Content is required' },
-          { status: 400 }
-        )
+        return badRequest('Content is required')
       }
 
       // Find the message across user's chats only (security: filter by userId)
@@ -71,10 +69,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json(updatedMessage)
     } catch (error) {
       logger.error('Error updating message', { endpoint: '/api/messages/[id]', method: 'PUT' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to update message' },
-        { status: 500 }
-      )
+      return serverError('Failed to update message')
     }
   }
 )
@@ -115,7 +110,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       if (!foundMessage || !foundChat) {
-        return NextResponse.json({ error: 'Message not found' }, { status: 404 })
+        return notFound('Message')
       }
 
       // Collect all message IDs to be deleted (for memory cascade)
@@ -209,10 +204,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       logger.error('Error deleting message', { endpoint: '/api/messages/[id]', method: 'DELETE' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to delete message' },
-        { status: 500 }
-      )
+      return serverError('Failed to delete message')
     }
   }
 )

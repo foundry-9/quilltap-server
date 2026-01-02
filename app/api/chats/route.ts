@@ -9,24 +9,18 @@ import { decryptApiKey } from '@/lib/encryption'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
-import type { ChatEvent, ChatParticipantBase, ChatParticipantBaseInput, FileEntry, TimestampConfig } from '@/lib/schemas/types'
+import type { ChatEvent, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types'
 import { TimestampConfigSchema } from '@/lib/schemas/types'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
+import {
+  enrichParticipantSummary,
+  enrichChatsForList,
+  filterChatsByExcludedTags,
+  cleanEnrichedChats,
+} from '@/lib/services/chat-enrichment.service'
 
 type Repos = RepositoryContainer
-
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : ''
-  return `data/files/storage/${file.id}${ext}`
-}
 
 // Result types for participant builders (uses Input type for optional defaults)
 type ParticipantBuildSuccess = {
@@ -56,74 +50,6 @@ const createChatSchema = z.object({
   timestampConfig: TimestampConfigSchema.optional(),
 })
 
-// Helper to get enriched character for list view
-async function getCharacterSummary(characterId: string, repos: Repos) {
-  const character = await repos.characters.findById(characterId)
-  if (!character) return null
-
-  let defaultImage = null
-  if (character.defaultImageId) {
-    const fileEntry = await repos.files.findById(character.defaultImageId)
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
-    }
-  }
-
-  return {
-    id: character.id,
-    name: character.name,
-    title: character.title,
-    avatarUrl: character.avatarUrl,
-    defaultImageId: character.defaultImageId,
-    defaultImage,
-    tags: character.tags || [],
-  }
-}
-
-// Helper to get enriched persona for list view
-async function getPersonaSummary(personaId: string, repos: Repos) {
-  const persona = await repos.personas.findById(personaId)
-  if (!persona) return null
-
-  let defaultImage = null
-  if (persona.defaultImageId) {
-    const fileEntry = await repos.files.findById(persona.defaultImageId)
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
-    }
-  }
-
-  return {
-    id: persona.id,
-    name: persona.name,
-    title: persona.title,
-    avatarUrl: persona.avatarUrl,
-    defaultImageId: persona.defaultImageId,
-    defaultImage,
-    tags: persona.tags || [],
-  }
-}
-
-// Helper to enrich participant for list view
-async function enrichParticipantSummary(participant: ChatParticipantBase, repos: Repos) {
-  const character = participant.type === 'CHARACTER' && participant.characterId
-    ? await getCharacterSummary(participant.characterId, repos)
-    : null
-
-  const persona = participant.type === 'PERSONA' && participant.personaId
-    ? await getPersonaSummary(participant.personaId, repos)
-    : null
-
-  return {
-    id: participant.id,
-    type: participant.type,
-    displayOrder: participant.displayOrder,
-    isActive: participant.isActive,
-    character,
-    persona,
-  }
-}
-
 // GET /api/chats - List all chats
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
   try {
@@ -143,66 +69,18 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 
     const chatMetadata = await repos.chats.findByUserId(user.id)
 
-    // Sort by updatedAt descending
-    chatMetadata.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-
-    // Enrich chats with related data
-    const chats = await Promise.all(
-      chatMetadata.map(async (chat) => {
-        // Enrich participants
-        const participants = await Promise.all(
-          chat.participants.map(p => enrichParticipantSummary(p, repos))
-        )
-
-        // Get tags
-        const tagData = await Promise.all(
-          chat.tags.map(async (tagId) => {
-            const tag = await repos.tags.findById(tagId)
-            return tag ? { tag: { id: tag.id, name: tag.name } } : null
-          })
-        )
-
-        // Get message count
-        const messageCount = await repos.chats.getMessageCount(chat.id)
-
-        // Collect all tag IDs from chat, characters, and personas for filtering
-        const allTagIds: string[] = [...chat.tags]
-        for (const participant of participants) {
-          if (participant.character?.tags) {
-            allTagIds.push(...participant.character.tags)
-          }
-          if (participant.persona?.tags) {
-            allTagIds.push(...participant.persona.tags)
-          }
-        }
-
-        return {
-          id: chat.id,
-          title: chat.title,
-          contextSummary: chat.contextSummary,
-          createdAt: chat.createdAt,
-          updatedAt: chat.updatedAt,
-          participants,
-          tags: tagData.filter(Boolean),
-          _count: { messages: messageCount },
-          _allTagIds: allTagIds,
-        }
-      })
-    )
+    // Enrich chats with related data (includes sorting)
+    const enrichedChats = await enrichChatsForList(chatMetadata, repos)
 
     // Filter out chats that have any excluded tags
-    let filteredChats = chats
+    let filteredChats = filterChatsByExcludedTags(enrichedChats, excludeTagIds)
+
     if (excludeTagIds.length > 0) {
-      const excludeSet = new Set(excludeTagIds)
-      filteredChats = chats.filter(chat => {
-        const hasExcludedTag = chat._allTagIds.some(tagId => excludeSet.has(tagId))
-        return !hasExcludedTag
-      })
       logger.debug('Filtered chats by excluded tags', {
         context: 'GET /api/chats',
-        originalCount: chats.length,
+        originalCount: enrichedChats.length,
         filteredCount: filteredChats.length,
-        excludedCount: chats.length - filteredChats.length,
+        excludedCount: enrichedChats.length - filteredChats.length,
       })
     }
 
@@ -212,12 +90,12 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     }
 
     // Remove internal _allTagIds field before returning
-    const result = filteredChats.map(({ _allTagIds, ...chat }) => chat)
+    const result = cleanEnrichedChats(filteredChats)
 
     return NextResponse.json({ chats: result })
   } catch (error) {
     logger.error('Error fetching chats', { context: 'GET /api/chats' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to fetch chats' }, { status: 500 })
+    return serverError('Failed to fetch chats')
   }
 })
 
@@ -520,7 +398,7 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
 
     const buildResult = await buildAllParticipants(validatedData.participants, user.id, repos)
     if ('error' in buildResult) {
-      return NextResponse.json({ error: buildResult.error }, { status: 400 })
+      return badRequest(buildResult.error)
     }
 
     const context = await buildChatContext(
@@ -579,13 +457,10 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
+      return validationError(error)
     }
 
     logger.error('Error creating chat', { context: 'POST /api/chats' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to create chat' }, { status: 500 })
+    return serverError('Failed to create chat')
   }
 })

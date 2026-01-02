@@ -17,19 +17,7 @@ import type { ChatParticipantBase, FileEntry, Character, Persona } from '@/lib/s
 import type { SpeakerMapping } from '@/lib/sillytavern/multi-char-parser'
 import { getErrorMessage } from '@/lib/errors'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
-
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : ''
-  return `data/files/storage/${file.id}${ext}`
-}
+import { getFilePath } from '@/lib/api/middleware/file-path'
 
 /**
  * Helper to parse send_date which can be either a timestamp or a string

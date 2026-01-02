@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
 
 const updateDescriptionSchema = z.object({
   name: z.string().min(1).optional(),
@@ -25,26 +26,23 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; descId: string
       const character = await repos.characters.findById(id)
 
       if (!character) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       if (character.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return badRequest('Unauthorized')
       }
 
       const description = await repos.characters.getDescription(id, descId)
 
       if (!description) {
-        return NextResponse.json({ error: 'Description not found' }, { status: 404 })
+        return notFound('Description')
       }
 
       return NextResponse.json({ description })
     } catch (error) {
       logger.error('Error fetching character description', { context: 'GET /api/characters/[id]/descriptions/[descId]' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to fetch character description' },
-        { status: 500 }
-      )
+      return serverError('Failed to fetch character description')
     }
   }
 )
@@ -57,11 +55,11 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; descId: string
       const character = await repos.characters.findById(id)
 
       if (!character) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       if (character.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return badRequest('Unauthorized')
       }
 
       const body = await req.json()
@@ -70,23 +68,17 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; descId: string
       const description = await repos.characters.updateDescription(id, descId, validatedData)
 
       if (!description) {
-        return NextResponse.json({ error: 'Description not found' }, { status: 404 })
+        return notFound('Description')
       }
 
       return NextResponse.json({ description })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('Error updating character description', { context: 'PUT /api/characters/[id]/descriptions/[descId]' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to update character description' },
-        { status: 500 }
-      )
+      return serverError('Failed to update character description')
     }
   }
 )
@@ -99,26 +91,23 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; descId: str
       const character = await repos.characters.findById(id)
 
       if (!character) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       if (character.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return badRequest('Unauthorized')
       }
 
       const success = await repos.characters.removeDescription(id, descId)
 
       if (!success) {
-        return NextResponse.json({ error: 'Description not found' }, { status: 404 })
+        return notFound('Description')
       }
 
       return NextResponse.json({ success: true })
     } catch (error) {
       logger.error('Error deleting character description', { context: 'DELETE /api/characters/[id]/descriptions/[descId]' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to delete character description' },
-        { status: 500 }
-      )
+      return serverError('Failed to delete character description')
     }
   }
 )

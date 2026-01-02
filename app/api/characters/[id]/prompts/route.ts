@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 
 const createPromptSchema = z.object({
   name: z.string().min(1).max(100),
@@ -28,7 +29,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           characterId,
           userId: user.id,
         });
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+        return notFound('Character');
       }
 
       if (character.userId !== user.id) {
@@ -53,10 +54,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      return NextResponse.json(
-        { error: 'Failed to fetch character prompts' },
-        { status: 500 }
-      );
+      return serverError('Failed to fetch character prompts');
     }
   }
 );
@@ -82,7 +80,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           characterId,
           userId: user.id,
         });
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+        return notFound('Character');
       }
 
       if (character.userId !== user.id) {
@@ -105,10 +103,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           characterId,
           userId: user.id,
         });
-        return NextResponse.json(
-          { error: 'Failed to add system prompt' },
-          { status: 500 }
-        );
+        return serverError('Failed to add system prompt');
       }
 
       logger.info('System prompt added to character', {
@@ -122,16 +117,13 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     } catch (error) {
       if (error instanceof z.ZodError) {
         logger.warn('Invalid character prompt data', { errors: error.errors });
-        return NextResponse.json({ error: error.errors }, { status: 400 });
+        return validationError(error);
       }
       logger.error('Error adding character prompt', {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      return NextResponse.json(
-        { error: 'Failed to add character prompt' },
-        { status: 500 }
-      );
+      return serverError('Failed to add character prompt');
     }
   }
 );

@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, getFilePath } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 
 const avatarOverrideSchema = z.object({
   characterId: z.string(),
@@ -29,7 +30,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const chat = await repos.chats.findById(id);
 
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+        return notFound('Chat');
       }
 
       // Get all characters that have avatar overrides for this chat
@@ -60,10 +61,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ data: enrichedOverrides });
     } catch (error) {
       logger.error('Error fetching avatar overrides', { endpoint: '/api/chats/[id]/avatars', method: 'GET' }, error instanceof Error ? error : undefined);
-      return NextResponse.json(
-        { error: 'Failed to fetch avatar overrides', details: error instanceof Error ? error.message : String(error) },
-        { status: 500 }
-      );
+      return serverError('Failed to fetch avatar overrides');
     }
   }
 );
@@ -82,21 +80,21 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const chat = await repos.chats.findById(id);
 
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+        return notFound('Chat');
       }
 
       // Verify character exists and belongs to user
       const character = await repos.characters.findById(characterId);
 
       if (!character || character.userId !== user.id) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+        return notFound('Character');
       }
 
       // Verify image exists in repository and belongs to user
       const fileEntry = await repos.files.findById(imageId);
 
       if (!fileEntry || fileEntry.userId !== user.id) {
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+        return notFound('Image');
       }
 
       // Update character's avatarOverrides array
@@ -132,13 +130,10 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       logger.error('Error setting avatar override', { endpoint: '/api/chats/[id]/avatars', method: 'POST' }, error instanceof Error ? error : undefined);
 
       if (error instanceof z.ZodError) {
-        return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
+        return validationError(error);
       }
 
-      return NextResponse.json(
-        { error: 'Failed to set avatar override', details: error instanceof Error ? error.message : String(error) },
-        { status: 500 }
-      );
+      return serverError('Failed to set avatar override');
     }
   }
 );
@@ -154,21 +149,21 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const characterId = searchParams.get('characterId');
 
       if (!characterId) {
-        return NextResponse.json({ error: 'characterId is required' }, { status: 400 });
+        return badRequest('characterId is required');
       }
 
       // Verify chat exists and belongs to user
       const chat = await repos.chats.findById(id);
 
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+        return notFound('Chat');
       }
 
       // Verify character exists and belongs to user
       const character = await repos.characters.findById(characterId);
 
       if (!character || character.userId !== user.id) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+        return notFound('Character');
       }
 
       // Remove avatar override from character's avatarOverrides array
@@ -180,10 +175,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ data: { success: true } });
     } catch (error) {
       logger.error('Error removing avatar override', { endpoint: '/api/chats/[id]/avatars', method: 'DELETE' }, error instanceof Error ? error : undefined);
-      return NextResponse.json(
-        { error: 'Failed to remove avatar override', details: error instanceof Error ? error.message : String(error) },
-        { status: 500 }
-      );
+      return serverError('Failed to remove avatar override');
     }
   }
 );

@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { encryptApiKey } from '@/lib/encryption';
+import { notFound, badRequest, forbidden, serverError, validationError } from '@/lib/api/responses';
 
 // Schema for updating a sync instance
 const UpdateInstanceSchema = z.object({
@@ -43,7 +44,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           instanceId: id,
         });
-        return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
+        return notFound('Instance');
       }
 
       // Verify ownership
@@ -54,7 +55,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           instanceId: id,
           ownerId: instance.userId,
         });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return forbidden();
       }
 
       const duration = Date.now() - startTime;
@@ -94,7 +95,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         durationMs: duration,
       });
 
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+      return serverError();
     }
   }
 );
@@ -119,7 +120,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           instanceId: id,
         });
-        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+        return badRequest('Invalid JSON body');
       }
 
       // Validate request
@@ -131,10 +132,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           instanceId: id,
           errors: parseResult.error.errors,
         });
-        return NextResponse.json(
-          { error: 'Invalid request', details: parseResult.error.errors },
-          { status: 400 }
-        );
+        return validationError(parseResult.error);
       }
 
       const updateData = parseResult.data;
@@ -156,7 +154,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           instanceId: id,
         });
-        return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
+        return notFound('Instance');
       }
 
       // Verify ownership
@@ -167,7 +165,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           instanceId: id,
           ownerId: instance.userId,
         });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return forbidden();
       }
 
       // Build update object
@@ -199,7 +197,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           instanceId: id,
         });
-        return NextResponse.json({ error: 'Failed to update instance' }, { status: 500 });
+        return serverError('Failed to update instance');
       }
 
       const duration = Date.now() - startTime;
@@ -239,7 +237,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         durationMs: duration,
       });
 
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+      return serverError();
     }
   }
 );
@@ -268,7 +266,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           instanceId: id,
         });
-        return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
+        return notFound('Instance');
       }
 
       // Verify ownership
@@ -279,7 +277,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           instanceId: id,
           ownerId: instance.userId,
         });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return forbidden();
       }
 
       // Delete all mappings for this instance
@@ -312,7 +310,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         durationMs: duration,
       });
 
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+      return serverError();
     }
   }
 );

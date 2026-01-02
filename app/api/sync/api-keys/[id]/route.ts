@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { notFound, badRequest, forbidden, serverError, validationError } from '@/lib/api/responses';
 
 // Schema for updating an API key
 const UpdateApiKeySchema = z.object({
@@ -36,7 +37,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           keyId: id,
         });
-        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+        return badRequest('Invalid JSON body');
       }
 
       // Validate request
@@ -48,10 +49,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
           keyId: id,
           errors: parseResult.error.errors,
         });
-        return NextResponse.json(
-          { error: 'Invalid request', details: parseResult.error.errors },
-          { status: 400 }
-        );
+        return validationError(parseResult.error);
       }
 
       logger.debug('Updating sync API key', {
@@ -68,7 +66,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           keyId: id,
         });
-        return NextResponse.json({ error: 'API key not found' }, { status: 404 });
+        return notFound('API key');
       }
 
       if (existingKey.userId !== user.id) {
@@ -78,7 +76,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
           keyId: id,
           keyUserId: existingKey.userId,
         });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return forbidden();
       }
 
       // Update the key
@@ -90,7 +88,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           keyId: id,
         });
-        return NextResponse.json({ error: 'Failed to update API key' }, { status: 500 });
+        return serverError('Failed to update API key');
       }
 
       const duration = Date.now() - startTime;
@@ -126,7 +124,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         durationMs: duration,
       });
 
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+      return serverError();
     }
   }
 );
@@ -155,7 +153,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           keyId: id,
         });
-        return NextResponse.json({ error: 'API key not found' }, { status: 404 });
+        return notFound('API key');
       }
 
       if (existingKey.userId !== user.id) {
@@ -165,7 +163,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           keyId: id,
           keyUserId: existingKey.userId,
         });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return forbidden();
       }
 
       // Delete the key
@@ -177,7 +175,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           keyId: id,
         });
-        return NextResponse.json({ error: 'Failed to delete API key' }, { status: 500 });
+        return serverError('Failed to delete API key');
       }
 
       const duration = Date.now() - startTime;
@@ -200,7 +198,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         durationMs: duration,
       });
 
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+      return serverError();
     }
   }
 );

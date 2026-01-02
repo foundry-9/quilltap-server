@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
+import { notFound, forbidden, serverError, validationError } from '@/lib/api/responses'
 
 const createDescriptionSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -24,11 +25,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const character = await repos.characters.findById(id)
 
       if (!character) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       if (character.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       const descriptions = await repos.characters.getDescriptions(id)
@@ -36,10 +37,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ descriptions })
     } catch (error) {
       logger.error('Error fetching character descriptions', { context: 'GET /api/characters/[id]/descriptions' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to fetch character descriptions' },
-        { status: 500 }
-      )
+      return serverError('Failed to fetch character descriptions')
     }
   }
 )
@@ -52,11 +50,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const character = await repos.characters.findById(id)
 
       if (!character) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       if (character.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       const body = await req.json()
@@ -65,26 +63,17 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const description = await repos.characters.addDescription(id, validatedData)
 
       if (!description) {
-        return NextResponse.json(
-          { error: 'Failed to create description' },
-          { status: 500 }
-        )
+        return serverError('Failed to create description')
       }
 
       return NextResponse.json({ description }, { status: 201 })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('Error creating character description', { context: 'POST /api/characters/[id]/descriptions' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to create character description' },
-        { status: 500 }
-      )
+      return serverError('Failed to create character description')
     }
   }
 )

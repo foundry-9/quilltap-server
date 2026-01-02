@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { notFound, serverError } from '@/lib/api/responses';
 
 /**
  * GET /api/sync/operations
@@ -45,7 +46,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
           userId: user.id,
           instanceId,
         });
-        return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
+        return notFound('Instance');
       }
 
       operations = await repos.syncOperations.findByInstanceId(
@@ -77,6 +78,6 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
       durationMs: duration,
     });
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return serverError();
   }
 });

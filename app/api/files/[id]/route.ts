@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
+import { notFound, badRequest, serverError, forbidden } from '@/lib/api/responses';
 import { downloadFile as downloadS3File, getPresignedUrl, deleteFile as deleteS3File } from '@/lib/s3/operations';
 
 /**
@@ -22,12 +23,12 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const fileEntry = await repos.files.findById(fileId);
       if (!fileEntry) {
         logger.debug('File not found', { context: 'GET /api/files/[id]', fileId });
-        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        return notFound('File');
       }
 
       if (!fileEntry.s3Key) {
         logger.error('File has no S3 key - may need migration', { context: 'GET /api/files/[id]', fileId });
-        return NextResponse.json({ error: 'File not available - migration required' }, { status: 500 });
+        return serverError('File not available - migration required');
       }
 
       logger.debug('Serving file from S3', { context: 'GET /api/files/[id]', fileId, s3Key: fileEntry.s3Key });
@@ -82,10 +83,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       });
     } catch (error) {
       logger.error('Error serving file', { context: 'GET /api/files/[id]' }, error instanceof Error ? error : undefined);
-      return NextResponse.json(
-        { error: 'Failed to serve file' },
-        { status: 500 }
-      );
+      return serverError('Failed to serve file');
     }
   }
 );
@@ -101,7 +99,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const fileEntry = await repos.files.findById(fileId);
       if (!fileEntry) {
         logger.debug('File not found', { context: 'DELETE /api/files/[id]', fileId });
-        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        return notFound('File');
       }
 
       logger.debug('Deleting file', { context: 'DELETE /api/files/[id]', fileId, hasS3Key: !!fileEntry.s3Key });
@@ -114,12 +112,9 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           linkedToCount: fileEntry.linkedTo.length,
         });
 
-        return NextResponse.json(
-          {
-            error: 'Cannot delete file that is still in use',
-            linkedTo: fileEntry.linkedTo,
-          },
-          { status: 400 }
+        return badRequest(
+          'Cannot delete file that is still in use',
+          { linkedTo: fileEntry.linkedTo }
         );
       }
 
@@ -163,7 +158,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           fileId,
         });
 
-        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        return notFound('File');
       }
 
       logger.info('File deleted successfully', {
@@ -175,10 +170,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ success: true });
     } catch (error) {
       logger.error('Error deleting file', { context: 'DELETE /api/files/[id]' }, error instanceof Error ? error : undefined);
-      return NextResponse.json(
-        { error: 'Failed to delete file' },
-        { status: 500 }
-      );
+      return serverError('Failed to delete file');
     }
   }
 );
@@ -193,27 +185,24 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
       const { entityId } = await request.json();
 
       if (!entityId) {
-        return NextResponse.json(
-          { error: 'entityId is required' },
-          { status: 400 }
-        );
+        return badRequest('entityId is required');
       }
 
       // Get file metadata from repository (supports MongoDB and JSON backends)
       const fileEntry = await repos.files.findById(fileId);
       if (!fileEntry) {
-        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        return notFound('File');
       }
 
       // Security: verify file belongs to user
       if (fileEntry.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        return forbidden();
       }
 
       // Remove the link using repository
       const updated = await repos.files.removeLink(fileId, entityId);
       if (!updated) {
-        return NextResponse.json({ error: 'Failed to update file' }, { status: 500 });
+        return serverError('Failed to update file');
       }
 
       // If no more links, consider auto-deleting the file
@@ -226,10 +215,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ success: true, file: updated });
     } catch (error) {
       logger.error('Error unlinking file', { context: 'PATCH /api/files/[id]' }, error instanceof Error ? error : undefined);
-      return NextResponse.json(
-        { error: 'Failed to unlink file' },
-        { status: 500 }
-      );
+      return serverError('Failed to unlink file');
     }
   }
 );

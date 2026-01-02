@@ -440,6 +440,8 @@ export interface MockBackgroundJobsRepository {
   delete: jest.Mock;
   findPending: jest.Mock;
   findByType: jest.Mock;
+  findByUserId: jest.Mock;
+  getStats: jest.Mock;
 }
 
 export function createMockBackgroundJobsRepository(): MockBackgroundJobsRepository {
@@ -451,6 +453,8 @@ export function createMockBackgroundJobsRepository(): MockBackgroundJobsReposito
     delete: jest.fn().mockResolvedValue(true),
     findPending: jest.fn().mockResolvedValue([]),
     findByType: jest.fn().mockResolvedValue([]),
+    findByUserId: jest.fn().mockResolvedValue([]),
+    getStats: jest.fn().mockResolvedValue({ pending: 0, processing: 0, failed: 0, completed: 0, dead: 0, paused: 0 }),
   };
 }
 

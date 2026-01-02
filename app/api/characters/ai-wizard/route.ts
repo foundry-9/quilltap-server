@@ -14,6 +14,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { downloadFile } from '@/lib/s3/operations'
 import { logger } from '@/lib/logger'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types'
 import type { FileAttachment } from '@/lib/llm/base'
 
@@ -406,7 +407,7 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     // Get primary profile
     const primaryProfile = await repos.connections.findById(request.primaryProfileId)
     if (!primaryProfile || primaryProfile.userId !== user.id) {
-      return NextResponse.json({ error: 'Primary profile not found' }, { status: 404 })
+      return notFound('Primary profile')
     }
 
     // Get primary profile API key
@@ -422,10 +423,7 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     if (!isPluginSystemInitialized() || !providerRegistry.isInitialized()) {
       const initResult = await initializePlugins()
       if (!initResult.success) {
-        return NextResponse.json(
-          { error: 'Plugin system initialization failed' },
-          { status: 500 }
-        )
+        return serverError('Plugin system initialization failed')
       }
     }
 
@@ -441,7 +439,7 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
       // Get image file
       const imageFile = await repos.files.findById(request.imageId)
       if (!imageFile || imageFile.userId !== user.id) {
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+        return notFound('Image')
       }
 
       // Determine which profile to use for vision
@@ -451,15 +449,12 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
       if (!profileSupportsMimeType(primaryProfile, imageFile.mimeType)) {
         // Need secondary vision profile
         if (!request.visionProfileId) {
-          return NextResponse.json(
-            { error: 'Vision profile required for image analysis' },
-            { status: 400 }
-          )
+          return badRequest('Vision profile required for image analysis')
         }
 
         const secondaryProfile = await repos.connections.findById(request.visionProfileId)
         if (!secondaryProfile || secondaryProfile.userId !== user.id) {
-          return NextResponse.json({ error: 'Vision profile not found' }, { status: 404 })
+          return notFound('Vision profile')
         }
 
         if (secondaryProfile.apiKeyId) {
@@ -487,10 +482,7 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
           context: 'POST /api/characters/ai-wizard',
           error: error instanceof Error ? error.message : String(error),
         })
-        return NextResponse.json(
-          { error: `Failed to analyze image: ${error instanceof Error ? error.message : 'Unknown error'}` },
-          { status: 500 }
-        )
+        return serverError(`Failed to analyze image: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
     }
 
@@ -556,10 +548,7 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
+      return validationError(error)
     }
 
     logger.error('AI Wizard generation failed', {
@@ -567,9 +556,6 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
       error: error instanceof Error ? error.message : String(error),
     })
 
-    return NextResponse.json(
-      { error: 'Generation failed', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    )
+    return serverError(error instanceof Error ? error.message : 'Generation failed')
   }
 })

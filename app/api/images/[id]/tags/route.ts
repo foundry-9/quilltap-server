@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { getRepositories } from '@/lib/repositories/factory';
+import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 
@@ -31,34 +32,34 @@ async function verifyTaggedEntity(
     const character = await repos.characters.findById(tagId);
     if (!character) {
       logger.debug('Character not found', { characterId: tagId });
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+      return notFound('Character');
     }
     // Security: verify character belongs to user
     if (character.userId !== userId) {
       logger.warn('User tried to tag with character they do not own', { characterId: tagId, userId });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return forbidden();
     }
   } else if (tagType === 'PERSONA') {
     const persona = await repos.personas.findById(tagId);
     if (!persona) {
       logger.debug('Persona not found', { personaId: tagId });
-      return NextResponse.json({ error: 'Persona not found' }, { status: 404 });
+      return notFound('Persona');
     }
     // Security: verify persona belongs to user
     if (persona.userId !== userId) {
       logger.warn('User tried to tag with persona they do not own', { personaId: tagId, userId });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return forbidden();
     }
   } else if (tagType === 'CHAT') {
     const chat = await repos.chats.findById(tagId);
     if (!chat) {
       logger.debug('Chat not found', { chatId: tagId });
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+      return notFound('Chat');
     }
     // Security: verify chat belongs to user
     if (chat.userId !== userId) {
       logger.warn('User tried to tag with chat they do not own', { chatId: tagId, userId });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return forbidden();
     }
   }
 
@@ -87,7 +88,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!fileEntry) {
         logger.debug('File not found in repository', { fileId: id });
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+        return notFound('Image');
       }
 
       // Verify file belongs to the user
@@ -97,7 +98,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           ownerId: fileEntry.userId
         });
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return forbidden();
       }
 
       // Verify file is an image
@@ -106,7 +107,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           fileId: id,
           category: fileEntry.category
         });
-        return NextResponse.json({ error: 'File is not an image' }, { status: 400 });
+        return badRequest('File is not an image');
       }
 
       // Verify the tagged entity exists and belongs to user
@@ -162,13 +163,10 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       logger.error('Error adding tag:', error as Error);
 
       if (error instanceof z.ZodError) {
-        return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
+        return validationError(error);
       }
 
-      return NextResponse.json(
-        { error: 'Failed to add tag', details: error instanceof Error ? error.message : String(error) },
-        { status: 500 }
-      );
+      return serverError('Failed to add tag');
     }
   }
 );
@@ -186,7 +184,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!tagType || !tagId) {
         logger.debug('DELETE /api/images/:id/tags - Missing tagType or tagId');
-        return NextResponse.json({ error: 'tagType and tagId are required' }, { status: 400 });
+        return badRequest('tagType and tagId are required');
       }
 
       logger.debug('DELETE /api/images/:id/tags - Starting', {
@@ -201,7 +199,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!fileEntry) {
         logger.debug('File not found in repository', { fileId: id });
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+        return notFound('Image');
       }
 
       // Verify file belongs to the user
@@ -211,7 +209,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           ownerId: fileEntry.userId
         });
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return forbidden();
       }
 
       // Remove the tag using repository
@@ -234,10 +232,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ data: { success: true } });
     } catch (error) {
       logger.error('Error removing tag:', error as Error);
-      return NextResponse.json(
-        { error: 'Failed to remove tag', details: error instanceof Error ? error.message : String(error) },
-        { status: 500 }
-      );
+      return serverError('Failed to remove tag');
     }
   }
 );

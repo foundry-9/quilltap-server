@@ -8,6 +8,7 @@ import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/l
 import { enqueueMemoryExtractionBatch, ensureProcessorRunning, type MessagePair } from '@/lib/background-jobs';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
+import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import type { ChatParticipant, MessageEvent } from '@/lib/schemas/types';
 
 /**
@@ -40,13 +41,13 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify chat belongs to user
       const chat = await repos.chats.findById(chatId);
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+        return notFound('Chat');
       }
 
       // Verify connection profile belongs to user
       const profile = await repos.connections.findById(connectionProfileId);
       if (!profile || profile.userId !== user.id) {
-        return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 });
+        return notFound('Connection profile');
       }
 
       // Build a map of participantId -> character info for multi-character support
@@ -81,7 +82,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       if (messagePairs && Array.isArray(messagePairs) && messagePairs.length > 0) {
         // Use provided pairs with fallback character
         if (!fallbackCharacter) {
-          return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+          return notFound('Character');
         }
         pairsWithCharacter = messagePairs.map((pair: MessagePair) => ({
           ...pair,
@@ -180,10 +181,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       if (pairsWithCharacter.length === 0) {
-        return NextResponse.json(
-          { error: 'No message pairs found to analyze' },
-          { status: 400 }
-        );
+        return badRequest('No message pairs found to analyze');
       }
 
       // Group pairs by character for efficient batch processing
@@ -243,7 +241,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       logger.error('[QueueMemories] Error', { error: errorMessage });
-      return NextResponse.json({ error: errorMessage }, { status: 500 });
+      return serverError(errorMessage);
     }
   }
 );

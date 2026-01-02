@@ -3,14 +3,8 @@ import { getServerSession } from "@/lib/auth/session";
 import { getRepositories } from "@/lib/repositories/factory";
 import { BrandLogo } from "@/components/ui/brand-logo";
 import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
+import { getFilePath } from "@/lib/api/middleware/file-path";
 import type { FileEntry } from "@/lib/schemas/types";
-
-/**
- * Get the filepath for a file - always use API route
- */
-function getFilePath(file: FileEntry): string {
-  return `/api/files/${file.id}`;
-}
 
 // Revalidate on every request
 export const revalidate = 0;

@@ -7,6 +7,7 @@ import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { createMemoryWithEmbedding } from '@/lib/memory/memory-service'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
+import { notFound, forbidden, serverError, validationError } from '@/lib/api/responses'
 
 // Validation schema for creating a memory
 const createMemorySchema = z.object({
@@ -28,10 +29,10 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify character exists and belongs to user
       const character = await repos.characters.findById(characterId)
       if (!character) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
       if (character.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       // Get query params for filtering
@@ -103,10 +104,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       logger.error('Error fetching memories', {}, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to fetch memories' },
-        { status: 500 }
-      )
+      return serverError('Failed to fetch memories')
     }
   }
 )
@@ -118,10 +116,10 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify character exists and belongs to user
       const character = await repos.characters.findById(characterId)
       if (!character) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
       if (character.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       const body = await req.json()
@@ -150,17 +148,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ memory }, { status: 201 })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('Error creating memory', {}, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to create memory' },
-        { status: 500 }
-      )
+      return serverError('Failed to create memory')
     }
   }
 )

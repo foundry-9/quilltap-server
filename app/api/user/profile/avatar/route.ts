@@ -6,16 +6,11 @@
 
 import { NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { getFilePath } from '@/lib/api/middleware/file-path';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 import type { FileEntry } from '@/lib/schemas/types';
-
-/**
- * Get the filepath for a file - always returns API path for S3-backed files
- */
-function getFilePath(file: FileEntry): string {
-  return `/api/files/${file.id}`;
-}
 
 const avatarSchema = z.object({
   imageId: z.string().nullable(),
@@ -59,7 +54,7 @@ export const PATCH = createAuthenticatedHandler(async (request, { user, repos })
           fileId: imageId,
           userId,
         });
-        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        return notFound('File');
       }
 
       // Verify file belongs to user
@@ -70,7 +65,7 @@ export const PATCH = createAuthenticatedHandler(async (request, { user, repos })
           fileOwnerId: fileEntry.userId,
           userId,
         });
-        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        return notFound('File');
       }
 
       // Verify file category is valid for avatar
@@ -81,9 +76,8 @@ export const PATCH = createAuthenticatedHandler(async (request, { user, repos })
           fileId: imageId,
           category: fileEntry.category,
         });
-        return NextResponse.json(
-          { error: `Invalid file category. Expected IMAGE or AVATAR, got ${fileEntry.category}` },
-          { status: 400 }
+        return badRequest(
+          `Invalid file category. Expected IMAGE or AVATAR, got ${fileEntry.category}`
         );
       }
 
@@ -109,7 +103,7 @@ export const PATCH = createAuthenticatedHandler(async (request, { user, repos })
         context: 'PATCH /api/user/profile/avatar',
         userId,
       });
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return notFound('User');
     }
 
     logger.info('Profile avatar updated successfully', {
@@ -156,7 +150,7 @@ export const PATCH = createAuthenticatedHandler(async (request, { user, repos })
         context: 'PATCH /api/user/profile/avatar',
         errors: error.errors,
       });
-      return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
+      return validationError(error);
     }
 
     logger.error(
@@ -165,9 +159,6 @@ export const PATCH = createAuthenticatedHandler(async (request, { user, repos })
       error instanceof Error ? error : new Error(String(error))
     );
 
-    return NextResponse.json(
-      { error: 'Failed to update profile avatar' },
-      { status: 500 }
-    );
+    return serverError('Failed to update profile avatar');
   }
 });

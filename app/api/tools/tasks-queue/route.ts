@@ -6,7 +6,6 @@
 
 import { NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
-import { BackgroundJobsRepository } from '@/lib/mongodb/repositories/background-jobs.repository';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { startProcessor, stopProcessor, getProcessorStatus } from '@/lib/background-jobs/processor';
@@ -68,11 +67,11 @@ function getJobTypeName(type: string): string {
  * GET /api/tools/tasks-queue
  * Returns queue statistics and pending/processing jobs
  */
-export const GET = createAuthenticatedHandler(async (req, { user }) => {
+export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
     logger.debug('Fetching tasks queue status', { userId: user.id });
 
-    const repo = new BackgroundJobsRepository();
+    const repo = repos.backgroundJobs;
 
     // Get overall stats for the user
     const stats = await repo.getStats(user.id);

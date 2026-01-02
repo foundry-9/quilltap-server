@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
+import { badRequest, forbidden, notFound, serverError, validationError } from '@/lib/api/responses'
 import { z } from 'zod'
 import type { Tag } from '@/lib/schemas/types'
 import { TagVisualStyleSchema } from '@/lib/schemas/types'
@@ -31,11 +32,11 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     const existingTag = await repos.tags.findById(tagId)
 
     if (!existingTag) {
-      return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+      return notFound('Tag')
     }
 
     if (existingTag.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+      return forbidden()
     }
 
     const body = await req.json()
@@ -53,10 +54,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       )
 
       if (duplicateTag) {
-        return NextResponse.json(
-          { error: 'A tag with this name already exists' },
-          { status: 400 }
-        )
+        return badRequest('A tag with this name already exists')
       }
 
       updateData.name = validatedData.name
@@ -76,17 +74,11 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     return NextResponse.json({ tag })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
+      return validationError(error)
     }
 
     logger.error('Error updating tag:', error as Error)
-    return NextResponse.json(
-      { error: 'Failed to update tag' },
-      { status: 500 }
-    )
+    return serverError('Failed to update tag')
   }
 })
 
@@ -100,11 +92,11 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
     const existingTag = await repos.tags.findById(tagId)
 
     if (!existingTag) {
-      return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+      return notFound('Tag')
     }
 
     if (existingTag.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+      return forbidden()
     }
 
     // Delete the tag (cascade will remove all junction table entries)
@@ -113,9 +105,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
     return NextResponse.json({ success: true })
   } catch (error) {
     logger.error('Error deleting tag:', error as Error)
-    return NextResponse.json(
-      { error: 'Failed to delete tag' },
-      { status: 500 }
-    )
+    return serverError('Failed to delete tag')
   }
 })

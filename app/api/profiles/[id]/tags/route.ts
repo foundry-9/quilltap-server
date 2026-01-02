@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
+import { notFound, forbidden, badRequest, serverError, validationError, created } from '@/lib/api/responses'
 
 const addTagSchema = z.object({
   tagId: z.string().uuid(),
@@ -20,11 +21,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const profile = await repos.connections.findById(id)
 
       if (!profile) {
-        return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+        return notFound('Connection profile')
       }
 
       if (profile.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       // Get tags for this profile
@@ -41,10 +42,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ tags: profileTags })
     } catch (error) {
       logger.error('Error fetching connection profile tags', { context: 'profiles-tags-GET' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to fetch connection profile tags' },
-        { status: 500 }
-      )
+      return serverError('Failed to fetch connection profile tags')
     }
   }
 )
@@ -57,11 +55,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const profile = await repos.connections.findById(id)
 
       if (!profile) {
-        return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+        return notFound('Connection profile')
       }
 
       if (profile.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       const body = await req.json()
@@ -71,30 +69,24 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const tag = await repos.tags.findById(validatedData.tagId)
 
       if (!tag) {
-        return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+        return notFound('Tag')
       }
 
       if (tag.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       // Add tag to connection profile
       await repos.connections.addTag(id, validatedData.tagId)
 
-      return NextResponse.json({ tag }, { status: 201 })
+      return created({ tag })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('Error adding tag to connection profile', { context: 'profiles-tags-POST' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to add tag to connection profile' },
-        { status: 500 }
-      )
+      return serverError('Failed to add tag to connection profile')
     }
   }
 )
@@ -106,21 +98,18 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const tagId = req.nextUrl.searchParams.get('tagId')
 
       if (!tagId) {
-        return NextResponse.json(
-          { error: 'tagId query parameter is required' },
-          { status: 400 }
-        )
+        return badRequest('tagId query parameter is required')
       }
 
       // Verify connection profile exists and belongs to user
       const profile = await repos.connections.findById(id)
 
       if (!profile) {
-        return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+        return notFound('Connection profile')
       }
 
       if (profile.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       // Remove tag from connection profile
@@ -129,10 +118,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ success: true })
     } catch (error) {
       logger.error('Error removing tag from connection profile', { context: 'profiles-tags-DELETE' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to remove tag from connection profile' },
-        { status: 500 }
-      )
+      return serverError('Failed to remove tag from connection profile')
     }
   }
 )

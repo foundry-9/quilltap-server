@@ -10,6 +10,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
+import { notFound, forbidden, serverError, validationError } from '@/lib/api/responses';
 
 const updateTemplateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -28,7 +29,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!template) {
         logger.warn('Prompt template not found', { templateId: id, userId: user.id });
-        return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+        return notFound('Template');
       }
 
       // Users can access built-in templates or their own templates
@@ -38,7 +39,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           ownerId: template.userId,
         });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return forbidden();
       }
 
       logger.debug('Retrieved prompt template', { templateId: id, userId: user.id });
@@ -48,10 +49,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      return NextResponse.json(
-        { error: 'Failed to fetch prompt template' },
-        { status: 500 }
-      );
+      return serverError('Failed to fetch prompt template');
     }
   }
 );
@@ -68,7 +66,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!existingTemplate) {
         logger.warn('Prompt template not found for update', { templateId: id, userId: user.id });
-        return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+        return notFound('Template');
       }
 
       // Cannot update built-in templates
@@ -77,10 +75,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           templateId: id,
           userId: user.id,
         });
-        return NextResponse.json(
-          { error: 'Cannot update built-in templates' },
-          { status: 403 }
-        );
+        return forbidden('Cannot update built-in templates');
       }
 
       // Can only update own templates
@@ -90,7 +85,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           ownerId: existingTemplate.userId,
         });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return forbidden();
       }
 
       const updates: any = {};
@@ -105,7 +100,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!template) {
         logger.error('Failed to update prompt template', { templateId: id, userId: user.id });
-        return NextResponse.json({ error: 'Failed to update template' }, { status: 500 });
+        return serverError('Failed to update template');
       }
 
       logger.info('Prompt template updated', {
@@ -118,16 +113,13 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     } catch (error) {
       if (error instanceof z.ZodError) {
         logger.warn('Invalid prompt template update data', { errors: error.errors });
-        return NextResponse.json({ error: error.errors }, { status: 400 });
+        return validationError(error);
       }
       logger.error('Error updating prompt template', {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      return NextResponse.json(
-        { error: 'Failed to update prompt template' },
-        { status: 500 }
-      );
+      return serverError('Failed to update prompt template');
     }
   }
 );
@@ -141,7 +133,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!existingTemplate) {
         logger.warn('Prompt template not found for deletion', { templateId: id, userId: user.id });
-        return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+        return notFound('Template');
       }
 
       // Cannot delete built-in templates
@@ -150,10 +142,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           templateId: id,
           userId: user.id,
         });
-        return NextResponse.json(
-          { error: 'Cannot delete built-in templates' },
-          { status: 403 }
-        );
+        return forbidden('Cannot delete built-in templates');
       }
 
       // Can only delete own templates
@@ -163,14 +152,14 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
           ownerId: existingTemplate.userId,
         });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return forbidden();
       }
 
       const deleted = await repos.promptTemplates.delete(id);
 
       if (!deleted) {
         logger.error('Failed to delete prompt template', { templateId: id, userId: user.id });
-        return NextResponse.json({ error: 'Failed to delete template' }, { status: 500 });
+        return serverError('Failed to delete template');
       }
 
       logger.info('Prompt template deleted', { templateId: id, userId: user.id });
@@ -181,10 +170,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      return NextResponse.json(
-        { error: 'Failed to delete prompt template' },
-        { status: 500 }
-      );
+      return serverError('Failed to delete prompt template');
     }
   }
 );

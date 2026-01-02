@@ -64,7 +64,7 @@ function getExtension(filename: string): string {
 /**
  * Get the filepath for a file - always returns the API path for S3-backed files
  */
-function getFilePath(fileId: string): string {
+function getFileApiPath(fileId: string): string {
   return `/api/files/${fileId}`;
 }
 
@@ -292,7 +292,7 @@ export async function uploadImage(file: File, userId: string, linkedTo: string[]
   return {
     id: fileEntry.id,
     filename: fileEntry.originalFilename,
-    filepath: getFilePath(fileEntry.id),
+    filepath: getFileApiPath(fileEntry.id),
     mimeType: fileEntry.mimeType,
     size: fileEntry.size,
     width: fileEntry.width || undefined,
@@ -350,7 +350,7 @@ export async function importImageFromUrl(url: string, userId: string, linkedTo: 
   return {
     id: fileEntry.id,
     filename: fileEntry.originalFilename,
-    filepath: getFilePath(fileEntry.id),
+    filepath: getFileApiPath(fileEntry.id),
     mimeType: fileEntry.mimeType,
     size: fileEntry.size,
     width: fileEntry.width || undefined,

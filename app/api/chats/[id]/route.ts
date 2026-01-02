@@ -6,22 +6,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { z } from 'zod'
-import type { ChatParticipantBase, ChatMetadata, FileEntry } from '@/lib/schemas/types'
+import type { ChatMetadata } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
-
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : ''
-  return `data/files/storage/${file.id}${ext}`
-}
+import { getFilePath } from '@/lib/api/middleware/file-path'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
+import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service'
 
 // Validation schema for chat updates
 // Note: roleplayTemplateId accepts any string because plugin templates use 'plugin:' prefix
@@ -71,122 +61,6 @@ const chatUpdateRequestSchema = z.object({
 })
 
 type Repos = RepositoryContainer
-
-// Helper to get enriched character data
-async function getEnrichedCharacter(characterId: string, repos: Repos) {
-  const charData = await repos.characters.findById(characterId)
-  if (!charData) return null
-
-  let defaultImage = null
-  if (charData.defaultImageId) {
-    const fileEntry = await repos.files.findById(charData.defaultImageId)
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
-    }
-  }
-
-  return {
-    id: charData.id,
-    name: charData.name,
-    title: charData.title,
-    avatarUrl: charData.avatarUrl,
-    defaultImageId: charData.defaultImageId,
-    defaultImage,
-  }
-}
-
-// Helper to get enriched persona data
-async function getEnrichedPersona(personaId: string, repos: Repos) {
-  const personaData = await repos.personas.findById(personaId)
-  if (!personaData) return null
-
-  let defaultImage = null
-  if (personaData.defaultImageId) {
-    const fileEntry = await repos.files.findById(personaData.defaultImageId)
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
-    }
-  }
-
-  return {
-    id: personaData.id,
-    name: personaData.name,
-    title: personaData.title,
-    avatarUrl: personaData.avatarUrl,
-    defaultImageId: personaData.defaultImageId,
-    defaultImage,
-  }
-}
-
-// Helper to get enriched connection profile
-async function getEnrichedConnectionProfile(profileId: string, repos: Repos) {
-  const profile = await repos.connections.findById(profileId)
-  if (!profile) return null
-
-  let apiKeyInfo = null
-  if (profile.apiKeyId) {
-    const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId)
-    if (apiKey) {
-      apiKeyInfo = { id: apiKey.id, provider: apiKey.provider, label: apiKey.label }
-    }
-  }
-
-  return {
-    id: profile.id,
-    name: profile.name,
-    provider: profile.provider,
-    modelName: profile.modelName,
-    apiKey: apiKeyInfo,
-  }
-}
-
-// Helper to get enriched image profile
-async function getEnrichedImageProfile(profileId: string, repos: Repos) {
-  const imgProfile = await repos.imageProfiles.findById(profileId)
-  if (!imgProfile) return null
-
-  return {
-    id: imgProfile.id,
-    name: imgProfile.name,
-    provider: imgProfile.provider,
-    modelName: imgProfile.modelName,
-  }
-}
-
-// Helper to enrich participant data with related entities
-async function enrichParticipant(participant: ChatParticipantBase, repos: Repos) {
-  const character = participant.type === 'CHARACTER' && participant.characterId
-    ? await getEnrichedCharacter(participant.characterId, repos)
-    : null
-
-  // Legacy: for PERSONA type, also look up persona data
-  const persona = participant.type === 'PERSONA' && participant.personaId
-    ? await getEnrichedPersona(participant.personaId, repos)
-    : null
-
-  const connectionProfile = participant.connectionProfileId
-    ? await getEnrichedConnectionProfile(participant.connectionProfileId, repos)
-    : null
-
-  const imageProfile = participant.imageProfileId
-    ? await getEnrichedImageProfile(participant.imageProfileId, repos)
-    : null
-
-  return {
-    id: participant.id,
-    type: participant.type,
-    controlledBy: participant.controlledBy || (participant.type === 'PERSONA' ? 'user' : 'llm'),
-    displayOrder: participant.displayOrder,
-    isActive: participant.isActive,
-    systemPromptOverride: participant.systemPromptOverride,
-    character,
-    persona,
-    connectionProfile,
-    imageProfile,
-    createdAt: participant.createdAt,
-    updatedAt: participant.updatedAt,
-  }
-}
 
 // Helper to validate CHARACTER participant requirements
 async function validateCharacterParticipant(
@@ -411,11 +285,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const chatMetadata = await repos.chats.findById(id)
 
       if (!chatMetadata || chatMetadata.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       const enrichedParticipants = await Promise.all(
-        chatMetadata.participants.map(p => enrichParticipant(p, repos))
+        chatMetadata.participants.map(p => enrichParticipantDetail(p, repos))
       )
 
       const chatEvents = await repos.chats.getMessages(id)
@@ -467,7 +341,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ chat })
     } catch (error) {
       logger.error('Error fetching chat', { context: 'GET /api/chats/:id' }, error instanceof Error ? error : undefined)
-      return NextResponse.json({ error: 'Failed to fetch chat' }, { status: 500 })
+      return serverError('Failed to fetch chat')
     }
   }
 )
@@ -550,7 +424,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       const existingChat = await repos.chats.findById(id)
 
       if (!existingChat || existingChat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       const body = await req.json()
@@ -559,11 +433,16 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       const result = await processChatUpdates(id, existingChat, validatedData, user.id, repos)
 
       if ('error' in result) {
-        return NextResponse.json({ error: result.error }, { status: result.status })
+        if (result.status === 404) {
+          return notFound('Resource')
+        } else if (result.status === 400) {
+          return badRequest(result.error)
+        }
+        return serverError(result.error)
       }
 
       const enrichedParticipants = await Promise.all(
-        result.chat.participants.map(p => enrichParticipant(p, repos))
+        result.chat.participants.map(p => enrichParticipantDetail(p, repos))
       )
 
       return NextResponse.json({
@@ -571,14 +450,11 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('Error updating chat', { context: 'PUT /api/chats/:id' }, error instanceof Error ? error : undefined)
-      return NextResponse.json({ error: 'Failed to update chat' }, { status: 500 })
+      return serverError('Failed to update chat')
     }
   }
 )
@@ -590,7 +466,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const existingChat = await repos.chats.findById(id)
 
       if (!existingChat || existingChat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       await repos.chats.delete(id)
@@ -598,7 +474,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ success: true })
     } catch (error) {
       logger.error('Error deleting chat', { context: 'DELETE /api/chats/:id' }, error instanceof Error ? error : undefined)
-      return NextResponse.json({ error: 'Failed to delete chat' }, { status: 500 })
+      return serverError('Failed to delete chat')
     }
   }
 )

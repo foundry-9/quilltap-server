@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger';
 import { downloadFile, deleteFile, listFiles } from '@/lib/s3/operations';
 import { validateS3Config } from '@/lib/s3/config';
 import { getErrorMessage } from '@/lib/errors';
+import { notFound, serverError } from '@/lib/api/responses';
 
 const moduleLogger = logger.child({ module: 'api:capabilities-report:id' });
 
@@ -39,7 +40,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Find the report S3 key
       const s3Key = await findReportS3Key(userId, reportId);
       if (!s3Key) {
-        return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+        return notFound('Report');
       }
 
       // Download the report content
@@ -82,10 +83,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       moduleLogger.error('Failed to get capabilities report', { error: errorMessage }, error instanceof Error ? error : undefined);
-      return NextResponse.json(
-        { error: 'Failed to get report', details: errorMessage },
-        { status: 500 }
-      );
+      return serverError('Failed to get report');
     }
   }
 );
@@ -100,7 +98,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       // Find the report S3 key
       const s3Key = await findReportS3Key(userId, reportId);
       if (!s3Key) {
-        return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+        return notFound('Report');
       }
 
       // Delete the report
@@ -112,10 +110,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       moduleLogger.error('Failed to delete capabilities report', { error: errorMessage }, error instanceof Error ? error : undefined);
-      return NextResponse.json(
-        { error: 'Failed to delete report', details: errorMessage },
-        { status: 500 }
-      );
+      return serverError('Failed to delete report');
     }
   }
 );

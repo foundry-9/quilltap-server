@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
+import { badRequest, serverError } from '@/lib/api/responses';
 import { previewImport, type QuilltapExport } from '@/lib/import/quilltap-import-service';
 
 // Max file size: 100MB
@@ -85,7 +86,7 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
           context: 'POST /api/tools/quilltap-import',
           userId: user.id,
         });
-        return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+        return badRequest('No file provided');
       }
 
       if (file.size > MAX_FILE_SIZE) {
@@ -95,10 +96,7 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
           fileSize: file.size,
           maxSize: MAX_FILE_SIZE,
         });
-        return NextResponse.json(
-          { error: `File too large (max ${Math.round(MAX_FILE_SIZE / 1024 / 1024)}MB)` },
-          { status: 400 }
-        );
+        return badRequest(`File too large (max ${Math.round(MAX_FILE_SIZE / 1024 / 1024)}MB)`);
       }
 
       logger.debug('Reading uploaded export file', {
@@ -119,10 +117,7 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
           context: 'POST /api/tools/quilltap-import',
           userId: user.id,
         });
-        return NextResponse.json(
-          { error: 'Missing required field: exportData' },
-          { status: 400 }
-        );
+        return badRequest('Missing required field: exportData');
       }
 
       exportData = body.exportData;
@@ -134,12 +129,7 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
         context: 'POST /api/tools/quilltap-import',
         userId: user.id,
       });
-      return NextResponse.json(
-        {
-          error: 'Invalid export file format. Expected quilltap-export v1.0 format.',
-        },
-        { status: 400 }
-      );
+      return badRequest('Invalid export file format. Expected quilltap-export v1.0 format.');
     }
 
     const exported = exportData as QuilltapExport;
@@ -166,9 +156,6 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
       { context: 'POST /api/tools/quilltap-import' },
       error instanceof Error ? error : undefined
     );
-    return NextResponse.json(
-      { error: getErrorMessage(error, 'Failed to preview import') },
-      { status: 500 }
-    );
+    return serverError(getErrorMessage(error, 'Failed to preview import'));
   }
 });

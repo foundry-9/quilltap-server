@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
+import { serverError, badRequest, validationError } from '@/lib/api/responses';
 
 const createTemplateSchema = z.object({
   name: z.string().min(1).max(100),
@@ -31,10 +32,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
-    return NextResponse.json(
-      { error: 'Failed to fetch prompt templates' },
-      { status: 500 }
-    );
+    return serverError('Failed to fetch prompt templates');
   }
 });
 
@@ -70,15 +68,12 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   } catch (error) {
     if (error instanceof z.ZodError) {
       logger.warn('Invalid prompt template data', { errors: error.errors });
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return validationError(error);
     }
     logger.error('Error creating prompt template', {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
-    return NextResponse.json(
-      { error: 'Failed to create prompt template' },
-      { status: 500 }
-    );
+    return serverError('Failed to create prompt template');
   }
 });

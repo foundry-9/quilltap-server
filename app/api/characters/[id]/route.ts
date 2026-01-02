@@ -9,6 +9,7 @@ import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/midd
 import { getFilePath } from '@/lib/api/middleware/file-path'
 import { executeCascadeDelete } from '@/lib/cascade-delete'
 import { logger } from '@/lib/logger'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
 import { z } from 'zod'
 
 // Validation schema for updates
@@ -33,7 +34,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const character = await repos.characters.findById(id)
 
       if (!checkOwnership(character, user.id)) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       // Get default image from repository if present
@@ -63,10 +64,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ character: enrichedCharacter })
     } catch (error) {
       logger.error('Error fetching character', { context: 'GET /api/characters/:id' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to fetch character' },
-        { status: 500 }
-      )
+      return serverError('Failed to fetch character')
     }
   }
 )
@@ -79,7 +77,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       const existingCharacter = await repos.characters.findById(id)
 
       if (!checkOwnership(existingCharacter, user.id)) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       const body = await req.json()
@@ -93,17 +91,11 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ character })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('Error updating character', { context: 'PUT /api/characters/:id' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to update character' },
-        { status: 500 }
-      )
+      return serverError('Failed to update character')
     }
   }
 )
@@ -119,7 +111,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const existingCharacter = await repos.characters.findById(id)
 
       if (!checkOwnership(existingCharacter, user.id)) {
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+        return notFound('Character')
       }
 
       // Parse cascade options from query params
@@ -134,10 +126,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       })
 
       if (!result.success) {
-        return NextResponse.json(
-          { error: 'Failed to delete character' },
-          { status: 500 }
-        )
+        return serverError('Failed to delete character')
       }
 
       return NextResponse.json({
@@ -148,10 +137,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       })
     } catch (error) {
       logger.error('Error deleting character', { context: 'DELETE /api/characters/:id' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to delete character' },
-        { status: 500 }
-      )
+      return serverError('Failed to delete character')
     }
   }
 )

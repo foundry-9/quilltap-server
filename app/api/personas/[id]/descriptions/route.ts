@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
+import { notFound, forbidden, serverError, validationError } from '@/lib/api/responses'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
 
@@ -24,11 +25,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const persona = await repos.personas.findById(id)
 
       if (!persona) {
-        return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+        return notFound('Persona')
       }
 
       if (persona.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       const descriptions = await repos.personas.getDescriptions(id)
@@ -36,10 +37,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json({ descriptions })
     } catch (error) {
       logger.error('Error fetching persona descriptions:', error as Error)
-      return NextResponse.json(
-        { error: 'Failed to fetch persona descriptions' },
-        { status: 500 }
-      )
+      return serverError('Failed to fetch persona descriptions')
     }
   }
 )
@@ -52,11 +50,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const persona = await repos.personas.findById(id)
 
       if (!persona) {
-        return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+        return notFound('Persona')
       }
 
       if (persona.userId !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        return forbidden()
       }
 
       const body = await req.json()
@@ -65,26 +63,17 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const description = await repos.personas.addDescription(id, validatedData)
 
       if (!description) {
-        return NextResponse.json(
-          { error: 'Failed to create description' },
-          { status: 500 }
-        )
+        return serverError('Failed to create description')
       }
 
       return NextResponse.json({ description }, { status: 201 })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       logger.error('Error creating persona description:', error as Error)
-      return NextResponse.json(
-        { error: 'Failed to create persona description' },
-        { status: 500 }
-      )
+      return serverError('Failed to create persona description')
     }
   }
 )

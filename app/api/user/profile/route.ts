@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 
 // Validation schema for profile updates
 const updateProfileSchema = z.object({
@@ -48,10 +49,7 @@ export const GET = createAuthenticatedHandler(async (req, { user }) => {
       { context: 'GET /api/user/profile' },
       error instanceof Error ? error : new Error(String(error))
     );
-    return NextResponse.json(
-      { error: 'Failed to fetch profile' },
-      { status: 500 }
-    );
+    return serverError('Failed to fetch profile');
   }
 });
 
@@ -70,10 +68,7 @@ export const PUT = createAuthenticatedHandler(async (req, { user, repos }) => {
         userId: user.id,
         errors: validationResult.error.errors,
       });
-      return NextResponse.json(
-        { error: 'Invalid data', details: validationResult.error.errors },
-        { status: 400 }
-      );
+      return validationError(validationResult.error);
     }
 
     const { email, name } = validationResult.data;
@@ -96,7 +91,7 @@ export const PUT = createAuthenticatedHandler(async (req, { user, repos }) => {
         context: 'PUT /api/user/profile',
         userId: user.id,
       });
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return notFound('User');
     }
 
     // Get 2FA status
@@ -125,9 +120,6 @@ export const PUT = createAuthenticatedHandler(async (req, { user, repos }) => {
       { context: 'PUT /api/user/profile' },
       error instanceof Error ? error : new Error(String(error))
     );
-    return NextResponse.json(
-      { error: 'Failed to update profile' },
-      { status: 500 }
-    );
+    return serverError('Failed to update profile');
   }
 });

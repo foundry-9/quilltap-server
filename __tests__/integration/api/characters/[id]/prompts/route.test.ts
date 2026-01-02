@@ -156,6 +156,7 @@ describe('Character System Prompts API', () => {
     const response = await POST(request, buildContext())
     expect(response.status).toBe(400)
     const body = await response.json()
-    expect(Array.isArray(body.error)).toBe(true)
+    expect(body.error).toBe('Validation error')
+    expect(Array.isArray(body.details)).toBe(true)
   })
 })

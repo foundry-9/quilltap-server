@@ -17,6 +17,7 @@ import {
   sendMessageSchema,
   continueMessageSchema,
 } from '@/lib/services/chat-message'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
 
 /**
  * POST - Send a message to a chat and receive a streaming response
@@ -27,7 +28,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify chat ownership
       const chat = await repos.chats.findById(id)
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+        return notFound('Chat')
       }
 
       // Parse request body
@@ -81,10 +82,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     } catch (error) {
       // Handle validation errors
       if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Validation error', details: error.errors },
-          { status: 400 }
-        )
+        return validationError(error)
       }
 
       // Handle known error types
@@ -93,20 +91,17 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
         // Map common errors to appropriate status codes
         if (message === 'Chat not found' || message === 'Character not found' || message === 'Connection profile not found') {
-          return NextResponse.json({ error: message }, { status: 404 })
+          return notFound(message)
         }
 
         if (message === 'No active character in chat' || message === 'No connection profile configured for character' || message === 'No API key configured for this connection profile') {
-          return NextResponse.json({ error: message }, { status: 400 })
+          return badRequest(message)
         }
       }
 
       // Generic error handling
       logger.error('[Chat Messages API] Error sending message', {}, error as Error)
-      return NextResponse.json(
-        { error: 'Failed to send message' },
-        { status: 500 }
-      )
+      return serverError('Failed to send message')
     }
   }
 )

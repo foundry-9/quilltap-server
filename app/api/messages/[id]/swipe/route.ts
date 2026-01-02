@@ -6,6 +6,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
+import { badRequest, notFound, serverError } from '@/lib/api/responses'
 import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
@@ -35,15 +36,12 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       if (!foundMessage || !foundChat) {
-        return NextResponse.json({ error: 'Message not found' }, { status: 404 })
+        return notFound('Message')
       }
 
       // Only assistant messages can be swiped
       if (foundMessage.role !== 'ASSISTANT') {
-        return NextResponse.json(
-          { error: 'Only assistant messages can be swiped' },
-          { status: 400 }
-        )
+        return badRequest('Only assistant messages can be swiped')
       }
 
       // Get connection profile from first active character participant
@@ -51,12 +49,12 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         p => p.type === 'CHARACTER' && p.isActive && p.connectionProfileId
       )
       if (!characterParticipant?.connectionProfileId) {
-        return NextResponse.json({ error: 'No connection profile configured' }, { status: 404 })
+        return notFound('Connection profile')
       }
 
       const profile = await repos.connections.findById(characterParticipant.connectionProfileId)
       if (!profile) {
-        return NextResponse.json({ error: 'Connection profile not found' }, { status: 404 })
+        return notFound('Connection profile')
       }
 
       // Create swipe group ID if this is the first swipe
@@ -176,10 +174,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       return NextResponse.json(newSwipe, { status: 201 })
     } catch (error) {
       logger.error('Error creating swipe', { context: 'POST /api/messages/:id/swipe' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to create alternative response' },
-        { status: 500 }
-      )
+      return serverError('Failed to create alternative response')
     }
   }
 )
@@ -191,10 +186,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       const { swipeIndex } = body
 
       if (swipeIndex === undefined) {
-        return NextResponse.json(
-          { error: 'Swipe index is required' },
-          { status: 400 }
-        )
+        return badRequest('Swipe index is required')
       }
 
       // Find the message across user's chats only (security: filter by userId)
@@ -215,14 +207,11 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       if (!foundMessage) {
-        return NextResponse.json({ error: 'Message not found' }, { status: 404 })
+        return notFound('Message')
       }
 
       if (!foundMessage.swipeGroupId) {
-        return NextResponse.json(
-          { error: 'Message is not part of a swipe group' },
-          { status: 400 }
-        )
+        return badRequest('Message is not part of a swipe group')
       }
 
       // Find the target swipe
@@ -234,20 +223,14 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       )
 
       if (!targetSwipe) {
-        return NextResponse.json(
-          { error: 'Swipe not found' },
-          { status: 404 }
-        )
+        return notFound('Swipe')
       }
 
       // Return the target swipe (UI will handle switching)
       return NextResponse.json(targetSwipe)
     } catch (error) {
       logger.error('Error switching swipe', { context: 'PUT /api/messages/:id/swipe' }, error instanceof Error ? error : undefined)
-      return NextResponse.json(
-        { error: 'Failed to switch swipe' },
-        { status: 500 }
-      )
+      return serverError('Failed to switch swipe')
     }
   }
 )

@@ -1,0 +1,523 @@
+/**
+ * Chat Enrichment Service
+ *
+ * Consolidates duplicated enrichment functions from:
+ * - app/api/chats/route.ts (getCharacterSummary, getPersonaSummary, enrichParticipantSummary)
+ * - app/api/chats/[id]/route.ts (getEnrichedCharacter, getEnrichedPersona, enrichParticipant)
+ *
+ * Provides unified enrichment for chat participants with options for different view modes.
+ */
+
+import type { ChatParticipantBase, ChatMetadata } from '@/lib/schemas/types'
+import type { RepositoryContainer } from '@/lib/repositories/factory'
+import { getFilePath } from '@/lib/api/middleware/file-path'
+import { logger } from '@/lib/logger'
+
+type Repos = RepositoryContainer
+
+// ============================================================================
+// Types
+// ============================================================================
+
+/**
+ * Image info for enriched entities
+ */
+export interface EnrichedImage {
+  id: string
+  filepath: string
+  url: string | null
+}
+
+/**
+ * Base character info shared between summary and detailed views
+ */
+export interface EnrichedCharacterBase {
+  id: string
+  name: string
+  title: string | null
+  avatarUrl: string | null
+  defaultImageId: string | null
+  defaultImage: EnrichedImage | null
+}
+
+/**
+ * Character info for list/summary view (includes tags)
+ */
+export interface EnrichedCharacterSummary extends EnrichedCharacterBase {
+  tags: string[]
+}
+
+/**
+ * Character info for detail view (no tags, used with full participant)
+ */
+export type EnrichedCharacterDetail = EnrichedCharacterBase
+
+/**
+ * Base persona info shared between summary and detailed views
+ */
+export interface EnrichedPersonaBase {
+  id: string
+  name: string
+  title: string | null
+  avatarUrl: string | null
+  defaultImageId: string | null
+  defaultImage: EnrichedImage | null
+}
+
+/**
+ * Persona info for list/summary view (includes tags)
+ */
+export interface EnrichedPersonaSummary extends EnrichedPersonaBase {
+  tags: string[]
+}
+
+/**
+ * Persona info for detail view (no tags, used with full participant)
+ */
+export type EnrichedPersonaDetail = EnrichedPersonaBase
+
+/**
+ * Connection profile info for detailed participant view
+ */
+export interface EnrichedConnectionProfile {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+  apiKey: {
+    id: string
+    provider: string
+    label: string
+  } | null
+}
+
+/**
+ * Image profile info for detailed participant view
+ */
+export interface EnrichedImageProfile {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+}
+
+/**
+ * Participant info for list/summary view (simpler, for chat lists)
+ */
+export interface EnrichedParticipantSummary {
+  id: string
+  type: 'CHARACTER' | 'PERSONA'
+  displayOrder: number
+  isActive: boolean
+  character: EnrichedCharacterSummary | null
+  persona: EnrichedPersonaSummary | null
+}
+
+/**
+ * Participant info for detail view (fuller, for single chat view)
+ */
+export interface EnrichedParticipantDetail {
+  id: string
+  type: 'CHARACTER' | 'PERSONA'
+  controlledBy: 'llm' | 'user'
+  displayOrder: number
+  isActive: boolean
+  systemPromptOverride: string | null
+  character: EnrichedCharacterDetail | null
+  persona: EnrichedPersonaDetail | null
+  connectionProfile: EnrichedConnectionProfile | null
+  imageProfile: EnrichedImageProfile | null
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Tag info for enriched chats
+ */
+export interface EnrichedTag {
+  tag: {
+    id: string
+    name: string
+  }
+}
+
+/**
+ * Enriched chat for list view
+ */
+export interface EnrichedChatSummary {
+  id: string
+  title: string
+  contextSummary: string | null
+  createdAt: string
+  updatedAt: string
+  participants: EnrichedParticipantSummary[]
+  tags: EnrichedTag[]
+  _count: { messages: number }
+  _allTagIds: string[] // Internal field for filtering
+}
+
+// ============================================================================
+// Character Enrichment
+// ============================================================================
+
+/**
+ * Get enriched character info for list/summary view (includes tags)
+ */
+export async function getCharacterSummary(
+  characterId: string,
+  repos: Repos
+): Promise<EnrichedCharacterSummary | null> {
+  const character = await repos.characters.findById(characterId)
+  if (!character) {
+    logger.debug('Character not found for enrichment', { characterId })
+    return null
+  }
+
+  let defaultImage: EnrichedImage | null = null
+  if (character.defaultImageId) {
+    const fileEntry = await repos.files.findById(character.defaultImageId)
+    if (fileEntry) {
+      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
+    }
+  }
+
+  return {
+    id: character.id,
+    name: character.name,
+    title: character.title ?? null,
+    avatarUrl: character.avatarUrl ?? null,
+    defaultImageId: character.defaultImageId ?? null,
+    defaultImage,
+    tags: character.tags || [],
+  }
+}
+
+/**
+ * Get enriched character info for detail view (no tags)
+ */
+export async function getCharacterDetail(
+  characterId: string,
+  repos: Repos
+): Promise<EnrichedCharacterDetail | null> {
+  const character = await repos.characters.findById(characterId)
+  if (!character) {
+    logger.debug('Character not found for enrichment', { characterId })
+    return null
+  }
+
+  let defaultImage: EnrichedImage | null = null
+  if (character.defaultImageId) {
+    const fileEntry = await repos.files.findById(character.defaultImageId)
+    if (fileEntry) {
+      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
+    }
+  }
+
+  return {
+    id: character.id,
+    name: character.name,
+    title: character.title ?? null,
+    avatarUrl: character.avatarUrl ?? null,
+    defaultImageId: character.defaultImageId ?? null,
+    defaultImage,
+  }
+}
+
+// ============================================================================
+// Persona Enrichment
+// ============================================================================
+
+/**
+ * Get enriched persona info for list/summary view (includes tags)
+ */
+export async function getPersonaSummary(
+  personaId: string,
+  repos: Repos
+): Promise<EnrichedPersonaSummary | null> {
+  const persona = await repos.personas.findById(personaId)
+  if (!persona) {
+    logger.debug('Persona not found for enrichment', { personaId })
+    return null
+  }
+
+  let defaultImage: EnrichedImage | null = null
+  if (persona.defaultImageId) {
+    const fileEntry = await repos.files.findById(persona.defaultImageId)
+    if (fileEntry) {
+      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
+    }
+  }
+
+  return {
+    id: persona.id,
+    name: persona.name,
+    title: persona.title ?? null,
+    avatarUrl: persona.avatarUrl ?? null,
+    defaultImageId: persona.defaultImageId ?? null,
+    defaultImage,
+    tags: persona.tags || [],
+  }
+}
+
+/**
+ * Get enriched persona info for detail view (no tags)
+ */
+export async function getPersonaDetail(
+  personaId: string,
+  repos: Repos
+): Promise<EnrichedPersonaDetail | null> {
+  const persona = await repos.personas.findById(personaId)
+  if (!persona) {
+    logger.debug('Persona not found for enrichment', { personaId })
+    return null
+  }
+
+  let defaultImage: EnrichedImage | null = null
+  if (persona.defaultImageId) {
+    const fileEntry = await repos.files.findById(persona.defaultImageId)
+    if (fileEntry) {
+      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
+    }
+  }
+
+  return {
+    id: persona.id,
+    name: persona.name,
+    title: persona.title ?? null,
+    avatarUrl: persona.avatarUrl ?? null,
+    defaultImageId: persona.defaultImageId ?? null,
+    defaultImage,
+  }
+}
+
+// ============================================================================
+// Profile Enrichment (for detail view)
+// ============================================================================
+
+/**
+ * Get enriched connection profile info
+ */
+export async function getConnectionProfile(
+  profileId: string,
+  repos: Repos
+): Promise<EnrichedConnectionProfile | null> {
+  const profile = await repos.connections.findById(profileId)
+  if (!profile) {
+    logger.debug('Connection profile not found for enrichment', { profileId })
+    return null
+  }
+
+  let apiKeyInfo: EnrichedConnectionProfile['apiKey'] = null
+  if (profile.apiKeyId) {
+    const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId)
+    if (apiKey) {
+      apiKeyInfo = { id: apiKey.id, provider: apiKey.provider, label: apiKey.label }
+    }
+  }
+
+  return {
+    id: profile.id,
+    name: profile.name,
+    provider: profile.provider,
+    modelName: profile.modelName,
+    apiKey: apiKeyInfo,
+  }
+}
+
+/**
+ * Get enriched image profile info
+ */
+export async function getImageProfile(
+  profileId: string,
+  repos: Repos
+): Promise<EnrichedImageProfile | null> {
+  const imgProfile = await repos.imageProfiles.findById(profileId)
+  if (!imgProfile) {
+    logger.debug('Image profile not found for enrichment', { profileId })
+    return null
+  }
+
+  return {
+    id: imgProfile.id,
+    name: imgProfile.name,
+    provider: imgProfile.provider,
+    modelName: imgProfile.modelName,
+  }
+}
+
+// ============================================================================
+// Participant Enrichment
+// ============================================================================
+
+/**
+ * Enrich participant for list/summary view (simpler output)
+ */
+export async function enrichParticipantSummary(
+  participant: ChatParticipantBase,
+  repos: Repos
+): Promise<EnrichedParticipantSummary> {
+  const character = participant.type === 'CHARACTER' && participant.characterId
+    ? await getCharacterSummary(participant.characterId, repos)
+    : null
+
+  const persona = participant.type === 'PERSONA' && participant.personaId
+    ? await getPersonaSummary(participant.personaId, repos)
+    : null
+
+  return {
+    id: participant.id,
+    type: participant.type,
+    displayOrder: participant.displayOrder,
+    isActive: participant.isActive,
+    character,
+    persona,
+  }
+}
+
+/**
+ * Enrich participant for detail view (fuller output with profiles)
+ */
+export async function enrichParticipantDetail(
+  participant: ChatParticipantBase,
+  repos: Repos
+): Promise<EnrichedParticipantDetail> {
+  const character = participant.type === 'CHARACTER' && participant.characterId
+    ? await getCharacterDetail(participant.characterId, repos)
+    : null
+
+  const persona = participant.type === 'PERSONA' && participant.personaId
+    ? await getPersonaDetail(participant.personaId, repos)
+    : null
+
+  const connectionProfile = participant.connectionProfileId
+    ? await getConnectionProfile(participant.connectionProfileId, repos)
+    : null
+
+  const imageProfile = participant.imageProfileId
+    ? await getImageProfile(participant.imageProfileId, repos)
+    : null
+
+  return {
+    id: participant.id,
+    type: participant.type,
+    controlledBy: participant.controlledBy || (participant.type === 'PERSONA' ? 'user' : 'llm'),
+    displayOrder: participant.displayOrder,
+    isActive: participant.isActive,
+    systemPromptOverride: participant.systemPromptOverride ?? null,
+    character,
+    persona,
+    connectionProfile,
+    imageProfile,
+    createdAt: participant.createdAt,
+    updatedAt: participant.updatedAt,
+  }
+}
+
+// ============================================================================
+// Tag Enrichment
+// ============================================================================
+
+/**
+ * Enrich tag IDs to full tag objects
+ */
+export async function enrichTags(
+  tagIds: string[],
+  repos: Repos
+): Promise<EnrichedTag[]> {
+  const tags = await Promise.all(
+    tagIds.map(async (tagId) => {
+      const tag = await repos.tags.findById(tagId)
+      return tag ? { tag: { id: tag.id, name: tag.name } } : null
+    })
+  )
+
+  return tags.filter((t): t is EnrichedTag => t !== null)
+}
+
+// ============================================================================
+// Chat Enrichment
+// ============================================================================
+
+/**
+ * Enrich a chat with participants for list/summary view
+ */
+export async function enrichChatForList(
+  chat: ChatMetadata,
+  repos: Repos
+): Promise<EnrichedChatSummary> {
+  // Enrich participants
+  const participants = await Promise.all(
+    chat.participants.map(p => enrichParticipantSummary(p, repos))
+  )
+
+  // Get tags
+  const tags = await enrichTags(chat.tags, repos)
+
+  // Get message count
+  const messageCount = await repos.chats.getMessageCount(chat.id)
+
+  // Collect all tag IDs from chat, characters, and personas for filtering
+  const allTagIds: string[] = [...chat.tags]
+  for (const participant of participants) {
+    if (participant.character?.tags) {
+      allTagIds.push(...participant.character.tags)
+    }
+    if (participant.persona?.tags) {
+      allTagIds.push(...participant.persona.tags)
+    }
+  }
+
+  return {
+    id: chat.id,
+    title: chat.title,
+    contextSummary: chat.contextSummary ?? null,
+    createdAt: chat.createdAt,
+    updatedAt: chat.updatedAt,
+    participants,
+    tags,
+    _count: { messages: messageCount },
+    _allTagIds: allTagIds,
+  }
+}
+
+/**
+ * Enrich multiple chats for list view with sorting
+ */
+export async function enrichChatsForList(
+  chats: ChatMetadata[],
+  repos: Repos
+): Promise<EnrichedChatSummary[]> {
+  // Sort by updatedAt descending
+  const sortedChats = [...chats].sort((a, b) =>
+    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
+
+  return Promise.all(sortedChats.map(chat => enrichChatForList(chat, repos)))
+}
+
+/**
+ * Filter enriched chats by excluded tag IDs
+ */
+export function filterChatsByExcludedTags(
+  chats: EnrichedChatSummary[],
+  excludeTagIds: string[]
+): EnrichedChatSummary[] {
+  if (excludeTagIds.length === 0) {
+    return chats
+  }
+
+  const excludeSet = new Set(excludeTagIds)
+  return chats.filter(chat => {
+    const hasExcludedTag = chat._allTagIds.some(tagId => excludeSet.has(tagId))
+    return !hasExcludedTag
+  })
+}
+
+/**
+ * Remove internal fields from enriched chats before returning
+ */
+export function cleanEnrichedChats<T extends EnrichedChatSummary>(
+  chats: T[]
+): Omit<T, '_allTagIds'>[] {
+  return chats.map(({ _allTagIds, ...chat }) => chat)
+}

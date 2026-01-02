@@ -9,6 +9,7 @@ import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/l
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
+import { notFound, serverError } from '@/lib/api/responses';
 
 /**
  * GET /api/chats/[id]/memories
@@ -25,7 +26,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify chat belongs to user
       const chat = await repos.chats.findById(chatId);
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+        return notFound('Chat');
       }
 
       // Count memories for this chat
@@ -43,7 +44,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       logger.error('[ChatMemories] Error getting memory count', { error: errorMessage });
-      return NextResponse.json({ error: errorMessage }, { status: 500 });
+      return serverError(errorMessage);
     }
   }
 );
@@ -63,7 +64,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify chat belongs to user
       const chat = await repos.chats.findById(chatId);
       if (!chat || chat.userId !== user.id) {
-        return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+        return notFound('Chat');
       }
 
       // Get all memories for this chat first (so we can clean up vector stores)
@@ -135,7 +136,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       logger.error('[ChatMemories] Error deleting memories', { error: errorMessage });
-      return NextResponse.json({ error: errorMessage }, { status: 500 });
+      return serverError(errorMessage);
     }
   }
 );

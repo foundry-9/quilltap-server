@@ -5,6 +5,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
+import { notFound, serverError } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types'
 
@@ -37,7 +38,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       if (!foundMessage || !foundChat) {
-        return NextResponse.json({ error: 'Message not found' }, { status: 404 })
+        return notFound('Message')
       }
 
       // Get all message IDs in swipe group if applicable
@@ -93,10 +94,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         { endpoint: '/api/messages/[id]/memories', method: 'GET' },
         error instanceof Error ? error : undefined
       )
-      return NextResponse.json(
-        { error: 'Failed to get message memories' },
-        { status: 500 }
-      )
+      return serverError('Failed to get message memories')
     }
   }
 )

@@ -4,6 +4,11 @@
 
 ### 2.6-dev
 
+- refactor: Phase 2 - Eliminate code duplication across API routes
+  - 2.1: Centralized getFilePath() duplications - replaced 8 local implementations with shared `lib/api/middleware/file-path.ts`
+  - 2.2: Standardized API responses across 76+ route files using `lib/api/responses.ts` helpers (notFound, badRequest, serverError, validationError, forbidden, created, conflict)
+  - 2.3: Consolidated chat enrichment functions - created `lib/services/chat-enrichment.service.ts` consolidating duplicated functions from `app/api/chats/route.ts` and `app/api/chats/[id]/route.ts`
+  - 2.4: Fixed direct repository instantiation - replaced `new CharactersRepository()` and `new BackgroundJobsRepository()` with `getRepositories()` factory pattern
 - refactor: Migrate 101 API routes to createAuthenticatedHandler middleware
   - Phase 1 of backend refactoring to enforce SRP, DRY, KISS, YAGNI principles
   - Eliminated ~1,500 lines of duplicated session/user lookup code across routes

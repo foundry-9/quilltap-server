@@ -13,14 +13,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import { CharactersRepository } from '@/lib/mongodb/repositories/characters.repository';
-import { MemoriesRepository } from '@/lib/mongodb/repositories/memories.repository';
-import { MongoChatsRepository } from '@/lib/mongodb/repositories/chats.repository';
 import { logger } from '@/lib/logger';
-
-const charactersRepository = new CharactersRepository();
-const memoriesRepository = new MemoriesRepository();
-const chatsRepository = new MongoChatsRepository();
+import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
 
 // Schema for a single replacement pair
 const ReplacementPairSchema = z.object({
@@ -126,15 +120,15 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const userId = user.id;
 
       // Verify character exists and belongs to user
-      const character = await charactersRepository.findById(characterId);
+      const character = await repos.characters.findById(characterId);
       if (!character) {
         logger.warn('Character not found for rename', { characterId, userId });
-        return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+        return notFound('Character');
       }
 
       if (character.userId !== userId) {
         logger.warn('Unauthorized rename attempt - wrong user', { characterId, userId, ownerId: character.userId });
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        return forbidden();
       }
 
       // Parse and validate request body
@@ -146,10 +140,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           characterId,
           errors: validationResult.error.errors
         });
-        return NextResponse.json(
-          { error: 'Invalid request', details: validationResult.error.errors },
-          { status: 400 }
-        );
+        return validationError(validationResult.error);
       }
 
       const { primaryRename, additionalReplacements, dryRun } = validationResult.data;
@@ -163,10 +154,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (allReplacements.length === 0) {
         logger.debug('No replacements specified', { characterId });
-        return NextResponse.json(
-          { error: 'At least one replacement must be specified' },
-          { status: 400 }
-        );
+        return badRequest('At least one replacement must be specified');
       }
 
       logger.debug('Processing rename request', {
@@ -319,7 +307,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // =========================================================================
       // 4. Process Memories
       // =========================================================================
-      const memories = await memoriesRepository.findByCharacterId(characterId);
+      const memories = await repos.memories.findByCharacterId(characterId);
       const memoryUpdates: Array<{ id: string; updates: Partial<{ content: string; summary: string; keywords: string[] }> }> = [];
 
       for (const memory of memories) {
@@ -394,7 +382,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // =========================================================================
       // 5. Process Chat Conversations
       // =========================================================================
-      const chats = await chatsRepository.findByCharacterId(characterId);
+      const chats = await repos.chats.findByCharacterId(characterId);
       const chatUpdates: Array<{ chatId: string; titleUpdate?: string; messageUpdates: Array<{ messageId: string; content: string }> }> = [];
 
       for (const chat of chats) {
@@ -420,7 +408,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         }
 
         // Process chat messages
-        const messages = await chatsRepository.getMessages(chat.id);
+        const messages = await repos.chats.getMessages(chat.id);
         for (const message of messages) {
           if (message.type !== 'message') continue;
 
@@ -474,25 +462,25 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
         // Update character fields
         if (Object.keys(characterUpdates).length > 0) {
-          await charactersRepository.update(characterId, characterUpdates as any);
+          await repos.characters.update(characterId, characterUpdates as any);
           logger.debug('Updated character fields', { characterId, fields: Object.keys(characterUpdates) });
         }
 
         // Update memories
         for (const { id, updates } of memoryUpdates) {
-          await memoriesRepository.update(id, updates);
+          await repos.memories.update(id, updates);
           logger.debug('Updated memory', { memoryId: id });
         }
 
         // Update chats
         for (const { chatId, titleUpdate, messageUpdates } of chatUpdates) {
           if (titleUpdate) {
-            await chatsRepository.update(chatId, { title: titleUpdate });
+            await repos.chats.update(chatId, { title: titleUpdate });
             logger.debug('Updated chat title', { chatId });
           }
 
           for (const { messageId, content } of messageUpdates) {
-            await chatsRepository.updateMessage(chatId, messageId, { content });
+            await repos.chats.updateMessage(chatId, messageId, { content });
             logger.debug('Updated chat message', { chatId, messageId });
           }
         }
@@ -527,10 +515,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         stack: error instanceof Error ? error.stack : undefined,
       });
 
-      return NextResponse.json(
-        { error: 'Failed to process rename request' },
-        { status: 500 }
-      );
+      return serverError('Failed to process rename request');
     }
   }
 );
