@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.6.0--dev.84-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.6.0--dev.85-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -15,7 +15,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 
 **Key Features:**
 
-- 🤖 Multi-provider plugins (OpenAI, Anthropic, Google Gemini, Grok, Gab AI, Ollama, OpenRouter, OpenAI-compatible APIs) with per-provider API key storage and connection profiles.
+- 🤖 Multi-provider plugins (OpenAI, Anthropic, Google Gemini, Grok, Ollama, OpenRouter, OpenAI-compatible APIs) with per-provider API key storage and connection profiles.
 - 🧠 Cheap LLM + embedding automation for memories, summaries, rename/replace flows, and semantic search that prefers embeddings when available.
 - 👥 Multi-character SillyTavern import wizard plus an in-app turn system with nudge/queue controls, pause/resume, inter-character memory sharing, and streaming avatars.
 - 🔄 Bidirectional sync between Quilltap instances with API key authentication, real-time progress tracking, and conflict resolution for characters, chats, memories, and more.
@@ -119,7 +119,6 @@ Configure dedicated connection profiles for each provider you want to use:
 | **Anthropic** | Claude 4/4.5 families (Opus, Sonnet, Haiku) and Claude 3 models with streaming, image understanding, and tool/JSON output control. |
 | **Google Gemini** | Gemini 2.5 Flash/Pro with multimodal inputs, web search, plus Imagen 4 image generation through Google Generative AI. |
 | **Grok (xAI)** | Grok 4/4.1 and Grok 3 families via the OpenAI-compatible xAI endpoint with multimodal attachments, web search, and native image generation. |
-| **Gab AI** | Access to multiple model families (Claude, GPT, Gemini, DeepSeek, Qwen, and more) through a unified OpenAI-compatible chat API. |
 | **Ollama** | Local/offline models (Llama, Phi, etc.) reachable at `http://localhost:11434` with embedding support, perfect for the Local First cheap-LLM strategy. |
 | **OpenRouter** | Access 200+ hosted models through the OpenRouter SDK with streaming, embeddings, pricing sync, web search, and image generation (model-dependent). |
 | **OpenAI-Compatible** | Generic connector for LM Studio, vLLM, Text Generation Web UI, and any other OpenAI-format API you want to self-host. |
@@ -463,7 +462,7 @@ Once logged in, you'll need to:
 
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript 5.6
-- **Data Storage**: MongoDB
+- **Data Storage**: MongoDB 7+
 - **File Storage**: S3-compatible (embedded MinIO or external S3)
 - **Authentication**: Arctic OAuth + custom JWT sessions with Google OAuth, email/password login, and TOTP 2FA
 - **Encryption**: AES-256-GCM for sensitive data
@@ -535,7 +534,7 @@ Contributions are welcome! Please:
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-Copyright (c) 2025 Foundry-9 LLC
+Copyright (c) 2025, 2026 Foundry-9 LLC
 
 ## Support
 
@@ -581,31 +580,25 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Files (text/Markdown or binary)
   - [ ] Direct import/export/access
   - [ ] Project becomes overriding context for chats, images, etc.
-- [X] Starting a new chat should include:
-  - [X] Send current timestamp at the beginning of a conversation or in every system prompt, optionally
-  - [X] A scenario prompt so you can set things up before you start
-- [X] Search and replace in one chat + memories associated with that chat, or in all chats (and their memories) associated with a character
-- [X] Memory cascade on message changes
-  - [X] When a message is deleted, cascade delete all memories with that `sourceMessageId`
-  - [X] When a message is regenerated (swipe), delete the old memory so the new response can create a fresh memory
-  - [X] Add `findBySourceMessageId()` and `deleteBySourceMessageId()` methods to memories repository
-  - [X] Handle multi-character edge case: a single message may trigger memories for multiple characters in group chats
-  - [X] Add confirmation dialog option: "This message has associated memories. Delete memories too?" with options to keep, delete, or regenerate
-  - [X] Track memory provenance in UI: show which message created each auto-extracted memory with a link back to the source
-- [X] Any files that exist in the app source code only because they are necessary for migrations should move to the migration/upgrade plugin
 - [ ] Hosted installations can not allow user-only plugins to be installed if they require server restarts
 - [ ] Hosted installations must automatically restart the server if site-wide plugins are installed that require restarts
-- [X] Running storybook for theme development produces this: `WARN Could not resolve addon "@storybook/addon-essentials", skipping. Is it installed?`
-- [ ] Make a default character to chat with (optional), who has a default connection profile, and a default character for you to be, and leave a text area at the bottom of the page to start a chat with the default character/connection profile (if none of those are set, then we'll make a completely generic assistant and a generic character that is you, and that's who's chatting to begin with).
 
 ## Acknowledgments
 
 Built with these excellent open source projects:
 
+- [React](https://react.dev/) - UI library
 - [Next.js](https://nextjs.org/) - React framework
-- [Arctic](https://arcticjs.dev/) - OAuth 2.0 library
-- [Tailwind CSS](https://tailwindcss.com/) - Styling
+- [TypeScript](https://www.typescriptlang.org/) - Type-safe JavaScript
+- [MongoDB Node.js Driver](https://www.mongodb.com/docs/drivers/node/current/) - Database connectivity
+- [Tailwind CSS](https://tailwindcss.com/) - Utility-first styling
 - [Zod](https://zod.dev/) - TypeScript-first schema validation
-- [Docker](https://www.docker.com/) - Containerization
+- [Arctic](https://arcticjs.dev/) - OAuth 2.0 library
+- [OpenAI Node SDK](https://github.com/openai/openai-node) - LLM API integration
+- [React Markdown](https://github.com/remarkjs/react-markdown) - Markdown rendering
+- [Jest](https://jestjs.io/) - Unit testing framework
+- [Playwright](https://playwright.dev/) - End-to-end testing
+- [Storybook](https://storybook.js.org/) - Component development and theme preview
+- [Docker Engine](https://docs.docker.com/engine/) & [Compose](https://docs.docker.com/compose/) - Containerization
 
 Special thanks to the [SillyTavern](https://github.com/SillyTavern/SillyTavern) project for pioneering this space and inspiring the character format and import/export compatibility.

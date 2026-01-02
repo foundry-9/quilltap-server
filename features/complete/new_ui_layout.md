@@ -10,14 +10,15 @@ In preparation for projects and files, we needed a new layout for the desktop UI
 - Left sidebar with tree views, always visible, contents might change with context but not yet
   - Brand logo at top (quill icon when collapsed, full Quilltap logo when expanded) - links to home
   - Button to push to fold sidebar in and out (collapsed state persisted to localStorage)
+  - Resizable sidebar width - drag the right edge to resize (256px to 512px range), width persisted to localStorage
   - Projects (placeholder - "Coming soon")
   - Files (placeholder - "Coming soon")
   - Characters (favorites and top-conversation-participants at the top, ends with a link to Characters page)
   - Chats (most recent to less recent, flex-fills screen, at the bottom of the list is a link to Chats page)
   - (At the bottom after Chats list) Settings button - takes you to settings
   - Tools button - takes you to tools
-  - Themes button - links to appearance settings if theme selector is enabled
-  - Quick-hide button - links to appearance settings if quick-hide tags exist
+  - Themes button - opens popout menu if theme selector is enabled
+  - Quick-hide button - opens popout menu if quick-hide tags exist
   - Profile menu - your avatar, your username/email address, links to profile page, dev console if available, sign out button
 - Page Toolbar (at top of main content area, not a fixed header)
   - Centered search bar
@@ -25,6 +26,11 @@ In preparation for projects and files, we needed a new layout for the desktop UI
   - Hamburger menu on mobile to open sidebar overlay
 - Footer (same as before)
 - Mobile: sidebar is an overlay drawer from the left
+
+## State Persistence
+
+- **Collapsed state**: Stored in `localStorage` under key `quilltap.sidebar.collapsed`
+- **Sidebar width**: Stored in `localStorage` under key `quilltap.sidebar.width` (also synced to MongoDB settings)
 
 ## Implementation
 

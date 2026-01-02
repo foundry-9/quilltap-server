@@ -55,7 +55,7 @@ export default function AboutPage() {
         <ul className="space-y-2 text-gray-700 dark:text-gray-300">
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Multi-provider plugins</strong> &ndash; OpenAI, Anthropic, Google Gemini, Grok, Gab AI, Ollama, OpenRouter, and OpenAI-compatible APIs</span>
+            <span><strong>Multi-provider plugins</strong> &ndash; OpenAI, Anthropic, Google Gemini, Grok, Ollama, OpenRouter, and OpenAI-compatible APIs</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -81,6 +81,10 @@ export default function AboutPage() {
             <span className="text-primary mt-1">&#8226;</span>
             <span><strong>Mobile-responsive</strong> &ndash; optimized dashboard and chat UI for phone portrait mode</span>
           </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Left sidebar navigation</strong> &ndash; persistent sidebar with characters, chats, resizable width, and collapsible on desktop</span>
+          </li>
         </ul>
       </div>
 
@@ -98,7 +102,7 @@ export default function AboutPage() {
             <span className="font-medium">Language:</span> TypeScript 5.6+
           </div>
           <div>
-            <span className="font-medium">Database:</span> MongoDB 6+
+            <span className="font-medium">Database:</span> MongoDB 7+
           </div>
           <div>
             <span className="font-medium">File Storage:</span> S3-compatible

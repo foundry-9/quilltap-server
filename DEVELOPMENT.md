@@ -38,6 +38,11 @@ quilltap/
 ├── plugins/                  # Plugin source code
 │   ├── dist/                 # Built plugins (loaded at runtime)
 │   └── src/                  # Plugin source files
+├── packages/                 # Published npm packages for plugin development
+│   ├── plugin-types/         # TypeScript types (@quilltap/plugin-types)
+│   ├── plugin-utils/         # Plugin utilities (@quilltap/plugin-utils)
+│   ├── theme-storybook/      # Storybook preset for theme development (@quilltap/theme-storybook)
+│   └── create-quilltap-theme/ # Scaffolding CLI for new themes
 ├── prompts/                  # Sample system prompt templates
 ├── hooks/                    # Custom React hooks
 ├── types/                    # TypeScript type augmentations
@@ -67,7 +72,7 @@ quilltap/
 
 ### Prerequisites
 
-- **Node.js 20+**
+- **Node.js 22+**
 - **MongoDB** (local or via Docker)
 - **MinIO or S3-compatible storage** (embedded MinIO for development)
 
@@ -195,6 +200,18 @@ Plugins are self-contained modules in `plugins/src/` that provide:
 - **Upgrade Scripts** - Data migration utilities
 
 See [plugins/README.md](plugins/README.md) for the plugin developer guide.
+
+For theme plugin development, use the scaffolding CLI and Storybook:
+
+```bash
+# Create a new theme plugin
+npm init quilltap-theme my-theme
+
+# Run Storybook to preview theme changes
+npm run storybook
+```
+
+See [docs/THEME_PLUGIN_DEVELOPMENT.md](docs/THEME_PLUGIN_DEVELOPMENT.md) for the complete theme development guide.
 
 ## Logging
 
