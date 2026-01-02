@@ -9,8 +9,10 @@
  * Now enhanced with real pricing data from provider APIs (Sprint 2.1).
  *
  * NOTE: Registered plugins provide cheapModels configuration via the provider
- * registry. The hardcoded CHEAPEST_MODEL_MAP and RECOMMENDED_CHEAP_MODELS are
- * kept as fallbacks for unknown providers and backward compatibility.
+ * registry. The legacy fallback constants are imported from fallback-data.ts
+ * and used only when no plugin is registered for a provider.
+ *
+ * @see lib/llm/fallback-data.ts for legacy fallback constants
  */
 
 import { ConnectionProfile, Provider } from '@/lib/schemas/types'
@@ -25,6 +27,10 @@ import {
   findCheapestAvailableModel,
 } from './pricing-fetcher'
 import { getCheapModelConfig } from '@/lib/plugins/provider-registry'
+import {
+  LEGACY_CHEAPEST_MODEL_MAP,
+  LEGACY_RECOMMENDED_CHEAP_MODELS,
+} from './fallback-data'
 
 /**
  * Strategy for selecting the cheap LLM provider
@@ -63,42 +69,19 @@ export interface CheapLLMSelection {
 
 /**
  * Mapping of providers to their cheapest models
- * Updated for November 2025 model lineup
+ * Re-exported from fallback-data.ts for backward compatibility
+ *
+ * @deprecated Use getCheapModelConfig() from provider-registry instead
  */
-const CHEAPEST_MODEL_MAP: Record<Provider, string> = {
-  ANTHROPIC: 'claude-haiku-4-5-20251001',
-  OPENAI: 'gpt-4o-mini',
-  GOOGLE: 'gemini-2.0-flash',
-  GROK: 'grok-2-mini', // Grok's cheaper offering
-  OPENROUTER: 'openai/gpt-4o-mini', // OpenRouter format
-  OLLAMA: 'llama3.2:3b', // Fast, small local model
-  OPENAI_COMPATIBLE: 'gpt-4o-mini', // Default to OpenAI mini format
-}
+const CHEAPEST_MODEL_MAP = LEGACY_CHEAPEST_MODEL_MAP
 
 /**
  * Models that are known to work well for cheap LLM tasks
- * (memory extraction, summarization, titling)
+ * Re-exported from fallback-data.ts for backward compatibility
+ *
+ * @deprecated Use getCheapModelConfig() from provider-registry instead
  */
-export const RECOMMENDED_CHEAP_MODELS: Record<Provider, string[]> = {
-  ANTHROPIC: ['claude-haiku-4-5-20251001', 'claude-3-haiku-20240307'],
-  OPENAI: ['gpt-4o-mini', 'gpt-3.5-turbo'],
-  GOOGLE: ['gemini-2.0-flash', 'gemini-1.5-flash'],
-  GROK: ['grok-2-mini'],
-  OPENROUTER: [
-    'openai/gpt-4o-mini',
-    'anthropic/claude-3-haiku',
-    'google/gemini-2.0-flash',
-    'mistralai/mistral-7b-instruct',
-  ],
-  OLLAMA: [
-    'llama3.2:3b',
-    'llama3.2:1b',
-    'phi3:mini',
-    'mistral:7b',
-    'gemma2:2b',
-  ],
-  OPENAI_COMPATIBLE: ['gpt-4o-mini', 'gpt-3.5-turbo'],
-}
+export const RECOMMENDED_CHEAP_MODELS = LEGACY_RECOMMENDED_CHEAP_MODELS
 
 /**
  * Default cheap LLM configuration

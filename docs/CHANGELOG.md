@@ -4,6 +4,13 @@
 
 ### 2.6-dev
 
+- refactor: Phase 6 - Plugin registry integration
+  - Created `lib/llm/fallback-data.ts` consolidating all legacy fallback constants
+  - Moved `CHEAPEST_MODEL_MAP` and `RECOMMENDED_CHEAP_MODELS` from `cheap-llm.ts` to fallback-data
+  - Moved `FALLBACK_PRICING` from `pricing.ts` to fallback-data
+  - Moved `PROVIDER_NAME_SUPPORT` from `message-formatter.ts` to fallback-data
+  - All constants now marked as deprecated with clear documentation pointing to plugin registry
+  - Original files now import from fallback-data for backward compatibility
 - refactor: Phase 5 - Large service decomposition
   - Decomposed `lib/chat/context-manager.ts` (1,266 lines) into focused modules:
     - `lib/chat/context/system-prompt-builder.ts` - System prompt construction with template processing

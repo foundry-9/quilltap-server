@@ -6,13 +6,19 @@
  * Provides name field support or content prefix fallback depending on provider.
  *
  * NOTE: Registered plugins provide message format support via messageFormat.
- * The hardcoded PROVIDER_NAME_SUPPORT is kept as a fallback for
- * unknown providers and backward compatibility.
+ * The legacy fallback constants are imported from fallback-data.ts and used
+ * only when no plugin is registered for a provider.
+ *
+ * @see lib/llm/fallback-data.ts for legacy fallback constants
  */
 
 import { Provider } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 import { getMessageFormat } from '@/lib/plugins/provider-registry'
+import {
+  LEGACY_PROVIDER_NAME_SUPPORT,
+  type LegacyProviderNameSupport,
+} from './fallback-data'
 
 /**
  * Provider capabilities for name field support
@@ -28,50 +34,12 @@ export interface ProviderNameSupport {
 
 /**
  * Provider-specific name field support information
- * Based on API documentation as of late 2024/early 2025
+ * Re-exported from fallback-data.ts for backward compatibility
+ *
+ * @deprecated Use getMessageFormat() from provider-registry instead
  */
-const PROVIDER_NAME_SUPPORT: Record<string, ProviderNameSupport> = {
-  // OpenAI supports name field on both user and assistant messages
-  OPENAI: {
-    supportsNameField: true,
-    supportedRoles: ['user', 'assistant'],
-    maxNameLength: 64,
-  },
-  // Anthropic does NOT support name field in the standard API
-  // We'll use content prefix fallback
-  ANTHROPIC: {
-    supportsNameField: false,
-    supportedRoles: [],
-  },
-  // Google/Gemini does NOT support name field
-  // We'll use content prefix fallback
-  GOOGLE: {
-    supportsNameField: false,
-    supportedRoles: [],
-  },
-  // OpenRouter passes through to underlying provider, assume no name support for safety
-  OPENROUTER: {
-    supportsNameField: false,
-    supportedRoles: [],
-  },
-  // xAI/Grok uses OpenAI-compatible format
-  GROK: {
-    supportsNameField: true,
-    supportedRoles: ['user', 'assistant'],
-    maxNameLength: 64,
-  },
-  // Ollama uses OpenAI-compatible format but name support varies by model
-  OLLAMA: {
-    supportsNameField: false, // Conservative default
-    supportedRoles: [],
-  },
-  // OpenAI Compatible providers - assume OpenAI behavior
-  'OPENAI-COMPATIBLE': {
-    supportsNameField: true,
-    supportedRoles: ['user', 'assistant'],
-    maxNameLength: 64,
-  },
-}
+const PROVIDER_NAME_SUPPORT: Record<string, ProviderNameSupport> =
+  LEGACY_PROVIDER_NAME_SUPPORT as Record<string, ProviderNameSupport>
 
 /**
  * Get name field support info for a provider
