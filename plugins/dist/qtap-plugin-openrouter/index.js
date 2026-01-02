@@ -10203,6 +10203,40 @@ var env2 = validateEnv();
 var isProduction = env2.NODE_ENV === "production";
 var isDevelopment = env2.NODE_ENV === "development";
 var isTest = env2.NODE_ENV === "test";
+function isLocalHostname(hostname) {
+  const lowerHostname = hostname.toLowerCase();
+  return lowerHostname === "localhost" || lowerHostname === "127.0.0.1";
+}
+function extractHostname(urlString) {
+  if (!urlString) return null;
+  try {
+    const url = new URL(urlString);
+    return url.hostname;
+  } catch {
+    const match2 = urlString.match(/mongodb(?:\+srv)?:\/\/(?:[^:@]+(?::[^@]+)?@)?([^:/?]+)/);
+    return match2 ? match2[1] : null;
+  }
+}
+function checkIsUserManaged() {
+  const mongodbMode = env2.MONGODB_MODE;
+  if (mongodbMode === "embedded") {
+    return true;
+  }
+  const mongoHostname = extractHostname(env2.MONGODB_URI);
+  if (mongoHostname && isLocalHostname(mongoHostname)) {
+    return true;
+  }
+  const s3Mode = env2.S3_MODE;
+  if (s3Mode === "embedded") {
+    return true;
+  }
+  const s3Hostname = extractHostname(env2.S3_ENDPOINT);
+  if (s3Hostname && isLocalHostname(s3Hostname)) {
+    return true;
+  }
+  return false;
+}
+var isUserManaged = checkIsUserManaged();
 
 // ../../../lib/logger.ts
 var LOG_LEVELS = {
