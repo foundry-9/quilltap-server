@@ -10,7 +10,7 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
 import { logger } from '@/lib/logger';
-import { safeValidatePluginManifest, type PluginManifest } from '@/lib/schemas/plugin-manifest';
+import { safeValidatePluginManifest, pluginRequiresRestart, type PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { isPluginCompatible } from './manifest-loader';
 
 const execAsync = promisify(exec);
@@ -26,6 +26,8 @@ export interface InstallResult {
   error?: string;
   manifest?: PluginManifest;
   version?: string;
+  /** Whether the plugin requires a server restart to activate */
+  requiresRestart?: boolean;
 }
 
 export interface UninstallResult {
@@ -301,14 +303,17 @@ export async function installPluginFromNpm(
       source: 'npm',
     });
 
+    const requiresRestart = pluginRequiresRestart(manifest);
+
     logger.info('Plugin installed successfully', {
       context: 'PluginInstaller.installPluginFromNpm',
       packageName,
       version: installedVersion,
       scope,
+      requiresRestart,
     });
 
-    return { success: true, manifest, version: installedVersion };
+    return { success: true, manifest, version: installedVersion, requiresRestart };
 
   } catch (error) {
     logger.error(

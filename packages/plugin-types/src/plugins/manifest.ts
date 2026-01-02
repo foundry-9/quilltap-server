@@ -189,6 +189,16 @@ export interface PluginManifest {
     url: string;
     email?: string;
   };
+
+  /**
+   * Whether this plugin requires a server restart to activate.
+   *
+   * If not specified, this is inferred from capabilities:
+   * - AUTH_METHODS, DATABASE_BACKEND, FILE_BACKEND, UPGRADE_MIGRATION → requires restart
+   *
+   * Set explicitly to override the inferred value.
+   */
+  requiresRestart?: boolean;
 }
 
 /**

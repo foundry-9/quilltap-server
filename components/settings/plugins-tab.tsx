@@ -1,12 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { BrandName } from '@/components/ui/brand-name'
 import { clientLogger } from '@/lib/client-logger'
 
 type PluginSource = 'included' | 'npm' | 'git' | 'manual' | 'bundled' | 'site' | 'user'
 type ActiveTab = 'installed' | 'browse'
+
+interface DeploymentInfo {
+  isUserManaged: boolean
+  isHosted: boolean
+}
 
 interface Plugin {
   name: string
@@ -95,6 +100,7 @@ export default function PluginsTab() {
   const [stats, setStats] = useState<PluginStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState<Set<string>>(new Set())
+  const [deploymentInfo, setDeploymentInfo] = useState<DeploymentInfo | null>(null)
 
   // Browse state
   const [searchQuery, setSearchQuery] = useState('')
@@ -126,14 +132,27 @@ export default function PluginsTab() {
     }
   }, [])
 
+  const fetchDeploymentInfo = useCallback(async () => {
+    try {
+      const res = await fetch('/api/deployment')
+      if (!res.ok) throw new Error('Failed to fetch deployment info')
+      const data: DeploymentInfo = await res.json()
+      setDeploymentInfo(data)
+    } catch (err) {
+      // Silently fail, assume user-managed by default
+      clientLogger.debug('Failed to fetch deployment info', { error: err })
+      setDeploymentInfo({ isUserManaged: true, isHosted: false })
+    }
+  }, [])
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
-      await Promise.all([fetchPlugins(), fetchInstalledPlugins()])
+      await Promise.all([fetchPlugins(), fetchInstalledPlugins(), fetchDeploymentInfo()])
       setLoading(false)
     }
     loadData()
-  }, [fetchPlugins, fetchInstalledPlugins])
+  }, [fetchPlugins, fetchInstalledPlugins, fetchDeploymentInfo])
 
   const handleTogglePlugin = async (pluginName: string, currentEnabled: boolean) => {
     setToggling(prev => new Set(prev).add(pluginName))
@@ -215,10 +234,23 @@ export default function PluginsTab() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'Installation failed')
+        // Check if the error is due to restart requirement on hosted deployment
+        if (data.requiresRestart && data.suggestedScope === 'site') {
+          showWarningToast(data.error || 'This plugin requires site-wide installation on hosted deployments.')
+        } else {
+          showErrorToast(data.error || 'Installation failed')
+        }
+        return
       }
 
-      showSuccessToast(data.message || 'Plugin installed successfully!')
+      // Check if server is restarting after installation
+      if (data.serverRestarting) {
+        showSuccessToast(data.message || 'Plugin installed! Server is restarting...')
+        // The page will need to be refreshed after server comes back
+        showWarningToast('Please wait for the server to restart and refresh this page.')
+      } else {
+        showSuccessToast(data.message || 'Plugin installed successfully!')
+      }
 
       // Refresh installed plugins list
       await fetchInstalledPlugins()
@@ -657,6 +689,12 @@ export default function PluginsTab() {
               Enabling or disabling existing plugins takes effect immediately,
               but some features may require a page refresh.
             </p>
+            {deploymentInfo?.isHosted && (
+              <p className="qt-text-small text-amber-700 dark:text-amber-300 mt-2">
+                <strong>Hosted deployment:</strong> Some plugins (such as authentication or database backends)
+                require site-wide installation and will trigger an automatic server restart.
+              </p>
+            )}
           </div>
         </div>
       </div>

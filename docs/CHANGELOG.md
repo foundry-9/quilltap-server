@@ -4,6 +4,15 @@
 
 ### 2.7-dev
 
+- feat: Plugin installation restrictions for hosted deployments
+  - Added `requiresRestart` field to plugin manifest schema (optional boolean)
+  - Restart requirement is inferred from capabilities: AUTH_METHODS, DATABASE_BACKEND, FILE_BACKEND, UPGRADE_MIGRATION
+  - Plugins requiring restart cannot be installed as user-only on hosted deployments
+  - Site-wide installation of restart-requiring plugins on hosted deployments triggers automatic server restart
+  - Added `/api/deployment` endpoint to expose `isUserManaged` status to frontend
+  - Updated plugins-tab UI to handle new error responses and show hosted deployment warnings
+  - Added `pluginRequiresRestart()` helper function to `lib/schemas/plugin-manifest.ts`
+  - Updated `@quilltap/plugin-types` package with `requiresRestart` field
 - feat: Add `isUserManaged` backend utility for detecting self-hosted deployments
   - New exports in `lib/env.ts`: `isUserManaged` constant and `checkIsUserManaged()` function
   - Returns true if MongoDB or S3 is localhost/127.0.0.1 or in embedded mode

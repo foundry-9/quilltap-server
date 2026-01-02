@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-01-02
+
+### Added
+
+- Added `requiresRestart?: boolean` field to `PluginManifest` interface
+  - Optional field to indicate if a plugin requires a server restart to activate
+  - If not specified, restart requirement is inferred from capabilities (AUTH_METHODS, DATABASE_BACKEND, FILE_BACKEND, UPGRADE_MIGRATION)
+  - Used by hosted deployments to enforce site-wide installation for restart-requiring plugins
+
 ## [1.2.0] - 2025-12-31
 
 ### Added

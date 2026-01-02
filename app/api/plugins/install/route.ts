@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { installPluginFromNpm, type PluginScope } from '@/lib/plugins/installer';
+import { isUserManaged } from '@/lib/env';
+import { installPluginFromNpm, uninstallPlugin, type PluginScope } from '@/lib/plugins/installer';
 
 interface InstallRequestBody {
   packageName: string;
@@ -89,14 +90,52 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user }
       );
     }
 
+    // Check for hosted deployment constraints
+    // On hosted deployments, plugins requiring restart cannot be installed as user-only
+    const isHostedDeployment = !isUserManaged;
+    if (isHostedDeployment && result.requiresRestart && scope === 'user') {
+      logger.warn('Plugin requires restart and cannot be installed as user-only on hosted deployment', {
+        context: 'plugins-install-POST',
+        packageName,
+        requiresRestart: result.requiresRestart,
+        isHostedDeployment,
+        scope,
+      });
+
+      // Uninstall the plugin we just installed
+      await uninstallPlugin(packageName, scope, user.id);
+
+      return NextResponse.json(
+        {
+          error: 'This plugin requires a server restart and cannot be installed as user-only on hosted deployments. Please install it site-wide instead.',
+          requiresRestart: true,
+          suggestedScope: 'site',
+        },
+        { status: 400 }
+      );
+    }
+
     logger.info('Plugin installed successfully', {
       context: 'plugins-install-POST',
       packageName,
       version: result.version,
       scope,
+      requiresRestart: result.requiresRestart,
+      isHostedDeployment,
     });
 
-    return NextResponse.json({
+    // For hosted deployments installing restart-required plugins site-wide, trigger server restart
+    const willRestart = isHostedDeployment && result.requiresRestart && scope === 'site';
+
+    if (willRestart) {
+      logger.info('Scheduling server restart for plugin requiring restart on hosted deployment', {
+        context: 'plugins-install-POST',
+        packageName,
+      });
+    }
+
+    // Build response
+    const response = NextResponse.json({
       success: true,
       plugin: {
         name: result.manifest?.name,
@@ -104,9 +143,26 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user }
         version: result.version,
         description: result.manifest?.description,
         capabilities: result.manifest?.capabilities,
+        requiresRestart: result.requiresRestart,
       },
-      message: 'Plugin installed successfully. Restart Quilltap to activate the plugin.',
+      message: willRestart
+        ? 'Plugin installed successfully. Server is restarting to activate the plugin.'
+        : 'Plugin installed successfully. Restart Quilltap to activate the plugin.',
+      serverRestarting: willRestart,
     });
+
+    // Queue server restart after response is sent (for hosted deployments with restart-required plugins)
+    if (willRestart) {
+      setImmediate(() => {
+        logger.info('Restarting server for plugin activation', {
+          context: 'plugins-install-POST',
+          packageName,
+        });
+        process.exit(0);
+      });
+    }
+
+    return response;
 
   } catch (error) {
     logger.error(

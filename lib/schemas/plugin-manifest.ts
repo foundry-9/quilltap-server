@@ -578,6 +578,9 @@ export const PluginManifestSchema = z.object({
 
   /** Plugin status */
   status: z.enum(['STABLE', 'BETA', 'ALPHA', 'DEPRECATED']).default('STABLE').optional(),
+
+  /** Whether this plugin requires a server restart to activate (inferred from capabilities if not set) */
+  requiresRestart: z.boolean().optional(),
 }).strict(); // Prevent unknown fields
 
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;
@@ -642,4 +645,37 @@ export function functionalityToCapabilities(functionality?: Functionality): Plug
   }
 
   return capabilities;
+}
+
+/**
+ * Capabilities that require a server restart to activate.
+ * These capabilities affect core infrastructure that is initialized at startup.
+ */
+const RESTART_REQUIRED_CAPABILITIES: PluginCapability[] = [
+  'AUTH_METHODS',
+  'DATABASE_BACKEND',
+  'FILE_BACKEND',
+  'UPGRADE_MIGRATION',
+];
+
+/**
+ * Determines if a plugin requires a server restart to activate.
+ *
+ * The restart requirement is determined by:
+ * 1. Explicit `requiresRestart` field in the manifest (takes precedence)
+ * 2. Inference from capabilities (AUTH_METHODS, DATABASE_BACKEND, FILE_BACKEND, UPGRADE_MIGRATION)
+ *
+ * @param manifest - The plugin manifest to check
+ * @returns true if the plugin requires a server restart to activate
+ */
+export function pluginRequiresRestart(manifest: PluginManifest): boolean {
+  // Explicit field takes precedence
+  if (manifest.requiresRestart !== undefined) {
+    return manifest.requiresRestart;
+  }
+
+  // Infer from capabilities
+  return manifest.capabilities.some(cap =>
+    RESTART_REQUIRED_CAPABILITIES.includes(cap)
+  );
 }
