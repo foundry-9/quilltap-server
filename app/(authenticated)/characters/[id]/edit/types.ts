@@ -23,24 +23,6 @@ export interface Character {
   }
 }
 
-export interface ConnectionProfile {
-  id: string
-  name: string
-}
-
-export interface Persona {
-  id: string
-  name: string
-  title?: string
-  matchingTagCount?: number
-}
-
-export interface CharacterPersonaLink {
-  personaId: string
-  isDefault: boolean
-  persona: Persona
-}
-
 export interface CharacterFormData {
   name: string
   title: string
@@ -61,12 +43,7 @@ export interface CharacterEditState {
   showUploadDialog: boolean
   showAvatarSelector: boolean
   character: Character | null
-  personas: Persona[]
-  profiles: ConnectionProfile[]
-  defaultPersonaId: string
-  loadingPersonas: boolean
   formData: CharacterFormData
   originalFormData: CharacterFormData
-  originalDefaultPersonaId: string
   avatarRefreshKey: number
 }

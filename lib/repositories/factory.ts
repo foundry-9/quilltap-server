@@ -56,18 +56,13 @@ export function isMongoDBEnabled(): boolean {
  * @returns RepositoryContainer for MongoDB backend
  */
 export function getRepositories(): RepositoryContainer {
-  logger.debug('Getting MongoDB repositories');
-
   // Return cached repositories if already initialized
   if (cachedRepositories) {
-    logger.debug('Returning cached repositories');
     return cachedRepositories;
   }
 
   logger.info('Initializing MongoDB backend repositories');
   cachedRepositories = getMongoRepos();
-
-  logger.debug('Repositories initialized successfully', { backend: 'mongodb' });
   return cachedRepositories;
 }
 
@@ -76,7 +71,6 @@ export function getRepositories(): RepositoryContainer {
  * Useful for testing or resetting state
  */
 export function resetRepositories(): void {
-  logger.debug('Resetting repository caches');
   cachedRepositories = null;
   clearUserRepositoryCache();
   logger.info('Repository caches cleared');

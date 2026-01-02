@@ -5,26 +5,20 @@
  * This returns raw file content without requiring database seeding.
  */
 
-import { NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextRequest, NextResponse } from 'next/server';
+import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import { loadSamplePrompts } from '@/lib/prompts/sample-prompts-loader';
 import { logger } from '@/lib/logger';
 
-export async function GET() {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user }: AuthenticatedContext) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Unauthorized access attempt to GET /api/sample-prompts');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    logger.debug('Loading sample prompts from files', { userId: session.user.id });
+    logger.debug('Loading sample prompts from files', { userId: user.id });
 
     const samples = await loadSamplePrompts();
 
     logger.debug('Loaded sample prompts', {
       count: samples.length,
-      userId: session.user.id,
+      userId: user.id,
     });
 
     return NextResponse.json(samples);
@@ -38,4 +32,4 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+});

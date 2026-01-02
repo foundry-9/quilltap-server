@@ -1,13 +1,14 @@
 /**
  * Background Jobs Process Trigger API
  * POST /api/background-jobs/process - Trigger job processing
+ * GET  /api/background-jobs/process - Get processor status (health check)
  *
  * This endpoint can be called by external cron jobs or health checks
  * to ensure the processor is running and trigger immediate processing.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import {
   startProcessor,
   isProcessorRunning,
@@ -30,14 +31,8 @@ import { getErrorMessage } from '@/lib/errors';
  * - cleanup=true: Also cleanup old completed jobs
  * - reset=true: Reset stuck jobs before processing
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user }: AuthenticatedContext) => {
   try {
-    const session = await getServerSession();
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { searchParams } = new URL(req.url);
     const batchMode = searchParams.get('batch') === 'true';
     const maxJobs = parseInt(searchParams.get('maxJobs') || '10', 10);
@@ -45,7 +40,7 @@ export async function POST(req: NextRequest) {
     const reset = searchParams.get('reset') === 'true';
 
     logger.info('[BackgroundJobs Process] Trigger received', {
-      userId: session.user.id,
+      userId: user.id,
       batchMode,
       maxJobs,
       cleanup,
@@ -93,7 +88,7 @@ export async function POST(req: NextRequest) {
     logger.error('[BackgroundJobs Process] Error', { error: errorMessage });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
-}
+});
 
 /**
  * GET /api/background-jobs/process

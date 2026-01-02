@@ -84,10 +84,13 @@ export class OpenRouterProvider implements LLMProvider {
     });
 
     // Strip attachments from messages and convert to OpenRouter format
-    const messages = params.messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // Filter out 'tool' role messages as they require special handling
+    const messages = params.messages
+      .filter(m => m.role !== 'tool')
+      .map((m) => ({
+        role: m.role as 'system' | 'user' | 'assistant',
+        content: m.content,
+      }));
 
     const requestParams: any = {
       model: params.model,
@@ -226,14 +229,17 @@ export class OpenRouterProvider implements LLMProvider {
     });
 
     // Strip attachments from messages and convert to OpenRouter format
-    const messages = params.messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // Filter out 'tool' role messages as they require special handling
+    const messages = params.messages
+      .filter(m => m.role !== 'tool')
+      .map((m) => ({
+        role: m.role as 'system' | 'user' | 'assistant',
+        content: m.content,
+      }));
 
     const requestParams: ChatGenerationParams & { stream: true } = {
       model: params.model,
-      messages,
+      messages: messages as any,
       temperature: params.temperature ?? 0.7,
       maxTokens: params.maxTokens ?? 4096,
       topP: params.topP ?? 1,
@@ -247,7 +253,7 @@ export class OpenRouterProvider implements LLMProvider {
         context: 'OpenRouterProvider.streamMessage',
         toolCount: params.tools.length,
       });
-      requestParams.tools = params.tools;
+      (requestParams as any).tools = params.tools;
       // Explicitly enable tool use with "auto" - let the model decide when to use tools
       requestParams.toolChoice = 'auto';
     }

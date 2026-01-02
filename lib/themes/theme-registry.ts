@@ -18,6 +18,7 @@ import { safeValidateThemeTokens } from './types';
 import { DEFAULT_THEME_TOKENS, DEFAULT_THEME_METADATA } from './default-tokens';
 import { mergeThemeTokens, themeTokensToCSS } from './utils';
 import { getErrorMessage } from '@/lib/errors';
+import type { ThemePlugin, EmbeddedFont } from '@quilltap/plugin-types';
 
 // ============================================================================
 // TYPES
@@ -29,7 +30,7 @@ import { getErrorMessage } from '@/lib/errors';
 export interface LoadedThemeFont {
   /** Font family name */
   family: string;
-  /** Font file path (absolute) */
+  /** Font file path (absolute) - empty for embedded fonts */
   filePath: string;
   /** Font weight */
   weight: string;
@@ -39,8 +40,12 @@ export interface LoadedThemeFont {
   display: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
   /** Plugin name (for URL construction) */
   pluginName: string;
-  /** Original source path (relative to plugin) */
+  /** Original source path (relative to plugin) or data URL for embedded */
   src: string;
+  /** Whether this font is embedded (data URL or base64) */
+  isEmbedded?: boolean;
+  /** Embedded font data (base64 or data URL) */
+  embeddedData?: string;
 }
 
 /**
@@ -124,17 +129,19 @@ class ThemeRegistry {
 
   /**
    * Initialize the theme registry by loading themes from enabled THEME plugins
+   * Note: Module-based themes should be registered via registerThemeModule() before calling this
    */
   async initialize(): Promise<void> {
     const startTime = Date.now();
     logger.info('Initializing theme registry');
 
-    // Clear existing state
-    this.state.themes.clear();
+    // Clear errors but preserve themes registered via registerThemeModule()
     this.state.errors = [];
 
-    // Always register the default theme first
-    this.registerDefaultTheme();
+    // Register the default theme if not already present
+    if (!this.state.themes.has('default')) {
+      this.registerDefaultTheme();
+    }
 
     // Get enabled theme plugins
     const themePlugins = getEnabledPluginsByCapability('THEME');
@@ -209,18 +216,163 @@ class ThemeRegistry {
   }
 
   /**
-   * Load a theme from a plugin
+   * Load a theme from a plugin (file-based loading only)
+   * Module-based themes should be registered via registerThemeModule()
    */
   private async loadThemeFromPlugin(plugin: LoadedPlugin): Promise<void> {
+    const themeId = this.extractThemeId(plugin.manifest.name);
+
+    // Check if this theme was already registered via module loading
+    if (this.state.themes.has(themeId)) {
+      logger.debug('Theme already registered (via module), skipping file-based load', {
+        themeId,
+      });
+      return;
+    }
+
+    // Fall back to file-based loading
+    await this.loadThemeFromFiles(plugin, themeId);
+  }
+
+  /**
+   * Register a pre-loaded theme module
+   * Called from plugin-initialization.ts after dynamic require
+   */
+  registerThemeModule(
+    plugin: LoadedPlugin,
+    themePlugin: ThemePlugin
+  ): boolean {
+    const themeId = this.extractThemeId(plugin.manifest.name);
+
+    logger.debug('Registering theme from pre-loaded module', {
+      themeId,
+      plugin: plugin.manifest.name,
+    });
+
+    // Check if module exports a theme plugin
+    if (!themePlugin?.tokens) {
+      logger.debug('Module does not export valid theme tokens', {
+        themeId,
+        hasTokens: !!themePlugin?.tokens,
+      });
+      return false;
+    }
+
+    // Validate the tokens
+    const validationResult = safeValidateThemeTokens(themePlugin.tokens);
+    if (!validationResult.success) {
+      throw new Error(
+        `Invalid theme tokens in module: ${validationResult.errors.errors
+          .map((e) => `${e.path.join('.')}: ${e.message}`)
+          .join(', ')}`
+      );
+    }
+
+    let tokens = validationResult.data;
+
+    // Handle theme inheritance if themeConfig specifies it
+    const themeConfig = plugin.manifest.themeConfig;
+    if (themeConfig?.extendsTheme) {
+      const baseTheme = this.state.themes.get(
+        this.extractThemeId(themeConfig.extendsTheme)
+      );
+      if (baseTheme) {
+        tokens = mergeThemeTokens(baseTheme.tokens, tokens);
+      } else {
+        tokens = mergeThemeTokens(DEFAULT_THEME_TOKENS, tokens);
+      }
+    }
+
+    // Convert embedded fonts to LoadedThemeFont format
+    const fonts: LoadedThemeFont[] = [];
+    if (themePlugin.fonts && themePlugin.fonts.length > 0) {
+      for (const font of themePlugin.fonts) {
+        fonts.push({
+          family: font.family,
+          filePath: '', // Embedded fonts don't have file paths
+          weight: font.weight,
+          style: font.style || 'normal',
+          display: 'swap',
+          pluginName: plugin.manifest.name,
+          src: font.data, // Store the data URL or base64 directly
+          // Mark as embedded for special handling
+          isEmbedded: true,
+          embeddedData: font.data,
+        } as LoadedThemeFont & { isEmbedded?: boolean; embeddedData?: string });
+      }
+    }
+
+    // Create the loaded theme
+    const loadedTheme: LoadedTheme = {
+      id: themeId,
+      name: themePlugin.metadata.displayName,
+      description: themePlugin.metadata.description,
+      version: plugin.manifest.version,
+      author: themePlugin.metadata.author || plugin.manifest.author,
+      supportsDarkMode: themePlugin.metadata.supportsDarkMode,
+      tokens,
+      cssOverrides: themePlugin.cssOverrides,
+      previewImage: themePlugin.metadata.previewImage,
+      previewImagePath: themePlugin.metadata.previewImage?.startsWith('data:')
+        ? undefined // Don't set path for data URLs
+        : themePlugin.metadata.previewImage
+          ? path.join(plugin.pluginPath, themePlugin.metadata.previewImage)
+          : undefined,
+      tags: themePlugin.metadata.tags || [],
+      pluginName: plugin.manifest.name,
+      isDefault: false,
+      fonts: fonts.length > 0 ? fonts : undefined,
+    };
+
+    // Register the theme
+    this.state.themes.set(themeId, loadedTheme);
+
+    // Call initialize if provided (fire-and-forget)
+    if (themePlugin.initialize) {
+      try {
+        const result = themePlugin.initialize();
+        // Handle async initialize
+        if (result && typeof (result as Promise<void>).catch === 'function') {
+          (result as Promise<void>).catch((error) => {
+            logger.warn('Theme initialize() failed', {
+              themeId,
+              error: getErrorMessage(error),
+            });
+          });
+        }
+      } catch (error) {
+        logger.warn('Theme initialize() failed', {
+          themeId,
+          error: getErrorMessage(error),
+        });
+      }
+    }
+
+    logger.info('Theme registered successfully (module-based)', {
+      themeId,
+      name: loadedTheme.name,
+      supportsDarkMode: loadedTheme.supportsDarkMode,
+      hasCssOverrides: !!themePlugin.cssOverrides,
+      fontCount: fonts.length,
+    });
+
+    return true;
+  }
+
+  /**
+   * Load a theme from files (traditional file-based approach)
+   */
+  private async loadThemeFromFiles(
+    plugin: LoadedPlugin,
+    themeId: string
+  ): Promise<void> {
     const themeConfig = plugin.manifest.themeConfig;
 
     if (!themeConfig) {
       throw new Error('Plugin does not have themeConfig');
     }
 
-    const themeId = this.extractThemeId(plugin.manifest.name);
-
-    logger.debug('Loading theme from plugin', {
+    logger.debug('Loading theme from files', {
       themeId,
       plugin: plugin.manifest.name,
       tokensPath: themeConfig.tokensPath,

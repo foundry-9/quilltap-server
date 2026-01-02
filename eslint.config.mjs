@@ -17,6 +17,13 @@ const eslintConfig = defineConfig([
       'plugins/dist/**/*.js',
     ],
   },
+  {
+    rules: {
+      // Disable no-img-element globally - we often use <img> intentionally
+      // for dynamic/external images that Next.js Image can't optimize
+      '@next/next/no-img-element': 'off',
+    },
+  },
 ])
 
 export default eslintConfig

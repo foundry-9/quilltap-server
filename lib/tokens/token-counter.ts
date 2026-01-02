@@ -5,12 +5,17 @@
  * Provides token counting for various LLM providers.
  * Uses character-based estimation with provider-specific multipliers
  * since we avoid adding tiktoken dependency for simplicity.
+ *
+ * NOTE: Registered plugins provide charsPerToken via the provider registry.
+ * The hardcoded CHARS_PER_TOKEN is kept as a fallback for unknown providers
+ * and backward compatibility.
  */
 
 import { Provider } from '@/lib/schemas/types'
+import { getCharsPerToken as getCharsPerTokenFromRegistry } from '@/lib/plugins/provider-registry'
 
 /**
- * Provider-specific tokens per character multipliers
+ * Provider-specific tokens per character multipliers (fallback)
  * These are conservative estimates (slightly over-counting to ensure safety)
  *
  * Different tokenizers produce different token counts:
@@ -36,10 +41,27 @@ const CHARS_PER_TOKEN: Record<Provider | 'default', number> = {
   OPENROUTER: 3.5,
   // OpenAI Compatible: assume OpenAI-like
   OPENAI_COMPATIBLE: 3.5,
-  // Gab AI: unknown, use conservative
-  GAB_AI: 3.5,
   // Default fallback
   default: 3.5,
+}
+
+/**
+ * Get characters per token for a provider
+ * First checks the plugin registry, falls back to hardcoded values
+ *
+ * @param provider The LLM provider
+ * @returns Characters per token ratio
+ */
+function getProviderCharsPerToken(provider: Provider): number {
+  // First try the plugin registry
+  const registryValue = getCharsPerTokenFromRegistry(provider)
+  // If registry returns default (3.5), also check hardcoded for provider-specific values
+  if (registryValue !== 3.5) {
+    return registryValue
+  }
+
+  // Fall back to hardcoded values
+  return CHARS_PER_TOKEN[provider] || CHARS_PER_TOKEN.default
 }
 
 /**
@@ -60,7 +82,7 @@ export function estimateTokens(text: string, provider?: Provider): number {
   if (!text) return 0
 
   const charsPerToken = provider
-    ? CHARS_PER_TOKEN[provider] || CHARS_PER_TOKEN.default
+    ? getProviderCharsPerToken(provider)
     : CHARS_PER_TOKEN.default
 
   // Calculate base estimate
@@ -205,7 +227,7 @@ export function truncateToTokenLimit(
   }
 
   const charsPerToken = provider
-    ? CHARS_PER_TOKEN[provider] || CHARS_PER_TOKEN.default
+    ? getProviderCharsPerToken(provider)
     : CHARS_PER_TOKEN.default
 
   // Calculate approximate character limit

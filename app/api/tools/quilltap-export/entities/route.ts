@@ -4,27 +4,23 @@
  * Returns available entities for export selection
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
+import { badRequest, serverError } from '@/lib/api/responses';
 import type { ExportEntityType } from '@/lib/export/types';
 
 const moduleLogger = logger.child({ module: 'api:quilltap-export-entities' });
 
-export async function GET(request: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = session.user.id;
-    const { searchParams } = new URL(request.url);
+    const userId = user.id;
+    const { searchParams } = new URL(req.url);
     const type = searchParams.get('type') as ExportEntityType | null;
 
     if (!type) {
-      return NextResponse.json({ error: 'Missing type parameter' }, { status: 400 });
+      return badRequest('Missing type parameter');
     }
 
     moduleLogger.debug('Fetching entities for export', { userId, type });
@@ -131,7 +127,7 @@ export async function GET(request: NextRequest) {
       }
 
       default:
-        return NextResponse.json({ error: `Unknown entity type: ${type}` }, { status: 400 });
+        return badRequest(`Unknown entity type: ${type}`);
     }
 
     moduleLogger.info('Entities fetched for export', {
@@ -149,9 +145,6 @@ export async function GET(request: NextRequest) {
     moduleLogger.error('Failed to fetch entities for export', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: 'Failed to fetch entities' },
-      { status: 500 }
-    );
+    return serverError('Failed to fetch entities');
   }
-}
+});

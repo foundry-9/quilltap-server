@@ -398,6 +398,450 @@
   }
 
   /* ==========================================================================
+     LEFT SIDEBAR (App Navigation)
+     ========================================================================== */
+
+  /**
+   * Left sidebar - main app navigation
+   * Desktop: persistent, collapsible
+   * Mobile: off-canvas overlay
+   */
+  .qt-left-sidebar {
+    @apply flex flex-col h-full;
+    @apply border-r;
+    width: var(--qt-left-sidebar-width);
+    background: var(--qt-left-sidebar-bg);
+    border-color: var(--qt-left-sidebar-border);
+    transition: var(--qt-left-sidebar-transition);
+    z-index: var(--qt-left-sidebar-z);
+  }
+
+  /**
+   * Collapsed state - icons only
+   */
+  .qt-left-sidebar-collapsed {
+    width: var(--qt-left-sidebar-collapsed-width);
+  }
+
+  .qt-left-sidebar-collapsed .qt-left-sidebar-item-label,
+  .qt-left-sidebar-collapsed .qt-left-sidebar-section-title,
+  .qt-left-sidebar-collapsed .qt-left-sidebar-view-all {
+    @apply hidden;
+  }
+
+  .qt-left-sidebar-collapsed .qt-left-sidebar-item {
+    @apply justify-center px-0;
+  }
+
+  /**
+   * Sidebar header - brand logo and collapse toggle
+   */
+  .qt-left-sidebar-header {
+    @apply flex items-center justify-between px-3;
+    @apply border-b shrink-0;
+    height: var(--qt-left-sidebar-header-height);
+    border-color: var(--qt-left-sidebar-border);
+  }
+
+  .qt-left-sidebar-collapsed .qt-left-sidebar-header {
+    @apply flex-col justify-center items-center gap-2 px-2 py-3;
+    height: auto;
+  }
+
+  /**
+   * Brand logo in sidebar header
+   */
+  .qt-left-sidebar-brand {
+    @apply flex items-center;
+    @apply transition-opacity duration-150;
+  }
+
+  .qt-left-sidebar-brand:hover {
+    @apply opacity-80;
+  }
+
+  .qt-left-sidebar-brand-icon {
+    @apply flex-shrink-0;
+  }
+
+  .qt-left-sidebar-collapsed .qt-left-sidebar-brand {
+    @apply justify-center;
+  }
+
+  /**
+   * Collapse toggle button
+   */
+  .qt-left-sidebar-toggle {
+    @apply inline-flex items-center justify-center;
+    @apply rounded-md;
+    @apply transition-colors duration-150;
+    width: 2rem;
+    height: 2rem;
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+  }
+
+  .qt-left-sidebar-toggle:hover {
+    background: var(--qt-sidebar-item-hover-bg);
+    color: var(--color-foreground);
+  }
+
+  /**
+   * Sidebar content - scrollable area
+   */
+  .qt-left-sidebar-content {
+    @apply flex-1 overflow-y-auto min-h-0;
+  }
+
+  /**
+   * Sidebar section container
+   */
+  .qt-left-sidebar-section {
+    @apply flex flex-col;
+    padding: var(--qt-left-sidebar-section-padding);
+  }
+
+  /**
+   * Section title
+   */
+  .qt-left-sidebar-section-title {
+    @apply text-xs font-semibold uppercase tracking-wider;
+    @apply mb-2 px-2;
+    color: var(--qt-left-sidebar-section-title-fg);
+  }
+
+  /**
+   * Placeholder section (coming soon)
+   */
+  .qt-left-sidebar-section-placeholder {
+    @apply opacity-50;
+  }
+
+  .qt-left-sidebar-section-placeholder .qt-left-sidebar-section-title {
+    @apply flex items-center gap-2;
+  }
+
+  .qt-left-sidebar-section-placeholder .qt-left-sidebar-section-title::after {
+    content: "Coming soon";
+    @apply text-[10px] font-normal normal-case tracking-normal;
+    @apply px-1.5 py-0.5 rounded;
+    background: var(--color-muted);
+  }
+
+  /**
+   * Section items list
+   */
+  .qt-left-sidebar-items {
+    @apply flex flex-col;
+    gap: var(--qt-left-sidebar-section-gap);
+  }
+
+  /**
+   * Flex-growing section (for chats)
+   */
+  .qt-left-sidebar-section-grow {
+    @apply flex-1 min-h-0;
+  }
+
+  .qt-left-sidebar-section-grow .qt-left-sidebar-items {
+    @apply overflow-y-auto max-h-full;
+  }
+
+  /**
+   * Navigation item
+   */
+  .qt-left-sidebar-item {
+    @apply flex items-center gap-3;
+    @apply text-sm rounded-md;
+    @apply transition-colors duration-150;
+    @apply cursor-pointer;
+    padding: var(--qt-sidebar-item-padding-y) var(--qt-sidebar-item-padding-x);
+  }
+
+  .qt-left-sidebar-item:hover {
+    background: var(--qt-sidebar-item-hover-bg);
+  }
+
+  .qt-left-sidebar-item-active {
+    background: var(--qt-sidebar-item-active-bg);
+    color: var(--color-primary);
+  }
+
+  .qt-left-sidebar-item-icon {
+    @apply flex-shrink-0;
+    width: var(--qt-left-sidebar-item-icon-size);
+    height: var(--qt-left-sidebar-item-icon-size);
+    color: var(--color-foreground);
+  }
+
+  .qt-left-sidebar-item-label {
+    @apply truncate;
+    color: var(--color-foreground);
+  }
+
+  /**
+   * View all link
+   */
+  .qt-left-sidebar-view-all {
+    @apply text-xs text-muted-foreground;
+    @apply px-2 py-1.5 mt-1;
+    @apply hover:text-foreground;
+    @apply transition-colors duration-150;
+    cursor: pointer;
+  }
+
+  /**
+   * Sidebar footer - settings, tools, profile
+   */
+  .qt-left-sidebar-footer {
+    @apply flex flex-col gap-1;
+    @apply border-t p-3 shrink-0;
+    border-color: var(--qt-left-sidebar-border);
+  }
+
+  .qt-left-sidebar-collapsed .qt-left-sidebar-footer {
+    @apply items-center p-2;
+  }
+
+  /**
+   * Footer action buttons
+   */
+  .qt-left-sidebar-footer-actions {
+    @apply flex flex-col gap-1;
+  }
+
+  .qt-left-sidebar-collapsed .qt-left-sidebar-footer-actions {
+    @apply items-center;
+  }
+
+  /**
+   * Profile menu in footer
+   */
+  .qt-left-sidebar-profile {
+    @apply flex items-center gap-3;
+    @apply p-2 rounded-md;
+    @apply transition-colors duration-150;
+    @apply cursor-pointer;
+  }
+
+  .qt-left-sidebar-profile:hover {
+    background: var(--qt-sidebar-item-hover-bg);
+  }
+
+  .qt-left-sidebar-profile-avatar {
+    @apply w-8 h-8 rounded-full;
+    @apply bg-muted;
+    @apply flex-shrink-0;
+  }
+
+  .qt-left-sidebar-profile-info {
+    @apply flex flex-col min-w-0;
+  }
+
+  .qt-left-sidebar-profile-name {
+    @apply text-sm font-medium truncate;
+  }
+
+  .qt-left-sidebar-profile-email {
+    @apply text-xs text-muted-foreground truncate;
+  }
+
+  .qt-left-sidebar-collapsed .qt-left-sidebar-profile-info {
+    @apply hidden;
+  }
+
+  /**
+   * Mobile sidebar overlay backdrop
+   */
+  .qt-left-sidebar-overlay {
+    @apply fixed inset-0;
+    background: var(--qt-left-sidebar-overlay-bg);
+    z-index: var(--qt-left-sidebar-overlay-z);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 300ms ease, visibility 300ms ease;
+  }
+
+  .qt-left-sidebar-overlay-visible {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Mobile: sidebar is off-canvas by default */
+  @media (max-width: 767px) {
+    .qt-left-sidebar {
+      @apply fixed top-0 left-0 bottom-0;
+      transform: translateX(-100%);
+    }
+
+    .qt-left-sidebar-mobile-open {
+      transform: translateX(0);
+    }
+
+    /* Force expanded state on mobile when open */
+    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed {
+      width: var(--qt-left-sidebar-width);
+    }
+
+    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-item-label,
+    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-section-title,
+    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-view-all {
+      @apply block;
+    }
+
+    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-item {
+      @apply justify-start px-3;
+    }
+  }
+
+  /* Desktop: sidebar is in document flow */
+  @media (min-width: 768px) {
+    .qt-left-sidebar {
+      @apply relative;
+      flex-shrink: 0;
+    }
+  }
+
+  /**
+   * Resize handle - draggable edge for width adjustment
+   */
+  .qt-left-sidebar-resize-handle {
+    @apply absolute top-0 bottom-0 right-0;
+    width: var(--qt-left-sidebar-resize-handle-width);
+    cursor: col-resize;
+    background: transparent;
+    transition: background 150ms ease;
+    z-index: 10;
+  }
+
+  .qt-left-sidebar-resize-handle:hover,
+  .qt-left-sidebar-resize-handle-active {
+    background: var(--color-primary);
+  }
+
+  /* Hide resize handle when collapsed */
+  .qt-left-sidebar-collapsed .qt-left-sidebar-resize-handle {
+    @apply hidden;
+  }
+
+  /* Hide resize handle on mobile */
+  @media (max-width: 767px) {
+    .qt-left-sidebar-resize-handle {
+      @apply hidden;
+    }
+  }
+
+  /* Prevent text selection while resizing */
+  .qt-left-sidebar-resizing {
+    user-select: none;
+  }
+
+  /* ==========================================================================
+     APP LAYOUT
+     ========================================================================== */
+
+  /**
+   * Root app layout container
+   */
+  .qt-app-layout {
+    @apply flex h-screen;
+    @apply bg-background text-foreground;
+  }
+
+  /**
+   * Main content area (header + content + footer)
+   */
+  .qt-app-main {
+    @apply flex flex-col flex-1 min-w-0 h-full;
+  }
+
+  /**
+   * Page toolbar - top toolbar with search and actions
+   * Appears at the top of page content, not as a fixed header
+   */
+  .qt-page-toolbar {
+    @apply flex items-center justify-between px-4 py-3;
+    @apply sticky top-0 z-30;
+    background: var(--qt-app-header-bg);
+    backdrop-filter: var(--qt-app-header-blur);
+    -webkit-backdrop-filter: var(--qt-app-header-blur);
+  }
+
+  .qt-page-toolbar-left {
+    @apply flex items-center;
+    /* Reserve space for hamburger on mobile, empty on desktop */
+    min-width: 2.5rem;
+  }
+
+  .qt-page-toolbar-center {
+    @apply flex-1 flex justify-center px-4;
+    max-width: 32rem;
+  }
+
+  .qt-page-toolbar-right {
+    @apply flex items-center gap-2;
+    /* Balance with left section */
+    min-width: 2.5rem;
+    justify-content: flex-end;
+  }
+
+  /* On desktop, hide the left placeholder when hamburger is hidden */
+  @media (min-width: 768px) {
+    .qt-page-toolbar-left {
+      min-width: 0;
+    }
+  }
+
+  /**
+   * App header - simplified with logo, search, actions
+   * @deprecated Use qt-page-toolbar instead
+   */
+  .qt-app-header {
+    @apply flex items-center justify-between px-4;
+    @apply border-b shrink-0;
+    height: var(--qt-app-header-height);
+    background: var(--qt-app-header-bg);
+    border-color: var(--qt-app-header-border);
+    backdrop-filter: var(--qt-app-header-blur);
+    -webkit-backdrop-filter: var(--qt-app-header-blur);
+  }
+
+  .qt-app-header-left {
+    @apply flex items-center gap-4;
+  }
+
+  .qt-app-header-center {
+    @apply flex-1 flex justify-center px-4;
+    max-width: 32rem;
+  }
+
+  .qt-app-header-right {
+    @apply flex items-center gap-2;
+  }
+
+  /**
+   * Hamburger menu button (mobile only)
+   */
+  .qt-hamburger {
+    @apply hidden;
+    @apply items-center justify-center;
+    @apply w-10 h-10 rounded-md;
+    @apply transition-colors duration-150;
+    cursor: pointer;
+    color: var(--color-foreground);
+  }
+
+  .qt-hamburger:hover {
+    background: var(--color-muted);
+  }
+
+  @media (max-width: 767px) {
+    .qt-hamburger {
+      @apply flex;
+    }
+  }
+
+  /* ==========================================================================
      CONTENT AREA
      ========================================================================== */
 
@@ -478,25 +922,30 @@
      ========================================================================== */
 
   /**
-   * Card grid - responsive grid for cards
-   * Mobile: 2 cols (compact), sm+: 2 cols, lg: 3 cols
+   * Card grid variants - responsive grids for cards
+   * Base: 2 cols (compact) with smaller gap
+   * sm+: larger gap
+   * lg: expands to max columns (2 or 3 depending on variant)
    */
-  .qt-card-grid {
+  .qt-card-grid-2,
+  .qt-card-grid-3 {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
   }
 
   @media (min-width: 640px) {
-    .qt-card-grid {
+    .qt-card-grid-2,
+    .qt-card-grid-3 {
       gap: 1.5rem;
     }
   }
 
   @media (min-width: 1024px) {
-    .qt-card-grid {
+    .qt-card-grid-3 {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+    /* qt-card-grid-2 stays at 2 columns */
   }
 
   /**

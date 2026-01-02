@@ -65,7 +65,6 @@ export interface ModelInfo {
 
 export interface DatabaseStats {
   characters: number;
-  personas: number;
   chats: number;
   memories: number;
   tags: number;
@@ -551,10 +550,9 @@ async function collectDatabaseStats(userId: string): Promise<DatabaseStats> {
 
   const repos = getUserRepositories(userId);
 
-  // Count documents in each collection
-  const [characters, personas, chats, tags] = await Promise.all([
+  // Count documents in each collection (personas no longer counted - migrated to characters)
+  const [characters, chats, tags] = await Promise.all([
     repos.characters.findAll(),
-    repos.personas.findAll(),
     repos.chats.findAll(),
     repos.tags.findAll(),
   ]);
@@ -568,7 +566,6 @@ async function collectDatabaseStats(userId: string): Promise<DatabaseStats> {
 
   const stats: DatabaseStats = {
     characters: characters.length,
-    personas: personas.length,
     chats: chats.length,
     memories: memoriesCount,
     tags: tags.length,
@@ -826,7 +823,6 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
   lines.push('| Collection | Count |');
   lines.push('|------------|-------|');
   lines.push(`| Characters | ${data.databaseStats.characters} |`);
-  lines.push(`| Personas | ${data.databaseStats.personas} |`);
   lines.push(`| Chats | ${data.databaseStats.chats} |`);
   lines.push(`| Memories | ${data.databaseStats.memories} |`);
   lines.push(`| Tags | ${data.databaseStats.tags} |`);

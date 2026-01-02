@@ -94,6 +94,19 @@
   }
 
   /**
+   * Success button - positive actions like Chat, Start, Save
+   */
+  .qt-button-success {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition cursor-pointer;
+    background: var(--qt-button-success-bg);
+    color: var(--qt-button-success-fg);
+  }
+
+  .qt-button-success:hover:not(:disabled) {
+    background: var(--qt-button-success-hover-bg);
+  }
+
+  /**
    * Icon button - square button for icons only
    */
   .qt-button-icon {

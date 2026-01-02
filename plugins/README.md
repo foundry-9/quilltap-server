@@ -15,7 +15,6 @@ plugins/
 │   ├── qtap-plugin-anthropic/          # Anthropic provider
 │   ├── qtap-plugin-google/             # Google Gemini provider
 │   ├── qtap-plugin-grok/               # Grok/xAI provider
-│   ├── qtap-plugin-gab-ai/             # Gab AI provider
 │   ├── qtap-plugin-ollama/             # Ollama provider
 │   ├── qtap-plugin-openrouter/         # OpenRouter provider
 │   ├── qtap-plugin-openai-compatible/  # OpenAI-compatible provider
@@ -47,7 +46,6 @@ Provider plugins add support for new LLM services. Each provider plugin includes
 | `qtap-plugin-anthropic` | Anthropic | Chat, image/PDF analysis, tool calling |
 | `qtap-plugin-google` | Google Gemini | Chat, Imagen images, file attachments |
 | `qtap-plugin-grok` | Grok/xAI | Chat, image generation, file attachments |
-| `qtap-plugin-gab-ai` | Gab AI | Chat (text-only) |
 | `qtap-plugin-ollama` | Ollama | Chat (local models) |
 | `qtap-plugin-openrouter` | OpenRouter | Chat (100+ models), pricing sync |
 | `qtap-plugin-openai-compatible` | Generic | Chat (any OpenAI-format API) |
@@ -290,8 +288,8 @@ Check the browser console for plugin loading messages:
 
 | Plugin | Complexity | Best For |
 |--------|------------|----------|
-| `qtap-plugin-gab-ai` | Simple | Text-only providers |
 | `qtap-plugin-ollama` | Simple | Providers requiring base URL |
+| `qtap-plugin-openai-compatible` | Simple | Generic OpenAI-compatible APIs |
 | `qtap-plugin-openai` | Full | Providers with all capabilities |
 | `qtap-plugin-anthropic` | Full | Providers with tool calling |
 | `qtap-plugin-openrouter` | Advanced | Model aggregators |

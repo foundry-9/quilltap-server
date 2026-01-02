@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.10.0";
+var VERSION = "6.15.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -5811,10 +5811,12 @@ var Responses = class extends APIResource {
    *
    * @example
    * ```ts
-   * const compactedResponse = await client.responses.compact();
+   * const compactedResponse = await client.responses.compact({
+   *   model: 'gpt-5.2',
+   * });
    * ```
    */
-  compact(body = {}, options) {
+  compact(body, options) {
     return this._client.post("/responses/compact", { body, ...options });
   }
 };
@@ -7274,7 +7276,8 @@ var GrokProvider = class {
   formatMessagesWithAttachments(messages) {
     const sent = [];
     const failed = [];
-    const formattedMessages = messages.map((msg) => {
+    const filteredMessages = messages.filter((m) => m.role !== "tool");
+    const formattedMessages = filteredMessages.map((msg) => {
       if (!msg.attachments || msg.attachments.length === 0) {
         return {
           role: msg.role,
@@ -7759,11 +7762,27 @@ var attachmentSupport = {
   description: "Images only (JPEG, PNG, GIF, WebP)",
   notes: "Images are supported in Grok models for vision capabilities"
 };
+var messageFormat = {
+  supportsNameField: true,
+  supportedRoles: ["user", "assistant"],
+  maxNameLength: 64
+};
+var cheapModels = {
+  defaultModel: "grok-2-mini",
+  recommendedModels: ["grok-2-mini"]
+};
 var plugin = {
   metadata,
   config,
   capabilities,
   attachmentSupport,
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: "openai",
+  // Grok uses OpenAI-compatible format
+  cheapModels,
+  defaultContextWindow: 131072,
   /**
    * Factory method to create a Grok LLM provider instance
    */

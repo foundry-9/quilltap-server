@@ -68,6 +68,23 @@ const attachmentSupport = {
 };
 
 /**
+ * Message format support for multi-character chats
+ * Google does NOT support the name field in messages
+ */
+const messageFormat = {
+  supportsNameField: false,
+  supportedRoles: [] as ('user' | 'assistant')[],
+};
+
+/**
+ * Cheap model configuration for background tasks
+ */
+const cheapModels = {
+  defaultModel: 'gemini-2.0-flash',
+  recommendedModels: ['gemini-2.0-flash', 'gemini-1.5-flash'],
+};
+
+/**
  * The Google Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
@@ -79,6 +96,13 @@ export const plugin: LLMProviderPlugin = {
   capabilities,
 
   attachmentSupport,
+
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.8, // Google uses SentencePiece tokenizer, slightly more efficient
+  toolFormat: 'google',
+  cheapModels,
+  defaultContextWindow: 1000000,
 
   /**
    * Factory method to create a Google LLM provider instance

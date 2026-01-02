@@ -5576,11 +5576,25 @@ var attachmentSupport = {
   description: "Images (JPEG, PNG, GIF, WebP) and PDFs",
   notes: "Images and PDFs are supported in Claude models for analysis and understanding"
 };
+var messageFormat = {
+  supportsNameField: false,
+  supportedRoles: []
+};
+var cheapModels = {
+  defaultModel: "claude-haiku-4-5-20251001",
+  recommendedModels: ["claude-haiku-4-5-20251001", "claude-3-haiku-20240307"]
+};
 var plugin = {
   metadata,
   config,
   capabilities,
   attachmentSupport,
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: "anthropic",
+  cheapModels,
+  defaultContextWindow: 2e5,
   /**
    * Factory method to create an Anthropic LLM provider instance
    */

@@ -230,7 +230,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                               type="button"
                             >
                               <div className="relative w-20 h-20 bg-muted">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                { }
                                 <img
                                   src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
                                   alt={attachment.filename}
@@ -334,7 +334,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                             className="w-full h-full absolute inset-0 !p-2"
                           />
                         ) : (
-                          // eslint-disable-next-line @next/next/no-img-element
+                           
                           <img
                             src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
                             alt={attachment.filename}

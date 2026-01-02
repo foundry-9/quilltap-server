@@ -15,6 +15,7 @@ interface ToolPaletteProps {
   onAddCharacterClick?: () => void
   onDeleteChatMemoriesClick?: () => void
   onReextractMemoriesClick?: () => void
+  onSearchReplaceClick?: () => void // Search and replace in chat
   chatPhotoCount: number
   hasImageProfile: boolean
   showAddCharacter?: boolean // Show "Add Character" button for single-character chats
@@ -74,6 +75,7 @@ export default function ToolPalette({
   onAddCharacterClick,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
+  onSearchReplaceClick,
   chatPhotoCount,
   hasImageProfile,
   showAddCharacter = false,
@@ -246,6 +248,12 @@ export default function ToolPalette({
     onClose()
   }
 
+  const handleSearchReplaceClick = () => {
+    clientLogger.debug('[ToolPalette] Search & Replace clicked', { chatId })
+    onSearchReplaceClick?.()
+    onClose()
+  }
+
   const handleTogglePreview = () => {
     clientLogger.debug('[ToolPalette] Toggle Preview clicked', { showPreview })
     onTogglePreview?.()
@@ -260,6 +268,7 @@ export default function ToolPalette({
         hasAddCharacterCallback: !!onAddCharacterClick,
         hasDeleteMemoriesCallback: !!onDeleteChatMemoriesClick,
         hasReextractMemoriesCallback: !!onReextractMemoriesClick,
+        hasSearchReplaceCallback: !!onSearchReplaceClick,
         hasRenameCallback: !!onRenameClick,
         chatPhotoCount,
         hasImageProfile,
@@ -270,7 +279,7 @@ export default function ToolPalette({
         hasPreviewToggle: !!onTogglePreview,
       })
     }
-  }, [isOpen, showAddCharacter, onAddCharacterClick, onDeleteChatMemoriesClick, onReextractMemoriesClick, onRenameClick, chatPhotoCount, hasImageProfile, chatId, chatMemoryCount, roleplayTemplateId, onAttachFileClick, onTogglePreview])
+  }, [isOpen, showAddCharacter, onAddCharacterClick, onDeleteChatMemoriesClick, onReextractMemoriesClick, onSearchReplaceClick, onRenameClick, chatPhotoCount, hasImageProfile, chatId, chatMemoryCount, roleplayTemplateId, onAttachFileClick, onTogglePreview])
 
   if (!isOpen) return null
 
@@ -347,6 +356,21 @@ export default function ToolPalette({
           </svg>
           <span>Export</span>
         </button>
+
+        {/* Search & Replace */}
+        {onSearchReplaceClick && (
+          <button
+            type="button"
+            onClick={handleSearchReplaceClick}
+            className="qt-tool-palette-button"
+            title="Search and replace in chat"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span>Replace</span>
+          </button>
+        )}
 
         {/* Optional Gallery - only when photos exist */}
         {chatPhotoCount > 0 && (

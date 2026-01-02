@@ -46,11 +46,14 @@ export class OpenAIProvider implements LLMProvider {
     const sent: string[] = [];
     const failed: { id: string; error: string }[] = [];
 
-    const formattedMessages: OpenAIMessage[] = messages.map((msg) => {
+    // Filter out 'tool' role messages as they require special handling
+    const filteredMessages = messages.filter(m => m.role !== 'tool');
+
+    const formattedMessages: OpenAIMessage[] = filteredMessages.map((msg) => {
       // If no attachments, return simple string content
       if (!msg.attachments || msg.attachments.length === 0) {
         return {
-          role: msg.role,
+          role: msg.role as 'system' | 'user' | 'assistant',
           content: msg.content,
         };
       }
@@ -92,7 +95,7 @@ export class OpenAIProvider implements LLMProvider {
       }
 
       return {
-        role: msg.role,
+        role: msg.role as 'system' | 'user' | 'assistant',
         content: content.length > 0 ? content : msg.content,
       };
     });

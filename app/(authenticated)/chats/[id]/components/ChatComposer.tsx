@@ -1,11 +1,14 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import ToolPalette from '@/components/chat/ToolPalette'
 import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import MessageContent from '@/components/chat/MessageContent'
 import { clientLogger } from '@/lib/client-logger'
 import type { AttachedFile } from '../types'
+
+// Use useLayoutEffect on client, useEffect on server (for SSR compatibility)
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
 interface ChatComposerProps {
   id: string
@@ -44,6 +47,7 @@ interface ChatComposerProps {
   onRenameClick?: () => void
   onDeleteChatMemoriesClick: () => void
   onReextractMemoriesClick: () => void
+  onSearchReplaceClick?: () => void
   onStopStreaming: () => void
 }
 
@@ -102,13 +106,34 @@ export function ChatComposer({
   onRenameClick,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
+  onSearchReplaceClick,
   onStopStreaming,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const desktopToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const maxHeight = getTextareaMaxHeight()
+  // Track the last external input value to detect when parent clears it
+  const lastExternalInputRef = useRef(input)
+  // Debounce timer for parent state updates
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Calculate maxHeight once on mount and update on resize
+  const maxHeightRef = useRef(getTextareaMaxHeight())
+
+  useEffect(() => {
+    const handleResize = () => {
+      maxHeightRef.current = getTextareaMaxHeight()
+      if (inputRef.current) {
+        resizeTextarea(inputRef.current, maxHeightRef.current)
+      }
+    }
+
+    globalThis.window?.addEventListener('resize', handleResize)
+    return () => {
+      globalThis.window?.removeEventListener('resize', handleResize)
+    }
+  }, [])
 
   // Handler that triggers the file input click - the file input lives in this component
   const handleAttachFileClick = () => {
@@ -118,13 +143,48 @@ export function ChatComposer({
     onAttachFileClick?.()
   }
 
-  // Resize textarea when input changes (including when cleared after submission)
-  useEffect(() => {
-    if (inputRef.current) {
-      clientLogger.debug('[ChatComposer] Resizing textarea on input change', { inputLength: input.length })
-      resizeTextarea(inputRef.current, maxHeight)
+  // Only sync when parent clears the input (e.g., after submission)
+  // This avoids race conditions with concurrent rendering during typing
+  useIsomorphicLayoutEffect(() => {
+    const textarea = inputRef.current
+    if (!textarea) return
+
+    // Only sync if parent cleared the input (input is now empty but textarea isn't)
+    // This is the main case we need: after submission, parent sets input to ''
+    if (input === '' && textarea.value !== '' && lastExternalInputRef.current !== '') {
+      clientLogger.debug('[ChatComposer] Parent cleared input, syncing textarea')
+      textarea.value = ''
+      resizeTextarea(textarea, maxHeightRef.current)
     }
-  }, [input, maxHeight])
+    lastExternalInputRef.current = input
+  }, [input])
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [])
+
+  // onChange handler - debounces parent state updates to avoid excessive re-renders
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value
+
+    // Resize immediately for responsive UI
+    if (inputRef.current) {
+      resizeTextarea(inputRef.current, maxHeightRef.current)
+    }
+
+    // Debounce the parent state update to avoid render storms in React 19
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      setInput(newValue)
+    }, 16) // ~1 frame, enough to batch rapid keystrokes
+  }, [setInput])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && e.shiftKey) {
@@ -133,26 +193,45 @@ export function ChatComposer({
       const textarea = e.currentTarget
       const start = textarea.selectionStart
       const end = textarea.selectionEnd
-      const newValue = input.substring(0, start) + '\n' + input.substring(end)
-      setInput(newValue)
+      const currentValue = textarea.value
+      const newValue = currentValue.substring(0, start) + '\n' + currentValue.substring(end)
+      // Update the textarea directly (uncontrolled)
+      textarea.value = newValue
+      // Debounce the parent state update
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        setInput(newValue)
+      }, 16)
       // Move cursor after the inserted newline
       setTimeout(() => {
         textarea.selectionStart = textarea.selectionEnd = start + 1
-        resizeTextarea(textarea, maxHeight)
+        resizeTextarea(textarea, maxHeightRef.current)
       }, 0)
     } else if (e.key === 'Enter' && !e.shiftKey) {
       // Enter (without Shift): submit form
       e.preventDefault()
-      if (input.trim() || attachedFiles.length > 0) {
-        const form = e.currentTarget.form
-        const textarea = e.currentTarget
+      const textarea = e.currentTarget
+      const currentValue = textarea.value
+      if (currentValue.trim() || attachedFiles.length > 0) {
+        // Flush any pending debounced update and sync parent state immediately
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
+          debounceTimerRef.current = null
+        }
+        setInput(currentValue)
+        const form = textarea.form
         if (form) {
-          form.dispatchEvent(new Event('submit', { bubbles: true }))
-          // Re-focus textarea after form dispatch to prevent focus loss
+          // Use setTimeout to ensure React processes the setInput before form submit
           setTimeout(() => {
-            textarea.focus({ preventScroll: true })
-            clientLogger.debug('[ChatComposer] Re-focused textarea after Enter submit')
-          }, 10)
+            form.dispatchEvent(new Event('submit', { bubbles: true }))
+            // Re-focus textarea after form dispatch to prevent focus loss
+            setTimeout(() => {
+              textarea.focus({ preventScroll: true })
+              clientLogger.debug('[ChatComposer] Re-focused textarea after Enter submit')
+            }, 10)
+          }, 0)
         }
       }
     }
@@ -279,6 +358,7 @@ export function ChatComposer({
             onAddCharacterClick={onAddCharacterClick}
             onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
             onReextractMemoriesClick={onReextractMemoriesClick}
+            onSearchReplaceClick={onSearchReplaceClick}
             chatPhotoCount={chatPhotoCount}
             hasImageProfile={hasImageProfile}
             showAddCharacter={isSingleCharacterChat}
@@ -369,13 +449,8 @@ export function ChatComposer({
           ) : (
             <textarea
               ref={inputRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value)
-                if (inputRef.current) {
-                  resizeTextarea(inputRef.current, maxHeight)
-                }
-              }}
+              defaultValue={input}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               disabled={sending || !hasActiveCharacters}
               rows={1}

@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { clientLogger } from '@/lib/client-logger'
 import { safeJsonParse } from '@/lib/fetch-helpers'
+import { useImageNavigation } from '@/hooks/useImageNavigation'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
 
 interface ChatFile {
@@ -82,29 +83,14 @@ export default function ChatGalleryImageViewModal({
     checkTags()
   }, [file.id, file.filepath, characterId, personaId])
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      } else if (e.key === 'ArrowLeft' && onPrev) {
-        onPrev()
-      } else if (e.key === 'ArrowRight' && onNext) {
-        onNext()
-      }
-    },
-    [onClose, onPrev, onNext]
-  )
-
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = 'hidden'
-    }
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = ''
-    }
-  }, [isOpen, handleKeyDown])
+  // Keyboard navigation (Escape, arrow keys)
+  useImageNavigation({
+    isOpen,
+    onClose,
+    onPrev,
+    onNext,
+    logContext: 'ChatGalleryImageViewModal',
+  })
 
   const handleDownload = async () => {
     try {
@@ -391,7 +377,7 @@ export default function ChatGalleryImageViewModal({
             height={400}
           />
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img
             src={file.url}
             alt={file.filename}

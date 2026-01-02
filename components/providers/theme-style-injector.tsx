@@ -15,9 +15,8 @@
  * @module providers/theme-style-injector
  */
 
-import { useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { themeTokensToCSS, generateFontFacesCSS } from '@/lib/themes/utils';
-import { clientLogger } from '@/lib/client-logger';
 import type { ThemeTokens } from '@/lib/themes/types';
 
 // ============================================================================
@@ -117,24 +116,6 @@ export function ThemeStyleInjector({
 
     return parts.join('\n\n');
   }, [baseCss, cssOverrides, fontFacesCss]);
-
-  // Log CSS generation in effect (not during render to avoid setState during render)
-  useEffect(() => {
-    if (!tokens) {
-      clientLogger.debug('ThemeStyleInjector: no tokens provided, skipping CSS generation');
-      return;
-    }
-
-    clientLogger.debug('ThemeStyleInjector: CSS variables injected', {
-      mode,
-      themeId,
-      hasTypography: !!tokens.typography,
-      hasSpacing: !!tokens.spacing,
-      hasEffects: !!tokens.effects,
-      hasCssOverrides: !!cssOverrides,
-      fontCount: fonts?.length || 0,
-    });
-  }, [tokens, mode, themeId, cssOverrides, fonts]);
 
   // Don't render anything if no CSS to inject
   if (!fullCss) {

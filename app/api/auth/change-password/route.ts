@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { hashPassword, verifyPassword, validatePasswordStrength } from '@/lib/auth/password'
-import { getRepositories } from '@/lib/repositories/factory'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
 
@@ -20,34 +19,16 @@ const ChangePasswordSchema = z.object({
  * - Current password matches
  * - New password meets strength requirements
  */
-export async function POST(req: NextRequest) {
-  const session = await getServerSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
     const body = await req.json()
     const { currentPassword, newPassword } = ChangePasswordSchema.parse(body)
-
-    // Get the user's current password hash
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      logger.warn('User not found for password change', {
-        context: 'POST /api/auth/change-password',
-        userId: session.user.id,
-      })
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
 
     // Check if user has a password set
     if (!user.passwordHash) {
       logger.warn('User attempted password change without existing password', {
         context: 'POST /api/auth/change-password',
-        userId: session.user.id,
+        userId: user.id,
       })
       return NextResponse.json(
         { error: 'Cannot change password - no password set. This account uses OAuth login.' },
@@ -61,7 +42,7 @@ export async function POST(req: NextRequest) {
     if (!isCurrentPasswordValid) {
       logger.info('Password change failed - incorrect current password', {
         context: 'POST /api/auth/change-password',
-        userId: session.user.id,
+        userId: user.id,
       })
       return NextResponse.json(
         { error: 'Current password is incorrect' },
@@ -93,13 +74,13 @@ export async function POST(req: NextRequest) {
     // Hash new password and update user
     const newPasswordHash = await hashPassword(newPassword)
 
-    await repos.users.update(session.user.id, {
+    await repos.users.update(user.id, {
       passwordHash: newPasswordHash,
     })
 
     logger.info('Password changed successfully', {
       context: 'POST /api/auth/change-password',
-      userId: session.user.id,
+      userId: user.id,
     })
 
     return NextResponse.json({
@@ -123,4 +104,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

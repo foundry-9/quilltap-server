@@ -878,11 +878,27 @@ var attachmentSupport = {
   description: "File attachments not yet supported (requires multimodal model detection)",
   notes: "Multimodal models like llava can process images, but require model-specific implementation"
 };
+var messageFormat = {
+  supportsNameField: false,
+  supportedRoles: []
+};
+var cheapModels = {
+  defaultModel: "llama3.2:3b",
+  recommendedModels: ["llama3.2:3b", "llama3.2:1b", "phi3:mini", "mistral:7b", "gemma2:2b"]
+};
 var plugin = {
   metadata,
   config,
   capabilities,
   attachmentSupport,
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: "openai",
+  // Ollama uses OpenAI-compatible format
+  cheapModels,
+  defaultContextWindow: 8192,
+  // Conservative default for local models
   /**
    * Factory method to create an Ollama LLM provider instance
    * Requires baseUrl parameter for Ollama server connection

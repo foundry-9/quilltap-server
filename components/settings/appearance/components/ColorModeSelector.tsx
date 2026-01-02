@@ -11,9 +11,7 @@
  * @module components/settings/appearance/components/ColorModeSelector
  */
 
-import { useEffect } from 'react'
 import type { ColorMode } from '@/lib/themes/types'
-import { clientLogger } from '@/lib/client-logger'
 import type { ColorModeSelectorProps, ColorModeOption } from '../types'
 
 const COLOR_MODE_OPTIONS: ColorModeOption[] = [
@@ -73,15 +71,6 @@ export function ColorModeSelector({
   onChange,
   disabled,
 }: ColorModeSelectorProps) {
-  // Log render in useEffect to avoid state updates during render
-  useEffect(() => {
-    clientLogger.debug('ColorModeSelector: rendered', {
-      value,
-      resolvedMode,
-      disabled,
-    })
-  }, [value, resolvedMode, disabled])
-
   return (
     <div className="space-y-3">
       {COLOR_MODE_OPTIONS.map((option) => (
@@ -104,9 +93,6 @@ export function ColorModeSelector({
             checked={value === option.value}
             onChange={() => {
               if (!disabled) {
-                clientLogger.debug('ColorModeSelector: mode selected', {
-                  mode: option.value,
-                })
                 onChange(option.value as ColorMode)
               }
             }}

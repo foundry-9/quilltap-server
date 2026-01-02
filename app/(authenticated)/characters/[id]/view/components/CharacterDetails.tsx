@@ -9,7 +9,7 @@ interface CharacterDetailsProps {
   character: Character | null
   templateCounts: TemplateCounts
   replacingTemplate: 'char' | 'user' | null
-  defaultPersonaName: string | null
+  defaultPartnerName: string | null
   onTemplateReplace: (type: 'char' | 'user') => void
 }
 
@@ -18,7 +18,7 @@ export function CharacterDetails({
   character,
   templateCounts,
   replacingTemplate,
-  defaultPersonaName,
+  defaultPartnerName,
   onTemplateReplace,
 }: CharacterDetailsProps) {
   if (!character) return null
@@ -50,12 +50,12 @@ export function CharacterDetails({
         )}
 
         {/* Persona Name → {{user}} button */}
-        {defaultPersonaName && templateCounts.userCount > 0 && (
+        {defaultPartnerName && templateCounts.userCount > 0 && (
           <button
             onClick={() => onTemplateReplace('user')}
             disabled={replacingTemplate !== null}
             className="flex items-center gap-1.5 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm font-medium text-success shadow-sm transition hover:bg-success/20 disabled:cursor-not-allowed disabled:opacity-50"
-            title={`Replace ${templateCounts.userCount} occurrences of "${defaultPersonaName}" with {{user}}`}
+            title={`Replace ${templateCounts.userCount} occurrences of "${defaultPartnerName}" with {{user}}`}
           >
             {replacingTemplate === 'user' ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-success border-r-transparent"></div>
@@ -64,7 +64,7 @@ export function CharacterDetails({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             )}
-            <span className="hidden sm:inline">{defaultPersonaName}</span>
+            <span className="hidden sm:inline">{defaultPartnerName}</span>
             <span className="text-success">→</span>
             <code className="rounded bg-success/20 px-1 text-xs text-success">{`{{user}}`}</code>
             <span className="text-xs text-success/80">({templateCounts.userCount})</span>
@@ -98,7 +98,7 @@ export function CharacterDetails({
               <TemplateDisplay
                 content={character.description}
                 characterName={character.name}
-                personaName={defaultPersonaName}
+                personaName={defaultPartnerName}
               />
             </div>
           </div>
@@ -118,7 +118,7 @@ export function CharacterDetails({
               <TemplateDisplay
                 content={character.personality}
                 characterName={character.name}
-                personaName={defaultPersonaName}
+                personaName={defaultPartnerName}
               />
             </div>
           </div>
@@ -138,7 +138,7 @@ export function CharacterDetails({
               <TemplateDisplay
                 content={character.scenario}
                 characterName={character.name}
-                personaName={defaultPersonaName}
+                personaName={defaultPartnerName}
               />
             </div>
           </div>
@@ -158,7 +158,7 @@ export function CharacterDetails({
               <TemplateDisplay
                 content={character.firstMessage}
                 characterName={character.name}
-                personaName={defaultPersonaName}
+                personaName={defaultPartnerName}
               />
             </div>
           </div>
@@ -178,7 +178,7 @@ export function CharacterDetails({
               <TemplateDisplay
                 content={character.exampleDialogues}
                 characterName={character.name}
-                personaName={defaultPersonaName}
+                personaName={defaultPartnerName}
               />
             </div>
           </div>

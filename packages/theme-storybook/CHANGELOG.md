@@ -1,0 +1,54 @@
+# Changelog
+
+All notable changes to `@quilltap/theme-storybook` will be documented in this file.
+
+## [1.0.4] - 2026-01-01
+
+### Added
+- Avatar label classes (`qt-avatar-labels`, `qt-avatar-name`, `qt-avatar-title`)
+- CSS variables: `--qt-avatar-name-fg`, `--qt-avatar-title-fg` for theming avatar text
+- Themes can now customize avatar name/title colors (useful for backgrounds with images)
+
+## [1.0.3] - 2026-01-01
+
+### Added
+- Success button variant (`qt-button-success`) as standalone class with full styling
+- CSS variables: `--qt-button-success-bg`, `--qt-button-success-fg`, `--qt-button-success-hover-bg`
+- Dark foreground text for proper contrast on bright green background
+
+## [1.0.2] - 2025-12-31
+
+### Changed
+- Sidebar navigation icons and labels now use standard foreground color
+
+## [1.0.1] - 2025-12-31
+
+### Added
+- Left sidebar CSS variables (`--qt-left-sidebar-*`) for theme customization
+- App header CSS variables (`--qt-app-header-*`) for theme customization
+- Left sidebar component classes (`.qt-left-sidebar-*`)
+- App layout component classes (`.qt-app-layout`, `.qt-app-main`, `.qt-app-header-*`)
+- Mobile-responsive hamburger menu class (`.qt-hamburger`)
+
+## [1.0.0] - 2025-12-31
+
+### Added
+- Initial release of `@quilltap/theme-storybook`
+- Storybook preset for theme development
+- Default Quilltap theme tokens CSS (`quilltap-defaults.css`)
+- Complete qt-* component classes CSS (`qt-components.css`)
+- ThemeDecorator for applying themes in Storybook
+- Default preview configuration with theme/color mode toggles
+- Comprehensive story components:
+  - `ColorPalette` - Theme color token visualization
+  - `Typography` - Font families, headings, text styles
+  - `Spacing` - Border radius, spacing scale, shadows
+  - `Buttons` - All button variants and states
+  - `Cards` - Card variants, entity cards, panels
+  - `Inputs` - Text inputs, textareas, selects, forms
+  - `Badges` - Badge variants including provider badges
+  - `Avatars` - Avatar sizes, shapes, status indicators
+  - `Dialogs` - Modal/dialog variants with interactions
+  - `Tabs` - Tab navigation patterns
+  - `Chat` - Chat messages, input, typing indicator
+  - `ThemeComparison` - Side-by-side theme comparison

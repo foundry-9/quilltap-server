@@ -11,6 +11,27 @@ log_step() {
   echo "$message"
 }
 
+# Run a command silently, only showing output on failure
+# Usage: run_silent "description" command [args...]
+# Returns: exit code of the command
+run_silent() {
+  local description="$1"
+  shift
+  local output
+  local exit_code
+
+  output=$("$@" 2>&1) || exit_code=$?
+  exit_code=${exit_code:-0}
+
+  if [ $exit_code -ne 0 ]; then
+    echo ""
+    echo "❌ $description failed with exit code $exit_code:"
+    echo "$output"
+  fi
+
+  return $exit_code
+}
+
 kill_repo_node_processes() {
   local repo_root="$1"
   local killed=0
@@ -163,8 +184,11 @@ else
 fi
 
 log_step "📋 Step 3/12: Running ESLint..."
-npm run lint
-echo "✅ Linting passed!"
+if run_silent "ESLint" npm run lint; then
+  echo "✅ Linting passed!"
+else
+  exit 1
+fi
 
 log_step "👀 Step 4/12: Stopping watchman for this repository..."
 stop_watchman_for_repo
@@ -173,8 +197,11 @@ echo "✅ watchman is not watching this repository."
 
 log_step "🧪 Step 5/12: Running unit tests (npm run test:unit)..."
 assert_watchman_not_watching
-npm run test:unit
-echo "✅ Unit tests passed!"
+if run_silent "Unit tests" npm run test:unit; then
+  echo "✅ Unit tests passed!"
+else
+  exit 1
+fi
 
 log_step "👀 Step 6/12: Re-checking watchman and stopping it again if needed..."
 stop_watchman_for_repo
@@ -183,16 +210,25 @@ echo "✅ watchman confirmed stopped."
 
 log_step "🧾 Step 7/12: Running TypeScript (npx tsc)..."
 assert_watchman_not_watching
-npx tsc
-echo "✅ TypeScript check passed!"
+if run_silent "TypeScript check" npx tsc; then
+  echo "✅ TypeScript check passed!"
+else
+  exit 1
+fi
 
 log_step "🏗️ Step 8/12: Building the project..."
+build_output=""
 build_exit_code=0
-if npm run build; then
+build_output=$(npm run build 2>&1) || build_exit_code=$?
+build_exit_code=${build_exit_code:-0}
+
+if [ $build_exit_code -eq 0 ]; then
   echo "✅ Build passed!"
 else
-  build_exit_code=$?
-  echo "❌ Build failed! Post-build cleanup will still run before exiting."
+  echo ""
+  echo "❌ Build failed with exit code $build_exit_code:"
+  echo "$build_output"
+  echo "Post-build cleanup will still run before exiting."
 fi
 
 log_step "🧹 Step 9/12: Ensuring .next directory is removed after build..."

@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
+import { useDialogStateWithFileInput } from '@/hooks/useDialogState'
+import { useWizardState } from '@/hooks/useWizardState'
 import type {
   ImportState,
+  ImportStep,
   ExportFile,
   PreviewResponse,
   ImportResult,
@@ -48,27 +51,30 @@ export function useImportKeys({
   isOpen,
   onSuccess,
 }: UseImportKeysOptions): UseImportKeysReturn {
-  const [state, setState] = useState<ImportState>(initialState)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { state, setState, reset, fileInputRef } = useDialogStateWithFileInput({
+    isOpen,
+    initialState,
+    logContext: 'useImportKeys',
+  })
 
-  // Reset state when dialog opens/closes
-  useEffect(() => {
-    if (!isOpen) {
-      setState(initialState)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-    }
-  }, [isOpen])
-
-  // Log when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('Import keys dialog opened', {
-        context: 'useImportKeys',
-      })
-    }
-  }, [isOpen])
+  // Wizard step configuration
+  const wizard = useWizardState<ImportStep>(
+    {
+      initialStep: 'file',
+      steps: {
+        file: { next: ['passphrase'] },
+        passphrase: { prev: 'file', next: ['preview'] },
+        preview: { prev: 'passphrase', next: ['importing', 'options'] },
+        options: { prev: 'preview', next: ['importing'] },
+        importing: { next: ['complete', 'error'] },
+        complete: { isTerminal: true },
+        error: { prev: 'preview', isTerminal: true },
+      },
+      logContext: 'useImportKeys',
+    },
+    state.step,
+    (step) => setState((prev) => ({ ...prev, step }))
+  )
 
   const handleFileSelect = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,11 +96,12 @@ export function useImportKeys({
           throw new Error('Invalid file format. Please select a Quilltap API keys export file.')
         }
 
+        // Use wizard for step navigation
+        wizard.goTo('passphrase')
         setState((prev) => ({
           ...prev,
           selectedFile: file,
           fileData: data,
-          step: 'passphrase',
           error: null,
         }))
       } catch (error) {
@@ -111,12 +118,12 @@ export function useImportKeys({
         }))
       }
     },
-    []
+    [wizard, setState]
   )
 
   const setPassphrase = useCallback((value: string) => {
     setState((prev) => ({ ...prev, passphrase: value, error: null }))
-  }, [])
+  }, [setState])
 
   const handleVerify = useCallback(async () => {
     if (!state.fileData || !state.passphrase) return
@@ -148,12 +155,13 @@ export function useImportKeys({
         signatureValid: data.signatureValid,
       })
 
+      // Use wizard for step navigation
+      wizard.goTo('preview')
       setState((prev) => ({
         ...prev,
         keyPreviews: data.keys,
         signatureValid: data.signatureValid,
         duplicateCount: data.duplicateCount,
-        step: 'preview',
       }))
     } catch (error) {
       const message = getErrorMessage(error)
@@ -163,16 +171,18 @@ export function useImportKeys({
       })
       setState((prev) => ({ ...prev, error: message }))
     }
-  }, [state.fileData, state.passphrase])
+  }, [state.fileData, state.passphrase, wizard, setState])
 
   const setDuplicateHandling = useCallback((value: DuplicateHandling) => {
     setState((prev) => ({ ...prev, duplicateHandling: value }))
-  }, [])
+  }, [setState])
 
   const handleImport = useCallback(async () => {
     if (!state.fileData || !state.passphrase) return
 
-    setState((prev) => ({ ...prev, step: 'importing', importing: true, error: null }))
+    // Use wizard for step navigation
+    wizard.goTo('importing')
+    setState((prev) => ({ ...prev, importing: true, error: null }))
 
     try {
       clientLogger.debug('Starting API key import', {
@@ -204,9 +214,9 @@ export function useImportKeys({
         replaced: result.replaced,
       })
 
+      wizard.goTo('complete')
       setState((prev) => ({
         ...prev,
-        step: 'complete',
         importing: false,
         importResult: result,
       }))
@@ -218,38 +228,25 @@ export function useImportKeys({
         context: 'useImportKeys',
         error: message,
       })
+      wizard.goTo('error')
       setState((prev) => ({
         ...prev,
-        step: 'error',
         importing: false,
         error: message,
       }))
     }
-  }, [state.fileData, state.passphrase, state.duplicateHandling, onSuccess])
+  }, [state.fileData, state.passphrase, state.duplicateHandling, wizard, onSuccess, setState])
 
   const goBack = useCallback(() => {
-    setState((prev) => {
-      switch (prev.step) {
-        case 'passphrase':
-          return { ...prev, step: 'file', passphrase: '', error: null }
-        case 'preview':
-          return { ...prev, step: 'passphrase', error: null }
-        case 'options':
-          return { ...prev, step: 'preview', error: null }
-        case 'error':
-          return { ...prev, step: 'preview', error: null }
-        default:
-          return prev
-      }
-    })
-  }, [])
-
-  const reset = useCallback(() => {
-    setState(initialState)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
+    // Handle special state cleanup when going back from passphrase
+    if (state.step === 'passphrase') {
+      setState((prev) => ({ ...prev, passphrase: '', error: null }))
+    } else {
+      setState((prev) => ({ ...prev, error: null }))
     }
-  }, [])
+    // Use wizard for step navigation
+    wizard.goBack()
+  }, [state.step, wizard, setState])
 
   // Memoize actions to prevent unnecessary re-renders and effect re-runs
   const actions = useMemo(

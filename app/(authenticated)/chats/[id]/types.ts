@@ -61,6 +61,7 @@ export interface ConnectionProfileData {
 export interface Participant {
   id: string
   type: 'CHARACTER' | 'PERSONA'
+  controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
   systemPromptOverride?: string | null
@@ -99,6 +100,19 @@ export interface Chat {
   isPaused?: boolean
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
   isManuallyRenamed?: boolean
+  /** Array of participant IDs the user is currently impersonating */
+  impersonatingParticipantIds?: string[]
+  /** Which impersonated participant is currently "active" for typing */
+  activeTypingParticipantId?: string | null
+  /** Turns since last user input or pause (for all-LLM pause logic) */
+  allLLMPauseTurnCount?: number
+}
+
+export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'
+
+export interface MemoryCascadePreferences {
+  onMessageDelete: MemoryCascadeAction
+  onSwipeRegenerate: MemoryCascadeAction
 }
 
 export interface ChatSettings {
@@ -107,6 +121,7 @@ export interface ChatSettings {
   avatarDisplayMode: 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
   avatarDisplayStyle?: 'CIRCULAR' | 'RECTANGULAR'
   tagStyles?: Record<string, TagVisualStyle>
+  memoryCascadePreferences?: MemoryCascadePreferences
   createdAt: string
   updatedAt: string
 }
@@ -122,6 +137,7 @@ export interface AttachedFile {
 export interface ChatParticipantData {
   id: string
   type: 'CHARACTER' | 'PERSONA'
+  controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
   character: {

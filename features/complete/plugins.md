@@ -24,7 +24,6 @@ All LLM providers have been migrated to the plugin architecture:
 | `qtap-plugin-anthropic` | Anthropic | Chat, image/PDF analysis, tool use |
 | `qtap-plugin-google` | Google Gemini | Chat, Imagen images, file attachments |
 | `qtap-plugin-grok` | Grok/xAI | Chat, image generation, file attachments |
-| `qtap-plugin-gab-ai` | Gab AI | Chat (text-only) |
 | `qtap-plugin-ollama` | Ollama | Chat (local models) |
 | `qtap-plugin-openrouter` | OpenRouter | Chat (100+ models), pricing sync |
 | `qtap-plugin-openai-compatible` | Generic | Chat (any OpenAI-format API) |

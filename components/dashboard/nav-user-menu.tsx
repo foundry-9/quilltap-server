@@ -175,7 +175,7 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
         {user.image ? (
           // Using img instead of Image because the avatar comes from /api/files
           // which requires auth cookies that Next.js Image optimization can't include
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img
             src={user.image}
             alt={user.name || 'User'}

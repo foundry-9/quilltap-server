@@ -5,9 +5,8 @@
  * POST /api/profiles/test-message - Send a test message to verify provider functionality
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
@@ -46,21 +45,11 @@ const testMessageSchema = z.object({
  *   }
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     // Validate request body
     const body = await req.json()
     const { provider, apiKeyId, baseUrl, modelName, parameters = {} } = testMessageSchema.parse(body)
-
-    const repos = getRepositories()
 
     // Get API key if provided
     let decryptedKey = ''
@@ -78,7 +67,7 @@ export async function POST(req: NextRequest) {
         apiKey.ciphertext,
         apiKey.iv,
         apiKey.authTag,
-        session.user.id
+        user.id
       )
     }
 
@@ -142,28 +131,41 @@ export async function POST(req: NextRequest) {
     // Send test message
     const testPrompt = 'Hello! Please respond with a brief greeting to confirm the connection is working.'
 
-    logger.debug(`[TEST-MESSAGE] Starting test for provider: ${provider}, model: ${modelName}`, { context: 'POST /api/profiles/test-message' })
+    // Debug log: LLM request
+    const requestParams = {
+      model: modelName,
+      messages: [
+        {
+          role: 'user' as const,
+          content: testPrompt,
+        },
+      ],
+      temperature: parameters.temperature,
+      maxTokens: parameters.max_tokens || 50,
+      topP: parameters.top_p,
+    }
+    logger.debug('[LLM Request] profiles/test-message/route.ts:POST', {
+      context: 'llm-api',
+      provider,
+      model: modelName,
+      request: JSON.stringify({
+        ...requestParams,
+        messages: requestParams.messages.map(m => ({
+          role: m.role,
+          contentLength: m.content.length,
+        })),
+      }),
+    })
 
     try {
-      logger.debug('[TEST-MESSAGE] Calling sendMessage', { context: 'POST /api/profiles/test-message' })
-      const response = await llmProvider.sendMessage(
-        {
-          model: modelName,
-          messages: [
-            {
-              role: 'user',
-              content: testPrompt,
-            },
-          ],
-          temperature: parameters.temperature,
-          maxTokens: parameters.max_tokens || 50, // Limit tokens for test
-          topP: parameters.top_p,
-        },
-        decryptedKey
-      )
+      const response = await llmProvider.sendMessage(requestParams, decryptedKey)
 
       if (!response) {
-        logger.debug('[TEST-MESSAGE] Null response from provider', { context: 'POST /api/profiles/test-message' })
+        logger.debug('[LLM Response] profiles/test-message/route.ts:POST - null response', {
+          context: 'llm-api',
+          provider,
+          model: modelName,
+        })
         return NextResponse.json(
           {
             success: false,
@@ -174,11 +176,18 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      logger.debug('[TEST-MESSAGE] Received response:', { context: 'POST /api/profiles/test-message', hasContent: response.content !== undefined && response.content !== null, contentLength: response.content?.length })
+      // Debug log: LLM response (after null check)
+      logger.debug('[LLM Response] profiles/test-message/route.ts:POST', {
+        context: 'llm-api',
+        provider,
+        model: modelName,
+        hasContent: response.content !== undefined && response.content !== null,
+        contentLength: response.content?.length,
+        usage: response.usage ? JSON.stringify(response.usage) : undefined,
+      })
 
       // Check if we got a response with content (even empty string is valid)
       if (response.content !== undefined && response.content !== null) {
-        logger.debug('[TEST-MESSAGE] Success - returning response', { context: 'POST /api/profiles/test-message' })
         const preview = response.content.substring(0, 100)
         const isTruncated = response.content.length > 100
         const suffix = isTruncated ? '...' : ''
@@ -194,7 +203,6 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      logger.debug('[TEST-MESSAGE] No content in response (undefined or null)', { context: 'POST /api/profiles/test-message' })
       return NextResponse.json(
         {
           success: false,
@@ -204,10 +212,12 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       )
     } catch (error) {
-      logger.error('[TEST-MESSAGE] Error caught', { context: 'POST /api/profiles/test-message' }, error instanceof Error ? error : undefined)
-      if (error instanceof Error) {
-        logger.error('[TEST-MESSAGE] Error details', { context: 'POST /api/profiles/test-message', message: error.message, stack: error.stack }, error)
-      }
+      logger.debug('[LLM Error] profiles/test-message/route.ts:POST', {
+        context: 'llm-api',
+        provider,
+        model: modelName,
+        error: error instanceof Error ? error.message : String(error),
+      })
       return NextResponse.json(
         {
           success: false,
@@ -234,4 +244,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

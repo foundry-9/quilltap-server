@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import type { TimestampConfig } from '@/lib/schemas/types'
 
 interface UseChatCreationReturn {
   creatingChat: boolean
@@ -13,6 +14,8 @@ interface UseChatCreationReturn {
     selectedProfileId: string
     selectedPersonaId: string
     selectedImageProfileId: string | null
+    scenario: string
+    timestampConfig?: TimestampConfig | null
   }) => Promise<void>
 }
 
@@ -26,6 +29,8 @@ export function useChatCreation(): UseChatCreationReturn {
     selectedProfileId: string
     selectedPersonaId: string
     selectedImageProfileId: string | null
+    scenario: string
+    timestampConfig?: TimestampConfig | null
   }) => {
     const {
       characterId,
@@ -33,6 +38,8 @@ export function useChatCreation(): UseChatCreationReturn {
       selectedProfileId,
       selectedPersonaId,
       selectedImageProfileId,
+      scenario,
+      timestampConfig,
     } = props
 
     if (!selectedProfileId) {
@@ -42,7 +49,12 @@ export function useChatCreation(): UseChatCreationReturn {
     }
 
     setCreatingChat(true)
-    clientLogger.debug('Starting chat creation', { characterId, profileId: selectedProfileId })
+    clientLogger.debug('Starting chat creation', {
+      characterId,
+      profileId: selectedProfileId,
+      hasScenario: !!scenario,
+      hasTimestampConfig: !!timestampConfig,
+    })
 
     try {
       const participants: any[] = [
@@ -67,6 +79,8 @@ export function useChatCreation(): UseChatCreationReturn {
         body: JSON.stringify({
           participants,
           title: `Chat with ${characterName}`,
+          ...(scenario && { scenario }),
+          ...(timestampConfig && timestampConfig.mode !== 'NONE' && { timestampConfig }),
         }),
       })
 

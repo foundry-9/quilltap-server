@@ -2,20 +2,20 @@
 
 import Link from 'next/link'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
-import { Character, ConnectionProfile, Persona } from '../types'
-import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
+import { Character, ConnectionProfile, UserControlledCharacter } from '../types'
+import { USER_CONTROLLED_PROFILE_ID } from '@/lib/constants/character'
 
 interface ProfilesTabProps {
   characterId: string
   character: Character | null
   profiles: ConnectionProfile[]
-  personas: Persona[]
-  defaultPersonaId: string
+  userControlledCharacters: UserControlledCharacter[]
+  defaultPartnerId: string
   defaultImageProfileId: string
   savingConnectionProfile: boolean
-  savingPersona: boolean
+  savingPartner: boolean
   onConnectionProfileChange: (profileId: string) => void
-  onPersonaChange: (personaId: string) => void
+  onPartnerChange: (partnerId: string) => void
   onImageProfileChange: (profileId: string | null | undefined) => void
 }
 
@@ -23,16 +23,17 @@ export function ProfilesTab({
   characterId,
   character,
   profiles,
-  personas,
-  defaultPersonaId,
+  userControlledCharacters,
+  defaultPartnerId,
   defaultImageProfileId,
   savingConnectionProfile,
-  savingPersona,
+  savingPartner,
   onConnectionProfileChange,
-  onPersonaChange,
+  onPartnerChange,
   onImageProfileChange,
 }: ProfilesTabProps) {
-  const { formatPersonaName } = usePersonaDisplayName()
+  // Check if this character is user-controlled (disable partner selection if so)
+  const isUserControlled = character?.controlledBy === 'user'
 
   if (!character) return null
 
@@ -48,12 +49,17 @@ export function ProfilesTab({
         </p>
         <div className="flex items-center gap-3">
           <select
-            value={character?.defaultConnectionProfileId || ''}
+            value={
+              character?.controlledBy === 'user'
+                ? USER_CONTROLLED_PROFILE_ID
+                : character?.defaultConnectionProfileId || ''
+            }
             onChange={(e) => onConnectionProfileChange(e.target.value)}
             disabled={savingConnectionProfile}
             className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           >
             <option value="">No default profile</option>
+            <option value={USER_CONTROLLED_PROFILE_ID}>User Acts As Character</option>
             {profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
                 {profile.name}
@@ -74,38 +80,42 @@ export function ProfilesTab({
         )}
       </div>
 
-      {/* Persona Section */}
-      <div className="character-section-card rounded-lg border border-border bg-card p-6">
+      {/* Default Partner Section */}
+      <div className={`character-section-card rounded-lg border border-border bg-card p-6 ${isUserControlled ? 'opacity-50' : ''}`}>
         <h2 className="text-lg font-semibold text-foreground mb-2">
-          Default Persona
+          Default Conversation Partner
         </h2>
         <p className="qt-text-small mb-4">
-          The default persona to use when chatting with this character. Represents &quot;you&quot; in the conversation.
+          {isUserControlled
+            ? 'Not applicable when this character is user-controlled.'
+            : 'The default user-controlled character to represent you when chatting with this character.'}
         </p>
         <div className="flex items-center gap-3">
           <select
-            value={defaultPersonaId}
-            onChange={(e) => onPersonaChange(e.target.value)}
-            disabled={savingPersona}
+            value={defaultPartnerId}
+            onChange={(e) => onPartnerChange(e.target.value)}
+            disabled={savingPartner || isUserControlled}
             className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           >
-            <option value="">No default persona</option>
-            {personas.map((persona) => (
-              <option key={persona.id} value={persona.id}>
-                {formatPersonaName(persona)}
-              </option>
-            ))}
+            <option value="">No default partner</option>
+            {userControlledCharacters
+              .filter(c => c.id !== characterId) // Exclude current character
+              .map((char) => (
+                <option key={char.id} value={char.id}>
+                  {char.name}{char.title ? ` - ${char.title}` : ''}
+                </option>
+              ))}
           </select>
-          {savingPersona && (
+          {savingPartner && (
             <div className="flex items-center gap-2 qt-text-small">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
               Saving...
             </div>
           )}
         </div>
-        {personas.length === 0 && (
+        {!isUserControlled && userControlledCharacters.filter(c => c.id !== characterId).length === 0 && (
           <p className="mt-2 text-sm text-warning">
-            No personas available. <Link href="/personas/new" className="underline hover:no-underline">Create one</Link>.
+            No user-controlled characters available. <Link href="/characters/new" className="underline hover:no-underline">Create one</Link> or set an existing character to &quot;User Acts As Character&quot;.
           </p>
         )}
       </div>

@@ -6,8 +6,9 @@ import Link from 'next/link'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
-import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 import { getAvatarClasses } from '@/lib/avatar-styles'
+import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
+import type { TimestampConfig } from '@/lib/schemas/types'
 
 interface Character {
   id: string
@@ -21,6 +22,11 @@ interface Character {
     url?: string
   } | null
   defaultConnectionProfileId?: string | null
+  controlledBy?: 'llm' | 'user'
+  isFavorite?: boolean
+  _count?: {
+    chats: number
+  }
   systemPrompts?: Array<{
     id: string
     name: string
@@ -42,31 +48,30 @@ interface ImageProfile {
   modelName: string
 }
 
-interface Persona {
-  id: string
-  name: string
-  title?: string | null
-}
-
 interface SelectedCharacter {
   character: Character
   connectionProfileId: string
   imageProfileId?: string | null
   selectedSystemPromptId?: string | null
+  controlledBy: 'llm' | 'user'
 }
+
+// Special value for "Play As (User)" option in connection profile dropdown
+const USER_CONTROLLED_PROFILE = '__USER_CONTROLLED__'
 
 export default function NewChatPage() {
   const router = useRouter()
   const { style } = useAvatarDisplay()
-  const { formatPersonaName } = usePersonaDisplayName()
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const [characters, setCharacters] = useState<Character[]>([])
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
-  const [personas, setPersonas] = useState<Persona[]>([])
+  const [userControlledCharacters, setUserControlledCharacters] = useState<Character[]>([])
   const [selectedCharacters, setSelectedCharacters] = useState<SelectedCharacter[]>([])
-  const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
+  const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
+  const [scenario, setScenario] = useState('')
+  const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -77,17 +82,25 @@ export default function NewChatPage() {
     const fetchData = async () => {
       clientLogger.debug('[NewChat] Fetching data')
       try {
-        const [charsRes, profilesRes, imageProfilesRes, personasRes] = await Promise.all([
+        const [charsRes, profilesRes, imageProfilesRes] = await Promise.all([
           fetch('/api/characters'),
           fetch('/api/profiles'),
           fetch('/api/image-profiles'),
-          fetch('/api/personas'),
         ])
 
         if (charsRes.ok) {
           const data = await charsRes.json()
-          setCharacters(data.characters || [])
-          clientLogger.debug('[NewChat] Loaded characters', { count: data.characters?.length || 0 })
+          const allCharacters: Character[] = data.characters || []
+          // Separate LLM-controlled and user-controlled characters
+          const llmControlled = allCharacters.filter(c => c.controlledBy !== 'user')
+          const userControlled = allCharacters.filter(c => c.controlledBy === 'user')
+          setCharacters(llmControlled)
+          setUserControlledCharacters(userControlled)
+          clientLogger.debug('[NewChat] Loaded characters', {
+            total: allCharacters.length,
+            llmControlled: llmControlled.length,
+            userControlled: userControlled.length,
+          })
         }
 
         if (profilesRes.ok) {
@@ -100,12 +113,6 @@ export default function NewChatPage() {
           const data = await imageProfilesRes.json()
           setImageProfiles(data || [])
           clientLogger.debug('[NewChat] Loaded image profiles', { count: data?.length || 0 })
-        }
-
-        if (personasRes.ok) {
-          const data = await personasRes.json()
-          setPersonas(data || [])
-          clientLogger.debug('[NewChat] Loaded personas', { count: data?.length || 0 })
         }
       } catch (err) {
         clientLogger.error('[NewChat] Error fetching data', {
@@ -127,13 +134,44 @@ export default function NewChatPage() {
   }, [loading])
 
   const filteredCharacters = useMemo(() => {
-    if (!searchQuery.trim()) return characters
-    const query = searchQuery.toLowerCase()
-    return characters.filter(
-      (c) =>
-        c.name.toLowerCase().includes(query) ||
-        (c.title?.toLowerCase().includes(query) ?? false)
-    )
+    let result = characters
+
+    // Apply search filter if present
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      result = result.filter(
+        (c) =>
+          c.name.toLowerCase().includes(query) ||
+          (c.title?.toLowerCase().includes(query) ?? false)
+      )
+    }
+
+    // Sort: favorites first, then user-controlled, then by chat count (desc), then by name, then by title
+    return [...result].sort((a, b) => {
+      // 1. Favorites first
+      const aFav = a.isFavorite ? 1 : 0
+      const bFav = b.isFavorite ? 1 : 0
+      if (bFav !== aFav) return bFav - aFav
+
+      // 2. User-controlled (Play As) characters next
+      const aUser = a.controlledBy === 'user' ? 1 : 0
+      const bUser = b.controlledBy === 'user' ? 1 : 0
+      if (bUser !== aUser) return bUser - aUser
+
+      // 3. By chat participation count (descending)
+      const aChatCount = a._count?.chats ?? 0
+      const bChatCount = b._count?.chats ?? 0
+      if (bChatCount !== aChatCount) return bChatCount - aChatCount
+
+      // 4. By name (ascending, case-insensitive)
+      const nameCompare = a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+      if (nameCompare !== 0) return nameCompare
+
+      // 5. By title (ascending, case-insensitive, nulls last)
+      const aTitle = a.title?.toLowerCase() ?? ''
+      const bTitle = b.title?.toLowerCase() ?? ''
+      return aTitle.localeCompare(bTitle)
+    })
   }, [characters, searchQuery])
 
   const selectedCharacterIds = useMemo(
@@ -160,16 +198,23 @@ export default function NewChatPage() {
       })
       setSelectedCharacters((prev) => [
         ...prev,
-        { character, connectionProfileId, imageProfileId: null, selectedSystemPromptId },
+        { character, connectionProfileId, imageProfileId: null, selectedSystemPromptId, controlledBy: 'llm' },
       ])
     }
   }
 
   const handleProfileChange = (characterId: string, profileId: string) => {
-    clientLogger.debug('[NewChat] Changing connection profile', { characterId, profileId })
+    const isUserControlled = profileId === USER_CONTROLLED_PROFILE
+    clientLogger.debug('[NewChat] Changing connection profile', { characterId, profileId, isUserControlled })
     setSelectedCharacters((prev) =>
       prev.map((sc) =>
-        sc.character.id === characterId ? { ...sc, connectionProfileId: profileId } : sc
+        sc.character.id === characterId
+          ? {
+              ...sc,
+              connectionProfileId: isUserControlled ? '' : profileId,
+              controlledBy: isUserControlled ? 'user' : 'llm',
+            }
+          : sc
       )
     )
   }
@@ -219,42 +264,71 @@ export default function NewChatPage() {
       return
     }
 
-    const charsWithoutProfile = selectedCharacters.filter((sc) => !sc.connectionProfileId)
-    if (charsWithoutProfile.length > 0) {
-      showErrorToast('Please select a connection profile for: ' + charsWithoutProfile.map((sc) => sc.character.name).join(', '))
+    // Only LLM-controlled characters need a connection profile
+    const llmCharsWithoutProfile = selectedCharacters.filter((sc) => sc.controlledBy === 'llm' && !sc.connectionProfileId)
+    if (llmCharsWithoutProfile.length > 0) {
+      showErrorToast('Please select a connection profile for: ' + llmCharsWithoutProfile.map((sc) => sc.character.name).join(', '))
+      return
+    }
+
+    // Ensure at least one LLM-controlled character exists
+    const hasLlmControlled = selectedCharacters.some((sc) => sc.controlledBy === 'llm')
+    if (!hasLlmControlled) {
+      showErrorToast('At least one character must be LLM-controlled')
       return
     }
 
     setCreating(true)
     clientLogger.debug('[NewChat] Creating chat', {
       characterCount: selectedCharacters.length,
-      hasPersona: !!selectedPersonaId,
+      hasUserCharacter: !!selectedUserCharacterId,
+      hasScenario: !!scenario,
+      hasTimestampConfig: !!timestampConfig,
     })
 
     try {
       const participants: Array<{
-        type: 'CHARACTER' | 'PERSONA'
-        characterId?: string
-        personaId?: string
+        type: 'CHARACTER'
+        characterId: string
         connectionProfileId?: string
         imageProfileId?: string
         selectedSystemPromptId?: string
+        controlledBy?: 'llm' | 'user'
       }> = selectedCharacters.map((sc) => ({
         type: 'CHARACTER' as const,
         characterId: sc.character.id,
-        connectionProfileId: sc.connectionProfileId,
+        connectionProfileId: sc.controlledBy === 'llm' ? sc.connectionProfileId : undefined,
         imageProfileId: sc.imageProfileId || undefined,
         selectedSystemPromptId: sc.selectedSystemPromptId || undefined,
+        controlledBy: sc.controlledBy,
       }))
 
-      if (selectedPersonaId) {
-        participants.push({ type: 'PERSONA' as const, personaId: selectedPersonaId })
+      // Add user-controlled character as a participant (replaces persona)
+      if (selectedUserCharacterId) {
+        participants.push({
+          type: 'CHARACTER' as const,
+          characterId: selectedUserCharacterId,
+          controlledBy: 'user' as const,
+        })
+      }
+
+      const requestBody: Record<string, unknown> = {
+        title: generateTitle(),
+        participants,
+      }
+
+      if (scenario) {
+        requestBody.scenario = scenario
+      }
+
+      if (timestampConfig) {
+        requestBody.timestampConfig = timestampConfig
       }
 
       const res = await fetch('/api/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: generateTitle(), participants }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!res.ok) {
@@ -293,8 +367,8 @@ export default function NewChatPage() {
   }
 
   return (
-    <div className="min-h-screen px-4 py-8 text-foreground">
-      <div className="mx-auto max-w-6xl">
+    <div className="qt-page-container min-h-screen text-foreground">
+      <div>
         <Link href="/chats" className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80">
           ← Back to Chats
         </Link>
@@ -312,9 +386,9 @@ export default function NewChatPage() {
         )}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="rounded-xl border border-border bg-card p-6">
+          <div className="flex flex-col rounded-xl border border-border bg-card p-6 lg:max-h-[calc(100vh-12rem)]">
             <h2 className="mb-4 text-lg font-semibold">Select Characters</h2>
-            <div className="mb-4">
+            <div className="mb-4 flex-shrink-0">
               <input
                 ref={searchInputRef}
                 type="text"
@@ -324,7 +398,7 @@ export default function NewChatPage() {
                 className="w-full rounded-lg border border-border bg-background px-4 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            <div className="max-h-[500px] space-y-2 overflow-y-auto">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
               {filteredCharacters.length === 0 ? (
                 <div className="py-8 text-center qt-text-small">
                   {searchQuery ? 'No characters match your search' : 'No characters available'}
@@ -340,7 +414,7 @@ export default function NewChatPage() {
                       className={'w-full flex items-center gap-3 rounded-lg border p-3 transition ' + (isSelected ? 'border-primary bg-primary/10' : 'border-border bg-card hover:border-primary/50 hover:bg-muted/50')}
                     >
                       {avatarSrc ? (
-                        // eslint-disable-next-line @next/next/no-img-element
+                         
                         <img src={avatarSrc} alt={character.name} className={getAvatarClasses(style, 'sm').imageClass} />
                       ) : (
                         <div className={getAvatarClasses(style, 'sm').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
@@ -378,7 +452,7 @@ export default function NewChatPage() {
                       <div key={sc.character.id} className="rounded-lg border border-border bg-muted/30 p-4">
                         <div className="flex items-start gap-3">
                           {avatarSrc ? (
-                            // eslint-disable-next-line @next/next/no-img-element
+                             
                             <img src={avatarSrc} alt={sc.character.name} className={getAvatarClasses(style, 'sm').imageClass} />
                           ) : (
                             <div className={getAvatarClasses(style, 'sm').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
@@ -394,11 +468,12 @@ export default function NewChatPage() {
                             <div className="mt-3">
                               <label className="mb-1 block text-xs font-medium qt-text-xs">Connection Profile</label>
                               <select
-                                value={sc.connectionProfileId}
+                                value={sc.controlledBy === 'user' ? USER_CONTROLLED_PROFILE : sc.connectionProfileId}
                                 onChange={(e) => handleProfileChange(sc.character.id, e.target.value)}
                                 className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                               >
                                 <option value="">Select profile...</option>
+                                <option value={USER_CONTROLLED_PROFILE}>Play As (User)</option>
                                 {profiles.map((profile) => (
                                   <option key={profile.id} value={profile.id}>
                                     {profile.name}{profile.modelName ? ' (' + profile.modelName + ')' : ''}
@@ -452,28 +527,53 @@ export default function NewChatPage() {
               )}
             </div>
 
-            {personas.length > 0 && (
+            {userControlledCharacters.length > 0 && (
               <div className="rounded-xl border border-border bg-card p-6">
-                <h2 className="mb-4 text-lg font-semibold">Persona (Optional)</h2>
-                <p className="mb-3 qt-text-small">Select a persona to represent you in the conversation.</p>
+                <h2 className="mb-4 text-lg font-semibold">Play As (Optional)</h2>
+                <p className="mb-3 qt-text-small">Select a character to represent you in the conversation.</p>
                 <select
-                  value={selectedPersonaId}
-                  onChange={(e) => setSelectedPersonaId(e.target.value)}
+                  value={selectedUserCharacterId}
+                  onChange={(e) => setSelectedUserCharacterId(e.target.value)}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="">No persona</option>
-                  {personas.map((persona) => (
-                    <option key={persona.id} value={persona.id}>{formatPersonaName(persona)}</option>
+                  <option value="">No character selected</option>
+                  {userControlledCharacters.map((char) => (
+                    <option key={char.id} value={char.id}>
+                      {char.name}{char.title ? ` (${char.title})` : ''}
+                    </option>
                   ))}
                 </select>
               </div>
             )}
 
+            <div className="rounded-xl border border-border bg-card p-6">
+              <h2 className="mb-4 text-lg font-semibold">Scenario (Optional)</h2>
+              <p className="mb-3 qt-text-small">Describe the starting scenario for this chat.</p>
+              <textarea
+                value={scenario}
+                onChange={(e) => setScenario(e.target.value)}
+                placeholder="e.g., You are in a cozy coffee shop on a rainy afternoon..."
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                rows={4}
+              />
+            </div>
+
+            <TimestampConfigCard
+              value={timestampConfig}
+              onChange={setTimestampConfig}
+            />
+
             <div className="flex justify-end gap-3">
               <Link href="/chats" className="rounded-lg border border-border bg-card px-6 py-2 font-medium qt-text-small transition hover:bg-muted">Cancel</Link>
               <button
                 onClick={handleCreateChat}
-                disabled={creating || selectedCharacters.length === 0 || profiles.length === 0 || selectedCharacters.some((sc) => !sc.connectionProfileId)}
+                disabled={
+                  creating ||
+                  selectedCharacters.length === 0 ||
+                  (profiles.length === 0 && selectedCharacters.some((sc) => sc.controlledBy === 'llm')) ||
+                  selectedCharacters.some((sc) => sc.controlledBy === 'llm' && !sc.connectionProfileId) ||
+                  !selectedCharacters.some((sc) => sc.controlledBy === 'llm')
+                }
                 className="rounded-lg bg-success px-6 py-2 font-semibold text-success-foreground transition hover:bg-success/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {creating ? 'Creating...' : 'Create Chat'}

@@ -6,15 +6,17 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 import { getServerSession } from '@/lib/auth/session'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
-import { getUserRepositories } from '@/lib/repositories/factory'
+import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
 
-// Mock dependencies
-// Note: @/lib/repositories/factory is mocked globally in jest.setup.ts
+// Mock the repositories factory - must be before any imports of modules using it
+jest.mock('@/lib/repositories/factory')
 
 // Import after mock setup
 import { GET as getKeys, POST as createKey } from '@/app/api/keys/route'
+import { getRepositories, getUserRepositories } from '@/lib/repositories/factory'
 
-// Get the mocked getUserRepositories from the global mock
+// Get the mocked functions
+const mockGetRepositories = jest.mocked(getRepositories)
 const mockGetUserRepositories = jest.mocked(getUserRepositories)
 
 // Encryption is mocked globally in jest.setup.ts
@@ -39,8 +41,21 @@ describe('API Keys Routes', () => {
   let mockConnectionsRepo: any
 
   beforeEach(() => {
-    // Clear mock call history
-    ;(getServerSession as jest.Mock).mockClear?.()
+    // Create fresh mock repositories for each test
+    const mockRepos = createMockRepositoryContainer()
+    mockGetRepositories.mockReturnValue(mockRepos)
+
+    // Also mock getUserRepositories for the route handler
+    mockGetUserRepositories.mockReturnValue({
+      characters: mockRepos.characters,
+      personas: mockRepos.personas,
+      chats: mockRepos.chats,
+      tags: mockRepos.tags,
+      connections: mockRepos.connections,
+      imageProfiles: mockRepos.imageProfiles,
+      embeddingProfiles: mockRepos.embeddingProfiles,
+      memories: mockRepos.memories,
+    } as any)
 
     // Set up default mock implementations for encryption functions
     mockEncryptApiKey.mockReturnValue({
@@ -51,30 +66,10 @@ describe('API Keys Routes', () => {
     mockMaskApiKey.mockImplementation((key: string) => `***${key.slice(-4)}`)
 
     // Set up repository mocks
-    mockConnectionsRepo = {
-      getAllApiKeys: jest.fn(),
-      findApiKeyById: jest.fn(),
-      createApiKey: jest.fn(),
-      updateApiKey: jest.fn(),
-      deleteApiKey: jest.fn(),
-      findByUserId: jest.fn(),
-      findById: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    }
+    mockConnectionsRepo = mockRepos.connections
 
-    mockGetUserRepositories.mockReturnValue({
-      connections: mockConnectionsRepo,
-      characters: {} as any,
-      personas: {} as any,
-      chats: {} as any,
-      tags: {} as any,
-      files: {} as any,
-      imageProfiles: {} as any,
-      embeddingProfiles: {} as any,
-      memories: {} as any,
-    } as any)
+    // Setup auth mocks with repositories
+    setupAuthMocks(getServerSession as jest.Mock, mockRepos)
 
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
   })

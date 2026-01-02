@@ -10,6 +10,10 @@ import { createLLMProvider } from '@/lib/llm'
 import { getRepositories } from '@/lib/repositories/factory'
 import { uploadFile as uploadS3File } from '@/lib/s3/operations'
 import { getInheritedTags } from '@/lib/files/tag-inheritance'
+import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
+
+// Create mock repos before jest.mock
+const mockRepos = createMockRepositoryContainer()
 
 // Note: Mocks for next-auth, @/lib/encryption, @/lib/llm, @/lib/repositories/factory,
 // @/lib/s3/operations, @/lib/s3/client, and @/lib/files/tag-inheritance are defined in jest.setup.ts
@@ -39,6 +43,16 @@ describe('POST /api/images/generate', () => {
     jest.clearAllMocks()
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
 
+    // Setup getRepositories to return mockRepos
+    mockGetRepositories.mockReturnValue(mockRepos)
+
+    // Setup auth mocks with the user ID used by these tests
+    setupAuthMocks(mockGetServerSession as jest.Mock, mockRepos, {
+      id: 'test-user-id',
+      email: 'test@example.com',
+      name: 'Test User',
+    })
+
     // Setup repository mocks structure
     mockConnectionsRepo = {
       findById: jest.fn(),
@@ -62,17 +76,10 @@ describe('POST /api/images/generate', () => {
       delete: jest.fn(),
     }
 
-    mockGetRepositories.mockReturnValue({
-      connections: mockConnectionsRepo,
-      images: mockImagesRepo,
-      files: mockImagesRepo, // files repo is used for file storage operations
-      characters: {},
-      personas: {},
-      chats: {},
-      tags: {},
-      users: {},
-      imageProfiles: {},
-    } as any)
+    // Update the mock repos with specific test repo instances
+    mockRepos.connections = mockConnectionsRepo as any
+    mockRepos.images = mockImagesRepo as any
+    mockRepos.files = mockImagesRepo as any
 
     // Setup S3 and tag inheritance mocks (base mocks are in jest.setup.ts, but reset here)
     mockUploadS3File.mockResolvedValue(undefined)

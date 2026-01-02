@@ -243,8 +243,32 @@ export async function generateImageDescription(
       messageParams.topP = topP
     }
 
+    // Debug log: LLM request for image description
+    logger.debug('[LLM Request] file-attachment-fallback.ts:generateImageDescription', {
+      context: 'llm-api',
+      provider: imageDescProfile.provider,
+      model: imageDescProfile.modelName,
+      filename: file.filename,
+      mimeType: file.mimeType,
+      params: JSON.stringify({
+        temperature: messageParams.temperature,
+        maxTokens: messageParams.maxTokens,
+        topP: messageParams.topP,
+      }),
+    })
+
     // Send message to cheap LLM asking for description
     const response = await provider.sendMessage(messageParams, apiKeyValue || '')
+
+    // Debug log: LLM response
+    logger.debug('[LLM Response] file-attachment-fallback.ts:generateImageDescription', {
+      context: 'llm-api',
+      provider: imageDescProfile.provider,
+      model: imageDescProfile.modelName,
+      responseLength: response.content?.length || 0,
+      finishReason: response.finishReason,
+      usage: response.usage ? JSON.stringify(response.usage) : undefined,
+    })
 
     // Check for empty or invalid responses
     const trimmedContent = response.content.trim()

@@ -5,12 +5,11 @@
  * Returns the list of available embedding models by provider
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
-import { getRepositories } from '@/lib/repositories/factory'
 import {
   getEmbeddingProviders,
   getEmbeddingModels,
@@ -24,16 +23,8 @@ import {
  * Query params:
  *   - provider: Provider name (optional, returns all if not specified)
  */
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     // Ensure plugin system is initialized
     const pluginSystemInitialized = isPluginSystemInitialized()
     const providerRegistryInitialized = providerRegistry.isInitialized()
@@ -97,7 +88,6 @@ export async function GET(req: NextRequest) {
 
       // Cache the fetched embedding models in the database
       try {
-        const repos = getRepositories()
         await repos.providerModels.upsertModelsForProvider(
           provider,
           models.map(m => ({
@@ -137,7 +127,6 @@ export async function GET(req: NextRequest) {
 
     // Cache all embedding models in the database
     try {
-      const repos = getRepositories()
       for (const [providerName, models] of Object.entries(allModels)) {
         await repos.providerModels.upsertModelsForProvider(
           providerName,
@@ -170,4 +159,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

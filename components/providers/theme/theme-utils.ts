@@ -45,12 +45,6 @@ export function applyThemeToDom(
   // Set data attribute for theme-aware CSS selectors
   root.setAttribute('data-theme', activeThemeId ?? 'default');
   root.setAttribute('data-color-mode', resolvedColorMode);
-
-  clientLogger.debug('Theme: applied to DOM', {
-    activeThemeId,
-    resolvedColorMode,
-    htmlClasses: root.classList.toString(),
-  });
 }
 
 /**
@@ -101,24 +95,14 @@ export async function fetchThemeTokens(
   cssOverrides: string | undefined;
 } | null> {
   try {
-    clientLogger.debug('Theme: loading theme tokens', { themeId });
-
     const response = await fetch(`/api/themes/${themeId}/tokens`);
     if (response.ok) {
       const data: ThemeTokensResponse = await response.json();
-      const result = {
+      return {
         tokens: data.tokens,
         fonts: data.fonts || [],
         cssOverrides: data.cssOverrides || undefined,
       };
-
-      clientLogger.debug('Theme: loaded theme tokens', {
-        themeId,
-        fontCount: result.fonts.length,
-        hasCssOverrides: !!result.cssOverrides,
-      });
-
-      return result;
     } else if (response.status === 404) {
       clientLogger.warn('Theme: theme not found, using default', { themeId });
       return null;
@@ -137,19 +121,11 @@ export async function fetchThemeTokens(
  */
 export async function fetchAvailableThemes(): Promise<ThemeSummary[]> {
   try {
-    clientLogger.debug('Theme: loading available themes');
-
     const response = await fetch('/api/themes');
     if (response.ok) {
       const data: ThemesListResponse = await response.json();
       // Filter out the default theme since it's handled separately in the UI
-      const themes = (data.themes || []).filter((t) => !t.isDefault);
-
-      clientLogger.debug('Theme: loaded available themes', {
-        count: themes.length,
-      });
-
-      return themes;
+      return (data.themes || []).filter((t) => !t.isDefault);
     } else {
       throw new Error(`Failed to load themes: ${response.status}`);
     }
@@ -170,18 +146,9 @@ export async function fetchThemePreference(): Promise<{
   showNavThemeSelector: boolean;
 } | null> {
   try {
-    clientLogger.debug('Theme: loading user preference');
-
     const response = await fetch('/api/theme-preference');
     if (response.ok) {
       const preference = await response.json();
-
-      clientLogger.debug('Theme: loaded user preference', {
-        activeThemeId: preference.activeThemeId,
-        colorMode: preference.colorMode,
-        showNavThemeSelector: preference.showNavThemeSelector,
-      });
-
       return {
         activeThemeId: preference.activeThemeId ?? null,
         colorMode: preference.colorMode ?? 'system',
@@ -189,7 +156,6 @@ export async function fetchThemePreference(): Promise<{
       };
     } else if (response.status === 401) {
       // Not authenticated, return null
-      clientLogger.debug('Theme: not authenticated, using defaults');
       return null;
     } else {
       throw new Error(`Failed to load preference: ${response.status}`);

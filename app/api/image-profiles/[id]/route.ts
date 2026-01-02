@@ -7,9 +7,8 @@
  * DELETE /api/image-profiles/[id]  - Delete a profile
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { logger } from '@/lib/logger'
 
@@ -17,65 +16,54 @@ import { logger } from '@/lib/logger'
  * GET /api/image-profiles/[id]
  * Get a specific image generation profile
  */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      const profile = await repos.imageProfiles.findById(id)
 
-    const repos = getRepositories()
-    const profile = await repos.imageProfiles.findById(id)
+      if (!profile || profile.userId !== user.id) {
+        return NextResponse.json(
+          { error: 'Image profile not found' },
+          { status: 404 }
+        )
+      }
 
-    if (!profile || profile.userId !== session.user.id) {
-      return NextResponse.json(
-        { error: 'Image profile not found' },
-        { status: 404 }
-      )
-    }
-
-    // Enrich with API key info
-    let apiKey = null
-    if (profile.apiKeyId) {
-      const key = await repos.connections.findApiKeyById(profile.apiKeyId)
-      if (key) {
-        apiKey = {
-          id: key.id,
-          label: key.label,
-          provider: key.provider,
-          isActive: key.isActive,
+      // Enrich with API key info
+      let apiKey = null
+      if (profile.apiKeyId) {
+        const key = await repos.connections.findApiKeyById(profile.apiKeyId)
+        if (key) {
+          apiKey = {
+            id: key.id,
+            label: key.label,
+            provider: key.provider,
+            isActive: key.isActive,
+          }
         }
       }
-    }
 
-    // Get tag details
-    const tagDetails = await Promise.all(
-      profile.tags.map(async (tagId) => {
-        const tag = await repos.tags.findById(tagId)
-        return tag ? { tagId, tag } : null
+      // Get tag details
+      const tagDetails = await Promise.all(
+        profile.tags.map(async (tagId) => {
+          const tag = await repos.tags.findById(tagId)
+          return tag ? { tagId, tag } : null
+        })
+      )
+
+      return NextResponse.json({
+        ...profile,
+        apiKey,
+        tags: tagDetails.filter(Boolean),
       })
-    )
-
-    return NextResponse.json({
-      ...profile,
-      apiKey,
-      tags: tagDetails.filter(Boolean),
-    })
-  } catch (error) {
-    logger.error('Failed to fetch image profile', { context: 'GET /api/image-profiles/[id]' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to fetch image profile' },
-      { status: 500 }
-    )
+    } catch (error) {
+      logger.error('Failed to fetch image profile', { context: 'GET /api/image-profiles/[id]' }, error instanceof Error ? error : undefined)
+      return NextResponse.json(
+        { error: 'Failed to fetch image profile' },
+        { status: 500 }
+      )
+    }
   }
-}
+)
 
 /**
  * PUT /api/image-profiles/[id]
@@ -91,226 +79,202 @@ export async function GET(
  *   isDefault?: boolean
  * }
  */
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      // Verify ownership
+      const existingProfile = await repos.imageProfiles.findById(id)
 
-    const repos = getRepositories()
-
-    // Verify ownership
-    const existingProfile = await repos.imageProfiles.findById(id)
-
-    if (!existingProfile || existingProfile.userId !== session.user.id) {
-      return NextResponse.json(
-        { error: 'Image profile not found' },
-        { status: 404 }
-      )
-    }
-
-    const body = await req.json()
-    const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault } = body
-
-    // Build update data
-    const updateData: Record<string, any> = {}
-
-    if (name !== undefined) {
-      if (typeof name !== 'string' || name.trim().length === 0) {
+      if (!existingProfile || existingProfile.userId !== user.id) {
         return NextResponse.json(
-          { error: 'Name must be a non-empty string' },
-          { status: 400 }
+          { error: 'Image profile not found' },
+          { status: 404 }
         )
       }
 
-      // Check for duplicate name (excluding current profile)
-      const duplicateProfile = await repos.imageProfiles.findByName(session.user.id, name.trim())
+      const body = await req.json()
+      const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault } = body
 
-      if (duplicateProfile && duplicateProfile.id !== id) {
-        return NextResponse.json(
-          { error: 'An image profile with this name already exists' },
-          { status: 409 }
-        )
-      }
+      // Build update data
+      const updateData: Record<string, any> = {}
 
-      updateData.name = name.trim()
-    }
-
-    if (provider !== undefined) {
-      if (typeof provider !== 'string' || provider.trim().length === 0) {
-        return NextResponse.json(
-          { error: 'Provider must be a non-empty string' },
-          { status: 400 }
-        )
-      }
-
-      // Verify provider is available
-      try {
-        createImageProvider(provider)
-      } catch {
-        return NextResponse.json(
-          { error: `Provider ${provider} is not available` },
-          { status: 400 }
-        )
-      }
-
-      updateData.provider = provider
-    }
-
-    if (apiKeyId !== undefined) {
-      if (apiKeyId === null) {
-        updateData.apiKeyId = null
-      } else {
-        // Validate the API key exists
-        const apiKey = await repos.connections.findApiKeyById(apiKeyId)
-
-        if (!apiKey) {
+      if (name !== undefined) {
+        if (typeof name !== 'string' || name.trim().length === 0) {
           return NextResponse.json(
-            { error: 'API key not found' },
-            { status: 404 }
+            { error: 'Name must be a non-empty string' },
+            { status: 400 }
           )
         }
 
-        updateData.apiKeyId = apiKeyId
+        // Check for duplicate name (excluding current profile)
+        const duplicateProfile = await repos.imageProfiles.findByName(user.id, name.trim())
+
+        if (duplicateProfile && duplicateProfile.id !== id) {
+          return NextResponse.json(
+            { error: 'An image profile with this name already exists' },
+            { status: 409 }
+          )
+        }
+
+        updateData.name = name.trim()
       }
-    }
 
-    if (baseUrl !== undefined) {
-      updateData.baseUrl = baseUrl || null
-    }
+      if (provider !== undefined) {
+        if (typeof provider !== 'string' || provider.trim().length === 0) {
+          return NextResponse.json(
+            { error: 'Provider must be a non-empty string' },
+            { status: 400 }
+          )
+        }
 
-    if (modelName !== undefined) {
-      if (typeof modelName !== 'string' || modelName.trim().length === 0) {
+        // Verify provider is available
+        try {
+          createImageProvider(provider)
+        } catch {
+          return NextResponse.json(
+            { error: `Provider ${provider} is not available` },
+            { status: 400 }
+          )
+        }
+
+        updateData.provider = provider
+      }
+
+      if (apiKeyId !== undefined) {
+        if (apiKeyId === null) {
+          updateData.apiKeyId = null
+        } else {
+          // Validate the API key exists
+          const apiKey = await repos.connections.findApiKeyById(apiKeyId)
+
+          if (!apiKey) {
+            return NextResponse.json(
+              { error: 'API key not found' },
+              { status: 404 }
+            )
+          }
+
+          updateData.apiKeyId = apiKeyId
+        }
+      }
+
+      if (baseUrl !== undefined) {
+        updateData.baseUrl = baseUrl || null
+      }
+
+      if (modelName !== undefined) {
+        if (typeof modelName !== 'string' || modelName.trim().length === 0) {
+          return NextResponse.json(
+            { error: 'Model name must be a non-empty string' },
+            { status: 400 }
+          )
+        }
+        updateData.modelName = modelName.trim()
+      }
+
+      if (parameters !== undefined) {
+        if (typeof parameters !== 'object' || Array.isArray(parameters)) {
+          return NextResponse.json(
+            { error: 'Parameters must be an object' },
+            { status: 400 }
+          )
+        }
+        updateData.parameters = parameters
+      }
+
+      if (isDefault !== undefined) {
+        if (typeof isDefault !== 'boolean') {
+          return NextResponse.json(
+            { error: 'isDefault must be a boolean' },
+            { status: 400 }
+          )
+        }
+
+        // If setting as default, unset other defaults
+        if (isDefault) {
+          await repos.imageProfiles.unsetAllDefaults(user.id)
+        }
+
+        updateData.isDefault = isDefault
+      }
+
+      // Update the profile
+      const updatedProfile = await repos.imageProfiles.update(id, updateData)
+
+      if (!updatedProfile) {
         return NextResponse.json(
-          { error: 'Model name must be a non-empty string' },
-          { status: 400 }
+          { error: 'Failed to update profile' },
+          { status: 500 }
         )
       }
-      updateData.modelName = modelName.trim()
-    }
 
-    if (parameters !== undefined) {
-      if (typeof parameters !== 'object' || Array.isArray(parameters)) {
-        return NextResponse.json(
-          { error: 'Parameters must be an object' },
-          { status: 400 }
-        )
-      }
-      updateData.parameters = parameters
-    }
-
-    if (isDefault !== undefined) {
-      if (typeof isDefault !== 'boolean') {
-        return NextResponse.json(
-          { error: 'isDefault must be a boolean' },
-          { status: 400 }
-        )
+      // Enrich with API key info
+      let apiKey = null
+      if (updatedProfile.apiKeyId) {
+        const key = await repos.connections.findApiKeyById(updatedProfile.apiKeyId)
+        if (key) {
+          apiKey = {
+            id: key.id,
+            label: key.label,
+            provider: key.provider,
+            isActive: key.isActive,
+          }
+        }
       }
 
-      // If setting as default, unset other defaults
-      if (isDefault) {
-        await repos.imageProfiles.unsetAllDefaults(session.user.id)
-      }
+      // Get tag details
+      const tagDetails = await Promise.all(
+        updatedProfile.tags.map(async (tagId) => {
+          const tag = await repos.tags.findById(tagId)
+          return tag ? { tagId, tag } : null
+        })
+      )
 
-      updateData.isDefault = isDefault
-    }
-
-    // Update the profile
-    const updatedProfile = await repos.imageProfiles.update(id, updateData)
-
-    if (!updatedProfile) {
+      return NextResponse.json({
+        ...updatedProfile,
+        apiKey,
+        tags: tagDetails.filter(Boolean),
+      })
+    } catch (error) {
+      logger.error('Failed to update image profile', { context: 'PUT /api/image-profiles/[id]' }, error instanceof Error ? error : undefined)
       return NextResponse.json(
-        { error: 'Failed to update profile' },
+        { error: 'Failed to update image profile' },
         { status: 500 }
       )
     }
-
-    // Enrich with API key info
-    let apiKey = null
-    if (updatedProfile.apiKeyId) {
-      const key = await repos.connections.findApiKeyById(updatedProfile.apiKeyId)
-      if (key) {
-        apiKey = {
-          id: key.id,
-          label: key.label,
-          provider: key.provider,
-          isActive: key.isActive,
-        }
-      }
-    }
-
-    // Get tag details
-    const tagDetails = await Promise.all(
-      updatedProfile.tags.map(async (tagId) => {
-        const tag = await repos.tags.findById(tagId)
-        return tag ? { tagId, tag } : null
-      })
-    )
-
-    return NextResponse.json({
-      ...updatedProfile,
-      apiKey,
-      tags: tagDetails.filter(Boolean),
-    })
-  } catch (error) {
-    logger.error('Failed to update image profile', { context: 'PUT /api/image-profiles/[id]' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to update image profile' },
-      { status: 500 }
-    )
   }
-}
+)
 
 /**
  * DELETE /api/image-profiles/[id]
  * Delete an image generation profile
  */
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
+export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      // Verify ownership
+      const existingProfile = await repos.imageProfiles.findById(id)
+
+      if (!existingProfile || existingProfile.userId !== user.id) {
+        return NextResponse.json(
+          { error: 'Image profile not found' },
+          { status: 404 }
+        )
+      }
+
+      // Delete the profile
+      await repos.imageProfiles.delete(id)
+
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { message: 'Image profile deleted successfully' },
+        { status: 200 }
+      )
+    } catch (error) {
+      logger.error('Failed to delete image profile', { context: 'DELETE /api/image-profiles/[id]' }, error instanceof Error ? error : undefined)
+      return NextResponse.json(
+        { error: 'Failed to delete image profile' },
+        { status: 500 }
       )
     }
-
-    const repos = getRepositories()
-
-    // Verify ownership
-    const existingProfile = await repos.imageProfiles.findById(id)
-
-    if (!existingProfile || existingProfile.userId !== session.user.id) {
-      return NextResponse.json(
-        { error: 'Image profile not found' },
-        { status: 404 }
-      )
-    }
-
-    // Delete the profile
-    await repos.imageProfiles.delete(id)
-
-    return NextResponse.json(
-      { message: 'Image profile deleted successfully' },
-      { status: 200 }
-    )
-  } catch (error) {
-    logger.error('Failed to delete image profile', { context: 'DELETE /api/image-profiles/[id]' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to delete image profile' },
-      { status: 500 }
-    )
   }
-}
+)

@@ -1,0 +1,201 @@
+/**
+ * Quilltap Default Theme Tokens
+ *
+ * This file contains the default theme values used by Quilltap.
+ * Theme plugins override these values by setting CSS custom properties
+ * in a [data-theme="your-theme"] selector.
+ *
+ * @package @quilltap/theme-storybook
+ */
+
+/* ==========================================================================
+   BASE THEME TOKENS (Light Mode)
+   ========================================================================== */
+
+:root {
+  /* Background and foreground */
+  --theme-background: hsl(0 0% 100%);
+  --theme-foreground: hsl(222.2 84% 4.9%);
+
+  /* Card surfaces */
+  --theme-card: hsl(0 0% 100%);
+  --theme-card-foreground: hsl(222.2 84% 4.9%);
+
+  /* Popover/dropdown surfaces */
+  --theme-popover: hsl(0 0% 100%);
+  --theme-popover-foreground: hsl(222.2 84% 4.9%);
+
+  /* Primary brand color */
+  --theme-primary: hsl(222.2 47.4% 11.2%);
+  --theme-primary-foreground: hsl(210 40% 98%);
+
+  /* Secondary color */
+  --theme-secondary: hsl(210 40% 96.1%);
+  --theme-secondary-foreground: hsl(222.2 47.4% 11.2%);
+
+  /* Muted backgrounds and text */
+  --theme-muted: hsl(210 40% 96.1%);
+  --theme-muted-foreground: hsl(215.4 16.3% 46.9%);
+
+  /* Accent color */
+  --theme-accent: hsl(210 40% 96.1%);
+  --theme-accent-foreground: hsl(222.2 47.4% 11.2%);
+
+  /* Destructive/error color */
+  --theme-destructive: hsl(0 84.2% 60.2%);
+  --theme-destructive-foreground: hsl(210 40% 98%);
+
+  /* Borders and inputs */
+  --theme-border: hsl(214.3 31.8% 91.4%);
+  --theme-input: hsl(214.3 31.8% 91.4%);
+  --theme-ring: hsl(222.2 84% 4.9%);
+
+  /* Status colors */
+  --theme-success: hsl(142 76% 36%);
+  --theme-success-foreground: hsl(0 0% 100%);
+  --theme-warning: hsl(38 92% 50%);
+  --theme-warning-foreground: hsl(0 0% 100%);
+  --theme-info: hsl(199 89% 48%);
+  --theme-info-foreground: hsl(0 0% 100%);
+
+  /* Chat-specific colors */
+  --theme-chat-user: hsl(222.2 47.4% 25%);
+  --theme-chat-user-foreground: hsl(210 40% 98%);
+
+  /* Border radius */
+  --theme-radius-lg: 0.5rem;
+  --theme-radius-md: calc(0.5rem - 2px);
+  --theme-radius-sm: calc(0.5rem - 4px);
+
+  /* Typography */
+  --theme-font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --theme-font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+  --theme-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --theme-font-brand: var(--theme-font-sans);
+  --theme-font-chat-user: var(--theme-font-brand);
+}
+
+/* ==========================================================================
+   DARK MODE TOKENS
+   ========================================================================== */
+
+.dark {
+  --theme-background: hsl(222.2 84% 4.9%);
+  --theme-foreground: hsl(210 40% 98%);
+
+  --theme-card: hsl(222.2 84% 4.9%);
+  --theme-card-foreground: hsl(210 40% 98%);
+
+  --theme-popover: hsl(222.2 84% 4.9%);
+  --theme-popover-foreground: hsl(210 40% 98%);
+
+  --theme-primary: hsl(210 40% 98%);
+  --theme-primary-foreground: hsl(222.2 47.4% 11.2%);
+
+  --theme-secondary: hsl(217.2 32.6% 17.5%);
+  --theme-secondary-foreground: hsl(210 40% 98%);
+
+  --theme-muted: hsl(217.2 32.6% 17.5%);
+  --theme-muted-foreground: hsl(215 20.2% 65.1%);
+
+  --theme-accent: hsl(217.2 32.6% 17.5%);
+  --theme-accent-foreground: hsl(210 40% 98%);
+
+  --theme-destructive: hsl(0 62.8% 30.6%);
+  --theme-destructive-foreground: hsl(210 40% 98%);
+
+  --theme-border: hsl(217.2 32.6% 17.5%);
+  --theme-input: hsl(217.2 32.6% 17.5%);
+  --theme-ring: hsl(212.7 26.8% 83.9%);
+
+  --theme-chat-user: hsl(222.2 47.4% 35%);
+  --theme-chat-user-foreground: hsl(210 40% 98%);
+}
+
+/* ==========================================================================
+   SEMANTIC ALIASES
+   These map theme tokens to --color-* variables used by components
+   ========================================================================== */
+
+:root {
+  --color-background: var(--theme-background);
+  --color-foreground: var(--theme-foreground);
+  --color-card: var(--theme-card);
+  --color-card-foreground: var(--theme-card-foreground);
+  --color-popover: var(--theme-popover);
+  --color-popover-foreground: var(--theme-popover-foreground);
+  --color-primary: var(--theme-primary);
+  --color-primary-foreground: var(--theme-primary-foreground);
+  --color-secondary: var(--theme-secondary);
+  --color-secondary-foreground: var(--theme-secondary-foreground);
+  --color-muted: var(--theme-muted);
+  --color-muted-foreground: var(--theme-muted-foreground);
+  --color-accent: var(--theme-accent);
+  --color-accent-foreground: var(--theme-accent-foreground);
+  --color-destructive: var(--theme-destructive);
+  --color-destructive-foreground: var(--theme-destructive-foreground);
+  --color-border: var(--theme-border);
+  --color-input: var(--theme-input);
+  --color-ring: var(--theme-ring);
+  --color-success: var(--theme-success);
+  --color-success-foreground: var(--theme-success-foreground);
+  --color-warning: var(--theme-warning);
+  --color-warning-foreground: var(--theme-warning-foreground);
+  --color-info: var(--theme-info);
+  --color-info-foreground: var(--theme-info-foreground);
+  --color-chat-user: var(--theme-chat-user);
+  --color-chat-user-foreground: var(--theme-chat-user-foreground);
+
+  --radius-lg: var(--theme-radius-lg);
+  --radius-md: var(--theme-radius-md);
+  --radius-sm: var(--theme-radius-sm);
+
+  --font-sans: var(--theme-font-sans);
+  --font-serif: var(--theme-font-serif);
+  --font-mono: var(--theme-font-mono);
+  --font-brand: var(--theme-font-brand);
+  --font-chat-user: var(--theme-font-chat-user);
+
+  /* Left Sidebar Variables */
+  --qt-left-sidebar-width: 16rem;
+  --qt-left-sidebar-collapsed-width: 4rem;
+  --qt-left-sidebar-bg: var(--color-background);
+  --qt-left-sidebar-border: var(--color-border);
+  --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;
+  --qt-left-sidebar-header-height: 4rem;
+  --qt-left-sidebar-footer-height: auto;
+  --qt-left-sidebar-section-padding: 0.75rem;
+  --qt-left-sidebar-section-gap: 0.25rem;
+  --qt-left-sidebar-section-title-fg: var(--color-muted-foreground);
+  --qt-left-sidebar-item-gap: 0.5rem;
+  --qt-left-sidebar-item-icon-size: 1.25rem;
+  --qt-left-sidebar-overlay-bg: rgb(0 0 0 / 0.5);
+  --qt-left-sidebar-overlay-z: 40;
+  --qt-left-sidebar-z: 50;
+
+  /* App Header Variables */
+  --qt-app-header-height: 4rem;
+  --qt-app-header-bg: var(--color-background);
+  --qt-app-header-border: var(--color-border);
+  --qt-app-header-blur: blur(8px);
+}
+
+/* ==========================================================================
+   BASE STYLES
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-color: var(--color-border);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

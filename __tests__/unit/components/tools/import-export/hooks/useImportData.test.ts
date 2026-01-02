@@ -368,8 +368,12 @@ describe('useImportData', () => {
         await result.current.actions.handleImport();
       });
 
-      // Verify no fetch was made when there's no export data
-      expect(mockFetch).not.toHaveBeenCalled();
+      // Verify no import-related fetch was made when there's no export data
+      // (logging calls to /api/logs are expected)
+      const importCalls = mockFetch.mock.calls.filter(
+        call => call[0].includes('/api/tools/quilltap-import')
+      );
+      expect(importCalls).toHaveLength(0);
       expect(result.current.state.importing).toBe(false);
     });
   });

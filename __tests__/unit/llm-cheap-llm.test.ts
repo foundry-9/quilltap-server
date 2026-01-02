@@ -540,7 +540,6 @@ describe('Cheap LLM Provider Selection', () => {
         'OPENROUTER',
         'OLLAMA',
         'OPENAI_COMPATIBLE',
-        'GAB_AI',
       ]
 
       for (const provider of providers) {

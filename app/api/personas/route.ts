@@ -5,39 +5,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler, getFilePath } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
-import type { FileEntry } from '@/lib/schemas/types'
 
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : ''
-  return `data/files/storage/${file.id}${ext}`
-}
-
-export async function GET(req: NextRequest) {
+// GET /api/personas - List all personas for user
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    const session = await getServerSession()
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-
     const { searchParams } = new URL(req.url)
     const sortByCharacter = searchParams.get('sortByCharacter')
 
     // Get all personas for user
-    const personas = await repos.personas.findByUserId(session.user.id)
+    const personas = await repos.personas.findByUserId(user.id)
 
     // Enrich personas with related data
     const enrichedPersonas = await Promise.all(
@@ -123,18 +101,11 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
-export async function POST(req: NextRequest) {
+// POST /api/personas - Create a new persona
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    const session = await getServerSession()
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-
     const body = await req.json()
     const { name, title, description, personalityTraits, avatarUrl, sillyTavernData } =
       body
@@ -148,7 +119,7 @@ export async function POST(req: NextRequest) {
     }
 
     const persona = await repos.personas.create({
-      userId: session.user.id,
+      userId: user.id,
       name,
       title: title || null,
       description,
@@ -169,4 +140,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.14.0";
+var VERSION = "6.15.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -7280,7 +7280,8 @@ var OpenAIProvider = class {
   formatMessagesWithAttachments(messages) {
     const sent = [];
     const failed = [];
-    const formattedMessages = messages.map((msg) => {
+    const filteredMessages = messages.filter((m) => m.role !== "tool");
+    const formattedMessages = filteredMessages.map((msg) => {
       if (!msg.attachments || msg.attachments.length === 0) {
         return {
           role: msg.role,
@@ -7761,11 +7762,26 @@ var attachmentSupport = {
   description: "Images only (JPEG, PNG, GIF, WebP)",
   notes: "Images are supported in vision-capable models like GPT-4V and GPT-4o"
 };
+var messageFormat = {
+  supportsNameField: true,
+  supportedRoles: ["user", "assistant"],
+  maxNameLength: 64
+};
+var cheapModels = {
+  defaultModel: "gpt-4o-mini",
+  recommendedModels: ["gpt-4o-mini", "gpt-3.5-turbo"]
+};
 var plugin = {
   metadata,
   config,
   capabilities,
   attachmentSupport,
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: "openai",
+  cheapModels,
+  defaultContextWindow: 128e3,
   /**
    * Factory method to create an OpenAI LLM provider instance
    */

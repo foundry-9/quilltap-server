@@ -1,24 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { generateTOTPSecret } from '@/lib/auth/totp'
-import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 
-export async function POST(req: NextRequest) {
-  const session = await getServerSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     if (user.totp?.enabled) {
       return NextResponse.json(
         { error: '2FA is already enabled' },
@@ -27,7 +13,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { secret, qrCode, encrypted } = await generateTOTPSecret(
-      session.user.id,
+      user.id,
       user.email || user.username
     )
 
@@ -43,4 +29,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

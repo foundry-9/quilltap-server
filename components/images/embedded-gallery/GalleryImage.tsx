@@ -44,7 +44,7 @@ export function GalleryImage({
             </svg>
           </div>
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img
             src={getImageUrl(image)}
             alt={image.filename}

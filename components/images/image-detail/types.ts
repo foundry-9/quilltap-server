@@ -25,12 +25,6 @@ export interface Character {
   defaultImageId?: string | null
 }
 
-export interface Persona {
-  id: string
-  name: string
-  defaultImageId?: string | null
-}
-
 export interface ImageDetailModalProps {
   isOpen: boolean
   onClose: () => void
@@ -40,10 +34,12 @@ export interface ImageDetailModalProps {
   onAvatarSet?: () => void // Callback when avatar is set to refresh parent
 }
 
-export type EntityType = 'character' | 'persona'
+// EntityType is now only 'character' - personas have been migrated to characters with controlledBy: 'user'
+export type EntityType = 'character'
 
 export interface TagActionParams {
   imageId: string
-  entityType: 'CHARACTER' | 'PERSONA'
+  // CHARACTER is the only type for new tags; PERSONA kept in schema for legacy data
+  entityType: 'CHARACTER'
   entityId: string
 }

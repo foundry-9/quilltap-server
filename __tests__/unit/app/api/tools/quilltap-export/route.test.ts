@@ -6,6 +6,11 @@
 import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
 import { NextRequest } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
+import {
+  createMockRepositoryContainer,
+  setupAuthMocks,
+  type MockRepositoryContainer,
+} from '@/__tests__/unit/lib/fixtures/mock-repositories';
 
 // Mock next/server's NextResponse for unit tests
 // The route uses `new NextResponse()` for file downloads with custom headers
@@ -37,6 +42,14 @@ jest.mock('next/server', () => ({
 // Mock dependencies
 jest.mock('@/lib/auth/session', () => ({
   getServerSession: jest.fn(),
+}));
+
+// Create mock repository container for getRepositories
+const mockRepos = createMockRepositoryContainer();
+
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: jest.fn(() => mockRepos),
+  getUserRepositories: jest.fn(),
 }));
 
 jest.mock('@/lib/export/quilltap-export-service', () => ({
@@ -84,10 +97,8 @@ describe('Quilltap Export API Route', () => {
       POST = routesModule.POST;
     });
 
-    // Default authenticated session
-    mockGetServerSession.mockResolvedValue({
-      user: { id: 'user-123', email: 'test@example.com' },
-    } as any);
+    // Set up authentication mocks (session + user lookup)
+    setupAuthMocks(mockGetServerSession as jest.Mock, mockRepos);
   });
 
   afterEach(() => {

@@ -1,0 +1,32 @@
+import type { Preview } from '@storybook/react';
+import { defaultPreview } from '@quilltap/theme-storybook';
+import { withTheme } from './ThemeProvider';
+
+// Import base Quilltap styles
+import '@quilltap/theme-storybook/css/quilltap-defaults.css';
+import '@quilltap/theme-storybook/css/qt-components.css';
+
+// Import your theme styles
+import '../styles.css';
+
+const preview: Preview = {
+  ...defaultPreview,
+  decorators: [withTheme, ...(defaultPreview.decorators || [])],
+  globalTypes: {
+    ...defaultPreview.globalTypes,
+    theme: {
+      description: 'Theme',
+      defaultValue: '{{THEME_ID}}',
+      toolbar: {
+        title: 'Theme',
+        items: [
+          { value: 'default', title: 'Quilltap Default' },
+          { value: '{{THEME_ID}}', title: '{{DISPLAY_NAME}}' },
+        ],
+        dynamicTitle: true,
+      },
+    },
+  },
+};
+
+export default preview;

@@ -1,11 +1,10 @@
 'use client'
 
-import { useRef } from 'react'
-import { useClickOutside } from '@/hooks/useClickOutside'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { clientLogger } from '@/lib/client-logger'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import type { ApiKey, EmbeddingModel, EmbeddingProfile, EmbeddingProfileFormData } from './types'
@@ -27,8 +26,6 @@ export function ProfileModal({
   apiKeys,
   embeddingModels,
 }: ProfileModalProps) {
-  const modalRef = useRef<HTMLDivElement>(null)
-
   const {
     loading: formLoading,
     error: formError,
@@ -44,11 +41,6 @@ export function ProfileModal({
     modelName: profile?.modelName || '',
     dimensions: profile?.dimensions?.toString() || '',
     isDefault: profile?.isDefault || false,
-  })
-
-  useClickOutside(modalRef, onClose, {
-    enabled: isOpen,
-    onEscape: onClose,
   })
 
   const handleModelSelect = (modelId: string) => {
@@ -108,8 +100,6 @@ export function ProfileModal({
     form.setField('dimensions', '')
   }
 
-  if (!isOpen) return null
-
   // Filter API keys for selected provider
   const filteredApiKeys = apiKeys.filter(key => {
     if (form.formData.provider === 'OPENAI') return key.provider === 'OPENAI'
@@ -121,20 +111,25 @@ export function ProfileModal({
   const isValid = form.formData.name.trim() && form.formData.modelName.trim()
 
   return (
-    <div className="qt-dialog-overlay">
-      <div ref={modalRef} className="qt-dialog max-w-lg max-h-[90vh] flex flex-col">
-        <div className="qt-dialog-header">
-          <h2 className="qt-dialog-title">
-            {profile?.id ? 'Edit Embedding Profile' : 'Create Embedding Profile'}
-          </h2>
-        </div>
+    <BaseModal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={profile?.id ? 'Edit Embedding Profile' : 'Create Embedding Profile'}
+      footer={
+        <FormActions
+          onCancel={handleClose}
+          onSubmit={handleSubmit}
+          submitLabel={profile?.id ? 'Update Profile' : 'Create Profile'}
+          isLoading={formLoading}
+          isDisabled={!isValid}
+        />
+      }
+    >
+      {formError && (
+        <ErrorAlert message={formError} className="mb-4" />
+      )}
 
-        <div className="qt-dialog-body flex-1 overflow-y-auto">
-          {formError && (
-            <ErrorAlert message={formError} className="mb-4" />
-          )}
-
-          <div className="space-y-4">
+      <div className="space-y-4">
             {/* Name */}
             <div>
               <label className="qt-label mb-1">
@@ -269,34 +264,22 @@ export function ProfileModal({
               </p>
             </div>
 
-            {/* Default */}
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="isDefault"
-                name="isDefault"
-                checked={form.formData.isDefault}
-                onChange={form.handleChange}
-                className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
-              />
-              <label htmlFor="isDefault" className="ml-2 block qt-text-label text-foreground">
-                Set as default embedding profile
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div className="qt-dialog-footer">
-          <FormActions
-            onCancel={handleClose}
-            onSubmit={handleSubmit}
-            submitLabel={profile?.id ? 'Update Profile' : 'Create Profile'}
-            isLoading={formLoading}
-            isDisabled={!isValid}
+        {/* Default */}
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="isDefault"
+            name="isDefault"
+            checked={form.formData.isDefault}
+            onChange={form.handleChange}
+            className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
           />
+          <label htmlFor="isDefault" className="ml-2 block qt-text-label text-foreground">
+            Set as default embedding profile
+          </label>
         </div>
       </div>
-    </div>
+    </BaseModal>
   )
 }
 

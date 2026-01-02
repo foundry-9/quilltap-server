@@ -30,6 +30,9 @@ export interface TemplateContext {
   // Anchor points (future support)
   anchorBefore?: string // Content before story string
   anchorAfter?: string // Content after story string
+
+  // Timestamp (for {{timestamp}} template variable)
+  timestamp?: string // Current or fictional timestamp
 }
 
 /**

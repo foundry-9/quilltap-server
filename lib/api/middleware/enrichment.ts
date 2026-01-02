@@ -1,0 +1,192 @@
+/**
+ * Data Enrichment Utilities
+ *
+ * Provides centralized enrichment functions for API responses.
+ * Consolidates patterns for adding related data (API keys, tags, etc.)
+ * that were duplicated across multiple route handlers.
+ */
+
+import type { RepositoryContainer } from '@/lib/repositories/factory';
+import type { Tag } from '@/lib/schemas/types';
+
+/**
+ * Enriched API key info for responses
+ * Contains only safe fields (no actual key value)
+ */
+export interface EnrichedApiKey {
+  id: string;
+  label: string;
+  provider: string;
+  isActive: boolean;
+}
+
+/**
+ * Enriched tag info for responses
+ */
+export interface EnrichedTag {
+  tagId: string;
+  tag: Tag;
+}
+
+/**
+ * Enrich an entity with API key information
+ *
+ * Common pattern for profiles that reference an API key.
+ * Returns only safe fields (no actual key value).
+ *
+ * @param apiKeyId - The API key ID from the entity
+ * @param repos - Repository container for data access
+ * @returns Enriched API key info or null
+ *
+ * @example
+ * ```ts
+ * const profile = await repos.embeddingProfiles.findById(id);
+ * const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
+ * return { ...profile, apiKey };
+ * ```
+ */
+export async function enrichWithApiKey(
+  apiKeyId: string | null | undefined,
+  repos: RepositoryContainer
+): Promise<EnrichedApiKey | null> {
+  if (!apiKeyId) {
+    return null;
+  }
+
+  const key = await repos.connections.findApiKeyById(apiKeyId);
+
+  if (!key) {
+    return null;
+  }
+
+  return {
+    id: key.id,
+    label: key.label,
+    provider: key.provider,
+    isActive: key.isActive,
+  };
+}
+
+/**
+ * Enrich an entity with tag details (batched)
+ *
+ * Common pattern for entities that have a tags array of IDs.
+ * Resolves all tag IDs in a single batched query for efficiency.
+ *
+ * @param tagIds - Array of tag IDs from the entity
+ * @param repos - Repository container for data access
+ * @returns Array of enriched tags (filters out null/not found)
+ *
+ * @example
+ * ```ts
+ * const profile = await repos.embeddingProfiles.findById(id);
+ * const tags = await enrichWithTags(profile.tags, repos);
+ * return { ...profile, tags };
+ * ```
+ */
+export async function enrichWithTags(
+  tagIds: string[] | undefined,
+  repos: RepositoryContainer
+): Promise<EnrichedTag[]> {
+  if (!tagIds || tagIds.length === 0) {
+    return [];
+  }
+
+  // Use batched query instead of N+1 individual queries
+  const tags = await repos.tags.findByIds(tagIds);
+
+  // Map to enriched format, preserving order from input tagIds
+  const tagMap = new Map(tags.map(tag => [tag.id, tag]));
+  const enriched: EnrichedTag[] = [];
+
+  for (const tagId of tagIds) {
+    const tag = tagMap.get(tagId);
+    if (tag) {
+      enriched.push({ tagId, tag });
+    }
+  }
+
+  return enriched;
+}
+
+/**
+ * Enrich a profile entity with both API key and tags
+ *
+ * Convenience wrapper for the common pattern of enriching profiles
+ * with both API key info and tag details.
+ *
+ * @param profile - Profile entity with apiKeyId and tags
+ * @param repos - Repository container for data access
+ * @returns Object with enriched apiKey and tags
+ *
+ * @example
+ * ```ts
+ * const profile = await repos.embeddingProfiles.findById(id);
+ * const enriched = await enrichProfile(profile, repos);
+ * return { ...profile, ...enriched };
+ * ```
+ */
+export async function enrichProfile<
+  T extends { apiKeyId?: string | null; tags?: string[] }
+>(
+  profile: T,
+  repos: RepositoryContainer
+): Promise<{ apiKey: EnrichedApiKey | null; tags: EnrichedTag[] }> {
+  const [apiKey, tags] = await Promise.all([
+    enrichWithApiKey(profile.apiKeyId, repos),
+    enrichWithTags(profile.tags, repos),
+  ]);
+
+  return { apiKey, tags };
+}
+
+/**
+ * Enrich multiple entities in parallel
+ *
+ * Efficiently enriches an array of entities with their related data.
+ *
+ * @param entities - Array of entities to enrich
+ * @param enrichFn - Function to enrich each entity
+ * @returns Array of enriched entities
+ *
+ * @example
+ * ```ts
+ * const characters = await repos.characters.findByUserId(userId);
+ * const enriched = await enrichMany(characters, async (char) => ({
+ *   ...char,
+ *   defaultImage: await enrichWithDefaultImage(char, repos.files.findById.bind(repos.files)),
+ * }));
+ * ```
+ */
+export async function enrichMany<T, R>(
+  entities: T[],
+  enrichFn: (entity: T) => Promise<R>
+): Promise<R[]> {
+  return Promise.all(entities.map(enrichFn));
+}
+
+/**
+ * Unset all default flags for a user's entities
+ *
+ * Common pattern for profile types that have an isDefault flag.
+ * When setting a new default, all other defaults should be unset.
+ *
+ * This is typically handled by the repository's unsetAllDefaults method,
+ * but this utility provides a standardized interface.
+ *
+ * @param userId - The user ID
+ * @param unsetFn - The repository's unsetAllDefaults function
+ *
+ * @example
+ * ```ts
+ * if (isDefault) {
+ *   await unsetAllDefaults(user.id, repos.embeddingProfiles.unsetAllDefaults);
+ * }
+ * ```
+ */
+export async function unsetAllDefaults(
+  userId: string,
+  unsetFn: (userId: string) => Promise<void>
+): Promise<void> {
+  await unsetFn(userId);
+}

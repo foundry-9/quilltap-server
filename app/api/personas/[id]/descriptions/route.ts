@@ -3,8 +3,8 @@
 // POST /api/personas/[id]/descriptions - Create a new description
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
+import { notFound, forbidden, serverError, validationError } from '@/lib/api/responses'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
 
@@ -18,102 +18,62 @@ const createDescriptionSchema = z.object({
 })
 
 // GET /api/personas/[id]/descriptions - Get all descriptions for a persona
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      // Verify persona exists and belongs to user
+      const persona = await repos.personas.findById(id)
+
+      if (!persona) {
+        return notFound('Persona')
+      }
+
+      if (persona.userId !== user.id) {
+        return forbidden()
+      }
+
+      const descriptions = await repos.personas.getDescriptions(id)
+
+      return NextResponse.json({ descriptions })
+    } catch (error) {
+      logger.error('Error fetching persona descriptions:', error as Error)
+      return serverError('Failed to fetch persona descriptions')
     }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    // Verify persona exists and belongs to user
-    const persona = await repos.personas.findById(id)
-
-    if (!persona) {
-      return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
-    }
-
-    if (persona.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    }
-
-    const descriptions = await repos.personas.getDescriptions(id)
-
-    return NextResponse.json({ descriptions })
-  } catch (error) {
-    logger.error('Error fetching persona descriptions:', error as Error)
-    return NextResponse.json(
-      { error: 'Failed to fetch persona descriptions' },
-      { status: 500 }
-    )
   }
-}
+)
 
 // POST /api/personas/[id]/descriptions - Create a new description
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      // Verify persona exists and belongs to user
+      const persona = await repos.personas.findById(id)
+
+      if (!persona) {
+        return notFound('Persona')
+      }
+
+      if (persona.userId !== user.id) {
+        return forbidden()
+      }
+
+      const body = await req.json()
+      const validatedData = createDescriptionSchema.parse(body)
+
+      const description = await repos.personas.addDescription(id, validatedData)
+
+      if (!description) {
+        return serverError('Failed to create description')
+      }
+
+      return NextResponse.json({ description }, { status: 201 })
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return validationError(error)
+      }
+
+      logger.error('Error creating persona description:', error as Error)
+      return serverError('Failed to create persona description')
     }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    // Verify persona exists and belongs to user
-    const persona = await repos.personas.findById(id)
-
-    if (!persona) {
-      return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
-    }
-
-    if (persona.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    }
-
-    const body = await req.json()
-    const validatedData = createDescriptionSchema.parse(body)
-
-    const description = await repos.personas.addDescription(id, validatedData)
-
-    if (!description) {
-      return NextResponse.json(
-        { error: 'Failed to create description' },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json({ description }, { status: 201 })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
-    logger.error('Error creating persona description:', error as Error)
-    return NextResponse.json(
-      { error: 'Failed to create persona description' },
-      { status: 500 }
-    )
   }
-}
+)

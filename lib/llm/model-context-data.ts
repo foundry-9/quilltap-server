@@ -5,10 +5,15 @@
  * Provides context window size information for LLM models.
  * Used by the context manager to determine how many tokens
  * can be included in a request.
+ *
+ * NOTE: Registered plugins provide defaultContextWindow and model info
+ * via the provider registry. The hardcoded DEFAULT_CONTEXT_BY_PROVIDER
+ * is kept as a fallback for unknown providers and backward compatibility.
  */
 
 import { Provider } from '@/lib/schemas/types'
 import { FALLBACK_PRICING, ModelPricing } from './pricing'
+import { getDefaultContextWindow, getProvider } from '@/lib/plugins/provider-registry'
 
 /**
  * Default context window sizes by provider when model is unknown
@@ -22,7 +27,6 @@ const DEFAULT_CONTEXT_BY_PROVIDER: Record<Provider, number> = {
   OLLAMA: 8192,           // Default for local models (varies widely)
   OPENROUTER: 128000,     // Depends on model, use conservative default
   OPENAI_COMPATIBLE: 8192, // Unknown, use very conservative
-  GAB_AI: 32000,          // Gab AI has 32k context
 }
 
 /**
@@ -78,6 +82,20 @@ export function getModelContextLimit(
     return prefixedOverride
   }
 
+  // Try to get context from plugin's model info
+  const plugin = getProvider(provider)
+  if (plugin?.getModelInfo) {
+    const models = plugin.getModelInfo()
+    const modelInfo = models.find(
+      m => m.id === modelName ||
+        m.id.includes(modelName) ||
+        modelName.includes(m.id)
+    )
+    if (modelInfo?.contextWindow) {
+      return modelInfo.contextWindow
+    }
+  }
+
   // Check fallback pricing data
   const providerPricing = FALLBACK_PRICING[provider]
   if (providerPricing) {
@@ -92,7 +110,14 @@ export function getModelContextLimit(
     }
   }
 
-  // Fall back to provider default
+  // Try plugin's default context window
+  const registryDefault = getDefaultContextWindow(provider)
+  if (registryDefault !== 8192) {
+    // Registry returned a non-default value
+    return registryDefault
+  }
+
+  // Fall back to hardcoded provider default
   return DEFAULT_CONTEXT_BY_PROVIDER[provider] || 8192
 }
 

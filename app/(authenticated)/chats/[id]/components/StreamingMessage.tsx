@@ -47,7 +47,7 @@ export function StreamingMessage({
                 const avatarSrc = respondingCharacter?.avatarUrl || (respondingCharacter?.defaultImage?.url || respondingCharacter?.defaultImage?.filepath)
                 const normalizedSrc = avatarSrc && (avatarSrc.startsWith('/') ? avatarSrc : `/${avatarSrc}`)
                 return normalizedSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+                   
                   <img src={normalizedSrc} alt={respondingCharacter?.name || 'AI'} />
                 ) : (
                   <div className="qt-chat-message-mobile-avatar-initial">

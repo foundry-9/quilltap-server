@@ -2,11 +2,18 @@
  * Unit tests for Tasks Queue API route (app/api/tools/tasks-queue/route.ts)
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals'
+import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals'
 import type { BackgroundJob } from '@/lib/schemas/types'
+import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
 import { getServerSession } from '@/lib/auth/session'
-import { startProcessor, stopProcessor, getProcessorStatus } from '@/lib/background-jobs/processor'
-import { BackgroundJobsRepository } from '@/lib/mongodb/repositories/background-jobs.repository'
+
+// Mock repositories factory - must be before imports
+const mockRepos = createMockRepositoryContainer()
+
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: jest.fn(() => mockRepos),
+  getUserRepositories: jest.fn(),
+}))
 
 jest.mock('@/lib/auth/session', () => ({
   getServerSession: jest.fn(),
@@ -20,8 +27,6 @@ jest.mock('@/lib/background-jobs/processor', () => ({
 }))
 
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>
-let getStatsSpy: jest.SpyInstance<Promise<any>, [string?]>
-let findByUserIdSpy: jest.SpyInstance<Promise<any>, [string, string?]>
 const processorMock = jest.requireMock('@/lib/background-jobs/processor') as {
   startProcessor: jest.Mock
   stopProcessor: jest.Mock
@@ -36,30 +41,33 @@ let POST: typeof import('@/app/api/tools/tasks-queue/route').POST
 describe('Tasks Queue API Route', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+
+    // Setup auth mocks with the user ID used in tests
+    setupAuthMocks(mockGetServerSession as jest.Mock, mockRepos, { id: 'user-123', email: 'u@example.com' })
+
+    // Setup default mock values for backgroundJobs repo
+    mockRepos.backgroundJobs.getStats.mockResolvedValue({
+      pending: 1,
+      processing: 1,
+      failed: 1,
+      completed: 5,
+      dead: 0,
+      paused: 1,
+    })
+    mockRepos.backgroundJobs.findByUserId.mockResolvedValue([])
+
     jest.isolateModules(() => {
-      const repoModule = require('@/lib/mongodb/repositories/background-jobs.repository')
-      getStatsSpy = jest.spyOn(repoModule.BackgroundJobsRepository.prototype, 'getStats').mockResolvedValue({
-        pending: 1,
-        processing: 1,
-        failed: 1,
-        completed: 5,
-        dead: 0,
-        paused: 1,
-      })
-      findByUserIdSpy = jest.spyOn(repoModule.BackgroundJobsRepository.prototype, 'findByUserId').mockResolvedValue([])
       const routesModule = require('@/app/api/tools/tasks-queue/route')
       GET = routesModule.GET
       POST = routesModule.POST
     })
+
     mockStartProcessor.mockReset()
     mockStopProcessor.mockReset()
     mockGetProcessorStatus.mockReset()
     mockStartProcessor.mockImplementation(() => {})
     mockStopProcessor.mockImplementation(() => {})
     mockGetProcessorStatus.mockReturnValue({ running: false, processing: false })
-    mockGetServerSession.mockResolvedValue({
-      user: { id: 'user-123', email: 'u@example.com' },
-    } as any)
   })
 
   afterEach(() => {
@@ -115,7 +123,7 @@ describe('Tasks Queue API Route', () => {
         payload: { userMessage: '', assistantMessage: '' },
       })
 
-      findByUserIdSpy.mockImplementation(async (_userId: string, status?: string) => {
+      mockRepos.backgroundJobs.findByUserId.mockImplementation(async (_userId: string, status?: string) => {
         switch (status) {
           case 'PENDING':
             return [pendingJob]
@@ -152,7 +160,7 @@ describe('Tasks Queue API Route', () => {
       // pausedJob -> 500 + 0 + 0 + 300 = 800
       expect(body.totalEstimatedTokens).toBe(3305)
       expect(body.processorStatus).toEqual({ running: false, processing: false })
-      expect(findByUserIdSpy).toHaveBeenCalled()
+      expect(mockRepos.backgroundJobs.findByUserId).toHaveBeenCalled()
     })
 
     it('returns 401 when session is missing', async () => {
@@ -163,7 +171,7 @@ describe('Tasks Queue API Route', () => {
 
       expect(response.status).toBe(401)
       expect(body).toEqual({ error: 'Unauthorized' })
-      expect(getStatsSpy).not.toHaveBeenCalled()
+      expect(mockRepos.backgroundJobs.getStats).not.toHaveBeenCalled()
     })
   })
 

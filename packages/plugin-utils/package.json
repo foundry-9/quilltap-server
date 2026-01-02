@@ -1,0 +1,96 @@
+{
+  "name": "@quilltap/plugin-utils",
+  "version": "1.2.0",
+  "description": "Utility functions for Quilltap plugin development",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "module": "dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./tools": {
+      "types": "./dist/tools/index.d.ts",
+      "import": "./dist/tools/index.mjs",
+      "require": "./dist/tools/index.js"
+    },
+    "./logging": {
+      "types": "./dist/logging/index.d.ts",
+      "import": "./dist/logging/index.mjs",
+      "require": "./dist/logging/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.mjs",
+      "require": "./dist/providers/index.js"
+    },
+    "./roleplay-templates": {
+      "types": "./dist/roleplay-templates/index.d.ts",
+      "import": "./dist/roleplay-templates/index.mjs",
+      "require": "./dist/roleplay-templates/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@quilltap/plugin-types": "^1.2.0"
+  },
+  "peerDependencies": {
+    "openai": "^4.0.0 || ^5.0.0 || ^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@quilltap/plugin-types": {
+      "optional": false
+    },
+    "openai": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "openai": "^6.15.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0"
+  },
+  "keywords": [
+    "quilltap",
+    "plugin",
+    "utils",
+    "utilities",
+    "llm",
+    "ai",
+    "provider",
+    "tools",
+    "logging"
+  ],
+  "author": {
+    "name": "Foundry-9 LLC",
+    "url": "https://github.com/foundry-9"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foundry-9/quilltap.git",
+    "directory": "packages/plugin-utils"
+  },
+  "homepage": "https://github.com/foundry-9/quilltap/tree/main/packages/plugin-utils#readme",
+  "bugs": {
+    "url": "https://github.com/foundry-9/quilltap/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

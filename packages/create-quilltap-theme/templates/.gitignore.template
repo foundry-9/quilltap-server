@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+index.js
+index.d.ts
+index.d.ts.map
+
+# Storybook
+storybook-static/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Package tarballs
+*.tgz

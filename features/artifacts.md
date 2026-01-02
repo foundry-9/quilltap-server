@@ -9,11 +9,12 @@ Display renderable content (Markdown, HTML, code) in a side panel, similar to ho
 
 ## Requirements
 
-- Detect renderable content in LLM responses (Markdown, HTML, code blocks, etc.)
+- Detect renderable content in LLM responses (Markdown, HTML, SVG, code blocks, etc.)
 - Display in a right-side panel, shifting chat to the left (similar to Chat Debug screen layout)
 - Hover actions:
   - **Copy** - Copy artifact content to clipboard
   - **Download** - Download as appropriate file type
+  - **Save to Project** - when projects are available, save the file to the project
 
 ## Implementation Notes
 

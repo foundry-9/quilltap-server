@@ -5,8 +5,8 @@
  * POST /api/image-profiles/[id]/generate - Generate images with placeholder support
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { executeImageGenerationTool } from '@/lib/tools/handlers/image-generation-handler';
 import { logger } from '@/lib/logger';
@@ -47,76 +47,69 @@ const generateImageSchema = z.object({
  *   negativePrompt?: string
  * }
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+  async (request, { user }, { id }) => {
+    try {
+      // Validate request body
+      const body = await request.json();
+      const validated = generateImageSchema.parse(body);
 
-    // Validate request body
-    const body = await request.json();
-    const validated = generateImageSchema.parse(body);
+      // Execute image generation with prompt expansion support
+      const result = await executeImageGenerationTool(
+        {
+          prompt: validated.prompt,
+          count: validated.count,
+          size: validated.size,
+          quality: validated.quality,
+          style: validated.style,
+          aspectRatio: validated.aspectRatio,
+          negativePrompt: validated.negativePrompt,
+        },
+        {
+          userId: user.id,
+          profileId: id,
+          chatId: validated.chatId,
+        }
+      );
 
-    // Execute image generation with prompt expansion support
-    const result = await executeImageGenerationTool(
-      {
-        prompt: validated.prompt,
-        count: validated.count,
-        size: validated.size,
-        quality: validated.quality,
-        style: validated.style,
-        aspectRatio: validated.aspectRatio,
-        negativePrompt: validated.negativePrompt,
-      },
-      {
-        userId: session.user.id,
-        profileId: id,
-        chatId: validated.chatId,
+      if (!result.success) {
+        return NextResponse.json(
+          {
+            error: result.error || 'Image generation failed',
+            message: result.message,
+          },
+          { status: 400 }
+        );
       }
-    );
 
-    if (!result.success) {
+      return NextResponse.json({
+        success: true,
+        data: result.images,
+        expandedPrompt: result.expandedPrompt,
+        metadata: {
+          originalPrompt: validated.prompt,
+          provider: result.provider,
+          model: result.model,
+          count: result.images?.length || 0,
+        },
+      });
+    } catch (error) {
+      logger.error('Error generating images:', error as Error);
+
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Validation error', details: error.errors },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json(
         {
-          error: result.error || 'Image generation failed',
-          message: result.message,
+          error: 'Failed to generate images',
+          details: error instanceof Error ? error.message : String(error),
         },
-        { status: 400 }
+        { status: 500 }
       );
     }
-
-    return NextResponse.json({
-      success: true,
-      data: result.images,
-      expandedPrompt: result.expandedPrompt,
-      metadata: {
-        originalPrompt: validated.prompt,
-        provider: result.provider,
-        model: result.model,
-        count: result.images?.length || 0,
-      },
-    });
-  } catch (error) {
-    logger.error('Error generating images:', error as Error);
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        error: 'Failed to generate images',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 }
-    );
   }
-}
+);

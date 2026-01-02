@@ -6,8 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
@@ -15,6 +14,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { downloadFile } from '@/lib/s3/operations'
 import { logger } from '@/lib/logger'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types'
 import type { FileAttachment } from '@/lib/llm/base'
 
@@ -390,39 +390,32 @@ async function generatePhysicalDescriptions(
   return results as GeneratedPhysicalDescription
 }
 
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     // Parse and validate request
     const body = await req.json()
     const request = wizardRequestSchema.parse(body)
 
     logger.info('AI Wizard generation started', {
       context: 'POST /api/characters/ai-wizard',
-      userId: session.user.id,
+      userId: user.id,
       characterName: request.characterName,
       fieldsToGenerate: request.fieldsToGenerate,
       sourceType: request.sourceType,
     })
 
-    const repos = getRepositories()
-
     // Get primary profile
     const primaryProfile = await repos.connections.findById(request.primaryProfileId)
-    if (!primaryProfile || primaryProfile.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Primary profile not found' }, { status: 404 })
+    if (!primaryProfile || primaryProfile.userId !== user.id) {
+      return notFound('Primary profile')
     }
 
     // Get primary profile API key
     let primaryApiKey = ''
     if (primaryProfile.apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyByIdAndUserId(primaryProfile.apiKeyId, session.user.id)
+      const apiKey = await repos.connections.findApiKeyByIdAndUserId(primaryProfile.apiKeyId, user.id)
       if (apiKey) {
-        primaryApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, session.user.id)
+        primaryApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, user.id)
       }
     }
 
@@ -430,10 +423,7 @@ export async function POST(req: NextRequest) {
     if (!isPluginSystemInitialized() || !providerRegistry.isInitialized()) {
       const initResult = await initializePlugins()
       if (!initResult.success) {
-        return NextResponse.json(
-          { error: 'Plugin system initialization failed' },
-          { status: 500 }
-        )
+        return serverError('Plugin system initialization failed')
       }
     }
 
@@ -448,8 +438,8 @@ export async function POST(req: NextRequest) {
     if ((request.sourceType === 'upload' || request.sourceType === 'gallery') && request.imageId) {
       // Get image file
       const imageFile = await repos.files.findById(request.imageId)
-      if (!imageFile || imageFile.userId !== session.user.id) {
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+      if (!imageFile || imageFile.userId !== user.id) {
+        return notFound('Image')
       }
 
       // Determine which profile to use for vision
@@ -459,24 +449,21 @@ export async function POST(req: NextRequest) {
       if (!profileSupportsMimeType(primaryProfile, imageFile.mimeType)) {
         // Need secondary vision profile
         if (!request.visionProfileId) {
-          return NextResponse.json(
-            { error: 'Vision profile required for image analysis' },
-            { status: 400 }
-          )
+          return badRequest('Vision profile required for image analysis')
         }
 
         const secondaryProfile = await repos.connections.findById(request.visionProfileId)
-        if (!secondaryProfile || secondaryProfile.userId !== session.user.id) {
-          return NextResponse.json({ error: 'Vision profile not found' }, { status: 404 })
+        if (!secondaryProfile || secondaryProfile.userId !== user.id) {
+          return notFound('Vision profile')
         }
 
         if (secondaryProfile.apiKeyId) {
           const apiKey = await repos.connections.findApiKeyByIdAndUserId(
             secondaryProfile.apiKeyId,
-            session.user.id
+            user.id
           )
           if (apiKey) {
-            visionApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, session.user.id)
+            visionApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, user.id)
           }
         }
 
@@ -495,10 +482,7 @@ export async function POST(req: NextRequest) {
           context: 'POST /api/characters/ai-wizard',
           error: error instanceof Error ? error.message : String(error),
         })
-        return NextResponse.json(
-          { error: `Failed to analyze image: ${error instanceof Error ? error.message : 'Unknown error'}` },
-          { status: 500 }
-        )
+        return serverError(`Failed to analyze image: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
     }
 
@@ -564,10 +548,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
+      return validationError(error)
     }
 
     logger.error('AI Wizard generation failed', {
@@ -575,9 +556,6 @@ export async function POST(req: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     })
 
-    return NextResponse.json(
-      { error: 'Generation failed', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    )
+    return serverError(error instanceof Error ? error.message : 'Generation failed')
   }
-}
+})

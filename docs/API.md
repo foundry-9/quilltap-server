@@ -1,6 +1,6 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v2.4.
+Complete API reference for Quilltap v2.6.
 
 ## Table of Contents
 
@@ -17,8 +17,8 @@ Complete API reference for Quilltap v2.4.
   - [Image Profiles](#image-profiles)
   - [Characters](#characters)
   - [NPCs](#npcs)
-  - [Personas](#personas)
   - [Chats](#chats)
+  - [Impersonation](#impersonation)
   - [Messages](#messages)
   - [Memories](#memories)
   - [Tags](#tags)
@@ -28,6 +28,7 @@ Complete API reference for Quilltap v2.4.
   - [Themes](#themes)
   - [Search](#search)
   - [Background Jobs](#background-jobs)
+  - [Plugins](#plugins)
 
 ## Authentication
 
@@ -127,7 +128,6 @@ Quilltap uses a plugin-based provider system. Available providers depend on whic
 | `ANTHROPIC` | qtap-plugin-anthropic | Chat, image understanding, tool calling, prompt caching |
 | `GOOGLE` | qtap-plugin-google | Chat, image generation (Imagen 4), multimodal inputs |
 | `GROK` | qtap-plugin-grok | Chat, image generation, web search, multimodal |
-| `GAB_AI` | qtap-plugin-gab-ai | Chat (OpenAI-compatible) |
 | `OLLAMA` | qtap-plugin-ollama | Chat, embeddings (local models) |
 | `OPENROUTER` | qtap-plugin-openrouter | Chat, embeddings, image generation (200+ models) |
 | `OPENAI_COMPATIBLE` | qtap-plugin-openai-compatible | Chat (any OpenAI-format API) |
@@ -431,6 +431,7 @@ List all characters.
 
 **Query Parameters**:
 - `npc=true|false` - Filter by NPC status (omit for regular characters)
+- `controlledBy=llm|user` - Filter by control mode (LLM-controlled or user-controlled)
 
 **Response**: `200 OK`
 
@@ -441,6 +442,7 @@ List all characters.
     "name": "Alice",
     "title": "The Curious",
     "description": "A friendly AI assistant",
+    "controlledBy": "llm",
     "npc": false,
     "isFavorite": true,
     "chatCount": 5,
@@ -465,6 +467,7 @@ Create a character.
   "scenario": "You're chatting with Alice",
   "firstMessage": "Hello! How can I help?",
   "exampleDialogues": "<START>\nUser: Hi\nAlice: Hello!\n<END>",
+  "controlledBy": "llm",
   "systemPrompts": [
     {
       "name": "Default",
@@ -476,9 +479,11 @@ Create a character.
 }
 ```
 
+**Note**: Set `controlledBy` to `"user"` for user-controlled characters (replaces the legacy persona system).
+
 #### `GET /api/characters/[id]`
 
-Get a character with linked personas.
+Get a character.
 
 #### `PUT /api/characters/[id]`
 
@@ -549,54 +554,6 @@ Create an NPC character.
 
 ---
 
-### Personas
-
-#### `GET /api/personas`
-
-List all personas.
-
-#### `POST /api/personas`
-
-Create a persona.
-
-**Request Body**:
-
-```json
-{
-  "name": "My Persona",
-  "displayName": "Display Name",
-  "title": "Optional Title",
-  "description": "Persona description",
-  "personalityTraits": "Curious, friendly"
-}
-```
-
-#### `GET /api/personas/[id]`
-
-Get a specific persona.
-
-#### `PUT /api/personas/[id]`
-
-Update a persona.
-
-#### `DELETE /api/personas/[id]`
-
-Delete a persona.
-
-#### `POST /api/personas/import`
-
-Import a SillyTavern persona.
-
-#### `GET /api/personas/[id]/export`
-
-Export persona as SillyTavern JSON.
-
-#### `POST /api/personas/quick-create`
-
-Quick-create a minimal persona.
-
----
-
 ### Chats
 
 #### `GET /api/chats`
@@ -611,9 +568,19 @@ List all chats for authenticated user.
     "id": "chat-uuid",
     "title": "Chat with Alice",
     "characterId": "char-uuid",
-    "personaId": "persona-uuid",
     "connectionProfileId": "profile-uuid",
-    "participants": [],
+    "participants": [
+      {
+        "id": "participant-uuid",
+        "type": "CHARACTER",
+        "characterId": "char-uuid",
+        "controlledBy": "llm",
+        "connectionProfileId": "profile-uuid"
+      }
+    ],
+    "impersonatingParticipantIds": [],
+    "activeTypingParticipantId": null,
+    "allLLMPauseTurnCount": 0,
     "createdAt": "2025-01-19T10:00:00.000Z",
     "updatedAt": "2025-01-19T12:00:00.000Z"
   }
@@ -629,12 +596,14 @@ Create a new chat.
 ```json
 {
   "characterId": "char-uuid",
-  "personaId": "persona-uuid",
   "connectionProfileId": "profile-uuid",
+  "userCharacterId": "user-char-uuid",
   "title": "Chat with Alice",
   "scenario": "Optional custom scenario"
 }
 ```
+
+**Note**: `userCharacterId` is optional - provide a user-controlled character ID to "play as" that character in the chat.
 
 #### `GET /api/chats/[id]`
 
@@ -675,6 +644,72 @@ Update turn state for multi-character chat.
 #### `POST /api/chats/[id]/queue-memories`
 
 Queue memory extraction as background job.
+
+---
+
+### Impersonation
+
+Impersonation allows users to take control of LLM-controlled characters mid-chat.
+
+#### `POST /api/chats/[id]/impersonate`
+
+Start impersonating a character in the chat.
+
+**Request Body**:
+
+```json
+{
+  "participantId": "participant-uuid"
+}
+```
+
+**Response**: `200 OK`
+
+Returns updated chat metadata with `impersonatingParticipantIds` including the new participant.
+
+#### `DELETE /api/chats/[id]/impersonate`
+
+Stop impersonating a character.
+
+**Request Body**:
+
+```json
+{
+  "participantId": "participant-uuid",
+  "newConnectionProfileId": "profile-uuid"
+}
+```
+
+**Note**: `newConnectionProfileId` is required when the character doesn't have a default connection profile. This assigns the LLM profile that will control the character after you stop impersonating.
+
+#### `GET /api/chats/[id]/impersonate`
+
+Get current impersonation state.
+
+**Response**: `200 OK`
+
+```json
+{
+  "impersonatingParticipantIds": ["participant-uuid"],
+  "activeTypingParticipantId": "participant-uuid"
+}
+```
+
+#### `PUT /api/chats/[id]/active-speaker`
+
+Set the active speaker when impersonating multiple characters.
+
+**Request Body**:
+
+```json
+{
+  "participantId": "participant-uuid"
+}
+```
+
+#### `GET /api/chats/[id]/active-speaker`
+
+Get the current active speaker.
 
 ---
 
@@ -976,11 +1011,11 @@ Update theme preference.
 
 #### `GET /api/search?q=query`
 
-Global search across characters, personas, chats.
+Global search across characters and chats.
 
 **Query Parameters**:
 - `q` - Search query (required)
-- `type` - Filter by type: `characters`, `personas`, `chats`
+- `type` - Filter by type: `characters`, `chats`
 
 ---
 
@@ -1005,6 +1040,160 @@ Delete a job.
 #### `GET /api/tools/tasks-queue`
 
 Get tasks queue status (UI endpoint).
+
+---
+
+### Plugins
+
+Plugin management endpoints for npm-based plugin installation.
+
+#### `GET /api/plugins`
+
+Get all registered plugins and system status.
+
+**Response:**
+```json
+{
+  "plugins": [
+    {
+      "name": "qtap-plugin-openai",
+      "title": "OpenAI Provider",
+      "version": "1.0.5",
+      "enabled": true,
+      "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER"],
+      "path": "/app/plugins/dist/qtap-plugin-openai",
+      "source": "included"
+    }
+  ],
+  "stats": {
+    "total": 15,
+    "enabled": 14,
+    "disabled": 1,
+    "errors": 0,
+    "initialized": true
+  },
+  "errors": []
+}
+```
+
+#### `PUT /api/plugins/[name]`
+
+Enable or disable a plugin.
+
+**Request Body:**
+```json
+{
+  "enabled": true
+}
+```
+
+#### `GET /api/plugins/search`
+
+Search npm registry for Quilltap plugins.
+
+**Query Parameters:**
+- `q` - Search query (appended to "qtap-plugin-" prefix)
+
+**Response:**
+```json
+{
+  "plugins": [
+    {
+      "name": "qtap-plugin-example",
+      "version": "1.0.0",
+      "description": "Example Quilltap plugin",
+      "author": "Author Name",
+      "keywords": ["quilltap", "plugin"],
+      "updated": "2024-01-15T10:30:00Z",
+      "score": 0.85
+    }
+  ]
+}
+```
+
+#### `POST /api/plugins/install`
+
+Install a plugin from npm.
+
+**Request Body:**
+```json
+{
+  "packageName": "qtap-plugin-example",
+  "scope": "user"
+}
+```
+
+- `scope` - Installation scope: `"user"` (personal) or `"site"` (shared across all users)
+
+**Response:**
+```json
+{
+  "success": true,
+  "plugin": {
+    "name": "qtap-plugin-example",
+    "title": "Example Plugin",
+    "version": "1.0.0",
+    "description": "An example plugin",
+    "capabilities": ["LLM_PROVIDER"]
+  },
+  "message": "Plugin installed successfully. Restart Quilltap to activate the plugin."
+}
+```
+
+#### `POST /api/plugins/uninstall`
+
+Uninstall an installed plugin.
+
+**Request Body:**
+```json
+{
+  "packageName": "qtap-plugin-example",
+  "scope": "user"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Plugin uninstalled successfully. Restart Quilltap to complete removal."
+}
+```
+
+**Notes:**
+- Bundled plugins cannot be uninstalled
+- Site-wide plugins require admin privileges (TODO)
+
+#### `GET /api/plugins/installed`
+
+Get all installed plugins with metadata.
+
+**Query Parameters:**
+- `scope` - Filter by scope: `"all"`, `"bundled"`, `"site"`, `"user"` (default: `"all"`)
+- `check` - Package name to check installation status
+
+**Response:**
+```json
+{
+  "plugins": [
+    {
+      "name": "qtap-plugin-openai",
+      "title": "OpenAI Provider",
+      "version": "1.0.5",
+      "description": "OpenAI LLM and image generation provider",
+      "source": "bundled",
+      "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER"],
+      "installedAt": null
+    }
+  ],
+  "counts": {
+    "total": 15,
+    "bundled": 12,
+    "site": 2,
+    "user": 1
+  }
+}
+```
 
 ---
 
@@ -1066,7 +1255,7 @@ characters = response.json()
 
 ## Versioning
 
-Current API version: **v2.4**
+Current API version: **v2.6**
 
 The API follows semantic versioning. Breaking changes are avoided where possible.
 

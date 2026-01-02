@@ -5,31 +5,25 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/repositories/factory';
+import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import { getQueueStats, enqueueJob, ensureProcessorRunning, getProcessorStatus } from '@/lib/background-jobs';
 import { BackgroundJobTypeEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
+import { badRequest, serverError } from '@/lib/api/responses';
 
 /**
  * GET /api/background-jobs
  * Get queue statistics and optionally recent jobs for the current user
  */
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
   try {
-    const session = await getServerSession();
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { searchParams } = new URL(req.url);
     const includeJobs = searchParams.get('includeJobs') === 'true';
     const chatId = searchParams.get('chatId');
 
     logger.debug('[BackgroundJobs API] GET request', {
-      userId: session.user.id,
+      userId: user.id,
       includeJobs,
       chatId,
     });
@@ -38,7 +32,7 @@ export async function GET(req: NextRequest) {
     ensureProcessorRunning();
 
     // Get stats
-    const stats = await getQueueStats(session.user.id);
+    const stats = await getQueueStats(user.id);
     const processorStatus = getProcessorStatus();
 
     const response: Record<string, unknown> = {
@@ -48,14 +42,12 @@ export async function GET(req: NextRequest) {
 
     // Optionally include recent jobs
     if (includeJobs) {
-      const repos = getRepositories();
-      const jobs = await repos.backgroundJobs.findByUserId(session.user.id);
+      const jobs = await repos.backgroundJobs.findByUserId(user.id);
       response.jobs = jobs.slice(0, 50); // Limit to 50 most recent
     }
 
     // If chatId specified, get pending jobs for that chat
     if (chatId) {
-      const repos = getRepositories();
       const pendingJobs = await repos.backgroundJobs.findPendingForChat(chatId);
       response.pendingForChat = pendingJobs;
     }
@@ -64,50 +56,38 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     logger.error('[BackgroundJobs API] Error in GET', { error: errorMessage });
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return serverError(errorMessage);
   }
-}
+});
 
 /**
  * POST /api/background-jobs
  * Create a new background job (mainly for testing/admin)
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user }: AuthenticatedContext) => {
   try {
-    const session = await getServerSession();
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const body = await req.json();
     const { type, payload, priority, maxAttempts } = body;
 
     // Validate type
     const typeValidation = BackgroundJobTypeEnum.safeParse(type);
     if (!typeValidation.success) {
-      return NextResponse.json(
-        { error: `Invalid job type. Must be one of: ${BackgroundJobTypeEnum.options.join(', ')}` },
-        { status: 400 }
-      );
+      return badRequest(`Invalid job type. Must be one of: ${BackgroundJobTypeEnum.options.join(', ')}`);
     }
 
     if (!payload || typeof payload !== 'object') {
-      return NextResponse.json(
-        { error: 'Payload is required and must be an object' },
-        { status: 400 }
-      );
+      return badRequest('Payload is required and must be an object');
     }
 
     logger.info('[BackgroundJobs API] Creating job', {
-      userId: session.user.id,
+      userId: user.id,
       type,
     });
 
     // Ensure processor is running
     ensureProcessorRunning();
 
-    const jobId = await enqueueJob(session.user.id, type, payload, {
+    const jobId = await enqueueJob(user.id, type, payload, {
       priority: typeof priority === 'number' ? priority : undefined,
       maxAttempts: typeof maxAttempts === 'number' ? maxAttempts : undefined,
     });
@@ -116,6 +96,6 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     logger.error('[BackgroundJobs API] Error in POST', { error: errorMessage });
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return serverError(errorMessage);
   }
-}
+});

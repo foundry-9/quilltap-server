@@ -2,8 +2,8 @@
   "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-theme-earl-grey",
   "title": "Earl Grey",
-  "description": "A sophisticated dark theme with deep slate grays and soft blue accents, inspired by the elegance of classic earl grey tea",
-  "version": "1.0.0",
+  "description": "A high-contrast dark theme inspired by modern AI chat interfaces, with pure black sidebar, charcoal main area, and clean minimal styling",
+  "version": "1.2.0",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -15,20 +15,36 @@
     "quilltapVersion": ">=2.2.0",
     "nodeVersion": ">=18.0.0"
   },
-  "capabilities": ["THEME"],
+  "capabilities": [
+    "THEME"
+  ],
   "category": "THEME",
   "typescript": true,
   "frontend": "NONE",
   "styling": "CSS_MODULES",
   "enabledByDefault": true,
   "status": "STABLE",
-  "keywords": ["theme", "earl-grey", "dark", "slate", "blue", "elegant", "sophisticated"],
+  "keywords": [
+    "theme",
+    "earl-grey",
+    "dark",
+    "slate",
+    "blue",
+    "elegant",
+    "sophisticated"
+  ],
   "themeConfig": {
     "tokensPath": "tokens.json",
     "stylesPath": "styles.css",
     "supportsDarkMode": true,
     "previewImage": "preview.png",
-    "tags": ["earl-grey", "dark", "slate", "blue", "elegant"],
+    "tags": [
+      "earl-grey",
+      "dark",
+      "minimal",
+      "high-contrast",
+      "modern"
+    ],
     "fonts": [
       {
         "family": "Rethink Sans",
@@ -44,7 +60,8 @@
         "style": "normal",
         "display": "swap"
       }
-    ]
+    ],
+    "useModule": true
   },
   "permissions": {
     "fileSystem": [],

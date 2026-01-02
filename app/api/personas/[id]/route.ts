@@ -6,182 +6,132 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler, checkOwnership, getFilePath } from '@/lib/api/middleware'
+import { notFound, serverError } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
-import type { FileEntry } from '@/lib/schemas/types'
 
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : ''
-  return `data/files/storage/${file.id}${ext}`
-}
+// GET /api/personas/:id
+export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      const persona = await repos.personas.findById(id)
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession()
+      if (!checkOwnership(persona, user.id)) {
+        return notFound('Persona')
+      }
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { id } = await params
-    const repos = getRepositories()
-
-    const persona = await repos.personas.findById(id)
-
-    if (!persona || persona.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
-    }
-
-    // Get default image from repository if present
-    let defaultImage = null
-    if (persona.defaultImageId) {
-      const fileEntry = await repos.files.findById(persona.defaultImageId)
-      if (fileEntry) {
-        defaultImage = {
-          id: fileEntry.id,
-          filepath: getFilePath(fileEntry),
-          url: null,
+      // Get default image from repository if present
+      let defaultImage = null
+      if (persona.defaultImageId) {
+        const fileEntry = await repos.files.findById(persona.defaultImageId)
+        if (fileEntry) {
+          defaultImage = {
+            id: fileEntry.id,
+            filepath: getFilePath(fileEntry),
+            url: null,
+          }
         }
       }
-    }
 
-    // Get character links with details
-    const characters = await Promise.all(
-      persona.characterLinks.map(async (characterId) => {
-        const character = await repos.characters.findById(characterId)
-        return character
-          ? {
-              character: {
-                id: character.id,
-                name: character.name,
-                avatarUrl: character.avatarUrl,
-              },
-            }
-          : null
+      // Get character links with details
+      const characters = await Promise.all(
+        persona.characterLinks.map(async (characterId) => {
+          const character = await repos.characters.findById(characterId)
+          return character
+            ? {
+                character: {
+                  id: character.id,
+                  name: character.name,
+                  avatarUrl: character.avatarUrl,
+                },
+              }
+            : null
+        })
+      )
+
+      const enrichedPersona = {
+        ...persona,
+        defaultImage,
+        characters: characters.filter(Boolean),
+      }
+
+      return NextResponse.json(enrichedPersona)
+    } catch (error) {
+      logger.error('Error fetching persona', { context: 'GET /api/personas/:id' }, error instanceof Error ? error : undefined)
+      return serverError('Failed to fetch persona')
+    }
+  }
+)
+
+// PUT /api/personas/:id
+export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      // Verify persona belongs to user
+      const existing = await repos.personas.findById(id)
+
+      if (!checkOwnership(existing, user.id)) {
+        return notFound('Persona')
+      }
+
+      const body = await req.json()
+      const { name, title, description, personalityTraits, avatarUrl, sillyTavernData } =
+        body
+
+      const updateData: Record<string, unknown> = {}
+      if (name !== undefined) updateData.name = name
+      if (title !== undefined) updateData.title = title
+      if (description !== undefined) updateData.description = description
+      if (personalityTraits !== undefined) updateData.personalityTraits = personalityTraits
+      if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl
+      if (sillyTavernData !== undefined) updateData.sillyTavernData = sillyTavernData
+
+      const persona = await repos.personas.update(id, updateData)
+
+      // Get default image from repository for response
+      let defaultImage = null
+      if (persona?.defaultImageId) {
+        const fileEntry = await repos.files.findById(persona.defaultImageId)
+        if (fileEntry) {
+          defaultImage = {
+            id: fileEntry.id,
+            filepath: getFilePath(fileEntry),
+            url: null,
+          }
+        }
+      }
+
+      return NextResponse.json({
+        ...persona,
+        defaultImage,
       })
-    )
-
-    const enrichedPersona = {
-      ...persona,
-      defaultImage,
-      characters: characters.filter(Boolean),
+    } catch (error) {
+      logger.error('Error updating persona', { context: 'PUT /api/personas/:id' }, error instanceof Error ? error : undefined)
+      return serverError('Failed to update persona')
     }
-
-    return NextResponse.json(enrichedPersona)
-  } catch (error) {
-    logger.error('Error fetching persona', { context: 'GET /api/personas/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to fetch persona' },
-      { status: 500 }
-    )
   }
-}
+)
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession()
+// DELETE /api/personas/:id
+export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      // Verify persona belongs to user
+      const existing = await repos.personas.findById(id)
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { id } = await params
-    const repos = getRepositories()
-
-    // Verify persona belongs to user
-    const existing = await repos.personas.findById(id)
-
-    if (!existing || existing.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
-    }
-
-    const body = await req.json()
-    const { name, title, description, personalityTraits, avatarUrl, sillyTavernData } =
-      body
-
-    const updateData: Record<string, unknown> = {}
-    if (name !== undefined) updateData.name = name
-    if (title !== undefined) updateData.title = title
-    if (description !== undefined) updateData.description = description
-    if (personalityTraits !== undefined) updateData.personalityTraits = personalityTraits
-    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl
-    if (sillyTavernData !== undefined) updateData.sillyTavernData = sillyTavernData
-
-    const persona = await repos.personas.update(id, updateData)
-
-    // Get default image from repository for response
-    let defaultImage = null
-    if (persona?.defaultImageId) {
-      const fileEntry = await repos.files.findById(persona.defaultImageId)
-      if (fileEntry) {
-        defaultImage = {
-          id: fileEntry.id,
-          filepath: getFilePath(fileEntry),
-          url: null,
-        }
+      if (!checkOwnership(existing, user.id)) {
+        return notFound('Persona')
       }
-    }
 
-    return NextResponse.json({
-      ...persona,
-      defaultImage,
-    })
-  } catch (error) {
-    logger.error('Error updating persona', { context: 'PUT /api/personas/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to update persona' },
-      { status: 500 }
-    )
+      // Note: We don't delete the image file when deleting a persona
+      // The image may be used elsewhere or the user may want to keep it in their gallery
+
+      await repos.personas.delete(id)
+
+      return NextResponse.json({ success: true })
+    } catch (error) {
+      logger.error('Error deleting persona', { context: 'DELETE /api/personas/:id' }, error instanceof Error ? error : undefined)
+      return serverError('Failed to delete persona')
+    }
   }
-}
-
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession()
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { id } = await params
-    const repos = getRepositories()
-
-    // Verify persona belongs to user
-    const existing = await repos.personas.findById(id)
-
-    if (!existing || existing.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
-    }
-
-    // Note: We don't delete the image file when deleting a persona
-    // The image may be used elsewhere or the user may want to keep it in their gallery
-
-    await repos.personas.delete(id)
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    logger.error('Error deleting persona', { context: 'DELETE /api/personas/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to delete persona' },
-      { status: 500 }
-    )
-  }
-}
+)
