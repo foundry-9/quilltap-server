@@ -5,9 +5,8 @@
  * GET    /api/image-profiles/models  - Get available models for a provider
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
@@ -20,16 +19,8 @@ import { logger } from '@/lib/logger'
  *   - provider: ImageProvider (dynamic, depends on registered plugins)
  *   - apiKeyId: (optional) API key ID to use for validation
  */
-export async function GET(request: NextRequest) {
+export const GET = createAuthenticatedHandler(async (request, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get('provider')
     const apiKeyId = searchParams.get('apiKeyId')
@@ -56,8 +47,6 @@ export async function GET(request: NextRequest) {
     let models: string[] = []
 
     if (apiKeyId) {
-      const repos = getRepositories()
-
       // Fetch the API key
       const apiKey = await repos.connections.findApiKeyById(apiKeyId)
 
@@ -73,7 +62,7 @@ export async function GET(request: NextRequest) {
           apiKey.ciphertext,
           apiKey.iv,
           apiKey.authTag,
-          session.user.id
+          user.id
         )
         models = await imageProvider.getAvailableModels(decryptedKey)
       } catch (error) {
@@ -88,7 +77,6 @@ export async function GET(request: NextRequest) {
 
     // Cache the fetched image models in the database
     try {
-      const repos = getRepositories()
       await repos.providerModels.upsertModelsForProvider(
         provider,
         models.map(modelId => ({
@@ -125,4 +113,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

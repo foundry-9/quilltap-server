@@ -1,8 +1,7 @@
 'use client'
 
-import { useRef } from 'react'
-import { useClickOutside } from '@/hooks/useClickOutside'
 import { clientLogger } from '@/lib/client-logger'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { ImageProfileForm } from './ImageProfileForm'
 
 interface ApiKey {
@@ -39,13 +38,6 @@ export function ImageProfileModal({
   profile,
   apiKeys,
 }: ImageProfileModalProps) {
-  const modalRef = useRef<HTMLDivElement>(null)
-
-  useClickOutside(modalRef, onClose, {
-    enabled: isOpen,
-    onEscape: onClose,
-  })
-
   const handleSuccess = () => {
     clientLogger.debug('Image profile saved via modal', { isEditing: !!profile })
     onSuccess()
@@ -57,27 +49,20 @@ export function ImageProfileModal({
     onClose()
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="qt-dialog-overlay">
-      <div ref={modalRef} className="qt-dialog max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="qt-dialog-header">
-          <h2 className="qt-dialog-title">
-            {profile ? 'Edit Image Profile' : 'Create Image Profile'}
-          </h2>
-        </div>
-
-        <div className="qt-dialog-body flex-1 overflow-y-auto">
-          <ImageProfileForm
-            profile={profile}
-            apiKeys={apiKeys}
-            onSuccess={handleSuccess}
-            onCancel={handleCancel}
-          />
-        </div>
-      </div>
-    </div>
+    <BaseModal
+      isOpen={isOpen}
+      onClose={handleCancel}
+      title={profile ? 'Edit Image Profile' : 'Create Image Profile'}
+      maxWidth="2xl"
+    >
+      <ImageProfileForm
+        profile={profile}
+        apiKeys={apiKeys}
+        onSuccess={handleSuccess}
+        onCancel={handleCancel}
+      />
+    </BaseModal>
   )
 }
 

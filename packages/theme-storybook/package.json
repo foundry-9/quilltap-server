@@ -1,0 +1,81 @@
+{
+  "name": "@quilltap/theme-storybook",
+  "version": "1.0.4",
+  "description": "Storybook preset and stories for developing Quilltap theme plugins",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "module": "dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./preset": {
+      "types": "./dist/preset/index.d.ts",
+      "import": "./dist/preset/index.mjs",
+      "require": "./dist/preset/index.js"
+    },
+    "./css/quilltap-defaults.css": "./src/css/quilltap-defaults.css",
+    "./css/qt-components.css": "./src/css/qt-components.css",
+    "./stories": {
+      "types": "./dist/stories/index.d.ts",
+      "import": "./dist/stories/index.mjs",
+      "require": "./dist/stories/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "src/css/",
+    "src/stories/",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@storybook/react": ">=8.0.0",
+    "react": ">=18.0.0",
+    "storybook": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@storybook/react": "^10.1.11",
+    "@types/react": "^18.2.0",
+    "react": "^19.0.0",
+    "storybook": "^10.1.11",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0"
+  },
+  "keywords": [
+    "quilltap",
+    "storybook",
+    "theme",
+    "design-system",
+    "css",
+    "theming"
+  ],
+  "author": {
+    "name": "Foundry-9 LLC",
+    "url": "https://github.com/foundry-9"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foundry-9/quilltap.git",
+    "directory": "packages/theme-storybook"
+  },
+  "homepage": "https://github.com/foundry-9/quilltap/tree/main/packages/theme-storybook#readme",
+  "bugs": {
+    "url": "https://github.com/foundry-9/quilltap/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

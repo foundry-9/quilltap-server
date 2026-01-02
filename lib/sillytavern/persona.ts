@@ -38,6 +38,7 @@ export interface PersonaDescription {
 
 /**
  * Import SillyTavern persona data to internal format
+ * @deprecated Use importSTPersonaAsCharacter for new imports
  */
 export function importSTPersona(stData: STPersona) {
   return {
@@ -46,6 +47,27 @@ export function importSTPersona(stData: STPersona) {
     title: stData.title || '',
     personalityTraits: stData.personality || '',
     sillyTavernData: stData, // Store original for full fidelity
+  }
+}
+
+/**
+ * Import SillyTavern persona data as a Character with controlledBy: 'user'
+ * Characters Not Personas - Phase 6
+ *
+ * This is the new preferred method for importing personas, as personas
+ * are now just characters that are user-controlled.
+ */
+export function importSTPersonaAsCharacter(stData: STPersona) {
+  return {
+    name: stData.name,
+    description: stData.description,
+    title: stData.title || '',
+    personality: stData.personality || '', // Use 'personality' for characters
+    controlledBy: 'user' as const, // Mark as user-controlled
+    sillyTavernData: stData, // Store original for full fidelity
+    // Character-specific defaults
+    talkativeness: 0.5,
+    defaultConnectionProfileId: null, // User-controlled characters don't need an LLM
   }
 }
 

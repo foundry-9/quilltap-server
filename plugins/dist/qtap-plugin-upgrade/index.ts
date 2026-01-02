@@ -107,3 +107,6 @@ export {
 
 // Re-export individual migrations for testing
 export { migrations } from './migrations';
+
+// Re-export user migrations (post-login)
+export { runPostLoginMigrations } from './user-migrations';

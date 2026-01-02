@@ -5,8 +5,8 @@
  * Lists all saved capabilities reports for the user
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { s3FileService } from '@/lib/s3/file-service';
 import { getFileMetadata } from '@/lib/s3/operations';
@@ -22,14 +22,9 @@ export interface ReportInfo {
   size: number;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = session.user.id;
+    const userId = user.id;
     moduleLogger.info('Listing capabilities reports', { userId });
 
     // List all files in the REPORT category
@@ -81,4 +76,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

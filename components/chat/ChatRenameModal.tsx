@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { useClickOutside } from '@/hooks/useClickOutside'
+import { BaseModal } from '@/components/ui/BaseModal'
 
 interface ChatRenameModalProps {
   isOpen: boolean
@@ -22,7 +22,6 @@ export default function ChatRenameModal({
   isManuallyRenamed: initialIsManuallyRenamed,
   onSuccess,
 }: Readonly<ChatRenameModalProps>) {
-  const modalRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState(currentTitle)
   const [useAutoRename, setUseAutoRename] = useState(!initialIsManuallyRenamed)
@@ -42,11 +41,6 @@ export default function ChatRenameModal({
       inputRef.current.select()
     }
   }, [isOpen, useAutoRename])
-
-  useClickOutside(modalRef, onClose, {
-    enabled: isOpen,
-    onEscape: onClose,
-  })
 
   const handleAutoRenameToggle = async (enabled: boolean) => {
     clientLogger.debug('[ChatRenameModal] Auto-rename toggle', {
@@ -159,102 +153,98 @@ export default function ChatRenameModal({
     }
   }
 
-  if (!isOpen) return null
-
   const isLoading = saving || regenerating
 
-  return (
-    <div className="qt-dialog-overlay">
-      <div
-        ref={modalRef}
-        className="qt-dialog max-w-md"
+  const footer = (
+    <div className="flex justify-end gap-2">
+      <button
+        onClick={onClose}
+        disabled={isLoading}
+        className="qt-button qt-button-secondary"
       >
-        <div className="qt-dialog-header">
-          <h2 className="qt-dialog-title">Rename Chat</h2>
-        </div>
-        <div className="qt-dialog-body">
-          <div className="mb-4">
-            <label htmlFor="chat-title" className="qt-label mb-1">
-              Chat Title
-            </label>
-            <input
-              ref={inputRef}
-              id="chat-title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isLoading || useAutoRename}
-              placeholder="Enter a title for this chat..."
-              className="qt-input"
-            />
-          </div>
-
-          <div className="mb-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={useAutoRename}
-                onChange={(e) => handleAutoRenameToggle(e.target.checked)}
-                disabled={isLoading}
-                className="rounded border-input"
-              />
-              <span className="qt-text-small">
-                Use automatic naming
-              </span>
-            </label>
-            <p className="qt-text-xs mt-1 ml-6">
-              {useAutoRename
-                ? 'The chat title will be updated automatically based on the conversation.'
-                : 'The chat will keep the title you set and won\'t be renamed automatically.'}
-            </p>
-          </div>
-
-          {regenerating && (
-            <div className="qt-text-small flex items-center gap-2 mt-3">
-              <svg
-                className="animate-spin h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              Generating title...
-            </div>
-          )}
-        </div>
-
-        <div className="qt-dialog-footer flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={isLoading}
-            className="qt-button qt-button-secondary"
-          >
-            Cancel
-          </button>
-          {!useAutoRename && (
-            <button
-              onClick={handleSave}
-              disabled={isLoading || !title.trim()}
-              className="qt-button qt-button-primary"
-            >
-              {saving ? 'Saving...' : 'Save'}
-            </button>
-          )}
-        </div>
-      </div>
+        Cancel
+      </button>
+      {!useAutoRename && (
+        <button
+          onClick={handleSave}
+          disabled={isLoading || !title.trim()}
+          className="qt-button qt-button-primary"
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      )}
     </div>
+  )
+
+  return (
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Rename Chat"
+      maxWidth="md"
+      footer={footer}
+    >
+      <div className="mb-4">
+        <label htmlFor="chat-title" className="qt-label mb-1">
+          Chat Title
+        </label>
+        <input
+          ref={inputRef}
+          id="chat-title"
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={isLoading || useAutoRename}
+          placeholder="Enter a title for this chat..."
+          className="qt-input"
+        />
+      </div>
+
+      <div className="mb-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useAutoRename}
+            onChange={(e) => handleAutoRenameToggle(e.target.checked)}
+            disabled={isLoading}
+            className="rounded border-input"
+          />
+          <span className="qt-text-small">
+            Use automatic naming
+          </span>
+        </label>
+        <p className="qt-text-xs mt-1 ml-6">
+          {useAutoRename
+            ? 'The chat title will be updated automatically based on the conversation.'
+            : 'The chat will keep the title you set and won\'t be renamed automatically.'}
+        </p>
+      </div>
+
+      {regenerating && (
+        <div className="qt-text-small flex items-center gap-2 mt-3">
+          <svg
+            className="animate-spin h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          Generating title...
+        </div>
+      )}
+    </BaseModal>
   )
 }

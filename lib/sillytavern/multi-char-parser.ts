@@ -63,14 +63,24 @@ export interface SpeakerMapping {
   speakerName: string
   /** Whether this speaker is a user (persona) */
   isUser: boolean
-  /** How to map this speaker */
+  /**
+   * How to map this speaker
+   * Note: 'existing_persona' and 'create_persona' are deprecated.
+   * Use 'existing_character' or 'create_character' with controlledBy: 'user' instead.
+   */
   mappingType: 'existing_character' | 'existing_persona' | 'create_character' | 'create_persona' | 'skip'
   /** Entity ID for existing mappings */
   entityId?: string
   /** Entity name for display or creation */
   entityName?: string
-  /** Connection profile ID (required for characters) */
+  /** Connection profile ID (required for LLM-controlled characters) */
   connectionProfileId?: string
+  /**
+   * Whether this character is controlled by user or LLM
+   * Characters Not Personas - Phase 6
+   * For user speakers, this should be 'user'. For AI speakers, this should be 'llm'.
+   */
+  controlledBy?: 'llm' | 'user'
 }
 
 /**
@@ -263,20 +273,24 @@ export function extractUniqueSpeakers(messages: STMessage[]): ParsedSpeaker[] {
  */
 export function buildSpeakerEntityMap(
   mappings: SpeakerMapping[]
-): Map<string, { entityId: string; entityType: 'character' | 'persona'; isUser: boolean }> {
-  const map = new Map<string, { entityId: string; entityType: 'character' | 'persona'; isUser: boolean }>()
+): Map<string, { entityId: string; entityType: 'character' | 'persona'; isUser: boolean; controlledBy?: 'llm' | 'user' }> {
+  const map = new Map<string, { entityId: string; entityType: 'character' | 'persona'; isUser: boolean; controlledBy?: 'llm' | 'user' }>()
 
   for (const mapping of mappings) {
     if (mapping.mappingType === 'skip' || !mapping.entityId) {
       continue
     }
 
+    // Determine entity type - new approach treats user speakers as user-controlled characters
     const entityType = mapping.mappingType.includes('character') ? 'character' : 'persona'
+    // Determine controlledBy - user speakers should be user-controlled
+    const controlledBy = mapping.controlledBy || (mapping.isUser ? 'user' : 'llm')
 
     map.set(mapping.speakerName, {
       entityId: mapping.entityId,
       entityType,
       isUser: mapping.isUser,
+      controlledBy,
     })
   }
 
@@ -286,17 +300,37 @@ export function buildSpeakerEntityMap(
 /**
  * Create default mappings for speakers (for initial UI state)
  *
- * For user speakers (isUser=true): suggest existing persona or create persona
- * For AI speakers (isUser=false): suggest existing character or create character
+ * Characters Not Personas - Phase 6:
+ * Both user speakers and AI speakers are now mapped to characters.
+ * User speakers get controlledBy: 'user', AI speakers get controlledBy: 'llm'.
+ *
+ * For backwards compatibility, we still check existing personas but prefer
+ * existing characters. New creations always create characters.
  */
 export function createDefaultMappings(
   speakers: ParsedSpeaker[],
-  existingCharacters: Array<{ id: string; name: string }>,
+  existingCharacters: Array<{ id: string; name: string; controlledBy?: 'llm' | 'user' }>,
   existingPersonas: Array<{ id: string; name: string }>
 ): SpeakerMapping[] {
   return speakers.map(speaker => {
     if (speaker.isUser) {
-      // Try to find a matching persona by name
+      // First, try to find a matching user-controlled character
+      const matchingCharacter = existingCharacters.find(
+        c => c.name.toLowerCase() === speaker.name.toLowerCase() && c.controlledBy === 'user'
+      )
+
+      if (matchingCharacter) {
+        return {
+          speakerName: speaker.name,
+          isUser: true,
+          mappingType: 'existing_character' as const,
+          entityId: matchingCharacter.id,
+          entityName: matchingCharacter.name,
+          controlledBy: 'user' as const,
+        }
+      }
+
+      // Fallback: Try to find a matching persona (for backwards compatibility)
       const matchingPersona = existingPersonas.find(
         p => p.name.toLowerCase() === speaker.name.toLowerCase()
       )
@@ -308,20 +342,22 @@ export function createDefaultMappings(
           mappingType: 'existing_persona' as const,
           entityId: matchingPersona.id,
           entityName: matchingPersona.name,
+          controlledBy: 'user' as const,
         }
       }
 
-      // Default to creating a new persona
+      // Default to creating a new user-controlled character (not persona)
       return {
         speakerName: speaker.name,
         isUser: true,
-        mappingType: 'create_persona' as const,
+        mappingType: 'create_character' as const,
         entityName: speaker.name,
+        controlledBy: 'user' as const,
       }
     } else {
-      // Try to find a matching character by name
+      // Try to find a matching LLM-controlled character by name
       const matchingCharacter = existingCharacters.find(
-        c => c.name.toLowerCase() === speaker.name.toLowerCase()
+        c => c.name.toLowerCase() === speaker.name.toLowerCase() && c.controlledBy !== 'user'
       )
 
       if (matchingCharacter) {
@@ -331,15 +367,33 @@ export function createDefaultMappings(
           mappingType: 'existing_character' as const,
           entityId: matchingCharacter.id,
           entityName: matchingCharacter.name,
+          controlledBy: 'llm' as const,
         }
       }
 
-      // Default to creating a new character
+      // Fallback: Try any character with matching name
+      const anyMatchingCharacter = existingCharacters.find(
+        c => c.name.toLowerCase() === speaker.name.toLowerCase()
+      )
+
+      if (anyMatchingCharacter) {
+        return {
+          speakerName: speaker.name,
+          isUser: false,
+          mappingType: 'existing_character' as const,
+          entityId: anyMatchingCharacter.id,
+          entityName: anyMatchingCharacter.name,
+          controlledBy: 'llm' as const,
+        }
+      }
+
+      // Default to creating a new LLM-controlled character
       return {
         speakerName: speaker.name,
         isUser: false,
         mappingType: 'create_character' as const,
         entityName: speaker.name,
+        controlledBy: 'llm' as const,
       }
     }
   })
@@ -347,6 +401,10 @@ export function createDefaultMappings(
 
 /**
  * Validate that all required mappings have the necessary fields
+ *
+ * Characters Not Personas - Phase 6:
+ * User-controlled characters (controlledBy: 'user') do NOT require a connection profile.
+ * LLM-controlled characters still require one.
  */
 export function validateMappings(
   mappings: SpeakerMapping[],
@@ -354,12 +412,12 @@ export function validateMappings(
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = []
 
-  // Must have at least one non-skipped character
-  const hasCharacter = mappings.some(
-    m => m.mappingType !== 'skip' && !m.isUser
+  // Must have at least one non-skipped LLM-controlled character
+  const hasLLMCharacter = mappings.some(
+    m => m.mappingType !== 'skip' && !m.isUser && m.controlledBy !== 'user'
   )
-  if (!hasCharacter) {
-    errors.push('At least one AI character must be mapped')
+  if (!hasLLMCharacter) {
+    errors.push('At least one AI-controlled character must be mapped')
   }
 
   // Check each mapping
@@ -373,11 +431,12 @@ export function validateMappings(
       errors.push(`${mapping.speakerName}: Must select an existing entity`)
     }
 
-    // Character mappings need a connection profile
-    if (mapping.mappingType.includes('character')) {
+    // Only LLM-controlled character mappings need a connection profile
+    // User-controlled characters don't need one since they're user-controlled
+    if (mapping.mappingType.includes('character') && mapping.controlledBy !== 'user') {
       const profileId = mapping.connectionProfileId || defaultConnectionProfileId
       if (!profileId) {
-        errors.push(`${mapping.speakerName}: Character requires a connection profile`)
+        errors.push(`${mapping.speakerName}: AI character requires a connection profile`)
       }
     }
   }

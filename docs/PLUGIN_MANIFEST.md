@@ -80,7 +80,7 @@ The manifest is validated at runtime using Zod schemas. Invalid manifests will p
   {
     "compatibility": {
       "quilltapVersion": ">=1.7.0",
-      "quilttapMaxVersion": "<=2.0.0",
+      "quilltapMaxVersion": "<=2.0.0",
       "nodeVersion": ">=18.0.0"
     }
   }

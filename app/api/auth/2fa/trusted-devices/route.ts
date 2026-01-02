@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import {
   createTrustedDevice,
   listTrustedDevices,
@@ -14,19 +14,13 @@ const DEVICE_TRUST_DAYS = 30
  * GET /api/auth/2fa/trusted-devices
  * List all trusted devices for the current user
  */
-export async function GET(req: NextRequest) {
-  const session = await getServerSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const devices = await listTrustedDevices(session.user.id)
+    const devices = await listTrustedDevices(user.id)
 
     logger.debug('Listed trusted devices', {
       context: 'GET /api/auth/2fa/trusted-devices',
-      userId: session.user.id,
+      userId: user.id,
       deviceCount: devices.length,
     })
 
@@ -38,23 +32,17 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 /**
  * POST /api/auth/2fa/trusted-devices
  * Create a new trusted device (called after successful 2FA verification)
  */
-export async function POST(req: NextRequest) {
-  const session = await getServerSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
     const userAgent = req.headers.get('user-agent') || 'Unknown Browser'
 
-    const { token, deviceId } = await createTrustedDevice(session.user.id, userAgent)
+    const { token, deviceId } = await createTrustedDevice(user.id, userAgent)
 
     // Calculate expiry date
     const expiresAt = new Date(Date.now() + DEVICE_TRUST_DAYS * 24 * 60 * 60 * 1000)
@@ -77,7 +65,7 @@ export async function POST(req: NextRequest) {
 
     logger.info('Trusted device created via API', {
       context: 'POST /api/auth/2fa/trusted-devices',
-      userId: session.user.id,
+      userId: user.id,
       deviceId,
     })
 
@@ -89,7 +77,7 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 /**
  * DELETE /api/auth/2fa/trusted-devices
@@ -98,20 +86,14 @@ export async function POST(req: NextRequest) {
  *   - deviceId: specific device to revoke
  *   - all=true: revoke all devices
  */
-export async function DELETE(req: NextRequest) {
-  const session = await getServerSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export const DELETE = createAuthenticatedHandler(async (req, { user }) => {
   const { searchParams } = new URL(req.url)
   const deviceId = searchParams.get('deviceId')
   const revokeAll = searchParams.get('all') === 'true'
 
   try {
     if (revokeAll) {
-      const count = await revokeAllTrustedDevices(session.user.id)
+      const count = await revokeAllTrustedDevices(user.id)
 
       // Clear the cookie
       const response = NextResponse.json({
@@ -130,7 +112,7 @@ export async function DELETE(req: NextRequest) {
 
       logger.info('All trusted devices revoked', {
         context: 'DELETE /api/auth/2fa/trusted-devices',
-        userId: session.user.id,
+        userId: user.id,
         revokedCount: count,
       })
 
@@ -144,7 +126,7 @@ export async function DELETE(req: NextRequest) {
       )
     }
 
-    const success = await revokeTrustedDevice(session.user.id, deviceId)
+    const success = await revokeTrustedDevice(user.id, deviceId)
 
     if (!success) {
       return NextResponse.json(
@@ -159,7 +141,7 @@ export async function DELETE(req: NextRequest) {
 
     logger.info('Trusted device revoked', {
       context: 'DELETE /api/auth/2fa/trusted-devices',
-      userId: session.user.id,
+      userId: user.id,
       deviceId,
     })
 
@@ -174,4 +156,4 @@ export async function DELETE(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

@@ -59,6 +59,7 @@ interface MessageRowProps {
   onHandleTalkativenessChange: (participantId: string, value: number) => void
   onHandleRemoveCharacter: (participantId: string) => void
   onHandleContinue: () => void
+  onReattribute?: (messageId: string) => void
 }
 
 function getImageAttachments(message: Message) {
@@ -104,6 +105,7 @@ export function MessageRow({
   onHandleTalkativenessChange,
   onHandleRemoveCharacter,
   onHandleContinue,
+  onReattribute,
 }: MessageRowProps) {
   const messageRowClasses = ['qt-chat-message-row']
   if (message.role === 'USER') {
@@ -114,6 +116,8 @@ export function MessageRow({
 
   return (
     <div
+      id={`message-${message.id}`}
+      data-message-id={message.id}
       key={message.id}
       className={messageRowClasses.join(' ')}
     >
@@ -139,7 +143,7 @@ export function MessageRow({
             <div className="qt-chat-message-mobile-speaker">
               <div className="qt-chat-message-mobile-avatar">
                 {getAvatarSrc(messageAvatar) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+                   
                   <img
                     src={getAvatarSrc(messageAvatar)!}
                     alt={messageAvatar.name}
@@ -222,7 +226,7 @@ export function MessageRow({
                         title={entity.name}
                       >
                         {pAvatarSrc ? (
-                          // eslint-disable-next-line @next/next/no-img-element
+                           
                           <img src={pAvatarSrc} alt={entity.name} />
                         ) : (
                           <span className="qt-mobile-participant-avatar-initial">
@@ -344,7 +348,7 @@ export function MessageRow({
                       type="button"
                       className="qt-button qt-chat-attachment-button"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      { }
                       <img
                         src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
                         alt={attachment.filename}
@@ -423,6 +427,18 @@ export function MessageRow({
                     >
                       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                  )}
+                  {/* Re-attribute (when other participants exist) */}
+                  {onReattribute && participantData.filter(p => p.id !== message.participantId).length > 0 && (
+                    <button
+                      onClick={() => onReattribute(message.id)}
+                      className="qt-chat-message-action-icon"
+                      title="Re-attribute to different participant"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                       </svg>
                     </button>
                   )}
@@ -537,6 +553,14 @@ export function MessageRow({
                     ↻ Resend
                   </button>
                 )}
+                {onReattribute && participantData.filter(p => p.id !== message.participantId).length > 0 && (
+                  <button
+                    onClick={() => onReattribute(message.id)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Re-attribute
+                  </button>
+                )}
               </>
             )}
 
@@ -554,6 +578,14 @@ export function MessageRow({
                 >
                   Regenerate
                 </button>
+                {onReattribute && participantData.filter(p => p.id !== message.participantId).length > 0 && (
+                  <button
+                    onClick={() => onReattribute(message.id)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Re-attribute
+                  </button>
+                )}
 
                 {/* Swipe controls */}
                 {swipeState && swipeState.total > 1 && (

@@ -4,8 +4,8 @@
  * POST /api/keys/import - Import API keys from export file
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { getUserRepositories } from '@/lib/repositories/factory'
 import { decryptWithPassphrase, encryptApiKey } from '@/lib/encryption'
 import { Provider } from '@/lib/schemas/types'
@@ -62,13 +62,8 @@ interface ImportResult {
  *   duplicateHandling: 'skip' | 'replace' | 'rename'
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const body = await req.json()
     const { file, passphrase, duplicateHandling = 'skip' } = body
 
@@ -114,7 +109,7 @@ export async function POST(req: NextRequest) {
 
     logger.debug('Starting API key import', {
       context: 'keys-import-POST',
-      userId: session.user.id,
+      userId: user.id,
       duplicateHandling: handling,
     })
 
@@ -149,7 +144,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const repos = getUserRepositories(session.user.id)
+    const repos = getUserRepositories(user.id)
     const existingKeys = await repos.connections.getAllApiKeys()
 
     const result: ImportResult = {
@@ -182,7 +177,7 @@ export async function POST(req: NextRequest) {
             continue
           } else if (handling === 'replace') {
             // Update existing key
-            const encrypted = encryptApiKey(key.apiKey, session.user.id)
+            const encrypted = encryptApiKey(key.apiKey, user.id)
             await repos.connections.updateApiKey(existing.id, {
               ciphertext: encrypted.encrypted,
               iv: encrypted.iv,
@@ -197,7 +192,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Encrypt the key with user's encryption
-        const encrypted = encryptApiKey(key.apiKey, session.user.id)
+        const encrypted = encryptApiKey(key.apiKey, user.id)
 
         // Determine label (may be modified for rename)
         let label = key.label
@@ -243,7 +238,7 @@ export async function POST(req: NextRequest) {
         keyCount: newKeyIds.length,
       })
 
-      const associationResult = await autoAssociateApiKeys(session.user.id, newKeyIds)
+      const associationResult = await autoAssociateApiKeys(user.id, newKeyIds)
       result.associations = associationResult.associations
 
       // Add any association errors to the result
@@ -254,7 +249,7 @@ export async function POST(req: NextRequest) {
 
     logger.info('API key import completed', {
       context: 'keys-import-POST',
-      userId: session.user.id,
+      userId: user.id,
       imported: result.imported,
       skipped: result.skipped,
       replaced: result.replaced,
@@ -272,4 +267,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

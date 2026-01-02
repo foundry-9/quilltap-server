@@ -20,6 +20,7 @@ import Avatar from '@/components/ui/Avatar'
 export interface ParticipantData {
   id: string
   type: 'CHARACTER' | 'PERSONA'
+  controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
   character?: {
@@ -67,6 +68,11 @@ interface ParticipantCardProps {
   isUserParticipant?: boolean // True if this is the user's persona
   canRemove?: boolean // True if this character can be removed (not the only character)
   canSkip?: boolean // True if user can skip their turn (next speaker is null = user's turn)
+  // Impersonation support
+  isImpersonating?: boolean // True if user is currently impersonating this participant
+  isActiveTyping?: boolean // True if this is the active typing participant (when impersonating multiple)
+  onImpersonate?: (participantId: string) => void // Start impersonating
+  onStopImpersonate?: (participantId: string) => void // Stop impersonating
 }
 
 export function ParticipantCard({
@@ -83,6 +89,10 @@ export function ParticipantCard({
   isUserParticipant = false,
   canRemove = true,
   canSkip = false,
+  isImpersonating = false,
+  isActiveTyping = false,
+  onImpersonate,
+  onStopImpersonate,
 }: ParticipantCardProps) {
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
@@ -187,13 +197,20 @@ export function ParticipantCard({
 
         {/* Info */}
         <div className="qt-participant-card-info">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="qt-participant-card-name">
               {name}
             </span>
-            {isUserParticipant && (
-              <span className="qt-badge-secondary text-xs">
-                You
+            {/* Show "You" badge for user-controlled participants or when impersonating */}
+            {(isUserParticipant || isImpersonating) && (
+              <span className={`text-xs ${isImpersonating ? 'qt-badge-info' : 'qt-badge-secondary'}`}>
+                {isImpersonating ? (isActiveTyping ? 'Speaking as' : 'You') : 'You'}
+              </span>
+            )}
+            {/* Show LLM badge for LLM-controlled that could be impersonated */}
+            {!isUserParticipant && !isImpersonating && participant.controlledBy === 'llm' && (
+              <span className="qt-badge-secondary text-xs opacity-60">
+                AI
               </span>
             )}
           </div>
@@ -302,8 +319,9 @@ export function ParticipantCard({
           </button>
         )}
 
-        {/* Remove button - only for characters, not user personas */}
-        {isCharacter && !isUserParticipant && onRemove && canRemove && (
+        {/* Remove button - for characters when canRemove is true
+            canRemove now includes the safety check that at least one user-controlled character remains */}
+        {isCharacter && onRemove && canRemove && (
           <button
             onClick={() => {
               clientLogger.debug('[ParticipantCard] Remove clicked', {
@@ -319,6 +337,47 @@ export function ParticipantCard({
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
+          </button>
+        )}
+
+        {/* Impersonate/Stop Impersonate button */}
+        {onImpersonate && onStopImpersonate && !isUserParticipant && (
+          <button
+            onClick={() => {
+              if (isImpersonating) {
+                clientLogger.debug('[ParticipantCard] Stop impersonate clicked', {
+                  participantId: participant.id,
+                  characterName: name,
+                })
+                onStopImpersonate(participant.id)
+              } else {
+                clientLogger.debug('[ParticipantCard] Impersonate clicked', {
+                  participantId: participant.id,
+                  characterName: name,
+                })
+                onImpersonate(participant.id)
+              }
+            }}
+            disabled={isGenerating}
+            className={`
+              qt-button qt-button-sm py-1.5 px-2
+              ${isImpersonating
+                ? 'qt-button-secondary'
+                : 'qt-button-primary'
+              }
+              disabled:opacity-50 disabled:cursor-not-allowed
+            `}
+            title={isImpersonating ? `Stop speaking as ${name}` : `Speak as ${name}`}
+          >
+            {isImpersonating ? (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            )}
           </button>
         )}
       </div>

@@ -106,7 +106,6 @@ export function useChatData(chatId: string) {
       if (res.ok) {
         const data = await res.json()
         setChatMemoryCount(data.memoryCount || 0)
-        clientLogger.debug('[Chat] Fetched memory count', { chatId, memoryCount: data.memoryCount })
       }
     } catch (err) {
       clientLogger.error('Failed to fetch chat memory count:', { error: err instanceof Error ? err.message : String(err) })
@@ -115,7 +114,6 @@ export function useChatData(chatId: string) {
 
   const persistTurnState = useCallback(async (lastTurnParticipantId: string | null) => {
     try {
-      clientLogger.debug('[Chat] Persisting turn state', { chatId, lastTurnParticipantId })
       const res = await fetch(`/api/chats/${chatId}/turn`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

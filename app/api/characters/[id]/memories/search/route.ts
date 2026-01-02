@@ -2,8 +2,7 @@
 // POST /api/characters/[id]/memories/search - Semantic/keyword search
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
@@ -18,83 +17,69 @@ const searchMemorySchema = z.object({
 })
 
 // POST /api/characters/[id]/memories/search - Search memories
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: characterId } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id: characterId }) => {
+    try {
+      // Verify character exists and belongs to user
+      const character = await repos.characters.findById(characterId)
+      if (!character) {
+        return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+      }
+      if (character.userId !== user.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+      }
 
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
+      const body = await req.json()
+      const { query, limit, minImportance, minScore, source } = searchMemorySchema.parse(body)
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+      // Use semantic search (falls back to text search if embedding unavailable)
+      const searchResults = await searchMemoriesSemantic(characterId, query, {
+        userId: user.id,
+        limit,
+        minScore,
+        minImportance,
+        source,
+      })
 
-    // Verify character exists and belongs to user
-    const character = await repos.characters.findById(characterId)
-    if (!character) {
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 })
-    }
-    if (character.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    }
+      // Enrich with tag names
+      const allTags = await repos.tags.findAll()
+      const tagMap = new Map(allTags.map(t => [t.id, t]))
 
-    const body = await req.json()
-    const { query, limit, minImportance, minScore, source } = searchMemorySchema.parse(body)
+      const memoriesWithTags = searchResults.map(result => ({
+        ...result.memory,
+        score: result.score,
+        usedEmbedding: result.usedEmbedding,
+        tagDetails: result.memory.tags
+          .map(tagId => tagMap.get(tagId))
+          .filter(Boolean),
+      }))
 
-    // Use semantic search (falls back to text search if embedding unavailable)
-    const searchResults = await searchMemoriesSemantic(characterId, query, {
-      userId: user.id,
-      limit,
-      minScore,
-      minImportance,
-      source,
-    })
+      // Update access times for returned memories (fire and forget)
+      Promise.all(
+        searchResults.map(r => repos.memories.updateAccessTime(characterId, r.memory.id))
+      ).catch(err =>
+        logger.warn('Failed to update memory access times after search', { characterId, error: err instanceof Error ? err.message : String(err) })
+      )
 
-    // Enrich with tag names
-    const allTags = await repos.tags.findAll()
-    const tagMap = new Map(allTags.map(t => [t.id, t]))
+      return NextResponse.json({
+        memories: memoriesWithTags,
+        count: memoriesWithTags.length,
+        query,
+        usedEmbedding: searchResults.length > 0 ? searchResults[0].usedEmbedding : false,
+      })
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Validation error', details: error.errors },
+          { status: 400 }
+        )
+      }
 
-    const memoriesWithTags = searchResults.map(result => ({
-      ...result.memory,
-      score: result.score,
-      usedEmbedding: result.usedEmbedding,
-      tagDetails: result.memory.tags
-        .map(tagId => tagMap.get(tagId))
-        .filter(Boolean),
-    }))
-
-    // Update access times for returned memories (fire and forget)
-    Promise.all(
-      searchResults.map(r => repos.memories.updateAccessTime(characterId, r.memory.id))
-    ).catch(err =>
-      logger.warn('Failed to update memory access times after search', { characterId, error: err instanceof Error ? err.message : String(err) })
-    )
-
-    return NextResponse.json({
-      memories: memoriesWithTags,
-      count: memoriesWithTags.length,
-      query,
-      usedEmbedding: searchResults.length > 0 ? searchResults[0].usedEmbedding : false,
-    })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
+      logger.error('Error searching memories', {}, error instanceof Error ? error : undefined)
       return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
+        { error: 'Failed to search memories' },
+        { status: 500 }
       )
     }
-
-    logger.error('Error searching memories', {}, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to search memories' },
-      { status: 500 }
-    )
   }
-}
+)

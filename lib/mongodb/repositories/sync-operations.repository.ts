@@ -5,7 +5,6 @@
  * Provides audit logging of sync operations for debugging and user visibility.
  */
 
-import { Collection } from 'mongodb';
 import { logger } from '@/lib/logger';
 import {
   SyncOperation,
@@ -15,65 +14,15 @@ import {
   SyncConflict,
   SyncProgress,
 } from '@/lib/sync/types';
-import { getMongoDatabase } from '../client';
+import { MongoBaseRepository } from './base.repository';
 
 /**
  * MongoDB Sync Operations Repository
  * Implements CRUD operations for sync operation audit logs
  */
-export class SyncOperationsRepository {
-  private collectionName = 'sync_operations';
-  private schema = SyncOperationSchema;
-
-  /**
-   * Get the MongoDB collection
-   */
-  private async getCollection(): Promise<Collection> {
-    const db = await getMongoDatabase();
-    const collection = db.collection(this.collectionName);
-
-    logger.debug('Retrieved MongoDB sync_operations collection', {
-      collectionName: this.collectionName,
-    });
-
-    return collection;
-  }
-
-  /**
-   * Validate data against schema
-   */
-  private validate(data: unknown): SyncOperation {
-    return this.schema.parse(data) as SyncOperation;
-  }
-
-  /**
-   * Safely validate without throwing
-   */
-  private validateSafe(data: unknown): { success: boolean; data?: SyncOperation; error?: string } {
-    try {
-      const validated = this.validate(data);
-      return { success: true, data: validated };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Generate UUID v4
-   */
-  private generateId(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
-
-  /**
-   * Get current ISO timestamp
-   */
-  private getCurrentTimestamp(): string {
-    return new Date().toISOString();
+export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation> {
+  constructor() {
+    super('sync_operations', SyncOperationSchema);
   }
 
   /**

@@ -4,20 +4,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/character'
 
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    const session = await getServerSession()
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
     const contentType = req.headers.get('content-type')
 
     let characterData = null
@@ -87,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     // Create character in database
     const character = await repos.characters.create({
-      userId: session.user.id,
+      userId: user.id,
       ...importedData,
       avatarUrl: avatarUrl,
       isFavorite: false,
@@ -121,4 +113,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

@@ -25,7 +25,8 @@ export interface GalleryTag {
   tagId: string
 }
 
-export type EntityType = 'character' | 'persona'
+// EntityType is now only 'character' - personas have been migrated to characters with controlledBy: 'user'
+export type EntityType = 'character'
 
 export interface EmbeddedPhotoGalleryProps {
   entityType: EntityType

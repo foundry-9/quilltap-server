@@ -9,10 +9,8 @@
  * @module components/settings/appearance/ThemeSelector
  */
 
-import { useEffect } from 'react'
 import type { ThemeSummary } from '@/components/providers/theme-provider'
 import { BrandName } from '@/components/ui/brand-name'
-import { clientLogger } from '@/lib/client-logger'
 import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
 import { ThemeCard } from './components/ThemeCard'
 
@@ -48,15 +46,6 @@ export function ThemeSelector({
   isLoading = false,
   onThemeSelect,
 }: ThemeSelectorProps) {
-  // Log render in useEffect to avoid state updates during render
-  useEffect(() => {
-    clientLogger.debug('ThemeSelector: rendered', {
-      activeThemeId,
-      themesCount: availableThemes.length,
-      isLoading,
-    })
-  }, [activeThemeId, availableThemes.length, isLoading])
-
   return (
     <section className="border-t border-border pt-8">
       <h2 className="text-xl font-semibold mb-2 text-foreground">Theme</h2>

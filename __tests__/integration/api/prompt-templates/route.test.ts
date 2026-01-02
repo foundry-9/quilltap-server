@@ -4,13 +4,13 @@ jest.mock('@/lib/auth/session', () => ({
   getServerSession: jest.fn(),
 }))
 
-jest.mock('@/lib/mongodb/repositories', () => ({
+jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
 type RouteModule = typeof import('@/app/api/prompt-templates/route')
 type SessionModule = typeof import('@/lib/auth/session')
-type RepositoriesModule = typeof import('@/lib/mongodb/repositories')
+type RepositoriesModule = typeof import('@/lib/repositories/factory')
 
 let GET: RouteModule['GET']
 let POST: RouteModule['POST']
@@ -26,7 +26,7 @@ describe('Prompt Templates API', () => {
     const sessionModule = await import('@/lib/auth/session')
     mockGetServerSession = sessionModule.getServerSession as jest.MockedFunction<SessionModule['getServerSession']>
 
-    const repositoriesModule = await import('@/lib/mongodb/repositories')
+    const repositoriesModule = await import('@/lib/repositories/factory')
     mockGetRepositories = repositoriesModule.getRepositories as jest.MockedFunction<RepositoriesModule['getRepositories']>
   })
 
@@ -54,6 +54,9 @@ describe('Prompt Templates API', () => {
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } } as any)
 
     mockGetRepositories.mockReturnValue({
+      users: {
+        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
+      },
       promptTemplates: {
         findAllForUser: jest.fn().mockResolvedValue([
           { id: 'built-in', name: 'Standard', isBuiltIn: true },
@@ -80,6 +83,9 @@ describe('Prompt Templates API', () => {
     })
 
     mockGetRepositories.mockReturnValue({
+      users: {
+        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
+      },
       promptTemplates: {
         findAllForUser: jest.fn(),
         create,
@@ -117,6 +123,9 @@ describe('Prompt Templates API', () => {
   it('rejects invalid template payloads', async () => {
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } } as any)
     mockGetRepositories.mockReturnValue({
+      users: {
+        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
+      },
       promptTemplates: {
         create: jest.fn(),
       },
@@ -134,6 +143,7 @@ describe('Prompt Templates API', () => {
     const response = await POST(request)
     expect(response.status).toBe(400)
     const payload = await response.json()
-    expect(Array.isArray(payload.error)).toBe(true)
+    expect(payload.error).toBe('Validation error')
+    expect(Array.isArray(payload.details)).toBe(true)
   })
 })

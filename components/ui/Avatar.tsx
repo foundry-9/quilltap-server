@@ -148,7 +148,7 @@ export function Avatar({
   const avatarElement = (
     <div className={containerClasses} style={containerStyle}>
       {avatarSrc ? (
-        // eslint-disable-next-line @next/next/no-img-element
+         
         <img
           src={avatarSrc}
           alt={name}
@@ -171,14 +171,14 @@ export function Avatar({
 
   // Name and title display
   const nameElement = (showName || showTitle) ? (
-    <div className="text-center mt-1">
+    <div className="qt-avatar-labels text-center mt-1">
       {showName && (
-        <div className="text-sm font-semibold text-foreground line-clamp-2">
+        <div className="qt-avatar-name text-sm font-semibold text-foreground line-clamp-2">
           {name}
         </div>
       )}
       {showTitle && title && (
-        <div className="qt-text-xs italic line-clamp-2">
+        <div className="qt-avatar-title qt-text-xs italic line-clamp-2">
           {title}
         </div>
       )}

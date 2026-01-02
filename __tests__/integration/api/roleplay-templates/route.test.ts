@@ -29,6 +29,9 @@ describe('Roleplay Templates API', () => {
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } } as any)
 
     mockGetRepositories.mockReturnValue({
+      users: {
+        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
+      },
       roleplayTemplates: {
         findAllForUser: jest.fn().mockResolvedValue([
           { id: 'user-2', name: 'Zany Format', isBuiltIn: false },
@@ -50,6 +53,9 @@ describe('Roleplay Templates API', () => {
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } } as any)
 
     mockGetRepositories.mockReturnValue({
+      users: {
+        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
+      },
       roleplayTemplates: {
         findAllForUser: jest.fn(),
         findByName: jest.fn().mockResolvedValue({ id: 'existing' }),
@@ -79,6 +85,9 @@ describe('Roleplay Templates API', () => {
     })
 
     mockGetRepositories.mockReturnValue({
+      users: {
+        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
+      },
       roleplayTemplates: {
         findAllForUser: jest.fn(),
         findByName: jest.fn().mockResolvedValue(null),

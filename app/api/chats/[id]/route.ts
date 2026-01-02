@@ -4,24 +4,14 @@
 // DELETE /api/chats/:id - Delete chat
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { z } from 'zod'
-import type { ChatParticipantBase, ChatMetadata, FileEntry } from '@/lib/schemas/types'
+import type { ChatMetadata } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
-
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : ''
-  return `data/files/storage/${file.id}${ext}`
-}
+import type { RepositoryContainer } from '@/lib/repositories/factory'
+import { getFilePath } from '@/lib/api/middleware/file-path'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
+import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service'
 
 // Validation schema for chat updates
 // Note: roleplayTemplateId accepts any string because plugin templates use 'plugin:' prefix
@@ -41,19 +31,22 @@ const updateParticipantSchema = z.object({
   systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
   isActive: z.boolean().optional(),
+  controlledBy: z.enum(['llm', 'user']).optional(),  // Who controls this participant
 })
 
 // Validation schema for adding a participant
+// Note: PERSONA type is deprecated - use CHARACTER with controlledBy='user' instead
 const addParticipantSchema = z.object({
-  type: z.enum(['CHARACTER', 'PERSONA']),
+  type: z.enum(['CHARACTER', 'PERSONA']),  // PERSONA kept for backwards compatibility
   characterId: z.string().uuid().optional(),
-  personaId: z.string().uuid().optional(),
+  personaId: z.string().uuid().optional(),  // @deprecated - use characterId with controlledBy='user'
   connectionProfileId: z.string().uuid().optional(),
   imageProfileId: z.string().uuid().nullish(),
   systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
   hasHistoryAccess: z.boolean().optional(), // Phase 6: Can see messages from before joining
   joinScenario: z.string().nullish(), // Phase 6: Custom join scenario text
+  controlledBy: z.enum(['llm', 'user']).optional(),  // Who controls this participant
 })
 
 // Combined update schema
@@ -67,121 +60,7 @@ const chatUpdateRequestSchema = z.object({
   roleplayTemplateId: z.string().nullish(),
 })
 
-type Repos = ReturnType<typeof getRepositories>
-
-// Helper to get enriched character data
-async function getEnrichedCharacter(characterId: string, repos: Repos) {
-  const charData = await repos.characters.findById(characterId)
-  if (!charData) return null
-
-  let defaultImage = null
-  if (charData.defaultImageId) {
-    const fileEntry = await repos.files.findById(charData.defaultImageId)
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
-    }
-  }
-
-  return {
-    id: charData.id,
-    name: charData.name,
-    title: charData.title,
-    avatarUrl: charData.avatarUrl,
-    defaultImageId: charData.defaultImageId,
-    defaultImage,
-  }
-}
-
-// Helper to get enriched persona data
-async function getEnrichedPersona(personaId: string, repos: Repos) {
-  const personaData = await repos.personas.findById(personaId)
-  if (!personaData) return null
-
-  let defaultImage = null
-  if (personaData.defaultImageId) {
-    const fileEntry = await repos.files.findById(personaData.defaultImageId)
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
-    }
-  }
-
-  return {
-    id: personaData.id,
-    name: personaData.name,
-    title: personaData.title,
-    avatarUrl: personaData.avatarUrl,
-    defaultImageId: personaData.defaultImageId,
-    defaultImage,
-  }
-}
-
-// Helper to get enriched connection profile
-async function getEnrichedConnectionProfile(profileId: string, repos: Repos) {
-  const profile = await repos.connections.findById(profileId)
-  if (!profile) return null
-
-  let apiKeyInfo = null
-  if (profile.apiKeyId) {
-    const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId)
-    if (apiKey) {
-      apiKeyInfo = { id: apiKey.id, provider: apiKey.provider, label: apiKey.label }
-    }
-  }
-
-  return {
-    id: profile.id,
-    name: profile.name,
-    provider: profile.provider,
-    modelName: profile.modelName,
-    apiKey: apiKeyInfo,
-  }
-}
-
-// Helper to get enriched image profile
-async function getEnrichedImageProfile(profileId: string, repos: Repos) {
-  const imgProfile = await repos.imageProfiles.findById(profileId)
-  if (!imgProfile) return null
-
-  return {
-    id: imgProfile.id,
-    name: imgProfile.name,
-    provider: imgProfile.provider,
-    modelName: imgProfile.modelName,
-  }
-}
-
-// Helper to enrich participant data with related entities
-async function enrichParticipant(participant: ChatParticipantBase, repos: Repos) {
-  const character = participant.type === 'CHARACTER' && participant.characterId
-    ? await getEnrichedCharacter(participant.characterId, repos)
-    : null
-
-  const persona = participant.type === 'PERSONA' && participant.personaId
-    ? await getEnrichedPersona(participant.personaId, repos)
-    : null
-
-  const connectionProfile = participant.connectionProfileId
-    ? await getEnrichedConnectionProfile(participant.connectionProfileId, repos)
-    : null
-
-  const imageProfile = participant.imageProfileId
-    ? await getEnrichedImageProfile(participant.imageProfileId, repos)
-    : null
-
-  return {
-    id: participant.id,
-    type: participant.type,
-    displayOrder: participant.displayOrder,
-    isActive: participant.isActive,
-    systemPromptOverride: participant.systemPromptOverride,
-    character,
-    persona,
-    connectionProfile,
-    imageProfile,
-    createdAt: participant.createdAt,
-    updatedAt: participant.updatedAt,
-  }
-}
+type Repos = RepositoryContainer
 
 // Helper to validate CHARACTER participant requirements
 async function validateCharacterParticipant(
@@ -192,18 +71,26 @@ async function validateCharacterParticipant(
   if (!data.characterId) {
     return { error: 'characterId is required for CHARACTER participants', status: 400 }
   }
-  if (!data.connectionProfileId) {
-    return { error: 'connectionProfileId is required for CHARACTER participants', status: 400 }
-  }
 
   const character = await repos.characters.findById(data.characterId)
   if (!character || character.userId !== userId) {
     return { error: 'Character not found', status: 404 }
   }
 
-  const profile = await repos.connections.findById(data.connectionProfileId)
-  if (!profile || profile.userId !== userId) {
-    return { error: 'Connection profile not found', status: 404 }
+  // Determine if this is a user-controlled character
+  const controlledBy = data.controlledBy || character.controlledBy || 'llm'
+  const isUserControlled = controlledBy === 'user'
+
+  // Connection profile is only required for LLM-controlled characters
+  if (!isUserControlled && !data.connectionProfileId) {
+    return { error: 'connectionProfileId is required for LLM-controlled CHARACTER participants', status: 400 }
+  }
+
+  if (data.connectionProfileId) {
+    const profile = await repos.connections.findById(data.connectionProfileId)
+    if (!profile || profile.userId !== userId) {
+      return { error: 'Connection profile not found', status: 404 }
+    }
   }
 
   return null
@@ -250,9 +137,50 @@ async function handleParticipantUpdate(
     }
   }
 
+  // Get current chat state to handle impersonation changes
+  const chat = await repos.chats.findById(chatId)
+  if (!chat) {
+    return { error: 'Chat not found', status: 404 }
+  }
+
   const result = await repos.chats.updateParticipant(chatId, participantId, participantData)
   if (!result) {
     return { error: 'Participant not found', status: 404 }
+  }
+
+  // Handle impersonation array updates when controlledBy changes
+  if (participantData.controlledBy !== undefined) {
+    const currentImpersonating = chat.impersonatingParticipantIds || []
+    const isCurrentlyImpersonating = currentImpersonating.includes(participantId)
+
+    if (participantData.controlledBy === 'user' && !isCurrentlyImpersonating) {
+      // Switching to user control - add to impersonation array
+      logger.debug('[handleParticipantUpdate] Adding participant to impersonation', { chatId, participantId })
+      const newImpersonating = [...currentImpersonating, participantId]
+      await repos.chats.update(chatId, {
+        impersonatingParticipantIds: newImpersonating,
+        // Set as active typing if no one else is
+        ...(result.activeTypingParticipantId ? {} : { activeTypingParticipantId: participantId }),
+      })
+    } else if (participantData.controlledBy === 'llm' && isCurrentlyImpersonating) {
+      // Switching to LLM control - remove from impersonation array
+      logger.debug('[handleParticipantUpdate] Removing participant from impersonation', { chatId, participantId })
+      const newImpersonating = currentImpersonating.filter(id => id !== participantId)
+      const updateData: Partial<ChatMetadata> = { impersonatingParticipantIds: newImpersonating }
+
+      // Clear active typing if it was this participant
+      if (result.activeTypingParticipantId === participantId) {
+        updateData.activeTypingParticipantId = newImpersonating[0] || null
+      }
+
+      await repos.chats.update(chatId, updateData)
+    }
+
+    // Re-fetch to get updated state
+    const updatedChat = await repos.chats.findById(chatId)
+    if (updatedChat) {
+      return { chat: updatedChat }
+    }
   }
 
   return { chat: result }
@@ -276,10 +204,19 @@ async function handleAddParticipant(
     if (validationError) return validationError
   }
 
+  // For CHARACTER participants, determine control mode
+  let controlledBy = data.controlledBy
+  if (data.type === 'CHARACTER' && data.characterId && !controlledBy) {
+    // Inherit from character's default if not explicitly specified
+    const character = await repos.characters.findById(data.characterId)
+    controlledBy = character?.controlledBy || 'llm'
+  }
+
   const result = await repos.chats.addParticipant(chatId, {
     type: data.type,
     characterId: data.characterId || null,
     personaId: data.personaId || null,
+    controlledBy: controlledBy || (data.type === 'PERSONA' ? 'user' : 'llm'),
     connectionProfileId: data.connectionProfileId || null,
     imageProfileId: data.imageProfileId || null,
     systemPromptOverride: data.systemPromptOverride || null,
@@ -342,86 +279,72 @@ async function handleRemoveParticipant(
 }
 
 // GET /api/chats/:id
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
+    try {
+      const chatMetadata = await repos.chats.findById(id)
+
+      if (!chatMetadata || chatMetadata.userId !== user.id) {
+        return notFound('Chat')
+      }
+
+      const enrichedParticipants = await Promise.all(
+        chatMetadata.participants.map(p => enrichParticipantDetail(p, repos))
+      )
+
+      const chatEvents = await repos.chats.getMessages(id)
+      const messages = await Promise.all(
+        chatEvents
+          .filter(event => event.type === 'message')
+          .map(async event => {
+            if (event.type !== 'message') return null
+
+            // Get attachments from repository using linkedTo
+            const linkedFiles = await repos.files.findByLinkedTo(event.id)
+            const attachments = linkedFiles.map(file => ({
+              id: file.id,
+              filename: file.originalFilename,
+              filepath: getFilePath(file),
+              mimeType: file.mimeType,
+            }))
+
+            return {
+              id: event.id,
+              role: event.role,
+              content: event.content,
+              tokenCount: event.tokenCount || null,
+              createdAt: event.createdAt,
+              swipeGroupId: event.swipeGroupId || null,
+              swipeIndex: event.swipeIndex || null,
+              participantId: event.participantId || null,
+              attachments,
+              debugMemoryLogs: event.debugMemoryLogs || undefined,
+            }
+          })
+      ).then(results => results.filter(Boolean))
+
+      const chat = {
+        id: chatMetadata.id,
+        title: chatMetadata.title,
+        contextSummary: chatMetadata.contextSummary,
+        roleplayTemplateId: chatMetadata.roleplayTemplateId,
+        lastTurnParticipantId: chatMetadata.lastTurnParticipantId ?? null,
+        isPaused: chatMetadata.isPaused ?? false,
+        isManuallyRenamed: chatMetadata.isManuallyRenamed ?? false,
+        updatedAt: chatMetadata.updatedAt,
+        createdAt: chatMetadata.createdAt,
+        participants: enrichedParticipants,
+        user: { id: user.id, name: user.name, image: user.image },
+        messages,
+      }
+
+      return NextResponse.json({ chat })
+    } catch (error) {
+      logger.error('Error fetching chat', { context: 'GET /api/chats/:id' }, error instanceof Error ? error : undefined)
+      return serverError('Failed to fetch chat')
     }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    const chatMetadata = await repos.chats.findById(id)
-
-    if (!chatMetadata || chatMetadata.userId !== user.id) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
-
-    const enrichedParticipants = await Promise.all(
-      chatMetadata.participants.map(p => enrichParticipant(p, repos))
-    )
-
-    const chatEvents = await repos.chats.getMessages(id)
-    const messages = await Promise.all(
-      chatEvents
-        .filter(event => event.type === 'message')
-        .map(async event => {
-          if (event.type !== 'message') return null
-
-          // Get attachments from repository using linkedTo
-          const linkedFiles = await repos.files.findByLinkedTo(event.id)
-          const attachments = linkedFiles.map(file => ({
-            id: file.id,
-            filename: file.originalFilename,
-            filepath: getFilePath(file),
-            mimeType: file.mimeType,
-          }))
-
-          return {
-            id: event.id,
-            role: event.role,
-            content: event.content,
-            tokenCount: event.tokenCount || null,
-            createdAt: event.createdAt,
-            swipeGroupId: event.swipeGroupId || null,
-            swipeIndex: event.swipeIndex || null,
-            participantId: event.participantId || null,
-            attachments,
-            debugMemoryLogs: event.debugMemoryLogs || undefined,
-          }
-        })
-    ).then(results => results.filter(Boolean))
-
-    const chat = {
-      id: chatMetadata.id,
-      title: chatMetadata.title,
-      contextSummary: chatMetadata.contextSummary,
-      roleplayTemplateId: chatMetadata.roleplayTemplateId,
-      lastTurnParticipantId: chatMetadata.lastTurnParticipantId ?? null,
-      isPaused: chatMetadata.isPaused ?? false,
-      isManuallyRenamed: chatMetadata.isManuallyRenamed ?? false,
-      updatedAt: chatMetadata.updatedAt,
-      createdAt: chatMetadata.createdAt,
-      participants: enrichedParticipants,
-      user: { id: user.id, name: user.name, image: user.image },
-      messages,
-    }
-
-    return NextResponse.json({ chat })
-  } catch (error) {
-    logger.error('Error fetching chat', { context: 'GET /api/chats/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to fetch chat' }, { status: 500 })
   }
-}
+)
 
 // Helper to process all chat update operations
 async function processChatUpdates(
@@ -495,89 +418,63 @@ async function processChatUpdates(
 }
 
 // PUT /api/chats/:id
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
+    try {
+      const existingChat = await repos.chats.findById(id)
 
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
+      if (!existingChat || existingChat.userId !== user.id) {
+        return notFound('Chat')
+      }
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+      const body = await req.json()
+      const validatedData = chatUpdateRequestSchema.parse(body)
 
-    const existingChat = await repos.chats.findById(id)
+      const result = await processChatUpdates(id, existingChat, validatedData, user.id, repos)
 
-    if (!existingChat || existingChat.userId !== user.id) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
+      if ('error' in result) {
+        if (result.status === 404) {
+          return notFound('Resource')
+        } else if (result.status === 400) {
+          return badRequest(result.error)
+        }
+        return serverError(result.error)
+      }
 
-    const body = await req.json()
-    const validatedData = chatUpdateRequestSchema.parse(body)
-
-    const result = await processChatUpdates(id, existingChat, validatedData, user.id, repos)
-
-    if ('error' in result) {
-      return NextResponse.json({ error: result.error }, { status: result.status })
-    }
-
-    const enrichedParticipants = await Promise.all(
-      result.chat.participants.map(p => enrichParticipant(p, repos))
-    )
-
-    return NextResponse.json({
-      chat: { ...result.chat, participants: enrichedParticipants }
-    })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
+      const enrichedParticipants = await Promise.all(
+        result.chat.participants.map(p => enrichParticipantDetail(p, repos))
       )
-    }
 
-    logger.error('Error updating chat', { context: 'PUT /api/chats/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to update chat' }, { status: 500 })
+      return NextResponse.json({
+        chat: { ...result.chat, participants: enrichedParticipants }
+      })
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return validationError(error)
+      }
+
+      logger.error('Error updating chat', { context: 'PUT /api/chats/:id' }, error instanceof Error ? error : undefined)
+      return serverError('Failed to update chat')
+    }
   }
-}
+)
 
 // DELETE /api/chats/:id
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
+    try {
+      const existingChat = await repos.chats.findById(id)
+
+      if (!existingChat || existingChat.userId !== user.id) {
+        return notFound('Chat')
+      }
+
+      await repos.chats.delete(id)
+
+      return NextResponse.json({ success: true })
+    } catch (error) {
+      logger.error('Error deleting chat', { context: 'DELETE /api/chats/:id' }, error instanceof Error ? error : undefined)
+      return serverError('Failed to delete chat')
     }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    const existingChat = await repos.chats.findById(id)
-
-    if (!existingChat || existingChat.userId !== user.id) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
-
-    await repos.chats.delete(id)
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    logger.error('Error deleting chat', { context: 'DELETE /api/chats/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json({ error: 'Failed to delete chat' }, { status: 500 })
   }
-}
+)

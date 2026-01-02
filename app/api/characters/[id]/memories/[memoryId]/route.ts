@@ -4,10 +4,10 @@
 // DELETE /api/characters/[id]/memories/[memoryId] - Delete a memory
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
 
 // Validation schema for updating a memory
 const updateMemorySchema = z.object({
@@ -21,167 +21,113 @@ const updateMemorySchema = z.object({
 })
 
 // GET /api/characters/[id]/memories/[memoryId] - Get a specific memory
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string; memoryId: string }> }
-) {
-  try {
-    const { id: characterId, memoryId } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const GET = createAuthenticatedParamsHandler<{ id: string; memoryId: string }>(
+  async (req, { user, repos }, { id: characterId, memoryId }) => {
+    try {
+      // Verify character exists and belongs to user
+      const character = await repos.characters.findById(characterId)
+      if (!character) {
+        return notFound('Character')
+      }
+      if (character.userId !== user.id) {
+        return badRequest('Unauthorized')
+      }
+
+      // Get the memory
+      const memory = await repos.memories.findByIdForCharacter(characterId, memoryId)
+      if (!memory) {
+        return notFound('Memory')
+      }
+
+      // Enrich with tag names
+      const allTags = await repos.tags.findAll()
+      const tagMap = new Map(allTags.map(t => [t.id, t]))
+
+      const memoryWithTags = {
+        ...memory,
+        tagDetails: memory.tags
+          .map(tagId => tagMap.get(tagId))
+          .filter(Boolean),
+      }
+
+      // Update access time (fire and forget)
+      repos.memories.updateAccessTime(characterId, memoryId).catch(err =>
+        logger.warn('Failed to update memory access time', { characterId, memoryId, error: err instanceof Error ? err.message : String(err) })
+      )
+
+      return NextResponse.json({ memory: memoryWithTags })
+    } catch (error) {
+      logger.error('Error fetching memory', {}, error instanceof Error ? error : undefined)
+      return serverError('Failed to fetch memory')
     }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    // Verify character exists and belongs to user
-    const character = await repos.characters.findById(characterId)
-    if (!character) {
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 })
-    }
-    if (character.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    }
-
-    // Get the memory
-    const memory = await repos.memories.findByIdForCharacter(characterId, memoryId)
-    if (!memory) {
-      return NextResponse.json({ error: 'Memory not found' }, { status: 404 })
-    }
-
-    // Enrich with tag names
-    const allTags = await repos.tags.findAll()
-    const tagMap = new Map(allTags.map(t => [t.id, t]))
-
-    const memoryWithTags = {
-      ...memory,
-      tagDetails: memory.tags
-        .map(tagId => tagMap.get(tagId))
-        .filter(Boolean),
-    }
-
-    // Update access time (fire and forget)
-    repos.memories.updateAccessTime(characterId, memoryId).catch(err =>
-      logger.warn('Failed to update memory access time', { characterId, memoryId, error: err instanceof Error ? err.message : String(err) })
-    )
-
-    return NextResponse.json({ memory: memoryWithTags })
-  } catch (error) {
-    logger.error('Error fetching memory', {}, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to fetch memory' },
-      { status: 500 }
-    )
   }
-}
+)
 
 // PUT /api/characters/[id]/memories/[memoryId] - Update a memory
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string; memoryId: string }> }
-) {
-  try {
-    const { id: characterId, memoryId } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const PUT = createAuthenticatedParamsHandler<{ id: string; memoryId: string }>(
+  async (req, { user, repos }, { id: characterId, memoryId }) => {
+    try {
+      // Verify character exists and belongs to user
+      const character = await repos.characters.findById(characterId)
+      if (!character) {
+        return notFound('Character')
+      }
+      if (character.userId !== user.id) {
+        return badRequest('Unauthorized')
+      }
+
+      // Verify memory exists
+      const existingMemory = await repos.memories.findByIdForCharacter(characterId, memoryId)
+      if (!existingMemory) {
+        return notFound('Memory')
+      }
+
+      const body = await req.json()
+      const validatedData = updateMemorySchema.parse(body)
+
+      const memory = await repos.memories.updateForCharacter(characterId, memoryId, validatedData)
+
+      if (!memory) {
+        return notFound('Memory')
+      }
+
+      return NextResponse.json({ memory })
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return validationError(error)
+      }
+
+      logger.error('Error updating memory', {}, error instanceof Error ? error : undefined)
+      return serverError('Failed to update memory')
     }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    // Verify character exists and belongs to user
-    const character = await repos.characters.findById(characterId)
-    if (!character) {
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 })
-    }
-    if (character.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    }
-
-    // Verify memory exists
-    const existingMemory = await repos.memories.findByIdForCharacter(characterId, memoryId)
-    if (!existingMemory) {
-      return NextResponse.json({ error: 'Memory not found' }, { status: 404 })
-    }
-
-    const body = await req.json()
-    const validatedData = updateMemorySchema.parse(body)
-
-    const memory = await repos.memories.updateForCharacter(characterId, memoryId, validatedData)
-
-    if (!memory) {
-      return NextResponse.json({ error: 'Memory not found' }, { status: 404 })
-    }
-
-    return NextResponse.json({ memory })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
-    logger.error('Error updating memory', {}, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to update memory' },
-      { status: 500 }
-    )
   }
-}
+)
 
 // DELETE /api/characters/[id]/memories/[memoryId] - Delete a memory
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string; memoryId: string }> }
-) {
-  try {
-    const { id: characterId, memoryId } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const DELETE = createAuthenticatedParamsHandler<{ id: string; memoryId: string }>(
+  async (req, { user, repos }, { id: characterId, memoryId }) => {
+    try {
+      // Verify character exists and belongs to user
+      const character = await repos.characters.findById(characterId)
+      if (!character) {
+        return notFound('Character')
+      }
+      if (character.userId !== user.id) {
+        return badRequest('Unauthorized')
+      }
+
+      // Verify memory exists
+      const existingMemory = await repos.memories.findByIdForCharacter(characterId, memoryId)
+      if (!existingMemory) {
+        return notFound('Memory')
+      }
+
+      await repos.memories.deleteForCharacter(characterId, memoryId)
+
+      return NextResponse.json({ success: true })
+    } catch (error) {
+      logger.error('Error deleting memory', {}, error instanceof Error ? error : undefined)
+      return serverError('Failed to delete memory')
     }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    // Verify character exists and belongs to user
-    const character = await repos.characters.findById(characterId)
-    if (!character) {
-      return NextResponse.json({ error: 'Character not found' }, { status: 404 })
-    }
-    if (character.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    }
-
-    // Verify memory exists
-    const existingMemory = await repos.memories.findByIdForCharacter(characterId, memoryId)
-    if (!existingMemory) {
-      return NextResponse.json({ error: 'Memory not found' }, { status: 404 })
-    }
-
-    await repos.memories.deleteForCharacter(characterId, memoryId)
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    logger.error('Error deleting memory', {}, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to delete memory' },
-      { status: 500 }
-    )
   }
-}
+)

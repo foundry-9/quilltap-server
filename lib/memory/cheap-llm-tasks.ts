@@ -13,6 +13,7 @@ import { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { getErrorMessage } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 
 /**
  * Candidate memory extracted from a conversation
@@ -106,7 +107,8 @@ async function executeCheapLLMTask<T>(
   selection: CheapLLMSelection,
   messages: LLMMessage[],
   userId: string,
-  parseResponse: (content: string) => T
+  parseResponse: (content: string) => T,
+  taskType?: string
 ): Promise<CheapLLMTaskResult<T>> {
   try {
     const apiKey = await getApiKeyForSelection(selection, userId)
@@ -122,6 +124,20 @@ async function executeCheapLLMTask<T>(
       selection.baseUrl
     )
 
+    // Debug log: Cheap LLM request
+    logger.debug('[Cheap LLM Request] cheap-llm-tasks.ts:executeCheapLLMTask', {
+      context: 'llm-api',
+      taskType: taskType || 'unknown',
+      provider: selection.provider,
+      model: selection.modelName,
+      messageCount: messages.length,
+      messages: JSON.stringify(messages.map(m => ({
+        role: m.role,
+        contentLength: m.content?.length || 0,
+        content: m.content,
+      }))),
+    })
+
     // Create a key for this profile to cache temperature support
     const profileKey = `${selection.provider}:${selection.modelName}`
 
@@ -135,6 +151,17 @@ async function executeCheapLLMTask<T>(
         },
         apiKey
       )
+
+      // Debug log: Cheap LLM response
+      logger.debug('[Cheap LLM Response] cheap-llm-tasks.ts:executeCheapLLMTask', {
+        context: 'llm-api',
+        taskType: taskType || 'unknown',
+        provider: selection.provider,
+        model: selection.modelName,
+        responseLength: response.content?.length || 0,
+        response: response.content,
+        usage: response.usage ? JSON.stringify(response.usage) : undefined,
+      })
 
       const result = parseResponse(response.content)
 
@@ -157,6 +184,17 @@ async function executeCheapLLMTask<T>(
         apiKey
       )
 
+      // Debug log: Cheap LLM response
+      logger.debug('[Cheap LLM Response] cheap-llm-tasks.ts:executeCheapLLMTask', {
+        context: 'llm-api',
+        taskType: taskType || 'unknown',
+        provider: selection.provider,
+        model: selection.modelName,
+        responseLength: response.content?.length || 0,
+        response: response.content,
+        usage: response.usage ? JSON.stringify(response.usage) : undefined,
+      })
+
       const result = parseResponse(response.content)
 
       return {
@@ -170,6 +208,13 @@ async function executeCheapLLMTask<T>(
       if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
         profilesWithoutCustomTemp.add(profileKey)
 
+        logger.debug('[Cheap LLM] Retrying without custom temperature', {
+          context: 'llm-api',
+          taskType: taskType || 'unknown',
+          provider: selection.provider,
+          model: selection.modelName,
+        })
+
         const response: LLMResponse = await provider.sendMessage(
           {
             messages,
@@ -178,6 +223,17 @@ async function executeCheapLLMTask<T>(
           },
           apiKey
         )
+
+        // Debug log: Cheap LLM response (retry)
+        logger.debug('[Cheap LLM Response] cheap-llm-tasks.ts:executeCheapLLMTask (retry)', {
+          context: 'llm-api',
+          taskType: taskType || 'unknown',
+          provider: selection.provider,
+          model: selection.modelName,
+          responseLength: response.content?.length || 0,
+          response: response.content,
+          usage: response.usage ? JSON.stringify(response.usage) : undefined,
+        })
 
         const result = parseResponse(response.content)
 
@@ -190,6 +246,13 @@ async function executeCheapLLMTask<T>(
       throw error
     }
   } catch (error) {
+    logger.debug('[Cheap LLM Error] cheap-llm-tasks.ts:executeCheapLLMTask', {
+      context: 'llm-api',
+      taskType: taskType || 'unknown',
+      provider: selection.provider,
+      model: selection.modelName,
+      error: getErrorMessage(error),
+    })
     return {
       success: false,
       error: getErrorMessage(error),
@@ -335,7 +398,8 @@ ${characterLabel}: ${assistantMessage}`,
         // If JSON parsing fails, assume not significant
         return { significant: false }
       }
-    }
+    },
+    'memory-extraction-user'
   )
 }
 
@@ -408,7 +472,8 @@ ${characterLabel}: ${assistantMessage}`,
         // If JSON parsing fails, assume not significant
         return { significant: false }
       }
-    }
+    },
+    'memory-extraction-character'
   )
 }
 
@@ -504,7 +569,8 @@ ${characterBName}: ${characterBMessage}`,
         // If JSON parsing fails, assume not significant
         return { significant: false }
       }
-    }
+    },
+    'memory-extraction-inter-character'
   )
 }
 
@@ -549,7 +615,8 @@ export async function summarizeChat(
     selection,
     llmMessages,
     userId,
-    (content: string): string => content.trim()
+    (content: string): string => content.trim(),
+    'summarize-chat'
   )
 }
 
@@ -627,7 +694,8 @@ export async function titleChat(
         title = title.substring(0, 47) + '...'
       }
       return title
-    }
+    },
+    'title-chat'
   )
 }
 
@@ -669,7 +737,8 @@ export async function generateTitleFromSummary(
         title = title.substring(0, 57) + '...'
       }
       return title
-    }
+    },
+    'title-from-summary'
   )
 }
 
@@ -772,7 +841,8 @@ export async function considerTitleUpdate(
           suggestedTitle: null,
         }
       }
-    }
+    },
+    'consider-title-update'
   )
 }
 
@@ -822,7 +892,8 @@ ${newMessagesText}`,
     selection,
     llmMessages,
     userId,
-    (content: string): string => content.trim()
+    (content: string): string => content.trim(),
+    'update-context-summary'
   )
 }
 
@@ -886,7 +957,8 @@ export async function describeAttachment(
       selection,
       llmMessages,
       userId,
-      (content: string): string => content.trim()
+      (content: string): string => content.trim(),
+      'describe-attachment'
     )
   }
 
@@ -976,7 +1048,8 @@ ${exchangesText}`,
         // If parsing fails, return empty array
         return []
       }
-    }
+    },
+    'batch-memory-extraction'
   )
 }
 
@@ -1114,6 +1187,7 @@ Create the final image prompt (maximize detail while staying under the limit):`,
       }
 
       return prompt
-    }
+    },
+    'craft-image-prompt'
   )
 }

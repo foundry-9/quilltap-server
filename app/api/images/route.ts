@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getRepositories } from '@/lib/repositories/factory';
 import { uploadImage, importImageFromUrl } from '@/lib/images-v2';
 import { logger } from '@/lib/logger';
@@ -27,20 +27,14 @@ const importFromUrlSchema = z.object({
  * GET /api/images
  * List images with optional filtering by tags
  */
-export async function GET(request: NextRequest) {
+export const GET = createAuthenticatedHandler(async (request, { user, repos }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const repos = getRepositories();
     const searchParams = request.nextUrl.searchParams;
     const tagId = searchParams.get('tagId');
 
     // Get all image files for this user from the repository (supports both JSON and MongoDB)
     const allImages = await repos.files.findByCategory('IMAGE');
-    let images = allImages.filter(img => img.userId === session.user.id);
+    let images = allImages.filter(img => img.userId === user.id);
 
     // Filter by tag if provided
     if (tagId) {
@@ -53,8 +47,8 @@ export async function GET(request: NextRequest) {
     // Transform to match expected API response format
     // Calculate usage counts by checking related entities
     const [allCharacters, allPersonas] = await Promise.all([
-      repos.characters.findByUserId(session.user.id),
-      repos.personas.findByUserId(session.user.id),
+      repos.characters.findByUserId(user.id),
+      repos.personas.findByUserId(user.id),
     ]);
 
     // Build tag type lookup maps
@@ -111,7 +105,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: img.id,
-        userId: session.user.id,
+        userId: user.id,
         filename: img.originalFilename,
         filepath,
         url: img.source === 'IMPORTED' ? img.description : null,
@@ -141,19 +135,14 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * POST /api/images
  * Upload image file or import from URL
  */
-export async function POST(request: NextRequest) {
+export const POST = createAuthenticatedHandler(async (request, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const contentType = request.headers.get('content-type') || '';
 
     // Handle URL import (JSON payload)
@@ -165,7 +154,7 @@ export async function POST(request: NextRequest) {
       const linkedTo = tags ? tags.map(t => t.tagId) : [];
 
       // Import image from URL (creates file entry automatically)
-      const imageData = await importImageFromUrl(url, session.user.id, linkedTo);
+      const imageData = await importImageFromUrl(url, user.id, linkedTo);
 
       // Add tags to the file using repository
       const repos = getRepositories();
@@ -178,7 +167,7 @@ export async function POST(request: NextRequest) {
       // Transform response to match expected format
       const responseData = {
         id: imageData.id,
-        userId: session.user.id,
+        userId: user.id,
         filename: imageData.filename,
         filepath: imageData.filepath,
         url: url,
@@ -219,7 +208,7 @@ export async function POST(request: NextRequest) {
       const linkedTo = tags ? tags.map(t => t.tagId) : [];
 
       // Upload image (creates file entry automatically)
-      const imageData = await uploadImage(file, session.user.id, linkedTo);
+      const imageData = await uploadImage(file, user.id, linkedTo);
 
       // Add tags to the file using repository
       const repos = getRepositories();
@@ -232,7 +221,7 @@ export async function POST(request: NextRequest) {
       // Transform response to match expected format
       const responseData = {
         id: imageData.id,
-        userId: session.user.id,
+        userId: user.id,
         filename: imageData.filename,
         filepath: imageData.filepath,
         url: null,
@@ -262,4 +251,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

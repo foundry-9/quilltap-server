@@ -11,11 +11,17 @@ import { NavContentWidthToggle } from "@/components/dashboard/nav-content-width-
 import { NavUserMenu } from "@/components/dashboard/nav-user-menu";
 import { useNavbarCollapse } from "@/hooks/useNavbarCollapse";
 
-/** Menu items for the main navigation */
+/**
+ * Menu items for the main navigation
+ *
+ * Note: 'Personas' removed as part of "Characters Not Personas" feature.
+ * Personas are now just characters with controlledBy: 'user'.
+ * The migration plugin converts existing personas to characters.
+ */
 const MENU_ITEMS: NavMenuItem[] = [
-  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/', label: 'Home' },
   { href: '/characters', label: 'Characters' },
-  { href: '/personas', label: 'Personas' },
+  // Personas removed - see characters_not_personas.md feature spec
   { href: '/chats', label: 'Chats' },
   { href: '/settings', label: 'Settings' },
   { href: '/tools', label: 'Tools' },

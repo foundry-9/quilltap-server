@@ -7,9 +7,8 @@
  * Roleplay templates provide formatting instructions that are prepended to character system prompts.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 
 /**
@@ -17,31 +16,18 @@ import { logger } from '@/lib/logger'
  * List all roleplay templates available to the authenticated user
  * Returns both built-in templates and user-created templates
  */
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
     logger.debug('Fetching roleplay templates', {
       endpoint: '/api/roleplay-templates',
       method: 'GET',
     })
 
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      logger.debug('Unauthorized request to roleplay templates', {
-        endpoint: '/api/roleplay-templates',
-      })
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    const repos = getRepositories()
-
     // Get all templates available to user (built-in + user's own)
-    const templates = await repos.roleplayTemplates.findAllForUser(session.user.id)
+    const templates = await repos.roleplayTemplates.findAllForUser(user.id)
 
     logger.debug('Retrieved roleplay templates for user', {
-      userId: session.user.id,
+      userId: user.id,
       count: templates.length,
     })
 
@@ -66,7 +52,7 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 /**
  * POST /api/roleplay-templates
@@ -78,23 +64,12 @@ export async function GET(req: NextRequest) {
  *   systemPrompt: string
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
     logger.debug('Creating roleplay template', {
       endpoint: '/api/roleplay-templates',
       method: 'POST',
     })
-
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      logger.debug('Unauthorized request to create roleplay template', {
-        endpoint: '/api/roleplay-templates',
-      })
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
 
     const body = await req.json()
     const { name, description, systemPrompt } = body
@@ -128,10 +103,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const repos = getRepositories()
-
     // Check for duplicate name among user's own templates
-    const existingTemplate = await repos.roleplayTemplates.findByName(session.user.id, name.trim())
+    const existingTemplate = await repos.roleplayTemplates.findByName(user.id, name.trim())
     if (existingTemplate) {
       return NextResponse.json(
         { error: 'A roleplay template with this name already exists' },
@@ -141,7 +114,7 @@ export async function POST(req: NextRequest) {
 
     // Create template
     const template = await repos.roleplayTemplates.create({
-      userId: session.user.id,
+      userId: user.id,
       name: name.trim(),
       description: description?.trim() || null,
       systemPrompt: systemPrompt.trim(),
@@ -150,7 +123,7 @@ export async function POST(req: NextRequest) {
     })
 
     logger.info('Roleplay template created', {
-      userId: session.user.id,
+      userId: user.id,
       templateId: template.id,
       templateName: template.name,
     })
@@ -166,4 +139,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

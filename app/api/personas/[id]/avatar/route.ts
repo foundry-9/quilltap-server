@@ -7,22 +7,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/repositories/factory';
+import { createAuthenticatedParamsHandler, checkOwnership, getFilePath } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import type { FileEntry } from '@/lib/schemas/types';
-
-/**
- * Get the filepath for a file - always returns API path for S3-backed files
- */
-function getFilePath(file: FileEntry): string {
-  return `/api/files/${file.id}`;
-}
-
-interface RouteContext {
-  params: Promise<{ id: string }>;
-}
 
 const avatarSchema = z.object({
   imageId: z.string().nullable(),
@@ -37,124 +24,116 @@ const avatarSchema = z.object({
  * - Belong to the authenticated user
  * - Have category 'IMAGE' or 'AVATAR'
  */
-export async function PATCH(request: NextRequest, context: RouteContext) {
-  try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.debug('Unauthorized persona avatar update - no session', { context: 'personas-avatar-PATCH' });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
+  async (request, { user, repos }, { id }) => {
+    try {
+      logger.debug('Processing persona avatar update', { personaId: id, userId: user.id });
 
-    const { id } = await context.params;
-    const userId = session.user.id;
-    const repos = getRepositories();
+      const body = await request.json();
+      const { imageId } = avatarSchema.parse(body);
 
-    logger.debug('Processing persona avatar update', { personaId: id, userId });
+      // Verify persona exists and belongs to user
+      const persona = await repos.personas.findById(id);
 
-    const body = await request.json();
-    const { imageId } = avatarSchema.parse(body);
-
-    // Verify persona exists and belongs to user
-    const persona = await repos.personas.findById(id);
-
-    if (!persona || persona.userId !== userId) {
-      logger.debug('Persona not found or unauthorized', { personaId: id, userId });
-      return NextResponse.json({ error: 'Persona not found' }, { status: 404 });
-    }
-
-    // If imageId is provided, verify it from repository
-    if (imageId) {
-      logger.debug('Validating file for persona avatar', { fileId: imageId, personaId: id });
-
-      const fileEntry = await repos.files.findById(imageId);
-
-      // Verify file exists
-      if (!fileEntry) {
-        logger.warn('File not found for persona avatar', { fileId: imageId, personaId: id });
-        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      if (!checkOwnership(persona, user.id)) {
+        logger.debug('Persona not found or unauthorized', { personaId: id, userId: user.id });
+        return NextResponse.json({ error: 'Persona not found' }, { status: 404 });
       }
 
-      // Verify file belongs to user
-      if (fileEntry.userId !== userId) {
-        logger.warn('File does not belong to user', {
-          fileId: imageId,
-          fileOwnerId: fileEntry.userId,
-          userId,
-        });
-        return NextResponse.json({ error: 'File not found' }, { status: 404 });
-      }
+      // If imageId is provided, verify it from repository
+      if (imageId) {
+        logger.debug('Validating file for persona avatar', { fileId: imageId, personaId: id });
 
-      // Verify file category is valid for avatar
-      const validCategories = ['IMAGE', 'AVATAR'];
-      if (!validCategories.includes(fileEntry.category)) {
-        logger.warn('File category invalid for avatar', {
+        const fileEntry = await repos.files.findById(imageId);
+
+        // Verify file exists
+        if (!fileEntry) {
+          logger.warn('File not found for persona avatar', { fileId: imageId, personaId: id });
+          return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        }
+
+        // Verify file belongs to user
+        if (fileEntry.userId !== user.id) {
+          logger.warn('File does not belong to user', {
+            fileId: imageId,
+            fileOwnerId: fileEntry.userId,
+            userId: user.id,
+          });
+          return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        }
+
+        // Verify file category is valid for avatar
+        const validCategories = ['IMAGE', 'AVATAR'];
+        if (!validCategories.includes(fileEntry.category)) {
+          logger.warn('File category invalid for avatar', {
+            fileId: imageId,
+            category: fileEntry.category,
+          });
+          return NextResponse.json(
+            { error: `Invalid file category. Expected IMAGE or AVATAR, got ${fileEntry.category}` },
+            { status: 400 }
+          );
+        }
+
+        logger.debug('File validation passed for persona avatar', {
           fileId: imageId,
+          filename: fileEntry.originalFilename,
           category: fileEntry.category,
         });
-        return NextResponse.json(
-          { error: `Invalid file category. Expected IMAGE or AVATAR, got ${fileEntry.category}` },
-          { status: 400 }
-        );
+      } else {
+        logger.debug('Clearing persona avatar', { personaId: id });
       }
 
-      logger.debug('File validation passed for persona avatar', {
-        fileId: imageId,
-        filename: fileEntry.originalFilename,
-        category: fileEntry.category,
+      // Update persona with the file ID
+      const updatedPersona = await repos.personas.update(id, { defaultImageId: imageId });
+
+      logger.debug('Persona avatar updated successfully', {
+        personaId: id,
+        imageId: imageId || null,
       });
-    } else {
-      logger.debug('Clearing persona avatar', { personaId: id });
-    }
 
-    // Update persona with the file ID
-    const updatedPersona = await repos.personas.update(id, { defaultImageId: imageId });
+      // Build response with file info if image is set
+      let defaultImage = null;
+      if (updatedPersona?.defaultImageId) {
+        const fileEntry = await repos.files.findById(updatedPersona.defaultImageId);
+        if (fileEntry) {
+          defaultImage = {
+            id: fileEntry.id,
+            filepath: getFilePath(fileEntry),
+            url: null,
+          };
+          logger.debug('Built response with default image', {
+            fileId: fileEntry.id,
+            filename: fileEntry.originalFilename,
+          });
+        }
+      }
 
-    logger.debug('Persona avatar updated successfully', {
-      personaId: id,
-      imageId: imageId || null,
-    });
-
-    // Build response with file info if image is set
-    let defaultImage = null;
-    if (updatedPersona?.defaultImageId) {
-      const fileEntry = await repos.files.findById(updatedPersona.defaultImageId);
-      if (fileEntry) {
-        defaultImage = {
-          id: fileEntry.id,
-          filepath: getFilePath(fileEntry),
-          url: null,
-        };
-        logger.debug('Built response with default image', {
-          fileId: fileEntry.id,
-          filename: fileEntry.originalFilename,
+      return NextResponse.json({
+        data: {
+          ...updatedPersona,
+          defaultImage,
+        },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        logger.warn('Validation error updating persona avatar', {
+          context: 'personas-avatar-PATCH',
+          errors: error.errors,
         });
+        return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
       }
+
+      logger.error(
+        'Error updating persona avatar',
+        { context: 'personas-avatar-PATCH' },
+        error instanceof Error ? error : undefined
+      );
+
+      return NextResponse.json(
+        { error: 'Failed to update persona avatar', details: error instanceof Error ? error.message : String(error) },
+        { status: 500 }
+      );
     }
-
-    return NextResponse.json({
-      data: {
-        ...updatedPersona,
-        defaultImage,
-      },
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      logger.warn('Validation error updating persona avatar', {
-        context: 'personas-avatar-PATCH',
-        errors: error.errors,
-      });
-      return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
-    }
-
-    logger.error(
-      'Error updating persona avatar',
-      { context: 'personas-avatar-PATCH' },
-      error instanceof Error ? error : undefined
-    );
-
-    return NextResponse.json(
-      { error: 'Failed to update persona avatar', details: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
-    );
   }
-}
+);

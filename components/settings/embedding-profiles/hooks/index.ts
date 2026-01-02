@@ -1,1 +1,0 @@
-export { useEmbeddingProfiles } from './useEmbeddingProfiles'

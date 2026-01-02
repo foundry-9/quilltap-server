@@ -12,7 +12,7 @@ describe('route flag helpers', () => {
   })
 
   it('disables debug support for other routes', () => {
-    expect(routeSupportsDebug('/dashboard')).toBe(false)
+    expect(routeSupportsDebug('/')).toBe(false)
     expect(routeSupportsDebug('/chats')).toBe(false)
   })
 

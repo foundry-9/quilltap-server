@@ -83,21 +83,40 @@ async function generateOpenAIEmbedding(
 ): Promise<EmbeddingResult> {
   const baseUrl = profile.baseUrl || 'https://api.openai.com/v1'
 
+  const requestPayload = {
+    model: profile.modelName,
+    input: text,
+    dimensions: profile.dimensions || undefined,
+  }
+
+  logger.debug('[Embedding Request] embedding-service.ts:generateOpenAIEmbedding', {
+    context: 'llm-api',
+    provider: 'OPENAI',
+    model: profile.modelName,
+    baseUrl,
+    textLength: text.length,
+    requestedDimensions: profile.dimensions,
+    request: JSON.stringify({ ...requestPayload, input: `[text of ${text.length} chars]` }),
+  })
+
   const response = await fetch(`${baseUrl}/embeddings`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: profile.modelName,
-      input: text,
-      dimensions: profile.dimensions || undefined,
-    }),
+    body: JSON.stringify(requestPayload),
   })
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+    logger.debug('[Embedding Error] embedding-service.ts:generateOpenAIEmbedding', {
+      context: 'llm-api',
+      provider: 'OPENAI',
+      model: profile.modelName,
+      error: error.error?.message || response.statusText,
+      status: response.status,
+    })
     throw new EmbeddingError(
       `OpenAI embedding failed: ${error.error?.message || response.statusText}`,
       'OPENAI'
@@ -106,6 +125,14 @@ async function generateOpenAIEmbedding(
 
   const data = await response.json()
   const embedding = data.data[0].embedding
+
+  logger.debug('[Embedding Response] embedding-service.ts:generateOpenAIEmbedding', {
+    context: 'llm-api',
+    provider: 'OPENAI',
+    model: profile.modelName,
+    dimensions: embedding.length,
+    usage: data.usage ? JSON.stringify(data.usage) : undefined,
+  })
 
   return {
     embedding,
@@ -124,19 +151,37 @@ async function generateOllamaEmbedding(
 ): Promise<EmbeddingResult> {
   const baseUrl = profile.baseUrl || 'http://localhost:11434'
 
+  const requestPayload = {
+    model: profile.modelName,
+    prompt: text,
+  }
+
+  logger.debug('[Embedding Request] embedding-service.ts:generateOllamaEmbedding', {
+    context: 'llm-api',
+    provider: 'OLLAMA',
+    model: profile.modelName,
+    baseUrl,
+    textLength: text.length,
+    request: JSON.stringify({ ...requestPayload, prompt: `[text of ${text.length} chars]` }),
+  })
+
   const response = await fetch(`${baseUrl}/api/embeddings`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: profile.modelName,
-      prompt: text,
-    }),
+    body: JSON.stringify(requestPayload),
   })
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+    logger.debug('[Embedding Error] embedding-service.ts:generateOllamaEmbedding', {
+      context: 'llm-api',
+      provider: 'OLLAMA',
+      model: profile.modelName,
+      error: error.error || response.statusText,
+      status: response.status,
+    })
     throw new EmbeddingError(
       `Ollama embedding failed: ${error.error || response.statusText}`,
       'OLLAMA'
@@ -145,6 +190,13 @@ async function generateOllamaEmbedding(
 
   const data = await response.json()
   const embedding = data.embedding
+
+  logger.debug('[Embedding Response] embedding-service.ts:generateOllamaEmbedding', {
+    context: 'llm-api',
+    provider: 'OLLAMA',
+    model: profile.modelName,
+    dimensions: embedding.length,
+  })
 
   return {
     embedding,
@@ -172,10 +224,17 @@ async function generateOpenRouterEmbedding(
     xTitle: 'Quilltap',
   })
 
-  logger.debug('Generating OpenRouter embedding', {
-    context: 'embedding-service',
+  logger.debug('[Embedding Request] embedding-service.ts:generateOpenRouterEmbedding', {
+    context: 'llm-api',
+    provider: 'OPENROUTER',
     model: profile.modelName,
     textLength: text.length,
+    requestedDimensions: profile.dimensions,
+    request: JSON.stringify({
+      input: `[text of ${text.length} chars]`,
+      model: profile.modelName,
+      dimensions: profile.dimensions || undefined,
+    }),
   })
 
   const response = await client.embeddings.generate({
@@ -205,11 +264,12 @@ async function generateOpenRouterEmbedding(
     embedding = embeddingData
   }
 
-  logger.debug('OpenRouter embedding generated', {
-    context: 'embedding-service',
+  logger.debug('[Embedding Response] embedding-service.ts:generateOpenRouterEmbedding', {
+    context: 'llm-api',
+    provider: 'OPENROUTER',
     model: response.model,
     dimensions: embedding.length,
-    usage: response.usage,
+    usage: response.usage ? JSON.stringify(response.usage) : undefined,
   })
 
   return {

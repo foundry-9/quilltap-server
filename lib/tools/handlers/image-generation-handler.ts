@@ -268,22 +268,38 @@ async function generateImagesWithProvider(
     imageProfile.modelName
   );
 
-  logger.info('[Image Generation] Sending to Provider:', {
+  // Debug log: Image generation request
+  logger.debug('[Image Generation Request] image-generation-handler.ts:generateImagesWithProvider', {
+    context: 'llm-api',
     provider: imageProfile.provider,
     model: imageProfile.modelName,
-    prompt: mergedParams.prompt,
-    otherParams: {
+    promptLength: mergedParams.prompt.length,
+    request: JSON.stringify({
+      prompt: mergedParams.prompt,
+      negativePrompt: mergedParams.negativePrompt,
+      model: mergedParams.model,
       n: mergedParams.n,
       size: mergedParams.size,
+      aspectRatio: mergedParams.aspectRatio,
       quality: mergedParams.quality,
       style: mergedParams.style,
-    },
+    }),
   })
 
   // Generate images
   let generationResponse;
   try {
     generationResponse = await provider.generateImage(mergedParams, decryptedKey);
+
+    // Debug log: Image generation response
+    logger.debug('[Image Generation Response] image-generation-handler.ts:generateImagesWithProvider', {
+      context: 'llm-api',
+      provider: imageProfile.provider,
+      model: imageProfile.modelName,
+      imageCount: generationResponse.images.length,
+      imageSizes: generationResponse.images.map(img => img.data.length),
+      revisedPrompts: generationResponse.images.map(img => img.revisedPrompt),
+    })
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     logger.error('Image generation failed:', { errorMessage }, error as Error);
@@ -375,7 +391,8 @@ async function expandPromptWithDescriptions(
     );
 
     // Craft the image prompt using cheap LLM
-    logger.info('[Image Generation] Cheap LLM Input:', {
+    logger.debug('[Image Generation] Cheap LLM Input for prompt expansion', {
+      context: 'llm-api',
       originalPrompt: expansionContext.originalPrompt,
       placeholderCount: expansionContext.placeholders?.length,
       provider: expansionContext.provider,
@@ -392,7 +409,8 @@ async function expandPromptWithDescriptions(
       userId
     );
 
-    logger.info('[Image Generation] Cheap LLM Output:', {
+    logger.debug('[Image Generation] Cheap LLM Output from prompt expansion', {
+      context: 'llm-api',
       success: craftResult.success,
       expandedPrompt: craftResult.result,
     })
@@ -496,7 +514,8 @@ export async function executeImageGenerationTool(
       prompt: expandedPrompt,
     };
 
-    logger.info('[Image Generation] Final Input to Provider:', {
+    logger.debug('[Image Generation] Final Input to Provider', {
+      context: 'llm-api',
       originalPrompt: toolInput.prompt,
       expandedPrompt: expandedPrompt,
       wasExpanded: expandedPrompt !== toolInput.prompt,

@@ -13,7 +13,7 @@ import { retrieveOAuthState, clearOAuthState } from '@/lib/auth/arctic/state';
 import { toArcticTokenResult } from '@/lib/auth/arctic/types';
 import { createOrFindOAuthUser } from '@/lib/auth/arctic/user-service';
 import { createSessionToken, setSessionCookie } from '@/lib/auth/session';
-import { runPostLoginMigrations } from '@/lib/auth/post-login-migrations';
+import { runPostLoginMigrations } from '@/lib/auth/user-migrations';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 

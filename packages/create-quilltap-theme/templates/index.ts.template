@@ -1,0 +1,23 @@
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('{{PACKAGE_NAME}}');
+
+/**
+ * Initialize the theme plugin.
+ * Called when the plugin is loaded.
+ */
+export function initialize(): void {
+  logger.debug('{{DISPLAY_NAME}} theme plugin loaded', { version: '1.0.0' });
+}
+
+/**
+ * Plugin metadata.
+ * Must match the manifest.json values.
+ */
+export const metadata = {
+  name: '{{PACKAGE_NAME}}',
+  version: '1.0.0',
+  type: 'THEME',
+} as const;
+
+export default { initialize, metadata };

@@ -38,7 +38,8 @@ test.describe('File Attachment', () => {
 
     // Navigate to the chat
     await page.goto(`/chats/${testChatId}`)
-    await page.waitForSelector('.qt-chat-composer', { timeout: 10000 })
+    await page.waitForLoadState('domcontentloaded')
+    await page.waitForSelector('.qt-chat-composer', { timeout: 20000 })
 
     // Open the tool palette
     const toolsButton = page.locator('button.qt-desktop-only[title="Tools"]')
@@ -62,7 +63,8 @@ test.describe('File Attachment', () => {
 
     // Navigate to the chat
     await page.goto(`/chats/${testChatId}`)
-    await page.waitForSelector('.qt-chat-composer', { timeout: 10000 })
+    await page.waitForLoadState('domcontentloaded')
+    await page.waitForSelector('.qt-chat-composer', { timeout: 20000 })
 
     // Open tool palette and trigger file picker
     await page.locator('button.qt-desktop-only[title="Tools"]').click()

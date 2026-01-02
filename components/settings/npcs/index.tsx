@@ -33,23 +33,38 @@ export default function NPCsTab() {
   const router = useRouter()
 
   const fetchNPCs = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await fetch('/api/characters?npc=true')
-      if (!res.ok) {
-        throw new Error('Failed to fetch NPCs')
+    setLoading(true)
+    setError(null)
+
+    const maxAttempts = 3
+    let lastError: string | null = null
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const res = await fetch('/api/characters?npc=true')
+        if (!res.ok) {
+          throw new Error('Failed to fetch NPCs')
+        }
+        const data = await res.json()
+        setNpcs(data.characters || [])
+        clientLogger.debug('NPCs fetched successfully', { count: data.characters?.length || 0 })
+        lastError = null
+        break
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : 'An error occurred'
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt))
+          continue
+        }
       }
-      const data = await res.json()
-      setNpcs(data.characters || [])
-      clientLogger.debug('NPCs fetched successfully', { count: data.characters?.length || 0 })
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred'
-      setError(errorMessage)
-      clientLogger.error('Error fetching NPCs', { error: errorMessage })
-    } finally {
-      setLoading(false)
     }
+
+    if (lastError) {
+      setError(lastError)
+      clientLogger.error('Error fetching NPCs', { error: lastError })
+    }
+
+    setLoading(false)
   }, [])
 
   useEffect(() => {

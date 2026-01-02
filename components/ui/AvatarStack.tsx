@@ -118,7 +118,7 @@ export function AvatarStack({
         }}
       >
         {avatarSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img
             src={avatarSrc}
             alt={entity.name}
@@ -162,7 +162,7 @@ export function AvatarStack({
             }}
           >
             {avatarSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
+               
               <img
                 src={avatarSrc}
                 alt={entity.name}

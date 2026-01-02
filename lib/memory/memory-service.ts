@@ -513,3 +513,99 @@ export async function rebuildVectorIndex(
 
   return { indexed, failed }
 }
+
+/**
+ * Delete all memories for a source message with vector store cleanup.
+ * Handles multi-character case where one message may have memories for multiple characters.
+ *
+ * @param sourceMessageId The source message ID
+ * @returns Object with count of deleted memories and removed vectors
+ */
+export async function deleteMemoriesBySourceMessageWithVectors(
+  sourceMessageId: string
+): Promise<{ deleted: number; vectorsRemoved: number }> {
+  const repos = getRepositories()
+
+  // First, find all memories to get character IDs for vector cleanup
+  const memories = await repos.memories.findBySourceMessageId(sourceMessageId)
+
+  if (memories.length === 0) {
+    logger.debug('[Memory] No memories found for source message', { sourceMessageId })
+    return { deleted: 0, vectorsRemoved: 0 }
+  }
+
+  // Group memories by character for efficient vector store operations
+  const memoryIdsByCharacter = new Map<string, string[]>()
+  for (const memory of memories) {
+    const existing = memoryIdsByCharacter.get(memory.characterId) || []
+    existing.push(memory.id)
+    memoryIdsByCharacter.set(memory.characterId, existing)
+  }
+
+  // Remove vectors from each character's store
+  let vectorsRemoved = 0
+  for (const [characterId, memoryIds] of memoryIdsByCharacter) {
+    try {
+      const vectorStore = await getCharacterVectorStore(characterId)
+      for (const memoryId of memoryIds) {
+        const removed = vectorStore.hasVector(memoryId)
+        if (removed) {
+          await vectorStore.removeVector(memoryId)
+          vectorsRemoved++
+        }
+      }
+      await vectorStore.save()
+    } catch (error) {
+      logger.warn('[Memory] Failed to remove vectors for character', {
+        characterId,
+        memoryCount: memoryIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // Delete the memories from the database
+  const deleted = await repos.memories.deleteBySourceMessageId(sourceMessageId)
+
+  logger.info('[Memory] Cascade deleted memories for source message', {
+    sourceMessageId,
+    deleted,
+    vectorsRemoved,
+    characterCount: memoryIdsByCharacter.size,
+  })
+
+  return { deleted, vectorsRemoved }
+}
+
+/**
+ * Delete all memories for multiple source messages (swipe group) with vector cleanup.
+ *
+ * @param sourceMessageIds Array of source message IDs
+ * @returns Object with count of deleted memories and removed vectors
+ */
+export async function deleteMemoriesBySourceMessagesWithVectors(
+  sourceMessageIds: string[]
+): Promise<{ deleted: number; vectorsRemoved: number }> {
+  if (sourceMessageIds.length === 0) {
+    return { deleted: 0, vectorsRemoved: 0 }
+  }
+
+  let totalDeleted = 0
+  let totalVectorsRemoved = 0
+
+  // Process each message - could be optimized with bulk operations but
+  // vector stores are per-character so we need the grouping logic
+  for (const sourceMessageId of sourceMessageIds) {
+    const result = await deleteMemoriesBySourceMessageWithVectors(sourceMessageId)
+    totalDeleted += result.deleted
+    totalVectorsRemoved += result.vectorsRemoved
+  }
+
+  logger.info('[Memory] Bulk cascade deleted memories for swipe group', {
+    messageCount: sourceMessageIds.length,
+    totalDeleted,
+    totalVectorsRemoved,
+  })
+
+  return { deleted: totalDeleted, vectorsRemoved: totalVectorsRemoved }
+}

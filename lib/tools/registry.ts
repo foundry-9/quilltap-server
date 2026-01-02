@@ -1,9 +1,14 @@
 /**
  * Tool Registry
  * Manages available tools and provides provider-specific tool definitions
+ *
+ * NOTE: Registered plugins provide toolFormat via the provider registry.
+ * The toProviderFormat method now queries the registry first, falling back
+ * to the hardcoded switch statement for unknown providers.
  */
 
 import { Provider } from '@/lib/schemas/types';
+import { getToolFormat } from '@/lib/plugins/provider-registry';
 
 /**
  * Tool metadata and execution context
@@ -97,8 +102,24 @@ export class ToolRegistry {
 
   /**
    * Get tools in the format expected by a specific provider
+   * First checks the plugin registry for the tool format, then falls back
+   * to hardcoded switch statement for unknown providers.
    */
   toProviderFormat(provider: Provider) {
+    // First try the plugin registry
+    const toolFormat = getToolFormat(provider);
+
+    // If registry returned a format (not the default), use it
+    switch (toolFormat) {
+      case 'openai':
+        return this.toOpenAIFormat();
+      case 'anthropic':
+        return this.toAnthropicFormat();
+      case 'google':
+        return this.toGoogleFormat();
+    }
+
+    // Fallback for unknown providers (shouldn't reach here if registry has data)
     switch (provider) {
       case 'OPENAI':
       case 'OPENAI_COMPATIBLE':
@@ -117,10 +138,6 @@ export class ToolRegistry {
 
       case 'OPENROUTER':
         // OpenRouter uses OpenAI format for function calling
-        return this.toOpenAIFormat();
-
-      case 'GAB_AI':
-        // Gab AI format (check their documentation)
         return this.toOpenAIFormat();
 
       case 'GOOGLE':

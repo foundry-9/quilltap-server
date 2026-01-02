@@ -137,7 +137,7 @@ describe('turn manager state', () => {
     expect(selection.debug?.eligibleSpeakers).toEqual(['p2'])
   })
 
-  it('falls back to user turn when all characters have spoken', () => {
+  it('falls back to user turn when all characters have spoken (with user participant)', () => {
     const participants = [makeCharacterParticipant('p1', 'char-1'), makeCharacterParticipant('p2', 'char-2')]
     const characters = new Map<string, Character>([
       ['char-1', makeCharacter('char-1')],
@@ -145,11 +145,41 @@ describe('turn manager state', () => {
     ])
     const turnState = { ...createInitialTurnState(), spokenSinceUserTurn: ['p1', 'p2'], lastSpeakerId: 'p2' }
 
-    const selection = selectNextSpeaker(participants, characters, turnState, null)
+    // With a user participant, returns user's turn when cycle complete
+    const selection = selectNextSpeaker(participants, characters, turnState, 'user-1')
     expect(selection).toEqual({ nextSpeakerId: null, reason: 'cycle_complete', cycleComplete: true })
   })
 
-  it('honors single-character special case', () => {
+  it('auto-continues in all-LLM chat when all characters have spoken', () => {
+    const participants = [makeCharacterParticipant('p1', 'char-1'), makeCharacterParticipant('p2', 'char-2')]
+    const characters = new Map<string, Character>([
+      ['char-1', makeCharacter('char-1')],
+      ['char-2', makeCharacter('char-2')],
+    ])
+    const turnState = { ...createInitialTurnState(), spokenSinceUserTurn: ['p1', 'p2'], lastSpeakerId: 'p2' }
+
+    // With no user participant (all-LLM), starts new cycle instead of user turn
+    const selection = selectNextSpeaker(participants, characters, turnState, null)
+    expect(selection.nextSpeakerId).toBe('p1') // Selects the other character (not last speaker)
+    expect(selection.reason).toBe('weighted_selection')
+    expect(selection.cycleComplete).toBe(true)
+  })
+
+  it('honors single-character special case (with user participant)', () => {
+    const participant = makeCharacterParticipant('p1', 'char-1')
+    const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])
+    const state = { ...createInitialTurnState(), lastSpeakerId: null }
+
+    const selection = selectNextSpeaker([participant], characters, state, 'user-1')
+    expect(selection.nextSpeakerId).toBe('p1')
+    expect(selection.reason).toBe('only_character')
+
+    // With user participant, after character speaks it's user's turn
+    const userTurn = selectNextSpeaker([participant], characters, { ...state, lastSpeakerId: 'p1' }, 'user-1')
+    expect(userTurn.reason).toBe('user_turn')
+  })
+
+  it('single-character all-LLM chat continues in monologue mode', () => {
     const participant = makeCharacterParticipant('p1', 'char-1')
     const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])
     const state = { ...createInitialTurnState(), lastSpeakerId: null }
@@ -158,8 +188,11 @@ describe('turn manager state', () => {
     expect(selection.nextSpeakerId).toBe('p1')
     expect(selection.reason).toBe('only_character')
 
-    const userTurn = selectNextSpeaker([participant], characters, { ...state, lastSpeakerId: 'p1' }, null)
-    expect(userTurn.reason).toBe('user_turn')
+    // With no user participant (all-LLM), single character continues speaking
+    const continueMonologue = selectNextSpeaker([participant], characters, { ...state, lastSpeakerId: 'p1' }, null)
+    expect(continueMonologue.nextSpeakerId).toBe('p1')
+    expect(continueMonologue.reason).toBe('only_character')
+    expect(continueMonologue.cycleComplete).toBe(true)
   })
 
   it('updates turn state after user and assistant messages', () => {
@@ -499,19 +532,19 @@ describe('turn manager edge cases', () => {
 
       // Initial state - character speaks
       let state = createInitialTurnState()
-      let selection = selectNextSpeaker([participant], characters, state, null)
+      let selection = selectNextSpeaker([participant], characters, state, 'user-1')
       expect(selection.nextSpeakerId).toBe('p1')
       expect(selection.reason).toBe('only_character')
 
-      // After character speaks - user turn
-      state = updateTurnStateAfterMessage(state, makeMessage('m1', 'ASSISTANT', 'p1'), null)
-      selection = selectNextSpeaker([participant], characters, state, null)
+      // After character speaks - user turn (when there's a user participant)
+      state = updateTurnStateAfterMessage(state, makeMessage('m1', 'ASSISTANT', 'p1'), 'user-1')
+      selection = selectNextSpeaker([participant], characters, state, 'user-1')
       expect(selection.nextSpeakerId).toBeNull()
       expect(selection.reason).toBe('user_turn')
 
       // After user speaks - character turn again
-      state = updateTurnStateAfterMessage(state, makeMessage('m2', 'USER'), 'persona-1')
-      selection = selectNextSpeaker([participant], characters, state, null)
+      state = updateTurnStateAfterMessage(state, makeMessage('m2', 'USER'), 'user-1')
+      selection = selectNextSpeaker([participant], characters, state, 'user-1')
       expect(selection.nextSpeakerId).toBe('p1')
       expect(selection.reason).toBe('only_character')
     })

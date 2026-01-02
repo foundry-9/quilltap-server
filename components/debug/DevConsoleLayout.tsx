@@ -54,7 +54,7 @@ export default function DevConsoleLayout({ children }: DevConsoleLayoutProps) {
   // Wide viewport with DevConsole: two-column layout
   if (showSidePanel) {
     return (
-      <div className="flex h-full">
+      <div className="flex flex-1 min-h-0">
         {/* Main content - fixed width */}
         <div
           className="flex-shrink-0 overflow-y-auto bg-background"
@@ -74,7 +74,7 @@ export default function DevConsoleLayout({ children }: DevConsoleLayoutProps) {
   // Narrow viewport or DevConsole closed: full-width main content
   return (
     <>
-      <div className={`h-full overflow-y-auto bg-background ${showBottomPanel ? 'pb-[40vh]' : ''}`}>
+      <div className={`flex-1 min-h-0 overflow-y-auto bg-background ${showBottomPanel ? 'pb-[40vh]' : ''}`}>
         {children}
       </div>
 

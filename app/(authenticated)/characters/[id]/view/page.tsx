@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { showErrorToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import type { TimestampConfig } from '@/lib/schemas/types'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { EntityTabs } from '@/components/tabs'
@@ -23,6 +24,7 @@ import {
   ChatCreationDialog,
 } from './components'
 import { CHARACTER_TABS } from './constants'
+import { SearchReplaceModal } from '@/components/tools/search-replace'
 
 export default function ViewCharacterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -32,13 +34,17 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const quickHideActive = hiddenTagIds.size > 0
 
   const [showChatDialog, setShowChatDialog] = useState(false)
+  const [showSearchReplaceModal, setShowSearchReplaceModal] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
+  const [scenario, setScenario] = useState<string>('')
+  const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
   const [savingPersona, setSavingPersona] = useState(false)
+  const [savingPartner, setSavingPartner] = useState(false)
 
   const {
     loading,
@@ -47,6 +53,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     profiles,
     personas,
     defaultPersonaId,
+    userControlledCharacters,
+    defaultPartnerId,
+    defaultPartnerName,
     avatarRefreshKey,
     templateCounts,
     replacingTemplate,
@@ -54,21 +63,26 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     fetchProfiles,
     fetchPersonas,
     fetchDefaultPersona,
+    fetchUserControlledCharacters,
+    fetchDefaultPartner,
     fetchImageProfiles,
     setCharacter,
     setDefaultPersonaId,
     handleTemplateReplace,
     handleSaveConnectionProfile,
     handleSaveDefaultPersona,
+    handleSaveDefaultPartner,
     handleToggleNpc,
+    handleToggleFavorite,
+    handleToggleControlledBy,
     togglingNpc,
+    togglingFavorite,
+    togglingControlledBy,
   } = useCharacterView(id)
 
   const { creatingChat, handleCreateChat } = useChatCreation()
 
   const characterTagIds = character?.tags || []
-  const defaultPersona = personas.find(p => p.id === defaultPersonaId)
-  const defaultPersonaName = defaultPersona?.name || null
 
   // Initialize data on mount
   useEffect(() => {
@@ -76,9 +90,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     fetchProfiles()
     fetchPersonas()
     fetchDefaultPersona()
+    fetchUserControlledCharacters()
+    fetchDefaultPartner()
     fetchImageProfiles()
     clientLogger.debug('Character view page initialized', { characterId: id })
-  }, [fetchCharacter, fetchProfiles, fetchPersonas, fetchDefaultPersona, fetchImageProfiles, id])
+  }, [fetchCharacter, fetchProfiles, fetchPersonas, fetchDefaultPersona, fetchUserControlledCharacters, fetchDefaultPartner, fetchImageProfiles, id])
 
   // Handle chat dialog opening from query params
   useEffect(() => {
@@ -128,6 +144,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       selectedProfileId,
       selectedPersonaId,
       selectedImageProfileId,
+      scenario,
+      timestampConfig,
     })
     setShowChatDialog(false)
   }
@@ -152,6 +170,16 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     }
   }
 
+  const handlePartnerSave = async (partnerId: string) => {
+    setSavingPartner(true)
+    try {
+      await handleSaveDefaultPartner(partnerId)
+      clientLogger.info('Default partner saved', { partnerId })
+    } finally {
+      setSavingPartner(false)
+    }
+  }
+
   const renderTabContent = (activeTab: string) => {
     switch (activeTab) {
       case 'details':
@@ -161,7 +189,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             character={character}
             templateCounts={templateCounts}
             replacingTemplate={replacingTemplate}
-            defaultPersonaName={defaultPersonaName}
+            defaultPartnerName={defaultPartnerName}
             onTemplateReplace={handleTemplateReplace}
           />
         )
@@ -171,7 +199,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           <SystemPromptsTab
             characterId={id}
             character={character}
-            defaultPersonaName={defaultPersonaName}
+            defaultPartnerName={defaultPartnerName}
           />
         )
 
@@ -195,13 +223,13 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             characterId={id}
             character={character}
             profiles={profiles}
-            personas={personas}
-            defaultPersonaId={defaultPersonaId}
+            userControlledCharacters={userControlledCharacters}
+            defaultPartnerId={defaultPartnerId}
             defaultImageProfileId={defaultImageProfileId}
             savingConnectionProfile={savingConnectionProfile}
-            savingPersona={savingPersona}
+            savingPartner={savingPartner}
             onConnectionProfileChange={handleConnectionProfileSave}
-            onPersonaChange={handlePersonaSave}
+            onPartnerChange={handlePartnerSave}
             onImageProfileChange={(profileId) => setDefaultImageProfileId(profileId || '')}
           />
         )
@@ -261,8 +289,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   }
 
   return (
-    <div className="character-view min-h-screen px-4 py-8 text-foreground">
-      <div className="mx-auto max-w-5xl">
+    <div className="character-view qt-page-container min-h-screen text-foreground">
+      <div>
         <Link
           href={character?.npc ? '/settings?tab=npcs' : '/characters'}
           className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
@@ -276,7 +304,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           avatarRefreshKey={avatarRefreshKey}
           onStartChat={handleStartChat}
           onToggleNpc={handleToggleNpc}
+          onToggleFavorite={handleToggleFavorite}
+          onToggleControlledBy={handleToggleControlledBy}
+          onSearchReplace={() => setShowSearchReplaceModal(true)}
           togglingNpc={togglingNpc}
+          togglingFavorite={togglingFavorite}
+          togglingControlledBy={togglingControlledBy}
         />
 
         {/* Tabbed Content */}
@@ -295,11 +328,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           selectedProfileId={selectedProfileId}
           selectedPersonaId={selectedPersonaId}
           selectedImageProfileId={selectedImageProfileId}
+          scenario={scenario}
+          timestampConfig={timestampConfig}
           creatingChat={creatingChat}
           openedFromQuery={openedFromQuery}
           onProfileChange={setSelectedProfileId}
           onPersonaChange={setSelectedPersonaId}
           onImageProfileChange={setSelectedImageProfileId}
+          onScenarioChange={setScenario}
+          onTimestampConfigChange={setTimestampConfig}
           onCancel={() => {
             if (openedFromQuery) {
               window.location.href = '/characters'
@@ -310,6 +347,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           onCreateChat={handleCreateChatClick}
         />
       )}
+
+      {/* Search & Replace Modal */}
+      <SearchReplaceModal
+        isOpen={showSearchReplaceModal}
+        onClose={() => setShowSearchReplaceModal(false)}
+        initialScope={{ type: 'character', characterId: id }}
+        characterName={character?.name}
+      />
     </div>
   )
 }

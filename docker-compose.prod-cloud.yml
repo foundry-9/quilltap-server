@@ -17,6 +17,11 @@ services:
     ports:
       - "3000:3000"
 
+    # Persistent volumes for plugins
+    volumes:
+      - plugin-site-data:/app/plugins/site
+      - plugin-user-data:/app/plugins/users
+
     # Environment variables for external services integration
     environment:
       # Data backend configuration
@@ -54,6 +59,11 @@ services:
     # Connect to the application network
     networks:
       - quilltap-network
+
+volumes:
+  # Persistent storage for npm-installed plugins
+  plugin-site-data:
+  plugin-user-data:
 
 networks:
   # Bridge network for container communication

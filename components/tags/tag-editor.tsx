@@ -19,7 +19,8 @@ export interface Tag {
 }
 
 interface TagEditorProps {
-  entityType: 'character' | 'persona' | 'chat' | 'profile';
+  // EntityType - personas have been migrated to characters with controlledBy: 'user'
+  entityType: 'character' | 'chat' | 'profile';
   entityId: string;
   onTagsChange?: (tags: Tag[]) => void;
 }
@@ -39,8 +40,6 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
     switch (entityType) {
       case 'character':
         return `/api/characters/${entityId}/tags`;
-      case 'persona':
-        return `/api/personas/${entityId}/tags`;
       case 'chat':
         return `/api/chats/${entityId}/tags`;
       case 'profile':

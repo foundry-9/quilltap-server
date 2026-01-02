@@ -4,8 +4,8 @@
  * POST /api/keys/export - Export all API keys encrypted with passphrase
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { getUserRepositories } from '@/lib/repositories/factory'
 import {
   decryptApiKey,
@@ -53,13 +53,8 @@ interface ExportFile {
  *   passphrase: string
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const body = await req.json()
     const { passphrase } = body
 
@@ -80,11 +75,11 @@ export async function POST(req: NextRequest) {
 
     logger.debug('Starting API key export', {
       context: 'keys-export-POST',
-      userId: session.user.id,
+      userId: user.id,
     })
 
     // Get all API keys for the user
-    const repos = getUserRepositories(session.user.id)
+    const repos = getUserRepositories(user.id)
     const apiKeys = await repos.connections.getAllApiKeys()
 
     if (apiKeys.length === 0) {
@@ -103,7 +98,7 @@ export async function POST(req: NextRequest) {
           key.ciphertext,
           key.iv,
           key.authTag,
-          session.user.id
+          user.id
         )
 
         decryptedKeys.push({
@@ -139,7 +134,7 @@ export async function POST(req: NextRequest) {
       iv: encrypted.iv,
       authTag: encrypted.authTag,
     })
-    const signature = signData(payloadJson, session.user.id)
+    const signature = signData(payloadJson, user.id)
 
     // Build the export file
     const exportFile: ExportFile = {
@@ -163,7 +158,7 @@ export async function POST(req: NextRequest) {
 
     logger.info('API keys exported successfully', {
       context: 'keys-export-POST',
-      userId: session.user.id,
+      userId: user.id,
       keyCount: decryptedKeys.length,
     })
 
@@ -177,4 +172,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

@@ -5,8 +5,8 @@
  * GET /api/tools/quilltap-export/preview - Preview export contents
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { createExport, previewExport } from '@/lib/export/quilltap-export-service';
@@ -36,22 +36,14 @@ function generateExportFilename(exportType: string): string {
  * Response:
  * JSON export data (with Content-Disposition header for download)
  */
-export async function POST(request: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Quilltap export attempted without authentication', {
-        context: 'POST /api/tools/quilltap-export',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
+    const body = await req.json();
     const { type, scope, selectedIds, includeMemories } = body;
 
     logger.info('Creating Quilltap export', {
       context: 'POST /api/tools/quilltap-export',
-      userId: session.user.id,
+      userId: user.id,
       type,
       scope,
       selectedIdsCount: selectedIds?.length || 0,
@@ -59,7 +51,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Create export using the export service
-    const exportData = await createExport(session.user.id, {
+    const exportData = await createExport(user.id, {
       type: type as ExportEntityType,
       scope: scope || 'all',
       selectedIds,
@@ -68,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     logger.debug('Quilltap export created', {
       context: 'POST /api/tools/quilltap-export',
-      userId: session.user.id,
+      userId: user.id,
       type,
       exportDataSize: JSON.stringify(exportData).length,
     });
@@ -93,7 +85,7 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * GET /api/tools/quilltap-export/preview
@@ -112,17 +104,9 @@ export async function POST(request: NextRequest) {
  *   warnings: string[]
  * }
  */
-export async function GET(request: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Quilltap export preview attempted without authentication', {
-        context: 'GET /api/tools/quilltap-export/preview',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(req.url);
     const type = searchParams.get('type');
     const scope = searchParams.get('scope') || 'all';
     const selectedIdsParam = searchParams.get('selectedIds');
@@ -133,7 +117,7 @@ export async function GET(request: NextRequest) {
     if (!type) {
       logger.warn('Quilltap export preview missing type parameter', {
         context: 'GET /api/tools/quilltap-export/preview',
-        userId: session.user.id,
+        userId: user.id,
       });
       return NextResponse.json(
         { error: 'Missing required parameter: type' },
@@ -143,7 +127,7 @@ export async function GET(request: NextRequest) {
 
     logger.info('Previewing Quilltap export', {
       context: 'GET /api/tools/quilltap-export/preview',
-      userId: session.user.id,
+      userId: user.id,
       type,
       scope,
       selectedIdsCount: selectedIds.length,
@@ -151,7 +135,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Generate preview using the export service
-    const preview = await previewExport(session.user.id, {
+    const preview = await previewExport(user.id, {
       type: type as ExportEntityType,
       scope: scope as 'all' | 'selected',
       selectedIds,
@@ -160,7 +144,7 @@ export async function GET(request: NextRequest) {
 
     logger.debug('Quilltap export preview generated', {
       context: 'GET /api/tools/quilltap-export/preview',
-      userId: session.user.id,
+      userId: user.id,
       type,
       entityCount: preview.entities.length,
     });
@@ -177,4 +161,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

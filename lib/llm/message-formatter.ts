@@ -4,10 +4,21 @@
  *
  * Handles provider-aware message formatting for multi-character chats.
  * Provides name field support or content prefix fallback depending on provider.
+ *
+ * NOTE: Registered plugins provide message format support via messageFormat.
+ * The legacy fallback constants are imported from fallback-data.ts and used
+ * only when no plugin is registered for a provider.
+ *
+ * @see lib/llm/fallback-data.ts for legacy fallback constants
  */
 
 import { Provider } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
+import { getMessageFormat } from '@/lib/plugins/provider-registry'
+import {
+  LEGACY_PROVIDER_NAME_SUPPORT,
+  type LegacyProviderNameSupport,
+} from './fallback-data'
 
 /**
  * Provider capabilities for name field support
@@ -23,60 +34,24 @@ export interface ProviderNameSupport {
 
 /**
  * Provider-specific name field support information
- * Based on API documentation as of late 2024/early 2025
+ * Re-exported from fallback-data.ts for backward compatibility
+ *
+ * @deprecated Use getMessageFormat() from provider-registry instead
  */
-const PROVIDER_NAME_SUPPORT: Record<string, ProviderNameSupport> = {
-  // OpenAI supports name field on both user and assistant messages
-  OPENAI: {
-    supportsNameField: true,
-    supportedRoles: ['user', 'assistant'],
-    maxNameLength: 64,
-  },
-  // Anthropic does NOT support name field in the standard API
-  // We'll use content prefix fallback
-  ANTHROPIC: {
-    supportsNameField: false,
-    supportedRoles: [],
-  },
-  // Google/Gemini does NOT support name field
-  // We'll use content prefix fallback
-  GOOGLE: {
-    supportsNameField: false,
-    supportedRoles: [],
-  },
-  // OpenRouter passes through to underlying provider, assume no name support for safety
-  OPENROUTER: {
-    supportsNameField: false,
-    supportedRoles: [],
-  },
-  // xAI/Grok uses OpenAI-compatible format
-  GROK: {
-    supportsNameField: true,
-    supportedRoles: ['user', 'assistant'],
-    maxNameLength: 64,
-  },
-  // Ollama uses OpenAI-compatible format but name support varies by model
-  OLLAMA: {
-    supportsNameField: false, // Conservative default
-    supportedRoles: [],
-  },
-  // OpenAI Compatible providers - assume OpenAI behavior
-  'OPENAI-COMPATIBLE': {
-    supportsNameField: true,
-    supportedRoles: ['user', 'assistant'],
-    maxNameLength: 64,
-  },
-  // Gab.AI - assume no name support
-  'GAB-AI': {
-    supportsNameField: false,
-    supportedRoles: [],
-  },
-}
+const PROVIDER_NAME_SUPPORT: Record<string, ProviderNameSupport> =
+  LEGACY_PROVIDER_NAME_SUPPORT as Record<string, ProviderNameSupport>
 
 /**
  * Get name field support info for a provider
  */
 export function getProviderNameSupport(provider: Provider): ProviderNameSupport {
+  // First try the plugin registry (plugins register their own message format support)
+  const pluginFormat = getMessageFormat(provider)
+  if (pluginFormat.supportsNameField || pluginFormat.supportedRoles.length > 0) {
+    return pluginFormat
+  }
+
+  // Fall back to hardcoded support for known providers
   const normalized = provider.toUpperCase()
   const support = PROVIDER_NAME_SUPPORT[normalized]
 
@@ -263,4 +238,73 @@ export function buildMultiCharacterContextSection(
   )
 
   return lines.join('\n')
+}
+
+/**
+ * Strip character name prefixes from the beginning of a response
+ *
+ * LLMs sometimes mimic the [Name] prefix format from the input in their responses.
+ * This function removes any such prefixes from the start of the response,
+ * including multiple occurrences across newlines.
+ *
+ * @param content The response content to clean
+ * @param characterName The responding character's name (to specifically target)
+ * @returns Cleaned content without leading name prefixes
+ */
+export function stripCharacterNamePrefix(content: string, characterName?: string): string {
+  if (!content) return content
+
+  // If we know the specific character name, build a specific pattern
+  // Otherwise, use a general pattern to match any [Name] prefix
+  let result = content
+
+  // Pattern to match [Name] at the start, possibly across multiple lines
+  // Matches: [Name], [Name]\n, [Name] \n, [Name]\n\n, etc.
+  // The name can contain letters, numbers, spaces, and common punctuation
+  const generalPrefixPattern = /^\s*\[[^\]]+\]\s*/
+
+  // If we have a specific character name, also build a specific pattern
+  // that's more targeted (case-insensitive)
+  let specificPattern: RegExp | null = null
+  if (characterName) {
+    const escapedName = characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    specificPattern = new RegExp(`^\\s*\\[${escapedName}\\]\\s*`, 'i')
+  }
+
+  // Keep stripping prefixes until we don't find any more
+  // This handles cases like "[Name]\n[Name]\n[Name]\n*content*"
+  let previousLength = -1
+  let iterations = 0
+  const MAX_ITERATIONS = 10 // Safety limit
+
+  while (result.length !== previousLength && iterations < MAX_ITERATIONS) {
+    previousLength = result.length
+    iterations++
+
+    // Try specific pattern first (if available)
+    if (specificPattern && specificPattern.test(result)) {
+      result = result.replace(specificPattern, '')
+      continue
+    }
+
+    // Then try general pattern
+    if (generalPrefixPattern.test(result)) {
+      result = result.replace(generalPrefixPattern, '')
+      continue
+    }
+
+    // No more prefixes found
+    break
+  }
+
+  if (iterations > 1) {
+    logger.debug('[MessageFormatter] Stripped character name prefixes from response', {
+      characterName,
+      prefixesStripped: iterations - 1,
+      originalLength: content.length,
+      resultLength: result.length,
+    })
+  }
+
+  return result
 }

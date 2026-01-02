@@ -354,13 +354,18 @@ export class GoogleProvider implements LLMProvider {
 
     const model = client.getGenerativeModel(modelConfig);
 
+    // Normalize stop sequences to array format
+    const stopSequences = params.stop
+      ? (Array.isArray(params.stop) ? params.stop : [params.stop])
+      : undefined;
+
     const response = (await model.generateContent({
       contents: messages,
       generationConfig: {
         temperature: params.temperature ?? 0.7,
         maxOutputTokens: params.maxTokens ?? 4096,
         topP: params.topP ?? 1,
-        stopSequences: params.stop,
+        stopSequences,
       },
     })) as any;
 
@@ -467,13 +472,18 @@ export class GoogleProvider implements LLMProvider {
 
     const model = client.getGenerativeModel(modelConfig);
 
+    // Normalize stop sequences to array format
+    const stopSequences = params.stop
+      ? (Array.isArray(params.stop) ? params.stop : [params.stop])
+      : undefined;
+
     const stream = await model.generateContentStream({
       contents: messages,
       generationConfig: {
         temperature: params.temperature ?? 0.7,
         maxOutputTokens: params.maxTokens ?? 4096,
         topP: params.topP ?? 1,
-        stopSequences: params.stop,
+        stopSequences,
       },
     });
 

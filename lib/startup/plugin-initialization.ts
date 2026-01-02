@@ -15,6 +15,7 @@ import { registerArcticProvider, clearArcticProviders } from '@/lib/auth/arctic/
 import type { ArcticProviderPlugin } from '@/lib/auth/arctic/types';
 import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-registry';
 import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/lib/plugins/roleplay-template-registry';
+import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugins/plugin-logger-bridge';
 import packageJson from '@/package.json';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
@@ -178,6 +179,11 @@ async function performInitialization(): Promise<PluginInitializationResult> {
   };
 
   try {
+    // Inject the logger factory before loading any plugins
+    // This allows plugins using @quilltap/plugin-utils to have their
+    // logs routed through Quilltap's core logging system
+    injectPluginLoggerFactory();
+
     // Scan for plugins
     const scanResult = await scanPlugins();
 
@@ -417,6 +423,48 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     }
 
     // Initialize theme registry from enabled plugins with THEME capability
+    // First, load module-based themes (self-contained) via dynamic require
+    logger.debug('Loading module-based theme plugins');
+    const themePlugins = pluginRegistry.getEnabledByCapability('THEME');
+    for (const loadedPlugin of themePlugins) {
+      // Check if plugin uses module-based loading
+      const themeConfig = loadedPlugin.manifest.themeConfig;
+      if (themeConfig?.useModule === false) {
+        continue; // Skip - will be loaded file-based
+      }
+
+      try {
+        const mainFile = loadedPlugin.manifest.main || 'index.js';
+        const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+
+        if (!existsSync(modulePath)) {
+          continue; // No module file, will fall back to file-based
+        }
+
+        logger.debug('Loading theme plugin module', {
+          plugin: loadedPlugin.manifest.name,
+          path: modulePath,
+        });
+
+        // Use require() to load the compiled JavaScript module
+        const pluginModule = dynamicRequire(modulePath);
+        const themePlugin = pluginModule?.plugin || pluginModule?.default?.plugin;
+
+        if (themePlugin?.tokens) {
+          themeRegistry.registerThemeModule(loadedPlugin, themePlugin);
+          logger.debug('Theme module registered', {
+            plugin: loadedPlugin.manifest.name,
+          });
+        }
+      } catch (error) {
+        logger.debug('Failed to load theme as module, will try file-based', {
+          plugin: loadedPlugin.manifest.name,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Then initialize the registry (handles file-based themes and default theme)
     logger.debug('Initializing theme registry');
     await initializeThemeRegistry();
     const themeStats = themeRegistry.getStats();
@@ -473,6 +521,8 @@ export function resetPluginSystem(): void {
   themeRegistry.reset();
   // Reset roleplay template registry
   roleplayTemplateRegistry.reset();
+  // Clear the plugin logger factory
+  clearPluginLoggerFactory();
   logger.debug('Plugin system reset');
 }
 

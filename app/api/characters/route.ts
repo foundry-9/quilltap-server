@@ -3,24 +3,10 @@
 // POST /api/characters - Create a new character
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
+import { getFilePath } from '@/lib/api/middleware/file-path'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
-import type { FileEntry } from '@/lib/schemas/types'
-
-/**
- * Get the filepath for a file based on storage type
- */
-function getFilePath(file: FileEntry): string {
-  if (file.s3Key) {
-    return `/api/files/${file.id}`
-  }
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : ''
-  return `data/files/storage/${file.id}${ext}`
-}
 
 // Validation schema
 const createCharacterSchema = z.object({
@@ -58,24 +44,14 @@ const createCharacterSchema = z.object({
 // GET /api/characters - List all characters
 // Query params:
 //   - npc: 'true' to get only NPCs, 'false' to get only non-NPCs, omit for all
-export async function GET(req: NextRequest) {
+//   - controlledBy: 'user' or 'llm' to filter by control mode
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     let characters = await repos.characters.findByUserId(user.id)
 
-    // Filter by NPC status if specified
     const { searchParams } = new URL(req.url)
+
+    // Filter by NPC status if specified
     const npcFilter = searchParams.get('npc')
     if (npcFilter === 'true') {
       characters = characters.filter(c => c.npc === true)
@@ -86,10 +62,21 @@ export async function GET(req: NextRequest) {
       logger.debug('Filtering characters to non-NPCs only', { count: characters.length })
     }
 
+    // Filter by controlledBy if specified
+    const controlledByFilter = searchParams.get('controlledBy')
+    if (controlledByFilter === 'user') {
+      characters = characters.filter(c => c.controlledBy === 'user')
+      logger.debug('Filtering characters to user-controlled only', { count: characters.length })
+    } else if (controlledByFilter === 'llm') {
+      // Include characters without controlledBy field (backwards compatibility, default to 'llm')
+      characters = characters.filter(c => c.controlledBy === 'llm' || c.controlledBy === undefined)
+      logger.debug('Filtering characters to LLM-controlled only', { count: characters.length })
+    }
+
     // Sort by createdAt descending
     characters.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-    // Enrich characters with related data (defaultImage and chat count)
+    // Enrich characters with related data (defaultImage, chat count, default partner name)
     const enrichedCharacters = await Promise.all(
       characters.map(async (character) => {
         // Get default image from repository if present
@@ -105,6 +92,15 @@ export async function GET(req: NextRequest) {
           }
         }
 
+        // Get default partner name if set
+        let defaultPartnerName: string | null = null
+        if (character.defaultPartnerId) {
+          const partner = await repos.characters.findById(character.defaultPartnerId)
+          if (partner) {
+            defaultPartnerName = partner.name
+          }
+        }
+
         // Get chat count for this character
         const chats = await repos.chats.findByCharacterId(character.id)
 
@@ -117,6 +113,8 @@ export async function GET(req: NextRequest) {
           defaultImageId: character.defaultImageId,
           defaultImage,
           isFavorite: character.isFavorite,
+          controlledBy: character.controlledBy ?? 'llm',
+          defaultPartnerName,
           npc: character.npc ?? false,
           createdAt: character.createdAt,
           tags: character.tags || [],
@@ -136,23 +134,11 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 // POST /api/characters - Create a new character
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     const body = await req.json()
     const validatedData = createCharacterSchema.parse(body)
 
@@ -198,4 +184,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

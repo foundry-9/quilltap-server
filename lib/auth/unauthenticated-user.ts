@@ -119,7 +119,7 @@ export async function getOrCreateUnauthenticatedUser(): Promise<User> {
     );
 
     // Create chat settings using the repository method (which creates if not exists)
-    await repos.users.updateChatSettings(UNAUTHENTICATED_USER_ID, {
+    await repos.chatSettings.updateForUser(UNAUTHENTICATED_USER_ID, {
       avatarDisplayMode: 'ALWAYS' as AvatarDisplayMode,
       avatarDisplayStyle: 'CIRCULAR',
       tagStyles: {},

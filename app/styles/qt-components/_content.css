@@ -9,6 +9,20 @@
 
 @layer components {
   /* ==========================================================================
+     PAGE CONTAINER
+     ========================================================================== */
+
+  /**
+   * Page container that respects content width toggle
+   * Replaces manual container + max-w-* classes in page components
+   */
+  .qt-page-container {
+    @apply w-full mx-auto px-4 pt-8 pb-20;
+    max-width: var(--qt-page-max-width);
+    transition: max-width 200ms ease-out;
+  }
+
+  /* ==========================================================================
      BADGES - Shared base styles
      ========================================================================== */
 
@@ -227,6 +241,31 @@
     @apply ring-2 ring-background;
   }
 
+  /**
+   * Avatar labels container (name + title below avatar)
+   */
+  .qt-avatar-labels {
+    @apply text-center mt-1;
+  }
+
+  /**
+   * Avatar name text
+   * Themeable for contrast on different backgrounds
+   */
+  .qt-avatar-name {
+    @apply text-sm font-semibold line-clamp-2;
+    color: var(--qt-avatar-name-fg, var(--color-foreground));
+  }
+
+  /**
+   * Avatar title/subtitle text
+   * Themeable for contrast on different backgrounds
+   */
+  .qt-avatar-title {
+    @apply text-xs italic line-clamp-2;
+    color: var(--qt-avatar-title-fg, var(--color-muted-foreground));
+  }
+
   /* ==========================================================================
      CODE BLOCKS
      ========================================================================== */
@@ -287,18 +326,22 @@
    */
   .qt-heading-1 {
     @apply text-3xl font-bold tracking-tight;
+    font-family: var(--qt-heading-font);
   }
 
   .qt-heading-2 {
     @apply text-2xl font-semibold tracking-tight;
+    font-family: var(--qt-heading-font);
   }
 
   .qt-heading-3 {
     @apply text-xl font-semibold;
+    font-family: var(--qt-heading-font);
   }
 
   .qt-heading-4 {
     @apply text-lg font-semibold;
+    font-family: var(--qt-heading-font);
   }
 
   /**

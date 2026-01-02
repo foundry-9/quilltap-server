@@ -38,64 +38,106 @@ import type {
   ChatEvent,
 } from '@/lib/schemas/types';
 
+// ============================================================================
+// Generic Base Class
+// ============================================================================
+
 /**
- * User-scoped Characters Repository
- * All operations are automatically filtered to the specified user
+ * Base class for user-scoped repositories.
+ * Provides common CRUD operations with automatic user scoping.
  */
-class UserScopedCharactersRepository {
+abstract class UserScopedRepository<
+  T extends { userId?: string; id: string },
+  R extends {
+    findById(id: string): Promise<T | null>;
+    findByUserId(userId: string): Promise<T[]>;
+    create(data: any): Promise<T>;
+    update(id: string, data: any): Promise<T | null>;
+    delete(id: string): Promise<boolean>;
+  }
+> {
   constructor(
-    private readonly userId: string,
-    private readonly baseRepo: CharactersRepository
+    protected readonly userId: string,
+    protected readonly baseRepo: R
   ) {}
 
-  async findAll(): Promise<Character[]> {
+  async findAll(): Promise<T[]> {
     return this.baseRepo.findByUserId(this.userId);
   }
 
-  async findById(id: string): Promise<Character | null> {
-    const character = await this.baseRepo.findById(id);
-    if (!character || character.userId !== this.userId) {
-      return null;
-    }
-    return character;
+  async findById(id: string): Promise<T | null> {
+    const item = await this.baseRepo.findById(id);
+    if (!item || item.userId !== this.userId) return null;
+    return item;
   }
 
-  async findByTag(tagId: string): Promise<Character[]> {
-    const characters = await this.baseRepo.findByTag(tagId);
-    return characters.filter(c => c.userId === this.userId);
-  }
-
-  async create(data: Omit<Character, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<Character> {
+  async create(data: Omit<T, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<T> {
     return this.baseRepo.create({ ...data, userId: this.userId });
   }
 
-  async update(id: string, data: Partial<Character>): Promise<Character | null> {
-    const character = await this.findById(id);
-    if (!character) return null;
-    // Prevent userId from being changed
-    const { userId: _, ...safeData } = data;
+  async update(id: string, data: Partial<T>): Promise<T | null> {
+    const item = await this.findById(id);
+    if (!item) return null;
+    const { userId: _, ...safeData } = data as any;
     return this.baseRepo.update(id, safeData);
   }
 
   async delete(id: string): Promise<boolean> {
-    const character = await this.findById(id);
-    if (!character) return false;
+    const item = await this.findById(id);
+    if (!item) return false;
     return this.baseRepo.delete(id);
   }
 
-  // Pass-through methods that are already scoped by character ownership
-  async addTag(characterId: string, tagId: string): Promise<Character | null> {
-    const character = await this.findById(characterId);
-    if (!character) return null;
-    return this.baseRepo.addTag(characterId, tagId);
+  /**
+   * Filter results by user ownership
+   */
+  protected filterByUser(items: T[]): T[] {
+    return items.filter(item => item.userId === this.userId);
+  }
+}
+
+/**
+ * Base class for repositories with tag support
+ */
+abstract class UserScopedTaggableRepository<
+  T extends { userId?: string; id: string; tags?: string[] },
+  R extends {
+    findById(id: string): Promise<T | null>;
+    findByUserId(userId: string): Promise<T[]>;
+    findByTag(tagId: string): Promise<T[]>;
+    create(data: any): Promise<T>;
+    update(id: string, data: any): Promise<T | null>;
+    delete(id: string): Promise<boolean>;
+    addTag(id: string, tagId: string): Promise<T | null>;
+    removeTag(id: string, tagId: string): Promise<T | null>;
+  }
+> extends UserScopedRepository<T, R> {
+  async findByTag(tagId: string): Promise<T[]> {
+    const items = await this.baseRepo.findByTag(tagId);
+    return this.filterByUser(items);
   }
 
-  async removeTag(characterId: string, tagId: string): Promise<Character | null> {
-    const character = await this.findById(characterId);
-    if (!character) return null;
-    return this.baseRepo.removeTag(characterId, tagId);
+  async addTag(entityId: string, tagId: string): Promise<T | null> {
+    const item = await this.findById(entityId);
+    if (!item) return null;
+    return this.baseRepo.addTag(entityId, tagId);
   }
 
+  async removeTag(entityId: string, tagId: string): Promise<T | null> {
+    const item = await this.findById(entityId);
+    if (!item) return null;
+    return this.baseRepo.removeTag(entityId, tagId);
+  }
+}
+
+// ============================================================================
+// Entity-Specific Repositories
+// ============================================================================
+
+/**
+ * User-scoped Characters Repository
+ */
+class UserScopedCharactersRepository extends UserScopedTaggableRepository<Character, CharactersRepository> {
   async setFavorite(characterId: string, isFavorite: boolean): Promise<Character | null> {
     const character = await this.findById(characterId);
     if (!character) return null;
@@ -148,58 +190,7 @@ class UserScopedCharactersRepository {
 /**
  * User-scoped Personas Repository
  */
-class UserScopedPersonasRepository {
-  constructor(
-    private readonly userId: string,
-    private readonly baseRepo: PersonasRepository
-  ) {}
-
-  async findAll(): Promise<Persona[]> {
-    return this.baseRepo.findByUserId(this.userId);
-  }
-
-  async findById(id: string): Promise<Persona | null> {
-    const persona = await this.baseRepo.findById(id);
-    if (!persona || persona.userId !== this.userId) {
-      return null;
-    }
-    return persona;
-  }
-
-  async findByTag(tagId: string): Promise<Persona[]> {
-    const personas = await this.baseRepo.findByTag(tagId);
-    return personas.filter(p => p.userId === this.userId);
-  }
-
-  async create(data: Omit<Persona, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<Persona> {
-    return this.baseRepo.create({ ...data, userId: this.userId });
-  }
-
-  async update(id: string, data: Partial<Persona>): Promise<Persona | null> {
-    const persona = await this.findById(id);
-    if (!persona) return null;
-    const { userId: _, ...safeData } = data;
-    return this.baseRepo.update(id, safeData);
-  }
-
-  async delete(id: string): Promise<boolean> {
-    const persona = await this.findById(id);
-    if (!persona) return false;
-    return this.baseRepo.delete(id);
-  }
-
-  async addTag(personaId: string, tagId: string): Promise<Persona | null> {
-    const persona = await this.findById(personaId);
-    if (!persona) return null;
-    return this.baseRepo.addTag(personaId, tagId);
-  }
-
-  async removeTag(personaId: string, tagId: string): Promise<Persona | null> {
-    const persona = await this.findById(personaId);
-    if (!persona) return null;
-    return this.baseRepo.removeTag(personaId, tagId);
-  }
-
+class UserScopedPersonasRepository extends UserScopedTaggableRepository<Persona, PersonasRepository> {
   async addDescription(personaId: string, description: any): Promise<any> {
     const persona = await this.findById(personaId);
     if (!persona) return null;
@@ -246,49 +237,10 @@ class UserScopedPersonasRepository {
 /**
  * User-scoped Chats Repository
  */
-class UserScopedChatsRepository {
-  constructor(
-    private readonly userId: string,
-    private readonly baseRepo: MongoChatsRepository
-  ) {}
-
-  async findAll(): Promise<ChatMetadata[]> {
-    return this.baseRepo.findByUserId(this.userId);
-  }
-
-  async findById(id: string): Promise<ChatMetadata | null> {
-    const chat = await this.baseRepo.findById(id);
-    if (!chat || chat.userId !== this.userId) {
-      return null;
-    }
-    return chat;
-  }
-
+class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadata, MongoChatsRepository> {
   async findByCharacterId(characterId: string): Promise<ChatMetadata[]> {
     const chats = await this.baseRepo.findByCharacterId(characterId);
-    return chats.filter(c => c.userId === this.userId);
-  }
-
-  async findByTag(tagId: string): Promise<ChatMetadata[]> {
-    const chats = await this.baseRepo.findByTag(tagId);
-    return chats.filter(c => c.userId === this.userId);
-  }
-
-  async create(data: Omit<ChatMetadata, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<ChatMetadata> {
-    return this.baseRepo.create({ ...data, userId: this.userId });
-  }
-
-  async update(id: string, data: Partial<ChatMetadata>): Promise<ChatMetadata | null> {
-    const chat = await this.findById(id);
-    if (!chat) return null;
-    const { userId: _, ...safeData } = data;
-    return this.baseRepo.update(id, safeData);
-  }
-
-  async delete(id: string): Promise<boolean> {
-    const chat = await this.findById(id);
-    if (!chat) return false;
-    return this.baseRepo.delete(id);
+    return this.filterByUser(chats);
   }
 
   async getMessages(chatId: string): Promise<ChatEvent[]> {
@@ -308,122 +260,23 @@ class UserScopedChatsRepository {
     if (!chat) throw new Error('Chat not found or access denied');
     return this.baseRepo.clearMessages(chatId);
   }
-
-  async addTag(chatId: string, tagId: string): Promise<ChatMetadata | null> {
-    const chat = await this.findById(chatId);
-    if (!chat) return null;
-    return this.baseRepo.addTag(chatId, tagId);
-  }
-
-  async removeTag(chatId: string, tagId: string): Promise<ChatMetadata | null> {
-    const chat = await this.findById(chatId);
-    if (!chat) return null;
-    return this.baseRepo.removeTag(chatId, tagId);
-  }
 }
 
 /**
  * User-scoped Tags Repository
  */
-class UserScopedTagsRepository {
-  constructor(
-    private readonly userId: string,
-    private readonly baseRepo: MongoTagsRepository
-  ) {}
-
-  async findAll(): Promise<Tag[]> {
-    return this.baseRepo.findByUserId(this.userId);
-  }
-
-  async findById(id: string): Promise<Tag | null> {
-    const tag = await this.baseRepo.findById(id);
-    if (!tag || tag.userId !== this.userId) {
-      return null;
-    }
-    return tag;
-  }
-
+class UserScopedTagsRepository extends UserScopedRepository<Tag, MongoTagsRepository> {
   async findByName(name: string): Promise<Tag | null> {
-    const tag = await this.baseRepo.findByName(this.userId, name);
-    return tag;
-  }
-
-  async create(data: Omit<Tag, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<Tag> {
-    return this.baseRepo.create({ ...data, userId: this.userId });
-  }
-
-  async update(id: string, data: Partial<Tag>): Promise<Tag | null> {
-    const tag = await this.findById(id);
-    if (!tag) return null;
-    const { userId: _, ...safeData } = data;
-    return this.baseRepo.update(id, safeData);
-  }
-
-  async delete(id: string): Promise<boolean> {
-    const tag = await this.findById(id);
-    if (!tag) return false;
-    return this.baseRepo.delete(id);
+    return this.baseRepo.findByName(this.userId, name);
   }
 }
 
 /**
  * User-scoped Connection Profiles Repository (includes API keys)
  */
-class UserScopedConnectionsRepository {
-  constructor(
-    private readonly userId: string,
-    private readonly baseRepo: ConnectionProfilesRepository
-  ) {}
-
-  // Connection Profiles
-  async findAll(): Promise<ConnectionProfile[]> {
-    return this.baseRepo.findByUserId(this.userId);
-  }
-
-  async findById(id: string): Promise<ConnectionProfile | null> {
-    const profile = await this.baseRepo.findById(id);
-    if (!profile || profile.userId !== this.userId) {
-      return null;
-    }
-    return profile;
-  }
-
+class UserScopedConnectionsRepository extends UserScopedTaggableRepository<ConnectionProfile, ConnectionProfilesRepository> {
   async findDefault(): Promise<ConnectionProfile | null> {
     return this.baseRepo.findDefault(this.userId);
-  }
-
-  async findByTag(tagId: string): Promise<ConnectionProfile[]> {
-    const profiles = await this.baseRepo.findByTag(tagId);
-    return profiles.filter(p => p.userId === this.userId);
-  }
-
-  async create(data: Omit<ConnectionProfile, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<ConnectionProfile> {
-    return this.baseRepo.create({ ...data, userId: this.userId });
-  }
-
-  async update(id: string, data: Partial<ConnectionProfile>): Promise<ConnectionProfile | null> {
-    const profile = await this.findById(id);
-    if (!profile) return null;
-    const { userId: _, ...safeData } = data;
-    return this.baseRepo.update(id, safeData);
-  }
-
-  async delete(id: string): Promise<boolean> {
-    const profile = await this.findById(id);
-    if (!profile) return false;
-    return this.baseRepo.delete(id);
-  }
-
-  async addTag(profileId: string, tagId: string): Promise<ConnectionProfile | null> {
-    const profile = await this.findById(profileId);
-    if (!profile) return null;
-    return this.baseRepo.addTag(profileId, tagId);
-  }
-
-  async removeTag(profileId: string, tagId: string): Promise<ConnectionProfile | null> {
-    const profile = await this.findById(profileId);
-    if (!profile) return null;
-    return this.baseRepo.removeTag(profileId, tagId);
   }
 
   // API Keys - all scoped to user
@@ -462,91 +315,24 @@ class UserScopedConnectionsRepository {
 /**
  * User-scoped Image Profiles Repository
  */
-class UserScopedImageProfilesRepository {
-  constructor(
-    private readonly userId: string,
-    private readonly baseRepo: MongoImageProfilesRepository
-  ) {}
-
-  async findAll(): Promise<ImageProfile[]> {
-    return this.baseRepo.findByUserId(this.userId);
-  }
-
-  async findById(id: string): Promise<ImageProfile | null> {
-    const profile = await this.baseRepo.findById(id);
-    if (!profile || profile.userId !== this.userId) {
-      return null;
-    }
-    return profile;
-  }
-
+class UserScopedImageProfilesRepository extends UserScopedRepository<ImageProfile, MongoImageProfilesRepository> {
   async findDefault(): Promise<ImageProfile | null> {
     return this.baseRepo.findDefault(this.userId);
-  }
-
-  async create(data: Omit<ImageProfile, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<ImageProfile> {
-    return this.baseRepo.create({ ...data, userId: this.userId });
-  }
-
-  async update(id: string, data: Partial<ImageProfile>): Promise<ImageProfile | null> {
-    const profile = await this.findById(id);
-    if (!profile) return null;
-    const { userId: _, ...safeData } = data;
-    return this.baseRepo.update(id, safeData);
-  }
-
-  async delete(id: string): Promise<boolean> {
-    const profile = await this.findById(id);
-    if (!profile) return false;
-    return this.baseRepo.delete(id);
   }
 }
 
 /**
  * User-scoped Embedding Profiles Repository
  */
-class UserScopedEmbeddingProfilesRepository {
-  constructor(
-    private readonly userId: string,
-    private readonly baseRepo: EmbeddingProfilesRepository
-  ) {}
-
-  async findAll(): Promise<EmbeddingProfile[]> {
-    return this.baseRepo.findByUserId(this.userId);
-  }
-
-  async findById(id: string): Promise<EmbeddingProfile | null> {
-    const profile = await this.baseRepo.findById(id);
-    if (!profile || profile.userId !== this.userId) {
-      return null;
-    }
-    return profile;
-  }
-
+class UserScopedEmbeddingProfilesRepository extends UserScopedRepository<EmbeddingProfile, EmbeddingProfilesRepository> {
   async findDefault(): Promise<EmbeddingProfile | null> {
     return this.baseRepo.findDefault(this.userId);
-  }
-
-  async create(data: Omit<EmbeddingProfile, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<EmbeddingProfile> {
-    return this.baseRepo.create({ ...data, userId: this.userId });
-  }
-
-  async update(id: string, data: Partial<EmbeddingProfile>): Promise<EmbeddingProfile | null> {
-    const profile = await this.findById(id);
-    if (!profile) return null;
-    const { userId: _, ...safeData } = data;
-    return this.baseRepo.update(id, safeData);
-  }
-
-  async delete(id: string): Promise<boolean> {
-    const profile = await this.findById(id);
-    if (!profile) return false;
-    return this.baseRepo.delete(id);
   }
 }
 
 /**
  * User-scoped Memories Repository
+ * Note: Uses charactersRepo for access control since memories belong to characters
  */
 class UserScopedMemoriesRepository {
   constructor(
@@ -556,7 +342,6 @@ class UserScopedMemoriesRepository {
   ) {}
 
   async findByCharacterId(characterId: string): Promise<Memory[]> {
-    // Verify user owns the character first
     const character = await this.charactersRepo.findById(characterId);
     if (!character) return [];
     return this.baseRepo.findByCharacterId(characterId);
@@ -565,14 +350,12 @@ class UserScopedMemoriesRepository {
   async findById(id: string): Promise<Memory | null> {
     const memory = await this.baseRepo.findById(id);
     if (!memory) return null;
-    // Verify user owns the character this memory belongs to
     const character = await this.charactersRepo.findById(memory.characterId);
     if (!character) return null;
     return memory;
   }
 
   async create(data: Omit<Memory, 'id' | 'createdAt' | 'updatedAt'>): Promise<Memory> {
-    // Verify user owns the character
     const character = await this.charactersRepo.findById(data.characterId);
     if (!character) throw new Error('Character not found or access denied');
     return this.baseRepo.create(data);
@@ -612,54 +395,20 @@ class UserScopedMemoriesRepository {
 /**
  * User-scoped Files Repository
  */
-class UserScopedFilesRepository {
-  constructor(
-    private readonly userId: string,
-    private readonly baseRepo: FilesRepository
-  ) {}
-
-  async findAll(): Promise<FileEntry[]> {
-    return this.baseRepo.findByUserId(this.userId);
-  }
-
-  async findById(id: string): Promise<FileEntry | null> {
-    const file = await this.baseRepo.findById(id);
-    if (!file || file.userId !== this.userId) {
-      return null;
-    }
-    return file;
-  }
-
+class UserScopedFilesRepository extends UserScopedTaggableRepository<FileEntry, FilesRepository> {
   async findBySha256(sha256: string): Promise<FileEntry[]> {
     const files = await this.baseRepo.findBySha256(sha256);
-    return files.filter(f => f.userId === this.userId);
+    return this.filterByUser(files);
   }
 
   async findByCategory(category: string): Promise<FileEntry[]> {
     const files = await this.baseRepo.findByCategory(category as any);
-    return files.filter(f => f.userId === this.userId);
+    return this.filterByUser(files);
   }
 
   async findByLinkedTo(entityId: string): Promise<FileEntry[]> {
     const files = await this.baseRepo.findByLinkedTo(entityId);
-    return files.filter(f => f.userId === this.userId);
-  }
-
-  async create(data: Omit<FileEntry, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<FileEntry> {
-    return this.baseRepo.create({ ...data, userId: this.userId });
-  }
-
-  async update(id: string, data: Partial<FileEntry>): Promise<FileEntry | null> {
-    const file = await this.findById(id);
-    if (!file) return null;
-    const { userId: _, ...safeData } = data;
-    return this.baseRepo.update(id, safeData);
-  }
-
-  async delete(id: string): Promise<boolean> {
-    const file = await this.findById(id);
-    if (!file) return false;
-    return this.baseRepo.delete(id);
+    return this.filterByUser(files);
   }
 
   async addLink(fileId: string, entityId: string): Promise<FileEntry | null> {
@@ -673,19 +422,11 @@ class UserScopedFilesRepository {
     if (!file) return null;
     return this.baseRepo.removeLink(fileId, entityId);
   }
-
-  async addTag(fileId: string, tagId: string): Promise<FileEntry | null> {
-    const file = await this.findById(fileId);
-    if (!file) return null;
-    return this.baseRepo.addTag(fileId, tagId);
-  }
-
-  async removeTag(fileId: string, tagId: string): Promise<FileEntry | null> {
-    const file = await this.findById(fileId);
-    if (!file) return null;
-    return this.baseRepo.removeTag(fileId, tagId);
-  }
 }
+
+// ============================================================================
+// Container and Factory
+// ============================================================================
 
 /**
  * Container interface for user-scoped repositories
@@ -717,7 +458,6 @@ export interface UserScopedRepositoryContainer {
 
 /**
  * Cache for user-scoped repository containers
- * Key is userId, value is the container
  */
 const userRepoCache = new Map<string, UserScopedRepositoryContainer>();
 

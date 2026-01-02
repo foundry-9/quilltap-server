@@ -65,6 +65,23 @@ const attachmentSupport = {
 };
 
 /**
+ * Message format support for multi-character chats
+ * Anthropic does NOT support the name field in messages
+ */
+const messageFormat = {
+  supportsNameField: false,
+  supportedRoles: [] as ('user' | 'assistant')[],
+};
+
+/**
+ * Cheap model configuration for background tasks
+ */
+const cheapModels = {
+  defaultModel: 'claude-haiku-4-5-20251001',
+  recommendedModels: ['claude-haiku-4-5-20251001', 'claude-3-haiku-20240307'],
+};
+
+/**
  * The Anthropic Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
@@ -76,6 +93,13 @@ export const plugin: LLMProviderPlugin = {
   capabilities,
 
   attachmentSupport,
+
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: 'anthropic',
+  cheapModels,
+  defaultContextWindow: 200000,
 
   /**
    * Factory method to create an Anthropic LLM provider instance

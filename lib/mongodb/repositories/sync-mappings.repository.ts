@@ -6,7 +6,6 @@
  * to ensure consistent entity relationships across sync operations.
  */
 
-import { Collection } from 'mongodb';
 import { logger } from '@/lib/logger';
 import {
   SyncMapping,
@@ -14,65 +13,15 @@ import {
   CreateSyncMapping,
   SyncableEntityType,
 } from '@/lib/sync/types';
-import { getMongoDatabase } from '../client';
+import { MongoBaseRepository } from './base.repository';
 
 /**
  * MongoDB Sync Mappings Repository
  * Implements CRUD operations for permanent UUID mappings
  */
-export class SyncMappingsRepository {
-  private collectionName = 'sync_mappings';
-  private schema = SyncMappingSchema;
-
-  /**
-   * Get the MongoDB collection
-   */
-  private async getCollection(): Promise<Collection> {
-    const db = await getMongoDatabase();
-    const collection = db.collection(this.collectionName);
-
-    logger.debug('Retrieved MongoDB sync_mappings collection', {
-      collectionName: this.collectionName,
-    });
-
-    return collection;
-  }
-
-  /**
-   * Validate data against schema
-   */
-  private validate(data: unknown): SyncMapping {
-    return this.schema.parse(data) as SyncMapping;
-  }
-
-  /**
-   * Safely validate without throwing
-   */
-  private validateSafe(data: unknown): { success: boolean; data?: SyncMapping; error?: string } {
-    try {
-      const validated = this.validate(data);
-      return { success: true, data: validated };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Generate UUID v4
-   */
-  private generateId(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
-
-  /**
-   * Get current ISO timestamp
-   */
-  private getCurrentTimestamp(): string {
-    return new Date().toISOString();
+export class SyncMappingsRepository extends MongoBaseRepository<SyncMapping> {
+  constructor() {
+    super('sync_mappings', SyncMappingSchema);
   }
 
   /**

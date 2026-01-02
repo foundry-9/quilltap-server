@@ -4,9 +4,20 @@
  *
  * This module fetches and caches model pricing data from providers
  * to enable cost-aware model selection for background tasks.
+ *
+ * NOTE: Registered plugins can provide pricing via getModelInfo().
+ * The getModelPricingFromRegistry function queries the registry first,
+ * falling back to legacy pricing data for unknown providers.
+ *
+ * @see lib/llm/fallback-data.ts for legacy fallback pricing
  */
 
 import { Provider } from '@/lib/schemas/types'
+import { getModelPricing } from '@/lib/plugins/provider-registry'
+import {
+  LEGACY_FALLBACK_PRICING,
+  type LegacyModelPricing,
+} from './fallback-data'
 
 /**
  * Pricing information for a model (costs per 1M tokens)
@@ -53,251 +64,12 @@ export interface PricingCache {
 
 /**
  * Default/fallback pricing data for providers that don't expose pricing via API
- * Prices are per 1M tokens in USD (as of November 2025)
+ * Re-exported from fallback-data.ts for backward compatibility
+ *
+ * @deprecated Use getModelPricing() from provider-registry instead
  */
-export const FALLBACK_PRICING: Record<Provider, ModelPricing[]> = {
-  ANTHROPIC: [
-    // Claude 4.5 models
-    {
-      modelId: 'claude-sonnet-4-5-20250929',
-      provider: 'ANTHROPIC',
-      name: 'Claude 4.5 Sonnet',
-      promptCostPer1M: 3.0,
-      completionCostPer1M: 15.0,
-      contextLength: 200000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    {
-      modelId: 'claude-haiku-4-5-20251001',
-      provider: 'ANTHROPIC',
-      name: 'Claude 4.5 Haiku',
-      promptCostPer1M: 0.80,
-      completionCostPer1M: 4.0,
-      contextLength: 200000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    // Claude 4 models
-    {
-      modelId: 'claude-opus-4-1-20250805',
-      provider: 'ANTHROPIC',
-      name: 'Claude 4.1 Opus',
-      promptCostPer1M: 15.0,
-      completionCostPer1M: 75.0,
-      contextLength: 200000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    {
-      modelId: 'claude-sonnet-4-20250514',
-      provider: 'ANTHROPIC',
-      name: 'Claude 4 Sonnet',
-      promptCostPer1M: 3.0,
-      completionCostPer1M: 15.0,
-      contextLength: 200000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    {
-      modelId: 'claude-opus-4-20250514',
-      provider: 'ANTHROPIC',
-      name: 'Claude 4 Opus',
-      promptCostPer1M: 15.0,
-      completionCostPer1M: 75.0,
-      contextLength: 200000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    // Claude 3 legacy
-    {
-      modelId: 'claude-3-opus-20240229',
-      provider: 'ANTHROPIC',
-      name: 'Claude 3 Opus',
-      promptCostPer1M: 15.0,
-      completionCostPer1M: 75.0,
-      contextLength: 200000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    {
-      modelId: 'claude-3-haiku-20240307',
-      provider: 'ANTHROPIC',
-      name: 'Claude 3 Haiku',
-      promptCostPer1M: 0.25,
-      completionCostPer1M: 1.25,
-      contextLength: 200000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-  ],
-
-  OPENAI: [
-    // GPT-4o models
-    {
-      modelId: 'gpt-4o',
-      provider: 'OPENAI',
-      name: 'GPT-4o',
-      promptCostPer1M: 2.50,
-      completionCostPer1M: 10.0,
-      contextLength: 128000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    {
-      modelId: 'gpt-4o-mini',
-      provider: 'OPENAI',
-      name: 'GPT-4o Mini',
-      promptCostPer1M: 0.15,
-      completionCostPer1M: 0.60,
-      contextLength: 128000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    // o1 reasoning models
-    {
-      modelId: 'o1',
-      provider: 'OPENAI',
-      name: 'o1',
-      promptCostPer1M: 15.0,
-      completionCostPer1M: 60.0,
-      contextLength: 200000,
-      supportsVision: true,
-      supportsTools: false,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    {
-      modelId: 'o1-mini',
-      provider: 'OPENAI',
-      name: 'o1-mini',
-      promptCostPer1M: 3.0,
-      completionCostPer1M: 12.0,
-      contextLength: 128000,
-      supportsVision: false,
-      supportsTools: false,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    // GPT-3.5 (legacy but cheap)
-    {
-      modelId: 'gpt-3.5-turbo',
-      provider: 'OPENAI',
-      name: 'GPT-3.5 Turbo',
-      promptCostPer1M: 0.50,
-      completionCostPer1M: 1.50,
-      contextLength: 16385,
-      supportsVision: false,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-  ],
-
-  GOOGLE: [
-    // Gemini 2.0 models
-    {
-      modelId: 'gemini-2.0-flash',
-      provider: 'GOOGLE',
-      name: 'Gemini 2.0 Flash',
-      promptCostPer1M: 0.075,
-      completionCostPer1M: 0.30,
-      contextLength: 1000000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    {
-      modelId: 'gemini-2.0-pro',
-      provider: 'GOOGLE',
-      name: 'Gemini 2.0 Pro',
-      promptCostPer1M: 1.25,
-      completionCostPer1M: 5.0,
-      contextLength: 1000000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    // Gemini 1.5 models
-    {
-      modelId: 'gemini-1.5-flash',
-      provider: 'GOOGLE',
-      name: 'Gemini 1.5 Flash',
-      promptCostPer1M: 0.075,
-      completionCostPer1M: 0.30,
-      contextLength: 1000000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    {
-      modelId: 'gemini-1.5-pro',
-      provider: 'GOOGLE',
-      name: 'Gemini 1.5 Pro',
-      promptCostPer1M: 1.25,
-      completionCostPer1M: 5.0,
-      contextLength: 1000000,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-  ],
-
-  GROK: [
-    {
-      modelId: 'grok-2',
-      provider: 'GROK',
-      name: 'Grok-2',
-      promptCostPer1M: 2.0,
-      completionCostPer1M: 10.0,
-      contextLength: 131072,
-      supportsVision: true,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-    {
-      modelId: 'grok-2-mini',
-      provider: 'GROK',
-      name: 'Grok-2 Mini',
-      promptCostPer1M: 0.30,
-      completionCostPer1M: 0.50,
-      contextLength: 131072,
-      supportsVision: false,
-      supportsTools: true,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-  ],
-
-  // OpenRouter fetches from API, these are fallbacks
-  OPENROUTER: [],
-
-  // Ollama is local/free
-  OLLAMA: [],
-
-  // OpenAI Compatible uses same pricing structure as source
-  OPENAI_COMPATIBLE: [],
-
-  // Gab AI
-  GAB_AI: [
-    {
-      modelId: 'gab-ai-chat',
-      provider: 'GAB_AI',
-      name: 'Gab AI Chat',
-      promptCostPer1M: 0,
-      completionCostPer1M: 0,
-      contextLength: 32000,
-      supportsVision: false,
-      supportsTools: false,
-      fetchedAt: '2025-11-01T00:00:00Z',
-    },
-  ],
-}
+export const FALLBACK_PRICING: Record<Provider, ModelPricing[]> =
+  LEGACY_FALLBACK_PRICING as Record<Provider, ModelPricing[]>
 
 /**
  * Calculate the average cost per 1M tokens for a model
@@ -403,4 +175,47 @@ export function calculateSavings(
 
   if (expensiveCost === 0) return 0
   return ((expensiveCost - cheaperCost) / expensiveCost) * 100
+}
+
+/**
+ * Get model pricing from the provider registry
+ * First checks plugin's getModelInfo(), then falls back to FALLBACK_PRICING
+ *
+ * @param provider The provider name
+ * @param modelId The model identifier
+ * @returns ModelPricing object or null if not found
+ */
+export function getModelPricingFromRegistry(
+  provider: Provider,
+  modelId: string
+): ModelPricing | null {
+  // First try the plugin registry
+  const registryPricing = getModelPricing(provider, modelId)
+  if (registryPricing) {
+    return {
+      modelId,
+      provider,
+      name: modelId, // Plugin doesn't provide display name in pricing
+      promptCostPer1M: registryPricing.input,
+      completionCostPer1M: registryPricing.output,
+      contextLength: null, // Would need to query separately
+      fetchedAt: new Date().toISOString(),
+    }
+  }
+
+  // Fall back to FALLBACK_PRICING
+  const providerPricing = FALLBACK_PRICING[provider]
+  if (providerPricing) {
+    const modelPricing = providerPricing.find(
+      (m: ModelPricing) =>
+        m.modelId === modelId ||
+        m.modelId.includes(modelId) ||
+        modelId.includes(m.modelId)
+    )
+    if (modelPricing) {
+      return modelPricing
+    }
+  }
+
+  return null
 }

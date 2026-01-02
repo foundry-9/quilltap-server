@@ -4,8 +4,8 @@
  * POST /api/keys/import/preview - Preview keys in an import file
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { getUserRepositories } from '@/lib/repositories/factory'
 import { decryptWithPassphrase, verifySignature, maskApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
@@ -66,13 +66,8 @@ interface PreviewResponse {
  *   passphrase: string
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const body = await req.json()
     const { file, passphrase } = body
 
@@ -119,7 +114,7 @@ export async function POST(req: NextRequest) {
 
     logger.debug('Starting import preview', {
       context: 'keys-import-preview-POST',
-      userId: session.user.id,
+      userId: user.id,
       fileKeyCount: importFile.keyCount,
     })
 
@@ -132,13 +127,13 @@ export async function POST(req: NextRequest) {
     const signatureValid = verifySignature(
       payloadJson,
       importFile.signature,
-      session.user.id
+      user.id
     )
 
     if (!signatureValid) {
       logger.warn('Import file signature verification failed', {
         context: 'keys-import-preview-POST',
-        userId: session.user.id,
+        userId: user.id,
       })
     }
 
@@ -174,7 +169,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get existing keys to check for duplicates
-    const repos = getUserRepositories(session.user.id)
+    const repos = getUserRepositories(user.id)
     const existingKeys = await repos.connections.getAllApiKeys()
 
     // Build preview response
@@ -202,7 +197,7 @@ export async function POST(req: NextRequest) {
 
     logger.info('Import preview completed', {
       context: 'keys-import-preview-POST',
-      userId: session.user.id,
+      userId: user.id,
       keyCount: previewKeys.length,
       duplicateCount,
       signatureValid,
@@ -226,4 +221,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

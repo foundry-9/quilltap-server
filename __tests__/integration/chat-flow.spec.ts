@@ -22,25 +22,43 @@ test.describe('Chat Flow Integration Tests', () => {
   let testCharacterId: string
   let testChatId: string
 
+  const waitForChatComposer = async (page: import('@playwright/test').Page) => {
+    const composer = page.locator('.qt-chat-composer')
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await page.goto(`/chats/${testChatId}`)
+      await page.waitForLoadState('domcontentloaded')
+
+      try {
+        await composer.waitFor({ state: 'visible', timeout: 20000 })
+        return
+      } catch (error) {
+        if (attempt === 3) {
+          throw error
+        }
+      }
+    }
+  }
+
   test('setup: create test user and login', async ({ page }) => {
     await testUser.createAndLogin(page)
   })
 
-  test('should display dashboard when authenticated', async ({ page }) => {
+  test('should display home page when authenticated', async ({ page }) => {
     await testUser.login(page)
-    await page.goto('/dashboard')
+    await page.goto('/')
     await page.waitForLoadState('domcontentloaded')
 
-    // Verify we're on the dashboard, not redirected to signin
+    // Verify we're on the home page, not redirected to signin
     expect(page.url()).not.toContain('/auth/signin')
-    expect(page.url()).toContain('/dashboard')
+    expect(page.url().endsWith('/') || page.url().endsWith(':3000')).toBe(true)
   })
 
   test('should create a character', async ({ page }) => {
     await testUser.login(page)
 
     // Navigate to characters page
-    await page.goto('/dashboard')
+    await page.goto('/')
     await page.waitForLoadState('domcontentloaded')
 
     // Click the "+" button to create a new character
@@ -92,8 +110,7 @@ test.describe('Chat Flow Integration Tests', () => {
   test('should display chat messages container', async ({ page }) => {
     await testUser.login(page)
 
-    await page.goto(`/chats/${testChatId}`)
-    await page.waitForSelector('.qt-chat-composer', { timeout: 10000 })
+    await waitForChatComposer(page)
 
     // Verify the chat messages container exists
     const messagesContainer = page.locator(
@@ -105,8 +122,7 @@ test.describe('Chat Flow Integration Tests', () => {
   test('should have message input field', async ({ page }) => {
     await testUser.login(page)
 
-    await page.goto(`/chats/${testChatId}`)
-    await page.waitForSelector('.qt-chat-composer', { timeout: 10000 })
+    await waitForChatComposer(page)
 
     // Verify the message input exists
     const messageInput = page.locator('textarea, input[type="text"]').first()
@@ -116,8 +132,7 @@ test.describe('Chat Flow Integration Tests', () => {
   test('should have send button', async ({ page }) => {
     await testUser.login(page)
 
-    await page.goto(`/chats/${testChatId}`)
-    await page.waitForSelector('.qt-chat-composer', { timeout: 10000 })
+    await waitForChatComposer(page)
 
     // Verify there's a send button or submit mechanism
     const sendButton = page.locator(

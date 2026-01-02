@@ -32,7 +32,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   }
 
   // Get user's chat settings for cheap LLM config
-  const chatSettings = await repos.users.getChatSettings(job.userId);
+  const chatSettings = await repos.chatSettings.findByUserId(job.userId);
   if (!chatSettings) {
     throw new Error(`Chat settings not found for user: ${job.userId}`);
   }

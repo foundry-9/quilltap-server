@@ -5,9 +5,8 @@
  * POST /api/profiles/test-connection - Test if connection settings are valid
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { decryptApiKey } from '@/lib/encryption'
 import { ProviderEnum } from '@/lib/schemas/types'
 import { testProviderConnection, validateProviderConfig } from '@/lib/plugins/provider-validation'
@@ -31,19 +30,8 @@ const testConnectionSchema = z.object({
  *   baseUrl?: string
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      logger.warn('Unauthorized access attempt to test-connection endpoint', {
-        context: 'POST /api/profiles/test-connection',
-      })
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     logger.debug('Testing provider connection', {
       context: 'POST /api/profiles/test-connection',
     })
@@ -58,8 +46,6 @@ export async function POST(req: NextRequest) {
       hasBaseUrl: !!baseUrl,
       context: 'POST /api/profiles/test-connection',
     })
-
-    const repos = getRepositories()
 
     // Get API key if provided
     let decryptedKey = ''
@@ -81,7 +67,7 @@ export async function POST(req: NextRequest) {
         apiKey.ciphertext,
         apiKey.iv,
         apiKey.authTag,
-        session.user.id
+        user.id
       )
     }
 
@@ -165,4 +151,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

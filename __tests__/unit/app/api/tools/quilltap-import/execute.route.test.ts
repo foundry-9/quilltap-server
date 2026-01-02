@@ -6,10 +6,19 @@
 import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
 import { NextRequest } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
+import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories';
+
+// Create mock repos before jest.mock
+const mockRepos = createMockRepositoryContainer();
 
 // Mock dependencies
 jest.mock('@/lib/auth/session', () => ({
   getServerSession: jest.fn(),
+}));
+
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: jest.fn(() => mockRepos),
+  getUserRepositories: jest.fn(),
 }));
 
 jest.mock('@/lib/import/quilltap-import-service', () => ({
@@ -51,10 +60,8 @@ describe('Quilltap Import Execute API Route', () => {
       POST = routesModule.POST;
     });
 
-    // Default authenticated session
-    mockGetServerSession.mockResolvedValue({
-      user: { id: 'user-123', email: 'test@example.com' },
-    } as any);
+    // Setup auth mocks
+    setupAuthMocks(mockGetServerSession, mockRepos);
   });
 
   afterEach(() => {

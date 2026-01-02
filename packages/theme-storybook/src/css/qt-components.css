@@ -1,0 +1,826 @@
+/**
+ * Quilltap Component Classes
+ *
+ * This file contains the qt-* component classes used by Quilltap.
+ * Theme plugins can override these by targeting component variables
+ * or using [data-theme="your-theme"] selectors.
+ *
+ * @package @quilltap/theme-storybook
+ */
+
+/* ==========================================================================
+   COMPONENT VARIABLES
+   ========================================================================== */
+
+:root {
+  /* Button variables */
+  --qt-button-radius: var(--radius-lg);
+  --qt-button-padding-x: 1rem;
+  --qt-button-padding-y: 0.5rem;
+  --qt-button-font-size: 0.875rem;
+  --qt-button-font-weight: 500;
+  --qt-button-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --qt-button-primary-bg: var(--color-primary);
+  --qt-button-primary-fg: var(--color-primary-foreground);
+  --qt-button-primary-hover-bg: color-mix(in srgb, var(--color-primary) 90%, black);
+
+  --qt-button-secondary-bg: var(--color-secondary);
+  --qt-button-secondary-fg: var(--color-secondary-foreground);
+  --qt-button-secondary-border: var(--color-border);
+  --qt-button-secondary-hover-bg: color-mix(in srgb, var(--color-secondary) 80%, black);
+
+  --qt-button-ghost-bg: transparent;
+  --qt-button-ghost-fg: var(--color-foreground);
+  --qt-button-ghost-hover-bg: var(--color-muted);
+
+  --qt-button-destructive-bg: var(--color-destructive);
+  --qt-button-destructive-fg: var(--color-destructive-foreground);
+  --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 90%, black);
+
+  --qt-button-success-bg: var(--color-success);
+  --qt-button-success-fg: hsl(0 0% 10%); /* Dark text for contrast on bright green */
+  --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
+
+  /* Card variables */
+  --qt-card-radius: var(--radius-lg);
+  --qt-card-padding: 1.5rem;
+  --qt-card-bg: var(--color-card);
+  --qt-card-fg: var(--color-card-foreground);
+  --qt-card-border: var(--color-border);
+  --qt-card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --qt-card-shadow-hover: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --qt-card-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Input variables */
+  --qt-input-radius: var(--radius-md);
+  --qt-input-padding-x: 0.75rem;
+  --qt-input-padding-y: 0.5rem;
+  --qt-input-bg: var(--color-background);
+  --qt-input-fg: var(--color-foreground);
+  --qt-input-border: var(--color-input);
+  --qt-input-placeholder: var(--color-muted-foreground);
+  --qt-input-focus-ring: var(--color-ring);
+
+  /* Badge variables */
+  --qt-badge-radius: 9999px;
+  --qt-badge-padding-x: 0.75rem;
+  --qt-badge-padding-y: 0.25rem;
+  --qt-badge-font-size: 0.875rem;
+  --qt-badge-font-weight: 600;
+
+  /* Avatar variables */
+  --qt-avatar-radius: 9999px;
+  --qt-avatar-size: 2.5rem;
+  --qt-avatar-size-sm: 2rem;
+  --qt-avatar-size-lg: 3rem;
+  --qt-avatar-size-xl: 4rem;
+  --qt-avatar-bg: var(--color-muted);
+  --qt-avatar-fg: var(--color-muted-foreground);
+  --qt-avatar-name-fg: var(--color-foreground);
+  --qt-avatar-title-fg: var(--color-muted-foreground);
+
+  /* Dialog variables */
+  --qt-dialog-radius: var(--radius-lg);
+  --qt-dialog-bg: var(--color-background);
+  --qt-dialog-border: var(--color-border);
+  --qt-dialog-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  --qt-dialog-backdrop: rgb(0 0 0 / 0.5);
+
+  /* Tab variables */
+  --qt-tab-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  --qt-tab-padding-x: 1rem;
+  --qt-tab-padding-y: 0.625rem;
+  --qt-tab-font-size: 0.875rem;
+  --qt-tab-font-weight: 500;
+  --qt-tab-bg: var(--color-muted);
+  --qt-tab-fg: var(--color-muted-foreground);
+  --qt-tab-active-bg: var(--color-card);
+  --qt-tab-active-fg: var(--color-primary);
+
+  /* Chat variables */
+  --qt-chat-message-radius: var(--radius-lg);
+  --qt-chat-message-padding: 1rem;
+  --qt-chat-user-bg: var(--color-chat-user);
+  --qt-chat-user-fg: var(--color-chat-user-foreground);
+  --qt-chat-assistant-bg: var(--color-muted);
+  --qt-chat-assistant-fg: var(--color-foreground);
+}
+
+/* ==========================================================================
+   BUTTON COMPONENTS
+   ========================================================================== */
+
+.qt-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: var(--qt-button-padding-y) var(--qt-button-padding-x);
+  border-radius: var(--qt-button-radius);
+  font-size: var(--qt-button-font-size);
+  font-weight: var(--qt-button-font-weight);
+  line-height: 1.25;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: var(--qt-button-transition);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.qt-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qt-button-primary {
+  background-color: var(--qt-button-primary-bg);
+  color: var(--qt-button-primary-fg);
+}
+
+.qt-button-primary:hover:not(:disabled) {
+  background-color: var(--qt-button-primary-hover-bg);
+}
+
+.qt-button-secondary {
+  background-color: var(--qt-button-secondary-bg);
+  color: var(--qt-button-secondary-fg);
+  border-color: var(--qt-button-secondary-border);
+}
+
+.qt-button-secondary:hover:not(:disabled) {
+  background-color: var(--qt-button-secondary-hover-bg);
+}
+
+.qt-button-ghost {
+  background-color: var(--qt-button-ghost-bg);
+  color: var(--qt-button-ghost-fg);
+}
+
+.qt-button-ghost:hover:not(:disabled) {
+  background-color: var(--qt-button-ghost-hover-bg);
+}
+
+.qt-button-destructive {
+  background-color: var(--qt-button-destructive-bg);
+  color: var(--qt-button-destructive-fg);
+}
+
+.qt-button-destructive:hover:not(:disabled) {
+  background-color: var(--qt-button-destructive-hover-bg);
+}
+
+.qt-button-success {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition: all 150ms;
+  cursor: pointer;
+  background-color: var(--qt-button-success-bg);
+  color: var(--qt-button-success-fg);
+}
+
+.qt-button-success:hover:not(:disabled) {
+  background-color: var(--qt-button-success-hover-bg);
+}
+
+.qt-button-sm {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+.qt-button-lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+}
+
+.qt-button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border-radius: var(--qt-button-radius);
+  background-color: transparent;
+  color: var(--color-foreground);
+  border: none;
+  cursor: pointer;
+  transition: var(--qt-button-transition);
+}
+
+.qt-button-icon:hover {
+  background-color: var(--color-muted);
+}
+
+/* ==========================================================================
+   CARD COMPONENTS
+   ========================================================================== */
+
+.qt-card {
+  background-color: var(--qt-card-bg);
+  color: var(--qt-card-fg);
+  border: 1px solid var(--qt-card-border);
+  border-radius: var(--qt-card-radius);
+  box-shadow: var(--qt-card-shadow);
+  transition: var(--qt-card-transition);
+}
+
+.qt-card-interactive:hover {
+  box-shadow: var(--qt-card-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.qt-card-header {
+  padding: var(--qt-card-padding);
+  padding-bottom: 0;
+}
+
+.qt-card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.qt-card-description {
+  font-size: 0.875rem;
+  color: var(--color-muted-foreground);
+  margin-top: 0.25rem;
+}
+
+.qt-card-body {
+  padding: var(--qt-card-padding);
+}
+
+.qt-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: var(--qt-card-padding);
+  padding-top: 0;
+}
+
+.qt-entity-card {
+  background-color: var(--qt-card-bg);
+  border: 1px solid var(--qt-card-border);
+  border-radius: calc(var(--qt-card-radius) * 1.25);
+  transition: var(--qt-card-transition);
+  cursor: pointer;
+}
+
+.qt-entity-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--qt-card-shadow-hover);
+}
+
+.qt-panel {
+  background-color: var(--qt-card-bg);
+  border: 1px solid var(--qt-card-border);
+  border-radius: var(--qt-card-radius);
+}
+
+.qt-panel-elevated {
+  box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1);
+}
+
+/* ==========================================================================
+   INPUT COMPONENTS
+   ========================================================================== */
+
+.qt-input {
+  width: 100%;
+  padding: var(--qt-input-padding-y) var(--qt-input-padding-x);
+  background-color: var(--qt-input-bg);
+  color: var(--qt-input-fg);
+  border: 1px solid var(--qt-input-border);
+  border-radius: var(--qt-input-radius);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+
+.qt-input::placeholder {
+  color: var(--qt-input-placeholder);
+}
+
+.qt-input:focus {
+  outline: none;
+  border-color: var(--qt-input-focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--qt-input-focus-ring) 25%, transparent);
+}
+
+.qt-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qt-textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.qt-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  padding-right: 2.5rem;
+}
+
+/* ==========================================================================
+   BADGE COMPONENTS
+   ========================================================================== */
+
+.qt-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
+  border-radius: var(--qt-badge-radius);
+  font-size: var(--qt-badge-font-size);
+  font-weight: var(--qt-badge-font-weight);
+  line-height: 1;
+}
+
+.qt-badge-primary {
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+.qt-badge-secondary {
+  background-color: var(--color-secondary);
+  color: var(--color-secondary-foreground);
+}
+
+.qt-badge-success {
+  background-color: var(--color-success);
+  color: var(--color-success-foreground);
+}
+
+.qt-badge-warning {
+  background-color: var(--color-warning);
+  color: var(--color-warning-foreground);
+}
+
+.qt-badge-destructive {
+  background-color: var(--color-destructive);
+  color: var(--color-destructive-foreground);
+}
+
+.qt-badge-outline {
+  background-color: transparent;
+  color: var(--color-foreground);
+  border: 1px solid var(--color-border);
+}
+
+/* ==========================================================================
+   AVATAR COMPONENTS
+   ========================================================================== */
+
+.qt-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--qt-avatar-size);
+  height: var(--qt-avatar-size);
+  border-radius: var(--qt-avatar-radius);
+  background-color: var(--qt-avatar-bg);
+  color: var(--qt-avatar-fg);
+  font-weight: 500;
+  overflow: hidden;
+}
+
+.qt-avatar-sm {
+  width: var(--qt-avatar-size-sm);
+  height: var(--qt-avatar-size-sm);
+  font-size: 0.75rem;
+}
+
+.qt-avatar-lg {
+  width: var(--qt-avatar-size-lg);
+  height: var(--qt-avatar-size-lg);
+  font-size: 1rem;
+}
+
+.qt-avatar-xl {
+  width: var(--qt-avatar-size-xl);
+  height: var(--qt-avatar-size-xl);
+  font-size: 1.25rem;
+}
+
+.qt-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.qt-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.qt-avatar-labels {
+  text-align: center;
+  margin-top: 0.25rem;
+}
+
+.qt-avatar-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--qt-avatar-name-fg);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.qt-avatar-title {
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--qt-avatar-title-fg);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ==========================================================================
+   DIALOG COMPONENTS
+   ========================================================================== */
+
+.qt-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: var(--qt-dialog-backdrop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.qt-dialog {
+  background-color: var(--qt-dialog-bg);
+  border: 1px solid var(--qt-dialog-border);
+  border-radius: var(--qt-dialog-radius);
+  box-shadow: var(--qt-dialog-shadow);
+  max-width: 32rem;
+  width: 100%;
+  max-height: 85vh;
+  overflow: auto;
+}
+
+.qt-dialog-header {
+  padding: 1.5rem;
+  padding-bottom: 0;
+}
+
+.qt-dialog-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.qt-dialog-description {
+  font-size: 0.875rem;
+  color: var(--color-muted-foreground);
+  margin-top: 0.5rem;
+}
+
+.qt-dialog-body {
+  padding: 1.5rem;
+}
+
+.qt-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  padding-top: 0;
+}
+
+/* ==========================================================================
+   TAB COMPONENTS
+   ========================================================================== */
+
+.qt-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.qt-tab {
+  padding: var(--qt-tab-padding-y) var(--qt-tab-padding-x);
+  font-size: var(--qt-tab-font-size);
+  font-weight: var(--qt-tab-font-weight);
+  color: var(--qt-tab-fg);
+  background-color: var(--qt-tab-bg);
+  border: none;
+  border-radius: var(--qt-tab-radius);
+  cursor: pointer;
+  transition: all 150ms;
+}
+
+.qt-tab:hover {
+  color: var(--color-foreground);
+}
+
+.qt-tab-active {
+  background-color: var(--qt-tab-active-bg);
+  color: var(--qt-tab-active-fg);
+}
+
+.qt-tab-content {
+  padding: 1rem 0;
+}
+
+/* ==========================================================================
+   CHAT COMPONENTS
+   ========================================================================== */
+
+.qt-chat-message {
+  padding: var(--qt-chat-message-padding);
+  border-radius: var(--qt-chat-message-radius);
+  max-width: 80%;
+}
+
+.qt-chat-message-user {
+  background-color: var(--qt-chat-user-bg);
+  color: var(--qt-chat-user-fg);
+  margin-left: auto;
+}
+
+.qt-chat-message-assistant {
+  background-color: var(--qt-chat-assistant-bg);
+  color: var(--qt-chat-assistant-fg);
+  border: 1px solid var(--color-border);
+}
+
+.qt-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding: 1rem;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.qt-chat-composer-input {
+  flex: 1;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  background-color: transparent;
+  border: none;
+  resize: none;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-foreground);
+}
+
+.qt-chat-composer-input:focus {
+  outline: none;
+}
+
+.qt-chat-composer-input::placeholder {
+  color: var(--color-muted-foreground);
+}
+
+/* ==========================================================================
+   UTILITY CLASSES
+   ========================================================================== */
+
+.qt-text-primary {
+  color: var(--color-foreground);
+}
+
+.qt-text-secondary {
+  color: var(--color-muted-foreground);
+}
+
+.qt-text-muted {
+  color: var(--color-muted-foreground);
+}
+
+.qt-bg-primary {
+  background-color: var(--color-background);
+}
+
+.qt-bg-secondary {
+  background-color: var(--color-muted);
+}
+
+.qt-bg-card {
+  background-color: var(--color-card);
+}
+
+.qt-border {
+  border-color: var(--color-border);
+}
+
+/* ==========================================================================
+   LEFT SIDEBAR COMPONENTS
+   ========================================================================== */
+
+.qt-left-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-right: 1px solid var(--qt-left-sidebar-border);
+  width: var(--qt-left-sidebar-width);
+  background: var(--qt-left-sidebar-bg);
+  transition: var(--qt-left-sidebar-transition);
+  z-index: var(--qt-left-sidebar-z);
+}
+
+.qt-left-sidebar-collapsed {
+  width: var(--qt-left-sidebar-collapsed-width);
+}
+
+.qt-left-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--qt-left-sidebar-border);
+  height: var(--qt-left-sidebar-header-height);
+  flex-shrink: 0;
+}
+
+.qt-left-sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.qt-left-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  padding: var(--qt-left-sidebar-section-padding);
+}
+
+.qt-left-sidebar-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+  padding: 0 0.5rem;
+  color: var(--qt-left-sidebar-section-title-fg);
+}
+
+.qt-left-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+
+.qt-left-sidebar-item:hover {
+  background-color: var(--color-muted);
+}
+
+.qt-left-sidebar-item-active {
+  background-color: var(--color-accent);
+  color: var(--color-primary);
+}
+
+.qt-left-sidebar-item-icon {
+  flex-shrink: 0;
+  width: var(--qt-left-sidebar-item-icon-size);
+  height: var(--qt-left-sidebar-item-icon-size);
+  color: var(--color-foreground);
+}
+
+.qt-left-sidebar-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-foreground);
+}
+
+.qt-left-sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-top: 1px solid var(--qt-left-sidebar-border);
+  padding: 0.75rem;
+  flex-shrink: 0;
+}
+
+.qt-left-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--qt-left-sidebar-overlay-bg);
+  z-index: var(--qt-left-sidebar-overlay-z);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 300ms ease, visibility 300ms ease;
+}
+
+.qt-left-sidebar-overlay-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ==========================================================================
+   APP LAYOUT COMPONENTS
+   ========================================================================== */
+
+.qt-app-layout {
+  display: flex;
+  height: 100vh;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+.qt-app-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.qt-app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--qt-app-header-border);
+  height: var(--qt-app-header-height);
+  background: var(--qt-app-header-bg);
+  backdrop-filter: var(--qt-app-header-blur);
+  -webkit-backdrop-filter: var(--qt-app-header-blur);
+  flex-shrink: 0;
+}
+
+.qt-app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.qt-app-header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 0 1rem;
+  max-width: 32rem;
+}
+
+.qt-app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.qt-hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--color-foreground);
+  transition: background-color 150ms;
+}
+
+.qt-hamburger:hover {
+  background-color: var(--color-muted);
+}
+
+@media (max-width: 767px) {
+  .qt-hamburger {
+    display: flex;
+  }
+
+  .qt-left-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+  }
+
+  .qt-left-sidebar-mobile-open {
+    transform: translateX(0);
+  }
+}

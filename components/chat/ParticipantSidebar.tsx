@@ -13,11 +13,10 @@
  * - Add character button (placeholder for Phase 6)
  */
 
-import { useMemo, useEffect } from 'react'
+import { useMemo } from 'react'
 import { ParticipantCard, type ParticipantData } from './ParticipantCard'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition } from '@/lib/chat/turn-manager'
-import { clientLogger } from '@/lib/client-logger'
 
 interface ParticipantSidebarProps {
   participants: ParticipantData[]
@@ -35,6 +34,11 @@ interface ParticipantSidebarProps {
   onTalkativenessChange?: (participantId: string, value: number) => void
   onAddCharacter?: () => void
   onRemoveCharacter?: (participantId: string) => void // Phase 6: Remove character from chat
+  // Impersonation support (Characters Not Personas)
+  impersonatingParticipantIds?: string[] // Participant IDs the user is impersonating
+  activeTypingParticipantId?: string | null // Which impersonated character is currently "active" for typing
+  onImpersonate?: (participantId: string) => void // Start impersonating a character
+  onStopImpersonate?: (participantId: string) => void // Stop impersonating a character
   className?: string
 }
 
@@ -54,20 +58,12 @@ export function ParticipantSidebar({
   onTalkativenessChange,
   onAddCharacter,
   onRemoveCharacter,
+  impersonatingParticipantIds = [],
+  activeTypingParticipantId,
+  onImpersonate,
+  onStopImpersonate,
   className = '',
 }: ParticipantSidebarProps) {
-  // Debug logging in useEffect to avoid setState during render
-  useEffect(() => {
-    clientLogger.debug('[ParticipantSidebar] Rendered', {
-      participantCount: participants.length,
-      queueLength: turnState.queue.length,
-      nextSpeakerId: turnSelectionResult?.nextSpeakerId,
-      respondingParticipantId,
-      isGenerating,
-      isPaused,
-    })
-  }, [participants.length, turnState.queue.length, turnSelectionResult?.nextSpeakerId, respondingParticipantId, isGenerating, isPaused])
-
   // Sort participants: personas first (the user), then characters by displayOrder
   const sortedParticipants = useMemo(() => {
     return [...participants]
@@ -101,6 +97,7 @@ export function ParticipantSidebar({
   const activeCharacterCount = useMemo(() => {
     return participants.filter(p => p.type === 'CHARACTER' && p.isActive).length
   }, [participants])
+
 
   // Include qt-desktop-only to hide sidebar on mobile (mobile uses inline participant controls in message header)
   const sidebarClasses = ['qt-chat-sidebar', 'qt-desktop-only']
@@ -189,10 +186,16 @@ export function ParticipantSidebar({
           const isUserParticipant = participant.id === userParticipantId
           const isCurrentTurn = currentSpeakerId === participant.id
           const queuePos = getQueuePosition(turnState, participant.id)
-          // Can remove if there's more than one active character
-          const canRemove = activeCharacterCount > 1
           // Can skip when it's the user's turn (nextSpeakerId is null means it's user's turn)
           const canSkip = turnSelectionResult?.nextSpeakerId === null && !isGenerating
+
+          // Check if this participant is being impersonated
+          const isImpersonating = impersonatingParticipantIds.includes(participant.id)
+          const isActiveTyping = activeTypingParticipantId === participant.id
+
+          // Can remove if there's more than one active character
+          // (all-LLM chats are supported with pause logic)
+          const canRemove = activeCharacterCount > 1
 
           return (
             <ParticipantCard
@@ -210,6 +213,10 @@ export function ParticipantSidebar({
               onRemove={onRemoveCharacter}
               canRemove={canRemove}
               canSkip={canSkip}
+              isImpersonating={isImpersonating}
+              isActiveTyping={isActiveTyping}
+              onImpersonate={onImpersonate}
+              onStopImpersonate={onStopImpersonate}
             />
           )
         })}

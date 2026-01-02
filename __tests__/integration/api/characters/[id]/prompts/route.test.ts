@@ -4,13 +4,13 @@ jest.mock('@/lib/auth/session', () => ({
   getServerSession: jest.fn(),
 }))
 
-jest.mock('@/lib/mongodb/repositories', () => ({
+jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
 type RouteModule = typeof import('@/app/api/characters/[id]/prompts/route')
 type SessionModule = typeof import('@/lib/auth/session')
-type RepositoriesModule = typeof import('@/lib/mongodb/repositories')
+type RepositoriesModule = typeof import('@/lib/repositories/factory')
 
 let GET: RouteModule['GET']
 let POST: RouteModule['POST']
@@ -30,7 +30,7 @@ describe('Character System Prompts API', () => {
     const sessionModule = await import('@/lib/auth/session')
     mockGetServerSession = sessionModule.getServerSession as jest.MockedFunction<SessionModule['getServerSession']>
 
-    const reposModule = await import('@/lib/mongodb/repositories')
+    const reposModule = await import('@/lib/repositories/factory')
     mockGetRepositories = reposModule.getRepositories as jest.MockedFunction<RepositoriesModule['getRepositories']>
   })
 
@@ -48,6 +48,9 @@ describe('Character System Prompts API', () => {
     ]
 
     mockGetRepositories.mockReturnValue({
+      users: {
+        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
+      },
       characters: {
         findById: jest.fn().mockResolvedValue({
           id: 'char-1',
@@ -71,7 +74,12 @@ describe('Character System Prompts API', () => {
       userId: 'user-2',
       systemPrompts: [],
     })
-    mockGetRepositories.mockReturnValue({ characters: { findById } } as any)
+    mockGetRepositories.mockReturnValue({
+      users: {
+        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
+      },
+      characters: { findById },
+    } as any)
 
     const response = await GET(new Request('http://test.local/api/characters/char-1/prompts'), buildContext())
     expect(response.status).toBe(403)
@@ -90,6 +98,9 @@ describe('Character System Prompts API', () => {
     })
 
     mockGetRepositories.mockReturnValue({
+      users: {
+        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
+      },
       characters: {
         findById: jest.fn().mockResolvedValue({
           id: 'char-1',
@@ -124,6 +135,9 @@ describe('Character System Prompts API', () => {
   it('returns 400 for invalid prompt payloads', async () => {
     mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } } as any)
     mockGetRepositories.mockReturnValue({
+      users: {
+        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
+      },
       characters: {
         findById: jest.fn(),
         addSystemPrompt: jest.fn(),
@@ -142,6 +156,7 @@ describe('Character System Prompts API', () => {
     const response = await POST(request, buildContext())
     expect(response.status).toBe(400)
     const body = await response.json()
-    expect(Array.isArray(body.error)).toBe(true)
+    expect(body.error).toBe('Validation error')
+    expect(Array.isArray(body.details)).toBe(true)
   })
 })

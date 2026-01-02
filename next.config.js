@@ -3,6 +3,11 @@ const nextConfig = {
   // Standalone output for Docker deployments
   output: 'standalone',
 
+  // Dev indicator position (bottom-right instead of default bottom-left)
+  devIndicators: {
+    position: 'bottom-right',
+  },
+
   // External packages that the main app needs at runtime
   // NOTE: LLM provider SDKs are now bundled INTO plugin output files, so they
   // don't need to be listed here. Only packages used directly by the main app
@@ -109,6 +114,18 @@ const nextConfig = {
         });
       }
     }
+
+    // Suppress warnings about dynamic requires in plugin loading code
+    // These are intentional - plugins are loaded at runtime using require()
+    config.ignoreWarnings = config.ignoreWarnings || [];
+    config.ignoreWarnings.push({
+      module: /lib\/startup\/plugin-initialization\.ts/,
+      message: /Can't resolve/,
+    });
+    config.ignoreWarnings.push({
+      module: /lib\/themes\/theme-registry\.ts/,
+      message: /Can't resolve/,
+    });
 
     // Production optimizations
     if (process.env.NODE_ENV === 'production') {

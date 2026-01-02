@@ -31,14 +31,15 @@ This plan covers the implementation of a Quilltap-native import/export system, e
 
 ### Supported Entity Types
 
-1. **Characters** - with optional memories, includes: system prompts, physical descriptions, tags, persona links, avatar overrides
-2. **Personas** - with optional memories (if persona-tagged), includes: tags, character links, physical descriptions
-3. **Chats** - with optional memories (chat-tagged), includes: messages, participants (references), tags
-4. **Roleplay Templates** - user-created templates only
-5. **Connection Profiles** - LLM connection configurations (API keys are NOT exported for security)
-6. **Image Profiles** - image generation configurations (API keys are NOT exported for security)
-7. **Embedding Profiles** - embedding/RAG configurations (API keys are NOT exported for security)
-8. **Tags** - tag definitions with visual styles
+1. **Characters** - with optional memories, includes: system prompts, physical descriptions, tags, avatar overrides, `controlledBy` field (LLM-controlled or user-controlled)
+2. **Chats** - with optional memories (chat-tagged), includes: messages, participants (references), tags, impersonation state
+3. **Roleplay Templates** - user-created templates only
+4. **Connection Profiles** - LLM connection configurations (API keys are NOT exported for security)
+5. **Image Profiles** - image generation configurations (API keys are NOT exported for security)
+6. **Embedding Profiles** - embedding/RAG configurations (API keys are NOT exported for security)
+7. **Tags** - tag definitions with visual styles
+
+**Note:** User-controlled characters (formerly "personas") are now included in the Characters export. They are identified by `controlledBy: 'user'` in the character data.
 
 ---
 
@@ -65,7 +66,7 @@ interface QuilltapExportManifest {
   version: '1.0';
 
   /** What type of export this is */
-  exportType: 'characters' | 'personas' | 'chats' | 'roleplay-templates' |
+  exportType: 'characters' | 'chats' | 'roleplay-templates' |
               'connection-profiles' | 'image-profiles' | 'tags' | 'mixed';
 
   /** ISO 8601 timestamp of export creation */
@@ -93,8 +94,7 @@ interface QuilltapExportSettings {
 }
 
 interface QuilltapExportCounts {
-  characters?: number;
-  personas?: number;
+  characters?: number;       // Includes both LLM-controlled and user-controlled
   chats?: number;
   messages?: number;
   roleplayTemplates?: number;
@@ -105,13 +105,10 @@ interface QuilltapExportCounts {
 }
 
 interface QuilltapExportData {
-  /** Characters with embedded associated data */
+  /** Characters with embedded associated data (includes both LLM-controlled and user-controlled) */
   characters?: ExportedCharacter[];
 
-  /** Personas with embedded associated data */
-  personas?: ExportedPersona[];
-
-  /** Chats with messages */
+  /** Chats with messages and impersonation state */
   chats?: ExportedChat[];
 
   /** Roleplay templates */
@@ -143,23 +140,11 @@ interface ExportedCharacter extends Character {
   /** Tag names for human readability (actual tags exported separately) */
   _tagNames?: string[];
 
-  /** Reference info for linked personas */
-  _linkedPersonaNames?: string[];
-}
-```
+  /** Whether this is a user-controlled character (formerly "persona") */
+  controlledBy: 'llm' | 'user';
 
-#### ExportedPersona
-
-```typescript
-interface ExportedPersona extends Persona {
-  /** Memories associated with this persona (optional) */
-  _exportedMemories?: Memory[];
-
-  /** Tag names for human readability */
-  _tagNames?: string[];
-
-  /** Reference info for linked characters */
-  _linkedCharacterNames?: string[];
+  /** Reference to default conversation partner character */
+  defaultPartnerId?: string;
 }
 ```
 
@@ -178,9 +163,14 @@ interface ExportedChat extends ChatMetadata {
 
   /** Participant info for human readability */
   _participantInfo?: {
-    characterNames: string[];
-    personaNames: string[];
+    characterNames: string[];          // All characters including user-controlled
+    llmControlledNames: string[];      // LLM-controlled characters only
+    userControlledNames: string[];     // User-controlled characters only
   };
+
+  /** Impersonation state */
+  impersonatingParticipantIds?: string[];
+  activeTypingParticipantId?: string;
 }
 ```
 
@@ -201,8 +191,7 @@ interface SanitizedImageProfile extends Omit<ImageProfile, 'apiKeyId'> {
 ### 1.3 File Naming Convention
 
 Export files follow this naming pattern:
-- `quilltap-characters-{timestamp}.qtap`
-- `quilltap-personas-{timestamp}.qtap`
+- `quilltap-characters-{timestamp}.qtap` (includes user-controlled characters)
 - `quilltap-chats-{timestamp}.qtap`
 - `quilltap-roleplay-templates-{timestamp}.qtap`
 - `quilltap-connection-profiles-{timestamp}.qtap`
@@ -224,11 +213,11 @@ Core functions:
 
 ```typescript
 interface ExportOptions {
-  type: 'characters' | 'personas' | 'chats' | 'roleplay-templates' |
+  type: 'characters' | 'chats' | 'roleplay-templates' |
         'connection-profiles' | 'image-profiles' | 'tags';
   scope: 'all' | 'selected';
   selectedIds?: string[];
-  includeMemories?: boolean;  // Only applicable for characters, personas, chats
+  includeMemories?: boolean;  // Only applicable for characters, chats
 }
 
 async function createExport(
@@ -239,13 +228,8 @@ async function createExport(
 async function createCharacterExport(
   userId: string,
   characterIds: string[] | 'all',
-  includeMemories: boolean
-): Promise<QuilltapExport>
-
-async function createPersonaExport(
-  userId: string,
-  personaIds: string[] | 'all',
-  includeMemories: boolean
+  includeMemories: boolean,
+  controlledByFilter?: 'llm' | 'user' | 'all'  // Optional filter for control type
 ): Promise<QuilltapExport>
 
 async function createChatExport(
@@ -287,11 +271,7 @@ async function createChatExport(
 
 Memories are associated with a character if:
 - `memory.characterId === character.id`
-
-#### For Personas
-
-Memories are associated with a persona if:
-- `memory.personaId === persona.id`
+- `memory.aboutCharacterId === character.id` (inter-character memories)
 
 #### For Chats
 
@@ -312,8 +292,7 @@ Core functions:
 interface ImportPreview {
   manifest: QuilltapExportManifest;
   entities: {
-    characters?: { id: string; name: string; exists: boolean }[];
-    personas?: { id: string; name: string; exists: boolean }[];
+    characters?: { id: string; name: string; controlledBy: 'llm' | 'user'; exists: boolean }[];
     chats?: { id: string; title: string; exists: boolean }[];
     roleplayTemplates?: { id: string; name: string; exists: boolean }[];
     connectionProfiles?: { id: string; name: string; exists: boolean }[];
@@ -345,8 +324,7 @@ interface ImportOptions {
 interface ImportResult {
   success: boolean;
   imported: {
-    characters: number;
-    personas: number;
+    characters: number;       // Includes both LLM-controlled and user-controlled
     chats: number;
     messages: number;
     roleplayTemplates: number;
@@ -357,7 +335,6 @@ interface ImportResult {
   };
   skipped: {
     characters: number;
-    personas: number;
     chats: number;
     roleplayTemplates: number;
     connectionProfiles: number;
@@ -450,8 +427,7 @@ Multi-step dialog:
 #### Step 1: Select Export Type
 
 - Radio buttons for entity type:
-  - Characters
-  - Personas
+  - Characters (includes both LLM-controlled and user-controlled)
   - Chats
   - Roleplay Templates
   - Connection Profiles
@@ -463,10 +439,11 @@ Multi-step dialog:
 - Toggle: "Export All" vs "Select Specific"
 - If "Select Specific":
   - Searchable list with checkboxes
+  - For characters, shows control type indicator (LLM or User)
   - "Select All" / "Select None" buttons
   - Count indicator: "X of Y selected"
 
-#### Step 3: Export Options (for Characters/Personas/Chats)
+#### Step 3: Export Options (for Characters/Chats)
 
 - Checkbox: "Include associated memories"
   - Shows count: "X memories will be included"

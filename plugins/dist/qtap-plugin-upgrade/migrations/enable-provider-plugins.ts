@@ -34,7 +34,6 @@ const PROVIDER_TO_PLUGIN: Record<string, string> = {
   'OPENROUTER': 'qtap-plugin-openrouter',
   'OPENAI_COMPATIBLE': 'qtap-plugin-openai-compatible',
   'GROK': 'qtap-plugin-grok',
-  'GAB_AI': 'qtap-plugin-gab-ai',
   'GOOGLE': 'qtap-plugin-google',
   // Image-specific providers
   'GOOGLE_IMAGEN': 'qtap-plugin-google',  // Google Imagen is part of the Google plugin

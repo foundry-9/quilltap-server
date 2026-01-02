@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
+import { useDialogState } from '@/hooks/useDialogState'
+import { useWizardState } from '@/hooks/useWizardState'
 import type { ExportState, ExportStep, AvailableEntity } from '../types'
 import type { ExportEntityType } from '@/lib/export/types'
 
@@ -38,27 +40,38 @@ const initialState: ExportState = {
   error: null,
 }
 
+// Helper to check if entity type supports memories
+const supportsMemories = (type: ExportEntityType | null): boolean =>
+  type === 'characters' || type === 'personas' || type === 'chats'
+
 export function useExportData({
   isOpen,
   onSuccess,
 }: UseExportDataOptions): UseExportDataReturn {
-  const [state, setState] = useState<ExportState>(initialState)
+  const { state, setState, reset } = useDialogState({
+    isOpen,
+    initialState,
+    logContext: 'useExportData',
+  })
 
-  // Reset state when dialog opens/closes
-  useEffect(() => {
-    if (!isOpen) {
-      setState(initialState)
-    }
-  }, [isOpen])
-
-  // Log when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('Export dialog opened', {
-        context: 'useExportData',
-      })
-    }
-  }, [isOpen])
+  // Wizard step configuration
+  // Note: transitions vary based on entityType (characters/personas/chats go through 'options')
+  const wizard = useWizardState<ExportStep>(
+    {
+      initialStep: 'type',
+      steps: {
+        type: { next: ['select'] },
+        select: { prev: 'type', next: ['options', 'exporting'] },
+        options: { prev: 'select', next: ['exporting'] },
+        exporting: { next: ['complete', 'error'] },
+        complete: { isTerminal: true },
+        error: { prev: 'select', isTerminal: true }, // Goes back to select or options based on entityType
+      },
+      logContext: 'useExportData',
+    },
+    state.step,
+    (step) => setState((prev) => ({ ...prev, step }))
+  )
 
   // Calculate memory count based on scope and selection
   useEffect(() => {
@@ -91,7 +104,7 @@ export function useExportData({
       })
       setState((prev) => ({ ...prev, memoryCount: newMemoryCount }))
     }
-  }, [state.scope, state.selectedIds, state.availableEntities, state.entityType, state.memoryCount])
+  }, [state.scope, state.selectedIds, state.availableEntities, state.entityType, state.memoryCount, setState])
 
   const setEntityType = useCallback((type: ExportEntityType) => {
     clientLogger.debug('Entity type selected', {
@@ -105,7 +118,7 @@ export function useExportData({
       selectedIds: [],
       error: null,
     }))
-  }, [])
+  }, [setState])
 
   const setScope = useCallback((scope: 'all' | 'selected') => {
     clientLogger.debug('Export scope changed', {
@@ -117,7 +130,7 @@ export function useExportData({
       scope,
       selectedIds: scope === 'all' ? [] : prev.selectedIds,
     }))
-  }, [])
+  }, [setState])
 
   const toggleEntitySelection = useCallback((id: string) => {
     setState((prev) => {
@@ -137,7 +150,7 @@ export function useExportData({
         selectedIds: newSelectedIds,
       }
     })
-  }, [])
+  }, [setState])
 
   const setIncludeMemories = useCallback((value: boolean) => {
     clientLogger.debug('Include memories toggled', {
@@ -148,7 +161,7 @@ export function useExportData({
       ...prev,
       includeMemories: value,
     }))
-  }, [])
+  }, [setState])
 
   const loadAvailableEntities = useCallback(async (type: ExportEntityType) => {
     if (!type) return
@@ -195,107 +208,73 @@ export function useExportData({
         error: message,
       }))
     }
-  }, [])
+  }, [setState])
 
   const handleNext = useCallback(async () => {
-    // Determine if we need to load entities
-    const shouldLoadEntities = state.step === 'type' && state.entityType
+    // Validation and step navigation based on current step
+    switch (state.step) {
+      case 'type':
+        if (!state.entityType) {
+          clientLogger.warn('Cannot proceed without entity type selected', {
+            context: 'useExportData',
+          })
+          return
+        }
+        // Move to select step and load entities
+        wizard.goTo('select')
+        setState((prev) => ({ ...prev, loadingEntities: true }))
+        await loadAvailableEntities(state.entityType)
+        break
 
-    setState((prev) => {
-      let nextStep: ExportStep = prev.step
+      case 'select':
+        if (state.scope === 'selected' && state.selectedIds.length === 0) {
+          clientLogger.warn('Cannot proceed without selecting entities', {
+            context: 'useExportData',
+          })
+          return
+        }
+        // Use wizard for conditional navigation based on entity type
+        if (supportsMemories(state.entityType)) {
+          wizard.goTo('options')
+        } else {
+          wizard.goTo('exporting')
+        }
+        break
 
-      switch (prev.step) {
-        case 'type':
-          if (!prev.entityType) {
-            clientLogger.warn('Cannot proceed without entity type selected', {
-              context: 'useExportData',
-            })
-            return prev
-          }
-          nextStep = 'select'
-          break
-        case 'select':
-          if (prev.scope === 'selected' && prev.selectedIds.length === 0) {
-            clientLogger.warn('Cannot proceed without selecting entities', {
-              context: 'useExportData',
-            })
-            return prev
-          }
-          // Only show options step for entities that support memories
-          nextStep =
-            prev.entityType === 'characters' ||
-            prev.entityType === 'personas' ||
-            prev.entityType === 'chats'
-              ? 'options'
-              : 'exporting'
-          break
-        case 'options':
-          nextStep = 'exporting'
-          break
-        default:
-          return prev
-      }
+      case 'options':
+        wizard.goNext() // Goes to 'exporting'
+        break
 
-      clientLogger.debug('Moving to next step', {
-        context: 'useExportData',
-        currentStep: prev.step,
-        nextStep,
-      })
-
-      // If moving to select step, set loading state
-      if (nextStep === 'select') {
-        return { ...prev, step: nextStep, loadingEntities: true }
-      }
-
-      return { ...prev, step: nextStep }
-    })
-
-    // Load entities when moving to select step
-    if (shouldLoadEntities) {
-      await loadAvailableEntities(state.entityType!)
+      default:
+        // No action for other steps
+        break
     }
-  }, [state.step, state.entityType, loadAvailableEntities])
+  }, [state.step, state.entityType, state.scope, state.selectedIds.length, wizard, loadAvailableEntities, setState])
 
   const handleBack = useCallback(() => {
-    setState((prev) => {
-      let previousStep: ExportStep = prev.step
+    // Clear error state when going back
+    setState((prev) => ({ ...prev, error: null }))
 
-      switch (prev.step) {
-        case 'select':
-          previousStep = 'type'
-          break
-        case 'options':
-          previousStep = 'select'
-          break
-        case 'exporting':
-          previousStep =
-            prev.entityType === 'characters' ||
-            prev.entityType === 'personas' ||
-            prev.entityType === 'chats'
-              ? 'options'
-              : 'select'
-          break
-        case 'error':
-          previousStep = prev.entityType === 'characters' || prev.entityType === 'personas' || prev.entityType === 'chats' ? 'options' : 'select'
-          break
-        default:
-          return prev
+    // Handle conditional back navigation based on entityType
+    if (state.step === 'exporting' || state.step === 'error') {
+      // These steps go back to 'options' for memory-supporting types, or 'select' otherwise
+      if (supportsMemories(state.entityType)) {
+        wizard.goTo('options')
+      } else {
+        wizard.goTo('select')
       }
-
-      clientLogger.debug('Moving to previous step', {
-        context: 'useExportData',
-        currentStep: prev.step,
-        previousStep,
-      })
-
-      return { ...prev, step: previousStep, error: null }
-    })
-  }, [])
+    } else {
+      // Use standard back navigation for other steps
+      wizard.goBack()
+    }
+  }, [state.step, state.entityType, wizard, setState])
 
   const handleExport = useCallback(async () => {
     if (!state.entityType) return
 
-    setState((prev) => ({ ...prev, step: 'exporting', exporting: true, error: null }))
+    // Use wizard for step navigation
+    wizard.goTo('exporting')
+    setState((prev) => ({ ...prev, exporting: true, error: null }))
 
     try {
       clientLogger.debug('Starting export', {
@@ -342,9 +321,9 @@ export function useExportData({
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
 
+      wizard.goTo('complete')
       setState((prev) => ({
         ...prev,
-        step: 'complete',
         exporting: false,
       }))
 
@@ -355,19 +334,14 @@ export function useExportData({
         context: 'useExportData',
         error: message,
       })
+      wizard.goTo('error')
       setState((prev) => ({
         ...prev,
-        step: 'error',
         exporting: false,
         error: message,
       }))
     }
-  }, [state.entityType, state.scope, state.selectedIds, state.includeMemories, onSuccess])
-
-  const reset = useCallback(() => {
-    clientLogger.debug('Resetting export state', { context: 'useExportData' })
-    setState(initialState)
-  }, [])
+  }, [state.entityType, state.scope, state.selectedIds, state.includeMemories, wizard, onSuccess, setState])
 
   return {
     state,

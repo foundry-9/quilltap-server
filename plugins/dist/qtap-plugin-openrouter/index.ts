@@ -74,6 +74,28 @@ const attachmentSupport = {
 };
 
 /**
+ * Message format support for multi-character chats
+ * OpenRouter is conservative - name support varies by underlying model
+ */
+const messageFormat = {
+  supportsNameField: false,
+  supportedRoles: [] as ('user' | 'assistant')[],
+};
+
+/**
+ * Cheap model configuration for background tasks
+ */
+const cheapModels = {
+  defaultModel: 'openai/gpt-4o-mini',
+  recommendedModels: [
+    'openai/gpt-4o-mini',
+    'anthropic/claude-3-haiku',
+    'google/gemini-2.0-flash',
+    'mistralai/mistral-7b-instruct',
+  ],
+};
+
+/**
  * The OpenRouter Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  * Provides access to cutting-edge and open-source models via unified API
@@ -86,6 +108,13 @@ export const plugin: LLMProviderPlugin = {
   capabilities,
 
   attachmentSupport,
+
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: 'openai', // OpenRouter uses OpenAI format
+  cheapModels,
+  defaultContextWindow: 128000,
 
   /**
    * Factory method to create an OpenRouter LLM provider instance
