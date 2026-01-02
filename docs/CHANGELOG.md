@@ -4,6 +4,11 @@
 
 ### 2.6-dev
 
+- refactor: Phase 3 - User-scoped repository refactoring
+  - Created generic `UserScopedRepository` base class with common CRUD operations
+  - Created `UserScopedTaggableRepository` for entities with tag support (findByTag, addTag, removeTag)
+  - Reduced `lib/repositories/user-scoped.ts` from 803 lines to 543 lines (32% reduction)
+  - All 9 repository classes now extend base classes, keeping only entity-specific methods
 - refactor: Phase 2 - Eliminate code duplication across API routes
   - 2.1: Centralized getFilePath() duplications - replaced 8 local implementations with shared `lib/api/middleware/file-path.ts`
   - 2.2: Standardized API responses across 76+ route files using `lib/api/responses.ts` helpers (notFound, badRequest, serverError, validationError, forbidden, created, conflict)
