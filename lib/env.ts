@@ -193,3 +193,75 @@ export const isDevelopment = env.NODE_ENV === 'development';
  * Check if we're in test mode
  */
 export const isTest = env.NODE_ENV === 'test';
+
+/**
+ * Check if a hostname is considered "local"
+ * @param hostname - The hostname to check
+ * @returns true if the hostname is localhost or 127.0.0.1
+ */
+function isLocalHostname(hostname: string): boolean {
+  const lowerHostname = hostname.toLowerCase();
+  return lowerHostname === 'localhost' || lowerHostname === '127.0.0.1';
+}
+
+/**
+ * Extract hostname from a URL string
+ * @param urlString - The URL to parse
+ * @returns The hostname or null if parsing fails
+ */
+function extractHostname(urlString: string | undefined): string | null {
+  if (!urlString) return null;
+  try {
+    const url = new URL(urlString);
+    return url.hostname;
+  } catch {
+    // For MongoDB URIs, try a simple extraction
+    // mongodb://hostname:port or mongodb+srv://hostname
+    const match = urlString.match(/mongodb(?:\+srv)?:\/\/(?:[^:@]+(?::[^@]+)?@)?([^:/?]+)/);
+    return match ? match[1] : null;
+  }
+}
+
+/**
+ * Check if the deployment is user-managed (locally hosted)
+ *
+ * A deployment is considered "user-managed" if either:
+ * - The MongoDB URI points to localhost/127.0.0.1 or is in embedded mode
+ * - The S3 endpoint points to localhost/127.0.0.1 or is in embedded mode
+ *
+ * This is useful for determining whether to show development/admin features,
+ * enable certain debugging capabilities, or adjust behavior for self-hosted deployments.
+ *
+ * @returns true if the deployment appears to be locally/self-managed
+ */
+export function checkIsUserManaged(): boolean {
+  // Check MongoDB - embedded mode or localhost URI means user-managed
+  const mongodbMode = env.MONGODB_MODE;
+  if (mongodbMode === 'embedded') {
+    return true;
+  }
+
+  const mongoHostname = extractHostname(env.MONGODB_URI);
+  if (mongoHostname && isLocalHostname(mongoHostname)) {
+    return true;
+  }
+
+  // Check S3 - embedded mode or localhost endpoint means user-managed
+  const s3Mode = env.S3_MODE;
+  if (s3Mode === 'embedded') {
+    return true;
+  }
+
+  const s3Hostname = extractHostname(env.S3_ENDPOINT);
+  if (s3Hostname && isLocalHostname(s3Hostname)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Whether the deployment is user-managed (locally hosted)
+ * True if either database or file storage is running locally
+ */
+export const isUserManaged = checkIsUserManaged();

@@ -2,6 +2,15 @@
 
 ## Recent Changes
 
+### 2.7-dev
+
+- feat: Add `isUserManaged` backend utility for detecting self-hosted deployments
+  - New exports in `lib/env.ts`: `isUserManaged` constant and `checkIsUserManaged()` function
+  - Returns true if MongoDB or S3 is localhost/127.0.0.1 or in embedded mode
+  - Useful for enabling admin/debug features on self-hosted instances
+  - Added 10 unit tests covering all detection scenarios
+- Started 2.7-dev
+
 ### 2.6.1
 
 - feat: Sidebar auto-refresh on character/chat changes
