@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- feat: Web search tool integration with Serper.dev API
+  - Implemented real web search functionality for the `search_web` LLM tool
+  - Uses Serper.dev API for Google search results (2,500 free searches/month)
+  - Added `SERPER_API_KEY` environment variable configuration
+  - Includes knowledge graph results when available
+  - Proper error handling for auth failures, rate limits, and API errors
 - feat: Plugin installation restrictions for hosted deployments
   - Added `requiresRestart` field to plugin manifest schema (optional boolean)
   - Restart requirement is inferred from capabilities: AUTH_METHODS, DATABASE_BACKEND, FILE_BACKEND, UPGRADE_MIGRATION

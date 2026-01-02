@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.7.0--dev.2-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.7.0--dev.3-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -444,6 +444,7 @@ Optional environment variables:
 | `LOG_FILE_PATH` | Directory for log files when `LOG_OUTPUT` includes `file` | `./logs` |
 | `LOG_FILE_MAX_SIZE` / `LOG_FILE_MAX_FILES` | Rotation controls for file logging | `10MB / 5` |
 | `MONGODB_CONNECTION_TIMEOUT_MS` / `MONGODB_MAX_POOL_SIZE` | Optional Mongo tuning | - |
+| `SERPER_API_KEY` | API key for web search tool ([serper.dev](https://serper.dev/), 2,500 free/month) | - |
 
 **Important**: Back up your `ENCRYPTION_MASTER_PEPPER` securely. If lost, all encrypted API keys become unrecoverable. Also ensure MongoDB and S3 data are backed up regularly.
 
@@ -582,7 +583,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Project becomes overriding context for chats, images, etc.
 - [x] Hosted installations can not allow user-only plugins to be installed if they require server restarts
 - [x] Hosted installations must automatically restart the server if site-wide plugins are installed that require restarts
-- [ ] Get the "Web Search" tool hooked up, it's just giving "not implemented" responses right now
+- [X] Get the "Web Search" tool hooked up, it's just giving "not implemented" responses right now
 
 ## Acknowledgments
 
