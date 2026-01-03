@@ -851,11 +851,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           }
         }
 
-        clientLogger.error('[Chat] Continue mode error', {
-          error: errorMessage,
+        // Known configuration issues should be warnings, not errors
+        const isConfigurationIssue = /connection profile|no api key|no active character/i.test(errorMessage)
+        const logMethod = isConfigurationIssue ? clientLogger.warn.bind(clientLogger) : clientLogger.error.bind(clientLogger)
+        logMethod(`[Chat] Continue mode ${isConfigurationIssue ? 'blocked' : 'error'}: ${errorMessage}`, {
           errorName,
           errorType: typeof err,
-          rawError: err instanceof Error ? err.message : JSON.stringify(err),
         })
         showErrorToast(errorMessage)
       }

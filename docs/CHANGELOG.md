@@ -17,7 +17,8 @@
 - fix: Improved continue mode error handling
   - Better extraction of error messages from various error formats (Error objects, strings, plain objects)
   - Now properly displays toast messages for errors like "No connection profile configured for character"
-  - Added diagnostic logging for debugging error scenarios
+  - Configuration issues (missing connection profile, no API key) now log as warnings instead of errors
+  - Error message included directly in log output for easier debugging
 - fix: Centered tool palette and formatting toolbar on desktop
 - perf: Major chat performance optimization for long conversations
   - Added virtualization using @tanstack/react-virtual - only renders visible messages
