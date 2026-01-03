@@ -4,6 +4,10 @@
 
 ### 2.7-dev
 
+- fix: Quilltap RP template plugin manifest validation error
+  - Removed `null` value for `dialogueDetection` that was causing Zod validation to fail
+  - Updated schema to accept `null` as well as `undefined` for `dialogueDetection`
+  - Bumped `qtap-plugin-template-quilltap-rp` to 1.0.5
 - fix: MongoDB migrations failing in hosted environments without admin access
   - Changed all migration `isMongoDBAccessible()` checks to use `db.command({ ping: 1 })` instead of `db.admin().ping()`
   - This allows migrations to run in managed MongoDB services (MongoDB Atlas, DocumentDB, etc.) where the database user doesn't have admin privileges

@@ -186,7 +186,7 @@ class RoleplayTemplateRegistry {
       tags: templateConfig.tags || [],
       annotationButtons: templateConfig.annotationButtons || [],
       renderingPatterns: templateConfig.renderingPatterns || [],
-      dialogueDetection: templateConfig.dialogueDetection,
+      dialogueDetection: templateConfig.dialogueDetection ?? undefined,
       pluginName: plugin.manifest.name,
       version: plugin.manifest.version,
       isBuiltIn: true, // Plugin templates are always treated as built-in

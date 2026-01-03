@@ -476,8 +476,8 @@ export const RoleplayTemplateConfigSchema = z.object({
   /** Patterns for styling roleplay text in message content */
   renderingPatterns: z.array(RenderingPatternConfigSchema).default([]).optional().describe('Message content rendering patterns'),
 
-  /** Optional dialogue detection for paragraph-level styling */
-  dialogueDetection: DialogueDetectionConfigSchema.optional().describe('Dialogue paragraph detection'),
+  /** Optional dialogue detection for paragraph-level styling (null = none) */
+  dialogueDetection: DialogueDetectionConfigSchema.nullable().optional().describe('Dialogue paragraph detection'),
 });
 
 export type RoleplayTemplateConfig = z.infer<typeof RoleplayTemplateConfigSchema>;
