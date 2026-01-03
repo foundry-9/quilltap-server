@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- fix: MongoDB migrations failing in hosted environments without admin access
+  - Changed all migration `isMongoDBAccessible()` checks to use `db.command({ ping: 1 })` instead of `db.admin().ping()`
+  - This allows migrations to run in managed MongoDB services (MongoDB Atlas, DocumentDB, etc.) where the database user doesn't have admin privileges
+  - Also updated `lib/mongodb/client.ts` to use the configured database for connection tests instead of 'admin' database
+  - This fixes the issue where the old "Quilltap RP" built-in template wasn't being cleaned up in hosted environments
+  - Bumped `qtap-plugin-upgrade` to 1.0.13
 - refactor: Make roleplay template rendering patterns configurable via plugins
   - Added `RenderingPattern` and `DialogueDetection` types to `@quilltap/plugin-types`
   - Templates can now define custom regex patterns for styling text (dialogue, narration, OOC, etc.)

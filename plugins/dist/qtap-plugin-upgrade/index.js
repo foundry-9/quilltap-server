@@ -32530,7 +32530,8 @@ __export(client_exports, {
 async function isClientConnected(client) {
   if (!client) return false;
   try {
-    await client.db("admin").command({ ping: 1 });
+    const config = validateMongoDBConfig();
+    await client.db(config.database).command({ ping: 1 });
     return true;
   } catch {
     return false;
@@ -32562,7 +32563,7 @@ async function getMongoClient() {
       uri: config.uri.replace(/mongodb\+srv:\/\/.*@/, "mongodb+srv://***@"),
       database: config.database
     });
-    await connectingClient.db("admin").command({ ping: 1 });
+    await connectingClient.db(config.database).command({ ping: 1 });
     connectingClient.on("error", (error) => {
       logger.error("MongoDB client error", { error: error.message });
     });
@@ -32610,7 +32611,8 @@ async function isMongoConnected() {
     return false;
   }
   try {
-    await mongoClient.db("admin").command({ ping: 1 });
+    const config = validateMongoDBConfig();
+    await mongoClient.db(config.database).command({ ping: 1 });
     return true;
   } catch {
     mongoClient = null;
@@ -37140,7 +37142,7 @@ async function getMongoDatabase2() {
 async function isMongoDBAccessible() {
   try {
     const db = await getMongoDatabase2();
-    await db.admin().ping();
+    await db.command({ ping: 1 });
     return true;
   } catch (error) {
     console.warn("[migration.migrate-json-to-mongodb] MongoDB is not accessible", {
@@ -37985,7 +37987,7 @@ async function getMongoDatabase3() {
 async function isMongoDBAccessible2() {
   try {
     const db = await getMongoDatabase3();
-    await db.admin().ping();
+    await db.command({ ping: 1 });
     return true;
   } catch (error) {
     logger.warn("MongoDB is not accessible for username migration", {
@@ -38180,7 +38182,7 @@ async function getMongoDatabase4() {
 async function isMongoDBAccessible3() {
   try {
     const db = await getMongoDatabase4();
-    await db.admin().ping();
+    await db.command({ ping: 1 });
     return true;
   } catch (error) {
     logger.warn("MongoDB is not accessible for file tags migration", {
@@ -38395,7 +38397,7 @@ async function getMongoDatabase5() {
 async function isMongoDBAccessible4() {
   try {
     const db = await getMongoDatabase5();
-    await db.admin().ping();
+    await db.command({ ping: 1 });
     return true;
   } catch (error) {
     logger.warn("MongoDB is not accessible for character system prompts migration", {
@@ -38562,7 +38564,7 @@ async function getMongoDatabase6() {
 async function isMongoDBAccessible5() {
   try {
     const db = await getMongoDatabase6();
-    await db.admin().ping();
+    await db.command({ ping: 1 });
     return true;
   } catch (error) {
     logger.warn("MongoDB is not accessible for tag styles migration", {
@@ -38760,7 +38762,7 @@ async function getMongoDatabase7() {
 async function isMongoDBAccessible6() {
   try {
     const db = await getMongoDatabase7();
-    await db.admin().ping();
+    await db.command({ ping: 1 });
     return true;
   } catch (error) {
     logger.warn("MongoDB is not accessible for Quilltap RP removal migration", {
@@ -38888,7 +38890,7 @@ async function getMongoDatabase8() {
 async function isMongoDBAccessible7() {
   try {
     const db = await getMongoDatabase8();
-    await db.admin().ping();
+    await db.command({ ping: 1 });
     return true;
   } catch (error) {
     logger.warn("MongoDB is not accessible for personas-to-characters migration", {
@@ -39254,7 +39256,7 @@ async function getMongoDatabase9() {
 async function isMongoDBAccessible8() {
   try {
     const db = await getMongoDatabase9();
-    await db.admin().ping();
+    await db.command({ ping: 1 });
     return true;
   } catch (error) {
     logger.warn("MongoDB is not accessible for multi-character fields migration", {
@@ -39477,7 +39479,7 @@ async function getMongoDatabase10() {
 async function isMongoDBAccessible9() {
   try {
     const db = await getMongoDatabase10();
-    await db.admin().ping();
+    await db.command({ ping: 1 });
     return true;
   } catch (error) {
     logger.warn("MongoDB is not accessible for inter-character memory fields migration", {

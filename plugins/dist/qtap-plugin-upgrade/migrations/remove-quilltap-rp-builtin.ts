@@ -32,11 +32,14 @@ async function getMongoDatabase() {
 
 /**
  * Check if MongoDB is accessible
+ * Uses database-level ping instead of admin ping to work with
+ * hosted MongoDB services where the user may not have admin access.
  */
 async function isMongoDBAccessible(): Promise<boolean> {
   try {
     const db = await getMongoDatabase();
-    await db.admin().ping();
+    // Use database-level ping instead of admin ping - works without admin privileges
+    await db.command({ ping: 1 });
     return true;
   } catch (error) {
     logger.warn('MongoDB is not accessible for Quilltap RP removal migration', {
