@@ -39,6 +39,7 @@ import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import { useDebugOptional } from '@/components/providers/debug-provider'
 import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import {
   type TurnState,
@@ -365,6 +366,28 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // Update browser tab title with chat name
   useDocumentTitle(chat?.title ?? null)
+
+  // Set project link in toolbar when chat is in a project
+  const { setLeftContent } = usePageToolbar()
+  useEffect(() => {
+    if (chat?.projectId && chat?.projectName) {
+      setLeftContent(
+        <a
+          href={`/projects/${chat.projectId}`}
+          className="hidden md:inline-flex items-center gap-2 text-sm qt-text-secondary hover:text-foreground transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          </svg>
+          <span>{chat.projectName}</span>
+        </a>
+      )
+    } else {
+      setLeftContent(null)
+    }
+    // Clear on unmount
+    return () => setLeftContent(null)
+  }, [chat?.projectId, chat?.projectName, setLeftContent])
 
   const charactersMap = useMemo((): Map<string, Character> => {
     const map = new Map<string, Character>()
@@ -1905,20 +1928,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   return (
     <div className="qt-chat-layout">
       <div className="qt-chat-main">
-        {/* Project Indicator Banner */}
-        {chat.projectId && chat.projectName && (
-          <div className="border-b border-border/60 bg-card/50 px-4 py-2">
-            <a
-              href={`/projects/${chat.projectId}`}
-              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-              <span>{chat.projectName}</span>
-            </a>
-          </div>
-        )}
         <div className="qt-chat-messages">
           <div className="qt-chat-messages-list">
             {/* Messages rendering */}

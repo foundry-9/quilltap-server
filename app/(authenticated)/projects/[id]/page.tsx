@@ -3,28 +3,27 @@
 /**
  * Project Detail Page
  *
- * Displays project details with tabs for chats, files, characters, and settings.
+ * Displays project details with a card-based layout:
+ * - Three expandable cards at the top (Files, Characters, Settings)
+ * - Infinite scrolling list of chats below
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { clientLogger } from '@/lib/client-logger'
-import { useProjectDetail, useProjectChats, useProjectFiles } from './hooks'
+import { useProjectDetail, useProjectChats, useProjectFiles, useProjectCardState } from './hooks'
 import {
   ProjectDetailHeader,
-  ProjectTabs,
-  ChatsTab,
-  FilesTab,
-  CharactersTab,
-  SettingsTab,
+  FilesCard,
+  CharactersCard,
+  SettingsCard,
+  ChatsSection,
 } from './components'
-import type { TabType } from './types'
 
 export default function ProjectDetailPage() {
   const params = useParams()
   const projectId = params.id as string
-  const [activeTab, setActiveTab] = useState<TabType>('chats')
 
   const {
     project,
@@ -40,18 +39,27 @@ export default function ProjectDetailPage() {
     handleRemoveCharacter,
   } = useProjectDetail(projectId)
 
-  const { chats, fetchChats, handleRemoveChat } = useProjectChats(projectId)
+  const {
+    chats,
+    loading: chatsLoading,
+    loadingMore,
+    pagination,
+    fetchChats,
+    loadMoreChats,
+    handleRemoveChat,
+  } = useProjectChats(projectId)
+
   const { files, fetchFiles } = useProjectFiles(projectId)
+
+  // Card expansion state - all open on first visit, all closed on subsequent visits
+  const { cardState, toggleCard } = useProjectCardState(projectId)
 
   useEffect(() => {
     clientLogger.debug('ProjectDetailPage: mounted', { projectId })
     fetchProject()
-  }, [projectId, fetchProject])
-
-  useEffect(() => {
-    if (activeTab === 'chats') fetchChats()
-    if (activeTab === 'files') fetchFiles()
-  }, [activeTab, fetchChats, fetchFiles])
+    fetchChats()
+    fetchFiles()
+  }, [projectId, fetchProject, fetchChats, fetchFiles])
 
   if (loading) {
     return (
@@ -86,44 +94,41 @@ export default function ProjectDetailPage() {
         onSave={handleSave}
       />
 
-      <ProjectTabs
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        chatCount={chats.length}
-        fileCount={files.length}
-        characterCount={project.characterRoster.length}
-      />
-
-      <div className="mt-6">
-        {activeTab === 'chats' && (
-          <ChatsTab
-            projectId={projectId}
-            chats={chats}
-            onRemoveChat={handleRemoveChat}
-          />
-        )}
-
-        {activeTab === 'files' && (
-          <FilesTab files={files} />
-        )}
-
-        {activeTab === 'characters' && (
-          <CharactersTab
-            project={project}
-            onRemoveCharacter={handleRemoveCharacter}
-          />
-        )}
-
-        {activeTab === 'settings' && (
-          <SettingsTab
-            project={project}
-            editForm={editForm}
-            onEditFormChange={setEditForm}
-            onSave={handleSave}
-            onToggleAllowAnyCharacter={handleToggleAllowAnyCharacter}
-          />
-        )}
+      {/* Cards grid - 3 across on wide desktop, 2 on medium, 1 on mobile */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <FilesCard
+          files={files}
+          expanded={cardState.files}
+          onToggle={() => toggleCard('files')}
+        />
+        <CharactersCard
+          project={project}
+          onRemoveCharacter={handleRemoveCharacter}
+          expanded={cardState.characters}
+          onToggle={() => toggleCard('characters')}
+        />
+        <SettingsCard
+          project={project}
+          editForm={editForm}
+          onEditFormChange={setEditForm}
+          onSave={handleSave}
+          onToggleAllowAnyCharacter={handleToggleAllowAnyCharacter}
+          expanded={cardState.settings}
+          onToggle={() => toggleCard('settings')}
+        />
       </div>
+
+      {/* Infinite scrolling chats section */}
+      <ChatsSection
+        projectId={projectId}
+        chats={chats}
+        loading={chatsLoading}
+        loadingMore={loadingMore}
+        hasMore={pagination.hasMore}
+        total={pagination.total}
+        onLoadMore={loadMoreChats}
+        onRemoveChat={handleRemoveChat}
+      />
     </div>
   )
 }

@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware'
+import { enrichWithDefaultImage } from '@/lib/api/middleware/file-path'
 import { logger } from '@/lib/logger'
 import { notFound, badRequest, serverError } from '@/lib/api/responses'
 import { z } from 'zod'
@@ -16,7 +17,7 @@ const addChatSchema = z.object({
   chatId: z.string().uuid(),
 })
 
-// GET /api/projects/:id/chats - List chats in project
+// GET /api/projects/:id/chats - List chats in project with optional pagination
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
@@ -26,6 +27,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Project')
       }
 
+      // Parse pagination params
+      const { searchParams } = new URL(req.url)
+      const limit = parseInt(searchParams.get('limit') || '20', 10)
+      const offset = parseInt(searchParams.get('offset') || '0', 10)
+
       // Get all user's chats that are in this project
       const allChats = await repos.chats.findAll()
       const projectChats = allChats.filter(c => c.projectId === id)
@@ -33,31 +39,80 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Sort by updatedAt descending
       projectChats.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 
-      // Enrich with participant info
+      // Get total count before pagination
+      const total = projectChats.length
+
+      // Apply pagination
+      const paginatedChats = projectChats.slice(offset, offset + limit)
+
+      // Fetch all tags for resolving tag names
+      const allTags = await repos.tags.findAll()
+      const tagMap = new Map(allTags.map(t => [t.id, t]))
+
+      // Enrich with participant info and tags
       const enrichedChats = await Promise.all(
-        projectChats.map(async (chat) => {
+        paginatedChats.map(async (chat) => {
           const participants = await Promise.all(
             chat.participants.map(async (p) => {
               if (p.characterId) {
                 const char = await repos.characters.findById(p.characterId)
-                return char ? { id: p.id, name: char.name, avatarUrl: char.avatarUrl } : null
+                if (!char) return null
+
+                // Fetch defaultImage if character has one
+                const defaultImage = await enrichWithDefaultImage(
+                  char,
+                  repos.files.findById.bind(repos.files)
+                )
+
+                return {
+                  id: p.id,
+                  name: char.name,
+                  avatarUrl: char.avatarUrl,
+                  defaultImage,
+                  tags: char.tags || [],
+                }
               }
               return null
             })
           )
+
+          // Resolve chat tags to include tag objects with names
+          const chatTags = (chat.tags || [])
+            .map(tagId => {
+              const tag = tagMap.get(tagId)
+              return tag ? { tag: { id: tag.id, name: tag.name } } : null
+            })
+            .filter(Boolean)
 
           return {
             id: chat.id,
             title: chat.title,
             messageCount: chat.messageCount,
             participants: participants.filter(Boolean),
+            tags: chatTags,
             updatedAt: chat.updatedAt,
             createdAt: chat.createdAt,
           }
         })
       )
 
-      return NextResponse.json({ chats: enrichedChats })
+      logger.debug('Fetched project chats', {
+        projectId: id,
+        total,
+        offset,
+        limit,
+        returned: enrichedChats.length,
+      })
+
+      return NextResponse.json({
+        chats: enrichedChats,
+        pagination: {
+          total,
+          offset,
+          limit,
+          hasMore: offset + enrichedChats.length < total,
+        },
+      })
     } catch (error) {
       logger.error('Error fetching project chats', { context: 'GET /api/projects/:id/chats' }, error instanceof Error ? error : undefined)
       return serverError('Failed to fetch project chats')

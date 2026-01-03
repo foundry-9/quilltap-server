@@ -4,6 +4,27 @@
 
 ### 2.7-dev
 
+- refactor: Project detail page card-based layout
+  - Replaced tab-based navigation with expandable/collapsible cards
+  - Three cards at top: Files, Characters (favorites-style), and Settings
+  - Responsive grid: 3 columns on wide desktop, 2 on medium, 1 on mobile
+  - Infinite scrolling chat list below cards with pagination support
+  - Chat cards styled identically to the `/chats` page with AvatarStack
+  - API pagination added to `/api/projects/:id/chats` endpoint
+  - First-visit detection: cards default to expanded on first visit, collapsed on subsequent
+  - Card state managed via `useProjectCardState` hook with localStorage persistence
+  - Uses qt-* theme utility classes throughout
+  - Fixed avatar display by enriching character data with `defaultImage` using `enrichWithDefaultImage` helper
+  - Fixed AvatarStack height for multi-character stacks to match single avatar height
+  - Added tag display on chat cards (matching `/chats` page)
+  - Quick-hide support for both Characters card and Chats section
+  - APIs updated to return tags for characters and chats
+  - Chat cards are fully clickable (click anywhere except X to open chat)
+  - Chat cards display in 2-column grid when full-width toggle is enabled
+- feat: Page toolbar left content injection
+  - Created `PageToolbarProvider` context for pages to inject content into toolbar
+  - Project link in chat pages now appears in page toolbar (flush left with search bar)
+  - Removed separate project banner from chat page for cleaner UI
 - feat: Collapsible sidebar sections
   - Added per-section collapse state to SidebarProvider with localStorage persistence
   - Updated SidebarSection component with toggle chevron and smooth CSS transitions

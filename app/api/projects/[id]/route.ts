@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware'
+import { enrichWithDefaultImage } from '@/lib/api/middleware/file-path'
 import { logger } from '@/lib/logger'
 import { notFound, serverError, validationError } from '@/lib/api/responses'
 import { z } from 'zod'
@@ -51,10 +52,19 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
             chat.participants?.some(p => p.characterId === charId)
           )
 
+          // Fetch defaultImage if character has one
+          const defaultImage = await enrichWithDefaultImage(
+            char,
+            repos.files.findById.bind(repos.files)
+          )
+
           return {
             id: char.id,
             name: char.name,
             avatarUrl: char.avatarUrl,
+            defaultImageId: char.defaultImageId,
+            defaultImage,
+            tags: char.tags || [],
             chatCount: charProjectChats.length,
           }
         })

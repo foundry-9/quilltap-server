@@ -13,6 +13,7 @@ import { useEffect } from 'react'
 import { SearchBar } from '@/components/search/search-bar'
 import { NavContentWidthToggle } from '@/components/dashboard/nav-content-width-toggle'
 import { useSidebarOptional } from '@/components/providers/sidebar-provider'
+import { usePageToolbarOptional } from '@/components/providers/page-toolbar-provider'
 import { clientLogger } from '@/lib/client-logger'
 
 /**
@@ -38,6 +39,7 @@ function HamburgerIcon({ className }: { className?: string }) {
 
 export function PageToolbar() {
   const sidebar = useSidebarOptional()
+  const pageToolbar = usePageToolbarOptional()
 
   useEffect(() => {
     clientLogger.debug('PageToolbar mounted')
@@ -52,7 +54,7 @@ export function PageToolbar() {
 
   return (
     <div className="qt-page-toolbar">
-      {/* Left section: hamburger (mobile only) */}
+      {/* Left section: hamburger (mobile only) + page-specific content */}
       <div className="qt-page-toolbar-left">
         <button
           type="button"
@@ -62,6 +64,8 @@ export function PageToolbar() {
         >
           <HamburgerIcon className="w-6 h-6" />
         </button>
+        {/* Page-specific left content (e.g., project link in chat) */}
+        {pageToolbar?.leftContent}
       </div>
 
       {/* Center section: search bar */}

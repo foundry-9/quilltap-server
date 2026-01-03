@@ -8,14 +8,41 @@ export interface ProjectCharacter {
   id: string
   name: string
   avatarUrl?: string | null
+  defaultImageId?: string | null
+  defaultImage?: {
+    id: string
+    filepath: string
+    url?: string | null
+  } | null
+  tags?: string[]
   chatCount: number
+}
+
+export interface ProjectChatParticipant {
+  id: string
+  name: string
+  avatarUrl?: string | null
+  defaultImage?: {
+    id: string
+    filepath: string
+    url?: string | null
+  } | null
+  tags?: string[]
+}
+
+export interface ProjectChatTag {
+  tag: {
+    id: string
+    name: string
+  }
 }
 
 export interface ProjectChat {
   id: string
   title?: string | null
   messageCount: number
-  participants: Array<{ id: string; name: string; avatarUrl?: string | null }>
+  participants: ProjectChatParticipant[]
+  tags?: ProjectChatTag[]
   updatedAt: string
 }
 

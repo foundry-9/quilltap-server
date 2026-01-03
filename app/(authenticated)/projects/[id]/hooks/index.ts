@@ -7,3 +7,4 @@
 export { useProjectDetail } from './useProjectDetail'
 export { useProjectChats } from './useProjectChats'
 export { useProjectFiles } from './useProjectFiles'
+export { useProjectCardState } from './useProjectCardState'

@@ -13,6 +13,7 @@ import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { useSession } from '@/components/providers/session-provider'
 import { SidebarProvider } from '@/components/providers/sidebar-provider'
+import { PageToolbarProvider } from '@/components/providers/page-toolbar-provider'
 import { LeftSidebar } from './left-sidebar'
 import { PageToolbar } from './page-toolbar'
 import FooterWrapper from '@/components/footer-wrapper'
@@ -79,7 +80,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 export function AppLayout({ children }: AppLayoutProps) {
   return (
     <SidebarProvider>
-      <AppLayoutInner>{children}</AppLayoutInner>
+      <PageToolbarProvider>
+        <AppLayoutInner>{children}</AppLayoutInner>
+      </PageToolbarProvider>
     </SidebarProvider>
   )
 }

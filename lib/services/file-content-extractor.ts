@@ -169,7 +169,7 @@ async function extractPdfContent(buffer: Buffer): Promise<ExtractedContent> {
     // Using require for optional dependency to avoid TypeScript module errors
     let pdfParse: ((buffer: Buffer) => Promise<{ text: string }>) | null = null
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       pdfParse = require('pdf-parse')
     } catch {
       // pdf-parse is not installed
