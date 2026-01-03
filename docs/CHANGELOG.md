@@ -4,6 +4,16 @@
 
 ### 2.7-dev
 
+- feat: Collapsible sidebar sections
+  - Added per-section collapse state to SidebarProvider with localStorage persistence
+  - Updated SidebarSection component with toggle chevron and smooth CSS transitions
+  - Projects and Characters sections are now collapsible; Chats section remains fixed (flex-grow)
+  - Cross-tab sync for section collapse state
+- refactor: Project pages restructured with hooks and components
+  - Projects list page extracted into `useProjects` hook and dedicated components (ProjectCard, ProjectsGrid, dialogs)
+  - Project detail page extracted into domain-specific hooks (useProjectDetail, useProjectChats, useProjectFiles)
+  - Tab components extracted (ChatsTab, FilesTab, CharactersTab, SettingsTab)
+  - Follows established patterns from character view and settings modules
 - fix: Turn manager not tracking initial greeting message in new chats
   - Initial greeting messages were created without a `participantId`, causing the turn manager to not recognize that the character had already spoken
   - This caused the character to be prompted to speak again immediately after their greeting, and they would get confused thinking they said what you said

@@ -96,7 +96,7 @@ export function LeftSidebar() {
           <ProjectsSection />
 
           {/* Files section - placeholder */}
-          <SidebarSection title="Files" placeholder>
+          <SidebarSection id="files" title="Files" placeholder>
             <div className="px-2 py-1 text-xs text-muted-foreground">
               <FileIcon className="w-4 h-4 inline-block mr-2 opacity-50" />
               {!isCollapsed && <span className="opacity-50">No files yet</span>}

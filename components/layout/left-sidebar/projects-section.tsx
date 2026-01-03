@@ -86,7 +86,7 @@ export function ProjectsSection() {
   // Loading state
   if (loading) {
     return (
-      <SidebarSection title="Projects">
+      <SidebarSection id="projects" title="Projects">
         <div className="px-2 py-1 text-xs text-muted-foreground animate-pulse">
           {!isCollapsed && 'Loading...'}
         </div>
@@ -97,7 +97,7 @@ export function ProjectsSection() {
   // Empty state
   if (projects.length === 0) {
     return (
-      <SidebarSection title="Projects">
+      <SidebarSection id="projects" title="Projects">
         <div className="px-2 py-1 text-xs text-muted-foreground">
           {!isCollapsed && 'No projects yet'}
         </div>
@@ -107,7 +107,7 @@ export function ProjectsSection() {
   }
 
   return (
-    <SidebarSection title="Projects">
+    <SidebarSection id="projects" title="Projects">
       {projects.slice(0, 5).map(project => (
         <ProjectItem
           key={project.id}

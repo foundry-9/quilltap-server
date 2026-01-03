@@ -133,7 +133,7 @@ export function ChatsSection() {
   // Don't show section if loading or no chats
   if (loading) {
     return (
-      <SidebarSection title="Chats" grow>
+      <SidebarSection id="chats" title="Chats" grow collapsible={false}>
         <div className="px-2 py-1 text-xs text-muted-foreground animate-pulse">
           {!isCollapsed && 'Loading...'}
         </div>
@@ -148,7 +148,7 @@ export function ChatsSection() {
 
   if (visibleChats.length === 0) {
     return (
-      <SidebarSection title="Chats" grow>
+      <SidebarSection id="chats" title="Chats" grow collapsible={false}>
         <div className="px-2 py-1 text-xs text-muted-foreground">
           {!isCollapsed && 'No chats yet'}
         </div>
@@ -158,7 +158,7 @@ export function ChatsSection() {
   }
 
   return (
-    <SidebarSection title="Chats" grow>
+    <SidebarSection id="chats" title="Chats" grow collapsible={false}>
       {visibleChats.slice(0, 10).map(chat => (
         <ChatItem
           key={chat.id}

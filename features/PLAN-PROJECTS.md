@@ -83,14 +83,14 @@ LLMs can access project context via `project_info` tool:
 - [x] Create `components/layout/left-sidebar/projects-section.tsx`
 - [x] Add projects to `components/providers/sidebar-data-provider.tsx`
 - [x] Replace placeholder in `components/layout/left-sidebar/index.tsx`
-- [ ] Add collapsible support to `sidebar-section.tsx` - Deferred
+- [x] Add collapsible support to `sidebar-section.tsx` (implemented 2026-01-03)
 
 ### Phase 6: Frontend - Project Pages ✅
 
 - [x] Create `app/(authenticated)/projects/page.tsx` (list)
 - [x] Create `app/(authenticated)/projects/[id]/page.tsx` (detail with tabs)
-- [ ] Create separate component files - Inlined in page for simplicity
-- [ ] Create custom hooks - Using inline fetch for now
+- [x] Create separate component files (refactored 2026-01-03)
+- [x] Create custom hooks (refactored 2026-01-03)
 
 ### Phase 7: Chat Integration ✅
 
@@ -244,7 +244,7 @@ Deferred for future implementation:
 
 - [ ] Project templates (pre-configured setups)
 - [ ] Project sharing between users
-- [ ] Project export/import
+- [x] Project export/import (already implemented in `lib/export/quilltap-export-service.ts` and `lib/import/quilltap-import-service.ts`)
 - [ ] Nested projects (sub-projects)
 - [ ] Project-level settings (default LLM, roleplay template)
 - [ ] Project activity feed/timeline

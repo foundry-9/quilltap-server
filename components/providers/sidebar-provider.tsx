@@ -42,10 +42,15 @@ interface SidebarContextValue {
   setWidth: (width: number) => void
   /** Reset sidebar width to default */
   resetWidth: () => void
+  /** Which sections are collapsed (by section id) */
+  sectionCollapsed: Record<string, boolean>
+  /** Toggle a section's collapsed state */
+  toggleSectionCollapsed: (sectionId: string) => void
 }
 
 const STORAGE_KEY = 'quilltap.sidebar.collapsed'
 const WIDTH_STORAGE_KEY = 'quilltap.sidebar.width'
+const SECTIONS_STORAGE_KEY = 'quilltap.sidebar.sections.collapsed'
 const MOBILE_BREAKPOINT = 768
 
 const SidebarContext = createContext<SidebarContextValue | null>(null)
@@ -56,8 +61,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [isMobile, setIsMobile] = useState(false)
   const [storageReady, setStorageReady] = useState(false)
   const [width, setWidthState] = useState(DEFAULT_SIDEBAR_WIDTH)
+  const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>({})
 
-  // Load collapsed state and width from localStorage on mount
+  // Load collapsed state, width, and section states from localStorage on mount
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -73,6 +79,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
         if (!isNaN(parsedWidth) && parsedWidth >= MIN_SIDEBAR_WIDTH && parsedWidth <= MAX_SIDEBAR_WIDTH) {
           setWidthState(parsedWidth)
           clientLogger.debug('Loaded sidebar width from localStorage', { width: parsedWidth })
+        }
+      }
+
+      const sectionsRaw = window.localStorage.getItem(SECTIONS_STORAGE_KEY)
+      if (sectionsRaw) {
+        const parsed = JSON.parse(sectionsRaw)
+        if (typeof parsed === 'object' && parsed !== null) {
+          setSectionCollapsed(parsed)
+          clientLogger.debug('Loaded section collapsed states from localStorage', { sections: parsed })
         }
       }
     } catch (error) {
@@ -109,6 +124,19 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       })
     }
   }, [width, storageReady])
+
+  // Persist section collapsed states to localStorage when changed
+  useEffect(() => {
+    if (!storageReady || typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify(sectionCollapsed))
+      clientLogger.debug('Persisted section collapsed states to localStorage', { sectionCollapsed })
+    } catch (error) {
+      clientLogger.warn('Unable to persist section collapsed states', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }, [sectionCollapsed, storageReady])
 
   // Debounced API persistence for sidebar width
   const apiDebounceRef = useRef<NodeJS.Timeout | null>(null)
@@ -193,6 +221,16 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
         if (!isNaN(parsedWidth) && parsedWidth >= MIN_SIDEBAR_WIDTH && parsedWidth <= MAX_SIDEBAR_WIDTH) {
           clientLogger.debug('Sidebar width changed in another tab', { width: parsedWidth })
           setWidthState(parsedWidth)
+        }
+      } else if (event.key === SECTIONS_STORAGE_KEY && event.newValue !== null) {
+        try {
+          const parsed = JSON.parse(event.newValue)
+          if (typeof parsed === 'object' && parsed !== null) {
+            clientLogger.debug('Section collapsed states changed in another tab', { sections: parsed })
+            setSectionCollapsed(parsed)
+          }
+        } catch {
+          // Ignore invalid JSON
         }
       }
     }
@@ -287,6 +325,16 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     clientLogger.info('Reset sidebar width to default', { width: DEFAULT_SIDEBAR_WIDTH })
   }, [])
 
+  const toggleSectionCollapsed = useCallback((sectionId: string) => {
+    setSectionCollapsed(prev => {
+      const next = { ...prev, [sectionId]: !prev[sectionId] }
+      queueMicrotask(() => {
+        clientLogger.debug('Toggled section collapsed', { sectionId, collapsed: next[sectionId] })
+      })
+      return next
+    })
+  }, [])
+
   const value = useMemo<SidebarContextValue>(
     () => ({
       isCollapsed,
@@ -299,8 +347,10 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       isMobile,
       setWidth,
       resetWidth,
+      sectionCollapsed,
+      toggleSectionCollapsed,
     }),
-    [isCollapsed, isMobileOpen, width, toggleCollapse, setCollapsed, openMobile, closeMobile, isMobile, setWidth, resetWidth]
+    [isCollapsed, isMobileOpen, width, toggleCollapse, setCollapsed, openMobile, closeMobile, isMobile, setWidth, resetWidth, sectionCollapsed, toggleSectionCollapsed]
   )
 
   return (

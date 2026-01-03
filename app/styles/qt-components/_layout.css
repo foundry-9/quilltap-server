@@ -424,6 +424,7 @@
   }
 
   .qt-left-sidebar-collapsed .qt-left-sidebar-item-label,
+  .qt-left-sidebar-collapsed .qt-left-sidebar-section-header,
   .qt-left-sidebar-collapsed .qt-left-sidebar-section-title,
   .qt-left-sidebar-collapsed .qt-left-sidebar-view-all {
     @apply hidden;
@@ -502,12 +503,35 @@
   }
 
   /**
+   * Section header (contains title and collapse toggle)
+   */
+  .qt-left-sidebar-section-header {
+    @apply flex items-center justify-between;
+    @apply mb-2 px-2;
+  }
+
+  /**
    * Section title
    */
   .qt-left-sidebar-section-title {
     @apply text-xs font-semibold uppercase tracking-wider;
-    @apply mb-2 px-2;
+    @apply flex-1;
     color: var(--qt-left-sidebar-section-title-fg);
+  }
+
+  /**
+   * Section content (collapsible container)
+   */
+  .qt-left-sidebar-section-content {
+    @apply overflow-hidden;
+    transition: max-height 200ms ease-out, opacity 150ms ease-out;
+    max-height: 500px; /* Large enough for content */
+    opacity: 1;
+  }
+
+  .qt-left-sidebar-section-collapsed .qt-left-sidebar-section-content {
+    max-height: 0;
+    opacity: 0;
   }
 
   /**
@@ -687,6 +711,10 @@
     .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-section-title,
     .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-view-all {
       @apply block;
+    }
+
+    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-section-header {
+      @apply flex;
     }
 
     .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-item {
