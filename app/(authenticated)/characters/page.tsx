@@ -9,6 +9,7 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
 import { clientLogger } from '@/lib/client-logger'
 import { processTemplate } from '@/lib/templates/processor'
@@ -44,6 +45,7 @@ export default function CharactersPage() {
   const [deleteDialogCharacter, setDeleteDialogCharacter] = useState<Character | null>(null)
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
+  const { refreshSidebar } = useSidebarData()
   const router = useRouter()
 
   const visibleCharacters = useMemo(
@@ -128,6 +130,9 @@ export default function CharactersPage() {
         deletedItems.push(`${result.deletedMemories} memor${result.deletedMemories === 1 ? 'y' : 'ies'} deleted`)
       }
       showSuccessToast(deletedItems.join('. '))
+
+      // Refresh sidebar to reflect deletion (also refreshes chats if cascadeChats was used)
+      refreshSidebar()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to delete character')
     }
@@ -140,6 +145,9 @@ export default function CharactersPage() {
       if (!res.ok) throw new Error('Failed to toggle favorite')
       const data = await res.json()
       setCharacters(characters.map((c) => (c.id === id ? { ...c, isFavorite: data.character.isFavorite } : c)))
+
+      // Refresh sidebar to reflect favorite change (favorites are shown first)
+      refreshSidebar()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle favorite')
     }
