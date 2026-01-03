@@ -120,6 +120,9 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       systemPrompt: systemPrompt.trim(),
       isBuiltIn: false,
       tags: [],
+      annotationButtons: [],
+      renderingPatterns: [],
+      dialogueDetection: null,
     })
 
     logger.info('Roleplay template created', {

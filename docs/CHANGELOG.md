@@ -4,6 +4,16 @@
 
 ### 2.7-dev
 
+- refactor: Make roleplay template rendering patterns configurable via plugins
+  - Added `RenderingPattern` and `DialogueDetection` types to `@quilltap/plugin-types`
+  - Templates can now define custom regex patterns for styling text (dialogue, narration, OOC, etc.)
+  - Removed all hardcoded template name checks from MessageContent component
+  - MessageContent now accepts `renderingPatterns` and `dialogueDetection` props
+  - Updated MessageRow, StreamingMessage, and ChatComposer to use new pattern-based props
+  - Chat page fetches and passes rendering patterns from roleplay template API
+  - Added rendering patterns to Quilltap RP plugin (narration, inner monologue, OOC)
+  - Added rendering patterns to Standard template in database seed
+  - Bumped `@quilltap/plugin-types` to 1.5.0
 - feat: Web search tool integration with Serper.dev API
   - Implemented real web search functionality for the `search_web` LLM tool
   - Uses Serper.dev API for Google search results (2,500 free searches/month)

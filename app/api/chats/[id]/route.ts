@@ -21,6 +21,7 @@ const updateChatSchema = z.object({
   roleplayTemplateId: z.string().nullish(),
   isPaused: z.boolean().optional(),
   isManuallyRenamed: z.boolean().optional(),
+  documentEditingMode: z.boolean().optional(),
 })
 
 // Validation schema for participant updates

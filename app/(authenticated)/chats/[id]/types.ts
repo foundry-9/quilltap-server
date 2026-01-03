@@ -106,6 +106,8 @@ export interface Chat {
   activeTypingParticipantId?: string | null
   /** Turns since last user input or pause (for all-LLM pause logic) */
   allLLMPauseTurnCount?: number
+  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  documentEditingMode?: boolean
 }
 
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'

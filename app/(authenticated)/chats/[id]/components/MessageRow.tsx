@@ -10,6 +10,7 @@ import type { Message, Participant } from '../types'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
+import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
 interface MessageAvatarInfo {
   name: string
@@ -28,7 +29,10 @@ interface MessageRowProps {
   showResendButton: boolean
   shouldShowAvatars: boolean
   messageAvatar: MessageAvatarInfo | null
-  roleplayTemplateName: string | null
+  /** Patterns for styling roleplay text in message content */
+  renderingPatterns?: RenderingPattern[]
+  /** Optional dialogue detection for paragraph-level styling */
+  dialogueDetection?: DialogueDetection | null
   isMultiChar: boolean
   participantData: ParticipantData[]
   turnState: TurnState
@@ -76,7 +80,8 @@ export function MessageRow({
   showResendButton,
   shouldShowAvatars,
   messageAvatar,
-  roleplayTemplateName,
+  renderingPatterns,
+  dialogueDetection,
   isMultiChar,
   participantData,
   turnState,
@@ -332,7 +337,7 @@ export function MessageRow({
                   {message.content}
                 </div>
               ) : (
-                <MessageContent content={message.content} roleplayTemplateName={roleplayTemplateName} />
+                <MessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} />
               )}
               {/* Image attachment thumbnails */}
               {getImageAttachments(message).length > 0 && (

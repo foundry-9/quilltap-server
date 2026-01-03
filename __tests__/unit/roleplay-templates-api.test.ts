@@ -194,6 +194,9 @@ describe('Roleplay Template Routes', () => {
         systemPrompt: 'Use this prompt',
         isBuiltIn: false,
         tags: [],
+        annotationButtons: [],
+        renderingPatterns: [],
+        dialogueDetection: null,
       })
       expect(data).toEqual(createdTemplate)
     })

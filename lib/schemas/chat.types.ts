@@ -179,6 +179,9 @@ export const ChatMetadataSchema = z.object({
   /** Turns since last user input or pause (for all-LLM pause logic) */
   allLLMPauseTurnCount: z.number().default(0),
 
+  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  documentEditingMode: z.boolean().default(false),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -214,6 +217,8 @@ export const ChatMetadataBaseSchema = z.object({
   impersonatingParticipantIds: z.array(UUIDSchema).default([]),
   activeTypingParticipantId: UUIDSchema.nullable().optional(),
   allLLMPauseTurnCount: z.number().default(0),
+  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  documentEditingMode: z.boolean().default(false),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

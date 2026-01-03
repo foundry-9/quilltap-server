@@ -94,6 +94,18 @@
   .qt-chat-message-content {
     @apply max-w-none w-full;
     overflow: hidden;
+    /* Override Tailwind prose body color to use full foreground instead of muted gray */
+    --tw-prose-body: var(--color-foreground);
+    --tw-prose-invert-body: var(--color-foreground);
+    /* Direct color override - prose plugin applies color via specificity, so we need to be explicit */
+    color: var(--color-foreground);
+  }
+
+  /* Ensure prose elements inherit foreground color from message content */
+  .qt-chat-message-content p,
+  .qt-chat-message-content li,
+  .qt-chat-message-content blockquote {
+    color: inherit;
   }
 
   /**
@@ -333,6 +345,90 @@
   }
 
   /* ==========================================================================
+     FORMATTING TOOLBAR (Document Editing Mode)
+     ========================================================================== */
+
+  /**
+   * Formatting toolbar container - shown above textarea in document editing mode
+   */
+  .qt-formatting-toolbar {
+    @apply flex items-center gap-2;
+    padding: 0.375rem 0.5rem;
+    background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.5rem;
+  }
+
+  /**
+   * Section groups buttons together
+   */
+  .qt-formatting-toolbar-section {
+    @apply flex items-center gap-1;
+  }
+
+  /**
+   * Vertical divider between sections
+   */
+  .qt-formatting-toolbar-divider {
+    @apply h-5 mx-1;
+    width: 1px;
+    background: var(--color-border);
+  }
+
+  /**
+   * Base formatting button style
+   */
+  .qt-formatting-button {
+    @apply inline-flex items-center justify-center;
+    @apply text-xs font-medium;
+    @apply transition-colors duration-150;
+    min-width: 1.75rem;
+    height: 1.75rem;
+    padding: 0 0.375rem;
+    border-radius: var(--radius-sm);
+    background: var(--qt-content-bg);
+    color: var(--color-foreground);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+  }
+
+  .qt-formatting-button:hover:not(:disabled) {
+    background: var(--qt-content-bg-hover);
+    border-color: var(--color-foreground);
+  }
+
+  .qt-formatting-button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  /**
+   * Bold button - use heavier font weight
+   */
+  .qt-formatting-button-bold {
+    font-weight: 700;
+  }
+
+  /**
+   * Italic button - use italic style
+   */
+  .qt-formatting-button-italic {
+    font-style: italic;
+  }
+
+  /**
+   * Active state for toggle buttons (e.g., document editing mode toggle)
+   */
+  .qt-chat-toolbar-button-active {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    border-color: var(--color-primary);
+  }
+
+  .qt-chat-toolbar-button-active:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-primary) 85%, black);
+  }
+
+  /* ==========================================================================
      ROLEPLAY ANNOTATION STYLES
      ========================================================================== */
 
@@ -397,8 +493,9 @@
 
   /**
    * Dialogue text styling
+   * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
-  .qt-chat-dialogue {
+  .qt-chat-message-content .qt-chat-dialogue {
     color: var(--qt-rp-dialogue-color);
     background: var(--qt-rp-dialogue-bg);
   }
@@ -406,8 +503,9 @@
   /**
    * Narration/action text styling
    * Dark background for contrast on any message bubble
+   * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
-  .qt-chat-narration {
+  .qt-chat-message-content .qt-chat-narration {
     color: var(--qt-rp-narration-color);
     background: var(--qt-rp-narration-bg);
     font-style: var(--qt-rp-narration-style);
@@ -419,8 +517,9 @@
   /**
    * Internal monologue text styling - italic purple
    * Dark background for contrast on any message bubble
+   * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
-  .qt-chat-inner-monologue {
+  .qt-chat-message-content .qt-chat-inner-monologue {
     color: var(--qt-rp-inner-monologue-color);
     background: var(--qt-rp-inner-monologue-bg);
     font-style: var(--qt-rp-inner-monologue-style);
@@ -432,8 +531,9 @@
   /**
    * Out of Character (OOC) text styling
    * Terminal-style bright green on black
+   * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
-  .qt-chat-ooc {
+  .qt-chat-message-content .qt-chat-ooc {
     color: var(--qt-rp-ooc-color);
     background: var(--qt-rp-ooc-bg);
     font-family: var(--qt-rp-ooc-font);

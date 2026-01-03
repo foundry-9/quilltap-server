@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-01-02
+
+### Added
+
+- Added `RenderingPattern` interface for configurable message content styling:
+  - `pattern: string` - Regex pattern as a string (converted to RegExp at runtime)
+  - `className: string` - CSS class to apply to matched text
+  - `flags?: string` - Optional regex flags (e.g., 'm' for multiline)
+- Added `DialogueDetection` interface for paragraph-level dialogue detection:
+  - `openingChars: string[]` - Opening quote characters to detect
+  - `closingChars: string[]` - Closing quote characters to detect
+  - `className: string` - CSS class to apply to dialogue paragraphs
+- Added `renderingPatterns?: RenderingPattern[]` field to `RoleplayTemplateConfig`
+- Added `dialogueDetection?: DialogueDetection` field to `RoleplayTemplateConfig`
+- Exported `AnnotationButton`, `RenderingPattern`, `DialogueDetection` from `@quilltap/plugin-types/plugins`
+
+## [1.4.0] - 2026-01-02
+
+### Added
+
+- Added `AnnotationButton` interface for roleplay template annotation buttons:
+  - `label: string` - Full name for tooltip (e.g., "Narration", "Internal Monologue")
+  - `abbrev: string` - Abbreviated label for button display (e.g., "Nar", "Int", "OOC")
+  - `prefix: string` - Opening delimiter (e.g., "[", "{", "// ")
+  - `suffix: string` - Closing delimiter (e.g., "]", "}", "")
+- Added `annotationButtons?: AnnotationButton[]` field to `RoleplayTemplateConfig` interface
+  - Enables roleplay template plugins to define custom annotation formatting buttons
+  - Used by the Document Editing Mode formatting toolbar
+
 ## [1.3.0] - 2026-01-02
 
 ### Added

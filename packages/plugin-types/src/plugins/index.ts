@@ -44,6 +44,9 @@ export type {
 } from './theme';
 
 export type {
+  AnnotationButton,
+  RenderingPattern,
+  DialogueDetection,
   RoleplayTemplateConfig,
   RoleplayTemplateMetadata,
   RoleplayTemplatePlugin,

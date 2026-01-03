@@ -57,6 +57,7 @@ import {
   getNextPauseThreshold,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
+import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
 // Import extracted hooks
 import {
@@ -100,9 +101,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [viewSourceMessageIds, setViewSourceMessageIds] = useState<Set<string>>(new Set())
   const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
   const [roleplayTemplateName, setRoleplayTemplateName] = useState<string | null>(null)
+  const [roleplayRenderingPatterns, setRoleplayRenderingPatterns] = useState<RenderingPattern[] | undefined>(undefined)
+  const [roleplayDialogueDetection, setRoleplayDialogueDetection] = useState<DialogueDetection | null | undefined>(undefined)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [mobileToolPaletteOpen, setMobileToolPaletteOpen] = useState(false)
+  const [documentEditingMode, setDocumentEditingMode] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
@@ -627,6 +631,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [chat?.isPaused])
 
+  // Initialize documentEditingMode from chat data
+  useEffect(() => {
+    if (chat?.documentEditingMode !== undefined) {
+      setDocumentEditingMode(chat.documentEditingMode)
+    }
+  }, [chat?.documentEditingMode])
+
   // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
   // This prevents immediate re-pause when user clicks Resume after page refresh
   useEffect(() => {
@@ -826,6 +837,26 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       clientLogger.error('[Chat] Error persisting pause state', { error })
     }
   }, [id])
+
+  // Toggle document editing mode and persist to database
+  const handleToggleDocumentEditingMode = useCallback(async () => {
+    const newMode = !documentEditingMode
+    setDocumentEditingMode(newMode)
+    clientLogger.debug('[Chat] Toggling document editing mode', { from: documentEditingMode, to: newMode })
+
+    try {
+      const response = await fetch(`/api/chats/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { documentEditingMode: newMode } }),
+      })
+      if (!response.ok) {
+        clientLogger.error('[Chat] Failed to persist document editing mode', { status: response.status })
+      }
+    } catch (error) {
+      clientLogger.error('[Chat] Error persisting document editing mode', { error })
+    }
+  }, [id, documentEditingMode])
 
   // Auto-trigger next character in multi-character mode
   useEffect(() => {
@@ -1325,9 +1356,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount])
 
   useEffect(() => {
-    const fetchTemplateName = async () => {
+    const fetchTemplateData = async () => {
       if (!chat?.roleplayTemplateId) {
         setRoleplayTemplateName(null)
+        setRoleplayRenderingPatterns(undefined)
+        setRoleplayDialogueDetection(undefined)
         return
       }
 
@@ -1336,22 +1369,30 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         if (res.ok) {
           const template = await res.json()
           setRoleplayTemplateName(template.name)
-          clientLogger.debug('[Chat] Fetched roleplay template name', {
+          setRoleplayRenderingPatterns(template.renderingPatterns)
+          setRoleplayDialogueDetection(template.dialogueDetection)
+          clientLogger.debug('[Chat] Fetched roleplay template data', {
             templateId: chat.roleplayTemplateId,
             templateName: template.name,
+            hasRenderingPatterns: !!template.renderingPatterns?.length,
+            hasDialogueDetection: !!template.dialogueDetection,
           })
         } else {
           setRoleplayTemplateName(null)
+          setRoleplayRenderingPatterns(undefined)
+          setRoleplayDialogueDetection(undefined)
         }
       } catch (err) {
         clientLogger.error('[Chat] Error fetching roleplay template', {
           error: err instanceof Error ? err.message : String(err),
         })
         setRoleplayTemplateName(null)
+        setRoleplayRenderingPatterns(undefined)
+        setRoleplayDialogueDetection(undefined)
       }
     }
 
-    fetchTemplateName()
+    fetchTemplateData()
   }, [chat?.roleplayTemplateId])
 
   useEffect(() => {
@@ -1900,7 +1941,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   showResendButton={showResendButton}
                   shouldShowAvatars={shouldShowAvatars()}
                   messageAvatar={messageAvatar}
-                  roleplayTemplateName={roleplayTemplateName}
+                  renderingPatterns={roleplayRenderingPatterns}
+                  dialogueDetection={roleplayDialogueDetection}
                   isMultiChar={isMultiChar}
                   participantData={participantData}
                   turnState={turnState}
@@ -1953,7 +1995,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               streamingContent={streamingContent}
               waitingForResponse={waitingForResponse}
               respondingCharacter={getRespondingCharacter() || undefined}
-              roleplayTemplateName={roleplayTemplateName}
+              renderingPatterns={roleplayRenderingPatterns}
+              dialogueDetection={roleplayDialogueDetection}
               shouldShowAvatars={shouldShowAvatars()}
               onStopClick={stopStreaming}
             />
@@ -1994,12 +2037,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           setShowPreview={setShowPreview}
           uploadingFile={uploadingFile}
           toolExecutionStatus={toolExecutionStatus}
-          roleplayTemplateName={roleplayTemplateName}
+          renderingPatterns={roleplayRenderingPatterns}
+          dialogueDetection={roleplayDialogueDetection}
           chatPhotoCount={chatPhotoCount}
           chatMemoryCount={chatMemoryCount}
           hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
           isSingleCharacterChat={isSingleCharacterChat}
           roleplayTemplateId={chat?.roleplayTemplateId}
+          documentEditingMode={documentEditingMode}
+          onToggleDocumentEditingMode={handleToggleDocumentEditingMode}
           onSubmit={sendMessage}
           onFileSelect={handleFileSelect}
           onAttachFileClick={() => {
