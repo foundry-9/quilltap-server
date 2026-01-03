@@ -263,6 +263,52 @@ export async function updateOAuthTokens(
 }
 
 /**
+ * Update user profile from OAuth provider info
+ * Updates name and image if they've changed
+ *
+ * @param userId - User's ID
+ * @param userInfo - User information from OAuth provider
+ * @returns Updated user
+ */
+export async function updateUserProfileFromOAuth(
+  userId: string,
+  userInfo: ArcticUserInfo
+): Promise<OAuthUser | null> {
+  const db = await getMongoDatabase();
+  const usersCollection = db.collection<OAuthUser>('users');
+
+  const updateFields: Partial<OAuthUser> = {
+    updatedAt: now(),
+  };
+
+  // Update name if provided
+  if (userInfo.name) {
+    updateFields.name = userInfo.name;
+  }
+
+  // Update image if provided
+  if (userInfo.image) {
+    updateFields.image = userInfo.image;
+  }
+
+  const result = await usersCollection.findOneAndUpdate(
+    { id: userId },
+    { $set: updateFields },
+    { returnDocument: 'after' }
+  );
+
+  if (result) {
+    logger.debug('Updated user profile from OAuth', {
+      context: 'arctic.user-service.updateUserProfileFromOAuth',
+      userId,
+      updatedFields: Object.keys(updateFields),
+    });
+  }
+
+  return result || null;
+}
+
+/**
  * Create or find a user from OAuth login
  * This is the main entry point for OAuth authentication
  *
@@ -283,13 +329,16 @@ export async function createOrFindOAuthUser(
     // Update tokens for existing account
     await updateOAuthTokens(provider, userInfo.id, tokens);
 
+    // Update user profile (name, image) from provider
+    const updatedUser = await updateUserProfileFromOAuth(existingUser.id, userInfo);
+
     logger.debug('OAuth login - returning existing user', {
       context: 'arctic.user-service.createOrFindOAuthUser',
       provider,
       userId: existingUser.id,
     });
 
-    return existingUser;
+    return updatedUser || existingUser;
   }
 
   // Check if we have a user with this email (for account linking)
@@ -300,6 +349,9 @@ export async function createOrFindOAuthUser(
       // Link this OAuth account to the existing user
       await linkOAuthAccount(userByEmail.id, provider, userInfo.id, tokens);
 
+      // Update user profile (name, image) from provider
+      const updatedUser = await updateUserProfileFromOAuth(userByEmail.id, userInfo);
+
       logger.info('OAuth login - linked account to existing user by email', {
         context: 'arctic.user-service.createOrFindOAuthUser',
         provider,
@@ -307,7 +359,7 @@ export async function createOrFindOAuthUser(
         email: userInfo.email,
       });
 
-      return userByEmail;
+      return updatedUser || userByEmail;
     }
   }
 

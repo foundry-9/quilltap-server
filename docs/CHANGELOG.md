@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- fix: Google OAuth avatar not displaying for existing users
+  - User profile (name, image) was not being updated on subsequent OAuth logins
+  - Added `updateUserProfileFromOAuth` function to sync profile data from provider
+  - Now updates name and avatar image each time user logs in via OAuth
+  - Users need to log out and log back in to see their Google avatar
 - refactor: Project detail page card-based layout
   - Replaced tab-based navigation with expandable/collapsible cards
   - Three cards at top: Files, Characters (favorites-style), and Settings
