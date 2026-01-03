@@ -49,6 +49,7 @@ describe('backup restore service - delete preview', () => {
           return Promise.resolve([{ id: 'mem-3' }])
         }),
       },
+      projects: { findAll: jest.fn().mockResolvedValue([{ id: 'project-1' }]) },
     }
     mockedGetUserRepositories.mockReturnValue(userRepos as any)
 

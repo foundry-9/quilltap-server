@@ -42,6 +42,9 @@ interface MockRepositories {
   files: {
     findByUserId: jest.Mock;
   };
+  projects: {
+    findByUserId: jest.Mock;
+  };
   roleplayTemplates: {
     findByUserId: jest.Mock;
   };
@@ -70,6 +73,9 @@ const mockRepositories: MockRepositories = {
     findByCharacterId: jest.fn().mockResolvedValue([]),
   },
   files: {
+    findByUserId: jest.fn().mockResolvedValue([]),
+  },
+  projects: {
     findByUserId: jest.fn().mockResolvedValue([]),
   },
   roleplayTemplates: {

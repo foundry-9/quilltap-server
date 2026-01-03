@@ -16,6 +16,7 @@ import type {
   Memory,
   MessageEvent,
   RoleplayTemplate,
+  Project,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -34,7 +35,8 @@ export type ExportEntityType =
   | 'connection-profiles'
   | 'image-profiles'
   | 'embedding-profiles'
-  | 'tags';
+  | 'tags'
+  | 'projects';
 
 // ============================================================================
 // EXPORT MANIFEST
@@ -66,6 +68,7 @@ export interface QuilltapExportCounts {
   embeddingProfiles?: number;
   tags?: number;
   memories?: number;
+  projects?: number;
 }
 
 /**
@@ -218,6 +221,22 @@ export interface TagsExportData {
 }
 
 /**
+ * Project with resolved relationships
+ */
+export interface ExportedProject extends Project {
+  _characterRosterNames?: string[];
+  _chatCount?: number;
+  _fileCount?: number;
+}
+
+/**
+ * Projects export data
+ */
+export interface ProjectsExportData {
+  projects: ExportedProject[];
+}
+
+/**
  * Union of all possible export data structures
  */
 export type QuilltapExportData =
@@ -228,7 +247,8 @@ export type QuilltapExportData =
   | ConnectionProfilesExportData
   | ImageProfilesExportData
   | EmbeddingProfilesExportData
-  | TagsExportData;
+  | TagsExportData
+  | ProjectsExportData;
 
 /**
  * Complete export structure with manifest and data

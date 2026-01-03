@@ -19,6 +19,9 @@
   - Chat integration: project selector in chat settings, project badge on sidebar chat cards
   - New Chat button on project page links to chat creation with project context
   - Project indicator banner in chat page linking back to project
+  - Full backup/restore support with project ID remapping and relationship reconciliation
+  - Quilltap export/import support for projects as standalone entity type
+  - Sync support: added PROJECT to syncable entity types with delta detection
 - fix: Quilltap RP template plugin manifest validation error
   - Removed `null` value for `dialogueDetection` that was causing Zod validation to fail
   - Updated schema to accept `null` as well as `undefined` for `dialogueDetection`

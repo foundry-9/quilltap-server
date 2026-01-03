@@ -48,6 +48,7 @@ export const ENTITY_TYPE_LABELS: Record<ExportEntityType, string> = {
   'image-profiles': 'Image Profiles',
   'embedding-profiles': 'Embedding Profiles',
   tags: 'Tags',
+  projects: 'Projects',
 }
 
 // Available entity with optional memory count

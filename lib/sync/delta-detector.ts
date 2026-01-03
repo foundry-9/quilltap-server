@@ -224,6 +224,24 @@ async function getEntityDeltas(
         break;
       }
 
+      case 'PROJECT': {
+        const projects = await repos.projects.findByUserId(userId);
+        for (const project of projects) {
+          if (!sinceTimestamp || project.updatedAt > sinceTimestamp) {
+            deltas.push({
+              entityType: 'PROJECT',
+              id: project.id,
+              createdAt: project.createdAt,
+              updatedAt: project.updatedAt,
+              isDeleted: false,
+              data: project as unknown as Record<string, unknown>,
+            });
+          }
+          if (deltas.length >= limit) break;
+        }
+        break;
+      }
+
       case 'ROLEPLAY_TEMPLATE': {
         const templates = await repos.roleplayTemplates.findByUserId(userId);
         for (const template of templates) {
@@ -292,7 +310,7 @@ export async function detectDeltas(options: DeltaDetectionOptions): Promise<Delt
   const {
     userId,
     // Enforced sync order - entities with dependencies come after their dependencies
-    entityTypes = ['TAG', 'FILE', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
+    entityTypes = ['TAG', 'FILE', 'PROJECT', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
     sinceTimestamp = null,
     limit = 100,
   } = options;
@@ -369,7 +387,7 @@ export async function countDeltas(options: DeltaDetectionOptions): Promise<Recor
   const {
     userId,
     // Enforced sync order - entities with dependencies come after their dependencies
-    entityTypes = ['TAG', 'FILE', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
+    entityTypes = ['TAG', 'FILE', 'PROJECT', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
     sinceTimestamp = null,
   } = options;
 
@@ -438,6 +456,9 @@ export async function getMostRecentUpdate(userId: string): Promise<string | null
 
     const files = await repos.files.findByUserId(userId);
     files.forEach((f) => checkTimestamp(f.updatedAt));
+
+    const projects = await repos.projects.findByUserId(userId);
+    projects.forEach((p) => checkTimestamp(p.updatedAt));
 
     const roleplayTemplates = await repos.roleplayTemplates.findByUserId(userId);
     roleplayTemplates.forEach((r) => checkTimestamp(r.updatedAt));

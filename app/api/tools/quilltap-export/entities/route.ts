@@ -126,6 +126,12 @@ export const GET = createAuthenticatedHandler(async (req, { user }) => {
         break;
       }
 
+      case 'projects': {
+        const projects = await repos.projects.findAll();
+        entities = projects.map((p) => ({ id: p.id, name: p.name }));
+        break;
+      }
+
       default:
         return badRequest(`Unknown entity type: ${type}`);
     }

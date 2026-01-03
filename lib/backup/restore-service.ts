@@ -35,6 +35,7 @@ import type {
   PromptTemplate,
   RoleplayTemplate,
   ProviderModel,
+  Project,
 } from '@/lib/schemas/types';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
@@ -100,6 +101,8 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
   const roleplayTemplates = readJsonOptional<RoleplayTemplate[]>('data/roleplay-templates.json', []);
   // Provider models are optional for backwards compatibility with older backups
   const providerModels = readJsonOptional<ProviderModel[]>('data/provider-models.json', []);
+  // Projects are optional for backwards compatibility with older backups
+  const projects = readJsonOptional<Project[]>('data/projects.json', []);
 
   moduleLogger.info('Parsed backup ZIP', {
     version: manifest.version,
@@ -121,6 +124,7 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
     promptTemplates,
     roleplayTemplates,
     providerModels,
+    projects,
   };
 }
 
@@ -181,6 +185,7 @@ export function previewRestore(zipBuffer: Buffer): RestoreSummary {
       roleplay: data.roleplayTemplates.length,
     },
     providerModels: data.providerModels.length,
+    projects: data.projects.length,
     warnings: [],
   };
 }
@@ -196,7 +201,7 @@ async function deleteUserData(userId: string): Promise<void> {
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates] =
+  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects] =
     await Promise.all([
       repos.characters.findAll(),
       repos.personas.findAll(),
@@ -208,6 +213,7 @@ async function deleteUserData(userId: string): Promise<void> {
       repos.embeddingProfiles.findAll(),
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
+      repos.projects.findAll(),
     ]);
 
   // Delete memories for each character first
@@ -218,7 +224,7 @@ async function deleteUserData(userId: string): Promise<void> {
     }
   }
 
-  // Delete all entities (including user-created templates)
+  // Delete all entities (including user-created templates and projects)
   await Promise.all([
     ...characters.map((c) => repos.characters.delete(c.id)),
     ...personas.map((p) => repos.personas.delete(p.id)),
@@ -229,6 +235,7 @@ async function deleteUserData(userId: string): Promise<void> {
     ...embeddingProfiles.map((ep) => repos.embeddingProfiles.delete(ep.id)),
     ...promptTemplates.map((pt) => globalRepos.promptTemplates.delete(pt.id)),
     ...roleplayTemplates.map((rt) => globalRepos.roleplayTemplates.delete(rt.id)),
+    ...projects.map((p) => repos.projects.delete(p.id)),
   ]);
 
   // Delete files from S3
@@ -259,6 +266,7 @@ async function deleteUserData(userId: string): Promise<void> {
       embeddingProfiles: embeddingProfiles.length,
       promptTemplates: promptTemplates.length,
       roleplayTemplates: roleplayTemplates.length,
+      projects: projects.length,
     },
   });
 }
@@ -275,6 +283,7 @@ export interface DeleteSummary {
   memories: number;
   apiKeys: number;
   backups: number;
+  projects: number;
   profiles: {
     connection: number;
     image: number;
@@ -303,7 +312,7 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
   const globalRepos = getRepositories();
 
   // First, count everything before deletion
-  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys] =
+  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys, projects] =
     await Promise.all([
       repos.characters.findAll(),
       repos.personas.findAll(),
@@ -319,6 +328,7 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
       globalRepos.syncInstances.findByUserId(userId),
       globalRepos.syncOperations.findByUserId(userId, 10000), // High limit to get all
       globalRepos.userSyncApiKeys.findByUserId(userId),
+      repos.projects.findAll(),
     ]);
 
   // Count memories
@@ -414,6 +424,7 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
     memories: memoriesCount,
     apiKeys: apiKeys.length,
     backups: backupsCount,
+    projects: projects.length,
     profiles: {
       connection: connectionProfiles.length,
       image: imageProfiles.length,
@@ -447,7 +458,7 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
 
-  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys] =
+  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys, projects] =
     await Promise.all([
       repos.characters.findAll(),
       repos.personas.findAll(),
@@ -463,6 +474,7 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
       globalRepos.syncInstances.findByUserId(userId),
       globalRepos.syncOperations.findByUserId(userId, 10000), // High limit to get all
       globalRepos.userSyncApiKeys.findByUserId(userId),
+      repos.projects.findAll(),
     ]);
 
   // Count memories
@@ -491,6 +503,7 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
     memories: memoriesCount,
     apiKeys: apiKeys.length,
     backups: backupKeys.length,
+    projects: projects.length,
     profiles: {
       connection: connectionProfiles.length,
       image: imageProfiles.length,
@@ -654,6 +667,13 @@ function remapBackupData(
   // Provider models are global and don't need remapping, just copy them
   const remappedProviderModels = data.providerModels;
 
+  // Remap projects
+  const remappedProjects = data.projects.map((project) => ({
+    ...remapper.remapFields(project, ['id']),
+    ...remapper.remapArrayFields(project, ['characterRoster']),
+    userId: targetUserId,
+  })) as Project[];
+
   return {
     manifest: data.manifest,
     characters: remappedCharacters,
@@ -668,6 +688,7 @@ function remapBackupData(
     promptTemplates: remappedPromptTemplates,
     roleplayTemplates: remappedRoleplayTemplates,
     providerModels: remappedProviderModels,
+    projects: remappedProjects,
   };
 }
 
@@ -711,6 +732,7 @@ export async function restore(
   const characterIdMap = new Map<string, string>();
   const personaIdMap = new Map<string, string>();
   const chatIdMap = new Map<string, string>();
+  const projectIdMap = new Map<string, string>();
 
   // Restore in dependency order
   // 1. Tags (no dependencies)
@@ -957,6 +979,21 @@ export async function restore(
     }
   }
 
+  // 13. Projects
+  moduleLogger.debug('Restoring projects', { count: data.projects.length });
+  let projectsRestored = 0;
+  for (const project of data.projects) {
+    try {
+      const { id: backupId, userId, createdAt, updatedAt, ...projectData } = project;
+      const createdProject = await repos.projects.create(projectData);
+      projectIdMap.set(backupId, createdProject.id);
+      projectsRestored++;
+    } catch (error) {
+      warnings.push(`Failed to restore project "${project.name}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore project', { projectId: project.id, error });
+    }
+  }
+
   // ============================================================================
   // POST-RESTORE RECONCILIATION PHASE
   // ============================================================================
@@ -973,6 +1010,7 @@ export async function restore(
       characters: characterIdMap.size,
       personas: personaIdMap.size,
       chats: chatIdMap.size,
+      projects: projectIdMap.size,
     },
   });
 
@@ -1170,6 +1208,15 @@ export async function restore(
         }
       }
 
+      // Remap projectId
+      if (originalChat.projectId) {
+        const newProjectId = remapId(originalChat.projectId, projectIdMap);
+        if (newProjectId) {
+          updates.projectId = newProjectId;
+          hasUpdates = true;
+        }
+      }
+
       if (hasUpdates) {
         await repos.chats.update(newId, updates);
         moduleLogger.debug('Updated chat relationships', { chatId: newId, updates: Object.keys(updates) });
@@ -1177,6 +1224,35 @@ export async function restore(
     } catch (error) {
       warnings.push(`Failed to reconcile chat relationships: ${error instanceof Error ? error.message : String(error)}`);
       moduleLogger.warn('Failed to reconcile chat relationships', { chatId: newId, error });
+    }
+  }
+
+  // 16. Update projects with correct characterRoster IDs
+  moduleLogger.debug('Reconciling project relationships');
+  for (const [backupId, newId] of projectIdMap) {
+    try {
+      const originalProject = data.projects.find((p) => p.id === backupId);
+      if (!originalProject) continue;
+
+      const updates: Partial<Project> = {};
+      let hasUpdates = false;
+
+      // Remap characterRoster
+      if (originalProject.characterRoster && originalProject.characterRoster.length > 0) {
+        const remappedRoster = remapIdArray(originalProject.characterRoster, characterIdMap);
+        if (remappedRoster.length > 0) {
+          updates.characterRoster = remappedRoster;
+          hasUpdates = true;
+        }
+      }
+
+      if (hasUpdates) {
+        await repos.projects.update(newId, updates);
+        moduleLogger.debug('Updated project relationships', { projectId: newId, updates: Object.keys(updates) });
+      }
+    } catch (error) {
+      warnings.push(`Failed to reconcile project relationships: ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to reconcile project relationships', { projectId: newId, error });
     }
   }
 
@@ -1200,6 +1276,7 @@ export async function restore(
       roleplay: roleplayTemplatesRestored,
     },
     providerModels: providerModelsRestored,
+    projects: projectsRestored,
     warnings,
   };
 

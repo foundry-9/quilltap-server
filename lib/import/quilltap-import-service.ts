@@ -21,6 +21,7 @@ import type {
   RoleplayTemplate,
   MessageEvent,
   ChatParticipantBase,
+  Project,
 } from '@/lib/schemas/types';
 import type {
   QuilltapExportManifest,
@@ -32,6 +33,7 @@ import type {
   ExportedPersona,
   ExportedChat,
   ExportedRoleplayTemplate,
+  ExportedProject,
   SanitizedConnectionProfile,
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
@@ -52,6 +54,7 @@ interface AnyExportData {
   imageProfiles?: SanitizedImageProfile[];
   embeddingProfiles?: SanitizedEmbeddingProfile[];
   roleplayTemplates?: ExportedRoleplayTemplate[];
+  projects?: ExportedProject[];
   memories?: Memory[];
 }
 
@@ -87,6 +90,7 @@ export interface ImportPreview {
     imageProfiles?: ImportPreviewEntity[];
     embeddingProfiles?: ImportPreviewEntity[];
     tags?: ImportPreviewEntity[];
+    projects?: ImportPreviewEntity[];
     memories?: { count: number };
   };
   conflictCounts: Record<string, number>;
@@ -113,6 +117,7 @@ interface IdMappingState {
   imageProfiles: Map<string, string>;
   embeddingProfiles: Map<string, string>;
   roleplayTemplates: Map<string, string>;
+  projects: Map<string, string>;
 }
 
 // ============================================================================
@@ -231,7 +236,7 @@ export async function previewImport(
   const data = getExportData(exportData);
 
   // Preview all entity types
-  const [characters, personas, chats, tags, connectionProfiles, imageProfiles, embeddingProfiles, roleplayTemplates] =
+  const [characters, personas, chats, tags, connectionProfiles, imageProfiles, embeddingProfiles, roleplayTemplates, projects] =
     await Promise.all([
       checkExists(
         data.characters,
@@ -276,6 +281,11 @@ export async function previewImport(
         },
         'roleplayTemplates'
       ),
+      checkExists(
+        data.projects,
+        (id) => repos.projects.findById(id),
+        'projects'
+      ),
     ]);
 
   const preview: ImportPreview = {
@@ -289,6 +299,7 @@ export async function previewImport(
       ...(imageProfiles.length > 0 && { imageProfiles }),
       ...(embeddingProfiles.length > 0 && { embeddingProfiles }),
       ...(roleplayTemplates.length > 0 && { roleplayTemplates }),
+      ...(projects.length > 0 && { projects }),
       ...(data.memories && {
         memories: { count: data.memories.length },
       }),
@@ -336,6 +347,7 @@ export async function executeImport(
     imageProfiles: new Map(),
     embeddingProfiles: new Map(),
     roleplayTemplates: new Map(),
+    projects: new Map(),
   };
 
   // Initialize counts
@@ -350,6 +362,7 @@ export async function executeImport(
     embeddingProfiles: 0,
     tags: 0,
     memories: 0,
+    projects: 0,
   };
 
   const skipped: QuilltapExportCounts = {
@@ -363,6 +376,7 @@ export async function executeImport(
     embeddingProfiles: 0,
     tags: 0,
     memories: 0,
+    projects: 0,
   };
 
   const data = getExportData(exportData);
@@ -432,6 +446,20 @@ export async function executeImport(
       );
       imported.roleplayTemplates = counts.imported;
       skipped.roleplayTemplates = counts.skipped;
+    }
+
+    // 5.5. Projects (before characters since projects reference characters in roster)
+    if (data.projects && data.projects.length > 0) {
+      const counts = await importProjects(
+        userId,
+        data.projects,
+        options,
+        idMaps,
+        repos,
+        warnings
+      );
+      imported.projects = counts.imported;
+      skipped.projects = counts.skipped;
     }
 
     // 6. Characters
@@ -814,6 +842,66 @@ async function importRoleplayTemplates(
     } catch (error) {
       moduleLogger.warn('Failed to import roleplay template', {
         templateId: template.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return { imported, skipped };
+}
+
+async function importProjects(
+  userId: string,
+  projects: Project[],
+  options: ImportOptions,
+  idMaps: IdMappingState,
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
+): Promise<ImportCounts> {
+  moduleLogger.debug('Importing projects', { count: projects.length });
+  let imported = 0;
+  let skipped = 0;
+
+  for (const project of projects) {
+    try {
+      const existing = await repos.projects.findById(project.id);
+
+      if (existing) {
+        if (options.conflictStrategy === 'skip') {
+          skipped++;
+          idMaps.projects.set(project.id, project.id);
+          continue;
+        }
+
+        if (options.conflictStrategy === 'overwrite') {
+          await repos.projects.delete(project.id);
+        }
+
+        if (options.conflictStrategy === 'duplicate') {
+          const newId = randomUUID();
+          idMaps.projects.set(project.id, newId);
+          const { id: _, userId: __, createdAt, updatedAt, ...projectData } = project;
+          const newProject = await repos.projects.create({
+            ...projectData,
+            name: `${projectData.name} (imported)`,
+          });
+          imported++;
+          continue;
+        }
+      }
+
+      const { id: _, userId: __, createdAt, updatedAt, ...projectData } = project;
+      const newProject = await repos.projects.create(projectData);
+      idMaps.projects.set(project.id, newProject.id);
+      imported++;
+    } catch (error) {
+      warnings.push(
+        `Failed to import project "${project.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to import project', {
+        projectId: project.id,
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -1290,6 +1378,15 @@ async function reconcileRelationships(
         }
       }
 
+      // Remap projectId
+      if (chat.projectId) {
+        const newProjectId = remapId(chat.projectId, idMaps.projects);
+        if (newProjectId) {
+          updates.projectId = newProjectId;
+          hasUpdates = true;
+        }
+      }
+
       if (hasUpdates) {
         await repos.chats.update(newId, updates);
         moduleLogger.debug('Reconciled chat relationships', { chatId: newId });
@@ -1302,6 +1399,41 @@ async function reconcileRelationships(
       );
       moduleLogger.warn('Failed to reconcile chat', {
         chatId: newId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Reconcile projects
+  for (const [backupId, newId] of idMaps.projects) {
+    try {
+      const project = await repos.projects.findById(newId);
+      if (!project) continue;
+
+      const updates: Partial<Project> = {};
+      let hasUpdates = false;
+
+      // Remap characterRoster
+      if (project.characterRoster && project.characterRoster.length > 0) {
+        const remappedRoster = remapIdArray(project.characterRoster, idMaps.characters);
+        if (remappedRoster.length > 0) {
+          updates.characterRoster = remappedRoster;
+          hasUpdates = true;
+        }
+      }
+
+      if (hasUpdates) {
+        await repos.projects.update(newId, updates);
+        moduleLogger.debug('Reconciled project relationships', { projectId: newId });
+      }
+    } catch (error) {
+      warnings.push(
+        `Failed to reconcile project relationships: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to reconcile project', {
+        projectId: newId,
         error: error instanceof Error ? error.message : String(error),
       });
     }

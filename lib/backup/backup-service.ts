@@ -41,6 +41,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     promptTemplates,
     roleplayTemplates,
     providerModels,
+    projects,
   ] = await Promise.all([
     repos.characters.findAll(),
     repos.personas.findAll(),
@@ -55,6 +56,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     globalRepos.roleplayTemplates.findByUserId(userId),
     // Get provider models
     globalRepos.providerModels.findAll(),
+    // Get projects
+    repos.projects.findAll(),
   ]);
 
   moduleLogger.debug('Collected base entities', {
@@ -70,6 +73,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     promptTemplates: promptTemplates.length,
     roleplayTemplates: roleplayTemplates.length,
     providerModels: providerModels.length,
+    projects: projects.length,
   });
 
   // Collect messages for each chat
@@ -119,6 +123,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     promptTemplates,
     roleplayTemplates,
     providerModels,
+    projects,
   };
 }
 
@@ -147,6 +152,7 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       promptTemplates: data.promptTemplates.length,
       roleplayTemplates: data.roleplayTemplates.length,
       providerModels: data.providerModels.length,
+      projects: data.projects.length,
     },
   };
 }
@@ -238,6 +244,9 @@ export async function createBackup(userId: string): Promise<{
   });
   archive.append(JSON.stringify(data.providerModels, null, 2), {
     name: `${folderName}/data/provider-models.json`,
+  });
+  archive.append(JSON.stringify(data.projects, null, 2), {
+    name: `${folderName}/data/projects.json`,
   });
 
   // Add actual files from S3

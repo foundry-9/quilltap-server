@@ -19,6 +19,7 @@ import type {
   ExportedPersona,
   ExportedChat,
   ExportedRoleplayTemplate,
+  ExportedProject,
   SanitizedConnectionProfile,
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
@@ -30,6 +31,7 @@ import type {
   ImageProfilesExportData,
   EmbeddingProfilesExportData,
   TagsExportData,
+  ProjectsExportData,
   MemoryCollection,
 } from './types';
 import type {
@@ -552,6 +554,54 @@ export async function exportTags(
   };
 }
 
+/**
+ * Export projects with resolved relationships
+ */
+export async function exportProjects(
+  userId: string,
+  projectIds: string[]
+): Promise<ProjectsExportData> {
+  logger.debug('Exporting projects', { userId, projectCount: projectIds.length });
+
+  const repos = getUserRepositories(userId);
+
+  // Fetch projects
+  const projects: ExportedProject[] = [];
+  for (const id of projectIds) {
+    const project = await repos.projects.findById(id);
+    if (project) {
+      // Resolve character roster names
+      const characterRosterNames: string[] = [];
+      for (const characterId of project.characterRoster ?? []) {
+        const character = await repos.characters.findById(characterId);
+        if (character) characterRosterNames.push(character.name);
+      }
+
+      // Count chats and files associated with this project
+      const allChats = await repos.chats.findAll();
+      const projectChats = allChats.filter(c => c.projectId === id);
+      const chatCount = projectChats.length;
+
+      const allFiles = await repos.files.findAll();
+      const projectFiles = allFiles.filter(f => f.linkedTo?.includes(id));
+      const fileCount = projectFiles.length;
+
+      projects.push({
+        ...project,
+        ...(characterRosterNames.length > 0 && { _characterRosterNames: characterRosterNames }),
+        _chatCount: chatCount,
+        _fileCount: fileCount,
+      });
+    }
+  }
+
+  logger.debug('Exported projects', { count: projects.length });
+
+  return {
+    projects,
+  };
+}
+
 // ============================================================================
 // PUBLIC API FUNCTIONS
 // ============================================================================
@@ -685,6 +735,19 @@ export async function createExport(
 
         data = await exportTags(userId, ids);
         entityCount = data.tags.length;
+        break;
+      }
+
+      case 'projects': {
+        const allProjects = options.scope === 'all'
+          ? await repos.projects.findAll()
+          : [];
+        const ids = options.scope === 'all'
+          ? allProjects.map(p => p.id)
+          : entityIds;
+
+        data = await exportProjects(userId, ids);
+        entityCount = data.projects.length;
         break;
       }
 
@@ -882,6 +945,23 @@ export async function previewExport(
           const tag = await repos.tags.findById(id);
           if (tag) {
             entities.push({ id: tag.id, name: tag.name });
+          }
+        }
+        break;
+      }
+
+      case 'projects': {
+        const allProjects = options.scope === 'all'
+          ? await repos.projects.findAll()
+          : [];
+        const ids = options.scope === 'all'
+          ? allProjects.map(p => p.id)
+          : entityIds;
+
+        for (const id of ids) {
+          const project = await repos.projects.findById(id);
+          if (project) {
+            entities.push({ id: project.id, name: project.name });
           }
         }
         break;

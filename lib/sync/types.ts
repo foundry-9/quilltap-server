@@ -37,11 +37,12 @@ export const SyncableEntityTypeEnum = z.enum([
   // Sync order is enforced - entities with dependencies come after their dependencies
   'TAG', // No dependencies
   'FILE', // Depends on TAG (for tags[])
+  'PROJECT', // No dependencies (characterRoster reconciled after CHARACTER)
   'PERSONA', // Depends on TAG
   'CHARACTER', // Depends on TAG, FILE (for defaultImageId), PERSONA (for personaLinks)
   'ROLEPLAY_TEMPLATE', // Depends on TAG
   'PROMPT_TEMPLATE', // Depends on TAG
-  'CHAT', // Depends on CHARACTER, PERSONA, TAG, FILE, ROLEPLAY_TEMPLATE
+  'CHAT', // Depends on CHARACTER, PERSONA, TAG, FILE, ROLEPLAY_TEMPLATE, PROJECT
   'MEMORY', // Depends on CHARACTER, PERSONA, CHAT, TAG
 ]);
 export type SyncableEntityType = z.infer<typeof SyncableEntityTypeEnum>;

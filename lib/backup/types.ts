@@ -19,6 +19,7 @@ import type {
   PromptTemplate,
   RoleplayTemplate,
   ProviderModel,
+  Project,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -73,6 +74,8 @@ export interface BackupManifest {
     roleplayTemplates: number;
     /** Number of ProviderModel entities */
     providerModels: number;
+    /** Number of Project entities */
+    projects: number;
   };
 }
 
@@ -126,6 +129,9 @@ export interface BackupData {
 
   /** Array of ProviderModel entities */
   providerModels: ProviderModel[];
+
+  /** Array of Project entities */
+  projects: Project[];
 }
 
 // ============================================================================
@@ -218,6 +224,9 @@ export interface RestoreSummary {
 
   /** Number of ProviderModel entities restored */
   providerModels: number;
+
+  /** Number of Project entities restored */
+  projects: number;
 
   /**
    * Array of warning messages for issues that occurred during restore

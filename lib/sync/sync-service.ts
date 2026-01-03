@@ -143,6 +143,8 @@ async function getLocalEntity(
       return repos.tags.findById(id);
     case 'FILE':
       return repos.files.findById(id);
+    case 'PROJECT':
+      return repos.projects.findById(id);
     case 'PERSONA':
       return repos.personas.findById(id);
     case 'CHARACTER':
@@ -245,6 +247,9 @@ async function createLocalEntity(
 
         return fileEntry;
       }
+
+      case 'PROJECT':
+        return repos.projects.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
 
       case 'PERSONA':
         return repos.personas.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
@@ -359,6 +364,10 @@ async function updateLocalEntity(
         return true;
       }
 
+      case 'PROJECT':
+        await repos.projects.update(id, updateData as any);
+        return true;
+
       case 'PERSONA':
         await repos.personas.update(id, updateData as any);
         return true;
@@ -441,6 +450,9 @@ async function deleteLocalEntity(entityType: SyncableEntityType, id: string): Pr
         }
         return repos.files.delete(id);
       }
+
+      case 'PROJECT':
+        return repos.projects.delete(id);
 
       case 'PERSONA':
         return repos.personas.delete(id);
