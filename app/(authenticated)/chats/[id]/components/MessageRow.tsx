@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { memo } from 'react'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
-import MessageContent from '@/components/chat/MessageContent'
+import LazyMessageContent from '@/components/chat/LazyMessageContent'
 import { formatMessageTime } from '@/lib/format-time'
 import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
 import { clientLogger } from '@/lib/client-logger'
@@ -70,7 +70,7 @@ function getImageAttachments(message: Message) {
   return (message.attachments || []).filter(a => a.mimeType.startsWith('image/'))
 }
 
-export function MessageRow({
+function MessageRowInner({
   message,
   messageIndex,
   isEditing,
@@ -337,7 +337,7 @@ export function MessageRow({
                   {message.content}
                 </div>
               ) : (
-                <MessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} />
+                <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} />
               )}
               {/* Image attachment thumbnails */}
               {getImageAttachments(message).length > 0 && (
@@ -636,3 +636,58 @@ export function MessageRow({
     </div>
   )
 }
+
+/**
+ * Memoized MessageRow component to prevent unnecessary re-renders.
+ * Only re-renders when message content, edit state, or relevant UI state changes.
+ */
+export const MessageRow = memo(MessageRowInner, (prev, next) => {
+  // Return true if props are equal (skip re-render)
+
+  // Core message identity and content
+  if (prev.message.id !== next.message.id) return false
+  if (prev.message.content !== next.message.content) return false
+  if (prev.message.role !== next.message.role) return false
+  if (prev.messageIndex !== next.messageIndex) return false
+
+  // Edit state
+  if (prev.isEditing !== next.isEditing) return false
+  if (prev.isEditing && prev.editContent !== next.editContent) return false
+
+  // View source toggle (compare Set membership for this message)
+  if (prev.viewSourceMessageIds.has(prev.message.id) !== next.viewSourceMessageIds.has(next.message.id)) return false
+
+  // Swipe state
+  if (prev.swipeState?.current !== next.swipeState?.current) return false
+  if (prev.swipeState?.total !== next.swipeState?.total) return false
+
+  // Display toggles
+  if (prev.showResendButton !== next.showResendButton) return false
+  if (prev.shouldShowAvatars !== next.shouldShowAvatars) return false
+
+  // Streaming/generation state
+  if (prev.streaming !== next.streaming) return false
+  if (prev.waitingForResponse !== next.waitingForResponse) return false
+  if (prev.isPaused !== next.isPaused) return false
+
+  // Multi-char specific state
+  if (prev.isMultiChar !== next.isMultiChar) return false
+  if (prev.mobileParticipantDropdownId !== next.mobileParticipantDropdownId) return false
+  if (prev.turnState.currentTurnParticipantId !== next.turnState.currentTurnParticipantId) return false
+
+  // Avatar info (compare by value since it's an object)
+  if (prev.messageAvatar?.name !== next.messageAvatar?.name) return false
+  if (prev.messageAvatar?.avatarUrl !== next.messageAvatar?.avatarUrl) return false
+
+  // Rendering patterns (reference equality is fine - they're stable)
+  if (prev.renderingPatterns !== next.renderingPatterns) return false
+  if (prev.dialogueDetection !== next.dialogueDetection) return false
+
+  // Attachments (check if array changed)
+  const prevAttachments = prev.message.attachments || []
+  const nextAttachments = next.message.attachments || []
+  if (prevAttachments.length !== nextAttachments.length) return false
+
+  // Props are equal, skip re-render
+  return true
+})

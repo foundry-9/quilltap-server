@@ -1,6 +1,7 @@
 'use client'
 
 import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
@@ -155,6 +156,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const mobileParticipantRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map())
   const lastAutoTriggeredRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const desktopToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
@@ -167,6 +169,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const hasRestoredDraftRef = useRef<boolean>(false)
   // Ref for triggerContinueMode to break dependency cycle in auto-trigger useEffect
   const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
+
+  // Virtualizer for efficient message list rendering - must be defined before scrollToBottom
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => messagesContainerRef.current,
+    estimateSize: () => 150, // Estimated row height in pixels
+    overscan: 5, // Render 5 extra items above/below viewport for smooth scrolling
+  })
 
   // Draft persistence - localStorage key for this chat
   const draftStorageKey = `quilltap-draft-${id}`
@@ -276,9 +286,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const awaitingTagInfo = quickHideActive && isCurrentChat && !chatContext.tagsFetched
   const chatHidden = quickHideActive && isCurrentChat && chatContext.tagsFetched && shouldHideByIds(chatTags)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  const scrollToBottom = useCallback(() => {
+    // With virtualization, scroll to the last message index, then let messagesEndRef handle the final scroll
+    if (messages.length > 0) {
+      virtualizer.scrollToIndex(messages.length - 1, { align: 'end', behavior: 'smooth' })
+    }
+    // Also scroll the end ref into view for non-message content (streaming, ephemeral, etc.)
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
+  }, [messages.length, virtualizer])
 
   const getTextareaMaxHeight = useCallback(() => {
     if (typeof globalThis === 'undefined' || !globalThis.window) return 200
@@ -837,7 +854,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         inputRef.current?.focus({ preventScroll: true })
       }, 150)
     }
-  }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages])
+  }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages, scrollToBottom])
 
   // Keep the ref in sync with the current callback to break dependency cycle
   triggerContinueModeRef.current = triggerContinueMode
@@ -1419,7 +1436,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages, streamingContent])
+  }, [messages, streamingContent, scrollToBottom])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1927,80 +1944,114 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   return (
     <div className="qt-chat-layout">
       <div className="qt-chat-main">
-        <div className="qt-chat-messages">
+        <div className="qt-chat-messages" ref={messagesContainerRef}>
           <div className="qt-chat-messages-list">
-            {/* Messages rendering */}
-            {messages.map((message, messageIndex) => {
-              const isEditing = editingMessageId === message.id
-              const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
-              const showResendButton = messageActions.canResendMessage(message.id, messageIndex)
+            {/* Virtualized messages rendering */}
+            <div
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const messageIndex = virtualRow.index
+                const message = messages[messageIndex]
+                const isEditing = editingMessageId === message.id
+                const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
+                const showResendButton = messageActions.canResendMessage(message.id, messageIndex)
 
-              if (message.role === 'TOOL') {
+                if (message.role === 'TOOL') {
+                  return (
+                    <div
+                      key={message.id}
+                      data-index={virtualRow.index}
+                      ref={virtualizer.measureElement}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <ToolMessage
+                        message={message}
+                        character={getFirstCharacter() ?? undefined}
+                        onImageClick={(filepath, filename, fileId) => {
+                          setModalImage({ src: filepath, filename, fileId })
+                        }}
+                      />
+                    </div>
+                  )
+                }
+
+                const messageAvatarData = shouldShowAvatars() ? getMessageAvatar(message) : null
+                const messageAvatar = messageAvatarData as any
+
                 return (
-                  <ToolMessage
+                  <div
                     key={message.id}
-                    message={message}
-                    character={getFirstCharacter() ?? undefined}
-                    onImageClick={(filepath, filename, fileId) => {
-                      setModalImage({ src: filepath, filename, fileId })
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
                     }}
-                  />
+                  >
+                    <MessageRow
+                      message={message}
+                      messageIndex={messageIndex}
+                      isEditing={isEditing}
+                      editContent={editContent}
+                      viewSourceMessageIds={viewSourceMessageIds}
+                      swipeState={swipeState}
+                      showResendButton={showResendButton}
+                      shouldShowAvatars={shouldShowAvatars()}
+                      messageAvatar={messageAvatar}
+                      renderingPatterns={roleplayRenderingPatterns}
+                      dialogueDetection={roleplayDialogueDetection}
+                      isMultiChar={isMultiChar}
+                      participantData={participantData}
+                      turnState={turnState}
+                      streaming={streaming}
+                      waitingForResponse={waitingForResponse}
+                      mobileParticipantDropdownId={mobileParticipantDropdownId}
+                      mobileParticipantRefs={mobileParticipantRefs}
+                      userParticipantId={userParticipantId}
+                      isPaused={isPaused}
+                      onTogglePause={togglePause}
+                      onEditStart={messageActions.startEdit}
+                      onEditSave={messageActions.saveEdit}
+                      onEditCancel={messageActions.cancelEdit}
+                      onEditChange={setEditContent}
+                      onToggleSourceView={messageActions.toggleSourceView}
+                      onDelete={messageActions.deleteMessage}
+                      onGenerateSwipe={(msgId) => messageActions.generateSwipe(msgId, fetchChat)}
+                      onSwitchSwipe={(groupId, dir) => messageActions.switchSwipe(groupId, dir, swipeStates, setSwipeStates)}
+                      onCopyContent={messageActions.copyMessageContent}
+                      onResend={messageActions.resendMessage}
+                      onImageClick={(filepath, filename, fileId) => {
+                        setModalImage({ src: filepath, filename, fileId })
+                      }}
+                      onMobileParticipantDropdownChange={setMobileParticipantDropdownId}
+                      onHandleNudge={turnManagement.handleNudge}
+                      onHandleQueue={turnManagement.handleQueue}
+                      onHandleDequeue={turnManagement.handleDequeue}
+                      onHandleTalkativenessChange={(pId, value) => {
+                        // Handle talkativeness change - this would need to be implemented
+                      }}
+                      onHandleRemoveCharacter={handleRemoveCharacter}
+                      onHandleContinue={turnManagement.handleContinue}
+                      onReattribute={handleReattribute}
+                    />
+                  </div>
                 )
-              }
-
-              const messageAvatarData = shouldShowAvatars() ? getMessageAvatar(message) : null
-              const messageAvatar = messageAvatarData as any
-
-              return (
-                <MessageRow
-                  key={message.id}
-                  message={message}
-                  messageIndex={messageIndex}
-                  isEditing={isEditing}
-                  editContent={editContent}
-                  viewSourceMessageIds={viewSourceMessageIds}
-                  swipeState={swipeState}
-                  showResendButton={showResendButton}
-                  shouldShowAvatars={shouldShowAvatars()}
-                  messageAvatar={messageAvatar}
-                  renderingPatterns={roleplayRenderingPatterns}
-                  dialogueDetection={roleplayDialogueDetection}
-                  isMultiChar={isMultiChar}
-                  participantData={participantData}
-                  turnState={turnState}
-                  streaming={streaming}
-                  waitingForResponse={waitingForResponse}
-                  mobileParticipantDropdownId={mobileParticipantDropdownId}
-                  mobileParticipantRefs={mobileParticipantRefs}
-                  userParticipantId={userParticipantId}
-                  isPaused={isPaused}
-                  onTogglePause={togglePause}
-                  onEditStart={messageActions.startEdit}
-                  onEditSave={messageActions.saveEdit}
-                  onEditCancel={messageActions.cancelEdit}
-                  onEditChange={setEditContent}
-                  onToggleSourceView={messageActions.toggleSourceView}
-                  onDelete={messageActions.deleteMessage}
-                  onGenerateSwipe={(msgId) => messageActions.generateSwipe(msgId, fetchChat)}
-                  onSwitchSwipe={(groupId, dir) => messageActions.switchSwipe(groupId, dir, swipeStates, setSwipeStates)}
-                  onCopyContent={messageActions.copyMessageContent}
-                  onResend={messageActions.resendMessage}
-                  onImageClick={(filepath, filename, fileId) => {
-                    setModalImage({ src: filepath, filename, fileId })
-                  }}
-                  onMobileParticipantDropdownChange={setMobileParticipantDropdownId}
-                  onHandleNudge={turnManagement.handleNudge}
-                  onHandleQueue={turnManagement.handleQueue}
-                  onHandleDequeue={turnManagement.handleDequeue}
-                  onHandleTalkativenessChange={(pId, value) => {
-                    // Handle talkativeness change - this would need to be implemented
-                  }}
-                  onHandleRemoveCharacter={handleRemoveCharacter}
-                  onHandleContinue={turnManagement.handleContinue}
-                  onReattribute={handleReattribute}
-                />
-              )
-            })}
+              })}
+            </div>
 
             {/* Pending tool calls */}
             <PendingToolCalls pendingToolCalls={pendingToolCalls} />

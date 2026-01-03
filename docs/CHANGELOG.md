@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- perf: Major chat performance optimization for long conversations
+  - Added virtualization using @tanstack/react-virtual - only renders visible messages
+  - LazyMessageContent defers markdown/roleplay processing until message is visible for 500ms
+  - Memoized MessageRow with custom comparison to prevent unnecessary re-renders
+  - Chats with 90+ messages now load instantly instead of freezing for several seconds
 - feat: User-controlled/impersonated characters now form memories
   - When typing as a character (via impersonation or user-controlled), that character forms memories
   - Memories capture what the character "said" and what other characters responded with

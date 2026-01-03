@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.7.0-dev.13",
+  "version": "2.7.0-dev.14",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -48,6 +48,7 @@
     "@aws-sdk/s3-request-presigner": "^3.943.0",
     "@quilltap/plugin-types": "^1.5.0",
     "@quilltap/plugin-utils": "^1.2.0",
+    "@tanstack/react-virtual": "^3.13.15",
     "adm-zip": "^0.5.16",
     "archiver": "^7.0.1",
     "arctic": "^3.7.0",

@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.7.0--dev.13-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.7.0--dev.14-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -584,7 +584,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [x] Hosted installations can not allow user-only plugins to be installed if they require server restarts
 - [x] Hosted installations must automatically restart the server if site-wide plugins are installed that require restarts
 - [X] Get the "Web Search" tool hooked up, it's just giving "not implemented" responses right now
-- [ ] Move the "Stop generating" button to the other side of the textarea
+- [X] Move the "Stop generating" button to the other side of the textarea
 - [ ] Token usage tracking
   - [ ] Every message shows input/output tokens (setting in Settings)
   - [ ] Make the connection profile message count work
