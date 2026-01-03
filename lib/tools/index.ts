@@ -72,6 +72,31 @@ export {
   type WebSearchToolContext,
 } from './handlers/web-search-handler';
 
+// Project Info Tool
+export {
+  projectInfoToolDefinition,
+  anthropicProjectInfoToolDefinition,
+  getOpenAIProjectInfoTool,
+  getAnthropicProjectInfoTool,
+  getGoogleProjectInfoTool,
+  validateProjectInfoInput,
+  type ProjectInfoAction,
+  type ProjectInfoToolInput,
+  type ProjectInfoToolOutput,
+  type ProjectInfoResult,
+  type ProjectInstructionsResult,
+  type ProjectFilesListResult,
+  type ProjectReadFileResult,
+  type ProjectSearchFilesResult,
+} from './project-info-tool';
+
+export {
+  executeProjectInfoTool,
+  formatProjectInfoResults,
+  ProjectInfoError,
+  type ProjectInfoToolContext,
+} from './handlers/project-info-handler';
+
 // Plugin-Based Tool Builder (Phase 3)
 export {
   buildToolsForProvider,

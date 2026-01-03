@@ -182,6 +182,9 @@ export const ChatMetadataSchema = z.object({
   /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
 
+  /** Project this chat belongs to (optional) */
+  projectId: UUIDSchema.nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -219,6 +222,10 @@ export const ChatMetadataBaseSchema = z.object({
   allLLMPauseTurnCount: z.number().default(0),
   /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
+
+  /** Project this chat belongs to (optional) */
+  projectId: UUIDSchema.nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

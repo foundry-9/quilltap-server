@@ -43,13 +43,26 @@ export interface SidebarChat {
   messageCount?: number
 }
 
+export interface SidebarProject {
+  id: string
+  name: string
+  color?: string | null
+  icon?: string | null
+  chatCount: number
+  fileCount: number
+  characterCount: number
+  updatedAt: string
+}
+
 interface SidebarDataContextValue {
   characters: SidebarCharacter[]
   chats: SidebarChat[]
+  projects: SidebarProject[]
   loading: boolean
   refreshSidebar: () => Promise<void>
   refreshCharacters: () => Promise<void>
   refreshChats: () => Promise<void>
+  refreshProjects: () => Promise<void>
 }
 
 // ============================================================================
@@ -69,13 +82,15 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
   const { status } = useSession()
   const [characters, setCharacters] = useState<SidebarCharacter[]>([])
   const [chats, setChats] = useState<SidebarChat[]>([])
+  const [projects, setProjects] = useState<SidebarProject[]>([])
   const [loading, setLoading] = useState(true)
 
   // Refs for debouncing
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const pendingRefreshRef = useRef<{ characters: boolean; chats: boolean }>({
+  const pendingRefreshRef = useRef<{ characters: boolean; chats: boolean; projects: boolean }>({
     characters: false,
     chats: false,
+    projects: false,
   })
 
   /**
@@ -125,11 +140,34 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
   }, [])
 
   /**
+   * Fetch projects from sidebar API
+   */
+  const fetchProjects = useCallback(async () => {
+    try {
+      clientLogger.debug('SidebarDataProvider: Fetching projects')
+      const response = await fetch('/api/sidebar/projects')
+      if (!response.ok) {
+        throw new Error(`Failed to fetch projects: ${response.status}`)
+      }
+      const data = await response.json()
+      setProjects(data.projects || [])
+      clientLogger.debug('SidebarDataProvider: Fetched projects', {
+        count: data.projects?.length || 0,
+      })
+    } catch (error) {
+      clientLogger.error('SidebarDataProvider: Failed to fetch projects', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setProjects([])
+    }
+  }, [])
+
+  /**
    * Execute pending refreshes with debouncing
    */
   const executePendingRefresh = useCallback(async () => {
     const pending = pendingRefreshRef.current
-    pendingRefreshRef.current = { characters: false, chats: false }
+    pendingRefreshRef.current = { characters: false, chats: false, projects: false }
 
     clientLogger.debug('SidebarDataProvider: Executing pending refresh', { pending })
 
@@ -140,23 +178,29 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
     if (pending.chats) {
       promises.push(fetchChats())
     }
+    if (pending.projects) {
+      promises.push(fetchProjects())
+    }
 
     if (promises.length > 0) {
       await Promise.all(promises)
     }
-  }, [fetchCharacters, fetchChats])
+  }, [fetchCharacters, fetchChats, fetchProjects])
 
   /**
    * Schedule a debounced refresh
    */
   const scheduleRefresh = useCallback(
-    (refreshCharacters: boolean, refreshChats: boolean) => {
+    (refreshCharacters: boolean, refreshChats: boolean, refreshProjects: boolean = false) => {
       // Mark what needs to be refreshed
       if (refreshCharacters) {
         pendingRefreshRef.current.characters = true
       }
       if (refreshChats) {
         pendingRefreshRef.current.chats = true
+      }
+      if (refreshProjects) {
+        pendingRefreshRef.current.projects = true
       }
 
       // Clear existing timeout
@@ -173,11 +217,11 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
   )
 
   /**
-   * Refresh both characters and chats
+   * Refresh all sidebar data (characters, chats, and projects)
    */
   const refreshSidebar = useCallback(async () => {
     clientLogger.debug('SidebarDataProvider: refreshSidebar called')
-    scheduleRefresh(true, true)
+    scheduleRefresh(true, true, true)
   }, [scheduleRefresh])
 
   /**
@@ -185,7 +229,7 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
    */
   const refreshCharactersOnly = useCallback(async () => {
     clientLogger.debug('SidebarDataProvider: refreshCharacters called')
-    scheduleRefresh(true, false)
+    scheduleRefresh(true, false, false)
   }, [scheduleRefresh])
 
   /**
@@ -193,7 +237,15 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
    */
   const refreshChatsOnly = useCallback(async () => {
     clientLogger.debug('SidebarDataProvider: refreshChats called')
-    scheduleRefresh(false, true)
+    scheduleRefresh(false, true, false)
+  }, [scheduleRefresh])
+
+  /**
+   * Refresh only projects
+   */
+  const refreshProjectsOnly = useCallback(async () => {
+    clientLogger.debug('SidebarDataProvider: refreshProjects called')
+    scheduleRefresh(false, false, true)
   }, [scheduleRefresh])
 
   /**
@@ -205,6 +257,7 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
       if (status === 'unauthenticated') {
         setCharacters([])
         setChats([])
+        setProjects([])
       }
       return
     }
@@ -212,13 +265,13 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
     const loadInitialData = async () => {
       setLoading(true)
       clientLogger.debug('SidebarDataProvider: Loading initial data')
-      await Promise.all([fetchCharacters(), fetchChats()])
+      await Promise.all([fetchCharacters(), fetchChats(), fetchProjects()])
       setLoading(false)
       clientLogger.debug('SidebarDataProvider: Initial data loaded')
     }
 
     loadInitialData()
-  }, [status, fetchCharacters, fetchChats])
+  }, [status, fetchCharacters, fetchChats, fetchProjects])
 
   /**
    * Cleanup timeout on unmount
@@ -235,12 +288,14 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
     () => ({
       characters,
       chats,
+      projects,
       loading,
       refreshSidebar,
       refreshCharacters: refreshCharactersOnly,
       refreshChats: refreshChatsOnly,
+      refreshProjects: refreshProjectsOnly,
     }),
-    [characters, chats, loading, refreshSidebar, refreshCharactersOnly, refreshChatsOnly]
+    [characters, chats, projects, loading, refreshSidebar, refreshCharactersOnly, refreshChatsOnly, refreshProjectsOnly]
   )
 
   return <SidebarDataContext.Provider value={value}>{children}</SidebarDataContext.Provider>

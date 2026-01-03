@@ -4,6 +4,18 @@
 
 ### 2.7-dev
 
+- feat: Projects feature for organizing chats, files, and characters
+  - Added `Project` schema with name, description, instructions, character roster, and customization
+  - Projects can have optional instructions that are injected into system prompts
+  - Character roster management with "allow any character" option
+  - Full CRUD API at `/api/projects/` with association endpoints for chats, files, and characters
+  - Sidebar integration with ProjectsSection showing recent projects
+  - Projects list page at `/projects` with create/delete dialogs
+  - Project detail page at `/projects/[id]` with tabs for chats, files, characters, and settings
+  - `project_info` LLM tool for accessing project context (get_info, get_instructions, list_files, read_file, search_files)
+  - File content extraction service supporting text, code, PDFs, and image descriptions
+  - Added `projectId` to Chat, File, and Memory schemas for associations
+  - Database indexes for efficient project queries
 - fix: Quilltap RP template plugin manifest validation error
   - Removed `null` value for `dialogueDetection` that was causing Zod validation to fail
   - Updated schema to accept `null` as well as `undefined` for `dialogueDetection`

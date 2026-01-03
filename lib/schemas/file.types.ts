@@ -56,6 +56,9 @@ export const FileEntrySchema = z.object({
   // Tags
   tags: z.array(UUIDSchema).default([]),
 
+  // Project association
+  projectId: UUIDSchema.nullable().optional(),
+
   // S3 storage reference
   s3Key: z.string().nullable().optional(),    // Full S3 object key
   s3Bucket: z.string().nullable().optional(), // S3 bucket name

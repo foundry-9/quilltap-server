@@ -26,6 +26,7 @@ import {
   buildSystemPrompt,
   buildOtherParticipantsInfo,
   type OtherParticipantInfo,
+  type ProjectContext,
 } from './context/system-prompt-builder'
 import {
   formatMemoriesForContext,
@@ -46,7 +47,7 @@ import {
 } from './context/message-selector'
 
 // Re-export types from extracted modules for backwards compatibility
-export type { OtherParticipantInfo } from './context/system-prompt-builder'
+export type { OtherParticipantInfo, ProjectContext } from './context/system-prompt-builder'
 export type { MessageWithParticipant } from './context/message-attribution'
 export type { SelectableMessage } from './context/message-selector'
 
@@ -196,6 +197,13 @@ export interface BuildContextOptions {
   timestampConfig?: TimestampConfig | null
   /** Whether this is the first user message in the conversation */
   isInitialMessage?: boolean
+
+  // ============================================================================
+  // Project Context
+  // ============================================================================
+
+  /** Project context to inject into system prompt (if chat is in a project) */
+  projectContext?: ProjectContext | null
 }
 
 /**
@@ -246,6 +254,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     messagesWithParticipants,
     // Pseudo-tool support
     pseudoToolInstructions,
+    // Project context
+    projectContext,
   } = options
 
   const warnings: string[] = []
@@ -291,7 +301,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     pseudoToolInstructions,
     selectedSystemPromptId,
     options.timestampConfig,
-    options.isInitialMessage
+    options.isInitialMessage,
+    projectContext
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 

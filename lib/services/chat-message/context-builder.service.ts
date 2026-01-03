@@ -6,7 +6,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { buildContext, type MessageWithParticipant, type BuiltContext } from '@/lib/chat/context-manager'
+import { buildContext, type MessageWithParticipant, type BuiltContext, type ProjectContext } from '@/lib/chat/context-manager'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import {
@@ -48,6 +48,8 @@ export interface BuildMessageContextOptions {
   pseudoToolInstructions?: string
   newUserMessage?: string
   isContinueMode: boolean
+  /** Project context if chat is in a project */
+  projectContext?: ProjectContext | null
 }
 
 /**
@@ -259,6 +261,7 @@ export async function buildMessageContext(
     chatSettings,
     pseudoToolInstructions,
     newUserMessage,
+    projectContext,
   } = options
 
   // Build conversation messages
@@ -300,6 +303,8 @@ export async function buildMessageContext(
     // Timestamp injection
     timestampConfig,
     isInitialMessage,
+    // Project context
+    projectContext,
   })
 
   // Log context building results for debugging

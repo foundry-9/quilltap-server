@@ -23,6 +23,7 @@ import {
   EmbeddingProfilesRepository,
   MemoriesRepository,
   FilesRepository,
+  ProjectsRepository,
 } from '@/lib/mongodb/repositories';
 import type {
   Character,
@@ -36,6 +37,7 @@ import type {
   FileEntry,
   ApiKey,
   ChatEvent,
+  Project,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -393,6 +395,46 @@ class UserScopedMemoriesRepository {
 }
 
 /**
+ * User-scoped Projects Repository
+ */
+class UserScopedProjectsRepository extends UserScopedRepository<Project, ProjectsRepository> {
+  async findByCharacterId(characterId: string): Promise<Project[]> {
+    const projects = await this.baseRepo.findByCharacterId(characterId);
+    return this.filterByUser(projects);
+  }
+
+  async addToRoster(projectId: string, characterId: string): Promise<Project | null> {
+    const project = await this.findById(projectId);
+    if (!project) return null;
+    return this.baseRepo.addToRoster(projectId, characterId);
+  }
+
+  async addManyToRoster(projectId: string, characterIds: string[]): Promise<Project | null> {
+    const project = await this.findById(projectId);
+    if (!project) return null;
+    return this.baseRepo.addManyToRoster(projectId, characterIds);
+  }
+
+  async removeFromRoster(projectId: string, characterId: string): Promise<Project | null> {
+    const project = await this.findById(projectId);
+    if (!project) return null;
+    return this.baseRepo.removeFromRoster(projectId, characterId);
+  }
+
+  async canCharacterParticipate(projectId: string, characterId: string): Promise<boolean> {
+    const project = await this.findById(projectId);
+    if (!project) return false;
+    return this.baseRepo.canCharacterParticipate(projectId, characterId);
+  }
+
+  async setAllowAnyCharacter(projectId: string, allowAnyCharacter: boolean): Promise<Project | null> {
+    const project = await this.findById(projectId);
+    if (!project) return null;
+    return this.baseRepo.setAllowAnyCharacter(projectId, allowAnyCharacter);
+  }
+}
+
+/**
  * User-scoped Files Repository
  */
 class UserScopedFilesRepository extends UserScopedTaggableRepository<FileEntry, FilesRepository> {
@@ -454,6 +496,8 @@ export interface UserScopedRepositoryContainer {
   files: UserScopedFilesRepository;
   /** Images repository (alias for files) - only returns user's images */
   images: UserScopedFilesRepository;
+  /** Projects repository - only returns user's projects */
+  projects: UserScopedProjectsRepository;
 }
 
 /**
@@ -505,6 +549,7 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
   const embeddingProfiles = new UserScopedEmbeddingProfilesRepository(userId, baseRepos.embeddingProfiles);
   const files = new UserScopedFilesRepository(userId, baseRepos.files);
   const memories = new UserScopedMemoriesRepository(userId, baseRepos.memories, characters);
+  const projects = new UserScopedProjectsRepository(userId, baseRepos.projects);
 
   const container: UserScopedRepositoryContainer = {
     userId,
@@ -518,6 +563,7 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
     memories,
     files,
     images: files, // Alias for backwards compatibility
+    projects,
   };
 
   // Cache the container

@@ -14,6 +14,7 @@ import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { SidebarHeader } from './sidebar-header'
 import { SidebarSection } from './sidebar-section'
 import { SidebarFooter } from './sidebar-footer'
+import { ProjectsSection } from './projects-section'
 import { CharactersSection } from './characters-section'
 import { ChatsSection } from './chats-section'
 import { clientLogger } from '@/lib/client-logger'
@@ -91,13 +92,8 @@ export function LeftSidebar() {
         <SidebarHeader />
 
         <div className="qt-left-sidebar-content">
-          {/* Projects section - placeholder */}
-          <SidebarSection title="Projects" placeholder>
-            <div className="px-2 py-1 text-xs text-muted-foreground">
-              <FolderIcon className="w-4 h-4 inline-block mr-2 opacity-50" />
-              {!isCollapsed && <span className="opacity-50">No projects yet</span>}
-            </div>
-          </SidebarSection>
+          {/* Projects section */}
+          <ProjectsSection />
 
           {/* Files section - placeholder */}
           <SidebarSection title="Files" placeholder>

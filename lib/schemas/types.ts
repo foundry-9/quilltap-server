@@ -226,6 +226,20 @@ export type {
 } from './memory.types';
 
 // ============================================================================
+// PROJECT TYPES
+// ============================================================================
+export {
+  ProjectSchema,
+  ProjectContextSchema,
+} from './project.types';
+
+export type {
+  Project,
+  ProjectInput,
+  ProjectContext,
+} from './project.types';
+
+// ============================================================================
 // TEMPLATE TYPES
 // ============================================================================
 export {

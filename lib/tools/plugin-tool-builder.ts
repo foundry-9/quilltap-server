@@ -18,6 +18,7 @@ import {
   imageGenerationToolDefinition,
   memorySearchToolDefinition,
   webSearchToolDefinition,
+  projectInfoToolDefinition,
 } from '@/lib/tools';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
@@ -81,6 +82,9 @@ export interface BuildToolsOptions {
 
   /** Whether to enable web search tool */
   webSearch?: boolean;
+
+  /** Whether to enable project info tool */
+  projectInfo?: boolean;
 }
 
 /**
@@ -145,6 +149,12 @@ export function buildToolsForProvider(
   if (options.webSearch) {
     universalTools.push(webSearchToolDefinition as UniversalTool);
     logger_.debug('Added web search tool');
+  }
+
+  // Add project info tool if enabled
+  if (options.projectInfo) {
+    universalTools.push(projectInfoToolDefinition as UniversalTool);
+    logger_.debug('Added project info tool');
   }
 
   // If no tools are enabled, return empty array

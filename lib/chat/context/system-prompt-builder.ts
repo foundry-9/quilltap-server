@@ -21,6 +21,15 @@ export interface OtherParticipantInfo {
 }
 
 /**
+ * Project context for system prompts
+ */
+export interface ProjectContext {
+  name: string
+  description?: string | null
+  instructions?: string | null
+}
+
+/**
  * Build the system prompt for a character
  * Supports both single-character and multi-character scenarios
  * Processes {{char}}, {{user}}, and other template variables in all prompts
@@ -40,7 +49,9 @@ export function buildSystemPrompt(
   /** Timestamp configuration for injection */
   timestampConfig?: TimestampConfig | null,
   /** Whether this is the first message (for START_ONLY mode) */
-  isInitialMessage?: boolean
+  isInitialMessage?: boolean,
+  /** Project context to include in system prompt */
+  projectContext?: ProjectContext | null
 ): string {
   const parts: string[] = []
 
@@ -101,6 +112,29 @@ export function buildSystemPrompt(
       instructionsLength: pseudoToolInstructions.length,
     })
     parts.push(processedToolInstructions)
+  }
+
+  // Project context (if chat is associated with a project)
+  // Added before character's system prompt so project instructions set the context
+  if (projectContext) {
+    const projectParts: string[] = [`## Project Context: ${projectContext.name}`]
+
+    if (projectContext.description) {
+      projectParts.push(projectContext.description)
+    }
+
+    if (projectContext.instructions) {
+      const processedInstructions = processTemplate(projectContext.instructions, templateContext)
+      projectParts.push(`\n### Project Instructions\n${processedInstructions}`)
+    }
+
+    logger.debug('[SystemPromptBuilder] Adding project context', {
+      projectName: projectContext.name,
+      hasDescription: !!projectContext.description,
+      hasInstructions: !!projectContext.instructions,
+    })
+
+    parts.push(projectParts.join('\n'))
   }
 
   // Base system prompt - priority: override > selected prompt > default systemPrompt

@@ -68,7 +68,9 @@ export async function buildTools(
   imageProfileId: string | null,
   imageProfile: ImageProfile | null,
   userId: string,
-  usePseudoTools: boolean
+  usePseudoTools: boolean,
+  /** Project ID if chat is associated with a project (enables project_info tool) */
+  projectId?: string | null
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -101,6 +103,7 @@ export async function buildTools(
     imageProviderType: imageProfile?.provider,
     memorySearchEnabled: true,
     webSearchEnabled: connectionProfile.allowWebSearch && !useNativeWebSearch,
+    projectInfoEnabled: !!projectId,
     useNativeWebSearch,
   })
 
@@ -109,6 +112,7 @@ export async function buildTools(
     imageProviderType: imageProfile?.provider,
     memorySearch: true,
     webSearch: connectionProfile.allowWebSearch && !useNativeWebSearch,
+    projectInfo: !!projectId,
   })
 
   logger.debug('Native tools built successfully', {

@@ -17,6 +17,11 @@ import {
   formatWebSearchResults,
   type WebSearchToolContext,
 } from '@/lib/tools/handlers/web-search-handler';
+import {
+  executeProjectInfoTool,
+  formatProjectInfoResults,
+  type ProjectInfoToolContext,
+} from '@/lib/tools/handlers/project-info-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -47,6 +52,8 @@ export interface ToolExecutionContext {
   embeddingProfileId?: string;
   /** Participant ID of who is calling the tool (for {{me}} resolution in image prompts) */
   callingParticipantId?: string;
+  /** Project ID for project_info tool */
+  projectId?: string;
 }
 
 /**
@@ -208,6 +215,42 @@ export async function executeToolCallWithContext(
           results: result.results,
           totalFound: result.totalFound,
           query: result.query,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle project info
+    if (toolCall.name === 'project_info') {
+      // If no project is configured, return error
+      if (!context.projectId) {
+        return {
+          toolName: 'project_info',
+          success: false,
+          result: null,
+          error: 'Project info requires a project context',
+        };
+      }
+
+      // Execute project info tool
+      const projectContext: ProjectInfoToolContext = {
+        userId,
+        projectId: context.projectId,
+        embeddingProfileId,
+      };
+
+      const result = await executeProjectInfoTool(toolCall.arguments, projectContext);
+
+      // Format results for LLM consumption
+      const formattedResult = formatProjectInfoResults(result);
+
+      return {
+        toolName: 'project_info',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          action: result.action,
+          data: result.data,
         } : null,
         error: result.success ? undefined : result.error,
       };
