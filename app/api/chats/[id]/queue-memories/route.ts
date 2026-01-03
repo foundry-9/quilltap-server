@@ -9,7 +9,7 @@ import { enqueueMemoryExtractionBatch, ensureProcessorRunning, type MessagePair 
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
-import type { ChatParticipant, MessageEvent } from '@/lib/schemas/types';
+import type { MessageEvent } from '@/lib/schemas/types';
 
 /**
  * Extended message pair with character info for multi-character support
@@ -25,12 +25,15 @@ interface MessagePairWithCharacter extends MessagePair {
  *
  * In multi-character chats, respects each message's participantId to route
  * memories to the correct character.
+ *
+ * The connection profile for memory extraction is determined from the user's
+ * cheap LLM settings - the front-end doesn't need to specify it.
  */
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: AuthenticatedContext, { id: chatId }) => {
     try {
       const body = await req.json();
-      const { characterId, characterName, connectionProfileId, messagePairs } = body;
+      const { characterId, characterName, messagePairs } = body;
 
       logger.debug('[QueueMemories] Request received', {
         chatId,
@@ -44,11 +47,52 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Chat');
       }
 
-      // Verify connection profile belongs to user
-      const profile = await repos.connections.findById(connectionProfileId);
-      if (!profile || profile.userId !== user.id) {
-        return notFound('Connection profile');
+      // Get cheap LLM settings to determine which connection profile to use
+      const chatSettings = await repos.chatSettings.findByUserId(user.id);
+      const cheapLLMSettings = chatSettings?.cheapLLMSettings;
+
+      logger.debug('[QueueMemories] Cheap LLM settings', {
+        strategy: cheapLLMSettings?.strategy,
+        defaultCheapProfileId: cheapLLMSettings?.defaultCheapProfileId,
+        userDefinedProfileId: cheapLLMSettings?.userDefinedProfileId,
+      });
+
+      // Determine connection profile based on strategy
+      // Priority: defaultCheapProfileId (global override) > strategy-based selection
+      let connectionProfileId: string | null | undefined = null;
+      let profile = null;
+
+      // Try global default first (if set and valid)
+      if (cheapLLMSettings?.defaultCheapProfileId) {
+        profile = await repos.connections.findById(cheapLLMSettings.defaultCheapProfileId);
+        if (profile && profile.userId === user.id) {
+          connectionProfileId = cheapLLMSettings.defaultCheapProfileId;
+          logger.debug('[QueueMemories] Using global default cheap LLM', { profileId: connectionProfileId });
+        }
       }
+
+      // If no valid global default, use strategy-based selection
+      if (!connectionProfileId && cheapLLMSettings?.strategy === 'USER_DEFINED' && cheapLLMSettings?.userDefinedProfileId) {
+        profile = await repos.connections.findById(cheapLLMSettings.userDefinedProfileId);
+        if (profile && profile.userId === user.id) {
+          connectionProfileId = cheapLLMSettings.userDefinedProfileId;
+          logger.debug('[QueueMemories] Using user-defined cheap LLM', { profileId: connectionProfileId });
+        }
+      }
+
+      if (!connectionProfileId || !profile) {
+        logger.warn('[QueueMemories] No valid cheap LLM configured', {
+          userId: user.id,
+          strategy: cheapLLMSettings?.strategy,
+        });
+        return badRequest('No valid cheap LLM configured. Please set a cheap LLM profile in settings.');
+      }
+
+      logger.debug('[QueueMemories] Using cheap LLM profile', {
+        profileId: connectionProfileId,
+        profileName: profile.name,
+        provider: profile.provider,
+      });
 
       // Build a map of participantId -> character info for multi-character support
       const participantCharacterMap = new Map<string, { characterId: string; characterName: string }>();

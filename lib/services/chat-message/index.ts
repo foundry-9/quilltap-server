@@ -85,6 +85,7 @@ export {
 export {
   triggerMemoryExtraction,
   triggerInterCharacterMemory,
+  triggerUserControlledCharacterMemory,
   triggerContextSummaryCheck,
   type MemoryChatSettings,
 } from './memory-trigger.service'

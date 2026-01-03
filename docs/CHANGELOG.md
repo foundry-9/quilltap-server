@@ -4,6 +4,34 @@
 
 ### 2.7-dev
 
+- feat: User-controlled/impersonated characters now form memories
+  - When typing as a character (via impersonation or user-controlled), that character forms memories
+  - Memories capture what the character "said" and what other characters responded with
+  - Enables continuity when switching between user and LLM control of a character
+- fix: Memory re-extraction no longer requires character connection profile
+  - Backend now determines cheap LLM profile from user settings automatically
+  - Front-end no longer needs to know about cheap LLM configuration
+  - Properly validates that configured profiles exist before using them
+  - Falls back from global default to user-defined profile based on strategy
+- chore: Added pdf-parse dependency for PDF text extraction in file attachments
+- feat: Expandable projects in sidebar with nested chats
+  - Projects in the sidebar can now be expanded to show their associated chats
+  - Click the chevron next to a project name to expand/collapse its chat list
+  - Shows up to 5 chats per project with a "more..." link to the project page
+  - Main chats list at bottom of sidebar now excludes chats that belong to projects
+  - Project expansion state persisted to localStorage
+- feat: Improved chat list page UX
+  - Chat cards are now fully clickable (click anywhere except delete button to open)
+  - Removed redundant "Open Chat" button
+  - Project badge now displayed to the left of tags with folder icon
+  - Project badge links to the project page
+- fix: Chat updatedAt now only changes on new messages
+  - Renaming chats, changing project assignment, editing messages, and settings changes no longer update updatedAt
+  - Only adding new messages updates the chat's timestamp for sorting purposes
+- fix: Sidebar now auto-refreshes when chat is assigned to a project
+  - Project chat counts and chat lists update immediately
+- fix: Move "Stop generating" button to right side of chat composer
+  - Now appears in place of the send button during generation
 - fix: Google OAuth avatar not displaying for existing users
   - User profile (name, image) was not being updated on subsequent OAuth logins
   - Added `updateUserProfileFromOAuth` function to sync profile data from provider

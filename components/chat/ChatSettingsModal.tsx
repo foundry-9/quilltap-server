@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
+import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 
 interface ConnectionProfile {
   id: string
@@ -357,6 +358,7 @@ export default function ChatSettingsModal({
   const [roleplayTemplateSaving, setRoleplayTemplateSaving] = useState(false)
   const [projectSaving, setProjectSaving] = useState(false)
   const [loading, setLoading] = useState(false)
+  const { refreshSidebar } = useSidebarData()
 
   // Update local state when prop changes
   useEffect(() => {
@@ -460,6 +462,10 @@ export default function ChatSettingsModal({
       setSelectedProjectId(projectId)
       showSuccessToast(projectId ? 'Chat moved to project' : 'Chat removed from project')
       clientLogger.info('Project updated for chat', { chatId, projectId })
+
+      // Refresh sidebar to update project chat counts and chat list
+      refreshSidebar()
+
       onSuccess?.()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)

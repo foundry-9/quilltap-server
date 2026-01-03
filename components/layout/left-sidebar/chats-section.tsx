@@ -141,9 +141,10 @@ export function ChatsSection() {
     )
   }
 
-  // Filter out chats with hidden character tags
+  // Filter out chats with hidden character tags AND chats that belong to projects
+  // Project chats are shown under their respective projects in the projects section
   const visibleChats = chats.filter(
-    chat => !shouldHideByIds(chat.characterTags)
+    chat => !shouldHideByIds(chat.characterTags) && !chat.projectId
   )
 
   if (visibleChats.length === 0) {

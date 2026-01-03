@@ -142,6 +142,15 @@ export interface EnrichedTag {
 }
 
 /**
+ * Project info for enriched chats
+ */
+export interface EnrichedProject {
+  id: string
+  name: string
+  color: string | null
+}
+
+/**
  * Enriched chat for list view
  */
 export interface EnrichedChatSummary {
@@ -152,6 +161,7 @@ export interface EnrichedChatSummary {
   updatedAt: string
   participants: EnrichedParticipantSummary[]
   tags: EnrichedTag[]
+  project: EnrichedProject | null
   _count: { messages: number }
   _allTagIds: string[] // Internal field for filtering
 }
@@ -468,6 +478,19 @@ export async function enrichChatForList(
   // Get message count
   const messageCount = await repos.chats.getMessageCount(chat.id)
 
+  // Get project info if chat belongs to a project
+  let project: EnrichedProject | null = null
+  if (chat.projectId) {
+    const projectData = await repos.projects.findById(chat.projectId)
+    if (projectData) {
+      project = {
+        id: projectData.id,
+        name: projectData.name,
+        color: projectData.color ?? null,
+      }
+    }
+  }
+
   // Collect all tag IDs from chat, characters, and personas for filtering
   const allTagIds: string[] = [...chat.tags]
   for (const participant of participants) {
@@ -487,6 +510,7 @@ export async function enrichChatForList(
     updatedAt: chat.updatedAt,
     participants,
     tags,
+    project,
     _count: { messages: messageCount },
     _allTagIds: allTagIds,
   }

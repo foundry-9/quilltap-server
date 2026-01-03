@@ -425,23 +425,6 @@ export function ChatComposer({
 
           {/* Tool palette toggle button - left side */}
           <div className="qt-chat-toolbar">
-            {/* Desktop: Stop button - only shown during streaming/waiting */}
-            {(streaming || waitingForResponse) && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onStopStreaming()
-                }}
-                className="qt-chat-toolbar-button qt-chat-stop-button qt-desktop-only"
-                title="Stop generating"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="6" width="12" height="12" rx="1" />
-                </svg>
-              </button>
-            )}
-
             {/* Mobile: Tool palette toggle button */}
             <button
               ref={mobileToolPaletteToggleRef}
@@ -516,17 +499,35 @@ export function ChatComposer({
             />
           )}
 
-          {/* Send button - right side */}
-          <button
-            type="submit"
-            disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
-            className="qt-chat-composer-send"
-            title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          </button>
+          {/* Right side buttons */}
+          {(streaming || waitingForResponse) ? (
+            /* Stop button - shown during streaming/waiting */
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onStopStreaming()
+              }}
+              className="qt-chat-composer-send qt-chat-stop-button"
+              title="Stop generating"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="6" width="12" height="12" rx="1" />
+              </svg>
+            </button>
+          ) : (
+            /* Send button - right side */
+            <button
+              type="submit"
+              disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
+              className="qt-chat-composer-send"
+              title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
+          )}
         </form>
       </div>
     </div>

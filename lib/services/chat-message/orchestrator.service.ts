@@ -64,6 +64,7 @@ import {
 import {
   triggerMemoryExtraction,
   triggerInterCharacterMemory,
+  triggerUserControlledCharacterMemory,
   triggerContextSummaryCheck,
 } from './memory-trigger.service'
 
@@ -648,6 +649,52 @@ async function processMessage(
           participants: chat.participants,
           participantCharacters,
         })
+      }
+
+      // Trigger memory extraction for user-controlled/impersonated characters
+      // If the user was typing as a character (not just the persona), that character
+      // should form memories about the exchange
+      if (!isContinueMode && chat.activeTypingParticipantId) {
+        const activeTypingParticipant = chat.participants.find(
+          p => p.id === chat.activeTypingParticipantId
+        )
+
+        // Check if the active typing participant is a character (not persona)
+        // and is different from the responding character
+        if (
+          activeTypingParticipant &&
+          activeTypingParticipant.type === 'CHARACTER' &&
+          activeTypingParticipant.characterId &&
+          activeTypingParticipant.id !== characterParticipant.id
+        ) {
+          // Get the character data for the user-controlled character
+          const userControlledCharacter = participantCharacters.get(activeTypingParticipant.characterId)
+            || await repos.characters.findById(activeTypingParticipant.characterId)
+
+          if (userControlledCharacter) {
+            logger.debug('Triggering memory for user-controlled character', {
+              userControlledCharacterId: userControlledCharacter.id,
+              userControlledCharacterName: userControlledCharacter.name,
+              respondingCharacterId: character.id,
+              respondingCharacterName: character.name,
+            })
+
+            await triggerUserControlledCharacterMemory(repos, {
+              userControlledCharacter,
+              userControlledParticipantId: activeTypingParticipant.id,
+              userTypedMessage: content,
+              respondingCharacter: character,
+              llmResponse: cleanedResponse,
+              llmResponseMessageId: assistantMessageId,
+              chatId,
+              userId,
+              chatSettings: memoryChatSettings,
+              allCharacterNames: isMultiCharacter
+                ? Array.from(participantCharacters.values()).map(c => c.name)
+                : [userControlledCharacter.name, character.name],
+            })
+          }
+        }
       }
 
       await triggerContextSummaryCheck(repos, {

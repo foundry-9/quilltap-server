@@ -1323,9 +1323,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const handleReextractMemories = useCallback(async () => {
     const characterParticipant = chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)
-    if (!characterParticipant?.character || !characterParticipant.connectionProfile) {
-      clientLogger.warn('[Chat] Cannot re-extract memories: no character or connection profile')
-      showErrorToast('Cannot re-extract memories: no character or connection profile configured')
+    if (!characterParticipant?.character) {
+      clientLogger.warn('[Chat] Cannot re-extract memories: no active character')
+      showErrorToast('Cannot re-extract memories: no active character in chat')
       return
     }
 
@@ -1351,7 +1351,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         body: JSON.stringify({
           characterId: characterParticipant.character.id,
           characterName: characterParticipant.character.name,
-          connectionProfileId: characterParticipant.connectionProfile.id,
         }),
       })
 

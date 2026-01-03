@@ -152,6 +152,111 @@ export async function triggerInterCharacterMemory(
 }
 
 /**
+ * Trigger memory extraction for a user-controlled/impersonated character
+ *
+ * When the user types as a character (via impersonation or user-controlled),
+ * that character should also form memories about:
+ * - What they "said" (the user's input as them)
+ * - What other characters responded with
+ *
+ * This allows the character to have continuous memories even when
+ * switching between user and LLM control.
+ */
+export async function triggerUserControlledCharacterMemory(
+  repos: ReturnType<typeof getRepositories>,
+  options: {
+    /** The character the user was typing as */
+    userControlledCharacter: Character
+    /** Participant ID of the user-controlled character */
+    userControlledParticipantId: string
+    /** What the user typed as this character */
+    userTypedMessage: string
+    /** The LLM character that responded */
+    respondingCharacter: Character
+    /** What the LLM character said in response */
+    llmResponse: string
+    /** Message ID of the LLM response (for debug logs) */
+    llmResponseMessageId: string
+    chatId: string
+    userId: string
+    chatSettings: MemoryChatSettings
+    /** All character names for context */
+    allCharacterNames?: string[]
+  }
+): Promise<void> {
+  try {
+    if (!options.chatSettings.cheapLLMSettings) {
+      logger.debug('Skipping user-controlled character memory - no cheapLLMSettings')
+      return
+    }
+
+    const availableProfiles = await repos.connections.findByUserId(options.userId)
+
+    // Get cheap LLM profile for memory extraction
+    // Priority: defaultCheapProfileId (if valid) > userDefinedProfileId (if valid)
+    let connectionProfile = null
+    const cheapLLMSettings = options.chatSettings.cheapLLMSettings
+
+    // Try global default first (if set and valid)
+    if (cheapLLMSettings.defaultCheapProfileId) {
+      connectionProfile = await repos.connections.findById(cheapLLMSettings.defaultCheapProfileId)
+      if (!connectionProfile || connectionProfile.userId !== options.userId) {
+        connectionProfile = null // Invalid, try next
+      }
+    }
+
+    // Fall back to user-defined profile
+    if (!connectionProfile && cheapLLMSettings.strategy === 'USER_DEFINED' && cheapLLMSettings.userDefinedProfileId) {
+      connectionProfile = await repos.connections.findById(cheapLLMSettings.userDefinedProfileId)
+      if (!connectionProfile || connectionProfile.userId !== options.userId) {
+        connectionProfile = null
+      }
+    }
+
+    if (!connectionProfile) {
+      logger.debug('Skipping user-controlled character memory - no valid cheap LLM profile configured')
+      return
+    }
+
+    logger.debug('Triggering memory extraction for user-controlled character', {
+      characterId: options.userControlledCharacter.id,
+      characterName: options.userControlledCharacter.name,
+      respondingCharacterName: options.respondingCharacter.name,
+    })
+
+    // The user-controlled character forms memories about what they said
+    // and how the other character responded
+    // From their perspective: they said something (userTypedMessage) and
+    // the other character responded (llmResponse)
+    processMessageForMemoryAsync({
+      characterId: options.userControlledCharacter.id,
+      characterName: options.userControlledCharacter.name,
+      // The "user message" from this character's perspective is what the other character said
+      userMessage: `${options.respondingCharacter.name}: ${options.llmResponse}`,
+      // The "assistant message" is what this character said (their own words)
+      assistantMessage: options.userTypedMessage,
+      allCharacterNames: options.allCharacterNames,
+      chatId: options.chatId,
+      sourceMessageId: options.llmResponseMessageId,
+      userId: options.userId,
+      connectionProfile,
+      cheapLLMSettings: options.chatSettings.cheapLLMSettings,
+      availableProfiles,
+    }, async (result) => {
+      logger.debug('User-controlled character memory extraction complete', {
+        characterId: options.userControlledCharacter.id,
+        characterName: options.userControlledCharacter.name,
+        memoryCreated: result.memoryCreated,
+        memoryId: result.memoryId,
+        debugLogs: result.debugLogs,
+      })
+    })
+  } catch (error) {
+    logger.error('Failed to trigger user-controlled character memory', {}, error as Error)
+  }
+}
+
+/**
  * Trigger context summary check and generation if needed
  */
 export async function triggerContextSummaryCheck(

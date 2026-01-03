@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.7.0-dev.12",
+  "version": "2.7.0-dev.13",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -58,6 +58,7 @@
     "next": "^16.1.1",
     "node-fetch": "^3.3.2",
     "openai": "^6.15.0",
+    "pdf-parse": "^2.4.5",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

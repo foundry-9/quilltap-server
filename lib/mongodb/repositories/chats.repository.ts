@@ -225,20 +225,23 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
 
   /**
    * Update chat metadata
+   * Note: updatedAt is NOT automatically set. Only new messages should update updatedAt.
+   * To update updatedAt, explicitly include it in the data parameter.
    */
   async update(id: string, data: Partial<ChatMetadata>): Promise<ChatMetadata | null> {
     try {
-
-      const now = (this as any).getCurrentTimestamp();
       const collection = await (this as any).getCollection();
 
       // Prepare update data, excluding id and createdAt
       const { id: _id, createdAt: _createdAt, ...updateFields } = data as Record<string, unknown>;
+
+      // If no fields to update, just return current state
+      if (Object.keys(updateFields).length === 0) {
+        return this.findById(id);
+      }
+
       const updateData = {
-        $set: {
-          ...updateFields,
-          updatedAt: now,
-        },
+        $set: updateFields,
       };
 
       const result = await collection.findOneAndUpdate(
@@ -800,13 +803,14 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         { upsert: true }
       );
 
-      // Update chat metadata with message count and last message timestamp
+      // Update chat metadata with message count, last message timestamp, and updatedAt
       const chat = await this.findById(chatId);
       if (chat) {
         const messages = await this.getMessages(chatId);
         await this.update(chatId, {
           messageCount: messages.length,
           lastMessageAt: now,
+          updatedAt: now,
         });
       }
 
@@ -848,13 +852,14 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         { upsert: true }
       );
 
-      // Update chat metadata
+      // Update chat metadata with message count, last message timestamp, and updatedAt
       const chat = await this.findById(chatId);
       if (chat) {
         const allMessages = await this.getMessages(chatId);
         await this.update(chatId, {
           messageCount: allMessages.length,
           lastMessageAt: now,
+          updatedAt: now,
         });
       }
 
@@ -1067,8 +1072,8 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         }
       );
 
-      // Update chat metadata timestamp
-      await this.update(chatId, {});
+      // Note: We intentionally don't update chat.updatedAt here since message edits
+      // are not considered "new messages" for sorting purposes
 
       logger.info('Replaced text in messages', { chatId, updatedCount });
       return updatedCount;
