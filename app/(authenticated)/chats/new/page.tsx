@@ -8,6 +8,7 @@ import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
+import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import type { TimestampConfig } from '@/lib/schemas/types'
 
 interface Character {
@@ -62,6 +63,7 @@ const USER_CONTROLLED_PROFILE = '__USER_CONTROLLED__'
 export default function NewChatPage() {
   const router = useRouter()
   const { style } = useAvatarDisplay()
+  const { refreshChats } = useSidebarData()
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const [characters, setCharacters] = useState<Character[]>([])
@@ -339,6 +341,10 @@ export default function NewChatPage() {
       const data = await res.json()
       clientLogger.info('[NewChat] Chat created successfully', { chatId: data.chat.id })
       showSuccessToast('Chat created!')
+
+      // Refresh sidebar to show new chat
+      refreshChats()
+
       router.push('/chats/' + data.chat.id)
     } catch (err) {
       clientLogger.error('[NewChat] Failed to create chat', {

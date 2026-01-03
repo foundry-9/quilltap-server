@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import Avatar from '@/components/ui/Avatar'
 
 interface NPC {
@@ -31,6 +32,7 @@ export default function NPCsTab() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [convertingId, setConvertingId] = useState<string | null>(null)
   const router = useRouter()
+  const { refreshSidebar } = useSidebarData()
 
   const fetchNPCs = useCallback(async () => {
     setLoading(true)
@@ -99,8 +101,9 @@ export default function NPCsTab() {
       showSuccessToast(`"${npcName}" deleted successfully`)
       clientLogger.info('NPC deleted successfully', { npcId, npcName })
 
-      // Refresh the list
+      // Refresh the list and sidebar
       await fetchNPCs()
+      refreshSidebar()
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete NPC'
       showErrorToast(errorMessage)
@@ -108,7 +111,7 @@ export default function NPCsTab() {
     } finally {
       setDeletingId(null)
     }
-  }, [fetchNPCs])
+  }, [fetchNPCs, refreshSidebar])
 
   const handleConvertToCharacter = useCallback(async (npcId: string, npcName: string) => {
     const confirmed = window.confirm(
@@ -135,8 +138,9 @@ export default function NPCsTab() {
       showSuccessToast(`"${npcName}" converted to character`)
       clientLogger.info('NPC converted to character successfully', { npcId, npcName })
 
-      // Refresh the list
+      // Refresh the list and sidebar
       await fetchNPCs()
+      refreshSidebar()
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to convert NPC'
       showErrorToast(errorMessage)
@@ -144,7 +148,7 @@ export default function NPCsTab() {
     } finally {
       setConvertingId(null)
     }
-  }, [fetchNPCs])
+  }, [fetchNPCs, refreshSidebar])
 
   if (loading) {
     return (
