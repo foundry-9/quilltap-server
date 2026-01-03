@@ -17,6 +17,7 @@ import {
   createMockPromptTemplate,
   createMockFileEntry,
   createMockMessage,
+  createMockConnectionProfile,
   generateId,
 } from '../fixtures/test-factories';
 
@@ -44,6 +45,10 @@ interface MockRepositories {
   };
   projects: {
     findByUserId: jest.Mock;
+  };
+  connections: {
+    findByUserId: jest.Mock;
+    findApiKeyById: jest.Mock;
   };
   roleplayTemplates: {
     findByUserId: jest.Mock;
@@ -77,6 +82,10 @@ const mockRepositories: MockRepositories = {
   },
   projects: {
     findByUserId: jest.fn().mockResolvedValue([]),
+  },
+  connections: {
+    findByUserId: jest.fn().mockResolvedValue([]),
+    findApiKeyById: jest.fn().mockResolvedValue(null),
   },
   roleplayTemplates: {
     findByUserId: jest.fn().mockResolvedValue([]),
@@ -135,6 +144,8 @@ describe('Sync Delta Detector', () => {
     mockRepositories.tags.findByUserId.mockResolvedValue([]);
     mockRepositories.memories.findByCharacterId.mockResolvedValue([]);
     mockRepositories.files.findByUserId.mockResolvedValue([]);
+    mockRepositories.connections.findByUserId.mockResolvedValue([]);
+    mockRepositories.connections.findApiKeyById.mockResolvedValue(null);
     mockRepositories.roleplayTemplates.findByUserId.mockResolvedValue([]);
     mockRepositories.promptTemplates.findByUserId.mockResolvedValue([]);
     mockDownloadUserFile.mockReset();
@@ -476,6 +487,97 @@ describe('Sync Delta Detector', () => {
         });
 
         expect(result.deltas).toHaveLength(2);
+      });
+    });
+
+    describe('connection profile entity handling', () => {
+      it('should detect connection profile deltas', async () => {
+        const profile = createMockConnectionProfile({
+          userId: testUserId,
+          name: 'Test Profile',
+          updatedAt: oneHourAgo.toISOString(),
+        });
+
+        mockRepositories.connections.findByUserId.mockResolvedValue([profile]);
+
+        const result = await detectDeltas({
+          userId: testUserId,
+          sinceTimestamp: null,
+          entityTypes: ['CONNECTION_PROFILE'],
+        });
+
+        expect(result.deltas).toHaveLength(1);
+        expect(result.deltas[0].entityType).toBe('CONNECTION_PROFILE');
+        expect(result.deltas[0].id).toBe(profile.id);
+      });
+
+      it('should strip apiKeyId and include _apiKeyLabel', async () => {
+        const apiKeyId = generateId();
+        const profile = createMockConnectionProfile({
+          userId: testUserId,
+          name: 'Test Profile',
+          apiKeyId,
+        });
+        const apiKey = { id: apiKeyId, label: 'My API Key', provider: 'OPENAI' };
+
+        mockRepositories.connections.findByUserId.mockResolvedValue([profile]);
+        mockRepositories.connections.findApiKeyById.mockResolvedValue(apiKey);
+
+        const result = await detectDeltas({
+          userId: testUserId,
+          sinceTimestamp: null,
+          entityTypes: ['CONNECTION_PROFILE'],
+        });
+
+        expect(result.deltas).toHaveLength(1);
+        // apiKeyId should be stripped
+        expect((result.deltas[0].data as any).apiKeyId).toBeUndefined();
+        // _apiKeyLabel should be included
+        expect((result.deltas[0].data as any)._apiKeyLabel).toBe('My API Key');
+      });
+
+      it('should handle profile without apiKeyId', async () => {
+        const profile = createMockConnectionProfile({
+          userId: testUserId,
+          name: 'Test Profile',
+          apiKeyId: null,
+        });
+
+        mockRepositories.connections.findByUserId.mockResolvedValue([profile]);
+
+        const result = await detectDeltas({
+          userId: testUserId,
+          sinceTimestamp: null,
+          entityTypes: ['CONNECTION_PROFILE'],
+        });
+
+        expect(result.deltas).toHaveLength(1);
+        expect((result.deltas[0].data as any).apiKeyId).toBeUndefined();
+        expect((result.deltas[0].data as any)._apiKeyLabel).toBeUndefined();
+      });
+
+      it('should filter by sinceTimestamp', async () => {
+        const oldProfile = createMockConnectionProfile({
+          userId: testUserId,
+          name: 'Old Profile',
+          updatedAt: threeDaysAgo.toISOString(),
+        });
+        const newProfile = createMockConnectionProfile({
+          userId: testUserId,
+          name: 'New Profile',
+          updatedAt: oneHourAgo.toISOString(),
+        });
+
+        mockRepositories.connections.findByUserId.mockResolvedValue([oldProfile, newProfile]);
+
+        const result = await detectDeltas({
+          userId: testUserId,
+          sinceTimestamp: twoHoursAgo.toISOString(),
+          entityTypes: ['CONNECTION_PROFILE'],
+        });
+
+        expect(result.deltas).toHaveLength(1);
+        expect(result.deltas[0].id).toBe(newProfile.id);
       });
     });
   });

@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.7.0--dev.16-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.7.0--dev.17-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -591,7 +591,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Make the connection profile token count work
   - [ ] If it's OpenRouter, or if you have an OpenRouter connection profile, use that to estimate costs
   - [ ] Include in estimated cost for a chat all the "Cheap LLM" token usages
-- [ ] Sync should sync up connection profile IDs also
+- [X] Sync should sync up connection profile IDs also
 - [X] If you try to chat and you're waiting for a character to respond but they don't have a valid/working connection profile, you should see an error toast
 
 ## Acknowledgments

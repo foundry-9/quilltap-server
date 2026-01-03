@@ -145,6 +145,8 @@ async function getLocalEntity(
       return repos.files.findById(id);
     case 'PROJECT':
       return repos.projects.findById(id);
+    case 'CONNECTION_PROFILE':
+      return repos.connections.findById(id);
     case 'PERSONA':
       return repos.personas.findById(id);
     case 'CHARACTER':
@@ -250,6 +252,17 @@ async function createLocalEntity(
 
       case 'PROJECT':
         return repos.projects.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
+
+      case 'CONNECTION_PROFILE': {
+        // Remove _apiKeyLabel from data (it's for user reference only, not stored)
+        // Set apiKeyId to null - user must configure API key locally
+        const { _apiKeyLabel, ...profileData } = createData as Record<string, unknown>;
+        return repos.connections.createOrUpdate(
+          entityId,
+          { ...profileData, apiKeyId: null } as any,
+          { createdAt: entityCreatedAt }
+        );
+      }
 
       case 'PERSONA':
         return repos.personas.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
@@ -368,6 +381,13 @@ async function updateLocalEntity(
         await repos.projects.update(id, updateData as any);
         return true;
 
+      case 'CONNECTION_PROFILE': {
+        // Remove _apiKeyLabel (not stored) and apiKeyId (preserve local API key config)
+        const { _apiKeyLabel, apiKeyId, ...profileData } = updateData as Record<string, unknown>;
+        await repos.connections.update(id, profileData as any);
+        return true;
+      }
+
       case 'PERSONA':
         await repos.personas.update(id, updateData as any);
         return true;
@@ -453,6 +473,9 @@ async function deleteLocalEntity(entityType: SyncableEntityType, id: string): Pr
 
       case 'PROJECT':
         return repos.projects.delete(id);
+
+      case 'CONNECTION_PROFILE':
+        return repos.connections.delete(id);
 
       case 'PERSONA':
         return repos.personas.delete(id);

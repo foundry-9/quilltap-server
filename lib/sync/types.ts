@@ -31,13 +31,14 @@ export const FILE_CONTENT_SIZE_THRESHOLD = 1024 * 1024; // 1MB
 
 /**
  * Entity types that can be synchronized between instances.
- * Profiles are excluded as they contain sensitive API keys.
+ * Connection profiles sync metadata only (API keys are stripped, replaced with _apiKeyLabel).
  */
 export const SyncableEntityTypeEnum = z.enum([
   // Sync order is enforced - entities with dependencies come after their dependencies
   'TAG', // No dependencies
   'FILE', // Depends on TAG (for tags[])
   'PROJECT', // No dependencies (characterRoster reconciled after CHARACTER)
+  'CONNECTION_PROFILE', // Depends on TAG (for tags[]); apiKeyId stripped, _apiKeyLabel added
   'PERSONA', // Depends on TAG
   'CHARACTER', // Depends on TAG, FILE (for defaultImageId), PERSONA (for personaLinks)
   'ROLEPLAY_TEMPLATE', // Depends on TAG

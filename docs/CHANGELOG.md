@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- feat: Connection profiles now sync between Quilltap instances
+  - Added CONNECTION_PROFILE as a syncable entity type
+  - API keys are handled securely: `apiKeyId` is stripped during sync, replaced with `_apiKeyLabel` for reference
+  - Synced profiles have null `apiKeyId` - user must configure API key locally on each instance
+  - Updates to synced profiles preserve local API key configuration (never overwritten)
 - feat: Bulk character replace tool in chat tool palette
   - Re-attribute all messages from one participant to another in a single operation
   - Supports filtering by role (AI responses only, user messages only, or all)

@@ -242,6 +242,41 @@ async function getEntityDeltas(
         break;
       }
 
+      case 'CONNECTION_PROFILE': {
+        const profiles = await repos.connections.findByUserId(userId);
+        for (const profile of profiles) {
+          if (!sinceTimestamp || profile.updatedAt > sinceTimestamp) {
+            // Strip apiKeyId and add _apiKeyLabel for reference
+            // API keys are instance-specific (different encryption) so can't be synced
+            const { apiKeyId, ...profileData } = profile;
+            let apiKeyLabel: string | undefined;
+            if (apiKeyId) {
+              const apiKey = await repos.connections.findApiKeyById(apiKeyId);
+              apiKeyLabel = apiKey?.label;
+            }
+            deltas.push({
+              entityType: 'CONNECTION_PROFILE',
+              id: profile.id,
+              createdAt: profile.createdAt,
+              updatedAt: profile.updatedAt,
+              isDeleted: false,
+              data: {
+                ...profileData,
+                _apiKeyLabel: apiKeyLabel,
+              } as unknown as Record<string, unknown>,
+            });
+            logger.debug('Added connection profile delta', {
+              context: 'sync:delta-detector',
+              profileId: profile.id,
+              profileName: profile.name,
+              hasApiKeyLabel: !!apiKeyLabel,
+            });
+          }
+          if (deltas.length >= limit) break;
+        }
+        break;
+      }
+
       case 'ROLEPLAY_TEMPLATE': {
         const templates = await repos.roleplayTemplates.findByUserId(userId);
         for (const template of templates) {
@@ -310,7 +345,7 @@ export async function detectDeltas(options: DeltaDetectionOptions): Promise<Delt
   const {
     userId,
     // Enforced sync order - entities with dependencies come after their dependencies
-    entityTypes = ['TAG', 'FILE', 'PROJECT', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
+    entityTypes = ['TAG', 'FILE', 'PROJECT', 'CONNECTION_PROFILE', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
     sinceTimestamp = null,
     limit = 100,
   } = options;
@@ -387,7 +422,7 @@ export async function countDeltas(options: DeltaDetectionOptions): Promise<Recor
   const {
     userId,
     // Enforced sync order - entities with dependencies come after their dependencies
-    entityTypes = ['TAG', 'FILE', 'PROJECT', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
+    entityTypes = ['TAG', 'FILE', 'PROJECT', 'CONNECTION_PROFILE', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
     sinceTimestamp = null,
   } = options;
 
@@ -459,6 +494,9 @@ export async function getMostRecentUpdate(userId: string): Promise<string | null
 
     const projects = await repos.projects.findByUserId(userId);
     projects.forEach((p) => checkTimestamp(p.updatedAt));
+
+    const connectionProfiles = await repos.connections.findByUserId(userId);
+    connectionProfiles.forEach((c) => checkTimestamp(c.updatedAt));
 
     const roleplayTemplates = await repos.roleplayTemplates.findByUserId(userId);
     roleplayTemplates.forEach((r) => checkTimestamp(r.updatedAt));

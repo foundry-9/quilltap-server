@@ -69,6 +69,8 @@ describe('Sync Service', () => {
   let mockRepos: {
     tags: any;
     files: any;
+    projects: any;
+    connections: any;
     personas: any;
     characters: any;
     roleplayTemplates: any;
@@ -92,6 +94,18 @@ describe('Sync Service', () => {
         delete: jest.fn(),
       },
       files: {
+        findById: jest.fn(),
+        createOrUpdate: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+      },
+      projects: {
+        findById: jest.fn(),
+        createOrUpdate: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+      },
+      connections: {
         findById: jest.fn(),
         createOrUpdate: jest.fn(),
         update: jest.fn(),
@@ -297,6 +311,48 @@ describe('Sync Service', () => {
         expect(result.success).toBe(true);
         expect(result.isNewEntity).toBe(true);
       });
+
+      it('should create CONNECTION_PROFILE entity and strip _apiKeyLabel', async () => {
+        const delta: SyncEntityDelta = {
+          entityType: 'CONNECTION_PROFILE',
+          id: 'profile-1',
+          createdAt: earlier.toISOString(),
+          updatedAt: now.toISOString(),
+          isDeleted: false,
+          data: {
+            name: 'Test Profile',
+            provider: 'OPENAI',
+            modelName: 'gpt-4',
+            _apiKeyLabel: 'My API Key', // Should be stripped
+          },
+        };
+
+        mockRepos.connections.findById.mockResolvedValue(null);
+        mockRepos.connections.createOrUpdate.mockResolvedValue({
+          id: 'profile-1',
+          updatedAt: now.toISOString(),
+        });
+
+        const result = await applyRemoteDelta(userId, instanceId, delta);
+
+        expect(result.success).toBe(true);
+        expect(result.isNewEntity).toBe(true);
+        // Verify apiKeyId is set to null and _apiKeyLabel is stripped
+        expect(mockRepos.connections.createOrUpdate).toHaveBeenCalledWith(
+          'profile-1',
+          expect.objectContaining({
+            name: 'Test Profile',
+            provider: 'OPENAI',
+            modelName: 'gpt-4',
+            apiKeyId: null,
+            userId,
+          }),
+          { createdAt: earlier.toISOString() }
+        );
+        // _apiKeyLabel should not be in the call
+        const callArgs = mockRepos.connections.createOrUpdate.mock.calls[0][1];
+        expect(callArgs._apiKeyLabel).toBeUndefined();
+      });
     });
 
     describe('deleting entities', () => {
@@ -401,6 +457,24 @@ describe('Sync Service', () => {
 
         expect(result.success).toBe(true);
         expect(mockRepos.chats.delete).toHaveBeenCalledWith('chat-1');
+      });
+
+      it('should delete CONNECTION_PROFILE entity successfully', async () => {
+        const delta: SyncEntityDelta = {
+          entityType: 'CONNECTION_PROFILE',
+          id: 'profile-1',
+          createdAt: earlier.toISOString(),
+          updatedAt: now.toISOString(),
+          isDeleted: true,
+          data: null,
+        };
+
+        mockRepos.connections.delete.mockResolvedValue(true);
+
+        const result = await applyRemoteDelta(userId, instanceId, delta);
+
+        expect(result.success).toBe(true);
+        expect(mockRepos.connections.delete).toHaveBeenCalledWith('profile-1');
       });
     });
 
