@@ -45,6 +45,25 @@ function getChatDisplayName(chat: SidebarChat): string {
   return 'Untitled Chat'
 }
 
+/**
+ * Folder icon for project indicator
+ */
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+    </svg>
+  )
+}
+
 function ChatItem({
   chat,
   isCollapsed,
@@ -58,13 +77,14 @@ function ChatItem({
   const firstParticipant = chat.participants[0]
   const avatarSrc = firstParticipant?.avatarUrl
   const messageCount = chat.messageCount || 0
+  const hasProject = !!chat.projectId
 
   return (
     <Link
       href={`/chats/${chat.id}`}
       className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
       onClick={onClick}
-      title={isCollapsed ? `${displayName} (${messageCount} messages)` : undefined}
+      title={isCollapsed ? `${displayName}${chat.projectName ? ` (${chat.projectName})` : ''} (${messageCount} messages)` : undefined}
     >
       {avatarSrc ? (
         <img
@@ -79,7 +99,15 @@ function ChatItem({
       )}
       {!isCollapsed && (
         <>
-          <span className="qt-left-sidebar-item-label">{displayName}</span>
+          <div className="flex-1 min-w-0">
+            <span className="qt-left-sidebar-item-label block truncate">{displayName}</span>
+            {hasProject && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+                <FolderIcon className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">{chat.projectName}</span>
+              </span>
+            )}
+          </div>
           {messageCount > 0 && (
             <span className="ml-auto px-1.5 py-0.5 text-xs bg-muted text-muted-foreground rounded-full flex-shrink-0">
               {messageCount > 999 ? '999+' : messageCount}

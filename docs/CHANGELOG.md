@@ -16,6 +16,9 @@
   - File content extraction service supporting text, code, PDFs, and image descriptions
   - Added `projectId` to Chat, File, and Memory schemas for associations
   - Database indexes for efficient project queries
+  - Chat integration: project selector in chat settings, project badge on sidebar chat cards
+  - New Chat button on project page links to chat creation with project context
+  - Project indicator banner in chat page linking back to project
 - fix: Quilltap RP template plugin manifest validation error
   - Removed `null` value for `dialogueDetection` that was causing Zod validation to fail
   - Updated schema to accept `null` as well as `undefined` for `dialogueDetection`

@@ -48,6 +48,7 @@ const createChatSchema = z.object({
   title: z.string().optional(),
   scenario: z.string().optional(),
   timestampConfig: TimestampConfigSchema.optional(),
+  projectId: z.string().uuid().optional(),
 })
 
 // GET /api/chats - List all chats
@@ -426,6 +427,33 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
       updatedAt: now,
     }))
 
+    // If creating chat in a project, validate and auto-add characters to roster
+    if (validatedData.projectId) {
+      const project = await repos.projects.findById(validatedData.projectId)
+      if (!project || project.userId !== user.id) {
+        return notFound('Project')
+      }
+
+      // Auto-add characters to project roster if not using allowAnyCharacter
+      if (!project.allowAnyCharacter) {
+        const characterIds = participantsWithTimestamps
+          .filter(p => p.type === 'CHARACTER' && p.characterId)
+          .map(p => p.characterId as string)
+
+        const newCharacterIds = characterIds.filter(id => !project.characterRoster.includes(id))
+        if (newCharacterIds.length > 0) {
+          logger.debug('Auto-adding characters to project roster', {
+            context: 'POST /api/chats',
+            projectId: validatedData.projectId,
+            newCharacterIds,
+          })
+          await repos.projects.update(validatedData.projectId, {
+            characterRoster: [...project.characterRoster, ...newCharacterIds],
+          })
+        }
+      }
+    }
+
     const chat = await repos.chats.create({
       userId: user.id,
       participants: participantsWithTimestamps,
@@ -438,6 +466,7 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
       messageCount: 0,
       lastMessageAt: null,
       lastRenameCheckInterchange: 0,
+      projectId: validatedData.projectId || null,
     })
 
     await createInitialMessages(

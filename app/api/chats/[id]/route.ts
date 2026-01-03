@@ -22,6 +22,7 @@ const updateChatSchema = z.object({
   isPaused: z.boolean().optional(),
   isManuallyRenamed: z.boolean().optional(),
   documentEditingMode: z.boolean().optional(),
+  projectId: z.string().uuid().nullish(),
 })
 
 // Validation schema for participant updates
@@ -324,6 +325,19 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           })
       ).then(results => results.filter(Boolean))
 
+      // Fetch project name if chat belongs to a project
+      let projectName: string | null = null
+      if (chatMetadata.projectId) {
+        try {
+          const project = await repos.projects.findById(chatMetadata.projectId)
+          if (project) {
+            projectName = project.name
+          }
+        } catch {
+          // Project might have been deleted
+        }
+      }
+
       const chat = {
         id: chatMetadata.id,
         title: chatMetadata.title,
@@ -337,6 +351,8 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         participants: enrichedParticipants,
         user: { id: user.id, name: user.name, image: user.image },
         messages,
+        projectId: chatMetadata.projectId || null,
+        projectName,
       }
 
       return NextResponse.json({ chat })
@@ -384,6 +400,36 @@ async function processChatUpdates(
       const template = await repos.roleplayTemplates.findById(validatedData.chat.roleplayTemplateId)
       if (!template) {
         return { error: 'Roleplay template not found', status: 404 }
+      }
+    }
+
+    // Handle projectId change
+    if (validatedData.chat.projectId !== undefined) {
+      if (validatedData.chat.projectId !== null) {
+        // Validate new project exists and belongs to user
+        const project = await repos.projects.findById(validatedData.chat.projectId)
+        if (!project || project.userId !== userId) {
+          return { error: 'Project not found', status: 404 }
+        }
+
+        // Auto-add characters to project roster if not using allowAnyCharacter
+        if (!project.allowAnyCharacter) {
+          const characterIds = updatedChat.participants
+            .filter(p => p.type === 'CHARACTER' && p.characterId)
+            .map(p => p.characterId as string)
+
+          const newCharacterIds = characterIds.filter(id => !project.characterRoster.includes(id))
+          if (newCharacterIds.length > 0) {
+            logger.debug('Auto-adding characters to project roster on chat move', {
+              chatId,
+              projectId: validatedData.chat.projectId,
+              newCharacterIds,
+            })
+            await repos.projects.update(validatedData.chat.projectId, {
+              characterRoster: [...project.characterRoster, ...newCharacterIds],
+            })
+          }
+        }
       }
     }
 

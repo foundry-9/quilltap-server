@@ -41,6 +41,9 @@ export interface SidebarChat {
   participants: SidebarChatParticipant[]
   characterTags?: string[]
   messageCount?: number
+  projectId?: string | null
+  projectName?: string | null
+  projectColor?: string | null
 }
 
 export interface SidebarProject {

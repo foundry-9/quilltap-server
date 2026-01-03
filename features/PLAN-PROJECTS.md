@@ -1,8 +1,8 @@
 # Projects Feature Implementation Plan
 
-**Status**: Core Implementation Complete
+**Status**: Implementation Complete (Phase 1-7)
 **Created**: 2026-01-02
-**Last Updated**: 2026-01-02
+**Last Updated**: 2026-01-03
 
 ## Overview
 
@@ -92,13 +92,13 @@ LLMs can access project context via `project_info` tool:
 - [ ] Create separate component files - Inlined in page for simplicity
 - [ ] Create custom hooks - Using inline fetch for now
 
-### Phase 7: Chat Integration (Future)
+### Phase 7: Chat Integration ✅
 
-- [ ] Add project selector to chat settings/header
-- [ ] Pass project context when starting chats from project page
-- [ ] Show project badge on chat cards
-- [ ] Show project indicator in chat UI
-- [ ] Support creating new chat within project
+- [x] Add project selector to chat settings/header
+- [x] Pass project context when starting chats from project page
+- [x] Show project badge on chat cards in sidebar
+- [x] Show project indicator in chat UI
+- [x] Support creating new chat within project (New Chat button on project page)
 
 ---
 

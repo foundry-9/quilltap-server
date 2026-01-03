@@ -1905,6 +1905,20 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   return (
     <div className="qt-chat-layout">
       <div className="qt-chat-main">
+        {/* Project Indicator Banner */}
+        {chat.projectId && chat.projectName && (
+          <div className="border-b border-border/60 bg-card/50 px-4 py-2">
+            <a
+              href={`/projects/${chat.projectId}`}
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+              <span>{chat.projectName}</span>
+            </a>
+          </div>
+        )}
         <div className="qt-chat-messages">
           <div className="qt-chat-messages-list">
             {/* Messages rendering */}
@@ -2110,6 +2124,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           chatId={id}
           participants={chat?.participants || []}
           roleplayTemplateId={chat?.roleplayTemplateId}
+          projectId={chat?.projectId}
           onSuccess={fetchChat}
         />
 

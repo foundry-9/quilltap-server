@@ -58,6 +58,30 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
       }
     }
 
+    // Collect project IDs and fetch project info
+    const projectIds = new Set<string>()
+    for (const chat of chats) {
+      if (chat.projectId) {
+        projectIds.add(chat.projectId)
+      }
+    }
+
+    // Fetch all needed projects
+    const projectMap = new Map<string, { name: string; color?: string | null }>()
+    for (const projectId of projectIds) {
+      try {
+        const project = await repos.projects.findById(projectId)
+        if (project) {
+          projectMap.set(projectId, {
+            name: project.name,
+            color: project.color,
+          })
+        }
+      } catch {
+        // Project might have been deleted
+      }
+    }
+
     // Enrich chats with participant info
     const enrichedChats = chats.slice(0, 15).map(chat => {
       const participants = (chat.participants || [])
@@ -80,6 +104,9 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
         }
       }
 
+      // Get project info if chat belongs to a project
+      const project = chat.projectId ? projectMap.get(chat.projectId) : null
+
       return {
         id: chat.id,
         title: chat.title,
@@ -87,6 +114,9 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
         participants,
         characterTags: [...new Set(characterTags)], // Deduplicate
         messageCount: chat.messageCount || 0,
+        projectId: chat.projectId || null,
+        projectName: project?.name || null,
+        projectColor: project?.color || null,
       }
     })
 

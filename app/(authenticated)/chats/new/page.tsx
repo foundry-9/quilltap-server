@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
@@ -60,10 +60,18 @@ interface SelectedCharacter {
 // Special value for "Play As (User)" option in connection profile dropdown
 const USER_CONTROLLED_PROFILE = '__USER_CONTROLLED__'
 
+interface Project {
+  id: string
+  name: string
+  color?: string | null
+}
+
 export default function NewChatPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const projectIdParam = searchParams.get('projectId')
   const { style } = useAvatarDisplay()
-  const { refreshChats } = useSidebarData()
+  const { refreshChats, refreshProjects } = useSidebarData()
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const [characters, setCharacters] = useState<Character[]>([])
@@ -77,18 +85,27 @@ export default function NewChatPage() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [project, setProject] = useState<Project | null>(null)
 
   useEffect(() => {
-    clientLogger.debug('[NewChat] Component mounted')
+    clientLogger.debug('[NewChat] Component mounted', { projectIdParam })
 
     const fetchData = async () => {
       clientLogger.debug('[NewChat] Fetching data')
       try {
-        const [charsRes, profilesRes, imageProfilesRes] = await Promise.all([
+        const fetchPromises: Promise<Response>[] = [
           fetch('/api/characters'),
           fetch('/api/profiles'),
           fetch('/api/image-profiles'),
-        ])
+        ]
+
+        // Fetch project info if projectId is provided
+        if (projectIdParam) {
+          fetchPromises.push(fetch(`/api/projects/${projectIdParam}`))
+        }
+
+        const responses = await Promise.all(fetchPromises)
+        const [charsRes, profilesRes, imageProfilesRes, projectRes] = responses
 
         if (charsRes.ok) {
           const data = await charsRes.json()
@@ -116,6 +133,15 @@ export default function NewChatPage() {
           setImageProfiles(data || [])
           clientLogger.debug('[NewChat] Loaded image profiles', { count: data?.length || 0 })
         }
+
+        // Handle project response
+        if (projectRes && projectRes.ok) {
+          const data = await projectRes.json()
+          setProject(data.project)
+          clientLogger.debug('[NewChat] Loaded project', { projectId: data.project?.id, name: data.project?.name })
+        } else if (projectRes && !projectRes.ok) {
+          clientLogger.warn('[NewChat] Failed to load project', { projectId: projectIdParam, status: projectRes.status })
+        }
       } catch (err) {
         clientLogger.error('[NewChat] Error fetching data', {
           error: err instanceof Error ? err.message : String(err),
@@ -127,7 +153,7 @@ export default function NewChatPage() {
     }
 
     fetchData()
-  }, [])
+  }, [projectIdParam])
 
   useEffect(() => {
     if (!loading && searchInputRef.current) {
@@ -286,6 +312,7 @@ export default function NewChatPage() {
       hasUserCharacter: !!selectedUserCharacterId,
       hasScenario: !!scenario,
       hasTimestampConfig: !!timestampConfig,
+      projectId: project?.id || null,
     })
 
     try {
@@ -327,6 +354,10 @@ export default function NewChatPage() {
         requestBody.timestampConfig = timestampConfig
       }
 
+      if (project?.id) {
+        requestBody.projectId = project.id
+      }
+
       const res = await fetch('/api/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -339,11 +370,14 @@ export default function NewChatPage() {
       }
 
       const data = await res.json()
-      clientLogger.info('[NewChat] Chat created successfully', { chatId: data.chat.id })
+      clientLogger.info('[NewChat] Chat created successfully', { chatId: data.chat.id, projectId: project?.id })
       showSuccessToast('Chat created!')
 
       // Refresh sidebar to show new chat
       refreshChats()
+      if (project) {
+        refreshProjects()
+      }
 
       router.push('/chats/' + data.chat.id)
     } catch (err) {
@@ -375,11 +409,30 @@ export default function NewChatPage() {
   return (
     <div className="qt-page-container min-h-screen text-foreground">
       <div>
-        <Link href="/chats" className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80">
-          ← Back to Chats
+        <Link href={project ? `/projects/${project.id}` : '/chats'} className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80">
+          ← Back to {project ? project.name : 'Chats'}
         </Link>
 
         <h1 className="mb-6 text-3xl font-semibold">New Chat</h1>
+
+        {project && (
+          <div className="mb-6 rounded-lg border border-border bg-card/50 p-4">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ backgroundColor: project.color || 'var(--muted)' }}
+              >
+                <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm qt-text-primary">Creating chat in project</p>
+                <p className="font-medium text-foreground">{project.name}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {profiles.length === 0 && (
           <div className="mb-6 rounded-lg border border-warning/50 bg-warning/10 p-4 text-warning">

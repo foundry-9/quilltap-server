@@ -108,6 +108,10 @@ export interface Chat {
   allLLMPauseTurnCount?: number
   /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode?: boolean
+  /** Project ID this chat belongs to (if any) */
+  projectId?: string | null
+  /** Project name for display purposes */
+  projectName?: string | null
 }
 
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'

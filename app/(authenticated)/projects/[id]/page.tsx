@@ -260,6 +260,15 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <Link
+            href={`/chats/new?projectId=${projectId}`}
+            className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow hover:bg-success/90"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Chat
+          </Link>
           {isEditing ? (
             <>
               <button
@@ -314,7 +323,15 @@ export default function ProjectDetailPage() {
             {chats.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <p>No chats in this project yet.</p>
-                <p className="text-sm mt-2">Add chats from the chat settings.</p>
+                <p className="text-sm mt-2">
+                  <Link
+                    href={`/chats/new?projectId=${projectId}`}
+                    className="text-primary hover:underline"
+                  >
+                    Create a new chat
+                  </Link>{' '}
+                  or add existing chats from chat settings.
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
