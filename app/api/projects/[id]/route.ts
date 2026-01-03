@@ -40,23 +40,30 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const allFiles = await repos.files.findAll()
       const projectFiles = allFiles.filter(f => f.projectId === project.id)
 
-      // Get characters in roster with their details
-      const rosterCharacters = await Promise.all(
+      // Get characters in roster with their details and chat counts
+      const enrichedCharacterRoster = await Promise.all(
         project.characterRoster.map(async (charId) => {
           const char = await repos.characters.findById(charId)
           if (!char) return null
+
+          // Count chats with this character in this project
+          const charProjectChats = projectChats.filter(chat =>
+            chat.participants?.some(p => p.characterId === charId)
+          )
+
           return {
             id: char.id,
             name: char.name,
             avatarUrl: char.avatarUrl,
-            controlledBy: char.controlledBy ?? 'llm',
+            chatCount: charProjectChats.length,
           }
         })
       )
 
       const enrichedProject = {
         ...project,
-        rosterCharacters: rosterCharacters.filter(Boolean),
+        // Replace the UUID array with enriched character objects
+        characterRoster: enrichedCharacterRoster.filter(Boolean),
         _count: {
           chats: projectChats.length,
           files: projectFiles.length,

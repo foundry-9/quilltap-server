@@ -420,17 +420,17 @@ export default function ProjectDetailPage() {
                   <div key={char.id} className="qt-entity-card flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       {char.avatarUrl ? (
-                        <img src={char.avatarUrl} alt={char.name} className="w-10 h-10 rounded-full object-cover" />
+                        <img src={char.avatarUrl} alt={char.name || 'Character'} className="w-10 h-10 rounded-full object-cover" />
                       ) : (
                         <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-lg font-semibold">
-                          {char.name.charAt(0).toUpperCase()}
+                          {char.name ? char.name.charAt(0).toUpperCase() : '?'}
                         </div>
                       )}
                       <div>
                         <Link href={`/characters/${char.id}/view`} className="font-medium hover:text-primary">
-                          {char.name}
+                          {char.name || 'Unknown Character'}
                         </Link>
-                        <p className="qt-text-small">{char.chatCount} chat{char.chatCount !== 1 ? 's' : ''} in project</p>
+                        <p className="qt-text-small">{char.chatCount || 0} chat{char.chatCount !== 1 ? 's' : ''} in project</p>
                       </div>
                     </div>
                     <button
