@@ -57,9 +57,12 @@ interface ChatComposerProps {
   onAddCharacterClick: () => void
   onSettingsClick: () => void
   onRenameClick?: () => void
+  onProjectClick?: () => void
+  projectName?: string | null
   onDeleteChatMemoriesClick: () => void
   onReextractMemoriesClick: () => void
   onSearchReplaceClick?: () => void
+  onBulkCharacterReplaceClick?: () => void
   onStopStreaming: () => void
 }
 
@@ -119,9 +122,12 @@ export function ChatComposer({
   onAddCharacterClick,
   onSettingsClick,
   onRenameClick,
+  onProjectClick,
+  projectName,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
   onSearchReplaceClick,
+  onBulkCharacterReplaceClick,
   onStopStreaming,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -290,10 +296,13 @@ export function ChatComposer({
         showAddCharacter={isSingleCharacterChat}
         onSettingsClick={onSettingsClick}
         onRenameClick={onRenameClick}
+        onProjectClick={onProjectClick}
+        projectName={projectName}
         chatId={id}
         onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
         onReextractMemoriesClick={onReextractMemoriesClick}
         chatMemoryCount={chatMemoryCount}
+        onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
         disabled={sending || !hasActiveCharacters}
       />
 
@@ -385,10 +394,13 @@ export function ChatComposer({
             onGenerateImageClick={onGenerateImageClick}
             onSettingsClick={onSettingsClick}
             onRenameClick={onRenameClick}
+            onProjectClick={onProjectClick}
+            projectName={projectName}
             onAddCharacterClick={onAddCharacterClick}
             onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
             onReextractMemoriesClick={onReextractMemoriesClick}
             onSearchReplaceClick={onSearchReplaceClick}
+            onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
             chatPhotoCount={chatPhotoCount}
             hasImageProfile={hasImageProfile}
             showAddCharacter={isSingleCharacterChat}

@@ -27,12 +27,17 @@ interface MobileToolPaletteProps {
   onSettingsClick: () => void
   // Rename
   onRenameClick?: () => void
+  // Project assignment
+  onProjectClick?: () => void
+  projectName?: string | null
   // Export
   chatId: string
   // Memory management
   onDeleteChatMemoriesClick?: () => void
   onReextractMemoriesClick?: () => void
   chatMemoryCount?: number
+  // Bulk character replace
+  onBulkCharacterReplaceClick?: () => void
   // Disabled state
   disabled?: boolean
 }
@@ -53,10 +58,13 @@ export default function MobileToolPalette({
   showAddCharacter = false,
   onSettingsClick,
   onRenameClick,
+  onProjectClick,
+  projectName,
   chatId,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
   chatMemoryCount = 0,
+  onBulkCharacterReplaceClick,
   disabled = false,
 }: MobileToolPaletteProps) {
   const paletteRef = useRef<HTMLDivElement>(null)
@@ -78,9 +86,12 @@ export default function MobileToolPalette({
         chatId,
         chatMemoryCount,
         hasRenameCallback: !!onRenameClick,
+        hasProjectCallback: !!onProjectClick,
+        projectName,
+        hasBulkCharacterReplaceCallback: !!onBulkCharacterReplaceClick,
       })
     }
-  }, [isOpen, showAddCharacter, hasImageProfile, chatPhotoCount, chatId, chatMemoryCount, onRenameClick])
+  }, [isOpen, showAddCharacter, hasImageProfile, chatPhotoCount, chatId, chatMemoryCount, onRenameClick, onProjectClick, projectName, onBulkCharacterReplaceClick])
 
   // Handlers that close palette after action
   const handleAttachFileClick = () => {
@@ -120,6 +131,12 @@ export default function MobileToolPalette({
     onClose()
   }
 
+  const handleProjectClick = () => {
+    clientLogger.debug('[MobileToolPalette] Project clicked', { projectName })
+    onProjectClick?.()
+    onClose()
+  }
+
   const handleExportClick = () => {
     clientLogger.debug('[MobileToolPalette] Export Chat clicked', { chatId })
     window.location.href = `/api/chats/${chatId}/export`
@@ -135,6 +152,12 @@ export default function MobileToolPalette({
   const handleReextractMemoriesClick = () => {
     clientLogger.debug('[MobileToolPalette] Re-extract Memories clicked', { chatId })
     onReextractMemoriesClick?.()
+    onClose()
+  }
+
+  const handleBulkCharacterReplaceClick = () => {
+    clientLogger.debug('[MobileToolPalette] Bulk Character Replace clicked', { chatId })
+    onBulkCharacterReplaceClick?.()
     onClose()
   }
 
@@ -227,6 +250,20 @@ export default function MobileToolPalette({
             </button>
           )}
 
+          {/* Bulk Character Replace */}
+          {onBulkCharacterReplaceClick && (
+            <button
+              type="button"
+              onClick={handleBulkCharacterReplaceClick}
+              className="qt-mobile-tool-palette-button"
+            >
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              <span className="qt-mobile-tool-palette-button-label">Bulk Replace</span>
+            </button>
+          )}
+
           {/* Chat Settings */}
           <button
             type="button"
@@ -251,6 +288,20 @@ export default function MobileToolPalette({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               <span className="qt-mobile-tool-palette-button-label">Rename</span>
+            </button>
+          )}
+
+          {/* Project Assignment */}
+          {onProjectClick && (
+            <button
+              type="button"
+              onClick={handleProjectClick}
+              className="qt-mobile-tool-palette-button"
+            >
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+              <span className="qt-mobile-tool-palette-button-label">{projectName ? projectName : 'Project'}</span>
             </button>
           )}
 

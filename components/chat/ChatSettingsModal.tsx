@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
-import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 
 interface ConnectionProfile {
   id: string
@@ -79,19 +78,12 @@ interface RoleplayTemplate {
   isBuiltIn: boolean
 }
 
-interface Project {
-  id: string
-  name: string
-  color?: string | null
-}
-
 interface ChatSettingsModalProps {
   isOpen: boolean
   onClose: () => void
   chatId: string
   participants: Participant[]
   roleplayTemplateId?: string | null
-  projectId?: string | null
   onSuccess?: () => void
 }
 
@@ -341,24 +333,17 @@ export default function ChatSettingsModal({
   chatId,
   participants,
   roleplayTemplateId: initialRoleplayTemplateId,
-  projectId: initialProjectId,
   onSuccess,
 }: Readonly<ChatSettingsModalProps>) {
   const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
   const [roleplayTemplates, setRoleplayTemplates] = useState<RoleplayTemplate[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
   const [selectedRoleplayTemplateId, setSelectedRoleplayTemplateId] = useState<string | null>(
     initialRoleplayTemplateId ?? null
   )
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    initialProjectId ?? null
-  )
   const [roleplayTemplateSaving, setRoleplayTemplateSaving] = useState(false)
-  const [projectSaving, setProjectSaving] = useState(false)
   const [loading, setLoading] = useState(false)
-  const { refreshSidebar } = useSidebarData()
 
   // Update local state when prop changes
   useEffect(() => {
@@ -366,20 +351,15 @@ export default function ChatSettingsModal({
   }, [initialRoleplayTemplateId])
 
   useEffect(() => {
-    setSelectedProjectId(initialProjectId ?? null)
-  }, [initialProjectId])
-
-  useEffect(() => {
     if (isOpen) {
       fetchProfiles()
       fetchRoleplayTemplates()
-      fetchProjects()
     }
   }, [isOpen])
 
   // Disable click-outside detection while saving to prevent native select dropdown clicks
   // from closing the modal (browser renders select options in a separate layer)
-  const isSaving = loading || roleplayTemplateSaving || projectSaving
+  const isSaving = loading || roleplayTemplateSaving
 
   const fetchProfiles = async () => {
     try {
@@ -422,61 +402,6 @@ export default function ChatSettingsModal({
       }
     } catch (error) {
       clientLogger.error('Failed to fetch roleplay templates', { error: error instanceof Error ? error.message : String(error) })
-    }
-  }
-
-  const fetchProjects = async () => {
-    try {
-      const res = await fetch('/api/projects')
-      if (res.ok) {
-        const data = await res.json()
-        setProjects(data.projects || [])
-      }
-    } catch (error) {
-      clientLogger.error('Failed to fetch projects', { error: error instanceof Error ? error.message : String(error) })
-    }
-  }
-
-  const handleProjectChange = async (projectId: string | null) => {
-    try {
-      setProjectSaving(true)
-      clientLogger.debug('Updating chat project', { chatId, projectId })
-
-      const res = await fetch(`/api/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { projectId } }),
-      })
-
-      if (!res.ok) {
-        let errorMessage = 'Failed to update project'
-        try {
-          const errorData = await res.json()
-          errorMessage = errorData.error || errorMessage
-        } catch {
-          errorMessage = `HTTP ${res.status}: ${res.statusText}`
-        }
-        throw new Error(errorMessage)
-      }
-
-      setSelectedProjectId(projectId)
-      showSuccessToast(projectId ? 'Chat moved to project' : 'Chat removed from project')
-      clientLogger.info('Project updated for chat', { chatId, projectId })
-
-      // Refresh sidebar to update project chat counts and chat list
-      refreshSidebar()
-
-      onSuccess?.()
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      clientLogger.error('Failed to update project', {
-        chatId,
-        projectId,
-        error: errorMessage,
-      })
-      showErrorToast(errorMessage || 'Failed to update project')
-    } finally {
-      setProjectSaving(false)
     }
   }
 
@@ -573,36 +498,6 @@ export default function ChatSettingsModal({
       closeOnClickOutside={!isSaving}
       closeOnEscape={!isSaving}
     >
-      {/* Project Section */}
-      <div className="mb-6">
-        <h3 className="qt-text-small font-medium mb-3">
-          Project
-        </h3>
-        <div className="qt-card">
-          <label htmlFor="chat-project" className="qt-label mb-1">
-            Assign to Project
-          </label>
-          <select
-            id="chat-project"
-            value={selectedProjectId || ''}
-            onChange={(e) => handleProjectChange(e.target.value || null)}
-            disabled={projectSaving || loading}
-            className="qt-select text-sm"
-          >
-            <option value="">No project</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-          <p className="qt-text-xs mt-2">
-            Move this chat to a project for better organization.
-            {projectSaving && <span className="ml-2">Saving...</span>}
-          </p>
-        </div>
-      </div>
-
       {/* Roleplay Template Section */}
       <div className="mb-6">
         <h3 className="qt-text-small font-medium mb-3">

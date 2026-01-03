@@ -7,12 +7,14 @@ import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
 import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
+import ChatProjectModal from '@/components/chat/ChatProjectModal'
 import ChatRenameModal from '@/components/chat/ChatRenameModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
 import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
 import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog'
+import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
 import { MemoryCascadeDialog } from '@/components/ui/MemoryCascadeDialog'
@@ -110,6 +112,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [mobileToolPaletteOpen, setMobileToolPaletteOpen] = useState(false)
   const [documentEditingMode, setDocumentEditingMode] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
+  const [chatProjectModalOpen, setChatProjectModalOpen] = useState(false)
   const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
@@ -119,6 +122,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     currentParticipantId: string | null
   } | null>(null)
   const [searchReplaceModalOpen, setSearchReplaceModalOpen] = useState(false)
+  const [bulkReplaceModalOpen, setBulkReplaceModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ id: string; name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
@@ -829,17 +833,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       const isAbort = err instanceof Error && err.name === 'AbortError'
       if (!isAbort) {
         // Extract error message, handling cases where message may be undefined
-        const errorMessage = err instanceof Error
-          ? (err.message || err.name || 'Unknown error')
-          : String(err) || 'Unknown error'
-        const errorName = err instanceof Error ? err.name : 'UnknownErrorType'
+        let errorMessage = 'Failed to generate response'
+        let errorName = 'UnknownErrorType'
 
-        clientLogger.error('[Chat] Continue mode error:', {
+        if (err instanceof Error) {
+          errorMessage = err.message || err.name || errorMessage
+          errorName = err.name
+        } else if (typeof err === 'string') {
+          errorMessage = err
+        } else if (err && typeof err === 'object') {
+          // Handle plain object errors (e.g., from API responses)
+          const errObj = err as Record<string, unknown>
+          if (typeof errObj.error === 'string') {
+            errorMessage = errObj.error
+          } else if (typeof errObj.message === 'string') {
+            errorMessage = errObj.message
+          }
+        }
+
+        clientLogger.error('[Chat] Continue mode error', {
           error: errorMessage,
           errorName,
           errorType: typeof err,
+          rawError: err instanceof Error ? err.message : JSON.stringify(err),
         })
-        showErrorToast(errorMessage || 'Failed to generate response')
+        showErrorToast(errorMessage)
       }
     } finally {
       setStreaming(false)
@@ -2129,9 +2147,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onAddCharacterClick={handleAddCharacter}
           onSettingsClick={() => setChatSettingsModalOpen(true)}
           onRenameClick={handleRenameClick}
+          onProjectClick={() => setChatProjectModalOpen(true)}
+          projectName={chat?.projectName}
           onDeleteChatMemoriesClick={handleDeleteChatMemories}
           onReextractMemoriesClick={handleReextractMemories}
           onSearchReplaceClick={() => setSearchReplaceModalOpen(true)}
+          onBulkCharacterReplaceClick={() => setBulkReplaceModalOpen(true)}
           onStopStreaming={stopStreaming}
         />
 
@@ -2183,7 +2204,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           chatId={id}
           participants={chat?.participants || []}
           roleplayTemplateId={chat?.roleplayTemplateId}
+          onSuccess={fetchChat}
+        />
+
+        <ChatProjectModal
+          isOpen={chatProjectModalOpen}
+          onClose={() => setChatProjectModalOpen(false)}
+          chatId={id}
           projectId={chat?.projectId}
+          projectName={chat?.projectName}
           onSuccess={fetchChat}
         />
 
@@ -2268,6 +2297,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           currentChatId={id}
           chatTitle={chat?.title}
         />
+
+        {/* Bulk Character Replace Modal */}
+        {chat && (
+          <BulkCharacterReplaceModal
+            isOpen={bulkReplaceModalOpen}
+            onClose={() => setBulkReplaceModalOpen(false)}
+            chatId={id}
+            participants={chat.participants}
+            messages={messages}
+            onSuccess={fetchChat}
+          />
+        )}
 
         {/* All-LLM Pause Modal */}
         <AllLLMPauseModal

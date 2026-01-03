@@ -12,10 +12,13 @@ interface ToolPaletteProps {
   onGenerateImageClick: () => void
   onSettingsClick: () => void
   onRenameClick?: () => void
+  onProjectClick?: () => void // Assign chat to project
+  projectName?: string | null // Current project name (to show in button)
   onAddCharacterClick?: () => void
   onDeleteChatMemoriesClick?: () => void
   onReextractMemoriesClick?: () => void
   onSearchReplaceClick?: () => void // Search and replace in chat
+  onBulkCharacterReplaceClick?: () => void // Bulk re-attribute messages between characters
   chatPhotoCount: number
   hasImageProfile: boolean
   showAddCharacter?: boolean // Show "Add Character" button for single-character chats
@@ -38,10 +41,13 @@ export default function ToolPalette({
   onGenerateImageClick,
   onSettingsClick,
   onRenameClick,
+  onProjectClick,
+  projectName,
   onAddCharacterClick,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
   onSearchReplaceClick,
+  onBulkCharacterReplaceClick,
   chatPhotoCount,
   hasImageProfile,
   showAddCharacter = false,
@@ -84,6 +90,12 @@ export default function ToolPalette({
     onClose()
   }
 
+  const handleProjectClick = () => {
+    clientLogger.debug('[ToolPalette] Project clicked', { projectName })
+    onProjectClick?.()
+    onClose()
+  }
+
   const handleAddCharacterClick = () => {
     clientLogger.debug('[ToolPalette] Add Character clicked')
     onAddCharacterClick?.()
@@ -121,6 +133,12 @@ export default function ToolPalette({
     onClose()
   }
 
+  const handleBulkCharacterReplaceClick = () => {
+    clientLogger.debug('[ToolPalette] Bulk Character Replace clicked', { chatId })
+    onBulkCharacterReplaceClick?.()
+    onClose()
+  }
+
   const handleTogglePreview = () => {
     clientLogger.debug('[ToolPalette] Toggle Preview clicked', { showPreview })
     onTogglePreview?.()
@@ -136,7 +154,10 @@ export default function ToolPalette({
         hasDeleteMemoriesCallback: !!onDeleteChatMemoriesClick,
         hasReextractMemoriesCallback: !!onReextractMemoriesClick,
         hasSearchReplaceCallback: !!onSearchReplaceClick,
+        hasBulkCharacterReplaceCallback: !!onBulkCharacterReplaceClick,
         hasRenameCallback: !!onRenameClick,
+        hasProjectCallback: !!onProjectClick,
+        projectName,
         chatPhotoCount,
         hasImageProfile,
         chatId,
@@ -145,7 +166,7 @@ export default function ToolPalette({
         hasPreviewToggle: !!onTogglePreview,
       })
     }
-  }, [isOpen, showAddCharacter, onAddCharacterClick, onDeleteChatMemoriesClick, onReextractMemoriesClick, onSearchReplaceClick, onRenameClick, chatPhotoCount, hasImageProfile, chatId, chatMemoryCount, onAttachFileClick, onTogglePreview])
+  }, [isOpen, showAddCharacter, onAddCharacterClick, onDeleteChatMemoriesClick, onReextractMemoriesClick, onSearchReplaceClick, onBulkCharacterReplaceClick, onRenameClick, onProjectClick, projectName, chatPhotoCount, hasImageProfile, chatId, chatMemoryCount, onAttachFileClick, onTogglePreview])
 
   if (!isOpen) return null
 
@@ -204,6 +225,21 @@ export default function ToolPalette({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
             <span>Rename</span>
+          </button>
+        )}
+
+        {/* Project Assignment */}
+        {onProjectClick && (
+          <button
+            type="button"
+            onClick={handleProjectClick}
+            className="qt-tool-palette-button"
+            title={projectName ? `In project: ${projectName}` : 'Assign to project'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+            <span>{projectName ? projectName : 'Project'}</span>
           </button>
         )}
 
@@ -277,6 +313,21 @@ export default function ToolPalette({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
             </svg>
             <span>Add Character</span>
+          </button>
+        )}
+
+        {/* Bulk Character Replace */}
+        {onBulkCharacterReplaceClick && (
+          <button
+            type="button"
+            onClick={handleBulkCharacterReplaceClick}
+            className="qt-tool-palette-button"
+            title="Bulk re-attribute messages between characters"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            <span>Bulk Replace</span>
           </button>
         )}
       </div>

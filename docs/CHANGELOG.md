@@ -4,6 +4,21 @@
 
 ### 2.7-dev
 
+- feat: Bulk character replace tool in chat tool palette
+  - Re-attribute all messages from one participant to another in a single operation
+  - Supports filtering by role (AI responses only, user messages only, or all)
+  - Handles messages with null participantId (unassigned user messages)
+  - Deletes associated memories when messages are re-attributed (same as individual re-attribute)
+  - New API endpoint: POST `/api/chats/:id/bulk-reattribute`
+- feat: Project assignment moved from chat settings to tool palette
+  - New "Project" button in tool palette shows current project name or "Project" if unassigned
+  - Opens dedicated ChatProjectModal for quick project assignment/unassignment
+  - Removed project section from ChatSettingsModal for cleaner settings dialog
+- fix: Improved continue mode error handling
+  - Better extraction of error messages from various error formats (Error objects, strings, plain objects)
+  - Now properly displays toast messages for errors like "No connection profile configured for character"
+  - Added diagnostic logging for debugging error scenarios
+- fix: Centered tool palette and formatting toolbar on desktop
 - perf: Major chat performance optimization for long conversations
   - Added virtualization using @tanstack/react-virtual - only renders visible messages
   - LazyMessageContent defers markdown/roleplay processing until message is visible for 500ms
