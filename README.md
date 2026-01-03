@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.7.0--dev.8-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.7.0--dev.9-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -576,11 +576,11 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Has intimate knowledge of this application
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
 - [ ] Create web-only version that uses IndexedDB for everything
-- [ ] Project support
+- [X] Project support
   - [ ] Folders
   - [ ] Files (text/Markdown or binary)
-  - [ ] Direct import/export/access
-  - [ ] Project becomes overriding context for chats, images, etc.
+  - [X] Direct import/export/access
+  - [X] Project becomes overriding context for chats, images, etc.
 - [x] Hosted installations can not allow user-only plugins to be installed if they require server restarts
 - [x] Hosted installations must automatically restart the server if site-wide plugins are installed that require restarts
 - [X] Get the "Web Search" tool hooked up, it's just giving "not implemented" responses right now

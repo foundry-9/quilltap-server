@@ -289,15 +289,31 @@ async function createInitialMessages(
     firstMessageContent = defaultGreeting(context.character.name)
   }
 
+  // Find the participant ID for the first LLM-controlled character
+  // This is needed for turn manager to track who has spoken
+  const firstCharacterParticipant = participants.find(
+    p => p.type === 'CHARACTER' && p.characterId === context.character.id && p.controlledBy !== 'user'
+  ) || participants.find(
+    p => p.type === 'CHARACTER' && p.controlledBy !== 'user'
+  )
+
   const firstMessage: ChatEvent = {
     type: 'message',
     id: crypto.randomUUID(),
     role: 'ASSISTANT',
     content: firstMessageContent,
+    participantId: firstCharacterParticipant?.id || undefined,
     attachments: [],
     createdAt: new Date().toISOString(),
   }
   await repos.chats.addMessage(chatId, firstMessage)
+
+  logger.debug('Created initial greeting message', {
+    context: 'createInitialMessages',
+    chatId,
+    participantId: firstCharacterParticipant?.id,
+    characterId: context.character.id,
+  })
 }
 
 async function autoGenerateFirstMessage(

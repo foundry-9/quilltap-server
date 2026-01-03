@@ -4,6 +4,10 @@
 
 ### 2.7-dev
 
+- fix: Turn manager not tracking initial greeting message in new chats
+  - Initial greeting messages were created without a `participantId`, causing the turn manager to not recognize that the character had already spoken
+  - This caused the character to be prompted to speak again immediately after their greeting, and they would get confused thinking they said what you said
+  - Now properly attaches the first LLM-controlled character's participant ID to the greeting message
 - feat: Projects feature for organizing chats, files, and characters
   - Added `Project` schema with name, description, instructions, character roster, and customization
   - Projects can have optional instructions that are injected into system prompts
