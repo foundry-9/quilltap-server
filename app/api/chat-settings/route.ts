@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
-import { TagStyleMapSchema, ThemePreferenceSchema, type AvatarDisplayMode } from '@/lib/schemas/types'
+import { TagStyleMapSchema, ThemePreferenceSchema, TokenDisplaySettingsSchema, type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/errors'
 
 /**
@@ -25,7 +25,8 @@ async function updateChatSettings(
   imageDescriptionProfileId?: string | null,
   themePreference?: unknown,
   defaultRoleplayTemplateId?: string | null,
-  sidebarWidth?: number
+  sidebarWidth?: number,
+  tokenDisplaySettings?: unknown
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -93,6 +94,10 @@ async function updateChatSettings(
     updateData.sidebarWidth = sidebarWidth
     logger.debug('Updating sidebar width', { userId, sidebarWidth })
   }
+  if (typeof tokenDisplaySettings !== 'undefined') {
+    const validatedTokenDisplaySettings = TokenDisplaySettingsSchema.parse(tokenDisplaySettings)
+    updateData.tokenDisplaySettings = validatedTokenDisplaySettings
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -136,7 +141,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 async function handleSettingsUpdate(req: NextRequest, { user }: AuthenticatedContext) {
   try {
     const body = await req.json()
-    const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings, imageDescriptionProfileId, themePreference, defaultRoleplayTemplateId, sidebarWidth } = body
+    const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings, imageDescriptionProfileId, themePreference, defaultRoleplayTemplateId, sidebarWidth, tokenDisplaySettings } = body
 
     const chatSettings = await updateChatSettings(
       user.id,
@@ -147,7 +152,8 @@ async function handleSettingsUpdate(req: NextRequest, { user }: AuthenticatedCon
       imageDescriptionProfileId,
       themePreference,
       defaultRoleplayTemplateId,
-      sidebarWidth
+      sidebarWidth,
+      tokenDisplaySettings
     )
 
     return NextResponse.json(chatSettings)

@@ -11,7 +11,9 @@ import {
   AvatarDisplayStyle,
   CheapLLMSettings,
   MemoryCascadePreferences,
+  TokenDisplaySettings,
   DEFAULT_MEMORY_CASCADE_PREFERENCES,
+  DEFAULT_TOKEN_DISPLAY_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -29,6 +31,7 @@ interface UseChatSettingsReturn {
   handleCheapLLMUpdate: (updates: Partial<CheapLLMSettings>) => Promise<void>
   handleImageDescriptionProfileChange: (profileId: string | null) => Promise<void>
   handleMemoryCascadeUpdate: (updates: Partial<MemoryCascadePreferences>) => Promise<void>
+  handleTokenDisplayChange: (key: keyof TokenDisplaySettings, value: boolean) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -332,6 +335,48 @@ export function useChatSettings(): UseChatSettingsReturn {
     [settings, showSuccess]
   )
 
+  /**
+   * Update token display settings
+   */
+  const handleTokenDisplayChange = useCallback(
+    async (key: keyof TokenDisplaySettings, value: boolean) => {
+      if (!settings) return
+
+      try {
+        clientLogger.debug('Updating token display settings', { key, value })
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const currentSettings = settings.tokenDisplaySettings || DEFAULT_TOKEN_DISPLAY_SETTINGS
+        const res = await fetch('/api/chat-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tokenDisplaySettings: { ...currentSettings, [key]: value },
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update token display settings')
+        }
+
+        const updatedSettings = await res.json()
+        clientLogger.info('Token display settings updated successfully', { key, value })
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        clientLogger.error('Failed to update token display settings', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
   return {
     settings,
     loading,
@@ -347,5 +392,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleCheapLLMUpdate,
     handleImageDescriptionProfileChange,
     handleMemoryCascadeUpdate,
+    handleTokenDisplayChange,
   }
 }

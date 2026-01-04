@@ -302,6 +302,120 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
   }
 
   // ============================================================================
+  // TOKEN USAGE TRACKING
+  // ============================================================================
+
+  /**
+   * Increment token aggregate counters for a chat
+   * Uses atomic $inc operations for thread safety
+   */
+  async incrementTokenAggregates(
+    chatId: string,
+    promptTokens: number,
+    completionTokens: number,
+    estimatedCost: number | null
+  ): Promise<void> {
+    try {
+      logger.debug('Incrementing token aggregates for chat', {
+        chatId,
+        promptTokens,
+        completionTokens,
+        estimatedCost,
+      });
+
+      const collection = await (this as any).getCollection();
+      const now = this.getCurrentTimestamp();
+
+      // Build update operations
+      const incOps: Record<string, number> = {
+        totalPromptTokens: promptTokens,
+        totalCompletionTokens: completionTokens,
+      };
+
+      // For estimated cost, we need special handling since we can't $inc with null
+      const updateOps: Record<string, unknown> = {
+        $inc: incOps,
+        $set: { updatedAt: now },
+      };
+
+      // If we have a cost to add, we need to handle the case where estimatedCostUSD might be null
+      if (estimatedCost !== null && estimatedCost > 0) {
+        // Use aggregation pipeline update for conditional cost increment
+        const result = await collection.updateOne(
+          { id: chatId },
+          [
+            {
+              $set: {
+                totalPromptTokens: { $add: ['$totalPromptTokens', promptTokens] },
+                totalCompletionTokens: { $add: ['$totalCompletionTokens', completionTokens] },
+                estimatedCostUSD: {
+                  $add: [
+                    { $ifNull: ['$estimatedCostUSD', 0] },
+                    estimatedCost,
+                  ],
+                },
+                updatedAt: now,
+              },
+            },
+          ]
+        );
+
+        if (result.matchedCount === 0) {
+          logger.warn('Chat not found for token aggregates increment', { chatId });
+          return;
+        }
+      } else {
+        // No cost to add, just increment tokens
+        const result = await collection.updateOne(
+          { id: chatId } as Filter<ChatMetadata>,
+          updateOps
+        );
+
+        if (result.matchedCount === 0) {
+          logger.warn('Chat not found for token aggregates increment', { chatId });
+          return;
+        }
+      }
+
+      logger.debug('Token aggregates incremented successfully', {
+        chatId,
+        promptTokens,
+        completionTokens,
+        estimatedCost,
+      });
+    } catch (error) {
+      logger.error('Error incrementing token aggregates', {
+        chatId,
+        promptTokens,
+        completionTokens,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Don't throw - token tracking failures shouldn't break message flow
+    }
+  }
+
+  /**
+   * Reset token aggregate counters for a chat
+   */
+  async resetTokenAggregates(chatId: string): Promise<ChatMetadata | null> {
+    try {
+      logger.debug('Resetting token aggregates for chat', { chatId });
+
+      return await this.update(chatId, {
+        totalPromptTokens: 0,
+        totalCompletionTokens: 0,
+        estimatedCostUSD: null,
+      });
+    } catch (error) {
+      logger.error('Error resetting token aggregates', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  // ============================================================================
   // TAG OPERATIONS
   // ============================================================================
 

@@ -8,6 +8,8 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { processMessageForMemoryAsync, processInterCharacterMemoryAsync } from '@/lib/memory'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
+import { createMemoryExtractionEvent } from '@/lib/services/system-events.service'
+import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ConnectionProfile, ChatParticipantBase, MessageEvent, CheapLLMSettings } from '@/lib/schemas/types'
 
@@ -71,6 +73,29 @@ export async function triggerMemoryExtraction(
           )
         } catch (e) {
           logger.error('Failed to store memory debug logs', {}, e as Error)
+        }
+      }
+
+      // Create system event for token tracking if tokens were used
+      if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {
+        try {
+          // Estimate cost for the memory extraction operation
+          const costResult = await estimateMessageCost(
+            options.connectionProfile.provider,
+            options.connectionProfile.modelName,
+            result.usage.promptTokens || 0,
+            result.usage.completionTokens || 0,
+            options.userId
+          )
+          await createMemoryExtractionEvent(
+            options.chatId,
+            result.usage,
+            options.connectionProfile.provider,
+            options.connectionProfile.modelName,
+            costResult.cost
+          )
+        } catch (e) {
+          logger.error('Failed to create memory extraction system event', {}, e as Error)
         }
       }
     })

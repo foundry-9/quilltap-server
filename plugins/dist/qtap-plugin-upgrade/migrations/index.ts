@@ -25,6 +25,8 @@ import { migratePersonasToCharactersMigration } from './migrate-personas-to-char
 // Multi-character chat migrations (moved from lib/mongodb/migrations/)
 import { addMultiCharacterFieldsMigration } from './add-multi-character-fields';
 import { addInterCharacterMemoryFieldsMigration } from './add-inter-character-memory-fields';
+// Token usage tracking
+import { addTokenTrackingFieldsMigration } from './add-token-tracking-fields';
 
 /**
  * All available migrations.
@@ -50,6 +52,8 @@ export const migrations: Migration[] = [
   // Multi-character chat migrations (moved from lib/mongodb/migrations/)
   addMultiCharacterFieldsMigration,
   addInterCharacterMemoryFieldsMigration,
+  // Token usage tracking
+  addTokenTrackingFieldsMigration,
 ];
 
 export {
@@ -72,4 +76,6 @@ export {
   // Multi-character chat migrations (moved from lib/mongodb/migrations/)
   addMultiCharacterFieldsMigration,
   addInterCharacterMemoryFieldsMigration,
+  // Token usage tracking
+  addTokenTrackingFieldsMigration,
 };

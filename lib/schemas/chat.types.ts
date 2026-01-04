@@ -28,6 +28,10 @@ export const MessageEventSchema = z.object({
   content: z.string(),
   rawResponse: JsonSchema.nullable().optional(),
   tokenCount: z.number().nullable().optional(),
+  /** Input/prompt tokens for this message */
+  promptTokens: z.number().nullable().optional(),
+  /** Output/completion tokens for this message */
+  completionTokens: z.number().nullable().optional(),
   swipeGroupId: z.string().nullable().optional(),
   swipeIndex: z.number().nullable().optional(),
   attachments: z.array(UUIDSchema).default([]),
@@ -52,9 +56,48 @@ export const ContextSummaryEventSchema = z.object({
 
 export type ContextSummaryEvent = z.infer<typeof ContextSummaryEventSchema>;
 
+// ============================================================================
+// SYSTEM EVENTS (Cheap LLM Operations)
+// ============================================================================
+
+export const SystemEventTypeEnum = z.enum([
+  'MEMORY_EXTRACTION',
+  'SUMMARIZATION',
+  'TITLE_GENERATION',
+  'CONTEXT_SUMMARY',
+  'IMAGE_PROMPT_CRAFTING',
+]);
+
+export type SystemEventType = z.infer<typeof SystemEventTypeEnum>;
+
+export const SystemEventSchema = z.object({
+  type: z.literal('system'),
+  id: UUIDSchema,
+  /** Type of system operation */
+  systemEventType: SystemEventTypeEnum,
+  /** Human-readable description of what the system did */
+  description: z.string(),
+  /** Input/prompt tokens used for this operation */
+  promptTokens: z.number().nullable().optional(),
+  /** Output/completion tokens used for this operation */
+  completionTokens: z.number().nullable().optional(),
+  /** Total tokens used (promptTokens + completionTokens) */
+  totalTokens: z.number().nullable().optional(),
+  /** Provider used for this operation */
+  provider: z.string().nullable().optional(),
+  /** Model name used for this operation */
+  modelName: z.string().nullable().optional(),
+  /** Estimated cost in USD for this operation */
+  estimatedCostUSD: z.number().nullable().optional(),
+  createdAt: TimestampSchema,
+});
+
+export type SystemEvent = z.infer<typeof SystemEventSchema>;
+
 export const ChatEventSchema = z.union([
   MessageEventSchema,
   ContextSummaryEventSchema,
+  SystemEventSchema,
 ]);
 
 export type ChatEvent = z.infer<typeof ChatEventSchema>;
@@ -185,6 +228,16 @@ export const ChatMetadataSchema = z.object({
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),
 
+  // Token usage tracking (aggregate totals for this chat)
+  /** Total prompt/input tokens used in this chat */
+  totalPromptTokens: z.number().default(0),
+  /** Total completion/output tokens used in this chat */
+  totalCompletionTokens: z.number().default(0),
+  /** Estimated total cost in USD for this chat */
+  estimatedCostUSD: z.number().nullable().optional(),
+  /** Per-chat override for showing system events (null = use global setting) */
+  showSystemEventsOverride: z.boolean().nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -225,6 +278,16 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),
+
+  // Token usage tracking (aggregate totals for this chat)
+  /** Total prompt/input tokens used in this chat */
+  totalPromptTokens: z.number().default(0),
+  /** Total completion/output tokens used in this chat */
+  totalCompletionTokens: z.number().default(0),
+  /** Estimated total cost in USD for this chat */
+  estimatedCostUSD: z.number().nullable().optional(),
+  /** Per-chat override for showing system events (null = use global setting) */
+  showSystemEventsOverride: z.boolean().nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

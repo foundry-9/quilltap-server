@@ -406,6 +406,90 @@ export class ConnectionProfilesRepository extends MongoBaseRepository<Connection
   }
 
   // ============================================================================
+  // TOKEN USAGE TRACKING
+  // ============================================================================
+
+  /**
+   * Increment token usage counters for a connection profile
+   * Uses atomic $inc operations for thread safety
+   */
+  async incrementTokenUsage(
+    profileId: string,
+    promptTokens: number,
+    completionTokens: number
+  ): Promise<void> {
+    try {
+      logger.debug('Incrementing token usage for connection profile', {
+        profileId,
+        promptTokens,
+        completionTokens,
+        collection: this.collectionName,
+      });
+
+      const collection = await this.getCollection();
+      const now = this.getCurrentTimestamp();
+
+      const result = await collection.updateOne(
+        { id: profileId },
+        {
+          $inc: {
+            totalTokens: promptTokens + completionTokens,
+            totalPromptTokens: promptTokens,
+            totalCompletionTokens: completionTokens,
+            messageCount: 1,
+          },
+          $set: { updatedAt: now },
+        }
+      );
+
+      if (result.matchedCount === 0) {
+        logger.warn('Connection profile not found for token usage increment', { profileId });
+        return;
+      }
+
+      logger.debug('Token usage incremented successfully', {
+        profileId,
+        promptTokens,
+        completionTokens,
+        modifiedCount: result.modifiedCount,
+      });
+    } catch (error) {
+      logger.error('Error incrementing token usage', {
+        profileId,
+        promptTokens,
+        completionTokens,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Don't throw - token tracking failures shouldn't break message flow
+    }
+  }
+
+  /**
+   * Reset token usage counters for a connection profile
+   */
+  async resetTokenUsage(profileId: string): Promise<ConnectionProfile | null> {
+    try {
+      logger.debug('Resetting token usage for connection profile', {
+        profileId,
+        collection: this.collectionName,
+      });
+
+      return await this.update(profileId, {
+        totalTokens: 0,
+        totalPromptTokens: 0,
+        totalCompletionTokens: 0,
+        messageCount: 0,
+      });
+    } catch (error) {
+      logger.error('Error resetting token usage', {
+        profileId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  // ============================================================================
   // API KEY OPERATIONS
   // ============================================================================
 

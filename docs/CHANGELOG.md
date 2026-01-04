@@ -4,6 +4,21 @@
 
 ### 2.7-dev
 
+- feat: Comprehensive token usage tracking with cost estimation
+  - Added promptTokens and completionTokens fields to messages for detailed usage tracking
+  - Added totalPromptTokens, totalCompletionTokens, estimatedCostUSD aggregates to chats
+  - Added totalTokens, totalPromptTokens, totalCompletionTokens, messageCount to connection profiles
+  - New SystemEvent type for tracking cheap LLM operations (memory extraction, summarization, etc.)
+  - Token display settings schema (showPerMessageTokens, showPerMessageCost, showChatTotals, showSystemEvents)
+  - Token tracking service with profile and chat aggregate updates
+  - Database migration for new fields in upgrade plugin
+  - System events service for creating cheap LLM operation events
+  - Memory extraction, context summary, and title generation now create system events with token usage
+  - Cost estimation service using OpenRouter pricing when available, with fallback pricing
+  - New API endpoint: GET `/api/chats/:id/cost` for chat cost breakdown
+  - Chat settings now supports tokenDisplaySettings for controlling token/cost visibility
+  - New UI components: TokenBadge, SystemEventMessage, ChatCostSummary for chat display
+  - Connection profile cards now show token usage alongside message count
 - feat: Connection profiles now sync between Quilltap instances
   - Added CONNECTION_PROFILE as a syncable entity type
   - API keys are handled securely: `apiKeyId` is stripped during sync, replaced with `_apiKeyLabel` for reference

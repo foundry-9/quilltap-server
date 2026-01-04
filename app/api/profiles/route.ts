@@ -273,6 +273,11 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       isCheap,
       allowWebSearch,
       tags: [],
+      // Token tracking fields (initialized to 0)
+      totalTokens: 0,
+      totalPromptTokens: 0,
+      totalCompletionTokens: 0,
+      messageCount: 0,
     })
 
     // Enrich with API key info

@@ -285,6 +285,12 @@ export class ChatSettingsRepository extends MongoBaseRepository<ChatSettings> {
             onMessageDelete: 'ASK_EVERY_TIME',
             onSwipeRegenerate: 'DELETE_MEMORIES',
           },
+          tokenDisplaySettings: {
+            showPerMessageTokens: false,
+            showPerMessageCost: false,
+            showChatTotals: false,
+            showSystemEvents: false,
+          },
           defaultRoleplayTemplateId,
           ...data,
         };

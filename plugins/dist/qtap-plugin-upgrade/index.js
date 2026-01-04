@@ -39585,6 +39585,174 @@ var addInterCharacterMemoryFieldsMigration = {
   }
 };
 
+// migrations/add-token-tracking-fields.ts
+init_logger();
+function isMongoDBBackendEnabled10() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase11() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible10() {
+  try {
+    const db = await getMongoDatabase11();
+    await db.command({ ping: 1 });
+    return true;
+  } catch (error) {
+    logger.warn("MongoDB is not accessible for token tracking fields migration", {
+      context: "migration.add-token-tracking-fields",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+async function hasProfilesNeedingMigration() {
+  try {
+    const db = await getMongoDatabase11();
+    const profilesCollection = db.collection("connection_profiles");
+    const count = await profilesCollection.countDocuments({
+      totalTokens: { $exists: false }
+    });
+    return count > 0;
+  } catch (error) {
+    logger.debug("Error checking profiles for token tracking fields", {
+      context: "migration.add-token-tracking-fields",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+async function hasChatsNeedingMigration2() {
+  try {
+    const db = await getMongoDatabase11();
+    const chatsCollection = db.collection("chats");
+    const count = await chatsCollection.countDocuments({
+      totalPromptTokens: { $exists: false }
+    });
+    return count > 0;
+  } catch (error) {
+    logger.debug("Error checking chats for token tracking fields", {
+      context: "migration.add-token-tracking-fields",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+var addTokenTrackingFieldsMigration = {
+  id: "add-token-tracking-fields-v1",
+  description: "Add token tracking fields to connection profiles and chats for usage monitoring",
+  introducedInVersion: "2.6.0",
+  dependsOn: ["migrate-json-to-mongodb-v1"],
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled10()) {
+      logger.debug("MongoDB not enabled, skipping token tracking fields migration", {
+        context: "migration.add-token-tracking-fields"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible10()) {
+      logger.debug("MongoDB not accessible, deferring token tracking fields migration", {
+        context: "migration.add-token-tracking-fields"
+      });
+      return false;
+    }
+    const profilesNeedMigration = await hasProfilesNeedingMigration();
+    const chatsNeedMigration = await hasChatsNeedingMigration2();
+    const needsRun = profilesNeedMigration || chatsNeedMigration;
+    logger.debug("Checked for token tracking fields migration need", {
+      context: "migration.add-token-tracking-fields",
+      profilesNeedMigration,
+      chatsNeedMigration,
+      needsRun
+    });
+    return needsRun;
+  },
+  async run() {
+    const startTime = Date.now();
+    let profilesUpdated = 0;
+    let chatsUpdated = 0;
+    logger.info("Starting token tracking fields migration", {
+      context: "migration.add-token-tracking-fields"
+    });
+    try {
+      const db = await getMongoDatabase11();
+      logger.debug("Adding token tracking fields to connection_profiles", {
+        context: "migration.add-token-tracking-fields"
+      });
+      const profilesCollection = db.collection("connection_profiles");
+      const profilesResult = await profilesCollection.updateMany(
+        { totalTokens: { $exists: false } },
+        {
+          $set: {
+            totalTokens: 0,
+            totalPromptTokens: 0,
+            totalCompletionTokens: 0,
+            messageCount: 0
+          }
+        }
+      );
+      profilesUpdated = profilesResult.modifiedCount;
+      logger.debug("Connection profiles updated with token tracking fields", {
+        context: "migration.add-token-tracking-fields",
+        count: profilesUpdated
+      });
+      logger.debug("Adding token tracking fields to chats", {
+        context: "migration.add-token-tracking-fields"
+      });
+      const chatsCollection = db.collection("chats");
+      const chatsResult = await chatsCollection.updateMany(
+        { totalPromptTokens: { $exists: false } },
+        {
+          $set: {
+            totalPromptTokens: 0,
+            totalCompletionTokens: 0,
+            estimatedCostUSD: null,
+            showSystemEventsOverride: null
+          }
+        }
+      );
+      chatsUpdated = chatsResult.modifiedCount;
+      logger.debug("Chats updated with token tracking fields", {
+        context: "migration.add-token-tracking-fields",
+        count: chatsUpdated
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error("Token tracking fields migration failed", {
+        context: "migration.add-token-tracking-fields",
+        error: errorMessage
+      });
+      return {
+        id: "add-token-tracking-fields-v1",
+        success: false,
+        itemsAffected: profilesUpdated + chatsUpdated,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const durationMs = Date.now() - startTime;
+    const totalAffected = profilesUpdated + chatsUpdated;
+    logger.info("Token tracking fields migration completed successfully", {
+      context: "migration.add-token-tracking-fields",
+      profilesUpdated,
+      chatsUpdated,
+      durationMs
+    });
+    return {
+      id: "add-token-tracking-fields-v1",
+      success: true,
+      itemsAffected: totalAffected,
+      message: `Added token tracking fields to ${profilesUpdated} profiles and ${chatsUpdated} chats`,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
 // migrations/index.ts
 var migrations = [
   convertOpenRouterProfilesMigration,
@@ -39605,21 +39773,23 @@ var migrations = [
   migratePersonasToCharactersMigration,
   // Multi-character chat migrations (moved from lib/mongodb/migrations/)
   addMultiCharacterFieldsMigration,
-  addInterCharacterMemoryFieldsMigration
+  addInterCharacterMemoryFieldsMigration,
+  // Token usage tracking
+  addTokenTrackingFieldsMigration
 ];
 
 // user-migrations.ts
 init_logger();
-function isMongoDBBackendEnabled10() {
+function isMongoDBBackendEnabled11() {
   const backend = process.env.DATA_BACKEND || "";
   return backend === "mongodb" || backend === "dual";
 }
-async function getMongoDatabase11() {
+async function getMongoDatabase12() {
   const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
   return getDb();
 }
 async function migrateUserCharacterSystemPrompts(userId) {
-  if (!isMongoDBBackendEnabled10()) {
+  if (!isMongoDBBackendEnabled11()) {
     logger.debug("MongoDB not enabled, skipping character system prompts migration", {
       context: "user-migrations.migrateUserCharacterSystemPrompts",
       userId
@@ -39628,7 +39798,7 @@ async function migrateUserCharacterSystemPrompts(userId) {
   }
   const startTime = Date.now();
   try {
-    const db = await getMongoDatabase11();
+    const db = await getMongoDatabase12();
     const charactersCollection = db.collection("characters");
     const needsMigration = await charactersCollection.find({
       userId,

@@ -95,6 +95,23 @@ export const MemoryCascadePreferencesSchema = z.object({
 export type MemoryCascadePreferences = z.infer<typeof MemoryCascadePreferencesSchema>;
 
 // ============================================================================
+// TOKEN DISPLAY SETTINGS
+// ============================================================================
+
+export const TokenDisplaySettingsSchema = z.object({
+  /** Show per-message token counts in chat */
+  showPerMessageTokens: z.boolean().default(false),
+  /** Show estimated cost per message */
+  showPerMessageCost: z.boolean().default(false),
+  /** Show chat-level token aggregation and cost */
+  showChatTotals: z.boolean().default(false),
+  /** Show system events (cheap LLM operations) in chat */
+  showSystemEvents: z.boolean().default(false),
+});
+
+export type TokenDisplaySettings = z.infer<typeof TokenDisplaySettingsSchema>;
+
+// ============================================================================
 // CHAT SETTINGS
 // ============================================================================
 
@@ -132,6 +149,13 @@ export const ChatSettingsSchema = z.object({
   memoryCascadePreferences: MemoryCascadePreferencesSchema.default({
     onMessageDelete: 'ASK_EVERY_TIME',
     onSwipeRegenerate: 'DELETE_MEMORIES',
+  }),
+  /** Token display settings for showing usage and costs */
+  tokenDisplaySettings: TokenDisplaySettingsSchema.default({
+    showPerMessageTokens: false,
+    showPerMessageCost: false,
+    showChatTotals: false,
+    showSystemEvents: false,
   }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

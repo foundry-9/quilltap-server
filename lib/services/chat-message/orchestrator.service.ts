@@ -67,6 +67,8 @@ import {
   triggerUserControlledCharacterMemory,
   triggerContextSummaryCheck,
 } from './memory-trigger.service'
+import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
+import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
@@ -324,7 +326,7 @@ async function processMessage(
 
   // Stream the response
   let fullResponse = ''
-  let usage: { totalTokens?: number } | null = null
+  let usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null = null
   let cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null = null
   let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
   let rawResponse: unknown = null
@@ -592,6 +594,19 @@ async function processMessage(
       toolMessages
     )
 
+    // Track token usage for profile and chat aggregates
+    if (usage && (usage.promptTokens || usage.completionTokens)) {
+      // Estimate cost using available pricing data
+      const costResult = await estimateMessageCost(
+        connectionProfile.provider,
+        connectionProfile.modelName,
+        usage.promptTokens || 0,
+        usage.completionTokens || 0,
+        userId
+      )
+      await trackMessageTokenUsage(chatId, connectionProfile.id, usage, costResult.cost)
+    }
+
     // Update chat timestamp
     await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
 
@@ -757,7 +772,7 @@ async function saveAssistantMessage(
   character: { id: string; name: string },
   characterParticipant: { id: string },
   content: string,
-  usage: { totalTokens?: number } | null,
+  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null,
   rawResponse: unknown,
   thoughtSignature: string | undefined,
   generatedImagePaths: GeneratedImage[],
@@ -773,6 +788,8 @@ async function saveAssistantMessage(
     content,
     createdAt: new Date().toISOString(),
     tokenCount: usage?.totalTokens || null,
+    promptTokens: usage?.promptTokens || null,
+    completionTokens: usage?.completionTokens || null,
     rawResponse: (rawResponse as Record<string, unknown>) || null,
     attachments: assistantAttachments,
     thoughtSignature: thoughtSignature || null,

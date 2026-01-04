@@ -56,6 +56,17 @@ export const ConnectionProfileSchema = z.object({
   /** Whether web search is allowed for this profile (only if provider supports it) */
   allowWebSearch: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
+
+  // Token usage tracking (persisted, incremented after each message)
+  /** Total tokens used through this profile */
+  totalTokens: z.number().default(0),
+  /** Total prompt/input tokens used through this profile */
+  totalPromptTokens: z.number().default(0),
+  /** Total completion/output tokens used through this profile */
+  totalCompletionTokens: z.number().default(0),
+  /** Total messages sent through this profile */
+  messageCount: z.number().default(0),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

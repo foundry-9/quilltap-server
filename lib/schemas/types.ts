@@ -86,6 +86,7 @@ export {
   TimestampModeEnum,
   TimestampFormatEnum,
   TimestampConfigSchema,
+  TokenDisplaySettingsSchema,
   ChatSettingsSchema,
   GeneralSettingsSchema,
 } from './settings.types';
@@ -97,6 +98,7 @@ export type {
   TimestampMode,
   TimestampFormat,
   TimestampConfig,
+  TokenDisplaySettings,
   ChatSettings,
   GeneralSettings,
 } from './settings.types';
@@ -157,6 +159,8 @@ export type {
 export {
   MessageEventSchema,
   ContextSummaryEventSchema,
+  SystemEventTypeEnum,
+  SystemEventSchema,
   ChatEventSchema,
   ParticipantTypeEnum,
   ChatParticipantSchema,
@@ -169,6 +173,8 @@ export {
 export type {
   MessageEvent,
   ContextSummaryEvent,
+  SystemEventType,
+  SystemEvent,
   ChatEvent,
   ParticipantType,
   ChatParticipant,

@@ -1,0 +1,222 @@
+/**
+ * Migration: Add Token Tracking Fields
+ *
+ * This migration adds token tracking fields to connection_profiles and chats:
+ * - connection_profiles: totalTokens, totalPromptTokens, totalCompletionTokens, messageCount
+ * - chats: totalPromptTokens, totalCompletionTokens, estimatedCostUSD, showSystemEventsOverride
+ *
+ * Migration ID: add-token-tracking-fields-v1
+ */
+
+import type { Migration, MigrationResult } from '../migration-types';
+import { logger } from '@/lib/logger';
+
+/**
+ * Check if MongoDB backend is enabled
+ */
+function isMongoDBBackendEnabled(): boolean {
+  const backend = process.env.DATA_BACKEND || '';
+  return backend === 'mongodb' || backend === 'dual';
+}
+
+/**
+ * Get MongoDB database instance
+ */
+async function getMongoDatabase() {
+  const { getMongoDatabase: getDb } = await import('@/lib/mongodb/client');
+  return getDb();
+}
+
+/**
+ * Check if MongoDB is accessible
+ */
+async function isMongoDBAccessible(): Promise<boolean> {
+  try {
+    const db = await getMongoDatabase();
+    await db.command({ ping: 1 });
+    return true;
+  } catch (error) {
+    logger.warn('MongoDB is not accessible for token tracking fields migration', {
+      context: 'migration.add-token-tracking-fields',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+/**
+ * Check if there are profiles without token tracking fields
+ */
+async function hasProfilesNeedingMigration(): Promise<boolean> {
+  try {
+    const db = await getMongoDatabase();
+    const profilesCollection = db.collection('connection_profiles');
+    const count = await profilesCollection.countDocuments({
+      totalTokens: { $exists: false },
+    });
+    return count > 0;
+  } catch (error) {
+    logger.debug('Error checking profiles for token tracking fields', {
+      context: 'migration.add-token-tracking-fields',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+/**
+ * Check if there are chats without token tracking fields
+ */
+async function hasChatsNeedingMigration(): Promise<boolean> {
+  try {
+    const db = await getMongoDatabase();
+    const chatsCollection = db.collection('chats');
+    const count = await chatsCollection.countDocuments({
+      totalPromptTokens: { $exists: false },
+    });
+    return count > 0;
+  } catch (error) {
+    logger.debug('Error checking chats for token tracking fields', {
+      context: 'migration.add-token-tracking-fields',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+/**
+ * Add Token Tracking Fields Migration
+ */
+export const addTokenTrackingFieldsMigration: Migration = {
+  id: 'add-token-tracking-fields-v1',
+  description: 'Add token tracking fields to connection profiles and chats for usage monitoring',
+  introducedInVersion: '2.6.0',
+  dependsOn: ['migrate-json-to-mongodb-v1'],
+
+  async shouldRun(): Promise<boolean> {
+    // Only run if MongoDB is enabled
+    if (!isMongoDBBackendEnabled()) {
+      logger.debug('MongoDB not enabled, skipping token tracking fields migration', {
+        context: 'migration.add-token-tracking-fields',
+      });
+      return false;
+    }
+
+    // Check if MongoDB is accessible
+    if (!(await isMongoDBAccessible())) {
+      logger.debug('MongoDB not accessible, deferring token tracking fields migration', {
+        context: 'migration.add-token-tracking-fields',
+      });
+      return false;
+    }
+
+    // Check if there are profiles or chats needing migration
+    const profilesNeedMigration = await hasProfilesNeedingMigration();
+    const chatsNeedMigration = await hasChatsNeedingMigration();
+    const needsRun = profilesNeedMigration || chatsNeedMigration;
+
+    logger.debug('Checked for token tracking fields migration need', {
+      context: 'migration.add-token-tracking-fields',
+      profilesNeedMigration,
+      chatsNeedMigration,
+      needsRun,
+    });
+
+    return needsRun;
+  },
+
+  async run(): Promise<MigrationResult> {
+    const startTime = Date.now();
+    let profilesUpdated = 0;
+    let chatsUpdated = 0;
+
+    logger.info('Starting token tracking fields migration', {
+      context: 'migration.add-token-tracking-fields',
+    });
+
+    try {
+      const db = await getMongoDatabase();
+
+      // Add token tracking fields to connection_profiles
+      logger.debug('Adding token tracking fields to connection_profiles', {
+        context: 'migration.add-token-tracking-fields',
+      });
+      const profilesCollection = db.collection('connection_profiles');
+      const profilesResult = await profilesCollection.updateMany(
+        { totalTokens: { $exists: false } },
+        {
+          $set: {
+            totalTokens: 0,
+            totalPromptTokens: 0,
+            totalCompletionTokens: 0,
+            messageCount: 0,
+          },
+        }
+      );
+      profilesUpdated = profilesResult.modifiedCount;
+
+      logger.debug('Connection profiles updated with token tracking fields', {
+        context: 'migration.add-token-tracking-fields',
+        count: profilesUpdated,
+      });
+
+      // Add token tracking fields to chats
+      logger.debug('Adding token tracking fields to chats', {
+        context: 'migration.add-token-tracking-fields',
+      });
+      const chatsCollection = db.collection('chats');
+      const chatsResult = await chatsCollection.updateMany(
+        { totalPromptTokens: { $exists: false } },
+        {
+          $set: {
+            totalPromptTokens: 0,
+            totalCompletionTokens: 0,
+            estimatedCostUSD: null,
+            showSystemEventsOverride: null,
+          },
+        }
+      );
+      chatsUpdated = chatsResult.modifiedCount;
+
+      logger.debug('Chats updated with token tracking fields', {
+        context: 'migration.add-token-tracking-fields',
+        count: chatsUpdated,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('Token tracking fields migration failed', {
+        context: 'migration.add-token-tracking-fields',
+        error: errorMessage,
+      });
+
+      return {
+        id: 'add-token-tracking-fields-v1',
+        success: false,
+        itemsAffected: profilesUpdated + chatsUpdated,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    const durationMs = Date.now() - startTime;
+    const totalAffected = profilesUpdated + chatsUpdated;
+
+    logger.info('Token tracking fields migration completed successfully', {
+      context: 'migration.add-token-tracking-fields',
+      profilesUpdated,
+      chatsUpdated,
+      durationMs,
+    });
+
+    return {
+      id: 'add-token-tracking-fields-v1',
+      success: true,
+      itemsAffected: totalAffected,
+      message: `Added token tracking fields to ${profilesUpdated} profiles and ${chatsUpdated} chats`,
+      durationMs,
+      timestamp: new Date().toISOString(),
+    };
+  },
+};

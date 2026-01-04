@@ -44,6 +44,9 @@ export interface ConnectionProfile {
   apiKey?: ApiKey | null
   tags?: Tag[]
   messageCount?: number
+  totalTokens?: number
+  totalPromptTokens?: number
+  totalCompletionTokens?: number
 }
 
 export interface ProfileFormData {
