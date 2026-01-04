@@ -315,6 +315,8 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
               role: event.role,
               content: event.content,
               tokenCount: event.tokenCount || null,
+              promptTokens: event.promptTokens || null,
+              completionTokens: event.completionTokens || null,
               createdAt: event.createdAt,
               swipeGroupId: event.swipeGroupId || null,
               swipeIndex: event.swipeIndex || null,

@@ -129,7 +129,7 @@ export interface ToolProcessingResult {
  */
 export interface StreamingResult {
   fullResponse: string
-  usage: { totalTokens?: number } | null
+  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
   cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
   attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
   rawResponse: unknown
@@ -153,7 +153,7 @@ export interface StreamChunkData {
   content?: string
   done?: boolean
   messageId?: string | null
-  usage?: { totalTokens?: number } | null
+  usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
   cacheUsage?: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
   attachmentResults?: { sent: string[]; failed: { id: string; error: string }[] } | null
   toolsExecuted?: boolean

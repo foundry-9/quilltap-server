@@ -35,6 +35,7 @@ import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
+import { ChatCostSummary } from '@/components/chat/ChatCostSummary'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
@@ -1964,6 +1965,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     <div className="qt-chat-layout">
       <div className="qt-chat-main">
         <div className="qt-chat-messages" ref={messagesContainerRef}>
+          {/* Chat cost summary - shown when enabled in settings */}
+          {chatSettings?.tokenDisplaySettings?.showChatTotals && (
+            <ChatCostSummary
+              chatId={id}
+              show={chatSettings.tokenDisplaySettings.showChatTotals}
+              className="mx-4 my-2"
+            />
+          )}
           <div className="qt-chat-messages-list">
             {/* Virtualized messages rendering */}
             <div
@@ -2043,6 +2052,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       userParticipantId={userParticipantId}
                       isPaused={isPaused}
                       onTogglePause={togglePause}
+                      tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
                       onEditStart={messageActions.startEdit}
                       onEditSave={messageActions.saveEdit}
                       onEditCancel={messageActions.cancelEdit}

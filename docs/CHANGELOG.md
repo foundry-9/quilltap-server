@@ -4,6 +4,18 @@
 
 ### 2.7-dev
 
+- feat: Token/cost display integration in chat UI
+  - TokenBadge now displays in message rows when enabled in settings
+  - ChatCostSummary shows at top of chat when showChatTotals is enabled
+  - Added tokenDisplaySettings to chat page types for proper type safety
+  - Added promptTokens, completionTokens, tokenCount fields to Message interface in chat types
+- fix: Token data now returned from chat API and streaming service
+  - GET /api/chats/:id now includes promptTokens and completionTokens in message data
+  - Streaming service types updated to include full token breakdown (was only totalTokens)
+  - StreamingResult, StreamChunkData, and StreamChunkCallback types updated for consistency
+- fix: Filter flushSync warning from DevConsoleProvider capture
+  - The @tanstack/react-virtual library emits this warning during element measurement
+  - Warning is harmless and now filtered to avoid cluttering the dev console
 - feat: Comprehensive token usage tracking with cost estimation
   - Added promptTokens and completionTokens fields to messages for detailed usage tracking
   - Added totalPromptTokens, totalCompletionTokens, estimatedCostUSD aggregates to chats

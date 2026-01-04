@@ -53,7 +53,7 @@ export interface StreamDebugInfo {
 export type StreamChunkCallback = (chunk: {
   content?: string
   done?: boolean
-  usage?: { totalTokens?: number }
+  usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }
   cacheUsage?: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number }
   attachmentResults?: { sent: string[]; failed: { id: string; error: string }[] }
   rawResponse?: unknown
@@ -131,7 +131,7 @@ export async function* streamMessage(
 ): AsyncGenerator<{
   content?: string
   done?: boolean
-  usage?: { totalTokens?: number }
+  usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }
   cacheUsage?: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number }
   attachmentResults?: { sent: string[]; failed: { id: string; error: string }[] }
   rawResponse?: unknown
@@ -190,7 +190,7 @@ export async function* streamMessage(
 
   let chunkCount = 0
   let totalContentLength = 0
-  let lastUsage: { totalTokens?: number } | undefined
+  let lastUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined
   let lastCacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | undefined
 
   for await (const chunk of provider.streamMessage(
@@ -307,7 +307,7 @@ export function encodeDoneEvent(
   encoder: TextEncoder,
   data: {
     messageId: string | null
-    usage: { totalTokens?: number } | null
+    usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
     cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
     attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
     toolsExecuted: boolean
@@ -341,7 +341,7 @@ export function encodeErrorEvent(
  */
 export function createStreamingResult(
   fullResponse: string,
-  usage: { totalTokens?: number } | null,
+  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null,
   cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null,
   attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null,
   rawResponse: unknown,

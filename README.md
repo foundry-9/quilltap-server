@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.7.0--dev.18-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.7.0--dev.19-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -585,11 +585,11 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [x] Hosted installations must automatically restart the server if site-wide plugins are installed that require restarts
 - [X] Get the "Web Search" tool hooked up, it's just giving "not implemented" responses right now
 - [X] Move the "Stop generating" button to the other side of the textarea
-- [ ] Token usage tracking
-  - [ ] Every message shows input/output tokens (setting in Settings)
-  - [ ] Every chat shows input/output tokens and estimated cost (setting in Settings)
-  - [ ] Make the connection profile message count work
-  - [ ] Make the connection profile token count work (does not exist yet)
+- [X] Token usage tracking
+  - [X] Every message shows input/output tokens (setting in Settings)
+  - [X] Every chat shows input/output tokens and estimated cost (setting in Settings)
+  - [X] Make the connection profile message count work
+  - [X] Make the connection profile token count work (does not exist yet)
   - [ ] If it's OpenRouter, or if you have an OpenRouter connection profile, use that to estimate costs
   - [ ] Include in estimated cost for a chat all the "Cheap LLM" token usages
 - [X] Sync should sync up connection profile IDs also

@@ -5,8 +5,9 @@ import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
 import { formatMessageTime } from '@/lib/format-time'
 import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
+import { TokenBadge } from '@/components/chat/TokenBadge'
 import { clientLogger } from '@/lib/client-logger'
-import type { Message, Participant } from '../types'
+import type { Message, Participant, TokenDisplaySettings } from '../types'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -43,6 +44,8 @@ interface MessageRowProps {
   userParticipantId: string | null
   isPaused?: boolean
   onTogglePause?: () => void
+  /** Token display settings */
+  tokenDisplaySettings?: TokenDisplaySettings
 
   // Callbacks
   onEditStart: (message: Message) => void
@@ -92,6 +95,7 @@ function MessageRowInner({
   userParticipantId,
   isPaused = false,
   onTogglePause,
+  tokenDisplaySettings,
   onEditStart,
   onEditSave,
   onEditCancel,
@@ -488,14 +492,32 @@ function MessageRowInner({
                     </>
                   )}
                 </div>
-                <span className="qt-chat-message-action-timestamp">
-                  {formatMessageTime(message.createdAt)}
-                </span>
+                <div className="qt-chat-message-action-timestamp flex items-center gap-2">
+                  <span>{formatMessageTime(message.createdAt)}</span>
+                  {tokenDisplaySettings?.showPerMessageTokens && (message.promptTokens || message.completionTokens) && (
+                    <TokenBadge
+                      promptTokens={message.promptTokens}
+                      completionTokens={message.completionTokens}
+                      totalTokens={message.tokenCount}
+                      showTokens={tokenDisplaySettings.showPerMessageTokens}
+                      showCost={tokenDisplaySettings.showPerMessageCost}
+                    />
+                  )}
+                </div>
               </div>
 
-              {/* Desktop timestamp - hidden on mobile */}
-              <div className="qt-text-xs mt-2 qt-chat-desktop-timestamp">
-                {formatMessageTime(message.createdAt)}
+              {/* Desktop timestamp and token info - hidden on mobile */}
+              <div className="qt-text-xs mt-2 qt-chat-desktop-timestamp flex items-center gap-2">
+                <span>{formatMessageTime(message.createdAt)}</span>
+                {tokenDisplaySettings?.showPerMessageTokens && (message.promptTokens || message.completionTokens) && (
+                  <TokenBadge
+                    promptTokens={message.promptTokens}
+                    completionTokens={message.completionTokens}
+                    totalTokens={message.tokenCount}
+                    showTokens={tokenDisplaySettings.showPerMessageTokens}
+                    showCost={tokenDisplaySettings.showPerMessageCost}
+                  />
+                )}
               </div>
             </>
           )}
@@ -687,6 +709,16 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   const prevAttachments = prev.message.attachments || []
   const nextAttachments = next.message.attachments || []
   if (prevAttachments.length !== nextAttachments.length) return false
+
+  // Token display settings
+  if (prev.tokenDisplaySettings?.showPerMessageTokens !== next.tokenDisplaySettings?.showPerMessageTokens) return false
+  if (prev.tokenDisplaySettings?.showPerMessageCost !== next.tokenDisplaySettings?.showPerMessageCost) return false
+
+  // Token data (if display is enabled)
+  if (prev.tokenDisplaySettings?.showPerMessageTokens || next.tokenDisplaySettings?.showPerMessageTokens) {
+    if (prev.message.promptTokens !== next.message.promptTokens) return false
+    if (prev.message.completionTokens !== next.message.completionTokens) return false
+  }
 
   // Props are equal, skip re-render
   return true

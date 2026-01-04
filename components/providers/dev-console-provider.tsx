@@ -161,6 +161,31 @@ export function DevConsoleProvider({ children }: { children: ReactNode }) {
 
     const captureLog = (level: ConsoleLogEntry['level']) => {
       return (...args: unknown[]) => {
+        // Filter out known harmless warnings from external libraries BEFORE calling original
+        // The flushSync warning comes from @tanstack/react-virtual during element measurement
+        // Check all arguments for the warning message
+        const shouldFilter = args.some(arg => {
+          if (typeof arg === 'string') {
+            return arg.includes('flushSync was called from inside a lifecycle method');
+          }
+          // Also check if it's an Error object with the message
+          if (arg instanceof Error) {
+            return arg.message.includes('flushSync was called from inside a lifecycle method');
+          }
+          // Check if it's an object with a message property
+          if (arg && typeof arg === 'object' && 'message' in arg) {
+            const msg = (arg as { message: unknown }).message;
+            return typeof msg === 'string' && msg.includes('flushSync was called from inside a lifecycle method');
+          }
+          return false;
+        });
+
+        if (shouldFilter) {
+          // Completely suppress this warning - don't even call original
+          // This prevents Next.js dev overlay from showing it
+          return;
+        }
+
         // Call original
         originalConsole[level](...args);
 
