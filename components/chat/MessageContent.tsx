@@ -66,12 +66,13 @@ function compilePatterns(patterns: RenderingPattern[]): CompiledPattern[] {
  * Escape markdown syntax characters inside roleplay brackets to prevent
  * ReactMarkdown from breaking up the segments before we can style them.
  * This handles cases like [narration with *emphasis* inside]
+ *
+ * IMPORTANT: This function preserves fenced code blocks (``` ... ```) unchanged
+ * to prevent corrupting code content with escape sequences.
  */
 function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[]): string {
   // Characters that trigger markdown parsing
   const markdownChars = /([*_~`])/g
-
-  let result = content
 
   // Check if patterns include bracket-style narration [...]
   const hasBracketNarration = patterns.some(p => p.pattern.includes('\\['))
@@ -82,35 +83,57 @@ function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[])
     p.pattern.includes('\\*') && p.className === 'qt-chat-narration'
   )
 
-  // Escape inside [...] if bracket narration is in patterns
-  if (hasBracketNarration) {
-    result = result.replace(/\[([^\]]+)\](?!\()/g, (match, inner) => {
-      // Escape markdown characters with backslash
-      const escaped = inner.replace(markdownChars, '\\$1')
-      return `[${escaped}]`
-    })
+  // If no relevant patterns, return content unchanged
+  if (!hasBracketNarration && !hasBraceMonologue && !hasAsteriskNarration) {
+    return content
   }
 
-  // Escape inside {...} if brace monologue is in patterns
-  if (hasBraceMonologue) {
-    result = result.replace(/\{([^}]+)\}/g, (match, inner) => {
-      const escaped = inner.replace(markdownChars, '\\$1')
-      return `{${escaped}}`
-    })
-  }
+  // Split content by fenced code blocks to preserve them unchanged
+  // Match ``` optionally followed by language, then content, then closing ```
+  const codeBlockRegex = /(```[\s\S]*?```)/g
+  const parts = content.split(codeBlockRegex)
 
-  // Escape inside *...* if single asterisks are used for narration
-  // Be careful not to double-escape or break bold **...**
-  if (hasAsteriskNarration) {
-    // Match single asterisk pairs that aren't bold
-    result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (match, inner) => {
-      // Only escape if there are nested markdown chars (unlikely but safe)
-      const escaped = inner.replace(/([_~`])/g, '\\$1')
-      return `*${escaped}*`
-    })
-  }
+  // Process only non-code-block parts
+  const processedParts = parts.map((part, index) => {
+    // Odd indices are code blocks (captured groups from split)
+    if (index % 2 === 1) {
+      return part // Return code blocks unchanged
+    }
 
-  return result
+    let result = part
+
+    // Escape inside [...] if bracket narration is in patterns
+    if (hasBracketNarration) {
+      result = result.replace(/\[([^\]]+)\](?!\()/g, (match, inner) => {
+        // Escape markdown characters with backslash
+        const escaped = inner.replace(markdownChars, '\\$1')
+        return `[${escaped}]`
+      })
+    }
+
+    // Escape inside {...} if brace monologue is in patterns
+    if (hasBraceMonologue) {
+      result = result.replace(/\{([^}]+)\}/g, (match, inner) => {
+        const escaped = inner.replace(markdownChars, '\\$1')
+        return `{${escaped}}`
+      })
+    }
+
+    // Escape inside *...* if single asterisks are used for narration
+    // Be careful not to double-escape or break bold **...**
+    if (hasAsteriskNarration) {
+      // Match single asterisk pairs that aren't bold
+      result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (match, inner) => {
+        // Only escape if there are nested markdown chars (unlikely but safe)
+        const escaped = inner.replace(/([_~`])/g, '\\$1')
+        return `*${escaped}*`
+      })
+    }
+
+    return result
+  })
+
+  return processedParts.join('')
 }
 
 /**
@@ -255,14 +278,22 @@ export default function MessageContent({
   )
 
   const components: Components = useMemo(() => ({
-    // Code blocks with syntax highlighting
-    code({ className, children, ...props }) {
-      const match = /language-(\w+)/.exec(className || '')
-      const language = match ? match[1] : ''
-      const inline = !match
-      const childrenString = typeof children === 'string' || typeof children === 'number' ? String(children) : ''
+    // Fenced code blocks - handled by pre component since they're <pre><code>
+    // This ensures ALL fenced code blocks get block styling, regardless of language
+    pre({ children }) {
+      // Extract the code element's props from children
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const codeElement = children as any
+      const className = codeElement?.props?.className || ''
+      const codeChildren = codeElement?.props?.children
 
-      return !inline && language ? (
+      const match = /language-(\w+)/.exec(className)
+      const language = match ? match[1] : 'text'
+      const codeString = typeof codeChildren === 'string' || typeof codeChildren === 'number'
+        ? String(codeChildren)
+        : ''
+
+      return (
         <div style={{
           width: '100%',
           maxWidth: '100%',
@@ -273,7 +304,6 @@ export default function MessageContent({
           marginBottom: '0.5rem',
         }}>
           <SyntaxHighlighter
-            // @ts-expect-error - style type mismatch between library versions
             style={oneDark}
             language={language}
             PreTag="div"
@@ -289,13 +319,16 @@ export default function MessageContent({
               maxWidth: '100%',
               boxSizing: 'border-box',
             }}
-            {...props}
           >
-            {childrenString.replace(/\n$/, '')}
+            {codeString.replace(/\n$/, '')}
           </SyntaxHighlighter>
         </div>
-      ) : (
-        <code className={`${className} qt-code-inline`} {...props}>
+      )
+    },
+    // Inline code only (not wrapped in pre)
+    code({ className, children, ...props }) {
+      return (
+        <code className={`${className || ''} qt-code-inline`} {...props}>
           {children}
         </code>
       )
