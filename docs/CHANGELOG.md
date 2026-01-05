@@ -4,6 +4,10 @@
 
 ### 2.7-dev
 
+- refactor: Move Sync functionality from Settings to Tools
+  - Created new SyncCard component in components/tools/
+  - SyncCard now appears first in the Tools page grid, followed by Backup & Restore
+  - Removed Sync tab from Settings page
 - feat: Token/cost display integration in chat UI
   - TokenBadge now displays in message rows when enabled in settings
   - ChatCostSummary shows at top of chat when showChatTotals is enabled
