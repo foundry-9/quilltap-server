@@ -56,8 +56,14 @@ export const FileEntrySchema = z.object({
   // Tags
   tags: z.array(UUIDSchema).default([]),
 
-  // Project association
+  // Project and folder association
   projectId: UUIDSchema.nullable().optional(),
+
+  // Folder path within project or general files
+  // "/" = root (default), "/documents/", "/documents/reports/"
+  // Always starts and ends with "/" when non-root
+  // Defaults to "/" when not specified
+  folderPath: z.string().nullable().optional(),
 
   // S3 storage reference
   s3Key: z.string().nullable().optional(),    // Full S3 object key

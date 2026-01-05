@@ -22,6 +22,11 @@ import {
   formatProjectInfoResults,
   type ProjectInfoToolContext,
 } from '@/lib/tools/handlers/project-info-handler';
+import {
+  executeFileManagementTool,
+  formatFileManagementResults,
+  type FileManagementToolContext,
+} from '@/lib/tools/handlers/file-management-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -246,6 +251,33 @@ export async function executeToolCallWithContext(
 
       return {
         toolName: 'project_info',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          action: result.action,
+          data: result.data,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle file management
+    if (toolCall.name === 'file_management') {
+      // Execute file management tool
+      const fileContext: FileManagementToolContext = {
+        userId,
+        chatId,
+        projectId: context.projectId || null,
+        characterIds: characterId ? [characterId] : [],
+      };
+
+      const result = await executeFileManagementTool(toolCall.arguments, fileContext);
+
+      // Format results for LLM consumption
+      const formattedResult = formatFileManagementResults(result);
+
+      return {
+        toolName: 'file_management',
         success: result.success,
         result: result.success ? {
           formattedText: formattedResult,

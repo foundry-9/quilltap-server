@@ -204,6 +204,23 @@ export type {
 } from './file.types';
 
 // ============================================================================
+// FILE WRITE PERMISSION TYPES
+// ============================================================================
+export {
+  FileWritePermissionScopeEnum,
+  FileWritePermissionSchema,
+  CreateFileWritePermissionSchema,
+  UpdateFileWritePermissionSchema,
+} from './file-permissions.types';
+
+export type {
+  FileWritePermissionScope,
+  FileWritePermission,
+  CreateFileWritePermission,
+  UpdateFileWritePermission,
+} from './file-permissions.types';
+
+// ============================================================================
 // TAG TYPES
 // ============================================================================
 export {

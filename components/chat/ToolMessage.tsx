@@ -94,6 +94,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🔍',
       bgColor: 'bg-muted border border-border',
     },
+    project_info: {
+      displayName: 'Project Info',
+      icon: '📋',
+      bgColor: 'bg-muted border border-border',
+    },
+    file_management: {
+      displayName: 'File Management',
+      icon: '📁',
+      bgColor: 'bg-muted border border-border',
+    },
   }
 
   const info = toolInfo[toolData.toolName!] || {

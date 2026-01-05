@@ -4,6 +4,15 @@
 
 ### 2.7-dev
 
+- feat: File management LLM tool for project and general file access
+  - New file_management tool enables LLM to list, read, write, and organize files
+  - Supports project-scoped files, general (non-project) files, and character-associated images
+  - Folder organization via path-based system (folderPath field on FileEntry)
+  - Write operations require user permission (per-project or general scope)
+  - Permission schema (FileWritePermission) with SINGLE_FILE, PROJECT, GENERAL scopes
+  - Repository methods for folder queries (findByFolder, listFolders, findInFolderRecursive)
+  - Folder utilities (normalizeFolderPath, validateFolderPath, buildFolderTree)
+  - Integrated into tool builder, executor, and ToolMessage display
 - fix: Connection profiles no longer duplicate during sync
   - ConnectionProfilesRepository.create() now accepts CreateOptions for ID preservation
   - When syncing, profiles now use the remote ID instead of generating a new one

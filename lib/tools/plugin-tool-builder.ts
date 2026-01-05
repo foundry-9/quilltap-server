@@ -19,6 +19,7 @@ import {
   memorySearchToolDefinition,
   webSearchToolDefinition,
   projectInfoToolDefinition,
+  fileManagementToolDefinition,
 } from '@/lib/tools';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
@@ -85,6 +86,9 @@ export interface BuildToolsOptions {
 
   /** Whether to enable project info tool */
   projectInfo?: boolean;
+
+  /** Whether to enable file management tool (always enabled by default) */
+  fileManagement?: boolean;
 }
 
 /**
@@ -155,6 +159,12 @@ export function buildToolsForProvider(
   if (options.projectInfo) {
     universalTools.push(projectInfoToolDefinition as UniversalTool);
     logger_.debug('Added project info tool');
+  }
+
+  // Add file management tool if enabled (defaults to true when not specified)
+  if (options.fileManagement !== false) {
+    universalTools.push(fileManagementToolDefinition as UniversalTool);
+    logger_.debug('Added file management tool');
   }
 
   // If no tools are enabled, return empty array

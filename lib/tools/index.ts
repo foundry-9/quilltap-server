@@ -97,6 +97,35 @@ export {
   type ProjectInfoToolContext,
 } from './handlers/project-info-handler';
 
+// File Management Tool
+export {
+  fileManagementToolDefinition,
+  anthropicFileManagementToolDefinition,
+  getOpenAIFileManagementTool,
+  getAnthropicFileManagementTool,
+  getGoogleFileManagementTool,
+  validateFileManagementInput,
+  type FileManagementAction,
+  type FileScope,
+  type FileManagementToolInput,
+  type FileManagementToolOutput,
+  type FileInfo,
+  type FolderInfo,
+  type FileListResult,
+  type FolderListResult,
+  type FileReadResult,
+  type FileWriteResult,
+  type FolderCreateResult,
+  type AttachmentPromoteResult,
+} from './file-management-tool';
+
+export {
+  executeFileManagementTool,
+  formatFileManagementResults,
+  FileManagementError,
+  type FileManagementToolContext,
+} from './handlers/file-management-handler';
+
 // Plugin-Based Tool Builder (Phase 3)
 export {
   buildToolsForProvider,

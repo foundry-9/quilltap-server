@@ -32,6 +32,7 @@ export { SyncOperationsRepository } from './sync-operations.repository';
 export { UserSyncApiKeysRepository } from './user-sync-api-keys.repository';
 export { ChatSettingsRepository } from './chat-settings.repository';
 export { ProjectsRepository } from './projects.repository';
+export { FilePermissionsRepository } from './file-permissions.repository';
 
 // Import all repository classes
 import { MongoBaseRepository } from './base.repository';
@@ -55,6 +56,7 @@ import { SyncOperationsRepository } from './sync-operations.repository';
 import { UserSyncApiKeysRepository } from './user-sync-api-keys.repository';
 import { ChatSettingsRepository } from './chat-settings.repository';
 import { ProjectsRepository } from './projects.repository';
+import { FilePermissionsRepository } from './file-permissions.repository';
 
 /**
  * Container interface for all repository instances.
@@ -85,6 +87,8 @@ export interface RepositoryContainer {
   chatSettings: ChatSettingsRepository;
   // Projects repository
   projects: ProjectsRepository;
+  // File write permissions repository
+  filePermissions: FilePermissionsRepository;
 }
 
 /**
@@ -127,6 +131,8 @@ export function createRepositories(): RepositoryContainer {
       chatSettings: new ChatSettingsRepository(),
       // Projects repository
       projects: new ProjectsRepository(),
+      // File write permissions repository
+      filePermissions: new FilePermissionsRepository(),
     };
 
     logger.debug('Repository container created successfully', {
