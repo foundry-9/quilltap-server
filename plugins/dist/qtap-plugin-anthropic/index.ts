@@ -56,12 +56,14 @@ const capabilities = {
 
 /**
  * File attachment support
+ * Note: Anthropic has a 5MB limit for base64-encoded images
  */
 const attachmentSupport = {
   supportsAttachments: true as const,
   supportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain'] as string[],
   description: 'Images (JPEG, PNG, GIF, WebP), PDFs, and text files',
   notes: 'Images, PDFs, and plain text files are supported in Claude models for analysis and understanding',
+  maxBase64Size: 5 * 1024 * 1024, // 5MB - Anthropic's API limit for base64-encoded images
 };
 
 /**

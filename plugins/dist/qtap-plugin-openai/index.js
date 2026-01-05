@@ -7794,7 +7794,9 @@ var attachmentSupport = {
   supportsAttachments: true,
   supportedMimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp"],
   description: "Images only (JPEG, PNG, GIF, WebP)",
-  notes: "Images are supported in vision-capable models like GPT-4V and GPT-4o"
+  notes: "Images are supported in vision-capable models like GPT-4V and GPT-4o",
+  maxBase64Size: 20 * 1024 * 1024
+  // 20MB - OpenAI's API limit for images
 };
 var messageFormat = {
   supportsNameField: true,

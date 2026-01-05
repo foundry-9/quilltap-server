@@ -9,9 +9,10 @@ import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
 import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as downloadS3File } from './s3/operations';
 import { buildS3Key } from './s3/client';
-import type { FileEntry, FileCategory } from './schemas/types';
+import type { FileEntry, FileCategory, Provider } from './schemas/types';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from './files/tag-inheritance';
+import { resizeImageForProvider, canResizeImage, calculateBase64Size, getProviderMaxBase64Size } from './files/image-processing';
 
 export interface ChatFileUploadResult {
   id: string;
@@ -199,9 +200,23 @@ export async function uploadChatFile(
 }
 
 /**
- * Read a file as base64 from S3
+ * Options for loading chat files for LLM
  */
-async function readFileAsBase64(fileId: string): Promise<string> {
+export interface LoadChatFilesOptions {
+  /** The provider being used (for size limit calculation) */
+  provider?: Provider
+  /** Whether to automatically resize images that exceed limits (default: true) */
+  autoResize?: boolean
+}
+
+/**
+ * Read a file as base64 from S3, optionally resizing images for provider limits
+ */
+async function readFileAsBase64(
+  fileId: string,
+  mimeType: string,
+  provider?: Provider
+): Promise<{ data: string; wasResized?: boolean; mimeType: string }> {
   const repos = getRepositories();
   const entry = await repos.files.findById(fileId);
 
@@ -214,20 +229,70 @@ async function readFileAsBase64(fileId: string): Promise<string> {
   }
 
   // Download from S3
-  const buffer = await downloadS3File(entry.s3Key);
+  let buffer = await downloadS3File(entry.s3Key);
+  let outputMimeType = mimeType;
+  let wasResized = false;
+
   logger.debug('Downloaded file from S3 for base64', { fileId, s3Key: entry.s3Key, size: buffer.length });
 
-  return buffer.toString('base64');
+  // Check if this is an image that might need resizing
+  if (provider && mimeType.startsWith('image/') && canResizeImage(mimeType)) {
+    const maxBase64Size = getProviderMaxBase64Size(provider);
+    const base64Size = calculateBase64Size(buffer);
+
+    if (base64Size > maxBase64Size) {
+      logger.info('Image exceeds provider limits, attempting resize', {
+        module: 'chat-files-v2',
+        fileId,
+        originalSize: buffer.length,
+        base64Size,
+        maxBase64Size,
+        provider,
+      });
+
+      const resizeResult = await resizeImageForProvider({
+        provider,
+        buffer,
+        mimeType,
+        filename: entry.originalFilename,
+      });
+
+      if (resizeResult.wasResized) {
+        buffer = resizeResult.buffer;
+        outputMimeType = resizeResult.mimeType;
+        wasResized = true;
+
+        logger.info('Image resized successfully', {
+          module: 'chat-files-v2',
+          fileId,
+          originalSize: resizeResult.originalSize,
+          finalSize: resizeResult.finalSize,
+          dimensions: resizeResult.width && resizeResult.height
+            ? `${resizeResult.width}x${resizeResult.height}`
+            : 'unknown',
+        });
+      }
+    }
+  }
+
+  return {
+    data: buffer.toString('base64'),
+    wasResized,
+    mimeType: outputMimeType,
+  };
 }
 
 /**
  * Convert file entries to FileAttachment format for LLM
- * Loads file data as base64
+ * Loads file data as base64, optionally resizing images for provider limits
  */
 export async function loadChatFilesForLLM(
-  fileIds: string[]
+  fileIds: string[],
+  options: LoadChatFilesOptions = {}
 ): Promise<FileAttachment[]> {
-  logger.debug('Loading chat files for LLM', { fileIds });
+  const { provider, autoResize = true } = options;
+
+  logger.debug('Loading chat files for LLM', { fileIds, provider, autoResize });
   const attachments: FileAttachment[] = [];
   const repos = getRepositories();
 
@@ -239,13 +304,18 @@ export async function loadChatFilesForLLM(
         continue;
       }
 
-      const data = await readFileAsBase64(fileId);
+      // Read file with potential resizing
+      const { data, wasResized, mimeType } = await readFileAsBase64(
+        fileId,
+        fileEntry.mimeType,
+        autoResize ? provider : undefined
+      );
 
       attachments.push({
         id: fileEntry.id,
         filepath: getFileApiPath(fileEntry.id),
         filename: fileEntry.originalFilename,
-        mimeType: fileEntry.mimeType,
+        mimeType, // Use potentially updated MIME type
         size: fileEntry.size,
         data,
       });
@@ -253,9 +323,11 @@ export async function loadChatFilesForLLM(
       logger.debug('Loaded chat file', {
         fileId: fileEntry.id,
         filename: fileEntry.originalFilename,
-        mimeType: fileEntry.mimeType,
+        mimeType,
+        originalMimeType: fileEntry.mimeType,
         size: fileEntry.size,
         dataLength: data?.length || 0,
+        wasResized,
       });
     } catch (error) {
       logger.error(`Failed to load chat file ${fileId}:`, {}, error instanceof Error ? error : new Error(String(error)));

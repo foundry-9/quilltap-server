@@ -2382,7 +2382,9 @@ var attachmentSupport = {
   supportsAttachments: true,
   supportedMimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp"],
   description: "Images only (JPEG, PNG, GIF, WebP)",
-  notes: "Images are supported in Gemini models for vision analysis"
+  notes: "Images are supported in Gemini models for vision analysis",
+  maxBase64Size: 20 * 1024 * 1024
+  // 20MB - Google's API limit for images
 };
 var messageFormat = {
   supportsNameField: false,

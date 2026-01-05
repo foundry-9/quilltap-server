@@ -110,8 +110,11 @@ export async function loadAndProcessFiles(
     size: file.size,
   }))
 
-  // Load file data for LLM
-  const fileAttachments = await loadChatFilesForLLM(attachedFiles.map(f => f.id))
+  // Load file data for LLM with provider-aware image resizing
+  const fileAttachments = await loadChatFilesForLLM(
+    attachedFiles.map(f => f.id),
+    { provider: connectionProfile.provider }
+  )
 
   // Process file attachment fallbacks if provider doesn't support them
   const fallbackResults: FallbackResult[] = []

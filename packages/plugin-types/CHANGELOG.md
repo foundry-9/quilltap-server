@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-01-05
+
+### Added
+
+- Added `maxBase64Size?: number` field to `AttachmentSupport` interface
+  - Allows provider plugins to specify their maximum base64-encoded file size limit
+  - Used by core to automatically resize images that exceed provider limits
+  - Anthropic sets 5MB, OpenAI/Google/Grok set 20MB
+
 ## [1.5.0] - 2026-01-02
 
 ### Added

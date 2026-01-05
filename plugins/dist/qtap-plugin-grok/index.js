@@ -7794,7 +7794,9 @@ var attachmentSupport = {
   supportsAttachments: true,
   supportedMimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp"],
   description: "Images only (JPEG, PNG, GIF, WebP)",
-  notes: "Images are supported in Grok models for vision capabilities"
+  notes: "Images are supported in Grok models for vision capabilities",
+  maxBase64Size: 20 * 1024 * 1024
+  // 20MB - Grok's API limit for images (OpenAI-compatible)
 };
 var messageFormat = {
   supportsNameField: true,

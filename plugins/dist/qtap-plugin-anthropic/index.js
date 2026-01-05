@@ -5626,7 +5626,9 @@ var attachmentSupport = {
   supportsAttachments: true,
   supportedMimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain"],
   description: "Images (JPEG, PNG, GIF, WebP), PDFs, and text files",
-  notes: "Images, PDFs, and plain text files are supported in Claude models for analysis and understanding"
+  notes: "Images, PDFs, and plain text files are supported in Claude models for analysis and understanding",
+  maxBase64Size: 5 * 1024 * 1024
+  // 5MB - Anthropic's API limit for base64-encoded images
 };
 var messageFormat = {
   supportsNameField: false,

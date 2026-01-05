@@ -4,6 +4,14 @@
 
 ### 2.7-dev
 
+- feat: Automatic image resizing for provider size limits
+  - Images that exceed provider base64 size limits are now automatically resized
+  - Anthropic: 5MB limit, OpenAI/Google/Grok: 20MB limit
+  - Progressive dimension reduction with quality optimization (mozjpeg)
+  - New maxBase64Size field in AttachmentSupport interface (plugin-types v1.5.1)
+  - New lib/files/image-processing.ts module using sharp for efficient resizing
+  - Provider limits queried from plugin registry at runtime
+  - Bumped plugin versions: anthropic 1.0.9, openai 1.0.8, google 1.0.6, grok 1.0.7
 - feat: File management LLM tool for project and general file access
   - New file_management tool enables LLM to list, read, write, and organize files
   - Supports project-scoped files, general (non-project) files, and character-associated images
