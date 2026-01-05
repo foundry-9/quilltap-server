@@ -9,13 +9,14 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types'
 import { logger } from '../../../lib/logger'
 
-// Anthropic supports images and PDFs
+// Anthropic supports images, PDFs, and plain text documents
 const ANTHROPIC_SUPPORTED_MIME_TYPES = [
   'image/jpeg',
   'image/png',
   'image/gif',
   'image/webp',
   'application/pdf',
+  'text/plain',
 ]
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
@@ -30,6 +31,7 @@ type AnthropicContentBlock =
   | { type: 'text'; text: string; cache_control?: CacheControl }
   | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string }; cache_control?: CacheControl }
   | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string }; cache_control?: CacheControl }
+  | { type: 'document'; source: { type: 'text'; media_type: 'text/plain'; data: string }; cache_control?: CacheControl }
 
 interface AnthropicMessage {
   role: 'user' | 'assistant'
@@ -132,6 +134,27 @@ export class AnthropicProvider implements LLMProvider {
               type: 'base64',
               media_type: attachment.mimeType,
               data: attachment.data,
+            },
+          })
+        } else if (attachment.mimeType === 'text/plain') {
+          // Plain text document - use text source type, not base64
+          // The data for text files should be the actual text content
+          let textContent = attachment.data
+          // If the data is base64 encoded, decode it
+          if (attachment.data && !attachment.data.includes('\n') && /^[A-Za-z0-9+/=]+$/.test(attachment.data)) {
+            try {
+              textContent = Buffer.from(attachment.data, 'base64').toString('utf-8')
+            } catch {
+              // If decoding fails, use the data as-is
+              textContent = attachment.data
+            }
+          }
+          content.push({
+            type: 'document',
+            source: {
+              type: 'text',
+              media_type: 'text/plain',
+              data: textContent,
             },
           })
         } else {

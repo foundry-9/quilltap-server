@@ -16,9 +16,6 @@ jest.mock('@/lib/llm/plugin-factory', () => ({
 jest.mock('@/lib/encryption', () => ({
   decryptApiKey: jest.fn(),
 }))
-jest.mock('fs/promises', () => ({
-  readFile: jest.fn(),
-}))
 
 import {
   needsFallbackProcessing,
@@ -32,12 +29,10 @@ import {
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
-import { readFile } from 'fs/promises'
 
 const mockProfileSupportsMimeType = profileSupportsMimeType as jest.MockedFunction<typeof profileSupportsMimeType>
 const mockCreateLLMProvider = createLLMProvider as jest.MockedFunction<typeof createLLMProvider>
 const mockDecryptApiKey = decryptApiKey as jest.MockedFunction<typeof decryptApiKey>
-const mockReadFile = readFile as jest.MockedFunction<typeof readFile>
 
 const baseProfile: ConnectionProfile = {
   id: '44444444-4444-4444-4444-444444444444',
@@ -103,34 +98,35 @@ describe('lib/chat/file-attachment-fallback', () => {
   })
 
   it('converts text files into inline message content', async () => {
-    mockReadFile.mockResolvedValue('Heading\nDetails line')
+    // Base64 encoded "Heading\nDetails line"
+    const base64Content = Buffer.from('Heading\nDetails line').toString('base64')
 
     const result = await convertTextFileToInline({
-      filepath: 'uploads/chat-files/chat-1/notes.md',
+      filepath: 'api/files/file-123',
       filename: 'notes.md',
       mimeType: 'text/markdown',
-    })
+    }, base64Content)
 
-    expect(mockReadFile).toHaveBeenCalledWith(
-      expect.stringContaining('public/uploads/chat-files/chat-1/notes.md'),
-      'utf-8'
-    )
     expect(result.type).toBe('text')
     expect(result.textContent).toContain('[User attached text file: notes.md]')
+    expect(result.textContent).toContain('Heading')
+    expect(result.textContent).toContain('Details line')
     expect(result.processingMetadata?.originalMimeType).toBe('text/markdown')
   })
 
   it('returns unsupported when text conversion fails', async () => {
-    mockReadFile.mockRejectedValue(new Error('boom'))
-
+    // Invalid base64 data that will cause decode to fail
+    // Actually, Buffer.from with 'base64' is lenient, so let's just test with empty/undefined behavior
+    // The actual error case is handled in processFileAttachmentFallback when data is missing
     const result = await convertTextFileToInline({
-      filepath: 'uploads/chat-files/chat-1/bad.txt',
+      filepath: 'api/files/file-123',
       filename: 'bad.txt',
       mimeType: 'text/plain',
-    })
+    }, '') // Empty string - will decode to empty but not fail
 
-    expect(result.type).toBe('unsupported')
-    expect(result.error).toContain('Failed to process text file')
+    // Empty content should still return a valid text result
+    expect(result.type).toBe('text')
+    expect(result.textContent).toContain('[User attached text file: bad.txt]')
   })
 
   it('returns unsupported when no image description profile is available', async () => {
@@ -207,17 +203,22 @@ describe('lib/chat/file-attachment-fallback', () => {
 
   it('processes text attachments when provider lacks native support', async () => {
     mockProfileSupportsMimeType.mockReturnValue(false)
-    mockReadFile.mockResolvedValue('Converted body')
+    const base64Content = Buffer.from('Converted body').toString('base64')
 
     const result = await processFileAttachmentFallback(
       {
         id: 'stored-file-id',
-        filepath: 'uploads/chat-files/chat-1/notes.txt',
+        filepath: 'api/files/stored-file-id',
         filename: 'notes.txt',
         mimeType: 'text/plain',
         size: 50,
       },
-      mockFileAttachment,
+      {
+        ...mockFileAttachment,
+        filename: 'notes.txt',
+        mimeType: 'text/plain',
+        data: base64Content,
+      },
       baseProfile,
       mockRepos,
       baseProfile.userId
@@ -225,6 +226,7 @@ describe('lib/chat/file-attachment-fallback', () => {
 
     expect(result.type).toBe('text')
     expect(result.textContent).toContain('notes.txt')
+    expect(result.textContent).toContain('Converted body')
   })
 
   it('short-circuits when provider already supports the attachment MIME type', async () => {

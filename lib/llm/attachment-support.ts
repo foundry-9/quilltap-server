@@ -50,8 +50,8 @@ export const PROVIDER_ATTACHMENT_CAPABILITIES = {
   },
   ANTHROPIC: {
     supportsAttachments: true,
-    types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'],
-    description: 'Images (JPEG, PNG, GIF, WebP) and PDF documents',
+    types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain'],
+    description: 'Images (JPEG, PNG, GIF, WebP), PDF documents, and text files',
   },
   GOOGLE: {
     supportsAttachments: true,

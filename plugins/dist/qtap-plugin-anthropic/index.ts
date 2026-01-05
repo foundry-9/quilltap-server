@@ -59,9 +59,9 @@ const capabilities = {
  */
 const attachmentSupport = {
   supportsAttachments: true as const,
-  supportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'] as string[],
-  description: 'Images (JPEG, PNG, GIF, WebP) and PDFs',
-  notes: 'Images and PDFs are supported in Claude models for analysis and understanding',
+  supportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain'] as string[],
+  description: 'Images (JPEG, PNG, GIF, WebP), PDFs, and text files',
+  notes: 'Images, PDFs, and plain text files are supported in Claude models for analysis and understanding',
 };
 
 /**

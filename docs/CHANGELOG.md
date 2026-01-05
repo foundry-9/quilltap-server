@@ -4,6 +4,14 @@
 
 ### 2.7-dev
 
+- feat: Add text/plain file support to Anthropic provider
+  - Anthropic now natively supports text/plain files using PlainTextSource document format
+  - Updated attachment support in provider, manifest, and capability declarations
+  - Bumped qtap-plugin-anthropic to version 1.0.8
+- fix: File attachment fallback now works with S3 storage
+  - Fallback was trying to read from local filesystem but files are stored in S3
+  - Now uses already-loaded base64 data from S3 instead of reading from disk
+  - Fixes ENOENT errors when attaching text/markdown files to non-supporting providers
 - refactor: Move Sync functionality from Settings to Tools
   - Created new SyncCard component in components/tools/
   - SyncCard now appears first in the Tools page grid, followed by Backup & Restore

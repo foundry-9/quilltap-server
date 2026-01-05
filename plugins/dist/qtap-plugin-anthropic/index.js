@@ -5091,7 +5091,8 @@ var ANTHROPIC_SUPPORTED_MIME_TYPES = [
   "image/png",
   "image/gif",
   "image/webp",
-  "application/pdf"
+  "application/pdf",
+  "text/plain"
 ];
 var AnthropicProvider = class {
   constructor() {
@@ -5160,6 +5161,23 @@ var AnthropicProvider = class {
               type: "base64",
               media_type: attachment.mimeType,
               data: attachment.data
+            }
+          });
+        } else if (attachment.mimeType === "text/plain") {
+          let textContent = attachment.data;
+          if (attachment.data && !attachment.data.includes("\n") && /^[A-Za-z0-9+/=]+$/.test(attachment.data)) {
+            try {
+              textContent = Buffer.from(attachment.data, "base64").toString("utf-8");
+            } catch {
+              textContent = attachment.data;
+            }
+          }
+          content.push({
+            type: "document",
+            source: {
+              type: "text",
+              media_type: "text/plain",
+              data: textContent
             }
           });
         } else {
@@ -5606,9 +5624,9 @@ var capabilities = {
 };
 var attachmentSupport = {
   supportsAttachments: true,
-  supportedMimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"],
-  description: "Images (JPEG, PNG, GIF, WebP) and PDFs",
-  notes: "Images and PDFs are supported in Claude models for analysis and understanding"
+  supportedMimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain"],
+  description: "Images (JPEG, PNG, GIF, WebP), PDFs, and text files",
+  notes: "Images, PDFs, and plain text files are supported in Claude models for analysis and understanding"
 };
 var messageFormat = {
   supportsNameField: false,
