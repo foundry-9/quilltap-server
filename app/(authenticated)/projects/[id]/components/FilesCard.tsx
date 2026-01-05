@@ -4,16 +4,21 @@
  * Files Card
  *
  * Expandable/scrollable card displaying project files.
+ * Files are clickable to open in a new tab.
+ * Includes a "Browse All" button to open the full file browser.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
+import FileBrowser from '@/components/files/FileBrowser'
+import { BaseModal } from '@/components/ui/BaseModal'
 import type { ProjectFile } from '../types'
 
 interface FilesCardProps {
   files: ProjectFile[]
   expanded: boolean
   onToggle: () => void
+  projectId?: string
 }
 
 function ImageIcon({ className }: { className?: string }) {
@@ -59,66 +64,112 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function FilesCard({ files, expanded, onToggle }: FilesCardProps) {
+export function FilesCard({ files, expanded, onToggle, projectId }: FilesCardProps) {
+  const [showBrowser, setShowBrowser] = useState(false)
+
   useEffect(() => {
     clientLogger.debug('FilesCard: rendered', { fileCount: files.length, expanded })
   }, [files.length, expanded])
 
-  return (
-    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">
-      {/* Header - always visible */}
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <FolderIcon className="w-5 h-5 qt-text-primary" />
-          <div className="text-left">
-            <h3 className="qt-heading-4 text-foreground">Files</h3>
-            <p className="qt-text-small qt-text-secondary">
-              {files.length} file{files.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-        </div>
-        <ChevronIcon className="w-5 h-5 qt-text-secondary" expanded={expanded} />
-      </button>
+  const handleFileClick = (file: ProjectFile) => {
+    // Open file in new tab via download API
+    const downloadUrl = `/api/files/${file.id}/download`
+    window.open(downloadUrl, '_blank')
+    clientLogger.debug('FilesCard: file clicked', { fileId: file.id, filename: file.originalFilename })
+  }
 
-      {/* Content - expandable */}
-      {expanded && (
-        <div className="border-t border-border">
-          {files.length === 0 ? (
-            <div className="p-4 text-center qt-text-secondary">
-              <p>No files in this project yet.</p>
-              <p className="qt-text-small mt-1">Files will appear here when added to project chats.</p>
+  return (
+    <>
+      <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">
+        {/* Header - always visible */}
+        <button
+          onClick={onToggle}
+          className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <FolderIcon className="w-5 h-5 qt-text-primary" />
+            <div className="text-left">
+              <h3 className="qt-heading-4 text-foreground">Files</h3>
+              <p className="qt-text-small qt-text-secondary">
+                {files.length} file{files.length !== 1 ? 's' : ''}
+              </p>
             </div>
-          ) : (
-            <div className="max-h-64 overflow-y-auto p-2 space-y-1">
-              {files.map((file) => (
-                <div
-                  key={file.id}
-                  className="flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted transition-colors"
+          </div>
+          <ChevronIcon className="w-5 h-5 qt-text-secondary" expanded={expanded} />
+        </button>
+
+        {/* Content - expandable */}
+        {expanded && (
+          <div className="border-t border-border">
+            {files.length === 0 ? (
+              <div className="p-4 text-center qt-text-secondary">
+                <p>No files in this project yet.</p>
+                <p className="qt-text-small mt-1">Files will appear here when added to project chats.</p>
+              </div>
+            ) : (
+              <div className="max-h-64 overflow-y-auto p-2 space-y-1">
+                {files.slice(0, 10).map((file) => (
+                  <button
+                    key={file.id}
+                    onClick={() => handleFileClick(file)}
+                    className="w-full flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted transition-colors text-left"
+                  >
+                    <div className="w-8 h-8 rounded qt-bg-muted flex items-center justify-center flex-shrink-0">
+                      {file.mimeType.startsWith('image/') ? (
+                        <ImageIcon className="w-4 h-4 qt-text-secondary" />
+                      ) : (
+                        <DocumentIcon className="w-4 h-4 qt-text-secondary" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {file.originalFilename}
+                      </p>
+                      <p className="qt-text-xs qt-text-secondary">
+                        {formatBytes(file.size)} &bull; {file.category}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+                {files.length > 10 && (
+                  <p className="qt-text-xs qt-text-secondary text-center py-2">
+                    +{files.length - 10} more files
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Browse All button */}
+            {projectId && (
+              <div className="p-2 border-t border-border">
+                <button
+                  onClick={() => setShowBrowser(true)}
+                  className="w-full qt-button qt-button-secondary text-sm"
                 >
-                  <div className="w-8 h-8 rounded qt-bg-muted flex items-center justify-center flex-shrink-0">
-                    {file.mimeType.startsWith('image/') ? (
-                      <ImageIcon className="w-4 h-4 qt-text-secondary" />
-                    ) : (
-                      <DocumentIcon className="w-4 h-4 qt-text-secondary" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {file.originalFilename}
-                    </p>
-                    <p className="qt-text-xs qt-text-secondary">
-                      {formatBytes(file.size)} &bull; {file.category}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                  Browse All Files
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* File Browser Modal */}
+      {projectId && (
+        <BaseModal
+          isOpen={showBrowser}
+          onClose={() => setShowBrowser(false)}
+          title="Project Files"
+          maxWidth="3xl"
+        >
+          <div className="min-h-[400px]">
+            <FileBrowser
+              projectId={projectId}
+              title="Project Files"
+            />
+          </div>
+        </BaseModal>
       )}
-    </div>
+    </>
   )
 }

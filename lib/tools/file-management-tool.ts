@@ -180,6 +180,14 @@ export interface FileManagementToolOutput {
     | FolderCreateResult
     | AttachmentPromoteResult;
   error?: string;
+  /** True if write permission is required before proceeding */
+  requiresPermission?: boolean;
+  /** Filename for permission requests */
+  filename?: string;
+  /** Folder path for permission requests */
+  folderPath?: string;
+  /** Message explaining what permission is needed */
+  message?: string;
 }
 
 /**

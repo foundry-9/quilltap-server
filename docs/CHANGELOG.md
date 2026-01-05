@@ -16,6 +16,10 @@
   - API routes: /api/files/write, /api/files/write-permission, /api/files/general, /api/files/:id/promote
   - UI components: FileWriteApprovalModal, FolderPicker, AttachmentPromotionMenu, FileBrowser
   - FilePermissionsManager settings component for viewing/revoking permissions
+  - Files section in sidebar showing general files with navigation to /files page
+  - Files page (/files) for browsing and managing general (non-project) files
+  - File write approval flow integrated into chat - shows modal when LLM requests file write permission
+  - Enhanced FilesCard on project pages with clickable files and "Browse All" modal using FileBrowser
   - Documentation: docs/FILE_LLM_ACCESS.md
 - fix: Connection profiles no longer duplicate during sync
   - ConnectionProfilesRepository.create() now accepts CreateOptions for ID preservation

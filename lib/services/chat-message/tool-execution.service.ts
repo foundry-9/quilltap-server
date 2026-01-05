@@ -78,15 +78,24 @@ export async function processToolCalls(
       metadata: toolResult.metadata,
     })
 
+    // Build tool result payload, including permission info if present
+    const toolResultPayload: Record<string, unknown> = {
+      index: toolIndex,
+      name: toolResult.toolName,
+      success: toolResult.success,
+      result: toolResult.result,
+    };
+
+    // Include permission requirement info for file writes
+    if (toolResult.requiresPermission) {
+      toolResultPayload.requiresPermission = true;
+      toolResultPayload.pendingWrite = toolResult.pendingWrite;
+    }
+
     controller.enqueue(
       encoder.encode(
         `data: ${JSON.stringify({
-          toolResult: {
-            index: toolIndex,
-            name: toolResult.toolName,
-            success: toolResult.success,
-            result: toolResult.result,
-          },
+          toolResult: toolResultPayload,
         })}\n\n`
       )
     )

@@ -15,6 +15,7 @@ import { SidebarHeader } from './sidebar-header'
 import { SidebarSection } from './sidebar-section'
 import { SidebarFooter } from './sidebar-footer'
 import { ProjectsSection } from './projects-section'
+import { FilesSection } from './files-section'
 import { CharactersSection } from './characters-section'
 import { ChatsSection } from './chats-section'
 import { clientLogger } from '@/lib/client-logger'
@@ -38,25 +39,6 @@ function FolderIcon({ className }: { className?: string }) {
   )
 }
 
-/**
- * File icon (for Files)
- */
-function FileIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-    </svg>
-  )
-}
 
 export function LeftSidebar() {
   const { isCollapsed, isMobileOpen, closeMobile, isMobile, width } = useSidebar()
@@ -95,13 +77,8 @@ export function LeftSidebar() {
           {/* Projects section */}
           <ProjectsSection />
 
-          {/* Files section - placeholder */}
-          <SidebarSection id="files" title="Files" placeholder>
-            <div className="px-2 py-1 text-xs text-muted-foreground">
-              <FileIcon className="w-4 h-4 inline-block mr-2 opacity-50" />
-              {!isCollapsed && <span className="opacity-50">No files yet</span>}
-            </div>
-          </SidebarSection>
+          {/* Files section */}
+          <FilesSection />
 
           {/* Characters section */}
           <CharactersSection />

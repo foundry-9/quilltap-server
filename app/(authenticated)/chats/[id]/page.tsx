@@ -17,6 +17,7 @@ import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog
 import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
+import FileWriteApprovalModal from '@/components/chat/FileWriteApprovalModal'
 import { MemoryCascadeDialog } from '@/components/ui/MemoryCascadeDialog'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
 import SelectLLMProfileDialog from '@/components/chat/SelectLLMProfileDialog'
@@ -140,6 +141,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [activeTypingParticipantId, setActiveTypingParticipantId] = useState<string | null>(null)
   const [allLLMPauseTurnCount, setAllLLMPauseTurnCount] = useState(0)
   const [allLLMPauseModalOpen, setAllLLMPauseModalOpen] = useState(false)
+  const [fileWriteApprovalState, setFileWriteApprovalState] = useState<{
+    isOpen: boolean
+    pendingWrite: {
+      filename: string
+      content?: string
+      mimeType?: string
+      folderPath: string
+      projectId: string | null
+    }
+    projectName?: string
+  } | null>(null)
   const [selectLLMProfileDialogState, setSelectLLMProfileDialogState] = useState<{
     isOpen: boolean
     participantId: string
@@ -1673,13 +1685,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
               // Handle tool results
               if (data.toolResult) {
-                const { index, name, success, result } = data.toolResult
+                const { index, name, success, result, requiresPermission, pendingWrite } = data.toolResult
                 // Update pending tool call status by index (more reliable) or fall back to name
                 setPendingToolCalls(prev => prev.map((tc, idx) =>
                   (index !== undefined && idx === index) || (index === undefined && tc.name === name)
                     ? { ...tc, status: success ? 'success' : 'error', result }
                     : tc
                 ))
+
+                // Handle file write permission requirement
+                if (requiresPermission && pendingWrite) {
+                  clientLogger.debug('[Chat] File write permission required', { pendingWrite })
+                  setFileWriteApprovalState({
+                    isOpen: true,
+                    pendingWrite: {
+                      filename: pendingWrite.filename || 'unknown',
+                      content: pendingWrite.content,
+                      mimeType: pendingWrite.mimeType || 'text/plain',
+                      folderPath: pendingWrite.folderPath || '/',
+                      projectId: pendingWrite.projectId ?? chat?.projectId ?? null,
+                    },
+                    projectName: chat?.projectName ?? undefined,
+                  })
+                  showInfoToast('The LLM is requesting permission to write a file.')
+                }
+
                 // Only show toast/status for image generation
                 if (name === 'generate_image') {
                   if (success) {
@@ -2332,6 +2362,32 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onStop={handleAllLLMStop}
           onTakeOver={handleAllLLMTakeOver}
         />
+
+        {/* File Write Approval Modal */}
+        {fileWriteApprovalState && (
+          <FileWriteApprovalModal
+            isOpen={fileWriteApprovalState.isOpen}
+            onClose={() => setFileWriteApprovalState(null)}
+            request={{
+              filename: fileWriteApprovalState.pendingWrite.filename,
+              content: fileWriteApprovalState.pendingWrite.content || '',
+              mimeType: fileWriteApprovalState.pendingWrite.mimeType || 'text/plain',
+              folderPath: fileWriteApprovalState.pendingWrite.folderPath,
+              projectId: fileWriteApprovalState.pendingWrite.projectId,
+              projectName: fileWriteApprovalState.projectName,
+            }}
+            chatId={id}
+            onApprove={async () => {
+              setFileWriteApprovalState(null)
+              // Refresh chat to show any new files/messages
+              await fetchChat()
+            }}
+            onDeny={() => {
+              setFileWriteApprovalState(null)
+              showInfoToast('File write denied.')
+            }}
+          />
+        )}
 
         {/* Select LLM Profile Dialog (for stopping impersonation) */}
         {selectLLMProfileDialogState && (

@@ -38,6 +38,16 @@ export interface ToolResult {
   success: boolean;
   result: unknown;
   error?: string;
+  /** For file_management: indicates permission is required for this write */
+  requiresPermission?: boolean;
+  /** Pending write details when requiresPermission is true */
+  pendingWrite?: {
+    filename: string;
+    content?: string;
+    mimeType?: string;
+    folderPath?: string;
+    projectId?: string | null;
+  };
   metadata?: {
     provider?: string;
     model?: string;
@@ -275,6 +285,25 @@ export async function executeToolCallWithContext(
 
       // Format results for LLM consumption
       const formattedResult = formatFileManagementResults(result);
+
+      // Check if permission is required for write operations
+      if (result.requiresPermission) {
+        const args = toolCall.arguments as Record<string, unknown>;
+        return {
+          toolName: 'file_management',
+          success: false,
+          result: null,
+          error: result.message || 'File write permission required',
+          requiresPermission: true,
+          pendingWrite: {
+            filename: result.filename || (args.filename as string) || 'unknown',
+            content: args.content as string | undefined,
+            mimeType: args.mimeType as string | undefined,
+            folderPath: result.folderPath || (args.targetFolderPath as string) || '/',
+            projectId: context.projectId || null,
+          },
+        };
+      }
 
       return {
         toolName: 'file_management',
