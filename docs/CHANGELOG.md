@@ -13,6 +13,10 @@
   - Repository methods for folder queries (findByFolder, listFolders, findInFolderRecursive)
   - Folder utilities (normalizeFolderPath, validateFolderPath, buildFolderTree)
   - Integrated into tool builder, executor, and ToolMessage display
+  - API routes: /api/files/write, /api/files/write-permission, /api/files/general, /api/files/:id/promote
+  - UI components: FileWriteApprovalModal, FolderPicker, AttachmentPromotionMenu, FileBrowser
+  - FilePermissionsManager settings component for viewing/revoking permissions
+  - Documentation: docs/FILE_LLM_ACCESS.md
 - fix: Connection profiles no longer duplicate during sync
   - ConnectionProfilesRepository.create() now accepts CreateOptions for ID preservation
   - When syncing, profiles now use the remote ID instead of generating a new one
