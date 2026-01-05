@@ -4,6 +4,10 @@
 
 ### 2.7-dev
 
+- fix: Connection profiles no longer duplicate during sync
+  - ConnectionProfilesRepository.create() now accepts CreateOptions for ID preservation
+  - When syncing, profiles now use the remote ID instead of generating a new one
+  - This was causing duplicates because each sync created a new profile with a new ID
 - feat: Add text/plain file support to Anthropic provider
   - Anthropic now natively supports text/plain files using PlainTextSource document format
   - Updated attachment support in provider, manifest, and capability declarations

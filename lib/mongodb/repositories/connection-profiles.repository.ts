@@ -14,7 +14,7 @@ import {
   ApiKeySchema,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { MongoBaseRepository } from './base.repository';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
 
 /**
  * Connection Profiles Repository
@@ -197,25 +197,30 @@ export class ConnectionProfilesRepository extends MongoBaseRepository<Connection
 
   /**
    * Create a new connection profile
+   * @param data The connection profile data (without id, createdAt, updatedAt)
+   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
    */
   async create(
-    data: Omit<ConnectionProfile, 'id' | 'createdAt' | 'updatedAt'>
+    data: Omit<ConnectionProfile, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
   ): Promise<ConnectionProfile> {
     try {
+      const id = options?.id || this.generateId();
+      const now = this.getCurrentTimestamp();
+      const createdAt = options?.createdAt || now;
+
       logger.debug('Creating new connection profile', {
         userId: data.userId,
         name: data.name,
         provider: data.provider,
         collection: this.collectionName,
+        usingProvidedId: !!options?.id,
       });
-
-      const id = this.generateId();
-      const now = this.getCurrentTimestamp();
 
       const profile: ConnectionProfile = {
         ...data,
         id,
-        createdAt: now,
+        createdAt,
         updatedAt: now,
       };
 
