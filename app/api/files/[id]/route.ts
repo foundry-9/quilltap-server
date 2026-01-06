@@ -79,6 +79,9 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           'Content-Length': buffer.length.toString(),
           'Content-Disposition': `inline; filename="${fileEntry.originalFilename}"`,
           'Cache-Control': 'public, max-age=31536000, immutable',
+          // Allow embedding in same-origin iframes (for file preview modal)
+          'X-Frame-Options': 'SAMEORIGIN',
+          'Content-Security-Policy': "frame-ancestors 'self'",
         },
       });
     } catch (error) {

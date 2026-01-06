@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- fix: PDF preview in file browser now uses PDF.js for client-side rendering
+  - Chrome's PDF viewer security blocked iframe/object embedding
+  - PDF.js fetches and renders PDFs on canvas, bypassing browser restrictions
+  - Includes page navigation, zoom controls, and download button
+  - Worker file served locally from /public to avoid CDN/CORS issues
 - feat: Redesigned file browser with thumbnails, preview modal, and folder management
   - Grid view now shows image thumbnails using on-demand generation with S3 caching
   - Filenames in grid view hard-wrap for full visibility
