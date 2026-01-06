@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- fix: Anthropic plugin now fetches models from API instead of hardcoded list
+  - Now uses /v1/models endpoint to get current available models
+  - Falls back to hardcoded list if API call fails
+  - Adds missing models: claude-opus-4-5-20251101, claude-3-7-sonnet, claude-3-5-haiku
+  - Bumped qtap-plugin-anthropic to version 1.0.10
 - fix: Improved auto-scroll behavior in chat to eliminate jumpiness
   - New useAutoScroll hook with intelligent scroll management
   - Waits for page to settle after loading existing chats before scrolling

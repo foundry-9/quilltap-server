@@ -575,27 +575,46 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
-    logger.debug('Fetching Anthropic models', { context: 'AnthropicProvider.getAvailableModels' })
-    // Anthropic doesn't have a models endpoint, return known models
-    // These are the current Claude models as of November 2025
-    // Note: Claude 3.5 models were deprecated on October 22, 2025
-    // Note: Claude 3 Sonnet was retired on July 21, 2025
-    const models = [
-      // Claude 4.5 models (latest)
-      'claude-sonnet-4-5-20250929',
-      'claude-haiku-4-5-20251001',
+    logger.debug('Fetching Anthropic models from API', { context: 'AnthropicProvider.getAvailableModels' })
+    try {
+      const client = new Anthropic({ apiKey })
+      const response = await client.models.list()
 
-      // Claude 4 models
-      'claude-opus-4-1-20250805',
-      'claude-sonnet-4-20250514',
-      'claude-opus-4-20250514',
+      // Extract model IDs from the response
+      const models: string[] = []
+      for await (const model of response) {
+        models.push(model.id)
+      }
 
-      // Claude 3 models (legacy, will be retired)
-      'claude-3-opus-20240229', // Retiring Jan 5, 2026
-      'claude-3-haiku-20240307',
-    ]
-    logger.debug('Retrieved Anthropic models', { context: 'AnthropicProvider.getAvailableModels', modelCount: models.length })
-    return models
+      logger.debug('Retrieved Anthropic models from API', {
+        context: 'AnthropicProvider.getAvailableModels',
+        modelCount: models.length,
+        models
+      })
+      return models
+    } catch (error) {
+      logger.error('Failed to fetch Anthropic models from API, using fallback list',
+        { context: 'AnthropicProvider.getAvailableModels' },
+        error instanceof Error ? error : undefined
+      )
+      // Fallback to known models if API fails
+      const fallbackModels = [
+        'claude-opus-4-5-20251101',
+        'claude-sonnet-4-5-20250929',
+        'claude-haiku-4-5-20251001',
+        'claude-opus-4-1-20250805',
+        'claude-sonnet-4-20250514',
+        'claude-opus-4-20250514',
+        'claude-3-7-sonnet-20250219',
+        'claude-3-5-haiku-20241022',
+        'claude-3-haiku-20240307',
+      ]
+      logger.debug('Using fallback Anthropic models', {
+        context: 'AnthropicProvider.getAvailableModels',
+        modelCount: fallbackModels.length
+      })
+      return fallbackModels
+    }
   }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {

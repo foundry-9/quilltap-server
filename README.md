@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.7.0--dev.30-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.7.0--dev.31-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -594,6 +594,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Include in estimated cost for a chat all the "Cheap LLM" token usages
 - [X] Sync should sync up connection profile IDs also
 - [X] If you try to chat and you're waiting for a character to respond but they don't have a valid/working connection profile, you should see an error toast
+- [ ] Server-side Markdown render of historical chat messages to speed up delivery of a chat window
 
 ## Acknowledgments
 
