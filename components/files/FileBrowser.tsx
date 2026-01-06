@@ -5,26 +5,20 @@
  *
  * File explorer UI for browsing files within a project or general files.
  * Shows folder structure and file list with basic operations.
+ * Supports grid and list view modes with sorting.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import FolderPicker from './FolderPicker'
+import FileBrowserGrid from './FileBrowserGrid'
+import FileBrowserList from './FileBrowserList'
+import { FilePreviewModal } from './FilePreview'
+import { CreateFolderModal } from './FolderManagement'
+import { FileInfo, FolderInfo, SortState, sortFiles } from './types'
 
-interface FileInfo {
-  id: string
-  originalFilename: string
-  filename?: string
-  mimeType: string
-  size: number
-  category: string
-  folderPath?: string
-  description?: string | null
-  filepath?: string
-  createdAt: string
-  updatedAt: string
-}
+// Re-export FileInfo for backwards compatibility
+export type { FileInfo }
 
 interface FileBrowserProps {
   /** Project ID to browse (null for general files) */
@@ -39,25 +33,6 @@ interface FileBrowserProps {
   className?: string
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-}
-
-function getFileIcon(mimeType: string): string {
-  if (mimeType.startsWith('image/')) return '🖼️'
-  if (mimeType.startsWith('video/')) return '🎬'
-  if (mimeType.startsWith('audio/')) return '🎵'
-  if (mimeType === 'application/pdf') return '📄'
-  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊'
-  if (mimeType.includes('document') || mimeType.includes('word')) return '📝'
-  if (mimeType.includes('json') || mimeType.includes('javascript') || mimeType.includes('typescript')) return '📜'
-  if (mimeType.startsWith('text/')) return '📃'
-  return '📁'
-}
-
 export default function FileBrowser({
   projectId,
   title,
@@ -68,7 +43,10 @@ export default function FileBrowser({
   const [files, setFiles] = useState<FileInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [currentFolder, setCurrentFolder] = useState('/')
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
+  const [sort, setSort] = useState<SortState>({ field: 'name', direction: 'asc' })
+  const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null)
+  const [showCreateFolder, setShowCreateFolder] = useState(false)
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -103,26 +81,39 @@ export default function FileBrowser({
     fetchFiles()
   }, [fetchFiles])
 
-  // Filter files by current folder
-  const filteredFiles = files.filter(file => {
-    const fileFolderPath = file.folderPath || '/'
-    return fileFolderPath === currentFolder
-  })
+  // Filter files by current folder and sort them
+  const filteredFiles = useMemo(() => {
+    const filtered = files.filter(file => {
+      const fileFolderPath = file.folderPath || '/'
+      return fileFolderPath === currentFolder
+    })
+    return sortFiles(filtered, sort)
+  }, [files, currentFolder, sort])
 
   // Get subfolders in current folder
-  const subfolders = new Set<string>()
-  for (const file of files) {
-    const fileFolderPath = file.folderPath || '/'
-    if (fileFolderPath.startsWith(currentFolder) && fileFolderPath !== currentFolder) {
-      // Get the immediate subfolder
-      const remainder = fileFolderPath.slice(currentFolder.length)
-      const nextSlash = remainder.indexOf('/')
-      if (nextSlash > 0) {
-        const subfolder = currentFolder + remainder.slice(0, nextSlash + 1)
-        subfolders.add(subfolder)
+  const subfolders = useMemo(() => {
+    const folderSet = new Map<string, number>()
+
+    for (const file of files) {
+      const fileFolderPath = file.folderPath || '/'
+      if (fileFolderPath.startsWith(currentFolder) && fileFolderPath !== currentFolder) {
+        // Get the immediate subfolder
+        const remainder = fileFolderPath.slice(currentFolder.length)
+        const nextSlash = remainder.indexOf('/')
+        if (nextSlash > 0) {
+          const subfolder = currentFolder + remainder.slice(0, nextSlash + 1)
+          folderSet.set(subfolder, (folderSet.get(subfolder) || 0) + 1)
+        }
       }
     }
-  }
+
+    const result: FolderInfo[] = []
+    for (const [path, count] of folderSet) {
+      const name = path.split('/').filter(Boolean).pop() || path
+      result.push({ path, name, fileCount: count })
+    }
+    return result.sort((a, b) => a.name.localeCompare(b.name))
+  }, [files, currentFolder])
 
   const handleFolderClick = (folder: string) => {
     setCurrentFolder(folder)
@@ -130,11 +121,12 @@ export default function FileBrowser({
   }
 
   const handleFileClick = (file: FileInfo) => {
+    clientLogger.debug('[FileBrowser] File clicked', { fileId: file.id, filename: file.originalFilename })
     if (onFileClick) {
       onFileClick(file)
-    } else if (file.filepath) {
-      // Default: open in new tab
-      window.open(file.filepath, '_blank')
+    } else {
+      // Set selected file for preview modal (to be implemented)
+      setSelectedFile(file)
     }
   }
 
@@ -150,15 +142,21 @@ export default function FileBrowser({
     if (!confirm('Are you sure you want to delete this file?')) return
 
     try {
+      clientLogger.debug('[FileBrowser] Deleting file', { fileId })
       const res = await fetch(`/api/files/${fileId}`, { method: 'DELETE' })
       if (res.ok) {
         setFiles(files.filter(f => f.id !== fileId))
         showSuccessToast('File deleted')
+        clientLogger.debug('[FileBrowser] File deleted', { fileId })
       } else {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to delete file')
       }
     } catch (error) {
+      clientLogger.error('[FileBrowser] Failed to delete file', {
+        fileId,
+        error: error instanceof Error ? error.message : String(error),
+      })
       showErrorToast(error instanceof Error ? error.message : 'Failed to delete file')
     }
   }
@@ -172,11 +170,18 @@ export default function FileBrowser({
         <h2 className="text-lg font-semibold">{displayTitle}</h2>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowCreateFolder(true)}
+            className="qt-button qt-button-secondary p-2"
+            title="New Folder"
+          >
+            {'\u{1F4C1}'}+
+          </button>
+          <button
             onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
             className="qt-button qt-button-secondary p-2"
             title={viewMode === 'list' ? 'Grid view' : 'List view'}
           >
-            {viewMode === 'list' ? '▦' : '☰'}
+            {viewMode === 'list' ? '\u25A6' : '\u2630'}
           </button>
           <button
             onClick={fetchFiles}
@@ -184,17 +189,17 @@ export default function FileBrowser({
             className="qt-button qt-button-secondary p-2"
             title="Refresh"
           >
-            ↻
+            {'\u21BB'}
           </button>
         </div>
       </div>
 
-      {/* Breadcrumb / Folder picker */}
+      {/* Breadcrumb */}
       <div className="mb-4">
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm flex-wrap">
           <button
             onClick={() => setCurrentFolder('/')}
-            className="hover:text-primary"
+            className="hover:text-primary transition-colors"
           >
             Root
           </button>
@@ -204,10 +209,10 @@ export default function FileBrowser({
                 const path = '/' + arr.slice(0, index + 1).join('/') + '/'
                 return (
                   <span key={path} className="flex items-center gap-2">
-                    <span>/</span>
+                    <span className="text-muted-foreground">/</span>
                     <button
                       onClick={() => setCurrentFolder(path)}
-                      className="hover:text-primary"
+                      className="hover:text-primary transition-colors"
                     >
                       {part}
                     </button>
@@ -225,71 +230,29 @@ export default function FileBrowser({
           <span className="qt-text-small text-muted-foreground">Loading files...</span>
         </div>
       ) : (
-        <div className={`flex-1 overflow-y-auto ${viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4' : 'space-y-1'}`}>
-          {/* Go up button */}
-          {currentFolder !== '/' && (
-            <button
-              onClick={handleGoUp}
-              className={`flex items-center gap-2 p-2 rounded hover:bg-muted text-left w-full ${viewMode === 'grid' ? 'flex-col' : ''}`}
-            >
-              <span className="text-xl">📁</span>
-              <span className="qt-text-small">..</span>
-            </button>
-          )}
-
-          {/* Subfolders */}
-          {Array.from(subfolders).sort().map(folder => {
-            const name = folder.split('/').filter(Boolean).pop() || folder
-            return (
-              <button
-                key={folder}
-                onClick={() => handleFolderClick(folder)}
-                className={`flex items-center gap-2 p-2 rounded hover:bg-muted text-left w-full ${viewMode === 'grid' ? 'flex-col' : ''}`}
-              >
-                <span className="text-xl">📁</span>
-                <span className="font-medium truncate">{name}</span>
-              </button>
-            )
-          })}
-
-          {/* Files */}
-          {filteredFiles.map(file => (
-            <div
-              key={file.id}
-              className={`flex items-center gap-2 p-2 rounded hover:bg-muted group ${viewMode === 'grid' ? 'flex-col text-center' : ''}`}
-            >
-              <button
-                onClick={() => handleFileClick(file)}
-                className={`flex items-center gap-2 flex-1 text-left ${viewMode === 'grid' ? 'flex-col' : ''}`}
-              >
-                <span className="text-xl">{getFileIcon(file.mimeType)}</span>
-                <div className={`flex-1 min-w-0 ${viewMode === 'grid' ? 'text-center' : ''}`}>
-                  <div className="font-medium truncate">{file.originalFilename || file.filename}</div>
-                  {viewMode === 'list' && (
-                    <div className="qt-text-xs text-muted-foreground">
-                      {formatFileSize(file.size)} • {new Date(file.createdAt).toLocaleDateString()}
-                    </div>
-                  )}
-                </div>
-              </button>
-              <button
-                onClick={() => handleDeleteFile(file.id)}
-                className="qt-button qt-button-secondary p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Delete file"
-              >
-                🗑️
-              </button>
-            </div>
-          ))}
-
-          {/* Empty state */}
-          {filteredFiles.length === 0 && subfolders.size === 0 && currentFolder === '/' && (
-            <div className="flex-1 flex items-center justify-center col-span-full">
-              <div className="text-center text-muted-foreground">
-                <div className="text-4xl mb-2">📂</div>
-                <p>No files yet</p>
-              </div>
-            </div>
+        <div className="flex-1 overflow-y-auto">
+          {viewMode === 'grid' ? (
+            <FileBrowserGrid
+              files={filteredFiles}
+              folders={subfolders}
+              currentFolder={currentFolder}
+              onFileClick={handleFileClick}
+              onFolderClick={handleFolderClick}
+              onGoUp={handleGoUp}
+              onDeleteFile={handleDeleteFile}
+            />
+          ) : (
+            <FileBrowserList
+              files={filteredFiles}
+              folders={subfolders}
+              currentFolder={currentFolder}
+              sort={sort}
+              onSortChange={setSort}
+              onFileClick={handleFileClick}
+              onFolderClick={handleFolderClick}
+              onGoUp={handleGoUp}
+              onDeleteFile={handleDeleteFile}
+            />
           )}
         </div>
       )}
@@ -298,9 +261,36 @@ export default function FileBrowser({
       <div className="mt-4 pt-2 border-t border-border">
         <span className="qt-text-xs text-muted-foreground">
           {files.length} file{files.length !== 1 ? 's' : ''} total
-          {currentFolder !== '/' && ` • ${filteredFiles.length} in current folder`}
+          {currentFolder !== '/' && ` \u2022 ${filteredFiles.length} in current folder`}
         </span>
       </div>
+
+      {/* File Preview Modal */}
+      {selectedFile && (
+        <FilePreviewModal
+          file={selectedFile}
+          files={filteredFiles}
+          onClose={() => setSelectedFile(null)}
+          onDelete={(fileId) => {
+            setFiles(files.filter(f => f.id !== fileId))
+            setSelectedFile(null)
+          }}
+          onNavigate={(file) => setSelectedFile(file)}
+        />
+      )}
+
+      {/* Create Folder Modal */}
+      <CreateFolderModal
+        isOpen={showCreateFolder}
+        onClose={() => setShowCreateFolder(false)}
+        currentFolder={currentFolder}
+        projectId={projectId}
+        onSuccess={(folderPath) => {
+          clientLogger.debug('[FileBrowser] Folder created', { folderPath })
+          // Navigate to the new folder
+          setCurrentFolder(folderPath)
+        }}
+      />
     </div>
   )
 }

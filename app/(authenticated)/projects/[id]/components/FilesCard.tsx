@@ -11,8 +11,11 @@
 import { useEffect, useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import FileBrowser from '@/components/files/FileBrowser'
+import FileThumbnail from '@/components/files/FileThumbnail'
+import { FilePreviewModal } from '@/components/files/FilePreview'
 import { BaseModal } from '@/components/ui/BaseModal'
 import type { ProjectFile } from '../types'
+import type { FileInfo } from '@/components/files/types'
 
 interface FilesCardProps {
   files: ProjectFile[]
@@ -64,19 +67,36 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+/**
+ * Convert ProjectFile to FileInfo for the preview modal
+ */
+function toFileInfo(file: ProjectFile): FileInfo {
+  return {
+    id: file.id,
+    originalFilename: file.originalFilename,
+    mimeType: file.mimeType,
+    size: file.size,
+    category: file.category,
+    createdAt: file.createdAt,
+    updatedAt: file.createdAt,
+  }
+}
+
 export function FilesCard({ files, expanded, onToggle, projectId }: FilesCardProps) {
   const [showBrowser, setShowBrowser] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null)
 
   useEffect(() => {
     clientLogger.debug('FilesCard: rendered', { fileCount: files.length, expanded })
   }, [files.length, expanded])
 
   const handleFileClick = (file: ProjectFile) => {
-    // Open file in new tab via download API
-    const downloadUrl = `/api/files/${file.id}/download`
-    window.open(downloadUrl, '_blank')
     clientLogger.debug('FilesCard: file clicked', { fileId: file.id, filename: file.originalFilename })
+    setSelectedFile(toFileInfo(file))
   }
+
+  // Convert all files to FileInfo for the preview modal
+  const filesAsFileInfo = files.map(toFileInfo)
 
   return (
     <>
@@ -114,13 +134,13 @@ export function FilesCard({ files, expanded, onToggle, projectId }: FilesCardPro
                     onClick={() => handleFileClick(file)}
                     className="w-full flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted transition-colors text-left"
                   >
-                    <div className="w-8 h-8 rounded qt-bg-muted flex items-center justify-center flex-shrink-0">
-                      {file.mimeType.startsWith('image/') ? (
-                        <ImageIcon className="w-4 h-4 qt-text-secondary" />
-                      ) : (
-                        <DocumentIcon className="w-4 h-4 qt-text-secondary" />
-                      )}
-                    </div>
+                    <FileThumbnail
+                      fileId={file.id}
+                      mimeType={file.mimeType}
+                      alt={file.originalFilename}
+                      size={40}
+                      className="rounded flex-shrink-0"
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-foreground truncate">
                         {file.originalFilename}
@@ -169,6 +189,16 @@ export function FilesCard({ files, expanded, onToggle, projectId }: FilesCardPro
             />
           </div>
         </BaseModal>
+      )}
+
+      {/* File Preview Modal */}
+      {selectedFile && (
+        <FilePreviewModal
+          file={selectedFile}
+          files={filesAsFileInfo}
+          onClose={() => setSelectedFile(null)}
+          onNavigate={(file) => setSelectedFile(file)}
+        />
       )}
     </>
   )

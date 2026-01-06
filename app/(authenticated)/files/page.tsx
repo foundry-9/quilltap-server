@@ -20,13 +20,6 @@ function FilesPageContent() {
     clientLogger.debug('FilesPage: mounted', { selectedFileId })
   }, [selectedFileId])
 
-  const handleFileClick = (file: { id: string; filepath?: string }) => {
-    if (file.filepath) {
-      window.open(file.filepath, '_blank')
-    }
-    clientLogger.debug('FilesPage: file clicked', { fileId: file.id })
-  }
-
   return (
     <div className="qt-page-container text-foreground">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
@@ -42,7 +35,6 @@ function FilesPageContent() {
         <FileBrowser
           projectId={null}
           title="General Files"
-          onFileClick={handleFileClick}
           className="min-h-[400px]"
         />
       </div>

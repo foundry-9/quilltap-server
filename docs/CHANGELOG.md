@@ -4,6 +4,23 @@
 
 ### 2.7-dev
 
+- feat: Redesigned file browser with thumbnails, preview modal, and folder management
+  - Grid view now shows image thumbnails using on-demand generation with S3 caching
+  - Filenames in grid view hard-wrap for full visibility
+  - List view is now tabular with sortable columns (Name, Associations, Type, Date)
+  - Default sort is by name ascending
+  - Files open in a preview dialog instead of new window (like image gallery)
+  - Preview supports images, PDFs (via iframe), and text/code files
+  - Preview modal includes download, delete, and navigation actions
+  - Keyboard navigation in preview (arrow keys, Escape)
+  - New Create Folder button in file browser toolbar
+  - New API endpoints: /api/files/:id/thumbnail, /api/files/:id/move, /api/files/folders
+  - Folder operations: create, rename, delete empty folders
+  - File operations: move to folder, rename
+  - FilesCard now shows thumbnails and uses preview modal
+  - New components: FileThumbnail, FileBrowserGrid, FileBrowserList, FilePreviewModal
+  - New modals: CreateFolderModal, MoveFileModal, RenameModal
+  - Hooks: useFilePreview, useFileActions
 - feat: Automatic image resizing for provider size limits
   - Images that exceed provider base64 size limits are now automatically resized
   - Anthropic: 5MB limit, OpenAI/Google/Grok: 20MB limit
