@@ -34,6 +34,8 @@ interface MessageRowProps {
   renderingPatterns?: RenderingPattern[]
   /** Optional dialogue detection for paragraph-level styling */
   dialogueDetection?: DialogueDetection | null
+  /** Force immediate render (skip lazy loading) - use for last few messages */
+  forceRender?: boolean
   isMultiChar: boolean
   participantData: ParticipantData[]
   turnState: TurnState
@@ -85,6 +87,7 @@ function MessageRowInner({
   messageAvatar,
   renderingPatterns,
   dialogueDetection,
+  forceRender = false,
   isMultiChar,
   participantData,
   turnState,
@@ -341,7 +344,7 @@ function MessageRowInner({
                   {message.content}
                 </div>
               ) : (
-                <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} />
+                <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} />
               )}
               {/* Image attachment thumbnails */}
               {getImageAttachments(message).length > 0 && (
@@ -704,6 +707,9 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Rendering patterns (reference equality is fine - they're stable)
   if (prev.renderingPatterns !== next.renderingPatterns) return false
   if (prev.dialogueDetection !== next.dialogueDetection) return false
+
+  // Force render flag (for last few messages to avoid lazy loading)
+  if (prev.forceRender !== next.forceRender) return false
 
   // Attachments (check if array changed)
   const prevAttachments = prev.message.attachments || []

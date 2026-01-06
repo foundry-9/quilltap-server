@@ -71,6 +71,7 @@ import {
   useTurnManagement,
   useMessageActions,
   useFileAttachments,
+  useAutoScroll,
   type SwipeState,
 } from './hooks'
 import type { Chat, ChatSettings, Message, MessageAttachment, Participant, CharacterData } from './types'
@@ -187,12 +188,29 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Ref for triggerContinueMode to break dependency cycle in auto-trigger useEffect
   const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
 
-  // Virtualizer for efficient message list rendering - must be defined before scrollToBottom
+  // Virtualizer for efficient message list rendering - must be defined before auto-scroll hook
   const virtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => messagesContainerRef.current,
     estimateSize: () => 150, // Estimated row height in pixels
     overscan: 5, // Render 5 extra items above/below viewport for smooth scrolling
+  })
+
+  // Intelligent auto-scroll hook - handles settling, streaming, and user scroll intent
+  const {
+    scrollOnUserMessage,
+    scrollOnStreamComplete,
+    isAutoScrollEnabled,
+    isSettled,
+  } = useAutoScroll({
+    containerRef: messagesContainerRef,
+    endRef: messagesEndRef,
+    virtualizer,
+    messageCount: messages.length,
+    isStreaming: streaming,
+    isWaitingForResponse: waitingForResponse,
+    streamingContent,
+    isLoading: loading,
   })
 
   // Draft persistence - localStorage key for this chat
@@ -303,12 +321,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const awaitingTagInfo = quickHideActive && isCurrentChat && !chatContext.tagsFetched
   const chatHidden = quickHideActive && isCurrentChat && chatContext.tagsFetched && shouldHideByIds(chatTags)
 
+  // Legacy scrollToBottom for explicit programmatic scroll (e.g., after message navigation)
+  // Most auto-scroll logic is now handled by useAutoScroll hook
   const scrollToBottom = useCallback(() => {
-    // With virtualization, scroll to the last message index, then let messagesEndRef handle the final scroll
     if (messages.length > 0) {
       virtualizer.scrollToIndex(messages.length - 1, { align: 'end', behavior: 'smooth' })
     }
-    // Also scroll the end ref into view for non-message content (streaming, ephemeral, etc.)
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, 100)
@@ -879,14 +897,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setStreamingContent('')
       setRespondingParticipantId(null)
       abortControllerRef.current = null
-      scrollToBottom()
+      scrollOnStreamComplete()
       // Return focus to input after AI response completes
       // Use longer timeout to let smooth scroll settle, and preventScroll to avoid conflicts
       setTimeout(() => {
         inputRef.current?.focus({ preventScroll: true })
       }, 150)
     }
-  }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages, scrollToBottom])
+  }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete])
 
   // Keep the ref in sync with the current callback to break dependency cycle
   triggerContinueModeRef.current = triggerContinueMode
@@ -1466,9 +1484,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     fetchTemplateData()
   }, [chat?.roleplayTemplateId])
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, streamingContent, scrollToBottom])
+  // Auto-scroll is now handled by useAutoScroll hook which:
+  // - Waits for page to settle after initial load before scrolling
+  // - Only scrolls on streaming completion, not every content chunk
+  // - Respects user scroll intent (disables auto-scroll if user scrolls up)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1559,6 +1578,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
     }
     setMessages((prev) => [...prev, tempUserMessage])
+
+    // Scroll to show user message - this also re-enables auto-scroll
+    scrollOnUserMessage()
 
     // Debug: Log outgoing request
     const requestPayload = { content: userMessage || 'Please look at the attached file(s).', fileIds }
@@ -1764,6 +1786,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setStreamingContent('')
                 setStreaming(false)
                 setRespondingParticipantId(null)
+                // Scroll to bottom now that streaming is complete
+                scrollOnStreamComplete()
                 // Refresh chat to get tool messages and memory debug logs
                 await fetchChat()
                 // Update debug entry with memory logs from the fetched chat (with polling)
@@ -2072,6 +2096,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       messageAvatar={messageAvatar}
                       renderingPatterns={roleplayRenderingPatterns}
                       dialogueDetection={roleplayDialogueDetection}
+                      forceRender={messageIndex >= messages.length - 5}
                       isMultiChar={isMultiChar}
                       participantData={participantData}
                       turnState={turnState}

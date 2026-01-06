@@ -4,6 +4,13 @@
 
 ### 2.7-dev
 
+- fix: Improved auto-scroll behavior in chat to eliminate jumpiness
+  - New useAutoScroll hook with intelligent scroll management
+  - Waits for page to settle after loading existing chats before scrolling
+  - Only scrolls on streaming completion, not every content chunk
+  - Tracks user scroll intent (disables auto-scroll when user scrolls up)
+  - Force renders last 5 messages immediately to prevent lazy-loading height changes
+  - Multi-strategy scroll ensures reaching true bottom of chat
 - fix: PDF preview in file browser now uses PDF.js for client-side rendering
   - Chrome's PDF viewer security blocked iframe/object embedding
   - PDF.js fetches and renders PDFs on canvas, bypassing browser restrictions
