@@ -164,6 +164,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       isDefault = false,
       isCheap = false,
       allowWebSearch = false,
+      useNativeWebSearch = false,
     } = body
 
     // Validation
@@ -272,6 +273,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       isDefault,
       isCheap,
       allowWebSearch,
+      useNativeWebSearch,
       tags: [],
       // Token tracking fields (initialized to 0)
       totalTokens: 0,

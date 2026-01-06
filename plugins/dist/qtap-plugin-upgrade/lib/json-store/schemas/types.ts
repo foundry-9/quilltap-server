@@ -228,8 +228,10 @@ export const ConnectionProfileSchema = z.object({
   isDefault: z.boolean().default(false),
   /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
   isCheap: z.boolean().default(false),
-  /** Whether web search is allowed for this profile (only if provider supports it) */
+  /** Whether the search_web tool is enabled for this profile */
   allowWebSearch: z.boolean().default(false),
+  /** Whether to use the provider's native web search integration (if supported) */
+  useNativeWebSearch: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

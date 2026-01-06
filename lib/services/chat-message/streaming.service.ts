@@ -87,7 +87,8 @@ export async function buildTools(
     userId
   )
 
-  const useNativeWebSearch = connectionProfile.allowWebSearch && provider.supportsWebSearch
+  // Native web search requires both the profile setting AND provider support
+  const useNativeWebSearch = connectionProfile.useNativeWebSearch && provider.supportsWebSearch
 
   if (usePseudoTools) {
     logger.debug('Skipping native tools (using pseudo-tools)', {
@@ -102,16 +103,17 @@ export async function buildTools(
     imageProfileId: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
     memorySearchEnabled: true,
-    webSearchEnabled: connectionProfile.allowWebSearch && !useNativeWebSearch,
+    webSearchToolEnabled: connectionProfile.allowWebSearch,
     projectInfoEnabled: !!projectId,
     useNativeWebSearch,
   })
 
+  // Web search tool is independent of native web search - user can enable both
   const tools = buildToolsForProvider(connectionProfile.provider, {
     imageGeneration: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
     memorySearch: true,
-    webSearch: connectionProfile.allowWebSearch && !useNativeWebSearch,
+    webSearch: connectionProfile.allowWebSearch,
     projectInfo: !!projectId,
   })
 

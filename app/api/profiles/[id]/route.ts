@@ -87,7 +87,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       const body = await req.json()
-      const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault, isCheap, allowWebSearch } = body
+      const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault, isCheap, allowWebSearch, useNativeWebSearch } = body
 
       // Build update data
       const updateData: any = {}
@@ -202,6 +202,16 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           )
         }
         updateData.allowWebSearch = allowWebSearch
+      }
+
+      if (useNativeWebSearch !== undefined) {
+        if (typeof useNativeWebSearch !== 'boolean') {
+          return NextResponse.json(
+            { error: 'useNativeWebSearch must be a boolean' },
+            { status: 400 }
+          )
+        }
+        updateData.useNativeWebSearch = useNativeWebSearch
       }
 
       // Update the profile

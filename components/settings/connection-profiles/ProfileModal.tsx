@@ -495,13 +495,26 @@ export function ProfileModal({
                   id="allowWebSearch"
                   checked={form.formData.allowWebSearch}
                   onChange={(e) => form.setField('allowWebSearch', e.target.checked)}
-                  disabled={!reqs.supportsWebSearch}
-                  className="w-4 h-4 rounded disabled:opacity-50"
+                  className="w-4 h-4 rounded"
                 />
-                <label htmlFor="allowWebSearch" className={`text-sm ${!reqs.supportsWebSearch ? 'text-muted-foreground' : ''}`}>
-                  Allow Web Search {!reqs.supportsWebSearch && '(not supported)'}
+                <label htmlFor="allowWebSearch" className="text-sm">
+                  Allow web search tool
                 </label>
               </div>
+              {reqs.supportsWebSearch && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="useNativeWebSearch"
+                    checked={form.formData.useNativeWebSearch}
+                    onChange={(e) => form.setField('useNativeWebSearch', e.target.checked)}
+                    className="w-4 h-4 rounded"
+                  />
+                  <label htmlFor="useNativeWebSearch" className="text-sm">
+                    Use provider native web search
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* OpenRouter-specific options */}

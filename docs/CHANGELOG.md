@@ -4,6 +4,14 @@
 
 ### 2.7-dev
 
+- feat: Decouple web search tool from native provider web search
+  - New `useNativeWebSearch` field on connection profiles controls provider integration
+  - `allowWebSearch` now only controls the search_web tool (available for all providers)
+  - Users can enable both tool and native search, or just one independently
+  - UI shows separate checkboxes: "Enable Web Search Tool" and "Use Provider's Native Web Search"
+  - Native web search checkbox only appears for providers that support it (OpenAI, Google, Grok, OpenRouter)
+  - Migration sets existing profiles to tool-only (useNativeWebSearch=false)
+  - Bumped qtap-plugin-upgrade to version 1.0.15
 - feat: Move token/cost summary from chat messages to page header
   - Cost summary now appears in toolbar, flush right before full-width toggle
   - Added compact variant for header display (minimal inline style)

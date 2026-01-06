@@ -33507,8 +33507,10 @@ var ConnectionProfileSchema = import_zod4.z.object({
   isDefault: import_zod4.z.boolean().default(false),
   /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
   isCheap: import_zod4.z.boolean().default(false),
-  /** Whether web search is allowed for this profile (only if provider supports it) */
+  /** Whether the search_web tool is enabled for this profile */
   allowWebSearch: import_zod4.z.boolean().default(false),
+  /** Whether to use the provider's native web search integration (if supported) */
+  useNativeWebSearch: import_zod4.z.boolean().default(false),
   tags: import_zod4.z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
@@ -39753,6 +39755,128 @@ var addTokenTrackingFieldsMigration = {
   }
 };
 
+// migrations/add-use-native-web-search-field.ts
+init_logger();
+function isMongoDBBackendEnabled11() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase12() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible11() {
+  try {
+    const db = await getMongoDatabase12();
+    await db.command({ ping: 1 });
+    return true;
+  } catch (error) {
+    logger.warn("MongoDB is not accessible for useNativeWebSearch field migration", {
+      context: "migration.add-use-native-web-search-field",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+async function hasProfilesNeedingMigration2() {
+  try {
+    const db = await getMongoDatabase12();
+    const profilesCollection = db.collection("connection_profiles");
+    const count = await profilesCollection.countDocuments({
+      useNativeWebSearch: { $exists: false }
+    });
+    return count > 0;
+  } catch (error) {
+    logger.debug("Error checking profiles for useNativeWebSearch field", {
+      context: "migration.add-use-native-web-search-field",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+var addUseNativeWebSearchFieldMigration = {
+  id: "add-use-native-web-search-field-v1",
+  description: "Add useNativeWebSearch field to connection profiles to decouple tool from native web search",
+  introducedInVersion: "2.7.0",
+  dependsOn: ["migrate-json-to-mongodb-v1"],
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled11()) {
+      logger.debug("MongoDB not enabled, skipping useNativeWebSearch field migration", {
+        context: "migration.add-use-native-web-search-field"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible11()) {
+      logger.debug("MongoDB not accessible, deferring useNativeWebSearch field migration", {
+        context: "migration.add-use-native-web-search-field"
+      });
+      return false;
+    }
+    const needsRun = await hasProfilesNeedingMigration2();
+    logger.debug("Checked for useNativeWebSearch field migration need", {
+      context: "migration.add-use-native-web-search-field",
+      needsRun
+    });
+    return needsRun;
+  },
+  async run() {
+    const startTime = Date.now();
+    let profilesUpdated = 0;
+    logger.info("Starting useNativeWebSearch field migration", {
+      context: "migration.add-use-native-web-search-field"
+    });
+    try {
+      const db = await getMongoDatabase12();
+      logger.debug("Adding useNativeWebSearch field to connection_profiles", {
+        context: "migration.add-use-native-web-search-field"
+      });
+      const profilesCollection = db.collection("connection_profiles");
+      const profilesResult = await profilesCollection.updateMany(
+        { useNativeWebSearch: { $exists: false } },
+        {
+          $set: {
+            useNativeWebSearch: false
+          }
+        }
+      );
+      profilesUpdated = profilesResult.modifiedCount;
+      logger.debug("Connection profiles updated with useNativeWebSearch field", {
+        context: "migration.add-use-native-web-search-field",
+        count: profilesUpdated
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error("useNativeWebSearch field migration failed", {
+        context: "migration.add-use-native-web-search-field",
+        error: errorMessage
+      });
+      return {
+        id: "add-use-native-web-search-field-v1",
+        success: false,
+        itemsAffected: profilesUpdated,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const durationMs = Date.now() - startTime;
+    logger.info("useNativeWebSearch field migration completed successfully", {
+      context: "migration.add-use-native-web-search-field",
+      profilesUpdated,
+      durationMs
+    });
+    return {
+      id: "add-use-native-web-search-field-v1",
+      success: true,
+      itemsAffected: profilesUpdated,
+      message: `Added useNativeWebSearch field to ${profilesUpdated} connection profiles`,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
 // migrations/index.ts
 var migrations = [
   convertOpenRouterProfilesMigration,
@@ -39775,21 +39899,23 @@ var migrations = [
   addMultiCharacterFieldsMigration,
   addInterCharacterMemoryFieldsMigration,
   // Token usage tracking
-  addTokenTrackingFieldsMigration
+  addTokenTrackingFieldsMigration,
+  // Web search decoupling
+  addUseNativeWebSearchFieldMigration
 ];
 
 // user-migrations.ts
 init_logger();
-function isMongoDBBackendEnabled11() {
+function isMongoDBBackendEnabled12() {
   const backend = process.env.DATA_BACKEND || "";
   return backend === "mongodb" || backend === "dual";
 }
-async function getMongoDatabase12() {
+async function getMongoDatabase13() {
   const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
   return getDb();
 }
 async function migrateUserCharacterSystemPrompts(userId) {
-  if (!isMongoDBBackendEnabled11()) {
+  if (!isMongoDBBackendEnabled12()) {
     logger.debug("MongoDB not enabled, skipping character system prompts migration", {
       context: "user-migrations.migrateUserCharacterSystemPrompts",
       userId
@@ -39798,7 +39924,7 @@ async function migrateUserCharacterSystemPrompts(userId) {
   }
   const startTime = Date.now();
   try {
-    const db = await getMongoDatabase12();
+    const db = await getMongoDatabase13();
     const charactersCollection = db.collection("characters");
     const needsMigration = await charactersCollection.find({
       userId,

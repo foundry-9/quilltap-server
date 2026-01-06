@@ -51,6 +51,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
         isDefault: profile.isDefault,
         isCheap: profile.isCheap ?? false,
         allowWebSearch: profile.allowWebSearch ?? false,
+        useNativeWebSearch: profile.useNativeWebSearch ?? false,
         // OpenRouter-specific fields
         fallbackModels: profile.parameters?.fallbackModels ?? [],
         enableZDR: profile.parameters?.providerPreferences?.dataCollection === 'deny',
@@ -109,6 +110,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
       isDefault: form.formData.isDefault,
       isCheap: form.formData.isCheap,
       allowWebSearch: form.formData.allowWebSearch,
+      useNativeWebSearch: form.formData.useNativeWebSearch,
       parameters,
     }
 

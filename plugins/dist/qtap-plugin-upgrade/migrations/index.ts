@@ -27,6 +27,8 @@ import { addMultiCharacterFieldsMigration } from './add-multi-character-fields';
 import { addInterCharacterMemoryFieldsMigration } from './add-inter-character-memory-fields';
 // Token usage tracking
 import { addTokenTrackingFieldsMigration } from './add-token-tracking-fields';
+// Web search decoupling
+import { addUseNativeWebSearchFieldMigration } from './add-use-native-web-search-field';
 
 /**
  * All available migrations.
@@ -54,6 +56,8 @@ export const migrations: Migration[] = [
   addInterCharacterMemoryFieldsMigration,
   // Token usage tracking
   addTokenTrackingFieldsMigration,
+  // Web search decoupling
+  addUseNativeWebSearchFieldMigration,
 ];
 
 export {
@@ -78,4 +82,6 @@ export {
   addInterCharacterMemoryFieldsMigration,
   // Token usage tracking
   addTokenTrackingFieldsMigration,
+  // Web search decoupling
+  addUseNativeWebSearchFieldMigration,
 };
