@@ -12,11 +12,12 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
 - **Build Tools**: Next.js
 - **Language**: TypeScript
 - **Package Manager**: npm
-- **Testing**: Jest and coverage tools (Istanbul/nyc)
+- **Testing**: Jest and coverage tools (Istanbul/nyc), Playwright
 - **Data Storage**: MongoDB (required) - uses the native MongoDB driver directly, NOT Prisma or Mongoose. Data models are defined as TypeScript interfaces.
 - **File Storage**: S3-compatible storage (embedded MinIO for development, external S3 for production)
 - **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
 - **Cloud Services**: AWS first
+- **Design Documentation**: Storybook
 
 ## Current State
 
@@ -97,8 +98,8 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
 - Themes and styling should depend primarily on the qt-* utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes.
 - Keep the documentation above up to date, and update this file if you add more documentation, in the same format.
 - `clientLogger.*` calls on the front end nearly always need to be wrapped in a useEffect or they're going to throw errors. Anticipate this when creating or editing UI components.
-- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports and backups.
-- Any files that exist in the app source code only because they are necessary for migrations should move to the migration/upgrade plugin
+- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports, backups, and/or migration/upgrade plugin.
+- Any files that exist in the app source code only because they are necessary for migrations should move to the migration/upgrade plugin.
 
 ## Best Practices and Principles
 

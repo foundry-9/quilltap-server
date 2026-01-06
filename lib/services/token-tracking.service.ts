@@ -5,6 +5,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger';
+import type { PriceSource } from './cost-estimation.service';
 
 const logger = createServiceLogger('token-tracking');
 
@@ -58,7 +59,8 @@ export async function incrementProfileTokenUsage(
 export async function updateChatTokenAggregates(
   chatId: string,
   usage: TokenUsage,
-  estimatedCost: number | null
+  estimatedCost: number | null,
+  priceSource?: PriceSource
 ): Promise<void> {
   const promptTokens = usage.promptTokens || 0;
   const completionTokens = usage.completionTokens || 0;
@@ -76,7 +78,8 @@ export async function updateChatTokenAggregates(
       chatId,
       promptTokens,
       completionTokens,
-      estimatedCost
+      estimatedCost,
+      priceSource
     );
 
     logger.debug('Updated chat token aggregates', {
@@ -84,6 +87,7 @@ export async function updateChatTokenAggregates(
       promptTokens,
       completionTokens,
       estimatedCost,
+      priceSource,
     });
   } catch (error) {
     logger.error('Failed to update chat token aggregates', {
@@ -101,13 +105,15 @@ export async function trackMessageTokenUsage(
   chatId: string,
   profileId: string | null | undefined,
   usage: TokenUsage,
-  estimatedCost: number | null
+  estimatedCost: number | null,
+  priceSource?: PriceSource
 ): Promise<void> {
   logger.debug('Tracking message token usage', {
     chatId,
     profileId,
     usage,
     estimatedCost,
+    priceSource,
   });
 
   // Increment profile tokens if profile ID is available
@@ -116,5 +122,5 @@ export async function trackMessageTokenUsage(
   }
 
   // Update chat aggregates
-  await updateChatTokenAggregates(chatId, usage, estimatedCost);
+  await updateChatTokenAggregates(chatId, usage, estimatedCost, priceSource);
 }

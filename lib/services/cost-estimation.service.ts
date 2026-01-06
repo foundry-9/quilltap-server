@@ -12,11 +12,14 @@ import {
   estimateCost,
   getModelPricingFromRegistry,
 } from '@/lib/llm/pricing';
-import { getModelPricing as fetchModelPricing } from '@/lib/llm/pricing-fetcher';
+import {
+  getModelPricing as fetchModelPricing,
+  getOpenRouterPricingForModel,
+} from '@/lib/llm/pricing-fetcher';
 
 const logger = createServiceLogger('cost-estimation');
 
-export type PriceSource = 'openrouter' | 'registry' | 'fallback' | 'unavailable';
+export type PriceSource = 'openrouter' | 'registry' | 'fallback' | 'openrouter-estimate' | 'unavailable';
 
 export interface CostEstimateResult {
   cost: number | null;
@@ -124,6 +127,28 @@ export async function estimateMessageCost(
       };
     }
 
+    // Try OpenRouter public pricing as final fallback for providers without pricing APIs
+    // This provides an estimate based on OpenRouter's pricing data (may differ from direct pricing)
+    if (provider !== 'OPENROUTER') {
+      const openRouterEstimate = await getOpenRouterPricingForModel(provider, modelName);
+      if (openRouterEstimate) {
+        const cost = estimateCost(openRouterEstimate, promptTokens, completionTokens);
+        logger.debug('Cost estimated from OpenRouter public pricing', {
+          cost,
+          modelName,
+          provider,
+          openRouterModelId: openRouterEstimate.modelId,
+          promptCostPer1M: openRouterEstimate.promptCostPer1M,
+          completionCostPer1M: openRouterEstimate.completionCostPer1M,
+        });
+        return {
+          cost,
+          source: 'openrouter-estimate',
+          modelPricing: openRouterEstimate,
+        };
+      }
+    }
+
     // No pricing available
     logger.debug('No pricing data available', { provider, modelName });
     return {
@@ -173,11 +198,12 @@ export async function getChatCostBreakdown(
     const totalTokens = totalPromptTokens + totalCompletionTokens;
     const estimatedCostUSD = chat.estimatedCostUSD ?? null;
 
-    // Determine price source based on whether we have a cost estimate
+    // Use stored price source, or infer from whether we have a cost estimate
     let priceSource: PriceSource = 'unavailable';
-    if (estimatedCostUSD !== null) {
-      // If we have a cost, it came from somewhere
-      // This is a simplification - in practice we'd track the source per message
+    if (chat.priceSource) {
+      priceSource = chat.priceSource as PriceSource;
+    } else if (estimatedCostUSD !== null) {
+      // Legacy chats without priceSource field - assume registry
       priceSource = 'registry';
     }
 

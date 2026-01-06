@@ -235,6 +235,8 @@ export const ChatMetadataSchema = z.object({
   totalCompletionTokens: z.number().default(0),
   /** Estimated total cost in USD for this chat */
   estimatedCostUSD: z.number().nullable().optional(),
+  /** Source of pricing data for cost estimate */
+  priceSource: z.enum(['openrouter', 'registry', 'fallback', 'openrouter-estimate', 'unavailable']).nullable().optional(),
   /** Per-chat override for showing system events (null = use global setting) */
   showSystemEventsOverride: z.boolean().nullable().optional(),
 
@@ -286,6 +288,8 @@ export const ChatMetadataBaseSchema = z.object({
   totalCompletionTokens: z.number().default(0),
   /** Estimated total cost in USD for this chat */
   estimatedCostUSD: z.number().nullable().optional(),
+  /** Source of pricing data for cost estimate */
+  priceSource: z.enum(['openrouter', 'registry', 'fallback', 'openrouter-estimate', 'unavailable']).nullable().optional(),
   /** Per-chat override for showing system events (null = use global setting) */
   showSystemEventsOverride: z.boolean().nullable().optional(),
 

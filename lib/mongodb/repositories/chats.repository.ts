@@ -313,7 +313,8 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
     chatId: string,
     promptTokens: number,
     completionTokens: number,
-    estimatedCost: number | null
+    estimatedCost: number | null,
+    priceSource?: string
   ): Promise<void> {
     try {
       logger.debug('Incrementing token aggregates for chat', {
@@ -321,6 +322,7 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         promptTokens,
         completionTokens,
         estimatedCost,
+        priceSource,
       });
 
       const collection = await (this as any).getCollection();
@@ -340,24 +342,28 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
 
       // If we have a cost to add, we need to handle the case where estimatedCostUSD might be null
       if (estimatedCost !== null && estimatedCost > 0) {
+        // Build the $set operations for pipeline update
+        const setOps: Record<string, unknown> = {
+          totalPromptTokens: { $add: ['$totalPromptTokens', promptTokens] },
+          totalCompletionTokens: { $add: ['$totalCompletionTokens', completionTokens] },
+          estimatedCostUSD: {
+            $add: [
+              { $ifNull: ['$estimatedCostUSD', 0] },
+              estimatedCost,
+            ],
+          },
+          updatedAt: now,
+        };
+
+        // Add priceSource if provided
+        if (priceSource) {
+          setOps.priceSource = priceSource;
+        }
+
         // Use aggregation pipeline update for conditional cost increment
         const result = await collection.updateOne(
           { id: chatId },
-          [
-            {
-              $set: {
-                totalPromptTokens: { $add: ['$totalPromptTokens', promptTokens] },
-                totalCompletionTokens: { $add: ['$totalCompletionTokens', completionTokens] },
-                estimatedCostUSD: {
-                  $add: [
-                    { $ifNull: ['$estimatedCostUSD', 0] },
-                    estimatedCost,
-                  ],
-                },
-                updatedAt: now,
-              },
-            },
-          ]
+          [{ $set: setOps }]
         );
 
         if (result.matchedCount === 0) {
@@ -382,6 +388,7 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         promptTokens,
         completionTokens,
         estimatedCost,
+        priceSource,
       });
     } catch (error) {
       logger.error('Error incrementing token aggregates', {

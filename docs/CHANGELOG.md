@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- feat: Use OpenRouter public API for cost estimation fallback
+  - Providers without pricing APIs (OpenAI, Google, Grok) now get cost estimates via OpenRouter
+  - OpenRouter's public models endpoint is free and requires no authentication
+  - Fuzzy model matching handles dated model versions (e.g., gpt-5-nano-2025-01-01)
+  - Warning icon with tooltip indicates when cost is an estimate from OpenRouter
+  - Added priceSource field to chat schema to track pricing data source
 - feat: Decouple web search tool from native provider web search
   - New `useNativeWebSearch` field on connection profiles controls provider integration
   - `allowWebSearch` now only controls the search_web tool (available for all providers)

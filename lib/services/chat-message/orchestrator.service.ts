@@ -604,7 +604,7 @@ async function processMessage(
         usage.completionTokens || 0,
         userId
       )
-      await trackMessageTokenUsage(chatId, connectionProfile.id, usage, costResult.cost)
+      await trackMessageTokenUsage(chatId, connectionProfile.id, usage, costResult.cost, costResult.source)
     }
 
     // Update chat timestamp
