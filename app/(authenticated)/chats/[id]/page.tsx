@@ -419,8 +419,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Update browser tab title with chat name
   useDocumentTitle(chat?.title ?? null)
 
-  // Set project link in toolbar when chat is in a project
-  const { setLeftContent } = usePageToolbar()
+  // Set project link and cost summary in toolbar
+  const { setLeftContent, setRightContent } = usePageToolbar()
   useEffect(() => {
     if (chat?.projectId && chat?.projectName) {
       setLeftContent(
@@ -440,6 +440,24 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     // Clear on unmount
     return () => setLeftContent(null)
   }, [chat?.projectId, chat?.projectName, setLeftContent])
+
+  // Set cost summary in toolbar right section
+  useEffect(() => {
+    if (chatSettings?.tokenDisplaySettings?.showChatTotals) {
+      setRightContent(
+        <ChatCostSummary
+          chatId={id}
+          show={chatSettings.tokenDisplaySettings.showChatTotals}
+          variant="compact"
+          refreshKey={messages.length}
+        />
+      )
+    } else {
+      setRightContent(null)
+    }
+    // Clear on unmount
+    return () => setRightContent(null)
+  }, [id, chatSettings?.tokenDisplaySettings?.showChatTotals, setRightContent, messages.length])
 
   const charactersMap = useMemo((): Map<string, Character> => {
     const map = new Map<string, Character>()
@@ -2019,14 +2037,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     <div className="qt-chat-layout">
       <div className="qt-chat-main">
         <div className="qt-chat-messages" ref={messagesContainerRef}>
-          {/* Chat cost summary - shown when enabled in settings */}
-          {chatSettings?.tokenDisplaySettings?.showChatTotals && (
-            <ChatCostSummary
-              chatId={id}
-              show={chatSettings.tokenDisplaySettings.showChatTotals}
-              className="mx-4 my-2"
-            />
-          )}
           <div className="qt-chat-messages-list">
             {/* Virtualized messages rendering */}
             <div

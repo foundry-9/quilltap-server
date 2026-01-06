@@ -73,8 +73,9 @@ export function PageToolbar() {
         <SearchBar />
       </div>
 
-      {/* Right section: full-width toggle */}
+      {/* Right section: page-specific content + full-width toggle */}
       <div className="qt-page-toolbar-right">
+        {pageToolbar?.rightContent}
         <NavContentWidthToggle />
       </div>
     </div>

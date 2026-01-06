@@ -9,6 +9,10 @@ export interface ChatCostSummaryProps {
   /** Whether to show the summary (from settings) */
   show?: boolean
   className?: string
+  /** Variant for different display contexts */
+  variant?: 'default' | 'compact'
+  /** Key to trigger refresh (e.g., message count) - when this changes, cost data is re-fetched */
+  refreshKey?: number | string
 }
 
 interface CostData {
@@ -27,6 +31,8 @@ export function ChatCostSummary({
   chatId,
   show = true,
   className = '',
+  variant = 'default',
+  refreshKey,
 }: ChatCostSummaryProps) {
   const [costData, setCostData] = useState<CostData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -57,13 +63,16 @@ export function ChatCostSummary({
     }
 
     fetchCostData()
-  }, [chatId, show])
+  }, [chatId, show, refreshKey])
 
   if (!show) {
     return null
   }
 
   if (loading) {
+    if (variant === 'compact') {
+      return null // Don't show loading state in header
+    }
     return (
       <div className={`text-xs text-muted-foreground animate-pulse ${className}`}>
         Loading cost data...
@@ -75,6 +84,32 @@ export function ChatCostSummary({
     return null
   }
 
+  // Compact variant for header display
+  if (variant === 'compact') {
+    return (
+      <div
+        className={`
+          flex items-center gap-2
+          text-xs text-muted-foreground
+          ${className}
+        `}
+      >
+        <span className="hidden md:inline">{formatTokenCount(costData.totalTokens)} tokens</span>
+        <span className="md:hidden">{formatTokenCount(costData.totalTokens)}</span>
+        {costData.estimatedCostUSD !== null && (
+          <>
+            <span className="text-muted-foreground/50">•</span>
+            <span>{formatCostForDisplay(costData.estimatedCostUSD)}</span>
+            {costData.priceSource === 'unavailable' && (
+              <span className="text-muted-foreground/50" title="Pricing data unavailable">*</span>
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
+
+  // Default variant
   return (
     <div
       className={`

@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- feat: Move token/cost summary from chat messages to page header
+  - Cost summary now appears in toolbar, flush right before full-width toggle
+  - Added compact variant for header display (minimal inline style)
+  - Extended PageToolbarProvider to support rightContent injection
+  - Cost summary now refreshes automatically when message count changes
 - fix: Anthropic plugin now fetches models from API instead of hardcoded list
   - Now uses /v1/models endpoint to get current available models
   - Falls back to hardcoded list if API call fails
