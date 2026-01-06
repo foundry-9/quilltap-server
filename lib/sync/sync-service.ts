@@ -257,11 +257,32 @@ async function createLocalEntity(
         // Remove _apiKeyLabel from data (it's for user reference only, not stored)
         // Set apiKeyId to null - user must configure API key locally
         const { _apiKeyLabel, ...profileData } = createData as Record<string, unknown>;
-        return repos.connections.createOrUpdate(
+
+        // Debug: Check if profile exists BEFORE createOrUpdate
+        const existingBefore = await repos.connections.findById(entityId);
+        logger.debug('CONNECTION_PROFILE sync: checking existing before createOrUpdate', {
+          context: 'sync:sync-service',
+          entityId,
+          existsLocally: !!existingBefore,
+          existingName: existingBefore?.name,
+          incomingName: (profileData as any)?.name,
+        });
+
+        const result = await repos.connections.createOrUpdate(
           entityId,
           { ...profileData, apiKeyId: null } as any,
           { createdAt: entityCreatedAt }
         );
+
+        logger.debug('CONNECTION_PROFILE sync: createOrUpdate result', {
+          context: 'sync:sync-service',
+          entityId,
+          resultId: result?.id,
+          resultName: result?.name,
+          idsMatch: entityId === result?.id,
+        });
+
+        return result;
       }
 
       case 'PERSONA':

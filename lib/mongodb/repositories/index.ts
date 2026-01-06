@@ -8,8 +8,8 @@
 
 import { logger } from '@/lib/logger';
 
-// Export base repository
-export { MongoBaseRepository } from './base.repository';
+// Export base repository and types
+export { MongoBaseRepository, type CreateOptions } from './base.repository';
 
 // Export all repository classes
 export { CharactersRepository } from './characters.repository';

@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- fix: File metadata now correctly matches S3 storage paths
+  - Critical bug: file uploads generated an ID for S3 but repository created a different ID
+  - Files were being stored in S3 under one ID but metadata saved with a different ID
+  - This caused uploaded files to appear in lists but be inaccessible (broken links)
+  - Fixed in 8 locations: project file upload, chat file upload, image generation, file write API, and backup restore
+  - User-scoped repository now passes through CreateOptions to preserve specified IDs
 - fix: GPT-5 reasoning models now work correctly for cheap LLM tasks
   - GPT-5 nano/mini use internal reasoning tokens before generating output
   - Increased max_completion_tokens from 1000 to 4096 for reasoning models

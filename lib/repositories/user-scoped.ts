@@ -24,6 +24,7 @@ import {
   MemoriesRepository,
   FilesRepository,
   ProjectsRepository,
+  type CreateOptions,
 } from '@/lib/mongodb/repositories';
 import type {
   Character,
@@ -53,7 +54,7 @@ abstract class UserScopedRepository<
   R extends {
     findById(id: string): Promise<T | null>;
     findByUserId(userId: string): Promise<T[]>;
-    create(data: any): Promise<T>;
+    create(data: any, options?: CreateOptions): Promise<T>;
     update(id: string, data: any): Promise<T | null>;
     delete(id: string): Promise<boolean>;
   }
@@ -73,8 +74,8 @@ abstract class UserScopedRepository<
     return item;
   }
 
-  async create(data: Omit<T, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<T> {
-    return this.baseRepo.create({ ...data, userId: this.userId });
+  async create(data: Omit<T, 'id' | 'createdAt' | 'updatedAt' | 'userId'>, options?: CreateOptions): Promise<T> {
+    return this.baseRepo.create({ ...data, userId: this.userId }, options);
   }
 
   async update(id: string, data: Partial<T>): Promise<T | null> {
@@ -107,7 +108,7 @@ abstract class UserScopedTaggableRepository<
     findById(id: string): Promise<T | null>;
     findByUserId(userId: string): Promise<T[]>;
     findByTag(tagId: string): Promise<T[]>;
-    create(data: any): Promise<T>;
+    create(data: any, options?: CreateOptions): Promise<T>;
     update(id: string, data: any): Promise<T | null>;
     delete(id: string): Promise<boolean>;
     addTag(id: string, tagId: string): Promise<T | null>;

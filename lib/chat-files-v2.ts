@@ -401,6 +401,7 @@ async function uploadFileToProject(
   });
 
   // Create metadata in repository
+  // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
   const fileEntry = await repos.files.create({
     userId,
     sha256,
@@ -420,7 +421,7 @@ async function uploadFileToProject(
     projectId: projectId || null,
     folderPath: '/',
     s3Key,
-  });
+  }, { id: fileId });
 
   logger.debug('Created chat file metadata in repository', { fileId: fileEntry.id, s3Key, projectId });
 

@@ -353,6 +353,7 @@ async function executeWriteFile(
   );
 
   // Create file entry
+  // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
   const fileEntry = await repos.files.create({
     userId: context.userId,
     sha256,
@@ -371,7 +372,7 @@ async function executeWriteFile(
     folderPath: targetFolderPath,
     s3Key,
     s3Bucket: undefined, // Will use default bucket
-  });
+  }, { id: fileId });
 
   logger.info('File created successfully', {
     context: 'file-management-handler',

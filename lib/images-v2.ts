@@ -172,6 +172,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   });
 
   // Create metadata in repository
+  // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
   const fileEntry = await repos.files.create({
     userId,
     sha256,
@@ -189,7 +190,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
     description: description || null,
     tags: finalTags,
     s3Key,
-  });
+  }, { id: fileId });
 
   logger.debug('Created file metadata in repository', { fileId: fileEntry.id, s3Key });
   return fileEntry;

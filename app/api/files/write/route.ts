@@ -103,6 +103,7 @@ export const POST = createAuthenticatedHandler(
       );
 
       // Create file entry
+      // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
       const fileEntry = await repos.files.create({
         userId: user.id,
         sha256,
@@ -121,7 +122,7 @@ export const POST = createAuthenticatedHandler(
         folderPath,
         s3Key,
         s3Bucket: undefined,
-      });
+      }, { id: fileId });
 
       log.info('File created successfully', {
         fileId: fileEntry.id,

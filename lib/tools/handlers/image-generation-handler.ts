@@ -103,6 +103,7 @@ async function saveGeneratedImage(
     });
 
     // Create metadata in repository
+    // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
     const fileEntry = await repos.files.create({
       userId,
       sha256,
@@ -120,7 +121,7 @@ async function saveGeneratedImage(
       description: null,
       tags: inheritedTags,
       s3Key,
-    });
+    }, { id: fileId });
 
     // Always use API route for S3-backed files
     const filepath = `/api/files/${fileEntry.id}`;

@@ -139,6 +139,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       })
 
       // Create metadata in repository with project association
+      // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
       const fileEntry = await repos.files.create({
         userId: user.id,
         sha256,
@@ -158,7 +159,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         s3Key,
         projectId,
         folderPath: folderPath || '/',
-      })
+      }, { id: fileId })
 
       logger.info('Created project file', {
         context: 'POST /api/projects/:id/files/upload',

@@ -251,12 +251,14 @@ describe('POST /api/images/generate', () => {
     expect(mockUploadS3File).toHaveBeenCalled()
 
     // Verify new Phase 4 fields are set correctly
+    // Second argument is { id: fileId } to ensure metadata ID matches S3 path
     expect(mockImagesRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'GENERATED',
         generationPrompt: 'a beautiful landscape',
         generationModel: 'dall-e-3',
-      })
+      }),
+      expect.objectContaining({ id: expect.any(String) })
     )
   })
 

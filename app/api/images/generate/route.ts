@@ -172,6 +172,7 @@ export const POST = createAuthenticatedHandler(async (request, { user, repos }) 
         })
 
         // Create database record using files repository (FileEntry format)
+        // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
         const file = await repos.files.create({
           sha256,
           userId: user.id,
@@ -186,7 +187,7 @@ export const POST = createAuthenticatedHandler(async (request, { user, repos }) 
           generationRevisedPrompt: generatedImage.revisedPrompt || null,
           tags: inheritedTags,
           s3Key,
-        })
+        }, { id: fileId })
 
         // Use API route for S3-backed files
         const filepath = `/api/files/${file.id}`
