@@ -681,6 +681,26 @@
   box-shadow: none;
 }
 
+/* Wikilinks - Blue accent matching theme */
+[data-theme="earl-grey"] .qt-wikilink {
+  color: hsl(var(--accent-secondary-100));
+  background: hsl(var(--accent-secondary-100) / 0.1);
+}
+
+[data-theme="earl-grey"] .qt-wikilink:hover {
+  background: hsl(var(--accent-secondary-100) / 0.2);
+}
+
+[data-theme="earl-grey"] .qt-wikilink-broken {
+  color: hsl(var(--text-400));
+  background: hsl(var(--bg-000));
+}
+
+/* File preview panel - Darker for contrast */
+[data-theme="earl-grey"] .qt-file-preview-panel {
+  background: hsl(var(--bg-300) / 0.5);
+}
+
 /* Section headers - Uppercase tertiary text */
 [data-theme="earl-grey"] .qt-sidebar-section-title {
   color: hsl(var(--text-400));

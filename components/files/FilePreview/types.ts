@@ -15,8 +15,8 @@ export interface FilePreviewModalProps {
   onClose: () => void
   /** Called when file is deleted */
   onDelete?: (fileId: string) => void
-  /** Called when navigating to a different file */
-  onNavigate?: (file: FileInfo) => void
+  /** Called when navigating to a different file (with optional heading anchor) */
+  onNavigate?: (file: FileInfo, heading?: string) => void
 }
 
 export interface FilePreviewRendererProps {

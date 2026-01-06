@@ -13,6 +13,7 @@ import { clientLogger } from '@/lib/client-logger'
 import FileBrowser from '@/components/files/FileBrowser'
 import FileThumbnail from '@/components/files/FileThumbnail'
 import { FilePreviewModal } from '@/components/files/FilePreview'
+import { useProjectFileUpload } from '@/components/files/useProjectFileUpload'
 import { BaseModal } from '@/components/ui/BaseModal'
 import type { ProjectFile } from '../types'
 import type { FileInfo } from '@/components/files/types'
@@ -22,6 +23,7 @@ interface FilesCardProps {
   expanded: boolean
   onToggle: () => void
   projectId?: string
+  onFilesChange?: () => void
 }
 
 function ImageIcon({ className }: { className?: string }) {
@@ -82,9 +84,25 @@ function toFileInfo(file: ProjectFile): FileInfo {
   }
 }
 
-export function FilesCard({ files, expanded, onToggle, projectId }: FilesCardProps) {
+export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange }: FilesCardProps) {
   const [showBrowser, setShowBrowser] = useState(false)
   const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null)
+
+  // Upload functionality
+  const {
+    uploading,
+    uploadProgress,
+    fileInputRef,
+    handleFileSelect,
+    triggerFileSelect,
+  } = useProjectFileUpload({
+    projectId: projectId || '',
+    folderPath: '/',
+    onSuccess: () => {
+      clientLogger.debug('FilesCard: files uploaded, refreshing list')
+      onFilesChange?.()
+    },
+  })
 
   useEffect(() => {
     clientLogger.debug('FilesCard: rendered', { fileCount: files.length, expanded })
@@ -159,12 +177,21 @@ export function FilesCard({ files, expanded, onToggle, projectId }: FilesCardPro
               </div>
             )}
 
-            {/* Browse All button */}
+            {/* Action buttons */}
             {projectId && (
-              <div className="p-2 border-t border-border">
+              <div className="p-2 border-t border-border flex gap-2">
+                <button
+                  onClick={triggerFileSelect}
+                  disabled={uploading}
+                  className="flex-1 qt-button qt-button-secondary text-sm"
+                >
+                  {uploading
+                    ? `Uploading ${uploadProgress?.current}/${uploadProgress?.total}...`
+                    : 'Upload Files'}
+                </button>
                 <button
                   onClick={() => setShowBrowser(true)}
-                  className="w-full qt-button qt-button-secondary text-sm"
+                  className="flex-1 qt-button qt-button-secondary text-sm"
                 >
                   Browse All Files
                 </button>
@@ -186,9 +213,23 @@ export function FilesCard({ files, expanded, onToggle, projectId }: FilesCardPro
             <FileBrowser
               projectId={projectId}
               title="Project Files"
+              showUpload={true}
+              onFilesChange={onFilesChange}
             />
           </div>
         </BaseModal>
+      )}
+
+      {/* Hidden file input for uploads */}
+      {projectId && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFileSelect}
+          accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
+        />
       )}
 
       {/* File Preview Modal */}

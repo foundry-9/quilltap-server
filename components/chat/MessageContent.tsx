@@ -282,7 +282,6 @@ export default function MessageContent({
     // This ensures ALL fenced code blocks get block styling, regardless of language
     pre({ children }) {
       // Extract the code element's props from children
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const codeElement = children as any
       const className = codeElement?.props?.className || ''
       const codeChildren = codeElement?.props?.children

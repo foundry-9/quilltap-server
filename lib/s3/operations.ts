@@ -31,11 +31,33 @@ function requireS3Client(): S3Client {
 }
 
 /**
+ * Sanitize metadata values for S3 headers
+ * HTTP headers can only contain ASCII characters, so we encode non-ASCII as Base64
+ * @param metadata The metadata object to sanitize
+ * @returns Sanitized metadata with non-ASCII values encoded
+ */
+function sanitizeMetadata(metadata?: Record<string, string>): Record<string, string> | undefined {
+  if (!metadata) return undefined;
+
+  const sanitized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    // Check if value contains non-ASCII characters
+    if (/[^\x00-\x7F]/.test(value)) {
+      // Encode as Base64 with a prefix so we know to decode it later
+      sanitized[key] = `base64:${Buffer.from(value, 'utf-8').toString('base64')}`;
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
+/**
  * Upload a file to S3
  * @param key The object key (path) in S3
  * @param body The file content as Buffer or Readable stream
  * @param contentType The MIME type of the file
- * @param metadata Optional metadata to attach to the object
+ * @param metadata Optional metadata to attach to the object (non-ASCII values will be Base64 encoded)
  * @throws Error if upload fails
  */
 export async function uploadFile(
@@ -46,6 +68,9 @@ export async function uploadFile(
 ): Promise<void> {
   const client = requireS3Client();
   const bucket = getS3Bucket();
+
+  // Sanitize metadata to handle Unicode characters in HTTP headers
+  const sanitizedMetadata = sanitizeMetadata(metadata);
 
   try {
     logger.debug('Uploading file to S3', {
@@ -60,7 +85,7 @@ export async function uploadFile(
       Key: key,
       Body: body,
       ContentType: contentType,
-      Metadata: metadata,
+      Metadata: sanitizedMetadata,
     });
 
     await client.send(command);

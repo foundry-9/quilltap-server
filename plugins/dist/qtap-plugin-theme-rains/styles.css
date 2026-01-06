@@ -750,6 +750,26 @@
   box-shadow: 0 0 0 2px hsl(var(--accent-secondary-000) / 0.15);
 }
 
+/* Wikilinks - Clay/orange accent matching theme */
+[data-theme="rains"] .qt-wikilink {
+  color: hsl(var(--accent-brand));
+  background: hsl(var(--accent-brand) / 0.12);
+}
+
+[data-theme="rains"] .qt-wikilink:hover {
+  background: hsl(var(--accent-brand) / 0.22);
+}
+
+[data-theme="rains"] .qt-wikilink-broken {
+  color: hsl(var(--text-400));
+  background: hsl(var(--bg-300));
+}
+
+/* File preview panel - Warm grey for consistency */
+[data-theme="rains"] .qt-file-preview-panel {
+  background: hsl(var(--bg-300) / 0.5);
+}
+
 /* ============================================================================
    SCROLLBARS
    ============================================================================ */

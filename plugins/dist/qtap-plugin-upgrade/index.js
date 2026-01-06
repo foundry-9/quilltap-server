@@ -37695,9 +37695,22 @@ function requireS3Client() {
   }
   return client;
 }
+function sanitizeMetadata(metadata) {
+  if (!metadata) return void 0;
+  const sanitized = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (/[^\x00-\x7F]/.test(value)) {
+      sanitized[key] = `base64:${Buffer.from(value, "utf-8").toString("base64")}`;
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
 async function uploadFile(key, body, contentType, metadata) {
   const client = requireS3Client();
   const bucket = getS3Bucket();
+  const sanitizedMetadata = sanitizeMetadata(metadata);
   try {
     logger.debug("Uploading file to S3", {
       key,
@@ -37710,7 +37723,7 @@ async function uploadFile(key, body, contentType, metadata) {
       Key: key,
       Body: body,
       ContentType: contentType,
-      Metadata: metadata
+      Metadata: sanitizedMetadata
     });
     await client.send(command);
     logger.info("File uploaded to S3", {

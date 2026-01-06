@@ -6,7 +6,7 @@
  * Main modal for previewing files with navigation, actions, and type-specific renderers.
  */
 
-import { useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { FilePreviewModalProps } from './types'
 import { useFilePreview } from './hooks/useFilePreview'
@@ -43,10 +43,17 @@ export default function FilePreviewModal({
     onClose,
   })
 
+  // Ref for scrolling content to top on file change
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // Track target heading for wikilink navigation
+  const [targetHeading, setTargetHeading] = useState<string | undefined>(undefined)
+
   // Navigation handlers
   const handlePrevious = useCallback(() => {
     const prevFile = goToPrevious()
     if (prevFile && onNavigate) {
+      setTargetHeading(undefined) // Clear heading for arrow navigation
       onNavigate(prevFile)
     }
   }, [goToPrevious, onNavigate])
@@ -54,9 +61,18 @@ export default function FilePreviewModal({
   const handleNext = useCallback(() => {
     const nextFile = goToNext()
     if (nextFile && onNavigate) {
+      setTargetHeading(undefined) // Clear heading for arrow navigation
       onNavigate(nextFile)
     }
   }, [goToNext, onNavigate])
+
+  // Handle navigation from wikilinks (with optional heading)
+  const handleTextNavigate = useCallback((file: typeof files[0], heading?: string) => {
+    setTargetHeading(heading)
+    if (onNavigate) {
+      onNavigate(file, heading)
+    }
+  }, [onNavigate])
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -99,6 +115,9 @@ export default function FilePreviewModal({
             content={textContent}
             isLoading={isLoadingText}
             error={textError}
+            files={files}
+            onNavigate={handleTextNavigate}
+            targetHeading={targetHeading}
           />
         )
       default:
@@ -106,10 +125,18 @@ export default function FilePreviewModal({
     }
   }
 
+  // Stop mousedown propagation to prevent parent modal's click-outside detection
+  // FilePreviewModal is rendered outside parent modals in the DOM, so clicks inside
+  // would otherwise trigger their click-outside handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+  }, [])
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
       onClick={handleBackdropClick}
+      onMouseDown={handleMouseDown}
     >
       <div
         className="qt-dialog w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden"
@@ -131,7 +158,7 @@ export default function FilePreviewModal({
         />
 
         {/* Preview content */}
-        <div className="flex-1 overflow-auto p-4 relative">{renderPreview()}</div>
+        <div ref={contentRef} className="flex-1 overflow-auto p-4 relative">{renderPreview()}</div>
 
         {/* Navigation arrows on sides (for larger screens) */}
         {files.length > 1 && (

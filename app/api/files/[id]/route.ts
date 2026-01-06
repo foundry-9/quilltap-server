@@ -13,6 +13,27 @@ import { notFound, badRequest, serverError, forbidden } from '@/lib/api/response
 import { downloadFile as downloadS3File, getPresignedUrl, deleteFile as deleteS3File } from '@/lib/s3/operations';
 
 /**
+ * Build Content-Disposition header value with proper Unicode support
+ * Uses RFC 5987 encoding for non-ASCII filenames
+ */
+function buildContentDisposition(filename: string, disposition: 'inline' | 'attachment' = 'inline'): string {
+  // Check if filename contains non-ASCII characters
+  const hasNonAscii = /[^\x00-\x7F]/.test(filename);
+
+  if (!hasNonAscii) {
+    // Simple ASCII filename
+    return `${disposition}; filename="${filename}"`;
+  }
+
+  // For non-ASCII filenames, use RFC 5987 encoding
+  // Include both filename (ASCII fallback) and filename* (UTF-8 encoded)
+  const asciiFilename = filename.replace(/[^\x00-\x7F]/g, '_');
+  const encodedFilename = encodeURIComponent(filename);
+
+  return `${disposition}; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`;
+}
+
+/**
  * GET /api/files/:id
  * Retrieve a file by its ID from S3 storage
  */
@@ -77,7 +98,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         headers: {
           'Content-Type': fileEntry.mimeType,
           'Content-Length': buffer.length.toString(),
-          'Content-Disposition': `inline; filename="${fileEntry.originalFilename}"`,
+          'Content-Disposition': buildContentDisposition(fileEntry.originalFilename, 'inline'),
           'Cache-Control': 'public, max-age=31536000, immutable',
           // Allow embedding in same-origin iframes (for file preview modal)
           'X-Frame-Options': 'SAMEORIGIN',

@@ -4,6 +4,35 @@
 
 ### 2.7-dev
 
+- feat: Add direct file upload to projects
+  - New upload button in FilesCard allows uploading files directly to a project
+  - FileBrowser now shows upload button when opened from project context
+  - Files uploaded to current folder with multi-file selection support
+  - API endpoint: POST /api/projects/:id/files/upload
+  - Duplicate detection by SHA256 hash within same project
+  - Supported types: images (JPEG, PNG, GIF, WebP) and documents (PDF, TXT, MD, CSV)
+- fix: Unicode filenames now work correctly in file uploads and downloads
+  - S3 metadata headers can only contain ASCII characters
+  - Non-ASCII filename characters are now Base64 encoded in S3 metadata
+  - File serving now uses RFC 5987 encoding for Content-Disposition header
+  - Original filenames are preserved in database and displayed correctly in UI
+- feat: Markdown files now render with formatting in file preview
+  - Files ending in .md or .markdown are rendered with ReactMarkdown
+  - Supports GitHub Flavored Markdown (tables, strikethrough, task lists, etc.)
+  - YAML frontmatter is parsed and displayed in a formatted "Document Info" section
+  - Added qt-markdown CSS class with proper typography (headings, paragraphs, lists, tables, code blocks, blockquotes)
+  - Wikilinks supported: [[File]], [[File#Header]], [[File|Text]], [[File#Header|Text]]
+  - Clicking wikilinks or relative markdown links navigates to the file in the preview modal
+  - Header links display as "File → Header" format when no custom text provided
+  - Broken links (files not found) shown with strikethrough styling
+  - Navigation to file without header scrolls to top; with header scrolls to that heading
+- refactor: File preview styling now uses qt-* theme classes
+  - Added qt-file-preview-scroll, qt-file-preview-panel, qt-file-preview-code classes
+  - Added qt-file-preview-loading, qt-file-preview-empty state classes
+  - Added qt-wikilink, qt-wikilink-broken classes for internal links
+  - Updated theme-storybook package (v1.0.5) with new classes and FilePreview story
+  - Updated Earl Grey theme (v1.2.1) with wikilink and file preview panel styling
+  - Updated Rains theme (v1.1.4) with wikilink and file preview panel styling
 - feat: Use OpenRouter public API for cost estimation fallback
   - Providers without pricing APIs (OpenAI, Google, Grok) now get cost estimates via OpenRouter
   - OpenRouter's public models endpoint is free and requires no authentication

@@ -15,6 +15,7 @@ import FileBrowserGrid from './FileBrowserGrid'
 import FileBrowserList from './FileBrowserList'
 import { FilePreviewModal } from './FilePreview'
 import { CreateFolderModal } from './FolderManagement'
+import { useProjectFileUpload } from './useProjectFileUpload'
 import { FileInfo, FolderInfo, SortState, sortFiles } from './types'
 
 // Re-export FileInfo for backwards compatibility
@@ -29,6 +30,8 @@ interface FileBrowserProps {
   onFileClick?: (file: FileInfo) => void
   /** Whether to show upload functionality */
   showUpload?: boolean
+  /** Called when files are added/removed (for parent refresh) */
+  onFilesChange?: () => void
   /** Optional class name */
   className?: string
 }
@@ -38,6 +41,7 @@ export default function FileBrowser({
   title,
   onFileClick,
   showUpload = false,
+  onFilesChange,
   className = '',
 }: Readonly<FileBrowserProps>) {
   const [files, setFiles] = useState<FileInfo[]>([])
@@ -47,6 +51,24 @@ export default function FileBrowser({
   const [sort, setSort] = useState<SortState>({ field: 'name', direction: 'asc' })
   const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null)
   const [showCreateFolder, setShowCreateFolder] = useState(false)
+
+  // Upload functionality (only enabled when showUpload=true and projectId is provided)
+  const {
+    uploading,
+    uploadProgress,
+    fileInputRef,
+    handleFileSelect,
+    triggerFileSelect,
+  } = useProjectFileUpload({
+    projectId: projectId || '',
+    folderPath: currentFolder,
+    onSuccess: () => {
+      // Refresh file list after upload
+      fetchFiles()
+      // Notify parent so it can refresh too
+      onFilesChange?.()
+    },
+  })
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -169,6 +191,17 @@ export default function FileBrowser({
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">{displayTitle}</h2>
         <div className="flex items-center gap-2">
+          {/* Upload button - only show when enabled and projectId is set */}
+          {showUpload && projectId && (
+            <button
+              onClick={triggerFileSelect}
+              disabled={uploading}
+              className="qt-button qt-button-secondary p-2"
+              title={uploading ? `Uploading ${uploadProgress?.current}/${uploadProgress?.total}...` : 'Upload Files'}
+            >
+              {uploading ? '\u23F3' : '\u{1F4E4}'}
+            </button>
+          )}
           <button
             onClick={() => setShowCreateFolder(true)}
             className="qt-button qt-button-secondary p-2"
@@ -269,13 +302,20 @@ export default function FileBrowser({
       {selectedFile && (
         <FilePreviewModal
           file={selectedFile}
-          files={filteredFiles}
+          files={files}
           onClose={() => setSelectedFile(null)}
           onDelete={(fileId) => {
             setFiles(files.filter(f => f.id !== fileId))
             setSelectedFile(null)
           }}
-          onNavigate={(file) => setSelectedFile(file)}
+          onNavigate={(file, _heading) => {
+            setSelectedFile(file)
+            // If navigating to a file in a different folder, update current folder
+            if (file.folderPath && file.folderPath !== currentFolder) {
+              setCurrentFolder(file.folderPath)
+            }
+            // Note: heading is handled internally by FilePreviewModal
+          }}
         />
       )}
 
@@ -291,6 +331,18 @@ export default function FileBrowser({
           setCurrentFolder(folderPath)
         }}
       />
+
+      {/* Hidden file input for uploads */}
+      {showUpload && projectId && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFileSelect}
+          accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
+        />
+      )}
     </div>
   )
 }

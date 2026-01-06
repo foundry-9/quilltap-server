@@ -2,6 +2,16 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.5] - 2026-01-06
+
+### Added
+- File preview component classes (`qt-file-preview-scroll`, `qt-file-preview-panel`, `qt-file-preview-code`)
+- File preview state classes (`qt-file-preview-loading`, `qt-file-preview-loading-text`, `qt-file-preview-empty`, `qt-file-preview-empty-icon`)
+- Wikilink classes (`qt-wikilink`, `qt-wikilink-broken`) for internal document links
+- CSS variables: `--qt-file-preview-max-height`, `--qt-file-preview-min-height`, `--qt-file-preview-panel-bg`
+- CSS variables: `--qt-code-bg`, `--qt-code-fg`, `--qt-code-font`
+- FilePreview story component showcasing all file preview styles
+
 ## [1.0.4] - 2026-01-01
 
 ### Added
