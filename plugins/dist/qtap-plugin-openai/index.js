@@ -7377,7 +7377,16 @@ var OpenAIProvider = class {
         requestParams.temperature = params.temperature;
       }
     } else {
-      logger.debug("Skipping sampling parameters for reasoning model", { context: "OpenAIProvider.sendMessage", model: params.model });
+      const minTokensForReasoning = 4096;
+      if ((params.maxTokens ?? 0) < minTokensForReasoning) {
+        requestParams.max_completion_tokens = minTokensForReasoning;
+        logger.debug("Increased max_completion_tokens for reasoning model", {
+          context: "OpenAIProvider.sendMessage",
+          model: params.model,
+          original: params.maxTokens,
+          adjusted: minTokensForReasoning
+        });
+      }
     }
     if (params.tools && params.tools.length > 0) {
       logger.debug("Adding tools to request", { context: "OpenAIProvider.sendMessage", toolCount: params.tools.length });
@@ -7429,7 +7438,16 @@ var OpenAIProvider = class {
         requestParams.temperature = params.temperature;
       }
     } else {
-      logger.debug("Skipping sampling parameters for reasoning model", { context: "OpenAIProvider.streamMessage", model: params.model });
+      const minTokensForReasoning = 4096;
+      if ((params.maxTokens ?? 0) < minTokensForReasoning) {
+        requestParams.max_completion_tokens = minTokensForReasoning;
+        logger.debug("Increased max_completion_tokens for reasoning model", {
+          context: "OpenAIProvider.streamMessage",
+          model: params.model,
+          original: params.maxTokens,
+          adjusted: minTokensForReasoning
+        });
+      }
     }
     if (params.tools && params.tools.length > 0) {
       logger.debug("Adding tools to stream request", { context: "OpenAIProvider.streamMessage", toolCount: params.tools.length });

@@ -40,6 +40,15 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   // Get available profiles for user-defined strategy
   const availableProfiles = await repos.connections.findByUserId(job.userId);
 
+  // Debug: log what settings we're using
+  logger.debug('[MemoryExtraction] Loaded settings', {
+    jobId: job.id,
+    userId: job.userId,
+    cheapLLMSettings: JSON.stringify(chatSettings.cheapLLMSettings),
+    availableProfileCount: availableProfiles.length,
+    availableProfileModels: availableProfiles.map(p => ({ id: p.id, model: p.modelName, provider: p.provider })),
+  });
+
   // Build the memory extraction context
   const ctx: MemoryExtractionContext = {
     characterId: payload.characterId,

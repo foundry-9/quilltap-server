@@ -4,6 +4,16 @@
 
 ### 2.7-dev
 
+- fix: GPT-5 reasoning models now work correctly for cheap LLM tasks
+  - GPT-5 nano/mini use internal reasoning tokens before generating output
+  - Increased max_completion_tokens from 1000 to 4096 for reasoning models
+  - Removed invalid `reasoning` parameter that caused 400 errors on gpt-5-nano
+  - OpenAI plugin bumped to v1.0.10
+- fix: Memory extraction prompts improved to reduce user/character confusion
+  - Strengthened prompts with explicit attribution rules and examples
+  - Changed conversation format to use clear "X says:" labels
+  - Format now shows "The user says:" and "Friday (the character) says:"
+  - Added debug logging for cheap LLM provider selection
 - feat: Add "Move File" functionality for all files
   - New MoveToProjectModal for selecting target project and folder
   - Move button appears in file list (grid and list views) and file preview modal

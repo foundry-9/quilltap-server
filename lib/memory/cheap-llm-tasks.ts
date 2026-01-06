@@ -263,73 +263,79 @@ async function executeCheapLLMTask<T>(
 /**
  * Memory extraction prompt template for user memories
  */
-const USER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about the USER (human participant) from their conversation.
-The conversation participants will be listed below - pay close attention to who is speaking.
+const USER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about the USER (the human participant) from a conversation.
 
-Analyze the conversation exchange and identify if there is something significant about the USER that should be remembered for future conversations.
+TASK: Identify if there is something significant about the USER that should be remembered.
 
-Criteria for significance:
-- Personal information about the USER (preferences, history, relationships, traits)
-- Emotional moments or important decisions involving the USER
+WHAT TO LOOK FOR (about the USER only):
+- Personal information the USER shares (preferences, history, relationships, traits)
+- Emotional moments or important decisions the USER makes
 - Facts about the USER that should persist across conversations
-- Changes in how the USER relates to or feels about a CHARACTER
 
-CRITICAL RULES:
-- ONLY extract memories about the USER based on what the USER says/does
-- Do NOT extract anything about what CHARACTERS say or do
-- Do NOT attribute a character's statements, traits, or actions to the user
-- If a CHARACTER says something about themselves, that is NOT a user memory
-- The memory must capture something we learn about the USER from this exchange
+CRITICAL ATTRIBUTION RULES - READ CAREFULLY:
+1. Each message is labeled with WHO said it (e.g., "The user says:" or "Friday says:")
+2. ONLY extract information from messages labeled as coming from the USER
+3. If a CHARACTER describes files, inventory, or information - that is the CHARACTER speaking, NOT the user
+4. The USER only reveals things about themselves through THEIR OWN words
+5. What a CHARACTER knows or describes is NOT what the USER said
 
-If significant, respond with JSON only (no markdown, no code blocks):
+EXAMPLE OF CORRECT ATTRIBUTION:
+- "The user says: I'm working on a novel about dragons" → USER fact: working on a dragon novel ✓
+- "Friday (the character) says: I see you have 39 files" → This is the CHARACTER's observation, NOT a user fact ✗
+- "The user says: That's interesting" → USER showed interest, but no significant personal fact
+
+If the USER reveals something significant about themselves, respond with JSON only:
 {
   "significant": true,
-  "content": "Full memory content describing what we learned about the user",
+  "content": "What we learned about the user FROM THEIR OWN WORDS",
   "summary": "Brief 1-sentence summary",
   "keywords": ["keyword1", "keyword2"],
   "importance": 0.0-1.0
 }
 
-If not significant, respond with JSON only:
+If nothing significant about the USER (from their own words), respond:
 { "significant": false }
 
-Do not include any text outside the JSON object.`
+JSON only - no other text.`
 
 /**
  * Memory extraction prompt template for character memories
  */
-const CHARACTER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about a specific CHARACTER from their conversation.
-The conversation participants will be listed below - pay close attention to who is speaking.
+const CHARACTER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about a specific CHARACTER from a conversation.
 
-Analyze the conversation exchange and identify if there is something significant about the specified CHARACTER that should be remembered for future conversations.
+TASK: Identify if the specified CHARACTER reveals something significant about themselves.
 
-Criteria for significance:
-- Personal information the CHARACTER shares about themselves (preferences, history, relationships, traits, background)
-- Emotional moments or important decisions the CHARACTER experiences or reveals
+WHAT TO LOOK FOR (about the CHARACTER only):
+- Personal information the CHARACTER shares (preferences, history, relationships, traits, background)
+- Emotional moments or important decisions the CHARACTER experiences
 - Facts about the CHARACTER that should persist across conversations
-- Changes in the CHARACTER's personality, relationships, or circumstances
+- How the CHARACTER behaves, speaks, or presents themselves
 
-CRITICAL RULES:
-- ONLY extract memories about the specified CHARACTER based on what THAT CHARACTER says/does
-- Do NOT extract anything about what the USER says or does
-- Do NOT attribute the user's statements, traits, or actions to the character
-- If the USER says something about themselves, that is NOT a character memory
-- In multi-character chats, only extract memories about the SPECIFIED character, not other characters
-- The memory must capture something we learn about the CHARACTER from this exchange
+CRITICAL ATTRIBUTION RULES - READ CAREFULLY:
+1. Each message is labeled with WHO said it (e.g., "The user says:" or "Friday says:")
+2. ONLY extract information from messages labeled as coming from the TARGET CHARACTER
+3. If the USER describes something - that is the USER speaking, NOT the character
+4. The CHARACTER only reveals things about themselves through THEIR OWN words and actions
+5. What the USER says or knows is NOT a character memory
 
-If significant, respond with JSON only (no markdown, no code blocks):
+EXAMPLE OF CORRECT ATTRIBUTION:
+- "Friday (the character) says: I've been keeping track of your files" → CHARACTER fact: Friday tracks files ✓
+- "The user says: You're very organized" → This is the USER's opinion, NOT a character self-revelation ✗
+- "Friday (the character) says: *adjusts glasses thoughtfully*" → CHARACTER behavior: uses glasses, thoughtful mannerisms ✓
+
+If the CHARACTER reveals something significant about themselves, respond with JSON only:
 {
   "significant": true,
-  "content": "Full memory content describing what we learned about the character",
+  "content": "What we learned about the character FROM THEIR OWN WORDS/ACTIONS",
   "summary": "Brief 1-sentence summary",
   "keywords": ["keyword1", "keyword2"],
   "importance": 0.0-1.0
 }
 
-If not significant, respond with JSON only:
+If nothing significant about the CHARACTER (from their own words/actions), respond:
 { "significant": false }
 
-Do not include any text outside the JSON object.`
+JSON only - no other text.`
 
 /**
  * Extracts a potential memory from a message exchange
@@ -352,9 +358,9 @@ export async function extractMemoryFromMessage(
   selection: CheapLLMSelection,
   userId: string
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
-  // Use actual names in conversation labels for clarity
-  const userLabel = personaName || 'USER'
-  const characterLabel = characterName
+  // Use clear "X says:" format to help the model distinguish speakers
+  const userLabel = personaName ? `${personaName} (the user)` : 'The user'
+  const characterLabel = `${characterName} (the character)`
 
   const messages: LLMMessage[] = [
     {
@@ -365,10 +371,13 @@ export async function extractMemoryFromMessage(
       role: 'user',
       content: `${context}
 
-CONVERSATION:
-${userLabel}: ${userMessage}
+CONVERSATION TRANSCRIPT:
 
-${characterLabel}: ${assistantMessage}`,
+${userLabel} says:
+"${userMessage}"
+
+${characterLabel} says:
+"${assistantMessage}"`,
     },
   ]
 
@@ -424,9 +433,9 @@ export async function extractCharacterMemoryFromMessage(
   selection: CheapLLMSelection,
   userId: string
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
-  // Use actual names in conversation labels for clarity
-  const userLabel = personaName || 'USER'
-  const characterLabel = characterName
+  // Use clear "X says:" format to help the model distinguish speakers
+  const userLabel = personaName ? `${personaName} (the user)` : 'The user'
+  const characterLabel = `${characterName} (the character)`
 
   const messages: LLMMessage[] = [
     {
@@ -437,12 +446,15 @@ export async function extractCharacterMemoryFromMessage(
       role: 'user',
       content: `${context}
 
-Extracting memories about: ${characterName}
+TARGET CHARACTER: ${characterName}
 
-CONVERSATION:
-${userLabel}: ${userMessage}
+CONVERSATION TRANSCRIPT:
 
-${characterLabel}: ${assistantMessage}`,
+${userLabel} says:
+"${userMessage}"
+
+${characterLabel} says:
+"${assistantMessage}"`,
     },
   ]
 
