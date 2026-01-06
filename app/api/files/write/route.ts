@@ -85,7 +85,13 @@ export const POST = createAuthenticatedHandler(
       const sanitizedFilename = filename.replace(/[/\\:*?"<>|]/g, '_');
 
       // Upload to S3
-      const s3Key = buildS3Key(user.id, fileId, sanitizedFilename, 'DOCUMENT');
+      const s3Key = buildS3Key({
+        userId: user.id,
+        fileId,
+        filename: sanitizedFilename,
+        projectId: targetProjectId,
+        folderPath,
+      });
 
       log.debug('Uploading file to S3', {
         fileId,

@@ -82,7 +82,13 @@ async function saveGeneratedImage(
     const fileId = crypto.randomUUID();
 
     // Upload to S3
-    const s3Key = buildS3Key(userId, fileId, originalFilename, category);
+    const s3Key = buildS3Key({
+      userId,
+      fileId,
+      filename: originalFilename,
+      projectId: null,
+      folderPath: '/',
+    });
     await uploadS3File(s3Key, buffer, mimeType, {
       userId,
       fileId,

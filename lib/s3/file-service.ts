@@ -11,6 +11,7 @@ import {
   uploadFile,
   downloadFile,
   deleteFile,
+  copyObject,
   fileExists,
   getPresignedUrl,
   getPresignedUploadUrl,
@@ -18,7 +19,7 @@ import {
   getFileMetadata,
   listFiles,
 } from './operations';
-import { buildS3Key } from './client';
+import { buildS3Key, type BuildS3KeyParams } from './client';
 
 /**
  * File metadata for upload operations
@@ -33,6 +34,10 @@ export interface FileUploadMetadata {
   size?: number;
   sha256?: string;
   mimeType?: string;
+  /** Project ID for project files, null/undefined for general files */
+  projectId?: string | null;
+  /** Folder path within the project (e.g., "/" or "/documents/") */
+  folderPath?: string;
 }
 
 /**
@@ -66,6 +71,8 @@ class S3FileService {
    * @param category The file category
    * @param content The file content as Buffer or Readable
    * @param contentType The MIME type of the file
+   * @param projectId Optional project ID (null/undefined for general files)
+   * @param folderPath Optional folder path within the project
    * @returns Promise that resolves when upload is complete
    * @throws Error if upload fails
    */
@@ -75,16 +82,20 @@ class S3FileService {
     filename: string,
     category: string,
     content: Buffer | Readable,
-    contentType: string
+    contentType: string,
+    projectId?: string | null,
+    folderPath?: string
   ): Promise<void> {
 
-    const s3Key = buildS3Key(userId, fileId, filename, category);
+    const s3Key = buildS3Key({ userId, fileId, filename, projectId, folderPath });
 
     this.moduleLogger.debug('Uploading user file to S3', {
       userId,
       fileId,
       filename,
       category,
+      projectId: projectId || 'none',
+      folderPath: folderPath || '/',
       s3Key,
       contentType,
     });
@@ -102,12 +113,13 @@ class S3FileService {
         fileId,
         filename,
         category,
+        projectId: projectId || 'none',
         s3Key,
       });
     } catch (error) {
       this.moduleLogger.error(
         'Failed to upload user file',
-        { userId, fileId, filename, category, s3Key },
+        { userId, fileId, filename, category, projectId: projectId || 'none', s3Key },
         error as Error
       );
       throw error;
@@ -121,12 +133,13 @@ class S3FileService {
    * @throws Error if upload fails
    */
   async uploadWithMetadata(metadata: FileUploadMetadata): Promise<void> {
-    const s3Key = buildS3Key(
-      metadata.userId,
-      metadata.fileId,
-      metadata.filename,
-      metadata.category
-    );
+    const s3Key = buildS3Key({
+      userId: metadata.userId,
+      fileId: metadata.fileId,
+      filename: metadata.filename,
+      projectId: metadata.projectId,
+      folderPath: metadata.folderPath,
+    });
 
     this.moduleLogger.debug('Uploading file with metadata', {
       userId: metadata.userId,
@@ -189,7 +202,9 @@ class S3FileService {
    * @param userId The user ID
    * @param fileId The file ID
    * @param filename The filename
-   * @param category The file category
+   * @param category The file category (kept for backward compatibility)
+   * @param projectId Optional project ID (null/undefined for general files)
+   * @param folderPath Optional folder path within the project
    * @returns Promise resolving to file content as Buffer
    * @throws Error if file not found or download fails
    */
@@ -197,15 +212,19 @@ class S3FileService {
     userId: string,
     fileId: string,
     filename: string,
-    category: string
+    category: string,
+    projectId?: string | null,
+    folderPath?: string
   ): Promise<Buffer> {
-    const s3Key = buildS3Key(userId, fileId, filename, category);
+    const s3Key = buildS3Key({ userId, fileId, filename, projectId, folderPath });
 
     this.moduleLogger.debug('Downloading user file from S3', {
       userId,
       fileId,
       filename,
       category,
+      projectId: projectId || 'none',
+      folderPath: folderPath || '/',
       s3Key,
     });
 
@@ -225,7 +244,7 @@ class S3FileService {
     } catch (error) {
       this.moduleLogger.error(
         'Failed to download user file',
-        { userId, fileId, filename, category, s3Key },
+        { userId, fileId, filename, category, projectId: projectId || 'none', s3Key },
         error as Error
       );
       throw error;
@@ -278,7 +297,9 @@ class S3FileService {
    * @param userId The user ID
    * @param fileId The file ID
    * @param filename The filename
-   * @param category The file category
+   * @param category The file category (kept for backward compatibility)
+   * @param projectId Optional project ID (null/undefined for general files)
+   * @param folderPath Optional folder path within the project
    * @returns Promise that resolves when deletion is complete
    * @throws Error if deletion fails
    */
@@ -286,15 +307,19 @@ class S3FileService {
     userId: string,
     fileId: string,
     filename: string,
-    category: string
+    category: string,
+    projectId?: string | null,
+    folderPath?: string
   ): Promise<void> {
-    const s3Key = buildS3Key(userId, fileId, filename, category);
+    const s3Key = buildS3Key({ userId, fileId, filename, projectId, folderPath });
 
     this.moduleLogger.debug('Deleting user file from S3', {
       userId,
       fileId,
       filename,
       category,
+      projectId: projectId || 'none',
+      folderPath: folderPath || '/',
       s3Key,
     });
 
@@ -306,12 +331,13 @@ class S3FileService {
         fileId,
         filename,
         category,
+        projectId: projectId || 'none',
         s3Key,
       });
     } catch (error) {
       this.moduleLogger.error(
         'Failed to delete user file',
-        { userId, fileId, filename, category, s3Key },
+        { userId, fileId, filename, category, projectId: projectId || 'none', s3Key },
         error as Error
       );
       throw error;
@@ -445,26 +471,19 @@ class S3FileService {
   /**
    * Generate an S3 key using key components
    * Exposes the key generation utility from the client module
-   * @param userId The user ID
-   * @param fileId The file ID
-   * @param filename The filename
-   * @param category The file category
+   * @param params The parameters for building the S3 key
    * @returns The generated S3 key
    */
-  generateS3Key(
-    userId: string,
-    fileId: string,
-    filename: string,
-    category: string
-  ): string {
+  generateS3Key(params: BuildS3KeyParams): string {
     this.moduleLogger.debug('Generating S3 key', {
-      userId,
-      fileId,
-      filename,
-      category,
+      userId: params.userId,
+      fileId: params.fileId,
+      filename: params.filename,
+      projectId: params.projectId || 'none',
+      folderPath: params.folderPath || '/',
     });
 
-    const key = buildS3Key(userId, fileId, filename, category);
+    const key = buildS3Key(params);
 
     this.moduleLogger.debug('S3 key generated', { key });
 
@@ -476,9 +495,11 @@ class S3FileService {
    * @param userId The user ID
    * @param fileId The file ID
    * @param filename The filename
-   * @param category The file category
+   * @param category The file category (kept for backward compatibility)
    * @param contentType The MIME type
    * @param expiresIn The URL expiration time in seconds (default: 3600)
+   * @param projectId Optional project ID (null/undefined for general files)
+   * @param folderPath Optional folder path within the project
    * @returns Promise resolving to the presigned upload URL
    * @throws Error if URL generation fails
    */
@@ -488,15 +509,19 @@ class S3FileService {
     filename: string,
     category: string,
     contentType: string,
-    expiresIn: number = 3600
+    expiresIn: number = 3600,
+    projectId?: string | null,
+    folderPath?: string
   ): Promise<string> {
-    const s3Key = buildS3Key(userId, fileId, filename, category);
+    const s3Key = buildS3Key({ userId, fileId, filename, projectId, folderPath });
 
     this.moduleLogger.debug('Generating presigned upload URL', {
       userId,
       fileId,
       filename,
       category,
+      projectId: projectId || 'none',
+      folderPath: folderPath || '/',
       s3Key,
       contentType,
       expiresIn,
@@ -516,7 +541,37 @@ class S3FileService {
     } catch (error) {
       this.moduleLogger.error(
         'Failed to generate presigned upload URL',
-        { userId, fileId, filename, category, contentType, expiresIn },
+        { userId, fileId, filename, category, projectId: projectId || 'none', contentType, expiresIn },
+        error as Error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Move a file from one S3 key to another (copy + delete)
+   * @param sourceKey The source S3 key
+   * @param destinationKey The destination S3 key
+   * @returns Promise that resolves when move is complete
+   * @throws Error if move fails
+   */
+  async moveFile(sourceKey: string, destinationKey: string): Promise<void> {
+    this.moduleLogger.debug('Moving file in S3', { sourceKey, destinationKey });
+
+    try {
+      // Copy to new location
+      await copyObject(sourceKey, destinationKey);
+
+      this.moduleLogger.debug('File copied to new location', { sourceKey, destinationKey });
+
+      // Delete from old location
+      await deleteFile(sourceKey);
+
+      this.moduleLogger.info('File moved successfully', { sourceKey, destinationKey });
+    } catch (error) {
+      this.moduleLogger.error(
+        'Failed to move file',
+        { sourceKey, destinationKey },
         error as Error
       );
       throw error;

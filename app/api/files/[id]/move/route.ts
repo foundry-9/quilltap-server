@@ -1,8 +1,8 @@
 /**
  * File Move/Rename API Route
  *
- * PATCH /api/files/:id/move - Move file to new folder and/or rename
- * Body: { folderPath?: string, filename?: string }
+ * PATCH /api/files/:id/move - Move file to new folder, project, and/or rename
+ * Body: { folderPath?: string, filename?: string, projectId?: string | null }
  */
 
 import { NextResponse } from 'next/server';
@@ -10,10 +10,14 @@ import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, forbidden } from '@/lib/api/responses';
 import { validateFolderPath, normalizeFolderPath } from '@/lib/files/folder-utils';
+import { buildS3Key } from '@/lib/s3/client';
+import { s3FileService } from '@/lib/s3/file-service';
 
 interface MoveRequest {
   folderPath?: string;
   filename?: string;
+  /** Project ID to move the file to, or null to move to general files */
+  projectId?: string | null;
 }
 
 /**
@@ -65,11 +69,11 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
     try {
       // Parse request body
       const body: MoveRequest = await request.json();
-      const { folderPath, filename } = body;
+      const { folderPath, filename, projectId } = body;
 
       // Require at least one field to change
-      if (folderPath === undefined && filename === undefined) {
-        return badRequest('At least one of folderPath or filename must be provided');
+      if (folderPath === undefined && filename === undefined && projectId === undefined) {
+        return badRequest('At least one of folderPath, filename, or projectId must be provided');
       }
 
       logger.debug('Move/rename file request', {
@@ -77,6 +81,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         fileId,
         folderPath,
         filename,
+        projectId,
         userId: user.id,
       });
 
@@ -99,7 +104,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       // Prepare update object
-      const updates: Record<string, string> = {};
+      const updates: Record<string, string | null> = {};
 
       // Validate and normalize folder path if provided
       if (folderPath !== undefined) {
@@ -119,10 +124,17 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         updates.originalFilename = filenameValidation.sanitized!;
       }
 
+      // Handle projectId change (can be a string ID or null for general files)
+      if (projectId !== undefined) {
+        updates.projectId = projectId;
+      }
+
       // Check if anything actually changed
-      const noChange =
-        (updates.folderPath === undefined || updates.folderPath === fileEntry.folderPath) &&
-        (updates.originalFilename === undefined || updates.originalFilename === fileEntry.originalFilename);
+      const folderChanged = updates.folderPath !== undefined && updates.folderPath !== fileEntry.folderPath;
+      const filenameChanged = updates.originalFilename !== undefined && updates.originalFilename !== fileEntry.originalFilename;
+      const projectChanged = updates.projectId !== undefined && updates.projectId !== fileEntry.projectId;
+
+      const noChange = !folderChanged && !filenameChanged && !projectChanged;
 
       if (noChange) {
         logger.debug('No changes to apply', { context, fileId });
@@ -137,11 +149,15 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         context,
         fileId,
         updates,
+        folderChanged,
+        filenameChanged,
+        projectChanged,
         originalFolderPath: fileEntry.folderPath,
         originalFilename: fileEntry.originalFilename,
+        originalProjectId: fileEntry.projectId,
       });
 
-      // Update the file
+      // Update the file metadata first
       const updatedFile = await repos.files.update(fileId, updates);
 
       if (!updatedFile) {
@@ -149,16 +165,69 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         return serverError('Failed to update file');
       }
 
+      // If folder or project changed, move the S3 object
+      const oldS3Key = fileEntry.s3Key;
+      if (oldS3Key && (folderChanged || projectChanged)) {
+        const newS3Key = buildS3Key({
+          userId: user.id,
+          fileId,
+          filename: updatedFile.originalFilename,
+          projectId: updatedFile.projectId ?? null,
+          folderPath: updatedFile.folderPath ?? '/',
+        });
+
+        if (newS3Key !== oldS3Key) {
+          logger.debug('Moving S3 object', {
+            context,
+            fileId,
+            oldS3Key,
+            newS3Key,
+          });
+
+          try {
+            await s3FileService.moveFile(oldS3Key, newS3Key);
+
+            // Update the s3Key in the database
+            await repos.files.update(fileId, { s3Key: newS3Key });
+
+            logger.info('S3 object moved successfully', {
+              context,
+              fileId,
+              oldS3Key,
+              newS3Key,
+            });
+          } catch (s3Error) {
+            // Log the error but don't fail the request - metadata is already updated
+            logger.error(
+              'Failed to move S3 object, metadata updated but S3 key unchanged',
+              { context, fileId, oldS3Key, newS3Key },
+              s3Error instanceof Error ? s3Error : undefined
+            );
+            // Revert the metadata update to keep consistency
+            await repos.files.update(fileId, {
+              folderPath: fileEntry.folderPath,
+              projectId: fileEntry.projectId,
+            });
+            return serverError('Failed to move file in storage');
+          }
+        }
+      }
+
+      // Re-fetch to get the updated s3Key
+      const finalFile = await repos.files.findById(fileId);
+
       logger.info('File moved/renamed successfully', {
         context,
         fileId,
-        newFolderPath: updatedFile.folderPath,
-        newFilename: updatedFile.originalFilename,
+        newFolderPath: finalFile?.folderPath,
+        newFilename: finalFile?.originalFilename,
+        newProjectId: finalFile?.projectId,
+        newS3Key: finalFile?.s3Key,
       });
 
       return NextResponse.json({
         success: true,
-        file: updatedFile,
+        file: finalFile || updatedFile,
       });
     } catch (error) {
       logger.error('Error moving/renaming file', { context, fileId }, error instanceof Error ? error : undefined);

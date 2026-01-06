@@ -247,8 +247,13 @@ jest.mock('@/lib/s3/operations', () => ({
 jest.mock('@/lib/s3/client', () => ({
   getS3Client: jest.fn().mockReturnValue({}),
   getS3Bucket: jest.fn().mockReturnValue('mock-bucket'),
-  buildS3Key: jest.fn().mockImplementation((userId: string, fileId: string, filename: string, category: string) => {
-    return `users/${userId}/${category.toLowerCase()}s/${fileId}/${filename}`
+  buildS3Key: jest.fn().mockImplementation((params: { userId: string; fileId: string; filename: string; projectId?: string | null; folderPath?: string }) => {
+    const { userId, fileId, filename, projectId, folderPath } = params;
+    if (projectId) {
+      const normalizedFolder = folderPath && folderPath !== '/' ? folderPath.replace(/^\//, '') : '';
+      return `users/${userId}/${projectId}/${normalizedFolder}${fileId}_${filename}`;
+    }
+    return `users/${userId}/_general/${fileId}_${filename}`;
   }),
 }))
 

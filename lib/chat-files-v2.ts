@@ -381,7 +381,13 @@ async function uploadFileToProject(
   const fileId = crypto.randomUUID();
 
   // Upload to S3
-  const s3Key = buildS3Key(userId, fileId, filename, category);
+  const s3Key = buildS3Key({
+    userId,
+    fileId,
+    filename,
+    projectId: projectId || null,
+    folderPath: '/',
+  });
   await uploadS3File(s3Key, buffer, mimeType, {
     userId,
     fileId,

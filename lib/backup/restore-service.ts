@@ -808,7 +808,13 @@ export async function restore(
         // Create file metadata
         // IMPORTANT: Pass the file.id to ensure metadata matches S3 storage path
         const { id: backupId, userId, createdAt, updatedAt, s3Key, s3Bucket, ...fileData } = file;
-        const newS3Key = s3FileService.generateS3Key(targetUserId, file.id, file.originalFilename, file.category);
+        const newS3Key = s3FileService.generateS3Key({
+          userId: targetUserId,
+          fileId: file.id,
+          filename: file.originalFilename,
+          projectId: file.projectId || null,
+          folderPath: file.folderPath || '/',
+        });
         const createdFile = await repos.files.create({ ...fileData, s3Key: newS3Key }, { id: file.id });
         fileIdMap.set(backupId, createdFile.id);
         filesRestored++;

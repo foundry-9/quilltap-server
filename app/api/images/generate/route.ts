@@ -151,7 +151,13 @@ export const POST = createAuthenticatedHandler(async (request, { user, repos }) 
         const linkedTo = tags?.map(t => t.tagId) || []
 
         // Upload to S3
-        const s3Key = buildS3Key(user.id, fileId, filename, category)
+        const s3Key = buildS3Key({
+          userId: user.id,
+          fileId,
+          filename,
+          projectId: null,
+          folderPath: '/',
+        })
         await uploadS3File(s3Key, imageBuffer, generatedImage.mimeType, {
           userId: user.id,
           fileId,

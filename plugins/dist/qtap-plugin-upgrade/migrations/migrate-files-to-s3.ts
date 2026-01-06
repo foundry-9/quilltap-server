@@ -200,12 +200,13 @@ export const migrateFilesToS3Migration: Migration = {
           }
 
           // Build S3 key
-          const s3Key = buildS3Key(
-            entry.userId,
-            entry.id,
-            entry.originalFilename,
-            entry.category.toLowerCase()
-          );
+          const s3Key = buildS3Key({
+            userId: entry.userId,
+            fileId: entry.id,
+            filename: entry.originalFilename,
+            projectId: entry.projectId,
+            folderPath: entry.folderPath,
+          });
 
           // Upload to S3
           try {

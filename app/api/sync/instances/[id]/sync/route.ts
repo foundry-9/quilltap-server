@@ -311,12 +311,13 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
                 );
 
                 // Update file entry with S3 key
-                const s3Key = s3FileService.generateS3Key(
-                  localFile.userId,
-                  localFile.id,
-                  localFile.originalFilename,
-                  localFile.category
-                );
+                const s3Key = s3FileService.generateS3Key({
+                  userId: localFile.userId,
+                  fileId: localFile.id,
+                  filename: localFile.originalFilename,
+                  projectId: localFile.projectId || null,
+                  folderPath: localFile.folderPath || '/',
+                });
                 await repos.files.update(localFile.id, { s3Key });
 
                 filesFetched++;

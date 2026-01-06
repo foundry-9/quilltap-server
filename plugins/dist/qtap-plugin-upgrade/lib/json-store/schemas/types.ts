@@ -555,6 +555,10 @@ export const FileEntrySchema = z.object({
   // Tags
   tags: z.array(UUIDSchema).default([]),
 
+  // Project and folder organization
+  projectId: UUIDSchema.nullable().optional(),  // Project ID if file is project-scoped
+  folderPath: z.string().default('/'),          // Folder path within project or general files
+
   // S3 storage reference (Phase 3: MongoDB + S3 migration)
   s3Key: z.string().nullable().optional(),    // Full S3 object key
   s3Bucket: z.string().nullable().optional(), // S3 bucket name

@@ -888,7 +888,12 @@ export async function generateAndSaveReport(userId: string): Promise<{
     'text/markdown'
   );
 
-  const s3Key = s3FileService.generateS3Key(userId, reportId, filename, 'REPORT');
+  const s3Key = s3FileService.generateS3Key({
+    userId,
+    fileId: reportId,
+    filename,
+    projectId: null,
+  });
 
   moduleLogger.info('Capabilities report saved', {
     reportId,

@@ -257,35 +257,76 @@ export function getS3Bucket(): string {
 }
 
 /**
+ * Parameters for building an S3 key
+ */
+export interface BuildS3KeyParams {
+  /** The user ID (usually a UUID) */
+  userId: string;
+  /** The file ID (usually a UUID) */
+  fileId: string;
+  /** The original filename (will be sanitized) */
+  filename: string;
+  /** The project ID, or null/undefined for general files */
+  projectId?: string | null;
+  /** The folder path within the project (e.g., "/" or "/documents/") */
+  folderPath?: string;
+}
+
+/**
+ * Normalize a folder path for use in S3 keys
+ * Converts internal folder format ("/documents/") to S3 path segment ("documents/")
+ *
+ * @param folderPath - The folder path to normalize (e.g., "/", "/documents/", "/docs/reports/")
+ * @returns Normalized path for S3 (e.g., "", "documents/", "docs/reports/")
+ */
+function normalizeS3FolderPath(folderPath: string | undefined): string {
+  if (!folderPath || folderPath === '/') {
+    return '';
+  }
+  // Remove leading slash, keep trailing slash
+  // "/documents/" -> "documents/"
+  // "/docs/reports/" -> "docs/reports/"
+  return folderPath.replace(/^\//, '');
+}
+
+/**
  * Build a properly formatted S3 key path for storing files
- * Respects S3_PATH_PREFIX if set, sanitizes the filename, and organizes by user/category
+ * Respects S3_PATH_PREFIX if set, sanitizes the filename, and organizes by user/project/folder
  *
- * Format: `{prefix}users/{userId}/{category}/{fileId}_{safeFilename}`
- * Example: `uploads/users/user123/documents/file456_my-document.pdf`
+ * Format for project files: `{prefix}users/{userId}/{projectId}/{folderPath}{fileId}_{safeFilename}`
+ * Example: `uploads/users/user123/proj456/documents/file789_my-document.pdf`
  *
- * @param userId - The user ID (usually a UUID)
- * @param fileId - The file ID (usually a UUID)
- * @param filename - The original filename (will be sanitized)
- * @param category - The category/folder (e.g., 'documents', 'images', 'uploads')
+ * Format for general files: `{prefix}users/{userId}/_general/{fileId}_{safeFilename}`
+ * Example: `uploads/users/user123/_general/file789_my-image.png`
+ *
+ * @param params - The parameters for building the S3 key
  * @returns The formatted S3 key path
  */
-export function buildS3Key(
-  userId: string,
-  fileId: string,
-  filename: string,
-  category: string
-): string {
+export function buildS3Key(params: BuildS3KeyParams): string {
   const moduleLogger = logger.child({ module: 's3:client' });
+
+  const { userId, fileId, filename, projectId, folderPath } = params;
 
   const config = validateS3Config();
   const prefix = config.pathPrefix || '';
   const safeFilename = sanitizeFilename(filename);
-  const key = `${prefix}users/${userId}/${category}/${fileId}_${safeFilename}`;
+  const normalizedFolder = normalizeS3FolderPath(folderPath);
+
+  let key: string;
+  if (projectId) {
+    // Project file: users/{userId}/{projectId}/{folderPath}{fileId}_{filename}
+    key = `${prefix}users/${userId}/${projectId}/${normalizedFolder}${fileId}_${safeFilename}`;
+  } else {
+    // General file: users/{userId}/_general/{fileId}_{filename}
+    key = `${prefix}users/${userId}/_general/${fileId}_${safeFilename}`;
+  }
 
   moduleLogger.debug('Built S3 key', {
     userId,
     fileId,
-    category,
+    projectId: projectId || 'none',
+    folderPath: folderPath || '/',
+    normalizedFolder: normalizedFolder || 'root',
     prefix: prefix || 'none',
     originalFilename: filename,
     safeFilename,

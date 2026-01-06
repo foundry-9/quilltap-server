@@ -342,7 +342,13 @@ async function executeWriteFile(
   const fileId = repos.files['generateId'](); // Access protected method
 
   // Upload to S3
-  const s3Key = buildS3Key(context.userId, fileId, filename, 'DOCUMENT');
+  const s3Key = buildS3Key({
+    userId: context.userId,
+    fileId,
+    filename,
+    projectId: context.projectId,
+    folderPath: targetFolderPath,
+  });
   await s3FileService.uploadUserFile(
     context.userId,
     fileId,

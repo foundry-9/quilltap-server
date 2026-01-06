@@ -33762,6 +33762,11 @@ var FileEntrySchema = import_zod4.z.object({
   // AI description or user-provided description
   // Tags
   tags: import_zod4.z.array(UUIDSchema).default([]),
+  // Project and folder organization
+  projectId: UUIDSchema.nullable().optional(),
+  // Project ID if file is project-scoped
+  folderPath: import_zod4.z.string().default("/"),
+  // Folder path within project or general files
   // S3 storage reference (Phase 3: MongoDB + S3 migration)
   s3Key: import_zod4.z.string().nullable().optional(),
   // Full S3 object key
@@ -37666,16 +37671,31 @@ function getS3Bucket() {
   moduleLogger.debug("Retrieved S3 bucket name", { bucket: config.bucket });
   return config.bucket;
 }
-function buildS3Key(userId, fileId, filename, category) {
+function normalizeS3FolderPath(folderPath) {
+  if (!folderPath || folderPath === "/") {
+    return "";
+  }
+  return folderPath.replace(/^\//, "");
+}
+function buildS3Key(params) {
   const moduleLogger = logger.child({ module: "s3:client" });
+  const { userId, fileId, filename, projectId, folderPath } = params;
   const config = validateS3Config();
   const prefix = config.pathPrefix || "";
   const safeFilename = sanitizeFilename(filename);
-  const key = `${prefix}users/${userId}/${category}/${fileId}_${safeFilename}`;
+  const normalizedFolder = normalizeS3FolderPath(folderPath);
+  let key;
+  if (projectId) {
+    key = `${prefix}users/${userId}/${projectId}/${normalizedFolder}${fileId}_${safeFilename}`;
+  } else {
+    key = `${prefix}users/${userId}/_general/${fileId}_${safeFilename}`;
+  }
   moduleLogger.debug("Built S3 key", {
     userId,
     fileId,
-    category,
+    projectId: projectId || "none",
+    folderPath: folderPath || "/",
+    normalizedFolder: normalizedFolder || "root",
     prefix: prefix || "none",
     originalFilename: filename,
     safeFilename,
@@ -37735,6 +37755,73 @@ async function uploadFile(key, body, contentType, metadata) {
     logger.error(
       "Failed to upload file to S3",
       { key, contentType, bucket },
+      error
+    );
+    throw error;
+  }
+}
+async function deleteFile2(key) {
+  const client = requireS3Client();
+  const bucket = getS3Bucket();
+  try {
+    logger.debug("Deleting file from S3", { key, bucket });
+    const command = new import_client_s33.DeleteObjectCommand({
+      Bucket: bucket,
+      Key: key
+    });
+    await client.send(command);
+    logger.info("File deleted from S3", { key, bucket });
+  } catch (error) {
+    logger.error(
+      "Failed to delete file from S3",
+      { key, bucket },
+      error
+    );
+    throw error;
+  }
+}
+async function copyObject(sourceKey, destinationKey) {
+  const client = requireS3Client();
+  const bucket = getS3Bucket();
+  try {
+    logger.debug("Copying file in S3", { sourceKey, destinationKey, bucket });
+    const command = new import_client_s33.CopyObjectCommand({
+      Bucket: bucket,
+      CopySource: `${bucket}/${sourceKey}`,
+      Key: destinationKey
+    });
+    await client.send(command);
+    logger.info("File copied in S3", { sourceKey, destinationKey, bucket });
+  } catch (error) {
+    logger.error(
+      "Failed to copy file in S3",
+      { sourceKey, destinationKey, bucket },
+      error
+    );
+    throw error;
+  }
+}
+async function fileExists(key) {
+  const client = requireS3Client();
+  const bucket = getS3Bucket();
+  try {
+    logger.debug("Checking if file exists in S3", { key, bucket });
+    const command = new import_client_s33.HeadObjectCommand({
+      Bucket: bucket,
+      Key: key
+    });
+    await client.send(command);
+    logger.debug("File exists in S3", { key, bucket });
+    return true;
+  } catch (error) {
+    const err = error;
+    if (err.name === "NoSuchKey" || err.$metadata?.httpStatusCode === 404) {
+      logger.debug("File does not exist in S3", { key, bucket });
+      return false;
+    }
+    logger.error(
+      "Failed to check file existence in S3",
+      { key, bucket },
       error
     );
     throw error;
@@ -37863,12 +37950,13 @@ var migrateFilesToS3Migration = {
             }
             continue;
           }
-          const s3Key = buildS3Key(
-            entry.userId,
-            entry.id,
-            entry.originalFilename,
-            entry.category.toLowerCase()
-          );
+          const s3Key = buildS3Key({
+            userId: entry.userId,
+            fileId: entry.id,
+            filename: entry.originalFilename,
+            projectId: entry.projectId,
+            folderPath: entry.folderPath
+          });
           try {
             await uploadFile(s3Key, fileBuffer, entry.mimeType);
             console.log("[migration.migrate-files-to-s3] Uploaded file to S3", {
@@ -39890,6 +39978,196 @@ var addUseNativeWebSearchFieldMigration = {
   }
 };
 
+// migrations/restructure-s3-keys.ts
+var OLD_CATEGORIES = ["IMAGE", "DOCUMENT", "AVATAR", "ATTACHMENT", "EXPORT"];
+function isOldFormatKey(s3Key) {
+  const usersMatch = s3Key.match(/users\/[^/]+\/([^/]+)\//);
+  if (!usersMatch) {
+    return true;
+  }
+  const thirdSegment = usersMatch[1];
+  if (thirdSegment === "_general") {
+    return false;
+  }
+  if (OLD_CATEGORIES.includes(thirdSegment)) {
+    return true;
+  }
+  return false;
+}
+async function countFilesToMigrate2() {
+  try {
+    const files = await getAllFiles();
+    return files.filter((entry) => entry.s3Key && isOldFormatKey(entry.s3Key)).length;
+  } catch {
+    return 0;
+  }
+}
+var restructureS3KeysMigration = {
+  id: "restructure-s3-keys-v1",
+  description: "Restructure S3 keys to use project/folder-based paths",
+  introducedInVersion: "2.6.0",
+  dependsOn: ["migrate-files-to-s3-v1"],
+  async shouldRun() {
+    const s3Config = validateS3Config();
+    if (!s3Config.isConfigured) {
+      console.log("[migration.restructure-s3-keys] S3 is not properly configured, skipping");
+      return false;
+    }
+    const filesToMigrate = await countFilesToMigrate2();
+    if (filesToMigrate === 0) {
+      console.log("[migration.restructure-s3-keys] No files need S3 key restructuring");
+      return false;
+    }
+    console.log("[migration.restructure-s3-keys] Files need S3 key restructuring", {
+      count: filesToMigrate
+    });
+    return true;
+  },
+  async run() {
+    const startTime = Date.now();
+    const BATCH_SIZE = 50;
+    let migrated = 0;
+    let skipped = 0;
+    const errors = [];
+    try {
+      console.log("[migration.restructure-s3-keys] Starting S3 key restructuring");
+      const allFiles = await getAllFiles();
+      const filesToMigrate = allFiles.filter((entry) => entry.s3Key && isOldFormatKey(entry.s3Key));
+      console.log("[migration.restructure-s3-keys] Found files to migrate", {
+        total: allFiles.length,
+        toMigrate: filesToMigrate.length
+      });
+      for (let i = 0; i < filesToMigrate.length; i += BATCH_SIZE) {
+        const batch = filesToMigrate.slice(i, i + BATCH_SIZE);
+        console.log("[migration.restructure-s3-keys] Processing batch", {
+          batchStart: i,
+          batchSize: batch.length,
+          progress: `${i}/${filesToMigrate.length}`
+        });
+        for (const entry of batch) {
+          const oldS3Key = entry.s3Key;
+          try {
+            const newS3Key = buildS3Key({
+              userId: entry.userId,
+              fileId: entry.id,
+              filename: entry.originalFilename,
+              projectId: entry.projectId ?? null,
+              folderPath: entry.folderPath ?? "/"
+            });
+            if (newS3Key === oldS3Key) {
+              skipped++;
+              console.log("[migration.restructure-s3-keys] Key unchanged, skipping", {
+                fileId: entry.id,
+                key: oldS3Key
+              });
+              continue;
+            }
+            const sourceExists = await fileExists(oldS3Key);
+            if (!sourceExists) {
+              errors.push({
+                fileId: entry.id,
+                filename: entry.originalFilename,
+                error: "Source file not found in S3",
+                oldKey: oldS3Key
+              });
+              console.warn("[migration.restructure-s3-keys] Source file not found", {
+                fileId: entry.id,
+                oldS3Key
+              });
+              continue;
+            }
+            console.log("[migration.restructure-s3-keys] Copying file", {
+              fileId: entry.id,
+              from: oldS3Key,
+              to: newS3Key
+            });
+            await copyObject(oldS3Key, newS3Key);
+            await updateFile(entry.id, {
+              s3Key: newS3Key,
+              updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+            });
+            try {
+              await deleteFile2(oldS3Key);
+              console.log("[migration.restructure-s3-keys] Deleted old S3 object", {
+                fileId: entry.id,
+                oldS3Key
+              });
+            } catch (deleteError) {
+              console.warn("[migration.restructure-s3-keys] Failed to delete old S3 object", {
+                fileId: entry.id,
+                oldS3Key,
+                error: deleteError instanceof Error ? deleteError.message : "Unknown error"
+              });
+            }
+            migrated++;
+            console.log("[migration.restructure-s3-keys] File migrated successfully", {
+              fileId: entry.id,
+              oldS3Key,
+              newS3Key
+            });
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            errors.push({
+              fileId: entry.id,
+              filename: entry.originalFilename,
+              error: errorMessage,
+              oldKey: oldS3Key
+            });
+            console.error("[migration.restructure-s3-keys] Failed to migrate file", {
+              fileId: entry.id,
+              oldS3Key,
+              error: errorMessage
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[migration.restructure-s3-keys] Failed to initialize migration", error instanceof Error ? error : void 0);
+      return {
+        id: "restructure-s3-keys-v1",
+        success: false,
+        itemsAffected: migrated,
+        message: "Failed to initialize S3 key restructuring",
+        error: error instanceof Error ? error.message : "Unknown error",
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const success = errors.length === 0;
+    const durationMs = Date.now() - startTime;
+    if (success) {
+      console.log("[migration.restructure-s3-keys] S3 key restructuring completed successfully", {
+        filesMigrated: migrated,
+        filesSkipped: skipped,
+        durationMs
+      });
+    } else {
+      console.warn("[migration.restructure-s3-keys] S3 key restructuring completed with errors", {
+        filesMigrated: migrated,
+        filesSkipped: skipped,
+        errorCount: errors.length,
+        durationMs
+      });
+    }
+    let message = `Restructured ${migrated} file S3 keys`;
+    if (skipped > 0) {
+      message += `, skipped ${skipped} unchanged`;
+    }
+    if (errors.length > 0) {
+      message += `, ${errors.length} errors`;
+    }
+    return {
+      id: "restructure-s3-keys-v1",
+      success,
+      itemsAffected: migrated,
+      message,
+      error: errors.length > 0 ? errors.slice(0, 5).map((e) => `${e.fileId}: ${e.error}`).join("; ") : void 0,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
 // migrations/index.ts
 var migrations = [
   convertOpenRouterProfilesMigration,
@@ -39914,7 +40192,9 @@ var migrations = [
   // Token usage tracking
   addTokenTrackingFieldsMigration,
   // Web search decoupling
-  addUseNativeWebSearchFieldMigration
+  addUseNativeWebSearchFieldMigration,
+  // S3 key restructuring
+  restructureS3KeysMigration
 ];
 
 // user-migrations.ts

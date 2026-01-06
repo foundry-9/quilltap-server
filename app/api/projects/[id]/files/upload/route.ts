@@ -122,7 +122,13 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const fileId = crypto.randomUUID()
 
       // Upload to S3
-      const s3Key = buildS3Key(user.id, fileId, file.name, category)
+      const s3Key = buildS3Key({
+        userId: user.id,
+        fileId,
+        filename: file.name,
+        projectId,
+        folderPath: folderPath || '/',
+      })
       await uploadS3File(s3Key, buffer, file.type, {
         userId: user.id,
         fileId,

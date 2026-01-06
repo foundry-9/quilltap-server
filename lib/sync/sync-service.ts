@@ -230,7 +230,13 @@ async function createLocalEntity(
           );
 
           // Update file entry with S3 key
-          const s3Key = s3FileService.generateS3Key(userId, fileEntry.id, originalFilename, category);
+          const s3Key = s3FileService.generateS3Key({
+            userId,
+            fileId: fileEntry.id,
+            filename: originalFilename,
+            projectId: fileEntry.projectId || null,
+            folderPath: fileEntry.folderPath || '/',
+          });
           await repos.files.update(fileEntry.id, { s3Key });
 
           logger.debug('Saved file content from sync', {

@@ -4,6 +4,14 @@
 
 ### 2.7-dev
 
+- feat: Project-based S3 key structure for file storage
+  - S3 keys now reflect project and folder organization
+  - Project files: `users/{userId}/{projectId}/{folderPath}/{fileId}_{filename}`
+  - General files: `users/{userId}/_general/{fileId}_{filename}`
+  - File move endpoint now physically moves S3 objects when folder/project changes
+  - New `copyObject()` and `moveFile()` operations for S3
+  - Migration `restructure-s3-keys-v1` upgrades existing files to new key format
+  - Updated `buildS3Key()` to accept object params with projectId and folderPath
 - fix: File metadata now correctly matches S3 storage paths
   - Critical bug: file uploads generated an ID for S3 but repository created a different ID
   - Files were being stored in S3 under one ID but metadata saved with a different ID

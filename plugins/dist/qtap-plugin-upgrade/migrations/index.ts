@@ -29,6 +29,8 @@ import { addInterCharacterMemoryFieldsMigration } from './add-inter-character-me
 import { addTokenTrackingFieldsMigration } from './add-token-tracking-fields';
 // Web search decoupling
 import { addUseNativeWebSearchFieldMigration } from './add-use-native-web-search-field';
+// S3 key restructuring
+import { restructureS3KeysMigration } from './restructure-s3-keys';
 
 /**
  * All available migrations.
@@ -58,6 +60,8 @@ export const migrations: Migration[] = [
   addTokenTrackingFieldsMigration,
   // Web search decoupling
   addUseNativeWebSearchFieldMigration,
+  // S3 key restructuring
+  restructureS3KeysMigration,
 ];
 
 export {
@@ -84,4 +88,6 @@ export {
   addTokenTrackingFieldsMigration,
   // Web search decoupling
   addUseNativeWebSearchFieldMigration,
+  // S3 key restructuring
+  restructureS3KeysMigration,
 };

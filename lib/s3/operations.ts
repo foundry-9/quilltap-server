@@ -8,6 +8,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  CopyObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   NoSuchKey,
@@ -180,6 +181,38 @@ export async function deleteFile(key: string): Promise<void> {
     logger.error(
       'Failed to delete file from S3',
       { key, bucket },
+      error as Error
+    );
+    throw error;
+  }
+}
+
+/**
+ * Copy a file within S3 from one key to another
+ * @param sourceKey The source object key (path) in S3
+ * @param destinationKey The destination object key (path) in S3
+ * @throws Error if copy fails
+ */
+export async function copyObject(sourceKey: string, destinationKey: string): Promise<void> {
+  const client = requireS3Client();
+  const bucket = getS3Bucket();
+
+  try {
+    logger.debug('Copying file in S3', { sourceKey, destinationKey, bucket });
+
+    const command = new CopyObjectCommand({
+      Bucket: bucket,
+      CopySource: `${bucket}/${sourceKey}`,
+      Key: destinationKey,
+    });
+
+    await client.send(command);
+
+    logger.info('File copied in S3', { sourceKey, destinationKey, bucket });
+  } catch (error) {
+    logger.error(
+      'Failed to copy file in S3',
+      { sourceKey, destinationKey, bucket },
       error as Error
     );
     throw error;
