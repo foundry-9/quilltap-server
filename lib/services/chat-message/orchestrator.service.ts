@@ -301,7 +301,8 @@ async function processMessage(
     character.id,
     characterParticipant.id,
     imageProfileId,
-    chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined
+    chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined,
+    chat.projectId
   )
 
   // Send debug info

@@ -18,6 +18,7 @@ import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceMod
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
 import FileWriteApprovalModal from '@/components/chat/FileWriteApprovalModal'
+import FileConflictDialog from '@/components/chat/FileConflictDialog'
 import { MemoryCascadeDialog } from '@/components/ui/MemoryCascadeDialog'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
 import SelectLLMProfileDialog from '@/components/chat/SelectLLMProfileDialog'
@@ -166,9 +167,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   } | null>(null)
 
   // Use the extracted file attachments hook
-  const fileHook = useFileAttachments(id)
+  const fileHook = useFileAttachments(id, chat?.projectId)
   const { attachedFiles, setAttachedFiles, uploadingFile } = fileHook
   const { handleFileSelect, removeAttachedFile } = fileHook
+  const { conflictInfo, isConflictDialogOpen, resolvingConflict, handleConflictResolution, cancelConflict } = fileHook
 
   // Refs
   const mobileParticipantRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map())
@@ -2423,6 +2425,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             }}
           />
         )}
+
+        {/* File Conflict Dialog for duplicate detection */}
+        <FileConflictDialog
+          isOpen={isConflictDialogOpen}
+          onClose={cancelConflict}
+          conflict={conflictInfo}
+          onResolve={handleConflictResolution}
+          resolving={resolvingConflict}
+        />
 
         {/* Select LLM Profile Dialog (for stopping impersonation) */}
         {selectLLMProfileDialogState && (

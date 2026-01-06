@@ -26,6 +26,8 @@ interface FileBrowserGridProps {
   onGoUp: () => void
   /** Called when delete is clicked */
   onDeleteFile: (fileId: string) => void
+  /** Called when move to project is clicked (only for general files) */
+  onMoveToProject?: (fileId: string, fileName: string) => void
   /** Thumbnail size in pixels */
   thumbnailSize?: number
 }
@@ -38,6 +40,7 @@ export default function FileBrowserGrid({
   onFolderClick,
   onGoUp,
   onDeleteFile,
+  onMoveToProject,
   thumbnailSize = 120,
 }: Readonly<FileBrowserGridProps>) {
   useEffect(() => {
@@ -128,17 +131,31 @@ export default function FileBrowserGrid({
             </div>
           </button>
 
-          {/* Delete button - shows on hover */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onDeleteFile(file.id)
-            }}
-            className="absolute top-2 right-2 qt-button qt-button-secondary p-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
-            title="Delete file"
-          >
-            {'\u{1F5D1}\uFE0F'} {/* wastebasket */}
-          </button>
+          {/* Action buttons - show on hover */}
+          <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {onMoveToProject && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onMoveToProject(file.id, file.originalFilename || file.filename || 'file')
+                }}
+                className="qt-button qt-button-secondary p-1.5 text-xs"
+                title="Move to Project"
+              >
+                {'\u{1F4C1}'} {/* folder icon */}
+              </button>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onDeleteFile(file.id)
+              }}
+              className="qt-button qt-button-secondary p-1.5 text-xs"
+              title="Delete file"
+            >
+              {'\u{1F5D1}\uFE0F'} {/* wastebasket */}
+            </button>
+          </div>
         </div>
       ))}
 

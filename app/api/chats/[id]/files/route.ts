@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler, getFilePath } from '@/lib/api/middleware'
-import { uploadChatFile } from '@/lib/chat-files-v2'
+import { uploadChatFile, type ConflictResolution } from '@/lib/chat-files-v2'
 import { logger } from '@/lib/logger'
 import { notFound, badRequest, serverError } from '@/lib/api/responses'
 
@@ -27,20 +27,57 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         return badRequest('No file provided')
       }
 
+      // Get optional resolution parameters for duplicate handling
+      const resolution = formData.get('resolution') as ConflictResolution | null
+      const conflictingFileId = formData.get('conflictingFileId') as string | null
+
+      logger.debug('Uploading chat file', {
+        context: 'chat-files-api',
+        chatId,
+        projectId: chat.projectId,
+        filename: file.name,
+        resolution,
+        conflictingFileId,
+      })
+
       // Upload the file (creates file entry automatically)
-      const uploadResult = await uploadChatFile(file, chatId, user.id)
+      // Pass projectId so files in project chats become project files
+      const uploadResult = await uploadChatFile(file, chatId, user.id, {
+        projectId: chat.projectId,
+        resolution: resolution || undefined,
+        conflictingFileId: conflictingFileId || undefined,
+      })
+
+      // Check if this is a duplicate detection result
+      if ('duplicate' in uploadResult && uploadResult.duplicate) {
+        logger.debug('Duplicate file detected', {
+          context: 'chat-files-api',
+          conflictType: uploadResult.conflictType,
+          existingFileId: uploadResult.existingFile.id,
+        })
+
+        return NextResponse.json({
+          duplicate: true,
+          conflictType: uploadResult.conflictType,
+          existingFile: uploadResult.existingFile,
+          newFile: uploadResult.newFile,
+        })
+      }
+
+      // Normal upload result - type is narrowed to ChatFileUploadResult
+      const successResult = uploadResult as { id: string; filename: string; filepath: string; mimeType: string; size: number }
 
       // Get the file entry from repository to determine correct filepath
-      const fileEntry = await repos.files.findById(uploadResult.id)
-      const filepath = fileEntry ? getFilePath(fileEntry) : uploadResult.filepath
+      const fileEntry = await repos.files.findById(successResult.id)
+      const filepath = fileEntry ? getFilePath(fileEntry) : successResult.filepath
 
       return NextResponse.json({
         file: {
-          id: uploadResult.id,
-          filename: file.name, // Original filename for display
+          id: successResult.id,
+          filename: successResult.filename,
           filepath,
-          mimeType: uploadResult.mimeType,
-          size: uploadResult.size,
+          mimeType: successResult.mimeType,
+          size: successResult.size,
           url: filepath,
         },
       })

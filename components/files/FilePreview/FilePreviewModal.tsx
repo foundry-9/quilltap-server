@@ -22,6 +22,7 @@ export default function FilePreviewModal({
   files,
   onClose,
   onDelete,
+  onMoveToProject,
   onNavigate,
 }: Readonly<FilePreviewModalProps>) {
   const {
@@ -37,9 +38,10 @@ export default function FilePreviewModal({
     goToNext,
   } = useFilePreview({ file, files })
 
-  const { handleDownload, handleDelete, isDeleting } = useFileActions({
+  const { handleDownload, handleDelete, handleMoveToProject, isDeleting, canMoveToProject } = useFileActions({
     file,
     onDelete,
+    onMoveToProject,
     onClose,
   })
 
@@ -153,8 +155,10 @@ export default function FilePreviewModal({
           onNext={handleNext}
           onDownload={handleDownload}
           onDelete={handleDelete}
+          onMoveToProject={handleMoveToProject}
           onClose={onClose}
           isDeleting={isDeleting}
+          canMoveToProject={canMoveToProject}
         />
 
         {/* Preview content */}

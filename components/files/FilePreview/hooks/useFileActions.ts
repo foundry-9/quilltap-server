@@ -12,11 +12,13 @@
 import { useState, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { showConfirmation } from '@/lib/alert'
 import { FileInfo } from '../../types'
 
 interface UseFileActionsOptions {
   file: FileInfo
   onDelete?: (fileId: string) => void
+  onMoveToProject?: (fileId: string) => void
   onClose?: () => void
 }
 
@@ -25,16 +27,24 @@ interface UseFileActionsResult {
   handleDownload: () => void
   /** Delete the file (with confirmation) */
   handleDelete: () => Promise<void>
+  /** Move file (opens modal) */
+  handleMoveToProject: () => void
   /** Whether delete is in progress */
   isDeleting: boolean
+  /** Whether the file can be moved (always true - can move to project, between projects, or to general) */
+  canMoveToProject: boolean
 }
 
 export function useFileActions({
   file,
   onDelete,
+  onMoveToProject,
   onClose,
 }: UseFileActionsOptions): UseFileActionsResult {
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Files can always be moved - to a project, between projects, or back to general files
+  const canMoveToProject = true
 
   const handleDownload = useCallback(() => {
     clientLogger.debug('[useFileActions] Downloading file', {
@@ -54,7 +64,8 @@ export function useFileActions({
   }, [file])
 
   const handleDelete = useCallback(async () => {
-    if (!confirm('Are you sure you want to delete this file?')) {
+    const confirmed = await showConfirmation('Are you sure you want to delete this file? This cannot be undone.')
+    if (!confirmed) {
       return
     }
 
@@ -62,12 +73,14 @@ export function useFileActions({
     clientLogger.debug('[useFileActions] Deleting file', { fileId: file.id })
 
     try {
-      const response = await fetch(`/api/files/${file.id}`, {
+      // Use force=true since user is explicitly deleting from file preview
+      const response = await fetch(`/api/files/${file.id}?force=true`, {
         method: 'DELETE',
       })
 
+      const data = await response.json().catch(() => ({}))
+
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to delete file')
       }
 
@@ -89,9 +102,21 @@ export function useFileActions({
     }
   }, [file, onDelete, onClose])
 
+  const handleMoveToProject = useCallback(() => {
+    clientLogger.debug('[useFileActions] Opening move modal', {
+      fileId: file.id,
+      filename: file.originalFilename,
+      currentProjectId: file.projectId,
+    })
+
+    onMoveToProject?.(file.id)
+  }, [file, onMoveToProject])
+
   return {
     handleDownload,
     handleDelete,
+    handleMoveToProject,
     isDeleting,
+    canMoveToProject,
   }
 }

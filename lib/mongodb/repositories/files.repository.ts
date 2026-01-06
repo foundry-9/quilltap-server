@@ -597,6 +597,47 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
   }
 
   /**
+   * Find files by original filename within a project
+   * Used for duplicate detection when uploading files
+   * @param userId - The user ID for ownership verification
+   * @param projectId - The project ID
+   * @param filename - The original filename to search for
+   */
+  async findByFilenameInProject(
+    userId: string,
+    projectId: string,
+    filename: string
+  ): Promise<FileEntry[]> {
+    try {
+      const collection = await this.getCollection();
+      const files = await collection.find({
+        userId,
+        projectId,
+        originalFilename: filename,
+      }).toArray();
+
+      logger.debug('Found files by filename in project', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        filename,
+        count: files.length,
+      });
+
+      return files.map((file: unknown) => this.validate(file));
+    } catch (error) {
+      logger.error('Error finding files by filename in project', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        filename,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Find general files (not in any project)
    * @param userId - The user ID for ownership verification
    */

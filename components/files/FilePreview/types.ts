@@ -15,6 +15,8 @@ export interface FilePreviewModalProps {
   onClose: () => void
   /** Called when file is deleted */
   onDelete?: (fileId: string) => void
+  /** Called when file is moved to a project */
+  onMoveToProject?: (fileId: string) => void
   /** Called when navigating to a different file (with optional heading anchor) */
   onNavigate?: (file: FileInfo, heading?: string) => void
 }
@@ -41,10 +43,14 @@ export interface FilePreviewActionsProps {
   onDownload: () => void
   /** Called to delete the file */
   onDelete: () => void
+  /** Called to move the file to a project */
+  onMoveToProject?: () => void
   /** Called to close the modal */
   onClose: () => void
   /** Whether delete is in progress */
   isDeleting?: boolean
+  /** Whether the file can be moved to a project (general files only) */
+  canMoveToProject?: boolean
 }
 
 export interface FileMetadataPanelProps {

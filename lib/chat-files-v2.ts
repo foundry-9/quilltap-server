@@ -26,6 +26,45 @@ export interface ChatFileUploadResult {
 }
 
 /**
+ * Result when a duplicate file is detected in project uploads
+ */
+export interface ChatFileDuplicateResult {
+  duplicate: true;
+  conflictType: 'filename' | 'content' | 'both';
+  existingFile: {
+    id: string;
+    filename: string;
+    size: number;
+    createdAt: string;
+    sha256: string;
+  };
+  newFile: {
+    filename: string;
+    size: number;
+    sha256: string;
+  };
+}
+
+/**
+ * Resolution action for duplicate file conflicts
+ */
+export type ConflictResolution = 'replace' | 'keepBoth' | 'skip';
+
+/**
+ * Options for chat file upload
+ */
+export interface ChatFileUploadOptions {
+  /** Message ID to link the file to */
+  messageId?: string;
+  /** Project ID if this chat belongs to a project */
+  projectId?: string | null;
+  /** Resolution action for duplicate conflicts */
+  resolution?: ConflictResolution;
+  /** ID of the conflicting file (for replace action) */
+  conflictingFileId?: string;
+}
+
+/**
  * Allowed file MIME types for chat attachments
  * Includes images and documents that various providers support
  */
@@ -57,6 +96,33 @@ function getExtension(filename: string): string {
 }
 
 /**
+ * Generate a unique filename by appending (1), (2), etc.
+ * @param filename - Original filename
+ * @param existingFilenames - Set of filenames that already exist
+ */
+function generateUniqueFilename(
+  filename: string,
+  existingFilenames: Set<string>
+): string {
+  if (!existingFilenames.has(filename)) {
+    return filename;
+  }
+
+  const ext = extname(filename);
+  const basename = ext ? filename.slice(0, -ext.length) : filename;
+
+  let counter = 1;
+  let newName = `${basename} (${counter})${ext}`;
+
+  while (existingFilenames.has(newName)) {
+    counter++;
+    newName = `${basename} (${counter})${ext}`;
+  }
+
+  return newName;
+}
+
+/**
  * Get the filepath for a file - always returns API path for S3-backed files
  */
 function getFileApiPath(fileId: string): string {
@@ -82,13 +148,16 @@ export function validateChatFile(file: File): void {
 
 /**
  * Upload a chat file to the server
+ * When projectId is provided, the file is stored as a project file with duplicate detection
  */
 export async function uploadChatFile(
   file: File,
   chatId: string,
   userId: string,
-  messageId?: string
-): Promise<ChatFileUploadResult> {
+  options: ChatFileUploadOptions = {}
+): Promise<ChatFileUploadResult | ChatFileDuplicateResult> {
+  const { messageId, projectId, resolution, conflictingFileId } = options;
+
   validateChatFile(file);
 
   const bytes = await file.arrayBuffer();
@@ -106,7 +175,146 @@ export async function uploadChatFile(
 
   const repos = getRepositories();
 
-  // Check for duplicate by hash
+  // For project files, check for duplicates within the project
+  if (projectId) {
+    logger.debug('Checking for duplicates in project', {
+      context: 'chat-files-v2',
+      projectId,
+      filename: file.name,
+      sha256,
+    });
+
+    // Check for content duplicate (same SHA256) in project
+    const existingByHash = await repos.files.findBySha256(sha256);
+    const contentDuplicate = existingByHash.find(f => f.projectId === projectId);
+
+    // Check for filename duplicate in project
+    const existingByName = await repos.files.findByFilenameInProject(userId, projectId, file.name);
+    const filenameDuplicate = existingByName.length > 0 ? existingByName[0] : null;
+
+    // Determine conflict type
+    const hasContentConflict = !!contentDuplicate;
+    const hasFilenameConflict = !!filenameDuplicate;
+
+    if ((hasContentConflict || hasFilenameConflict) && !resolution) {
+      // Duplicate detected and no resolution provided - return conflict info
+      const conflictType: 'filename' | 'content' | 'both' =
+        hasContentConflict && hasFilenameConflict ? 'both' :
+        hasContentConflict ? 'content' : 'filename';
+
+      // Use the more relevant duplicate for the response
+      const existingFile = hasFilenameConflict ? filenameDuplicate! : contentDuplicate!;
+
+      logger.debug('Duplicate file detected in project', {
+        context: 'chat-files-v2',
+        projectId,
+        conflictType,
+        existingFileId: existingFile.id,
+      });
+
+      return {
+        duplicate: true,
+        conflictType,
+        existingFile: {
+          id: existingFile.id,
+          filename: existingFile.originalFilename,
+          size: existingFile.size,
+          createdAt: existingFile.createdAt,
+          sha256: existingFile.sha256,
+        },
+        newFile: {
+          filename: file.name,
+          size: buffer.length,
+          sha256,
+        },
+      };
+    }
+
+    // Handle resolution
+    if (resolution) {
+      logger.debug('Handling conflict resolution', {
+        context: 'chat-files-v2',
+        resolution,
+        conflictingFileId,
+      });
+
+      if (resolution === 'skip') {
+        // User chose to skip - return the existing file info
+        const existingFile = conflictingFileId
+          ? await repos.files.findById(conflictingFileId)
+          : (filenameDuplicate || contentDuplicate);
+
+        if (existingFile) {
+          logger.debug('Skipping upload, returning existing file', {
+            context: 'chat-files-v2',
+            fileId: existingFile.id,
+          });
+
+          return {
+            id: existingFile.id,
+            filename: existingFile.originalFilename,
+            filepath: getFileApiPath(existingFile.id),
+            mimeType: existingFile.mimeType,
+            size: existingFile.size,
+            sha256: existingFile.sha256,
+            width: existingFile.width || undefined,
+            height: existingFile.height || undefined,
+          };
+        }
+      }
+
+      if (resolution === 'replace' && conflictingFileId) {
+        // Delete the existing file first
+        const existingFile = await repos.files.findById(conflictingFileId);
+        if (existingFile && existingFile.s3Key) {
+          try {
+            await deleteS3File(existingFile.s3Key);
+            logger.debug('Deleted existing file from S3 for replacement', {
+              context: 'chat-files-v2',
+              fileId: conflictingFileId,
+            });
+          } catch (error) {
+            logger.error('Failed to delete existing file from S3', {
+              context: 'chat-files-v2',
+              fileId: conflictingFileId,
+            }, error instanceof Error ? error : undefined);
+          }
+        }
+        await repos.files.delete(conflictingFileId);
+        logger.debug('Deleted existing file for replacement', {
+          context: 'chat-files-v2',
+          fileId: conflictingFileId,
+        });
+      }
+
+      // For 'keepBoth', generate a unique filename
+      let finalFilename = file.name;
+      if (resolution === 'keepBoth') {
+        const projectFiles = await repos.files.findByProjectId(userId, projectId);
+        const existingFilenames = new Set(projectFiles.map(f => f.originalFilename));
+        finalFilename = generateUniqueFilename(file.name, existingFilenames);
+        logger.debug('Generated unique filename for keepBoth', {
+          context: 'chat-files-v2',
+          originalFilename: file.name,
+          newFilename: finalFilename,
+        });
+      }
+
+      // Proceed with upload using the final filename
+      return await uploadFileToProject(
+        buffer,
+        finalFilename,
+        file.type,
+        sha256,
+        category,
+        userId,
+        projectId,
+        linkedTo
+      );
+    }
+  }
+
+  // Non-project files: use existing behavior with hash-based deduplication
   const existingFiles = await repos.files.findBySha256(sha256);
   if (existingFiles.length > 0) {
     const existing = existingFiles[0];
@@ -141,19 +349,47 @@ export async function uploadChatFile(
     };
   }
 
+  // No project - upload as before (general file)
+  return await uploadFileToProject(
+    buffer,
+    file.name,
+    file.type,
+    sha256,
+    category,
+    userId,
+    projectId || undefined,
+    linkedTo
+  );
+}
+
+/**
+ * Internal helper to upload file to S3 and create repository entry
+ */
+async function uploadFileToProject(
+  buffer: Buffer,
+  filename: string,
+  mimeType: string,
+  sha256: string,
+  category: FileCategory,
+  userId: string,
+  projectId: string | undefined,
+  linkedTo: string[]
+): Promise<ChatFileUploadResult> {
+  const repos = getRepositories();
+
   // Generate a new file ID
   const fileId = crypto.randomUUID();
 
   // Upload to S3
-  const s3Key = buildS3Key(userId, fileId, file.name, category);
-  await uploadS3File(s3Key, buffer, file.type, {
+  const s3Key = buildS3Key(userId, fileId, filename, category);
+  await uploadS3File(s3Key, buffer, mimeType, {
     userId,
     fileId,
     category,
-    filename: file.name,
+    filename,
     sha256,
   });
-  logger.debug('Uploaded chat file to S3', { fileId, s3Key, size: buffer.length });
+  logger.debug('Uploaded chat file to S3', { fileId, s3Key, size: buffer.length, projectId });
 
   // Inherit tags from the chat (and any other linked entities)
   const inheritedTags = await getInheritedTags(linkedTo, userId);
@@ -161,7 +397,6 @@ export async function uploadChatFile(
   logger.debug('Inherited tags for chat file', {
     context: 'chat-files-v2',
     fileId,
-    chatId,
     inheritedTagCount: inheritedTags.length,
   });
 
@@ -169,8 +404,8 @@ export async function uploadChatFile(
   const fileEntry = await repos.files.create({
     userId,
     sha256,
-    originalFilename: file.name,
-    mimeType: file.type,
+    originalFilename: filename,
+    mimeType,
     size: buffer.length,
     width: null,
     height: null,
@@ -182,10 +417,12 @@ export async function uploadChatFile(
     generationRevisedPrompt: null,
     description: null,
     tags: inheritedTags,
+    projectId: projectId || null,
+    folderPath: '/',
     s3Key,
   });
 
-  logger.debug('Created chat file metadata in repository', { fileId: fileEntry.id, s3Key });
+  logger.debug('Created chat file metadata in repository', { fileId: fileEntry.id, s3Key, projectId });
 
   return {
     id: fileEntry.id,

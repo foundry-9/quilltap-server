@@ -189,7 +189,8 @@ export function createToolContext(
   characterId: string,
   characterParticipantId: string,
   imageProfileId?: string | null,
-  embeddingProfileId?: string
+  embeddingProfileId?: string,
+  projectId?: string | null
 ): ToolExecutionContext {
   return {
     chatId,
@@ -198,5 +199,6 @@ export function createToolContext(
     characterId,
     embeddingProfileId,
     callingParticipantId: characterParticipantId,
+    projectId: projectId || undefined,
   }
 }

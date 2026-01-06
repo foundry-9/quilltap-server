@@ -4,6 +4,30 @@
 
 ### 2.7-dev
 
+- feat: Add "Move File" functionality for all files
+  - New MoveToProjectModal for selecting target project and folder
+  - Move button appears in file list (grid and list views) and file preview modal
+  - General files can be moved to any project
+  - Project files can be moved to a different project or back to General Files
+  - Uses existing /api/files/:id/promote endpoint - preserves all linkages
+  - File disappears from current view after moving to a different location
+- fix: File delete confirmation now uses styled dialog instead of native browser alert
+  - Replaced `confirm()` with `showConfirmation()` in useFileActions hook
+  - Error messages from API now display properly in toast notifications
+- fix: Deleting files from file preview now works even if file is linked to chats
+  - Added `force=true` query parameter to DELETE /api/files/:id endpoint
+  - File preview uses force delete since user explicitly chose to delete
+- feat: Chat file attachments in project chats now save to project files
+  - Files attached to chats in a project automatically get projectId set
+  - Duplicate detection by both filename and SHA256 content hash within the project
+  - Conflict dialog offers three options: Replace existing, Keep both (auto-rename), Skip
+  - "Keep both" generates unique filename like "document (1).pdf"
+  - New FileConflictDialog component following BaseModal pattern
+  - Non-project chats continue to use hash-based deduplication with silent reuse
+- fix: File management tool now correctly scopes to project files
+  - When scope='project', the tool was incorrectly returning general files instead of project files
+  - Root cause: projectId was not being passed through the tool execution context
+  - Added projectId parameter to createToolContext() and passed chat.projectId from orchestrator
 - feat: Add direct file upload to projects
   - New upload button in FilesCard allows uploading files directly to a project
   - FileBrowser now shows upload button when opened from project context

@@ -115,10 +115,15 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 /**
  * DELETE /api/files/:id
  * Delete a file by its ID from S3 storage
+ * Use ?force=true to delete even if file is linked to entities
  */
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
-  async (_request, { repos }, { id: fileId }) => {
+  async (request, { repos }, { id: fileId }) => {
     try {
+      // Check for force parameter
+      const { searchParams } = new URL(request.url);
+      const force = searchParams.get('force') === 'true';
+
       // Get file metadata from repository
       const fileEntry = await repos.files.findById(fileId);
       if (!fileEntry) {
@@ -126,18 +131,18 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('File');
       }
 
-      logger.debug('Deleting file', { context: 'DELETE /api/files/[id]', fileId, hasS3Key: !!fileEntry.s3Key });
+      logger.debug('Deleting file', { context: 'DELETE /api/files/[id]', fileId, hasS3Key: !!fileEntry.s3Key, force });
 
-      // Check if file is still linked to any entities
-      if (fileEntry.linkedTo.length > 0) {
-        logger.debug('Cannot delete file still in use', {
+      // Check if file is still linked to any entities (unless force=true)
+      if (!force && fileEntry.linkedTo.length > 0) {
+        logger.debug('Cannot delete file linked to entities', {
           context: 'DELETE /api/files/[id]',
           fileId,
           linkedToCount: fileEntry.linkedTo.length,
         });
 
         return badRequest(
-          'Cannot delete file that is still in use',
+          'Cannot delete file linked to chats, characters, or projects.',
           { linkedTo: fileEntry.linkedTo }
         );
       }

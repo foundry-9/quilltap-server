@@ -11,10 +11,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { showConfirmation } from '@/lib/alert'
 import FileBrowserGrid from './FileBrowserGrid'
 import FileBrowserList from './FileBrowserList'
 import { FilePreviewModal } from './FilePreview'
 import { CreateFolderModal } from './FolderManagement'
+import MoveToProjectModal from './MoveToProjectModal'
 import { useProjectFileUpload } from './useProjectFileUpload'
 import { FileInfo, FolderInfo, SortState, sortFiles } from './types'
 
@@ -51,6 +53,8 @@ export default function FileBrowser({
   const [sort, setSort] = useState<SortState>({ field: 'name', direction: 'asc' })
   const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null)
   const [showCreateFolder, setShowCreateFolder] = useState(false)
+  // Move to project modal state
+  const [moveModalFile, setMoveModalFile] = useState<{ id: string; name: string } | null>(null)
 
   // Upload functionality (only enabled when showUpload=true and projectId is provided)
   const {
@@ -161,17 +165,19 @@ export default function FileBrowser({
   }
 
   const handleDeleteFile = async (fileId: string) => {
-    if (!confirm('Are you sure you want to delete this file?')) return
+    const confirmed = await showConfirmation('Are you sure you want to delete this file? This cannot be undone.')
+    if (!confirmed) return
 
     try {
       clientLogger.debug('[FileBrowser] Deleting file', { fileId })
       const res = await fetch(`/api/files/${fileId}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
       if (res.ok) {
         setFiles(files.filter(f => f.id !== fileId))
         showSuccessToast('File deleted')
         clientLogger.debug('[FileBrowser] File deleted', { fileId })
+        onFilesChange?.()
       } else {
-        const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to delete file')
       }
     } catch (error) {
@@ -182,6 +188,32 @@ export default function FileBrowser({
       showErrorToast(error instanceof Error ? error.message : 'Failed to delete file')
     }
   }
+
+  // Handle opening move modal (works for both general files and project files)
+  const handleMoveToProject = useCallback((fileId: string, fileName: string) => {
+    clientLogger.debug('[FileBrowser] Opening move modal', { fileId, fileName, currentProjectId: projectId })
+    setMoveModalFile({ id: fileId, name: fileName })
+  }, [projectId])
+
+  // Handle successful move - remove file from current list since it moved somewhere else
+  const handleMoveSuccess = useCallback((targetProjectId: string | null, targetName: string) => {
+    if (moveModalFile) {
+      clientLogger.info('[FileBrowser] File moved', {
+        fileId: moveModalFile.id,
+        targetProjectId,
+        targetName,
+        fromProjectId: projectId,
+      })
+      // Remove from current view since file is no longer here
+      setFiles(prev => prev.filter(f => f.id !== moveModalFile.id))
+      setMoveModalFile(null)
+      // Close preview if this file was being previewed
+      if (selectedFile?.id === moveModalFile.id) {
+        setSelectedFile(null)
+      }
+      onFilesChange?.()
+    }
+  }, [moveModalFile, selectedFile, onFilesChange, projectId])
 
   const displayTitle = title || (projectId ? 'Project Files' : 'General Files')
 
@@ -273,6 +305,7 @@ export default function FileBrowser({
               onFolderClick={handleFolderClick}
               onGoUp={handleGoUp}
               onDeleteFile={handleDeleteFile}
+              onMoveToProject={handleMoveToProject}
             />
           ) : (
             <FileBrowserList
@@ -285,6 +318,7 @@ export default function FileBrowser({
               onFolderClick={handleFolderClick}
               onGoUp={handleGoUp}
               onDeleteFile={handleDeleteFile}
+              onMoveToProject={handleMoveToProject}
             />
           )}
         </div>
@@ -307,6 +341,13 @@ export default function FileBrowser({
           onDelete={(fileId) => {
             setFiles(files.filter(f => f.id !== fileId))
             setSelectedFile(null)
+            onFilesChange?.()
+          }}
+          onMoveToProject={(fileId) => {
+            const file = files.find(f => f.id === fileId)
+            if (file) {
+              handleMoveToProject(fileId, file.originalFilename || file.filename || 'file')
+            }
           }}
           onNavigate={(file, _heading) => {
             setSelectedFile(file)
@@ -331,6 +372,18 @@ export default function FileBrowser({
           setCurrentFolder(folderPath)
         }}
       />
+
+      {/* Move File Modal */}
+      {moveModalFile && (
+        <MoveToProjectModal
+          isOpen={!!moveModalFile}
+          onClose={() => setMoveModalFile(null)}
+          fileId={moveModalFile.id}
+          fileName={moveModalFile.name}
+          currentProjectId={projectId}
+          onSuccess={handleMoveSuccess}
+        />
+      )}
 
       {/* Hidden file input for uploads */}
       {showUpload && projectId && (

@@ -39,6 +39,8 @@ interface FileBrowserListProps {
   onGoUp: () => void
   /** Called when delete is clicked */
   onDeleteFile: (fileId: string) => void
+  /** Called when move to project is clicked (only for general files) */
+  onMoveToProject?: (fileId: string, fileName: string) => void
 }
 
 interface SortableHeaderProps {
@@ -101,6 +103,7 @@ export default function FileBrowserList({
   onFolderClick,
   onGoUp,
   onDeleteFile,
+  onMoveToProject,
 }: Readonly<FileBrowserListProps>) {
   useEffect(() => {
     clientLogger.debug('[FileBrowserList] Rendered', {
@@ -236,16 +239,30 @@ export default function FileBrowserList({
                 {formatFileDate(file.createdAt)}
               </td>
               <td className="p-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDeleteFile(file.id)
-                  }}
-                  className="qt-button qt-button-secondary p-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
-                  title="Delete file"
-                >
-                  {'\u{1F5D1}\uFE0F'}
-                </button>
+                <div className="flex items-center gap-1">
+                  {onMoveToProject && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onMoveToProject(file.id, file.originalFilename || file.filename || 'file')
+                      }}
+                      className="qt-button qt-button-secondary p-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                      title="Move to Project"
+                    >
+                      {'\u{1F4C1}'} {/* folder icon */}
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDeleteFile(file.id)
+                    }}
+                    className="qt-button qt-button-secondary p-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                    title="Delete file"
+                  >
+                    {'\u{1F5D1}\uFE0F'}
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

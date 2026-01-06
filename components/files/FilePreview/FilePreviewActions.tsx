@@ -18,8 +18,10 @@ export default function FilePreviewActions({
   onNext,
   onDownload,
   onDelete,
+  onMoveToProject,
   onClose,
   isDeleting = false,
+  canMoveToProject = false,
 }: Readonly<FilePreviewActionsProps>) {
   const hasPrevious = currentIndex > 0
   const hasNext = currentIndex < totalFiles - 1
@@ -96,6 +98,15 @@ export default function FilePreviewActions({
         >
           {'\u2B07\uFE0F'} {/* download arrow */}
         </button>
+        {canMoveToProject && onMoveToProject && (
+          <button
+            onClick={onMoveToProject}
+            className="qt-button qt-button-secondary p-2"
+            title="Move to Project"
+          >
+            {'\u{1F4C1}'} {/* folder icon */}
+          </button>
+        )}
         <button
           onClick={onDelete}
           disabled={isDeleting}
