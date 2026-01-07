@@ -59,6 +59,10 @@ NOTE: URLs must match the configured allowlist patterns. Private/local addresses
           type: 'boolean',
           description: 'Allow connections to SSL sites without valid certificates. Default is false. Not recommended for production use.',
         },
+        render: {
+          type: 'boolean',
+          description: 'Convert HTML response to plain text for easier reading. Default is false. Useful for web pages.',
+        },
       },
       required: ['url'],
     },
@@ -128,6 +132,11 @@ export function validateCurlInput(input: unknown): input is CurlToolInput {
 
   // insecure must be a boolean if provided
   if (obj.insecure !== undefined && typeof obj.insecure !== 'boolean') {
+    return false;
+  }
+
+  // render must be a boolean if provided
+  if (obj.render !== undefined && typeof obj.render !== 'boolean') {
     return false;
   }
 

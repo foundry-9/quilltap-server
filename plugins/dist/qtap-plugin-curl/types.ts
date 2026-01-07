@@ -29,6 +29,9 @@ export interface CurlToolInput {
 
   /** Allow connections to SSL sites without valid certificates (default: false) */
   insecure?: boolean;
+
+  /** Convert HTML response to plain text using html-to-text (default: false) */
+  render?: boolean;
 }
 
 /**

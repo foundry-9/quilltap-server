@@ -4,6 +4,7 @@
  * Executes HTTP requests using Node.js fetch API.
  */
 
+import { convert as htmlToText } from 'html-to-text';
 import type { CurlToolInput, CurlToolConfig, CurlToolOutput } from './types';
 import { parseUrlPatterns, validateUrl } from './url-validator';
 
@@ -181,7 +182,24 @@ export async function executeCurlRequest(
     clearTimeout(timeoutId);
 
     // Read response body
-    const bodyText = await response.text();
+    let bodyText = await response.text();
+
+    // Convert HTML to text if render option is enabled
+    if (input.render) {
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('text/html')) {
+        bodyText = htmlToText(bodyText, {
+          wordwrap: 120,
+          selectors: [
+            { selector: 'a', options: { ignoreHref: true } },
+            { selector: 'img', format: 'skip' },
+            { selector: 'script', format: 'skip' },
+            { selector: 'style', format: 'skip' },
+          ],
+        });
+      }
+    }
+
     const { body, truncated, originalSize } = truncateBody(
       bodyText,
       effectiveConfig.maxResponseSize

@@ -14,7 +14,8 @@
 - feat: Add curl tool plugin for HTTP requests
   - New qtap-plugin-curl provides `curl` tool for LLMs to make HTTP requests
   - Supports GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS methods
-  - Options: --url, --request, --header, --data, --user-agent, --max-time, --location, --insecure
+  - Options: --url, --request, --header, --data, --user-agent, --max-time, --location, --insecure, --render
+  - `--render` option converts HTML responses to plain text using html-to-text library
   - Configurable URL allowlist for security (empty by default - no requests allowed until configured)
   - Blocks private/local IP addresses (localhost, 10.x.x.x, 192.168.x.x, etc.) for SSRF protection
   - Response body truncation with configurable max size (default 100KB)
