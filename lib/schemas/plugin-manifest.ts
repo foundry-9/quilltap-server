@@ -35,6 +35,7 @@ export const PluginCapabilityEnum = z.enum([
   'FILE_BACKEND',          // Replaces/augments file storage
   'UPGRADE_MIGRATION',     // Provides version upgrade migrations (runs early in startup)
   'ROLEPLAY_TEMPLATE',     // Provides roleplay formatting templates
+  'TOOL_PROVIDER',         // Provides LLM tools (e.g., curl, calculators, etc.)
 ]);
 
 export type PluginCapability = z.infer<typeof PluginCapabilityEnum>;
@@ -482,6 +483,32 @@ export const RoleplayTemplateConfigSchema = z.object({
 
 export type RoleplayTemplateConfig = z.infer<typeof RoleplayTemplateConfigSchema>;
 
+/**
+ * Tool plugin configuration schema
+ *
+ * Defines the configuration for tool plugins that provide LLM tools.
+ * Tool plugins use the TOOL_PROVIDER capability and provide tools
+ * that can be called by LLMs during chat interactions.
+ */
+export const ToolConfigSchema = z.object({
+  /** Tool name used in LLM function calls (lowercase with underscores) */
+  toolName: z.string().regex(/^[a-z][a-z0-9_]*$/).min(1).max(50).describe('Tool name for LLM function calls'),
+
+  /** Human-readable display name */
+  displayName: z.string().min(1).max(100).describe('Display name for UI'),
+
+  /** Tool description for LLM to understand when to use it */
+  description: z.string().min(1).max(1000).describe('Description for LLM'),
+
+  /** Whether the tool requires user configuration before use (e.g., API keys, allowlists) */
+  requiresConfiguration: z.boolean().default(false).describe('Whether user must configure before use'),
+
+  /** Whether the tool is enabled by default when the plugin is installed */
+  enabledByDefault: z.boolean().default(true).describe('Whether tool is enabled by default'),
+});
+
+export type ToolConfig = z.infer<typeof ToolConfigSchema>;
+
 // ============================================================================
 // MAIN MANIFEST SCHEMA
 // ============================================================================
@@ -596,6 +623,9 @@ export const PluginManifestSchema = z.object({
   /** Roleplay template configuration (for ROLEPLAY_TEMPLATE capability plugins) */
   roleplayTemplateConfig: RoleplayTemplateConfigSchema.optional(),
 
+  /** Tool configuration (for TOOL_PROVIDER capability plugins) */
+  toolConfig: ToolConfigSchema.optional(),
+
   // ===== SECURITY & PERMISSIONS =====
   /** Permissions required by the plugin */
   permissions: PermissionsSchema.default({}).optional(),
@@ -624,6 +654,7 @@ export const PluginManifestSchema = z.object({
     'DATABASE',
     'STORAGE',
     'AUTHENTICATION',
+    'TOOLS',
     'OTHER',
   ]).default('OTHER').optional(),
 

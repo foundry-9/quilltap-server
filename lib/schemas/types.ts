@@ -104,6 +104,13 @@ export type {
 } from './settings.types';
 
 // ============================================================================
+// PLUGIN CONFIGURATION TYPES
+// ============================================================================
+export { PluginConfigSchema, PluginConfigInputSchema } from './plugin-config.types';
+
+export type { PluginConfig, PluginConfigInput } from './plugin-config.types';
+
+// ============================================================================
 // PROFILE TYPES
 // ============================================================================
 export {

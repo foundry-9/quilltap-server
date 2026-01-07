@@ -13,6 +13,7 @@ export type PluginCapability =
   | 'STORAGE_BACKEND'
   | 'THEME'
   | 'ROLEPLAY_TEMPLATE'
+  | 'TOOL_PROVIDER'
   | 'UTILITY';
 
 /**
@@ -24,6 +25,7 @@ export type PluginCategory =
   | 'STORAGE'
   | 'UI'
   | 'TEMPLATE'
+  | 'TOOLS'
   | 'UTILITY';
 
 /**

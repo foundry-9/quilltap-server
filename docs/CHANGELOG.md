@@ -4,6 +4,29 @@
 
 ### 2.7-dev
 
+- feat: Add TOOL_PROVIDER plugin capability for custom LLM tools
+  - New plugin capability allows plugins to provide custom tools for LLM interactions
+  - Tool plugins define tool schemas, validation, execution handlers, and result formatting
+  - Tool registry manages plugin-provided tools alongside built-in tools
+  - Plugin tools are automatically included in tool arrays sent to LLMs
+  - Tool executor checks plugin registry first for tool execution
+  - Updated @quilltap/plugin-types package (v1.6.0) with ToolPlugin types
+- feat: Add curl tool plugin for HTTP requests
+  - New qtap-plugin-curl provides `curl` tool for LLMs to make HTTP requests
+  - Supports GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS methods
+  - Options: --url, --request, --header, --data, --user-agent, --max-time, --location, --insecure
+  - Configurable URL allowlist for security (empty by default - no requests allowed until configured)
+  - Blocks private/local IP addresses (localhost, 10.x.x.x, 192.168.x.x, etc.) for SSRF protection
+  - Response body truncation with configurable max size (default 100KB)
+  - Returns JSON with status, headers, body, and timing information
+- feat: Plugin configuration UI for per-user settings
+  - Plugins with `configSchema` now show a "Settings" button on the Plugins settings page
+  - PluginConfigModal dynamically renders form fields based on the plugin's configuration schema
+  - Supports text, textarea, number, boolean, select, password, url, and email field types
+  - Configuration is stored per-user in MongoDB via new PluginConfigRepository
+  - Tool executor and streaming service automatically load user's plugin configs from database
+  - API endpoints: GET/PUT `/api/plugins/[name]/config` for reading/updating plugin settings
+  - Added TOOL_PLUGIN_DEVELOPMENT.md documentation for external tool plugin development
 - feat: Project-based S3 key structure for file storage
   - S3 keys now reflect project and folder organization
   - Project files: `users/{userId}/{projectId}/{folderPath}/{fileId}_{filename}`

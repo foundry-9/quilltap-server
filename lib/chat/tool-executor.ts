@@ -5,6 +5,9 @@
 
 import { logger } from '@/lib/logger'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
+import { toolRegistry } from '@/lib/plugins/tool-registry'
+import { getRepositories } from '@/lib/repositories/factory'
+import type { ToolExecutionContext as PluginToolContext } from '@/lib/plugins/interfaces/tool-plugin'
 import {
   executeImageGenerationTool,
   executeMemorySearchTool,
@@ -133,7 +136,83 @@ export async function executeToolCallWithContext(
   const { chatId, userId, imageProfileId, characterId, embeddingProfileId } = context;
 
   try {
-    // Handle image generation
+    // Check tool registry first for plugin-provided tools
+    if (toolRegistry.hasTool(toolCall.name)) {
+      logger.debug('Executing plugin tool', {
+        context: 'tool-executor',
+        toolName: toolCall.name,
+      });
+
+      // Fetch user's tool configuration from database
+      let toolConfig: Record<string, unknown> = {};
+      try {
+        const repos = getRepositories();
+        // Get the plugin name for this tool (tools are registered with their plugin name prefix)
+        const toolMetadata = toolRegistry.getToolMetadata(toolCall.name);
+        if (toolMetadata) {
+          // Look up config by tool name (plugin stores config keyed by plugin name)
+          // For built-in plugins, the plugin name matches the tool name pattern
+          const pluginName = `qtap-plugin-${toolCall.name}`;
+          const userConfig = await repos.pluginConfigs.findByUserAndPlugin(userId, pluginName);
+          if (userConfig) {
+            toolConfig = userConfig.config;
+            logger.debug('Loaded tool config from database', {
+              context: 'tool-executor',
+              toolName: toolCall.name,
+              pluginName,
+              configKeys: Object.keys(toolConfig),
+            });
+          } else {
+            // Use default config from tool plugin
+            toolConfig = toolRegistry.getDefaultConfig(toolCall.name);
+            logger.debug('Using default tool config', {
+              context: 'tool-executor',
+              toolName: toolCall.name,
+              configKeys: Object.keys(toolConfig),
+            });
+          }
+        }
+      } catch (configError) {
+        logger.warn('Failed to load tool config, using defaults', {
+          context: 'tool-executor',
+          toolName: toolCall.name,
+          error: configError instanceof Error ? configError.message : String(configError),
+        });
+        toolConfig = toolRegistry.getDefaultConfig(toolCall.name);
+      }
+
+      // Build context for plugin tool execution
+      const pluginContext: PluginToolContext = {
+        userId,
+        chatId,
+        projectId: context.projectId,
+        characterId,
+        callingParticipantId: context.callingParticipantId,
+        toolConfig,
+      };
+
+      const result = await toolRegistry.executeTool(
+        toolCall.name,
+        toolCall.arguments,
+        pluginContext
+      );
+
+      // Format results for LLM
+      const formattedResult = toolRegistry.formatToolResults(toolCall.name, result);
+
+      return {
+        toolName: toolCall.name,
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          ...result.result as object,
+        } : null,
+        error: result.success ? undefined : result.error,
+        metadata: result.metadata,
+      };
+    }
+
+    // Handle image generation (built-in tool)
     if (toolCall.name === 'generate_image') {
       // If no image profile is configured, return error
       if (!imageProfileId) {

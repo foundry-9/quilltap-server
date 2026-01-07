@@ -235,6 +235,7 @@ class PluginRegistry {
         capabilities: plugin.capabilities,
         path: plugin.pluginPath,
         source: plugin.source,
+        hasConfigSchema: Array.isArray(plugin.manifest.configSchema) && plugin.manifest.configSchema.length > 0,
       })),
       errors: Array.from(this.state.errors.entries()).map(([name, error]) => ({
         name,

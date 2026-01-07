@@ -14,6 +14,7 @@
 
 import { logger } from '@/lib/logger';
 import { getProvider, getImageProviderConstraints } from '@/lib/plugins/provider-registry';
+import { toolRegistry } from '@/lib/plugins/tool-registry';
 import {
   imageGenerationToolDefinition,
   memorySearchToolDefinition,
@@ -89,6 +90,12 @@ export interface BuildToolsOptions {
 
   /** Whether to enable file management tool (always enabled by default) */
   fileManagement?: boolean;
+
+  /** Whether to include tools from the tool registry (plugin tools) */
+  includePluginTools?: boolean;
+
+  /** Tool configurations for plugin tools (keyed by tool name) */
+  toolConfigs?: Map<string, Record<string, unknown>>;
 }
 
 /**
@@ -165,6 +172,21 @@ export function buildToolsForProvider(
   if (options.fileManagement !== false) {
     universalTools.push(fileManagementToolDefinition as UniversalTool);
     logger_.debug('Added file management tool');
+  }
+
+  // Add plugin tools if enabled (defaults to true when not specified)
+  if (options.includePluginTools !== false) {
+    // Get configured tool definitions from the tool registry
+    const toolConfigs = options.toolConfigs || new Map();
+    const pluginToolDefs = toolRegistry.getConfiguredToolDefinitions(toolConfigs);
+
+    if (pluginToolDefs.length > 0) {
+      universalTools.push(...pluginToolDefs);
+      logger_.debug('Added plugin tools', {
+        count: pluginToolDefs.length,
+        tools: pluginToolDefs.map(t => t.function.name),
+      });
+    }
   }
 
   // If no tools are enabled, return empty array

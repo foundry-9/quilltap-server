@@ -34786,7 +34786,8 @@ var PluginRegistry = class {
         enabled: plugin2.enabled,
         capabilities: plugin2.capabilities,
         path: plugin2.pluginPath,
-        source: plugin2.source
+        source: plugin2.source,
+        hasConfigSchema: Array.isArray(plugin2.manifest.configSchema) && plugin2.manifest.configSchema.length > 0
       })),
       errors: Array.from(this.state.errors.entries()).map(([name, error]) => ({
         name,

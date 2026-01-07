@@ -8,6 +8,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
 import { buildToolsForProvider, checkModelSupportsTools } from '@/lib/tools'
+import { getRepositories } from '@/lib/repositories/factory'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
@@ -108,6 +109,28 @@ export async function buildTools(
     useNativeWebSearch,
   })
 
+  // Fetch user's plugin tool configurations from database
+  let toolConfigs = new Map<string, Record<string, unknown>>()
+  try {
+    const repos = getRepositories()
+    const userPluginConfigs = await repos.pluginConfigs.findByUserId(userId)
+    for (const config of userPluginConfigs) {
+      // Extract tool name from plugin name (e.g., 'qtap-plugin-curl' -> 'curl')
+      const toolName = config.pluginName.replace(/^qtap-plugin-/, '')
+      toolConfigs.set(toolName, config.config)
+    }
+    logger.debug('Loaded plugin tool configs', {
+      userId,
+      configCount: toolConfigs.size,
+      tools: Array.from(toolConfigs.keys()),
+    })
+  } catch (configError) {
+    logger.warn('Failed to load plugin tool configs, using defaults', {
+      userId,
+      error: configError instanceof Error ? configError.message : String(configError),
+    })
+  }
+
   // Web search tool is independent of native web search - user can enable both
   const tools = buildToolsForProvider(connectionProfile.provider, {
     imageGeneration: !!imageProfileId,
@@ -115,6 +138,7 @@ export async function buildTools(
     memorySearch: true,
     webSearch: connectionProfile.allowWebSearch,
     projectInfo: !!projectId,
+    toolConfigs,
   })
 
   logger.debug('Native tools built successfully', {

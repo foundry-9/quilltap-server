@@ -117,6 +117,15 @@ export type {
   RoleplayTemplatePluginExport,
 } from './plugins/roleplay-template';
 
+export type {
+  // Tool plugin types
+  ToolMetadata,
+  ToolExecutionContext,
+  ToolExecutionResult,
+  ToolPlugin,
+  ToolPluginExport,
+} from './plugins/tool';
+
 // ============================================================================
 // Common Types
 // ============================================================================
