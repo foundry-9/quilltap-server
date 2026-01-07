@@ -251,7 +251,12 @@ Create `manifest.json` - this tells Quilltap about your tool:
 
 ### configSchema for User Settings
 
-If your tool needs user configuration, add `configSchema`:
+If your tool needs user configuration, add `configSchema`. When a plugin has a non-empty `configSchema`, Quilltap automatically:
+
+1. **Shows a "Settings" button** on the plugin card in Settings > Plugins
+2. **Opens a configuration modal** when clicked, with form fields generated from your schema
+3. **Stores configuration per-user** in the database
+4. **Passes configuration to your tool** at execution time via `context.toolConfig`
 
 ```json
 {
@@ -280,6 +285,72 @@ If your tool needs user configuration, add `configSchema`:
   ]
 }
 ```
+
+#### Supported Field Types
+
+| Type | Description | Additional Properties |
+|------|-------------|----------------------|
+| `text` | Single-line text input | - |
+| `textarea` | Multi-line text input | - |
+| `number` | Numeric input | `min`, `max` |
+| `boolean` | Checkbox toggle | - |
+| `select` | Dropdown selection | `options: [{label, value}]` |
+| `password` | Hidden text input | - |
+| `url` | URL input with validation | - |
+| `email` | Email input with validation | - |
+
+#### Field Properties
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `key` | Yes | Unique identifier for the setting |
+| `label` | Yes | Display label shown in the UI |
+| `type` | Yes | One of the supported field types |
+| `default` | No | Default value when not configured |
+| `description` | No | Help text shown below the field |
+| `required` | No | Whether the field must have a value |
+| `min` | No | Minimum value (for `number` type) |
+| `max` | No | Maximum value (for `number` type) |
+| `options` | No | Array of options (for `select` type) |
+
+#### Accessing Configuration in Your Tool
+
+Configuration is passed to your `execute` method via `context.toolConfig`:
+
+```typescript
+async execute(
+  input: Record<string, unknown>,
+  context: ToolExecutionContext
+): Promise<ToolExecutionResult> {
+  // Access user's configuration
+  const allowedDomains = context.toolConfig.allowedDomains as string;
+  const maxResults = context.toolConfig.maxResults as number ?? 10;
+  const cacheEnabled = context.toolConfig.enableCache as boolean ?? true;
+
+  // Use config values in your tool logic
+  // ...
+}
+```
+
+#### The isConfigured Method
+
+If your tool requires certain configuration to function (like an allowlist), implement `isConfigured`:
+
+```typescript
+isConfigured(config: Record<string, unknown>): boolean {
+  // Example: Tool requires at least one allowed domain
+  const domains = config.allowedDomains as string;
+  if (!domains || domains.trim().length === 0) {
+    return false;
+  }
+  return true;
+}
+```
+
+When `isConfigured` returns `false`:
+- The tool is **not sent to the LLM** (filtered from available tools)
+- The tool appears in Settings but shows as "requires configuration"
+- Users must configure the tool before it becomes available
 
 ---
 
