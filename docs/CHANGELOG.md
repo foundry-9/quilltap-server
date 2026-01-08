@@ -4,6 +4,15 @@
 
 ### 2.7-dev
 
+- feat: Graceful request limit error recovery
+  - When a message exceeds LLM limits (token limit, PDF page limit, etc.), the system attempts to recover gracefully
+  - Sends a simplified message to the LLM explaining what happened, including attachment details (filename, type, size)
+  - LLM can provide a helpful in-character response suggesting alternatives (e.g., breaking document into smaller sections)
+  - Two-tier fallback: LLM-generated recovery response, then static fallback if LLM recovery also fails
+  - Recovery messages are saved to chat with `recoveryType` metadata field (`token_limit`, `content_limit`, `*_static` variants)
+  - Supports multiple error types: token limits, PDF page limits (max 100 pages), image size limits, file size limits
+  - New `TokenLimitError`, `ContentLimitError` classes and `isRecoverableRequestError()` utility
+  - New `recovery.service.ts` for building and streaming recovery messages
 - feat: Add TOOL_PROVIDER plugin capability for custom LLM tools
   - New plugin capability allows plugins to provide custom tools for LLM interactions
   - Tool plugins define tool schemas, validation, execution handlers, and result formatting

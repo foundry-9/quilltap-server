@@ -43,6 +43,12 @@ export const MessageEventSchema = z.object({
   thoughtSignature: z.string().nullable().optional(),
   // Multi-character chat: which participant sent this message
   participantId: UUIDSchema.nullable().optional(),
+  // Recovery type: indicates this message was generated as an error recovery response
+  // 'token_limit' = LLM-generated recovery response for token limit errors
+  // 'token_limit_static' = Static fallback message when LLM recovery also failed
+  // 'content_limit' = LLM-generated recovery response for content limit errors (PDF pages, etc.)
+  // 'content_limit_static' = Static fallback message when LLM recovery for content limit also failed
+  recoveryType: z.enum(['token_limit', 'token_limit_static', 'content_limit', 'content_limit_static']).nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;

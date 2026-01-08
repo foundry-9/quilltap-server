@@ -195,3 +195,8 @@ export type { BuiltContext }
  * Fallback result from file attachment processing
  */
 export type { FallbackResult }
+
+/**
+ * Recovery context and result types
+ */
+export type { RecoveryContext, RecoveryResult } from './recovery.service'

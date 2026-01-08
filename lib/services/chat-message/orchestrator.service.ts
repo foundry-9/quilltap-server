@@ -69,6 +69,8 @@ import {
 } from './memory-trigger.service'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
+import { isRecoverableRequestError } from '@/lib/llm/errors'
+import { attemptRequestLimitRecovery } from './recovery.service'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
@@ -333,31 +335,76 @@ async function processMessage(
   let rawResponse: unknown = null
   let thoughtSignature: string | undefined
 
-  for await (const chunk of streamMessage({
-    messages: formattedMessages,
-    connectionProfile,
-    apiKey,
-    modelParams,
-    tools: actualTools,
-    useNativeWebSearch,
-  })) {
-    if (chunk.content) {
-      fullResponse += chunk.content
-      controller.enqueue(encodeContentChunk(encoder, chunk.content))
-    }
+  try {
+    for await (const chunk of streamMessage({
+      messages: formattedMessages,
+      connectionProfile,
+      apiKey,
+      modelParams,
+      tools: actualTools,
+      useNativeWebSearch,
+    })) {
+      if (chunk.content) {
+        fullResponse += chunk.content
+        controller.enqueue(encodeContentChunk(encoder, chunk.content))
+      }
 
-    if (chunk.done) {
-      usage = chunk.usage || null
-      cacheUsage = chunk.cacheUsage || null
-      attachmentResults = chunk.attachmentResults || null
-      rawResponse = chunk.rawResponse
-      if (chunk.thoughtSignature) {
-        thoughtSignature = chunk.thoughtSignature
-        logger.debug('Captured thought signature from response', {
-          signatureLength: thoughtSignature.length,
-        })
+      if (chunk.done) {
+        usage = chunk.usage || null
+        cacheUsage = chunk.cacheUsage || null
+        attachmentResults = chunk.attachmentResults || null
+        rawResponse = chunk.rawResponse
+        if (chunk.thoughtSignature) {
+          thoughtSignature = chunk.thoughtSignature
+          logger.debug('Captured thought signature from response', {
+            signatureLength: thoughtSignature.length,
+          })
+        }
       }
     }
+  } catch (streamingError) {
+    // Check if this is a recoverable request error (token limit, PDF pages, etc.)
+    if (isRecoverableRequestError(streamingError)) {
+      logger.info('Recoverable request error detected, attempting recovery', {
+        chatId,
+        provider: connectionProfile.provider,
+        model: connectionProfile.modelName,
+        attachmentCount: fileProcessing.attachedFiles.length,
+        error: streamingError instanceof Error ? streamingError.message : String(streamingError),
+      })
+
+      const recoveryResult = await attemptRequestLimitRecovery({
+        controller,
+        encoder,
+        character,
+        connectionProfile,
+        apiKey,
+        attachedFiles: fileProcessing.attachedFiles,
+        originalMessage: options.content,
+        error: streamingError,
+        repos,
+        chatId,
+        userId,
+        characterParticipantId: characterParticipant.id,
+      })
+
+      if (recoveryResult.success) {
+        logger.info('Request limit recovery successful', {
+          chatId,
+          messageId: recoveryResult.messageId,
+          isStaticFallback: recoveryResult.isStaticFallback,
+        })
+        // Close the stream - recovery has handled everything
+        controller.close()
+        return
+      }
+
+      // Recovery failed, re-throw the original error
+      logger.warn('Request limit recovery failed, propagating error', { chatId })
+    }
+
+    // Not a recoverable error or recovery failed - re-throw
+    throw streamingError
   }
 
   // Process tool calls
