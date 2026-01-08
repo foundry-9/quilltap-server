@@ -4,6 +4,19 @@
 
 ### 2.7-dev
 
+- feat: Enhanced file deletion with association management
+  - Files linked to chats or characters now show a detailed confirmation dialog before deletion
+  - Dialog lists all associated characters (by name) and chats (by name) using the file
+  - Users can choose to cancel or "Delete Anyway" to proceed
+  - Deleting dissociates the file from all linked entities first:
+    - Messages with attachments get a note appended: `[Attachment "filename" deleted timestamp]`
+    - Character default avatars and avatar overrides are cleared
+  - Direct repository updates ensure memories are NOT regenerated from the deletion notes
+  - New helper: `lib/files/get-file-associations.ts` for resolving file associations
+  - New component: `FileDeleteConfirmation.tsx` for the association dialog
+  - API now returns `code: 'FILE_HAS_ASSOCIATIONS'` with detailed association info
+  - New `?dissociate=true` parameter for DELETE endpoint to handle cleanup
+  - FilesCard "Browse All Files" modal now has `closeOnClickOutside={false}` to prevent closing when nested dialogs appear
 - feat: Graceful request limit error recovery
   - When a message exceeds LLM limits (token limit, PDF page limit, etc.), the system attempts to recover gracefully
   - Sends a simplified message to the LLM explaining what happened, including attachment details (filename, type, size)

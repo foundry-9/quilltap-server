@@ -15,6 +15,11 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { FileInfo } from '../../types'
 
+interface FileAssociation {
+  characters: { id: string; name: string; usage: string }[]
+  messages: { chatId: string; chatName: string; messageId: string }[]
+}
+
 interface UseFileActionsOptions {
   file: FileInfo
   onDelete?: (fileId: string) => void
@@ -33,6 +38,15 @@ interface UseFileActionsResult {
   isDeleting: boolean
   /** Whether the file can be moved (always true - can move to project, between projects, or to general) */
   canMoveToProject: boolean
+  /** Pending delete info when file has associations */
+  pendingDelete: {
+    fileId: string
+    associations: FileAssociation
+  } | null
+  /** Confirm deletion with dissociation */
+  confirmDelete: () => Promise<void>
+  /** Cancel pending delete */
+  cancelDelete: () => void
 }
 
 export function useFileActions({
@@ -42,6 +56,10 @@ export function useFileActions({
   onClose,
 }: UseFileActionsOptions): UseFileActionsResult {
   const [isDeleting, setIsDeleting] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<{
+    fileId: string
+    associations: FileAssociation
+  } | null>(null)
 
   // Files can always be moved - to a project, between projects, or back to general files
   const canMoveToProject = true
@@ -73,23 +91,31 @@ export function useFileActions({
     clientLogger.debug('[useFileActions] Deleting file', { fileId: file.id })
 
     try {
-      // Use force=true since user is explicitly deleting from file preview
-      const response = await fetch(`/api/files/${file.id}?force=true`, {
+      // No longer using force=true - respect associations
+      const response = await fetch(`/api/files/${file.id}`, {
         method: 'DELETE',
       })
 
       const data = await response.json().catch(() => ({}))
 
-      if (!response.ok) {
+      if (response.ok) {
+        clientLogger.debug('[useFileActions] File deleted', { fileId: file.id })
+        showSuccessToast('File deleted')
+        onDelete?.(file.id)
+        onClose?.()
+      } else if (data.details?.code === 'FILE_HAS_ASSOCIATIONS') {
+        // File has associations - show confirmation dialog
+        clientLogger.debug('[useFileActions] File has associations', {
+          fileId: file.id,
+          associations: data.details.associations,
+        })
+        setPendingDelete({
+          fileId: file.id,
+          associations: data.details.associations,
+        })
+      } else {
         throw new Error(data.error || 'Failed to delete file')
       }
-
-      clientLogger.debug('[useFileActions] File deleted', { fileId: file.id })
-      showSuccessToast('File deleted')
-
-      // Notify parent component
-      onDelete?.(file.id)
-      onClose?.()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to delete file'
       clientLogger.error('[useFileActions] Delete failed', {
@@ -112,11 +138,55 @@ export function useFileActions({
     onMoveToProject?.(file.id)
   }, [file, onMoveToProject])
 
+  const confirmDelete = useCallback(async () => {
+    if (!pendingDelete) return
+
+    setIsDeleting(true)
+    clientLogger.debug('[useFileActions] Confirming delete with dissociation', {
+      fileId: pendingDelete.fileId,
+    })
+
+    try {
+      const response = await fetch(`/api/files/${pendingDelete.fileId}?dissociate=true`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        clientLogger.debug('[useFileActions] File deleted with dissociation', {
+          fileId: pendingDelete.fileId,
+        })
+        showSuccessToast('File deleted')
+        setPendingDelete(null)
+        onDelete?.(pendingDelete.fileId)
+        onClose?.()
+      } else {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to delete file')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete file'
+      clientLogger.error('[useFileActions] Delete with dissociation failed', {
+        fileId: pendingDelete.fileId,
+        error: message,
+      })
+      showErrorToast(message)
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [pendingDelete, onDelete, onClose])
+
+  const cancelDelete = useCallback(() => {
+    setPendingDelete(null)
+  }, [])
+
   return {
     handleDownload,
     handleDelete,
     handleMoveToProject,
     isDeleting,
     canMoveToProject,
+    pendingDelete,
+    confirmDelete,
+    cancelDelete,
   }
 }

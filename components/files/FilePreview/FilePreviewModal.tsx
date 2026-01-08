@@ -16,6 +16,7 @@ import FilePreviewImage from './FilePreviewImage'
 import FilePreviewPdf from './FilePreviewPdf'
 import FilePreviewText from './FilePreviewText'
 import FilePreviewFallback from './FilePreviewFallback'
+import FileDeleteConfirmation from '../FileDeleteConfirmation'
 
 export default function FilePreviewModal({
   file,
@@ -38,7 +39,16 @@ export default function FilePreviewModal({
     goToNext,
   } = useFilePreview({ file, files })
 
-  const { handleDownload, handleDelete, handleMoveToProject, isDeleting, canMoveToProject } = useFileActions({
+  const {
+    handleDownload,
+    handleDelete,
+    handleMoveToProject,
+    isDeleting,
+    canMoveToProject,
+    pendingDelete,
+    confirmDelete,
+    cancelDelete,
+  } = useFileActions({
     file,
     onDelete,
     onMoveToProject,
@@ -186,6 +196,18 @@ export default function FilePreviewModal({
               </button>
             )}
           </>
+        )}
+
+        {/* Delete Confirmation for files with associations */}
+        {pendingDelete && (
+          <FileDeleteConfirmation
+            isOpen={!!pendingDelete}
+            filename={file.originalFilename || file.filename || 'file'}
+            associations={pendingDelete.associations}
+            onConfirm={confirmDelete}
+            onCancel={cancelDelete}
+            isDeleting={isDeleting}
+          />
         )}
       </div>
     </div>

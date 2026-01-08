@@ -11,6 +11,10 @@ import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, forbidden } from '@/lib/api/responses';
 import { downloadFile as downloadS3File, getPresignedUrl, deleteFile as deleteS3File } from '@/lib/s3/operations';
+import { getFileAssociations } from '@/lib/files/get-file-associations';
+import { getUserRepositories } from '@/lib/repositories/factory';
+import type { FileEntry } from '@/lib/schemas/file.types';
+import type { RepositoryContainer } from '@/lib/repositories/factory';
 
 /**
  * Build Content-Disposition header value with proper Unicode support
@@ -113,16 +117,132 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 );
 
 /**
+ * Dissociate a file from all linked entities
+ * Updates messages with deletion notes and removes file from character settings
+ */
+async function dissociateFileFromAll(
+  fileId: string,
+  file: FileEntry,
+  repos: RepositoryContainer
+) {
+  const timestamp = new Date().toISOString();
+  const filename = file.originalFilename || 'unknown file';
+
+  logger.debug('Starting file dissociation', {
+    context: 'dissociateFileFromAll',
+    fileId,
+    filename,
+    linkedToCount: file.linkedTo.length,
+  });
+
+  // 1. Update messages - add deletion note, remove from attachments
+  const chats = await repos.chats.findAll();
+  for (const entityId of file.linkedTo) {
+    for (const chat of chats) {
+      try {
+        const messages = await repos.chats.getMessages(chat.id);
+        const message = messages.find(m => m.id === entityId && m.type === 'message');
+        if (
+          message &&
+          message.type === 'message' &&
+          'attachments' in message &&
+          message.attachments?.includes(fileId)
+        ) {
+          const note = `\n\n[Attachment "${filename}" deleted ${timestamp}]`;
+          await repos.chats.updateMessage(chat.id, message.id, {
+            content: message.content + note,
+            attachments: message.attachments.filter(a => a !== fileId),
+          });
+          logger.debug('Updated message with deletion note', {
+            context: 'dissociateFileFromAll',
+            chatId: chat.id,
+            messageId: message.id,
+            fileId,
+          });
+          break;
+        }
+      } catch (error) {
+        logger.warn('Error updating message during dissociation', {
+          context: 'dissociateFileFromAll',
+          chatId: chat.id,
+          fileId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
+  // 2. Update characters - clear defaultImageId and avatarOverrides
+  try {
+    const charsWithDefault = await repos.characters.findByDefaultImageId(fileId);
+    for (const char of charsWithDefault) {
+      await repos.characters.update(char.id, { defaultImageId: null });
+      logger.debug('Cleared character defaultImageId', {
+        context: 'dissociateFileFromAll',
+        characterId: char.id,
+        characterName: char.name,
+        fileId,
+      });
+    }
+  } catch (error) {
+    logger.warn('Error clearing character defaultImageId', {
+      context: 'dissociateFileFromAll',
+      fileId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  try {
+    const charsWithOverride = await repos.characters.findByAvatarOverrideImageId(fileId);
+    for (const char of charsWithOverride) {
+      const filtered = char.avatarOverrides.filter(o => o.imageId !== fileId);
+      await repos.characters.update(char.id, { avatarOverrides: filtered });
+      logger.debug('Removed from character avatarOverrides', {
+        context: 'dissociateFileFromAll',
+        characterId: char.id,
+        characterName: char.name,
+        fileId,
+      });
+    }
+  } catch (error) {
+    logger.warn('Error clearing character avatarOverrides', {
+      context: 'dissociateFileFromAll',
+      fileId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // 3. Clear linkedTo on file
+  try {
+    await repos.files.update(fileId, { linkedTo: [] });
+  } catch (error) {
+    logger.warn('Error clearing file linkedTo', {
+      context: 'dissociateFileFromAll',
+      fileId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  logger.info('File dissociation complete', {
+    context: 'dissociateFileFromAll',
+    fileId,
+    filename,
+  });
+}
+
+/**
  * DELETE /api/files/:id
  * Delete a file by its ID from S3 storage
  * Use ?force=true to delete even if file is linked to entities
+ * Use ?dissociate=true to automatically dissociate from all entities before deletion
  */
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
-  async (request, { repos }, { id: fileId }) => {
+  async (request, { user, repos }, { id: fileId }) => {
     try {
-      // Check for force parameter
+      // Check for force and dissociate parameters
       const { searchParams } = new URL(request.url);
       const force = searchParams.get('force') === 'true';
+      const dissociate = searchParams.get('dissociate') === 'true';
 
       // Get file metadata from repository
       const fileEntry = await repos.files.findById(fileId);
@@ -131,20 +251,65 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('File');
       }
 
-      logger.debug('Deleting file', { context: 'DELETE /api/files/[id]', fileId, hasS3Key: !!fileEntry.s3Key, force });
+      logger.debug('Deleting file', { context: 'DELETE /api/files/[id]', fileId, hasS3Key: !!fileEntry.s3Key, force, dissociate });
 
-      // Check if file is still linked to any entities (unless force=true)
-      if (!force && fileEntry.linkedTo.length > 0) {
-        logger.debug('Cannot delete file linked to entities', {
+      // Handle dissociation if requested
+      if (dissociate && fileEntry.linkedTo.length > 0) {
+        logger.debug('Dissociating file from all linked entities', {
           context: 'DELETE /api/files/[id]',
           fileId,
           linkedToCount: fileEntry.linkedTo.length,
         });
 
-        return badRequest(
-          'Cannot delete file linked to chats, characters, or projects.',
-          { linkedTo: fileEntry.linkedTo }
-        );
+        await dissociateFileFromAll(fileId, fileEntry, repos);
+        // Refresh file entry after dissociation
+        const updatedFile = await repos.files.findById(fileId);
+        if (updatedFile) {
+          Object.assign(fileEntry, updatedFile);
+        }
+      }
+
+      // Check if file is still linked to any entities (unless force=true or dissociate=true)
+      if (!force && !dissociate && fileEntry.linkedTo.length > 0) {
+        logger.debug('Checking file associations before deletion', {
+          context: 'DELETE /api/files/[id]',
+          fileId,
+          linkedToCount: fileEntry.linkedTo.length,
+        });
+
+        // Get enhanced association details for error response
+        const userRepos = getUserRepositories(user.id);
+        const associations = await getFileAssociations(fileId, fileEntry.linkedTo, userRepos);
+
+        // Only block if there are actual associations found
+        // (linkedTo might contain stale entries that don't match real data)
+        const hasRealAssociations = associations.characters.length > 0 || associations.messages.length > 0;
+
+        if (hasRealAssociations) {
+          logger.debug('File has real associations, blocking deletion', {
+            context: 'DELETE /api/files/[id]',
+            fileId,
+            characterCount: associations.characters.length,
+            messageCount: associations.messages.length,
+          });
+
+          return badRequest(
+            'File is linked to other items',
+            {
+              code: 'FILE_HAS_ASSOCIATIONS',
+              associations,
+            }
+          );
+        } else {
+          // linkedTo has stale entries but no real associations found
+          // Clean up the stale linkedTo and proceed with deletion
+          logger.info('File has stale linkedTo entries, cleaning up before deletion', {
+            context: 'DELETE /api/files/[id]',
+            fileId,
+            staleLinkedToCount: fileEntry.linkedTo.length,
+          });
+          await repos.files.update(fileId, { linkedTo: [] });
+        }
       }
 
       // Delete from S3 if file has s3Key

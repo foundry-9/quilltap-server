@@ -91,7 +91,8 @@ export default function FilePreviewPdf({
         if (cancelled) return
         clientLogger.error('[FilePreviewPdf] Failed to load PDF', {
           fileId: file.id,
-          error: err instanceof Error ? err.message : 'Unknown error',
+          error: err instanceof Error ? err.message : String(err),
+          errorType: err?.constructor?.name || typeof err,
         })
         setError('Failed to load PDF. Try downloading instead.')
       } finally {
@@ -146,7 +147,8 @@ export default function FilePreviewPdf({
         clientLogger.error('[FilePreviewPdf] Failed to render page', {
           fileId: file.id,
           page: currentPage,
-          error: err instanceof Error ? err.message : 'Unknown error',
+          error: err instanceof Error ? err.message : String(err),
+          errorType: err?.constructor?.name || typeof err,
         })
       }
     }

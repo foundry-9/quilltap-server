@@ -202,12 +202,17 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
       </div>
 
       {/* File Browser Modal */}
+      {/* closeOnClickOutside=false prevents the modal from closing when
+          showConfirmation or FileDeleteConfirmation dialogs appear,
+          since those render outside this modal's DOM tree */}
       {projectId && (
         <BaseModal
           isOpen={showBrowser}
           onClose={() => setShowBrowser(false)}
           title="Project Files"
           maxWidth="3xl"
+          closeOnClickOutside={false}
+          showCloseButton={true}
         >
           <div className="min-h-[400px]">
             <FileBrowser
@@ -238,6 +243,11 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
           file={selectedFile}
           files={filesAsFileInfo}
           onClose={() => setSelectedFile(null)}
+          onDelete={(fileId) => {
+            clientLogger.debug('FilesCard: file deleted from preview', { fileId })
+            setSelectedFile(null)
+            onFilesChange?.()
+          }}
           onNavigate={(file) => setSelectedFile(file)}
         />
       )}

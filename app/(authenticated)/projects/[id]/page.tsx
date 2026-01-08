@@ -101,6 +101,7 @@ export default function ProjectDetailPage() {
           expanded={cardState.files}
           onToggle={() => toggleCard('files')}
           projectId={projectId}
+          onFilesChange={fetchFiles}
         />
         <CharactersCard
           project={project}

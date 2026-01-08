@@ -17,6 +17,7 @@ import FileBrowserList from './FileBrowserList'
 import { FilePreviewModal } from './FilePreview'
 import { CreateFolderModal } from './FolderManagement'
 import MoveToProjectModal from './MoveToProjectModal'
+import FileDeleteConfirmation from './FileDeleteConfirmation'
 import { useProjectFileUpload } from './useProjectFileUpload'
 import { FileInfo, FolderInfo, SortState, sortFiles } from './types'
 
@@ -55,6 +56,15 @@ export default function FileBrowser({
   const [showCreateFolder, setShowCreateFolder] = useState(false)
   // Move to project modal state
   const [moveModalFile, setMoveModalFile] = useState<{ id: string; name: string } | null>(null)
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    fileId: string;
+    filename: string;
+    associations: {
+      characters: { id: string; name: string; usage: string }[];
+      messages: { chatId: string; chatName: string; messageId: string }[];
+    };
+  } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Upload functionality (only enabled when showUpload=true and projectId is provided)
   const {
@@ -172,11 +182,24 @@ export default function FileBrowser({
       clientLogger.debug('[FileBrowser] Deleting file', { fileId })
       const res = await fetch(`/api/files/${fileId}`, { method: 'DELETE' })
       const data = await res.json().catch(() => ({}))
+
       if (res.ok) {
         setFiles(files.filter(f => f.id !== fileId))
         showSuccessToast('File deleted')
         clientLogger.debug('[FileBrowser] File deleted', { fileId })
         onFilesChange?.()
+      } else if (data.details?.code === 'FILE_HAS_ASSOCIATIONS') {
+        // Show enhanced confirmation with association details
+        const file = files.find(f => f.id === fileId)
+        clientLogger.debug('[FileBrowser] File has associations, showing dialog', {
+          fileId,
+          associations: data.details.associations,
+        })
+        setDeleteConfirmation({
+          fileId,
+          filename: file?.originalFilename || file?.filename || 'file',
+          associations: data.details.associations,
+        })
       } else {
         throw new Error(data.error || 'Failed to delete file')
       }
@@ -186,6 +209,42 @@ export default function FileBrowser({
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast(error instanceof Error ? error.message : 'Failed to delete file')
+    }
+  }
+
+  const handleConfirmDeleteWithDissociation = async () => {
+    if (!deleteConfirmation) return
+
+    setIsDeleting(true)
+    try {
+      clientLogger.debug('[FileBrowser] Deleting file with dissociation', {
+        fileId: deleteConfirmation.fileId,
+      })
+      const res = await fetch(
+        `/api/files/${deleteConfirmation.fileId}?dissociate=true`,
+        { method: 'DELETE' }
+      )
+
+      if (res.ok) {
+        setFiles(files.filter(f => f.id !== deleteConfirmation.fileId))
+        showSuccessToast('File deleted')
+        clientLogger.debug('[FileBrowser] File deleted with dissociation', {
+          fileId: deleteConfirmation.fileId,
+        })
+        setDeleteConfirmation(null)
+        onFilesChange?.()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to delete file')
+      }
+    } catch (error) {
+      clientLogger.error('[FileBrowser] Failed to delete file with dissociation', {
+        fileId: deleteConfirmation.fileId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      showErrorToast(error instanceof Error ? error.message : 'Failed to delete file')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -382,6 +441,18 @@ export default function FileBrowser({
           fileName={moveModalFile.name}
           currentProjectId={projectId}
           onSuccess={handleMoveSuccess}
+        />
+      )}
+
+      {/* File Delete Confirmation Dialog */}
+      {deleteConfirmation && (
+        <FileDeleteConfirmation
+          isOpen={!!deleteConfirmation}
+          filename={deleteConfirmation.filename}
+          associations={deleteConfirmation.associations}
+          onConfirm={handleConfirmDeleteWithDissociation}
+          onCancel={() => setDeleteConfirmation(null)}
+          isDeleting={isDeleting}
         />
       )}
 
