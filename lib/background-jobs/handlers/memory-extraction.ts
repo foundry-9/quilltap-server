@@ -53,6 +53,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   const ctx: MemoryExtractionContext = {
     characterId: payload.characterId,
     characterName: payload.characterName,
+    userCharacterId: payload.userCharacterId,
     chatId: payload.chatId,
     userMessage: payload.userMessage,
     assistantMessage: payload.assistantMessage,

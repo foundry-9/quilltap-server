@@ -31,6 +31,8 @@ import { addTokenTrackingFieldsMigration } from './add-token-tracking-fields';
 import { addUseNativeWebSearchFieldMigration } from './add-use-native-web-search-field';
 // S3 key restructuring
 import { restructureS3KeysMigration } from './restructure-s3-keys';
+// Memory aboutCharacterId population
+import { populateMemoryAboutCharacterIdsMigration } from './populate-memory-about-character-ids';
 
 /**
  * All available migrations.
@@ -62,6 +64,8 @@ export const migrations: Migration[] = [
   addUseNativeWebSearchFieldMigration,
   // S3 key restructuring
   restructureS3KeysMigration,
+  // Memory aboutCharacterId population
+  populateMemoryAboutCharacterIdsMigration,
 ];
 
 export {
@@ -90,4 +94,6 @@ export {
   addUseNativeWebSearchFieldMigration,
   // S3 key restructuring
   restructureS3KeysMigration,
+  // Memory aboutCharacterId population
+  populateMemoryAboutCharacterIdsMigration,
 };

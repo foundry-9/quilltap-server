@@ -34,7 +34,10 @@ export interface MemoryExtractionPayload {
   assistantMessage: string;
   sourceMessageId: string;
   connectionProfileId: string;
+  /** @deprecated Use userCharacterId instead */
   personaId?: string;
+  /** User character ID - who the memory is about (the user-controlled character) */
+  userCharacterId?: string;
 }
 
 /**

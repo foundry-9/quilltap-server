@@ -7,6 +7,7 @@ import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize'
 import { decryptApiKey } from '@/lib/encryption'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
+import { buildFirstMessageContext } from '@/lib/chat/first-message-context'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
 import type { ChatEvent, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types'
@@ -267,7 +268,8 @@ async function createInitialMessages(
   context: ChatContext,
   participants: ChatParticipantBaseInput[],
   userId: string,
-  repos: Repos
+  repos: Repos,
+  projectId?: string | null
 ): Promise<void> {
   const systemMessage: ChatEvent = {
     type: 'message',
@@ -282,7 +284,7 @@ async function createInitialMessages(
   let firstMessageContent = (context.firstMessage || '').trim()
 
   if (!firstMessageContent) {
-    firstMessageContent = await autoGenerateFirstMessage(context, participants, userId, repos)
+    firstMessageContent = await autoGenerateFirstMessage(context, participants, userId, repos, projectId)
   }
 
   if (!firstMessageContent) {
@@ -320,7 +322,8 @@ async function autoGenerateFirstMessage(
   context: ChatContext,
   participants: ChatParticipantBaseInput[],
   userId: string,
-  repos: Repos
+  repos: Repos,
+  projectId?: string | null
 ): Promise<string> {
   const participant = selectCharacterParticipant(context.character.id, participants)
 
@@ -352,6 +355,55 @@ async function autoGenerateFirstMessage(
   const rawParameters = connectionProfile.parameters as Record<string, unknown> | undefined
   const parameters = rawParameters ?? {}
 
+  // Build enhanced context with participant memories and project context
+  let participantMemories: { aboutCharacterName: string; summary: string }[] = []
+  let projectContext: { name: string; description?: string | null; instructions?: string | null } | null = null
+
+  try {
+    // Get embedding profile from chat settings
+    const chatSettings = await repos.chatSettings.findByUserId(userId)
+    const embeddingProfileId = chatSettings?.cheapLLMSettings?.embeddingProfileId
+
+    logger.debug('[autoGenerateFirstMessage] Building first message context', {
+      context: 'autoGenerateFirstMessage',
+      characterId: context.character.id,
+      characterName: context.character.name,
+      participantCount: participants.length,
+      hasProjectId: !!projectId,
+      hasEmbeddingProfile: !!embeddingProfileId,
+    })
+
+    const firstMessageContext = await buildFirstMessageContext(
+      context.character.id,
+      participants,
+      {
+        userId,
+        projectId,
+        embeddingProfileId: embeddingProfileId ?? undefined,
+      }
+    )
+
+    // Map memories to the format expected by generateGreetingMessage
+    participantMemories = firstMessageContext.participantMemories.map(m => ({
+      aboutCharacterName: m.aboutCharacterName,
+      summary: m.summary,
+    }))
+    projectContext = firstMessageContext.projectContext
+
+    logger.debug('[autoGenerateFirstMessage] First message context built', {
+      context: 'autoGenerateFirstMessage',
+      memoryCount: participantMemories.length,
+      hasProjectContext: !!projectContext,
+    })
+  } catch (error) {
+    logger.error('[autoGenerateFirstMessage] Failed to build first message context', {
+      context: 'autoGenerateFirstMessage',
+      characterId: context.character.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    // Continue with basic greeting (no memories/project context)
+  }
+
   try {
     const greeting = await generateGreetingMessage({
       systemPrompt: context.systemPrompt,
@@ -363,6 +415,8 @@ async function autoGenerateFirstMessage(
       temperature: extractNumber(parameters.temperature),
       maxTokens: extractNumber(parameters.maxTokens),
       topP: extractNumber(parameters.topP),
+      participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
+      projectContext,
     })
     return greeting
   } catch (error) {
@@ -490,7 +544,8 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
       context,
       participantsWithTimestamps,
       user.id,
-      repos
+      repos,
+      validatedData.projectId || null
     )
 
     const enrichedParticipants = await Promise.all(

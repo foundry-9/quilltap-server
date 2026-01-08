@@ -4,6 +4,33 @@
 
 ### 2.7-dev
 
+- feat: Enhanced first message context for auto-generated greetings
+  - Characters now receive relevant context when speaking first in a new chat
+  - Includes recent and semantically-relevant memories about other participants (3-5 per participant)
+  - Project name, description, and instructions are included if chat is in a project
+  - Uses "Recent + Participant-based" memory retrieval strategy
+  - New module: `lib/chat/first-message-context.ts` for context building
+  - Extended `generateGreetingMessage()` to accept memory and project context
+  - Only applies to auto-generated greetings (not scripted `firstMessage`)
+  - Text-based fallback search for memories when semantic search is unavailable
+- fix: Memory extraction now properly links memories to user-controlled characters
+  - Added `userCharacterId` to memory extraction context flow
+  - Memories are now created with `aboutCharacterId` set to the user-controlled character in the chat
+  - Updated: `memory-processor.ts`, `memory-trigger.service.ts`, `orchestrator.service.ts`
+  - Background job handler also updated to pass `userCharacterId` from payload
+  - Fixes issue where all memories had `aboutCharacterId: null`
+- feat: Migration to populate `aboutCharacterId` for existing memories
+  - New migration `populate-memory-about-character-ids-v1` retroactively fixes old memories
+  - Looks up each memory's chat to find the user-controlled character
+  - Sets `aboutCharacterId` to that character's ID for better memory retrieval
+  - Upgrade plugin bumped to v1.0.17
+- fix: Template variables in user character descriptions now properly substituted
+  - `{{char}}` in user character's description/personality was appearing unsubstituted in system prompts
+  - Now processes user character fields with their own template context (`{{char}}` = user character name)
+  - Updated `lib/chat/initialize.ts` to call `processTemplate` on user character data
+- feat: Full system prompts now logged for LLM requests
+  - `initial-greeting.ts` and `recovery.service.ts` now log complete system prompt content
+  - Helps with debugging and verifying context injection
 - feat: Enhanced file deletion with association management
   - Files linked to chats or characters now show a detailed confirmation dialog before deletion
   - Dialog lists all associated characters (by name) and chats (by name) using the file

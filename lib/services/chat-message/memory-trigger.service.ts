@@ -31,6 +31,8 @@ export async function triggerMemoryExtraction(
     characterId: string
     characterName: string
     personaName?: string
+    /** User character ID - who the memory is about (the user-controlled character) */
+    userCharacterId?: string
     allCharacterNames?: string[]
     chatId: string
     userMessage: string
@@ -53,6 +55,7 @@ export async function triggerMemoryExtraction(
       characterId: options.characterId,
       characterName: options.characterName,
       personaName: options.personaName,
+      userCharacterId: options.userCharacterId,
       allCharacterNames: options.allCharacterNames,
       chatId: options.chatId,
       userMessage: options.userMessage,

@@ -163,6 +163,13 @@ async function processMessage(
   // Get persona data
   const { persona, personaData } = await getPersonaData(repos, chat)
 
+  // Get user-controlled character ID (for memory aboutCharacterId)
+  // This is the character that the user is "playing as" in this chat
+  const userControlledParticipant = chat.participants.find(
+    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId && p.isActive
+  )
+  const userCharacterId = userControlledParticipant?.characterId || undefined
+
   // Get chat settings
   const chatSettings = await repos.chatSettings.findByUserId(userId)
 
@@ -688,6 +695,7 @@ async function processMessage(
         characterId: character.id,
         characterName: character.name,
         personaName: personaData?.name,
+        userCharacterId,
         allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
         chatId,
         userMessage: isContinueMode ? '[Continue/Nudge - no user message]' : content,

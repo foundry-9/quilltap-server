@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-upgrade",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "Quilltap upgrade and migration manager plugin",
   "main": "index.js",
   "types": "index.d.ts",

@@ -304,7 +304,9 @@ export async function attemptRequestLimitRecovery(
   logger.debug('Recovery message constructed', {
     chatId,
     errorType,
+    systemPrompt,
     systemPromptLength: systemPrompt.length,
+    userMessage,
     userMessageLength: userMessage.length,
   })
 
