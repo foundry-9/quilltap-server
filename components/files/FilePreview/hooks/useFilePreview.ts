@@ -50,7 +50,10 @@ export function useFilePreview({
   const [isLoadingText, setIsLoadingText] = useState(false)
   const [textError, setTextError] = useState<string | null>(null)
 
-  const previewType = useMemo(() => getPreviewType(file.mimeType), [file.mimeType])
+  const previewType = useMemo(
+    () => getPreviewType(file.mimeType, file.isPlainText),
+    [file.mimeType, file.isPlainText]
+  )
   const fileUrl = useMemo(() => `/api/files/${file.id}`, [file.id])
 
   const currentIndex = useMemo(

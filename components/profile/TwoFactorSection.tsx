@@ -399,9 +399,9 @@ export function TwoFactorSection({
 
               <button
                 onClick={handleCopyBackupCodes}
-                className="qt-button qt-button-ghost text-sm mt-4"
+                className={`qt-copy-button mt-4 ${codesCopied ? 'qt-copy-button-success' : ''}`}
               >
-                {codesCopied ? 'Copied!' : 'Copy backup codes'}
+                {codesCopied ? '✓ Copied' : '📋 Copy backup codes'}
               </button>
             </div>
 

@@ -40,6 +40,9 @@ export const FileEntrySchema = z.object({
   width: z.number().nullable().optional(),
   height: z.number().nullable().optional(),
 
+  // Text content detection (populated during upload)
+  isPlainText: z.boolean().optional(),
+
   // Linking - array of IDs this file is associated with
   linkedTo: z.array(UUIDSchema).default([]),  // messageId, chatId, characterId, personaId, etc.
 

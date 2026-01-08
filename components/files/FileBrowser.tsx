@@ -464,7 +464,7 @@ export default function FileBrowser({
           multiple
           className="hidden"
           onChange={handleFileSelect}
-          accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
+          accept="*/*"
         />
       )}
     </div>

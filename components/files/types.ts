@@ -14,6 +14,7 @@ export interface FileInfo {
   filepath?: string
   projectId?: string | null
   linkedTo?: string[]
+  isPlainText?: boolean
   createdAt: string
   updatedAt: string
 }

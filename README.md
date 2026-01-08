@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.7.0--dev.47-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.7.0--dev.48-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -598,7 +598,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [X] Plugin-defined tools - Allow plugins to register custom tools the LLM can call
 - [ ] Tool management UI - Settings interface to enable/disable individual tools per profile
 - [X] If we are firing up a new chat and the character is speaking first, the LLM running the character should always get not only the most relevant but the most recent memories of their chats with the other characters (or user) in the chat, and if the chat is in a project, that project's name should also be told to the LLM. Under no circumstances should the character speak first without actually sending some kind of context, even if it's just the most basic prompt created by the system telling the LLM who their character is and what he or she is doing. In short, no generic non-contextual conversation startups.
-- [ ] Accept any arbitrary kind of file as an attachment, and have an internal indicator to mark if this file can be treated as text/plain (like for source code or Markdown files); assume most files are UTF8 encoded
+- [X] Accept any arbitrary kind of file as an attachment, and have an internal indicator to mark if this file can be treated as text/plain (like for source code or Markdown files); assume most files are UTF8 encoded
 
 ## Acknowledgments
 

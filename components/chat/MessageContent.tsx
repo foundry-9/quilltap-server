@@ -1,12 +1,76 @@
 'use client'
 
-import { useMemo, ReactNode } from 'react'
+import { useMemo, useState, useCallback, ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import type { Components } from 'react-markdown'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+import { clientLogger } from '@/lib/client-logger'
+
+/**
+ * Code block with copy button component
+ */
+function CodeBlockWithCopy({ code, language }: { code: string; language: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      clientLogger.debug('Code block copied to clipboard', { language, codeLength: code.length })
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      clientLogger.error('Failed to copy code block', { error: err instanceof Error ? err.message : String(err) })
+    }
+  }, [code, language])
+
+  return (
+    <div
+      className="qt-code-block-container"
+      style={{
+        position: 'relative',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        borderRadius: '0.375rem',
+        marginTop: '0.5rem',
+        marginBottom: '0.5rem',
+      }}
+    >
+      <button
+        onClick={handleCopy}
+        className={`qt-copy-button qt-code-block-copy ${copied ? 'qt-copy-button-success' : ''}`}
+        title={copied ? 'Copied!' : 'Copy to clipboard'}
+      >
+        {copied ? '✓' : '📋'}
+        <span className="qt-copy-button-text">{copied ? 'Copied' : 'Copy'}</span>
+      </button>
+      <SyntaxHighlighter
+        style={oneDark}
+        language={language}
+        PreTag="div"
+        wrapLines={true}
+        wrapLongLines={true}
+        customStyle={{
+          margin: 0,
+          padding: '1rem',
+          paddingTop: '2.5rem', // Extra padding for copy button
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          overflowWrap: 'break-word',
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+        }}
+      >
+        {code.replace(/\n$/, '')}
+      </SyntaxHighlighter>
+    </div>
+  )
+}
 
 interface MessageContentProps {
   content: string
@@ -292,37 +356,7 @@ export default function MessageContent({
         ? String(codeChildren)
         : ''
 
-      return (
-        <div style={{
-          width: '100%',
-          maxWidth: '100%',
-          boxSizing: 'border-box',
-          overflow: 'hidden',
-          borderRadius: '0.375rem',
-          marginTop: '0.5rem',
-          marginBottom: '0.5rem',
-        }}>
-          <SyntaxHighlighter
-            style={oneDark}
-            language={language}
-            PreTag="div"
-            wrapLines={true}
-            wrapLongLines={true}
-            customStyle={{
-              margin: 0,
-              padding: '1rem',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              overflowWrap: 'break-word',
-              width: '100%',
-              maxWidth: '100%',
-              boxSizing: 'border-box',
-            }}
-          >
-            {codeString.replace(/\n$/, '')}
-          </SyntaxHighlighter>
-        </div>
-      )
+      return <CodeBlockWithCopy code={codeString} language={language} />
     },
     // Inline code only (not wrapped in pre)
     code({ className, children, ...props }) {

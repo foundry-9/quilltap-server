@@ -23,7 +23,7 @@ export function CopyButton({ content }: Readonly<CopyButtonProps>) {
   return (
     <button
       onClick={handleCopy}
-      className={`qt-button qt-button-sm ${copied ? 'qt-button-primary' : 'qt-button-secondary'}`}
+      className={`qt-copy-button ${copied ? 'qt-copy-button-success' : ''}`}
       title={copied ? 'Copied!' : 'Copy to clipboard'}
     >
       {copied ? '✓ Copied' : '📋 Copy'}

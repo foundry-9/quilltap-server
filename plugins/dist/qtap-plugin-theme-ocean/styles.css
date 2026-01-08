@@ -177,6 +177,17 @@
   --qt-button-destructive-fg: hsl(var(--always-white));
   --qt-button-destructive-hover-bg: hsl(var(--danger-200));
 
+  /* Copy Button Variables - Glass bubble style */
+  --qt-copy-button-bg: hsl(200 50% 14% / 0.8);
+  --qt-copy-button-text: hsl(180 30% 92%);
+  --qt-copy-button-border: hsl(var(--accent-teal) / 0.3);
+  --qt-copy-button-hover-bg: hsl(200 50% 18% / 0.9);
+  --qt-copy-button-hover-text: hsl(var(--always-white));
+  --qt-copy-button-hover-border: hsl(var(--accent-teal) / 0.5);
+  --qt-copy-button-success-bg: hsl(var(--seaweed-green) / 0.9);
+  --qt-copy-button-success-text: hsl(var(--always-white));
+  --qt-copy-button-success-border: hsl(var(--seaweed-green) / 0.6);
+
   /* Status tokens */
   --qt-status-success-bg: hsl(var(--success-100) / 0.15);
   --qt-status-success-fg: hsl(var(--success-200));

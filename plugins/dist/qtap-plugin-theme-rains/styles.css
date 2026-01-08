@@ -199,6 +199,17 @@
   --qt-button-destructive-fg: hsl(var(--oncolor-100));
   --qt-button-destructive-hover-bg: hsl(var(--danger-000));
 
+  /* Copy Button Variables - Warm grey style */
+  --qt-copy-button-bg: hsl(var(--bg-100) / 0.9);
+  --qt-copy-button-text: hsl(var(--text-200));
+  --qt-copy-button-border: hsl(var(--border-300) / 0.2);
+  --qt-copy-button-hover-bg: hsl(var(--bg-000));
+  --qt-copy-button-hover-text: hsl(var(--text-000));
+  --qt-copy-button-hover-border: hsl(var(--border-300) / 0.3);
+  --qt-copy-button-success-bg: hsl(var(--success-100) / 0.9);
+  --qt-copy-button-success-text: hsl(var(--oncolor-100));
+  --qt-copy-button-success-border: hsl(var(--success-100) / 0.5);
+
   /* Status tokens */
   --qt-status-success-bg: hsl(var(--success-900) / 0.35);
   --qt-status-success-fg: hsl(var(--success-000));

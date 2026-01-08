@@ -9,6 +9,7 @@ import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
 import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as downloadS3File } from './s3/operations';
 import { buildS3Key } from './s3/client';
+import { detectTextContent, getBestMimeType } from './files/text-detection';
 import type { FileEntry, FileCategory, Provider } from './schemas/types';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from './files/tag-inheritance';
@@ -65,24 +66,6 @@ export interface ChatFileUploadOptions {
 }
 
 /**
- * Allowed file MIME types for chat attachments
- * Includes images and documents that various providers support
- */
-const ALLOWED_CHAT_FILE_TYPES = [
-  // Images (supported by OpenAI, Anthropic, Grok)
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  // Documents (supported by Anthropic, Grok)
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-];
-
-/**
  * Maximum file size in bytes (10 MB)
  */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -130,15 +113,9 @@ function getFileApiPath(fileId: string): string {
 }
 
 /**
- * Validate chat file
+ * Validate chat file (size only - no type restrictions)
  */
 export function validateChatFile(file: File): void {
-  if (!ALLOWED_CHAT_FILE_TYPES.includes(file.type)) {
-    throw new Error(
-      `Invalid file type: ${file.type}. Allowed types: ${ALLOWED_CHAT_FILE_TYPES.join(', ')}`
-    );
-  }
-
   if (file.size > MAX_FILE_SIZE) {
     throw new Error(
       `File size exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024} MB`
@@ -164,8 +141,21 @@ export async function uploadChatFile(
   const buffer = Buffer.from(bytes);
   const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
 
+  // Detect text content and infer better MIME type if needed
+  const textDetection = detectTextContent(buffer, file.name, file.type);
+  const mimeType = getBestMimeType(textDetection, file.type);
+
+  logger.debug('Text detection result for chat file', {
+    context: 'chat-files-v2',
+    filename: file.name,
+    providedMimeType: file.type,
+    detectedMimeType: textDetection.detectedMimeType,
+    finalMimeType: mimeType,
+    isPlainText: textDetection.isPlainText,
+  });
+
   // Determine category based on MIME type
-  const category: FileCategory = file.type.startsWith('image/') ? 'IMAGE' : 'ATTACHMENT';
+  const category: FileCategory = mimeType.startsWith('image/') ? 'IMAGE' : 'ATTACHMENT';
 
   // Build linkedTo array
   const linkedTo: string[] = [chatId];
@@ -304,12 +294,13 @@ export async function uploadChatFile(
       return await uploadFileToProject(
         buffer,
         finalFilename,
-        file.type,
+        mimeType,
         sha256,
         category,
         userId,
         projectId,
-        linkedTo
+        linkedTo,
+        textDetection.isPlainText
       );
     }
   }
@@ -353,12 +344,13 @@ export async function uploadChatFile(
   return await uploadFileToProject(
     buffer,
     file.name,
-    file.type,
+    mimeType,
     sha256,
     category,
     userId,
     projectId || undefined,
-    linkedTo
+    linkedTo,
+    textDetection.isPlainText
   );
 }
 
@@ -373,7 +365,8 @@ async function uploadFileToProject(
   category: FileCategory,
   userId: string,
   projectId: string | undefined,
-  linkedTo: string[]
+  linkedTo: string[],
+  isPlainText?: boolean
 ): Promise<ChatFileUploadResult> {
   const repos = getRepositories();
 
@@ -416,6 +409,7 @@ async function uploadFileToProject(
     size: buffer.length,
     width: null,
     height: null,
+    isPlainText,
     linkedTo,
     source: 'UPLOADED',
     category,
@@ -641,7 +635,9 @@ export async function readChatFileBuffer(fileId: string): Promise<Buffer> {
 
 /**
  * Get supported MIME types for chat file uploads
+ * @deprecated All file types are now supported. This function returns an empty array.
  */
 export function getSupportedMimeTypes(): string[] {
-  return [...ALLOWED_CHAT_FILE_TYPES];
+  // All file types are now supported - no restrictions
+  return [];
 }

@@ -4,6 +4,28 @@
 
 ### 2.7-dev
 
+- feat: Remove file type restrictions and add text content detection
+  - All file types can now be uploaded (general files, project files, attachments)
+  - Backend automatically detects if file content is plain text by sampling bytes
+  - MIME type inferred from file extension when browser provides generic types
+  - New `isPlainText` flag stored with file metadata for preview support
+  - Text files (source code, markdown, config files) now preview correctly
+  - 10MB file size limit retained
+  - New utility: `lib/files/text-detection.ts` for text detection and MIME inference
+  - Updated: project files upload route, chat-files-v2.ts, FileBrowser.tsx, FilePreview types
+- feat: Syntax highlighting for code files in preview
+  - Code files now display with proper syntax coloring using react-syntax-highlighter
+  - Line numbers shown for easier reference
+  - Supports 30+ languages: TypeScript, JavaScript, Python, Rust, Go, Java, C/C++, etc.
+  - Uses "One Dark" theme for consistent dark mode appearance
+  - Plain text and markdown files render without highlighting (as before)
+- feat: Copy button for text file preview
+  - All text-based files (code, markdown, plain text) now have a copy button in the preview
+  - Button appears in top-right corner, stays visible while scrolling
+  - Shows "Copied!" confirmation for 2 seconds after copying
+  - Styled with qt-copy-button classes for theme customization
+  - All themes updated with copy button CSS variables (Ocean 1.2.6, Earl Grey 1.2.2, Rains 1.1.5)
+  - Theme-storybook package updated with copy button component classes (1.0.6)
 - feat: Enhanced first message context for auto-generated greetings
   - Characters now receive relevant context when speaking first in a new chat
   - Includes recent and semantically-relevant memories about other participants (3-5 per participant)

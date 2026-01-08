@@ -160,9 +160,9 @@ export function ApiKeyPanel({
                     <button
                       type="button"
                       onClick={handleCopy}
-                      className="flex-shrink-0 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm"
+                      className={`flex-shrink-0 qt-copy-button ${copied ? 'qt-copy-button-success' : ''}`}
                     >
-                      {copied ? 'Copied!' : 'Copy'}
+                      {copied ? '✓ Copied' : '📋 Copy'}
                     </button>
                   </div>
                 </div>

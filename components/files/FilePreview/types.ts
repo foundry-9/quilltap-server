@@ -69,12 +69,15 @@ export interface FileMetadataPanelProps {
 }
 
 /**
- * Determine the preview type for a file based on its MIME type
+ * Determine the preview type for a file based on its MIME type and isPlainText flag
+ * @param mimeType The file's MIME type
+ * @param isPlainText Optional flag from text detection (if true, file is previewable as text)
  */
-export function getPreviewType(mimeType: string): PreviewType {
+export function getPreviewType(mimeType: string, isPlainText?: boolean): PreviewType {
   if (mimeType.startsWith('image/')) return 'image'
   if (mimeType === 'application/pdf') return 'pdf'
   if (
+    isPlainText ||
     mimeType.startsWith('text/') ||
     mimeType === 'application/json' ||
     mimeType === 'application/javascript' ||

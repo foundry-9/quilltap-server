@@ -10,25 +10,8 @@ import { logger } from '@/lib/logger'
 import { notFound, badRequest, serverError } from '@/lib/api/responses'
 import { uploadFile as uploadS3File } from '@/lib/s3/operations'
 import { buildS3Key } from '@/lib/s3/client'
+import { detectTextContent, getBestMimeType } from '@/lib/files/text-detection'
 import type { FileCategory } from '@/lib/schemas/types'
-
-/**
- * Allowed file MIME types for project file uploads
- * Same as chat attachments for consistency
- */
-const ALLOWED_FILE_TYPES = [
-  // Images
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  // Documents
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-]
 
 /**
  * Maximum file size in bytes (10 MB)
@@ -36,15 +19,9 @@ const ALLOWED_FILE_TYPES = [
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 /**
- * Validate project file upload
+ * Validate project file upload (size only - no type restrictions)
  */
 function validateFile(file: File): void {
-  if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-    throw new Error(
-      `Invalid file type: ${file.type}. Allowed types: ${ALLOWED_FILE_TYPES.join(', ')}`
-    )
-  }
-
   if (file.size > MAX_FILE_SIZE) {
     throw new Error(
       `File size exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024} MB`
@@ -89,8 +66,21 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const buffer = Buffer.from(bytes)
       const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex')
 
+      // Detect text content and infer better MIME type if needed
+      const textDetection = detectTextContent(buffer, file.name, file.type)
+      const mimeType = getBestMimeType(textDetection, file.type)
+
+      logger.debug('Text detection result', {
+        context: 'POST /api/projects/:id/files/upload',
+        filename: file.name,
+        providedMimeType: file.type,
+        detectedMimeType: textDetection.detectedMimeType,
+        finalMimeType: mimeType,
+        isPlainText: textDetection.isPlainText,
+      })
+
       // Determine category based on MIME type
-      const category: FileCategory = file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT'
+      const category: FileCategory = mimeType.startsWith('image/') ? 'IMAGE' : 'DOCUMENT'
 
       // Check for duplicate by hash within the same project
       const existingFiles = await repos.files.findBySha256(sha256)
@@ -129,7 +119,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         projectId,
         folderPath: folderPath || '/',
       })
-      await uploadS3File(s3Key, buffer, file.type, {
+      await uploadS3File(s3Key, buffer, mimeType, {
         userId: user.id,
         fileId,
         category,
@@ -150,10 +140,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         userId: user.id,
         sha256,
         originalFilename: file.name,
-        mimeType: file.type,
+        mimeType,
         size: buffer.length,
         width: null,
         height: null,
+        isPlainText: textDetection.isPlainText,
         linkedTo: [],
         source: 'UPLOADED',
         category,
@@ -193,10 +184,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (error instanceof Error) {
         // Return validation errors with 400
-        if (
-          error.message.includes('Invalid file type') ||
-          error.message.includes('File size exceeds')
-        ) {
+        if (error.message.includes('File size exceeds')) {
           return badRequest(error.message)
         }
       }

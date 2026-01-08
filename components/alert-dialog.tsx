@@ -60,9 +60,9 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
           {showCopy && (
             <button
               onClick={handleCopy}
-              className="qt-button qt-button-secondary"
+              className="qt-copy-button"
             >
-              Copy
+              📋 Copy
             </button>
           )}
           {dialogButtons.map((buttonLabel, index) => (

@@ -95,12 +95,12 @@ function InfoField({
       {copyable && (
         <button
           onClick={handleCopy}
-          className="qt-button-ghost p-2 ml-2"
+          className={`qt-copy-button qt-copy-button-icon ml-2 ${copied ? 'qt-copy-button-success' : ''}`}
           title="Copy to clipboard"
           aria-label={`Copy ${label}`}
         >
           {copied ? (
-            <CheckIcon className="w-4 h-4 text-green-500" />
+            <CheckIcon className="w-4 h-4" />
           ) : (
             <CopyIcon className="w-4 h-4" />
           )}

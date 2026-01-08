@@ -3,15 +3,18 @@
 /**
  * FilePreviewText Component
  *
- * Renders a text file in the preview modal with syntax highlighting hints.
+ * Renders a text file in the preview modal with syntax highlighting.
  * Markdown files (.md) are rendered with full markdown formatting.
+ * Code files are syntax highlighted using react-syntax-highlighter.
  * Supports wikilinks [[File]] and [[File#Header]] with navigation.
  */
 
-import { useEffect, useMemo, useCallback, useRef } from 'react'
+import { useEffect, useMemo, useCallback, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import { clientLogger } from '@/lib/client-logger'
 import { FileInfo } from '../types'
 
@@ -125,9 +128,65 @@ function formatFrontmatterValue(value: unknown): string {
 }
 
 /**
- * Get a language hint from MIME type for styling
+ * Get language for syntax highlighting from MIME type
+ * Returns Prism-compatible language names
  */
-function getLanguageHint(mimeType: string): string {
+function getLanguageFromMimeType(mimeType: string): string {
+  // Check for specific MIME types first
+  const mimeToLanguage: Record<string, string> = {
+    'application/json': 'json',
+    'application/xml': 'xml',
+    'application/javascript': 'javascript',
+    'application/typescript': 'typescript',
+    'text/javascript': 'javascript',
+    'text/typescript': 'typescript',
+    'text/html': 'html',
+    'text/css': 'css',
+    'text/markdown': 'markdown',
+    'text/yaml': 'yaml',
+    'text/csv': 'csv',
+    'text/x-python': 'python',
+    'text/x-ruby': 'ruby',
+    'text/x-rust': 'rust',
+    'text/x-go': 'go',
+    'text/x-java': 'java',
+    'text/x-kotlin': 'kotlin',
+    'text/x-scala': 'scala',
+    'text/x-swift': 'swift',
+    'text/x-c': 'c',
+    'text/x-c++': 'cpp',
+    'text/x-csharp': 'csharp',
+    'text/x-php': 'php',
+    'text/x-perl': 'perl',
+    'text/x-r': 'r',
+    'text/x-lua': 'lua',
+    'text/x-dart': 'dart',
+    'text/x-elixir': 'elixir',
+    'text/x-erlang': 'erlang',
+    'text/x-clojure': 'clojure',
+    'text/x-haskell': 'haskell',
+    'text/x-ocaml': 'ocaml',
+    'text/x-fsharp': 'fsharp',
+    'text/x-shellscript': 'bash',
+    'text/x-powershell': 'powershell',
+    'text/x-batch': 'batch',
+    'text/x-sql': 'sql',
+    'text/toml': 'toml',
+    'text/x-vue': 'markup',
+    'text/x-svelte': 'markup',
+    'text/x-scss': 'scss',
+    'text/x-sass': 'sass',
+    'text/x-less': 'less',
+    'text/x-graphql': 'graphql',
+    'text/x-dockerfile': 'docker',
+    'text/x-makefile': 'makefile',
+  }
+
+  if (mimeToLanguage[mimeType]) {
+    return mimeToLanguage[mimeType]
+  }
+
+  // Fallback to checking substrings for partial matches
   if (mimeType.includes('json')) return 'json'
   if (mimeType.includes('javascript')) return 'javascript'
   if (mimeType.includes('typescript')) return 'typescript'
@@ -136,7 +195,76 @@ function getLanguageHint(mimeType: string): string {
   if (mimeType.includes('xml')) return 'xml'
   if (mimeType.includes('markdown')) return 'markdown'
   if (mimeType.includes('yaml')) return 'yaml'
+  if (mimeType.includes('python')) return 'python'
+  if (mimeType.includes('ruby')) return 'ruby'
+  if (mimeType.includes('rust')) return 'rust'
+  if (mimeType.includes('java')) return 'java'
+  if (mimeType.includes('shell')) return 'bash'
+
   return 'text'
+}
+
+/**
+ * Check if syntax highlighting should be used for this file
+ * (i.e., it's a code file, not plain text or markdown)
+ */
+function shouldUseSyntaxHighlighting(mimeType: string, filename: string): boolean {
+  // Skip for plain text without code extension
+  if (mimeType === 'text/plain') {
+    // Check if file has a code-like extension
+    const codeExtensions = [
+      '.json', '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg',
+      '.sh', '.bash', '.zsh', '.ps1', '.bat', '.cmd',
+      '.sql', '.graphql', '.gql',
+    ]
+    const lowerFilename = filename.toLowerCase()
+    return codeExtensions.some(ext => lowerFilename.endsWith(ext))
+  }
+
+  // Use highlighting for all code MIME types
+  const lang = getLanguageFromMimeType(mimeType)
+  return lang !== 'text' && lang !== 'markdown'
+}
+
+/**
+ * Copy button component for text preview
+ */
+interface CopyButtonProps {
+  content: string
+  className?: string
+}
+
+function CopyButton({ content, className = '' }: CopyButtonProps) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopied(true)
+      clientLogger.debug('[CopyButton] Content copied to clipboard', {
+        contentLength: content.length,
+      })
+      // Reset after 2 seconds
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      clientLogger.error('[CopyButton] Failed to copy to clipboard', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }, [content])
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className={`qt-copy-button ${copied ? 'qt-copy-button-success' : ''} ${className}`}
+      title={copied ? 'Copied!' : 'Copy to clipboard'}
+      aria-label={copied ? 'Copied to clipboard' : 'Copy to clipboard'}
+    >
+      <span className="qt-copy-button-icon">{copied ? '✓' : '📋'}</span>
+      <span className="qt-copy-button-text">{copied ? 'Copied!' : 'Copy'}</span>
+    </button>
+  )
 }
 
 /**
@@ -210,8 +338,9 @@ export default function FilePreviewText({
 }: Readonly<FilePreviewTextProps>) {
   // Ref for scroll container
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const languageHint = getLanguageHint(file.mimeType)
+  const language = getLanguageFromMimeType(file.mimeType)
   const isMarkdown = isMarkdownFile(file)
+  const useHighlighting = shouldUseSyntaxHighlighting(file.mimeType, file.originalFilename)
 
   // Parse frontmatter and process wikilinks for markdown files (must be before any early returns)
   const parsed = useMemo(() => {
@@ -346,11 +475,12 @@ export default function FilePreviewText({
   useEffect(() => {
     clientLogger.debug('[FilePreviewText] Rendering text', {
       fileId: file.id,
-      languageHint,
+      language,
+      useHighlighting,
       contentLength: content?.length,
       isMarkdown,
     })
-  }, [file.id, languageHint, content?.length, isMarkdown])
+  }, [file.id, language, useHighlighting, content?.length, isMarkdown])
 
   // Scroll to heading or top when file/heading changes
   useEffect(() => {
@@ -423,40 +553,78 @@ export default function FilePreviewText({
   // Render markdown files with ReactMarkdown
   if (isMarkdown && parsed) {
     return (
-      <div ref={scrollContainerRef} className="qt-file-preview-scroll">
-        <div className="qt-file-preview-panel">
-          {/* Frontmatter display */}
-          {hasFrontmatter && (
-            <div className="qt-frontmatter">
-              <div className="qt-frontmatter-title">Document Info</div>
-              <table className="qt-frontmatter-table">
-                <tbody>
-                  {Object.entries(parsed.data).map(([key, value]) => (
-                    <tr key={key}>
-                      <th>{key}</th>
-                      <td>{formatFrontmatterValue(value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+      <div className="qt-file-preview-text-container">
+        <CopyButton content={content} />
+        <div ref={scrollContainerRef} className="qt-file-preview-scroll">
+          <div className="qt-file-preview-panel">
+            {/* Frontmatter display */}
+            {hasFrontmatter && (
+              <div className="qt-frontmatter">
+                <div className="qt-frontmatter-title">Document Info</div>
+                <table className="qt-frontmatter-table">
+                  <tbody>
+                    {Object.entries(parsed.data).map(([key, value]) => (
+                      <tr key={key}>
+                        <th>{key}</th>
+                        <td>{formatFrontmatterValue(value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-          {/* Markdown content */}
-          <div className="qt-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{parsed.content}</ReactMarkdown>
+            {/* Markdown content */}
+            <div className="qt-markdown">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{parsed.content}</ReactMarkdown>
+            </div>
           </div>
         </div>
       </div>
     )
   }
 
-  // Render other text files as plain text
+  // Render code files with syntax highlighting
+  if (useHighlighting) {
+    return (
+      <div className="qt-file-preview-text-container">
+        <CopyButton content={content} />
+        <div ref={scrollContainerRef} className="qt-file-preview-scroll">
+          <SyntaxHighlighter
+            language={language}
+            style={oneDark}
+            showLineNumbers
+            wrapLines
+            customStyle={{
+              margin: 0,
+              borderRadius: 0,
+              fontSize: '0.875rem',
+              lineHeight: '1.5',
+            }}
+            lineNumberStyle={{
+              minWidth: '3em',
+              paddingRight: '1em',
+              textAlign: 'right',
+              userSelect: 'none',
+              opacity: 0.5,
+            }}
+          >
+            {content}
+          </SyntaxHighlighter>
+        </div>
+      </div>
+    )
+  }
+
+  // Render plain text files without syntax highlighting
   return (
-    <div ref={scrollContainerRef} className="qt-file-preview-scroll">
-      <pre className="qt-file-preview-code">
-        <code data-language={languageHint}>{content}</code>
-      </pre>
+    <div className="qt-file-preview-text-container">
+      <CopyButton content={content} />
+      <div ref={scrollContainerRef} className="qt-file-preview-scroll">
+        <pre className="qt-file-preview-code">
+          <code>{content}</code>
+        </pre>
+      </div>
     </div>
   )
 }
