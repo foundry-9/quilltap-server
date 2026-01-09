@@ -4,6 +4,13 @@
 
 ### 2.7-dev
 
+- fix: Streaming reliability during long context compression operations
+  - Added keep-alive pings during sync compression to prevent proxy/ALB timeouts
+  - Compression can take 30-50+ seconds; without keep-alive, connection would timeout
+  - New `safeEnqueue()` and `safeClose()` helpers prevent "Controller is already closed" crashes
+  - Stream errors now handled gracefully when client disconnects mid-stream
+  - Improved frontend error logging with stack traces for debugging network issues
+  - User now sees "Connection lost" message instead of cryptic errors
 - chore: Upgrade esbuild from 0.19.0/0.20.0/0.24.0 to 0.27.0 across all plugins
   - Addresses security vulnerability CVE-2024-23334 in esbuild <= 0.24.2
   - Updated 14 plugins and create-quilltap-theme package

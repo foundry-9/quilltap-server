@@ -367,6 +367,45 @@ export function encodeErrorEvent(
 }
 
 /**
+ * Encode a keep-alive/heartbeat ping
+ * SSE comment lines (starting with :) are ignored by clients but keep the connection alive
+ */
+export function encodeKeepAlive(encoder: TextEncoder): Uint8Array {
+  return encoder.encode(': keep-alive\n\n')
+}
+
+/**
+ * Safely enqueue data to a stream controller
+ * Returns true if successful, false if the controller is already closed
+ */
+export function safeEnqueue(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  data: Uint8Array
+): boolean {
+  try {
+    controller.enqueue(data)
+    return true
+  } catch (error) {
+    // Controller is already closed (client disconnected, timeout, etc.)
+    logger.debug('Stream controller closed, enqueue skipped', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
+}
+
+/**
+ * Safely close a stream controller
+ */
+export function safeClose(controller: ReadableStreamDefaultController<Uint8Array>): void {
+  try {
+    controller.close()
+  } catch {
+    // Already closed - ignore
+  }
+}
+
+/**
  * Create streaming response result
  */
 export function createStreamingResult(

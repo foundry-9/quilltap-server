@@ -1923,17 +1923,28 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setRespondingParticipantId(null)
       } else {
         // Extract error message, handling cases where message may be undefined
+        // Network errors (connection dropped, timeout) may have empty messages
         const errorMessage = err instanceof Error
           ? (err.message || err.name || 'Unknown error')
           : String(err) || 'Unknown error'
         const errorName = err instanceof Error ? err.name : 'UnknownErrorType'
 
-        clientLogger.error('Error sending message:', {
+        // Log with more context for debugging connection issues
+        clientLogger.error('Error sending message', {
           error: errorMessage,
           errorName,
           errorType: typeof err,
+          // Capture additional error properties that may help diagnose issues
+          errorStack: err instanceof Error ? err.stack?.substring(0, 500) : undefined,
+          wasStreaming: streaming,
+          wasWaitingForResponse: waitingForResponse,
         })
-        showErrorToast(errorMessage || 'Failed to send message')
+
+        // Show user-friendly message for common network errors
+        const displayMessage = errorMessage === 'Unknown error' || errorMessage === 'TypeError'
+          ? 'Connection lost. Please try again.'
+          : errorMessage
+        showErrorToast(displayMessage || 'Failed to send message')
 
         // Debug: Mark entries as error
         if (debug?.isDebugMode) {

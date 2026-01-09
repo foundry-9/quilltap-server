@@ -46,6 +46,9 @@ import {
   encodeContentChunk,
   encodeDoneEvent,
   encodeErrorEvent,
+  encodeKeepAlive,
+  safeEnqueue,
+  safeClose,
 } from './streaming.service'
 import {
   checkShouldUsePseudoTools,
@@ -367,6 +370,22 @@ async function processMessage(
     invalidateCompressionCache(chatId)
   }
 
+  // Start keep-alive pings during context building (especially important during compression)
+  // This prevents proxy/load balancer timeouts during long compression operations
+  let keepAliveInterval: ReturnType<typeof setInterval> | null = null
+  if (compressionEnabled && !cachedCompressionResult) {
+    logger.debug('Starting keep-alive pings during context compression')
+    keepAliveInterval = setInterval(() => {
+      if (!safeEnqueue(controller, encodeKeepAlive(encoder))) {
+        // Stream closed, stop the interval
+        if (keepAliveInterval) {
+          clearInterval(keepAliveInterval)
+          keepAliveInterval = null
+        }
+      }
+    }, 15000) // Send ping every 15 seconds
+  }
+
   const { builtContext, formattedMessages, isInitialMessage } = await buildMessageContext(
     {
       repos,
@@ -394,6 +413,13 @@ async function processMessage(
     existingMessages,
     fileProcessing.attachmentsToSend
   )
+
+  // Stop keep-alive pings after context building completes
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval)
+    keepAliveInterval = null
+    logger.debug('Stopped keep-alive pings after context compression')
+  }
 
   // Create tool context
   const toolContext = createToolContext(
@@ -494,7 +520,7 @@ async function processMessage(
           isStaticFallback: recoveryResult.isStaticFallback,
         })
         // Close the stream - recovery has handled everything
-        controller.close()
+        safeClose(controller)
         return
       }
 
@@ -947,11 +973,7 @@ async function processMessage(
   }
 
   // Close stream
-  try {
-    controller.close()
-  } catch {
-    // Already closed
-  }
+  safeClose(controller)
 }
 
 /**
@@ -1110,6 +1132,7 @@ function handleStreamError(
     errorType = error.name
   }
 
-  controller.enqueue(encodeErrorEvent(encoder, 'Failed to generate response', errorType, errorMessage))
-  controller.close()
+  // Use safe methods to prevent crash if stream is already closed
+  safeEnqueue(controller, encodeErrorEvent(encoder, 'Failed to generate response', errorType, errorMessage))
+  safeClose(controller)
 }
