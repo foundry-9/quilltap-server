@@ -11,14 +11,17 @@
 import type { LLMProviderPlugin } from './types'
 import { AnthropicProvider } from './provider'
 import { AnthropicIcon } from './icon'
-import { logger } from '../../../lib/logger'
 import {
-  convertOpenAIToAnthropicFormat,
+  createPluginLogger,
+  convertToAnthropicFormat,
   parseAnthropicToolCalls,
   type OpenAIToolDefinition,
+  type UniversalTool,
   type AnthropicToolDefinition,
   type ToolCallRequest,
-} from '../../../lib/llm/tool-formatting-utils'
+} from '@quilltap/plugin-utils'
+
+const logger = createPluginLogger('qtap-plugin-anthropic')
 
 /**
  * Plugin metadata configuration
@@ -248,8 +251,22 @@ export const plugin: LLMProviderPlugin = {
 
         const openaiTool = tool as OpenAIToolDefinition;
 
-        // Convert from OpenAI format to Anthropic format
-        const anthropicTool = convertOpenAIToAnthropicFormat(openaiTool);
+        // Convert to UniversalTool format (ensuring required fields have defaults)
+        const universalTool: UniversalTool = {
+          type: 'function',
+          function: {
+            name: openaiTool.function.name,
+            description: openaiTool.function.description ?? '',
+            parameters: {
+              type: 'object',
+              properties: openaiTool.function.parameters?.properties ?? {},
+              required: openaiTool.function.parameters?.required ?? [],
+            },
+          },
+        };
+
+        // Convert from Universal format to Anthropic format
+        const anthropicTool = convertToAnthropicFormat(universalTool);
         formattedTools.push(anthropicTool);
       }
 

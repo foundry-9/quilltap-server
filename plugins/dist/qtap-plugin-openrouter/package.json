@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-openrouter",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "OpenRouter provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
@@ -11,7 +11,8 @@
     "clean": "rm -f index.js"
   },
   "dependencies": {
-    "@openrouter/sdk": "^0.3.1"
+    "@openrouter/sdk": "^0.3.1",
+    "@quilltap/plugin-utils": "^1.2.2"
   },
   "devDependencies": {
     "esbuild": "^0.24.0"

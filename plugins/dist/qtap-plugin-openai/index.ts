@@ -14,12 +14,14 @@ import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
 import { OpenAIProvider } from './provider';
 import { OpenAIImageProvider } from './image-provider';
 import { OpenAIIcon } from './icon';
-import { logger } from '../../../lib/logger';
 import {
+  createPluginLogger,
   parseOpenAIToolCalls,
   type OpenAIToolDefinition,
   type ToolCallRequest,
-} from '../../../lib/llm/tool-formatting-utils';
+} from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-openai');
 
 /**
  * Plugin metadata configuration

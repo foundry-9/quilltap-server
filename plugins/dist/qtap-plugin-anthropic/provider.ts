@@ -7,7 +7,9 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types'
-import { logger } from '../../../lib/logger'
+import { createPluginLogger } from '@quilltap/plugin-utils'
+
+const logger = createPluginLogger('qtap-plugin-anthropic')
 
 // Anthropic supports images, PDFs, and plain text documents
 const ANTHROPIC_SUPPORTED_MIME_TYPES = [

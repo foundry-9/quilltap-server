@@ -577,7 +577,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
 - [ ] Create web-only version that uses IndexedDB for everything
 - [X] Project support
-  - [ ] Folders
+  - [X] Folders
   - [ ] Files (text/Markdown or binary)
   - [X] Direct import/export/access
   - [X] Project becomes overriding context for chats, images, etc.
@@ -600,6 +600,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [X] If we are firing up a new chat and the character is speaking first, the LLM running the character should always get not only the most relevant but the most recent memories of their chats with the other characters (or user) in the chat, and if the chat is in a project, that project's name should also be told to the LLM. Under no circumstances should the character speak first without actually sending some kind of context, even if it's just the most basic prompt created by the system telling the LLM who their character is and what he or she is doing. In short, no generic non-contextual conversation startups.
 - [X] Accept any arbitrary kind of file as an attachment, and have an internal indicator to mark if this file can be treated as text/plain (like for source code or Markdown files); assume most files are UTF8 encoded
 - [ ] OpenRouter (noticed it with z-ai/glm-4.6) isn't great about tool calling; need to look into that
+- [ ] Finish file read/write tool calling support with permissions
 
 ## Acknowledgments
 

@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- fix: OpenRouter streaming tool calls not being detected
+  - Tool calls were in `choices[0].delta.toolCalls` (streaming) but parser only checked `choices[0].message.tool_calls`
+  - OpenRouter SDK uses camelCase `toolCalls` but parser expected snake_case `tool_calls`
+  - Updated `parseOpenAIToolCalls()` and `detectToolCallFormat()` in @quilltap/plugin-utils to handle both formats
+  - GLM 4.6 and other OpenRouter models can now successfully make tool calls
 - feat: Async pre-compression for context compression
   - Compression now starts immediately after receiving an LLM response
   - Result is cached and ready when user sends their next message

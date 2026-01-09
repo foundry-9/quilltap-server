@@ -14,12 +14,14 @@ import type { LLMProviderPlugin, ImageProviderConstraints } from './types';
 import { GrokProvider } from './provider';
 import { GrokImageProvider } from './image-provider';
 import { GrokIcon } from './icon';
-import { logger } from '../../../lib/logger';
 import {
+  createPluginLogger,
   parseOpenAIToolCalls,
   type OpenAIToolDefinition,
   type ToolCallRequest,
-} from '../../../lib/llm/tool-formatting-utils';
+} from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-grok');
 
 /**
  * Grok image generation constraints

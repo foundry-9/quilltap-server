@@ -11,10 +11,12 @@
  * - Provides a central place for all upgrade logic
  */
 
-import { logger } from '@/lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
 import type { UpgradePlugin, UpgradeResult, MigrationState, Migration } from './migration-types';
 import { runMigrations, getPendingMigrations, loadMigrationState } from './migration-runner';
 import { migrations } from './migrations';
+
+const logger = createPluginLogger('qtap-plugin-upgrade');
 
 // ============================================================================
 // LOGGER SETUP

@@ -11,6 +11,7 @@ import type {
   UniversalTool,
   AnthropicToolDefinition,
   GoogleToolDefinition,
+  OpenAIToolDefinition,
 } from '@quilltap/plugin-types';
 
 /**
@@ -21,7 +22,7 @@ import type {
  * - description: string
  * - input_schema: JSON schema object
  *
- * @param tool - Universal tool in OpenAI format
+ * @param tool - Universal tool or OpenAI tool definition
  * @returns Tool formatted for Anthropic's tool_use
  *
  * @example
@@ -38,14 +39,14 @@ import type {
  * // }
  * ```
  */
-export function convertToAnthropicFormat(tool: UniversalTool): AnthropicToolDefinition {
+export function convertToAnthropicFormat(tool: UniversalTool | OpenAIToolDefinition): AnthropicToolDefinition {
   return {
     name: tool.function.name,
-    description: tool.function.description,
+    description: tool.function.description ?? '',
     input_schema: {
       type: 'object',
-      properties: tool.function.parameters.properties,
-      required: tool.function.parameters.required,
+      properties: tool.function.parameters?.properties ?? {},
+      required: tool.function.parameters?.required ?? [],
     },
   };
 }
@@ -58,7 +59,7 @@ export function convertToAnthropicFormat(tool: UniversalTool): AnthropicToolDefi
  * - description: string
  * - parameters: JSON schema object
  *
- * @param tool - Universal tool in OpenAI format
+ * @param tool - Universal tool or OpenAI tool definition
  * @returns Tool formatted for Google's functionCall
  *
  * @example
@@ -75,14 +76,14 @@ export function convertToAnthropicFormat(tool: UniversalTool): AnthropicToolDefi
  * // }
  * ```
  */
-export function convertToGoogleFormat(tool: UniversalTool): GoogleToolDefinition {
+export function convertToGoogleFormat(tool: UniversalTool | OpenAIToolDefinition): GoogleToolDefinition {
   return {
     name: tool.function.name,
-    description: tool.function.description,
+    description: tool.function.description ?? '',
     parameters: {
       type: 'object',
-      properties: tool.function.parameters.properties,
-      required: tool.function.parameters.required,
+      properties: tool.function.parameters?.properties ?? {},
+      required: tool.function.parameters?.required ?? [],
     },
   };
 }
@@ -188,14 +189,14 @@ export type ToolConvertTarget = 'openai' | 'anthropic' | 'google';
 /**
  * Convert a universal tool to a specific provider format
  *
- * @param tool - Universal tool in OpenAI format
+ * @param tool - Universal tool or OpenAI tool definition
  * @param target - Target provider format
  * @returns Tool in the target format
  */
 export function convertToolTo(
-  tool: UniversalTool,
+  tool: UniversalTool | OpenAIToolDefinition,
   target: ToolConvertTarget
-): UniversalTool | AnthropicToolDefinition | GoogleToolDefinition {
+): UniversalTool | OpenAIToolDefinition | AnthropicToolDefinition | GoogleToolDefinition {
   switch (target) {
     case 'anthropic':
       return convertToAnthropicFormat(tool);
@@ -210,13 +211,29 @@ export function convertToolTo(
 /**
  * Convert multiple tools to a specific provider format
  *
- * @param tools - Array of universal tools
+ * @param tools - Array of universal tools or OpenAI tool definitions
  * @param target - Target provider format
  * @returns Array of tools in the target format
  */
 export function convertToolsTo(
-  tools: UniversalTool[],
+  tools: Array<UniversalTool | OpenAIToolDefinition>,
   target: ToolConvertTarget
-): Array<UniversalTool | AnthropicToolDefinition | GoogleToolDefinition> {
+): Array<UniversalTool | OpenAIToolDefinition | AnthropicToolDefinition | GoogleToolDefinition> {
   return tools.map((tool) => convertToolTo(tool, target));
 }
+
+// ============================================================================
+// Backward-compatible aliases
+// ============================================================================
+
+/**
+ * Alias for convertToAnthropicFormat
+ * @deprecated Use convertToAnthropicFormat instead
+ */
+export const convertOpenAIToAnthropicFormat = convertToAnthropicFormat;
+
+/**
+ * Alias for convertToGoogleFormat
+ * @deprecated Use convertToGoogleFormat instead
+ */
+export const convertOpenAIToGoogleFormat = convertToGoogleFormat;

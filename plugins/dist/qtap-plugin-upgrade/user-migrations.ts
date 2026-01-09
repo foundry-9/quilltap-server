@@ -9,7 +9,9 @@
  * all migration logic in the upgrade plugin.
  */
 
-import { logger } from '@/lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-upgrade');
 
 /**
  * Check if MongoDB backend is enabled

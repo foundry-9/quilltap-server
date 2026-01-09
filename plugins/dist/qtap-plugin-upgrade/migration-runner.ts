@@ -8,7 +8,7 @@
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import path from 'node:path';
-import { logger } from '@/lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
 import type {
   Migration,
   MigrationResult,
@@ -16,6 +16,8 @@ import type {
   MigrationRecord,
   UpgradeResult,
 } from './migration-types';
+
+const logger = createPluginLogger('qtap-plugin-upgrade');
 
 // Path to store migration state (file-based)
 const MIGRATIONS_STATE_FILE = path.join(process.cwd(), 'data', 'settings', 'migrations.json');

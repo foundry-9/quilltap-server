@@ -15,7 +15,9 @@ import type {
   ImageGenParams,
   ImageGenResponse,
 } from './types';
-import { logger } from '../../../lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-openrouter');
 
 /**
  * OpenRouter provider preferences for fine-grained provider control

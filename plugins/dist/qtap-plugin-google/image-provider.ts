@@ -11,7 +11,9 @@ import type {
   ImageGenParams,
   ImageGenResponse,
 } from './types';
-import { logger } from '../../../lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-google');
 
 /**
  * Models that use the Gemini generateContent API for image generation
