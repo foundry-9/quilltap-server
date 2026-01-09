@@ -4,6 +4,17 @@
 
 ### 2.7-dev
 
+- feat: Sliding window context compression for long conversations
+  - Reduces token costs by compressing older messages using a cheap LLM
+  - Keeps last N messages (default 5) in full context while summarizing older ones
+  - Also compresses system prompts when compression is active
+  - Tool definitions are never compressed
+  - New `request_full_context` tool allows AI to reload full conversation if needed
+  - Enabled by default with opt-out setting in Chat Settings
+  - Configurable window size (3-10 messages) and target token counts
+  - Uses dynamic character/user names in compression prompts
+  - New files: `lib/chat/context/compression.ts`, `lib/tools/request-full-context-tool.ts`
+  - Settings UI in Chat Settings tab with sliders for customization
 - feat: Inline file write permission prompt in chat
   - New `FileWritePermissionPrompt` component displays prominently at the bottom of chat when LLM requests file write
   - Auto-scrolls into view to ensure user sees the permission request

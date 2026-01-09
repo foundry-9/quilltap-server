@@ -71,6 +71,8 @@ import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { isRecoverableRequestError } from '@/lib/llm/errors'
 import { attemptRequestLimitRecovery } from './recovery.service'
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
+import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
@@ -173,6 +175,64 @@ async function processMessage(
   // Get chat settings
   const chatSettings = await repos.chatSettings.findByUserId(userId)
 
+  // ============================================================================
+  // Context Compression Setup
+  // ============================================================================
+
+  // Check if full context was requested (requestFullContextOnNextMessage flag)
+  let bypassCompression = false
+  if (chat.requestFullContextOnNextMessage === true) {
+    bypassCompression = true
+    // Reset the flag
+    await repos.chats.update(chatId, { requestFullContextOnNextMessage: false })
+    logger.info('Bypassing context compression (full context requested)', { chatId })
+  }
+
+  // Get context compression settings (default to enabled)
+  const contextCompressionSettings: ContextCompressionSettings = chatSettings?.contextCompressionSettings || {
+    enabled: true,
+    windowSize: 5,
+    compressionTargetTokens: 800,
+    systemPromptTargetTokens: 1500,
+  }
+
+  // Get cheap LLM selection for compression
+  let cheapLLMSelection = null
+  if (contextCompressionSettings.enabled && !bypassCompression) {
+    try {
+      // Get all connection profiles for cheap LLM selection
+      const allProfiles = await repos.connections.findByUserId(userId)
+      const cheapLLMConfig = chatSettings?.cheapLLMSettings || DEFAULT_CHEAP_LLM_CONFIG
+
+      // Convert null values to undefined for CheapLLMConfig compatibility
+      const compatibleConfig = {
+        ...cheapLLMConfig,
+        userDefinedProfileId: cheapLLMConfig.userDefinedProfileId ?? undefined,
+        defaultCheapProfileId: cheapLLMConfig.defaultCheapProfileId ?? undefined,
+      }
+
+      cheapLLMSelection = getCheapLLMProvider(
+        connectionProfile,
+        compatibleConfig,
+        allProfiles,
+        false // Ollama availability - could be checked but keeping simple for now
+      )
+
+      logger.debug('Cheap LLM selection for compression', {
+        provider: cheapLLMSelection.provider,
+        model: cheapLLMSelection.modelName,
+        isLocal: cheapLLMSelection.isLocal,
+      })
+    } catch (error) {
+      logger.warn('Failed to get cheap LLM for compression, compression will be skipped', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // Determine if compression is actually enabled for this request
+  const compressionEnabled = !!(contextCompressionSettings.enabled && cheapLLMSelection && !bypassCompression)
+
   // Get roleplay template
   const roleplayTemplate = await getRoleplayTemplate(repos, chat, chatSettings ? { defaultRoleplayTemplateId: chatSettings.defaultRoleplayTemplateId ?? undefined } : null)
 
@@ -253,13 +313,15 @@ async function processMessage(
     connectionProfile.allowWebSearch
   )
 
-  // Build tools
+  // Build tools (include request_full_context when compression is enabled)
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
     connectionProfile,
     imageProfileId,
     imageProfile,
     userId,
-    false // Will check after
+    false, // Will check pseudo-tools after
+    undefined, // projectId (will be set if needed)
+    compressionEnabled // requestFullContext - enable the tool when compression is active
   )
 
   const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)
@@ -298,6 +360,10 @@ async function processMessage(
       pseudoToolInstructions,
       newUserMessage: finalUserMessageContent,
       isContinueMode,
+      // Context compression options
+      contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,
+      cheapLLMSelection,
+      bypassCompression,
     },
     existingMessages,
     fileProcessing.attachmentsToSend

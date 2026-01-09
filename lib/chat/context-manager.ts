@@ -45,11 +45,22 @@ import {
   selectRecentMessages,
   type SelectableMessage,
 } from './context/message-selector'
+import {
+  shouldApplyCompression,
+  splitMessagesForCompression,
+  applyContextCompression,
+  buildCompressedSystemMessage,
+  type ContextCompressionOptions,
+  type ContextCompressionResult,
+} from './context/compression'
+import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 
 // Re-export types from extracted modules for backwards compatibility
 export type { OtherParticipantInfo, ProjectContext } from './context/system-prompt-builder'
 export type { MessageWithParticipant } from './context/message-attribution'
 export type { SelectableMessage } from './context/message-selector'
+export type { ContextCompressionOptions, ContextCompressionResult } from './context/compression'
 
 // Re-export functions from extracted modules for backwards compatibility
 export {
@@ -132,6 +143,19 @@ export interface BuiltContext {
   debugSummary?: string
   /** Debug info: the system prompt that was built */
   debugSystemPrompt?: string
+  /** Whether context compression was applied */
+  compressionApplied?: boolean
+  /** Details about the compression (if applied) */
+  compressionDetails?: {
+    originalMessageCount: number
+    compressedMessageCount: number
+    windowMessageCount: number
+    originalHistoryTokens: number
+    compressedHistoryTokens: number
+    originalSystemPromptTokens: number
+    compressedSystemPromptTokens: number
+    totalSavings: number
+  }
 }
 
 /**
@@ -204,6 +228,17 @@ export interface BuildContextOptions {
 
   /** Project context to inject into system prompt (if chat is in a project) */
   projectContext?: ProjectContext | null
+
+  // ============================================================================
+  // Context Compression
+  // ============================================================================
+
+  /** Context compression settings */
+  contextCompressionSettings?: ContextCompressionSettings | null
+  /** Cheap LLM selection for compression (required if compression is enabled) */
+  cheapLLMSelection?: CheapLLMSelection | null
+  /** Whether to bypass compression for this request (e.g., requestFullContextOnNextMessage flag) */
+  bypassCompression?: boolean
 }
 
 /**
@@ -324,6 +359,111 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   }
   const finalSystemPromptTokens = estimateTokens(finalSystemPrompt, provider)
 
+  // ============================================================================
+  // Context Compression (Sliding Window)
+  // ============================================================================
+
+  // Extract compression options
+  const { contextCompressionSettings, cheapLLMSelection, bypassCompression = false } = options
+
+  // Determine if compression should be applied
+  const compressionEnabled = !!(
+    contextCompressionSettings &&
+    cheapLLMSelection &&
+    shouldApplyCompression(
+      existingMessages.length,
+      contextCompressionSettings,
+      bypassCompression
+    )
+  )
+
+  // Initialize compression result
+  let compressionResult: ContextCompressionResult | undefined
+  let useCompressedContext = false
+
+  if (compressionEnabled && contextCompressionSettings && cheapLLMSelection) {
+    logger.info('[ContextManager] Context compression enabled', {
+      messageCount: existingMessages.length,
+      windowSize: contextCompressionSettings.windowSize,
+      bypassCompression,
+    })
+
+    // Get user/persona name for compression prompt
+    const userName = persona?.name || 'User'
+
+    // Apply compression
+    try {
+      compressionResult = await applyContextCompression(
+        existingMessages.map(m => ({
+          role: m.role as 'user' | 'assistant' | 'system',
+          content: m.content,
+        })),
+        finalSystemPrompt,
+        {
+          enabled: contextCompressionSettings.enabled,
+          windowSize: contextCompressionSettings.windowSize,
+          compressionTargetTokens: contextCompressionSettings.compressionTargetTokens,
+          systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
+          selection: cheapLLMSelection,
+          userId,
+          characterName: character.name,
+          userName,
+        }
+      )
+
+      useCompressedContext = compressionResult.compressionApplied
+
+      if (compressionResult.warnings.length > 0) {
+        warnings.push(...compressionResult.warnings.map(w => `[Compression] ${w}`))
+      }
+
+      logger.info('[ContextManager] Compression result', {
+        compressionApplied: compressionResult.compressionApplied,
+        compressionDetails: compressionResult.compressionDetails,
+      })
+    } catch (error) {
+      warnings.push(`Failed to apply context compression: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      logger.error('[ContextManager] Context compression error', {}, error instanceof Error ? error : undefined)
+    }
+  }
+
+  // If using compressed context, replace system prompt and filter messages
+  let effectiveSystemPrompt = finalSystemPrompt
+  let effectiveMessages = existingMessages
+
+  if (useCompressedContext && compressionResult) {
+    // Build the compressed system message (includes compressed history)
+    effectiveSystemPrompt = buildCompressedSystemMessage(
+      compressionResult.compressedHistory,
+      compressionResult.compressedSystemPrompt,
+      finalSystemPrompt
+    )
+
+    // Only keep window messages (the ones that weren't compressed)
+    const { windowMessages } = splitMessagesForCompression(
+      existingMessages.map(m => ({
+        role: m.role as 'user' | 'assistant' | 'system',
+        content: m.content,
+      })),
+      contextCompressionSettings?.windowSize || 5
+    )
+
+    // Map back to the original format with all metadata
+    const windowStartIndex = existingMessages.length - windowMessages.length
+    effectiveMessages = existingMessages.slice(windowStartIndex)
+
+    logger.debug('[ContextManager] Using compressed context', {
+      originalMessageCount: existingMessages.length,
+      effectiveMessageCount: effectiveMessages.length,
+      compressedSystemPromptLength: effectiveSystemPrompt.length,
+    })
+  }
+
+  // Update system prompt token count for compressed version
+  const effectiveSystemPromptTokens = useCompressedContext
+    ? estimateTokens(effectiveSystemPrompt, provider)
+    : finalSystemPromptTokens
+
   // 2. Retrieve and format relevant memories
   let memoryContent = ''
   let memoryTokens = 0
@@ -437,7 +577,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   }
 
   // 4. Calculate remaining budget for messages
-  const usedTokens = finalSystemPromptTokens + memoryTokens + interCharacterMemoryTokens + summaryTokens
+  // Use effective (possibly compressed) system prompt tokens
+  const usedTokens = effectiveSystemPromptTokens + memoryTokens + interCharacterMemoryTokens + summaryTokens
   const remainingBudget = budget.totalLimit - usedTokens - budget.responseReserve
 
   // 5. Prepare messages based on single vs multi-character mode
@@ -489,14 +630,14 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       thoughtSignature: msg.thoughtSignature,
     }))
 
-    // Prepend join scenario to final system prompt if present
+    // Prepend join scenario to effective system prompt if present
     if (joinScenarioContent) {
-      // Add join scenario to final system prompt instead of as a separate message
-      finalSystemPrompt += `\n\n## How You Entered This Conversation\n${joinScenarioContent}`
+      // Add join scenario to effective system prompt instead of as a separate message
+      effectiveSystemPrompt += `\n\n## How You Entered This Conversation\n${joinScenarioContent}`
     }
   } else {
-    // Single-character mode: use existing messages as-is
-    messagesToProcess = existingMessages.map(msg => ({
+    // Single-character mode: use effective messages (possibly filtered by compression)
+    messagesToProcess = effectiveMessages.map(msg => ({
       role: msg.role,
       content: msg.content,
       id: msg.id,
@@ -529,7 +670,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const contextMessages: ContextMessage[] = []
 
   // System prompt with injected memories and summary
-  let fullSystemContent = finalSystemPrompt
+  // Use effective system prompt (possibly compressed)
+  let fullSystemContent = effectiveSystemPrompt
 
   if (memoryContent) {
     fullSystemContent += '\n\n' + memoryContent
@@ -576,8 +718,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   }
 
   // Calculate final token usage
+  // Use effective system prompt tokens (possibly compressed)
   const totalMemoryTokens = memoryTokens + interCharacterMemoryTokens
-  const totalUsed = finalSystemPromptTokens + totalMemoryTokens + summaryTokens + messagesTokens + newUserMessageTokens
+  const totalUsed = effectiveSystemPromptTokens + totalMemoryTokens + summaryTokens + messagesTokens + newUserMessageTokens
   const totalMemoriesIncluded = memoriesIncluded + interCharacterMemoriesIncluded
 
   logger.debug('[ContextManager] Context built successfully', {
@@ -587,12 +730,14 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     messagesTruncated: truncated,
     memoriesIncluded,
     interCharacterMemoriesIncluded,
+    compressionApplied: useCompressedContext,
+    compressionDetails: compressionResult?.compressionDetails,
   })
 
   return {
     messages: contextMessages,
     tokenUsage: {
-      systemPrompt: finalSystemPromptTokens,
+      systemPrompt: effectiveSystemPromptTokens,
       memories: totalMemoryTokens,
       summary: summaryTokens,
       recentMessages: messagesTokens + newUserMessageTokens,
@@ -607,7 +752,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // Debug info for the debug panel
     debugMemories,
     debugSummary: chat.contextSummary || undefined,
-    debugSystemPrompt: finalSystemPrompt,
+    debugSystemPrompt: effectiveSystemPrompt,
+    // Compression info
+    compressionApplied: useCompressedContext,
+    compressionDetails: compressionResult?.compressionDetails,
   }
 }
 

@@ -30,6 +30,11 @@ import {
   formatFileManagementResults,
   type FileManagementToolContext,
 } from '@/lib/tools/handlers/file-management-handler';
+import {
+  executeRequestFullContextTool,
+  formatRequestFullContextResults,
+  type RequestFullContextToolContext,
+} from '@/lib/tools/handlers/request-full-context-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -408,6 +413,28 @@ export async function executeToolCallWithContext(
           data: result.data,
         } : null,
         error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle request_full_context (context compression bypass)
+    if (toolCall.name === 'request_full_context') {
+      // Execute request full context tool
+      const requestContext: RequestFullContextToolContext = {
+        chatId,
+      };
+
+      const result = await executeRequestFullContextTool(toolCall.arguments, requestContext);
+
+      // Format results for LLM consumption
+      const formattedResult = formatRequestFullContextResults(result);
+
+      return {
+        toolName: 'request_full_context',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+        } : null,
+        error: result.success ? undefined : result.message,
       };
     }
 

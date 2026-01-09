@@ -71,7 +71,9 @@ export async function buildTools(
   userId: string,
   usePseudoTools: boolean,
   /** Project ID if chat is associated with a project (enables project_info tool) */
-  projectId?: string | null
+  projectId?: string | null,
+  /** Whether context compression is enabled (enables request_full_context tool) */
+  requestFullContext?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -106,6 +108,7 @@ export async function buildTools(
     memorySearchEnabled: true,
     webSearchToolEnabled: connectionProfile.allowWebSearch,
     projectInfoEnabled: !!projectId,
+    requestFullContextEnabled: !!requestFullContext,
     useNativeWebSearch,
   })
 
@@ -138,6 +141,7 @@ export async function buildTools(
     memorySearch: true,
     webSearch: connectionProfile.allowWebSearch,
     projectInfo: !!projectId,
+    requestFullContext: !!requestFullContext,
     toolConfigs,
   })
 

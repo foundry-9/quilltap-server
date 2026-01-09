@@ -7,6 +7,8 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildContext, type MessageWithParticipant, type BuiltContext, type ProjectContext } from '@/lib/chat/context-manager'
+import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import {
@@ -50,6 +52,12 @@ export interface BuildMessageContextOptions {
   isContinueMode: boolean
   /** Project context if chat is in a project */
   projectContext?: ProjectContext | null
+  /** Context compression settings (if enabled) */
+  contextCompressionSettings?: ContextCompressionSettings | null
+  /** Cheap LLM selection for compression (required if compression is enabled) */
+  cheapLLMSelection?: CheapLLMSelection | null
+  /** Whether to bypass compression for this request */
+  bypassCompression?: boolean
 }
 
 /**
@@ -265,6 +273,9 @@ export async function buildMessageContext(
     pseudoToolInstructions,
     newUserMessage,
     projectContext,
+    contextCompressionSettings,
+    cheapLLMSelection,
+    bypassCompression,
   } = options
 
   // Build conversation messages
@@ -308,6 +319,10 @@ export async function buildMessageContext(
     isInitialMessage,
     // Project context
     projectContext,
+    // Context compression
+    contextCompressionSettings,
+    cheapLLMSelection,
+    bypassCompression,
   })
 
   // Log context building results for debugging

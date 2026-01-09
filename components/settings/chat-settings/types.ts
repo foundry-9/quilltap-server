@@ -56,6 +56,7 @@ export interface ChatSettings {
   defaultTimestampConfig?: TimestampConfig
   memoryCascadePreferences?: MemoryCascadePreferences
   tokenDisplaySettings?: TokenDisplaySettings
+  contextCompressionSettings?: ContextCompressionSettings
   createdAt: string
   updatedAt: string
 }
@@ -247,6 +248,27 @@ export const DEFAULT_TOKEN_DISPLAY_SETTINGS: TokenDisplaySettings = {
   showPerMessageCost: false,
   showChatTotals: false,
   showSystemEvents: false,
+}
+
+/**
+ * Context Compression Settings
+ * Controls how older messages are compressed to reduce token costs
+ */
+export interface ContextCompressionSettings {
+  enabled: boolean
+  windowSize: number
+  compressionTargetTokens: number
+  systemPromptTargetTokens: number
+}
+
+/**
+ * Default context compression settings
+ */
+export const DEFAULT_CONTEXT_COMPRESSION_SETTINGS: ContextCompressionSettings = {
+  enabled: true,
+  windowSize: 5,
+  compressionTargetTokens: 800,
+  systemPromptTargetTokens: 1500,
 }
 
 /**

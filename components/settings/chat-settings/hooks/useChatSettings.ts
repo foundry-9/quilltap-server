@@ -12,8 +12,10 @@ import {
   CheapLLMSettings,
   MemoryCascadePreferences,
   TokenDisplaySettings,
+  ContextCompressionSettings,
   DEFAULT_MEMORY_CASCADE_PREFERENCES,
   DEFAULT_TOKEN_DISPLAY_SETTINGS,
+  DEFAULT_CONTEXT_COMPRESSION_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -32,6 +34,7 @@ interface UseChatSettingsReturn {
   handleImageDescriptionProfileChange: (profileId: string | null) => Promise<void>
   handleMemoryCascadeUpdate: (updates: Partial<MemoryCascadePreferences>) => Promise<void>
   handleTokenDisplayChange: (key: keyof TokenDisplaySettings, value: boolean) => Promise<void>
+  handleContextCompressionUpdate: (updates: Partial<ContextCompressionSettings>) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -377,6 +380,48 @@ export function useChatSettings(): UseChatSettingsReturn {
     [settings, showSuccess]
   )
 
+  /**
+   * Update context compression settings
+   */
+  const handleContextCompressionUpdate = useCallback(
+    async (updates: Partial<ContextCompressionSettings>) => {
+      if (!settings) return
+
+      try {
+        clientLogger.debug('Updating context compression settings', { updates })
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const currentSettings = settings.contextCompressionSettings || DEFAULT_CONTEXT_COMPRESSION_SETTINGS
+        const res = await fetch('/api/chat-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contextCompressionSettings: { ...currentSettings, ...updates },
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update context compression settings')
+        }
+
+        const updatedSettings = await res.json()
+        clientLogger.info('Context compression settings updated successfully', { updates })
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        clientLogger.error('Failed to update context compression settings', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
   return {
     settings,
     loading,
@@ -393,5 +438,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleImageDescriptionProfileChange,
     handleMemoryCascadeUpdate,
     handleTokenDisplayChange,
+    handleContextCompressionUpdate,
   }
 }

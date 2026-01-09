@@ -291,6 +291,12 @@ export class ChatSettingsRepository extends MongoBaseRepository<ChatSettings> {
             showChatTotals: false,
             showSystemEvents: false,
           },
+          contextCompressionSettings: {
+            enabled: true,
+            windowSize: 5,
+            compressionTargetTokens: 800,
+            systemPromptTargetTokens: 1500,
+          },
           defaultRoleplayTemplateId,
           ...data,
         };

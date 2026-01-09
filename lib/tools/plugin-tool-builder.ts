@@ -21,6 +21,7 @@ import {
   webSearchToolDefinition,
   projectInfoToolDefinition,
   fileManagementToolDefinition,
+  requestFullContextToolDefinition,
 } from '@/lib/tools';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
@@ -90,6 +91,9 @@ export interface BuildToolsOptions {
 
   /** Whether to enable file management tool (always enabled by default) */
   fileManagement?: boolean;
+
+  /** Whether to enable request_full_context tool (enabled when context compression is active) */
+  requestFullContext?: boolean;
 
   /** Whether to include tools from the tool registry (plugin tools) */
   includePluginTools?: boolean;
@@ -172,6 +176,12 @@ export function buildToolsForProvider(
   if (options.fileManagement !== false) {
     universalTools.push(fileManagementToolDefinition as UniversalTool);
     logger_.debug('Added file management tool');
+  }
+
+  // Add request_full_context tool if enabled (for context compression bypass)
+  if (options.requestFullContext) {
+    universalTools.push(requestFullContextToolDefinition as UniversalTool);
+    logger_.debug('Added request_full_context tool');
   }
 
   // Add plugin tools if enabled (defaults to true when not specified)

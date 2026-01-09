@@ -18,6 +18,23 @@ import {
 import { UserSchema } from './auth.types';
 
 // ============================================================================
+// CONTEXT COMPRESSION SETTINGS
+// ============================================================================
+
+export const ContextCompressionSettingsSchema = z.object({
+  /** Whether context compression is enabled (default: true) */
+  enabled: z.boolean().default(true),
+  /** Number of messages to keep in full context (sliding window size) */
+  windowSize: z.number().min(3).max(10).default(5),
+  /** Target token count for compressed history (500-1200 tokens) */
+  compressionTargetTokens: z.number().min(300).max(2000).default(800),
+  /** Target token count for compressed system prompt */
+  systemPromptTargetTokens: z.number().min(500).max(3000).default(1500),
+});
+
+export type ContextCompressionSettings = z.infer<typeof ContextCompressionSettingsSchema>;
+
+// ============================================================================
 // CHEAP LLM SETTINGS
 // ============================================================================
 
@@ -156,6 +173,13 @@ export const ChatSettingsSchema = z.object({
     showPerMessageCost: false,
     showChatTotals: false,
     showSystemEvents: false,
+  }),
+  /** Context compression settings for long conversations */
+  contextCompressionSettings: ContextCompressionSettingsSchema.default({
+    enabled: true,
+    windowSize: 5,
+    compressionTargetTokens: 800,
+    systemPromptTargetTokens: 1500,
   }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

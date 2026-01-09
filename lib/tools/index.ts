@@ -126,6 +126,24 @@ export {
   type FileManagementToolContext,
 } from './handlers/file-management-handler';
 
+// Request Full Context Tool (Context Compression Feature)
+export {
+  requestFullContextToolDefinition,
+  anthropicRequestFullContextToolDefinition,
+  getOpenAIRequestFullContextTool,
+  getAnthropicRequestFullContextTool,
+  getGoogleRequestFullContextTool,
+  validateRequestFullContextInput,
+  type RequestFullContextToolInput,
+  type RequestFullContextToolOutput,
+} from './request-full-context-tool';
+
+export {
+  executeRequestFullContextTool,
+  formatRequestFullContextResults,
+  type RequestFullContextToolContext,
+} from './handlers/request-full-context-handler';
+
 // Plugin-Based Tool Builder (Phase 3)
 export {
   buildToolsForProvider,

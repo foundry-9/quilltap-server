@@ -72,6 +72,7 @@ export const SystemEventTypeEnum = z.enum([
   'TITLE_GENERATION',
   'CONTEXT_SUMMARY',
   'IMAGE_PROMPT_CRAFTING',
+  'CONTEXT_COMPRESSION',
 ]);
 
 export type SystemEventType = z.infer<typeof SystemEventTypeEnum>;
@@ -246,6 +247,9 @@ export const ChatMetadataSchema = z.object({
   /** Per-chat override for showing system events (null = use global setting) */
   showSystemEventsOverride: z.boolean().nullable().optional(),
 
+  /** Flag set when AI calls request_full_context tool - bypasses compression on next message */
+  requestFullContextOnNextMessage: z.boolean().default(false),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -298,6 +302,9 @@ export const ChatMetadataBaseSchema = z.object({
   priceSource: z.enum(['openrouter', 'registry', 'fallback', 'openrouter-estimate', 'unavailable']).nullable().optional(),
   /** Per-chat override for showing system events (null = use global setting) */
   showSystemEventsOverride: z.boolean().nullable().optional(),
+
+  /** Flag set when AI calls request_full_context tool - bypasses compression on next message */
+  requestFullContextOnNextMessage: z.boolean().default(false),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
