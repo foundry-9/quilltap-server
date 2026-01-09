@@ -28,6 +28,10 @@
   - Added `fileBackendConfig` schema to plugin manifest (was causing validation failure)
   - Added FILE_BACKEND capability handler in plugin-initialization.ts
   - S3 storage plugin now loads correctly and registers with file storage manager
+- chore: Remove S3-specific utility script (`scripts/reset-file-tags.ts`)
+  - Script was S3-specific and incompatible with new storage abstraction
+  - AWS SDK removed from main package breaks this script
+  - Functionality can be reimplemented using file storage manager if needed
 - fix: Turbopack build warnings in log file rotation
   - Extracted path construction to helper function to prevent pattern analysis
   - Eliminates "overly broad patterns" warnings during build
