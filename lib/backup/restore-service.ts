@@ -11,7 +11,7 @@ import AdmZip from 'adm-zip';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
-import { s3FileService } from '@/lib/s3/file-service';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { UuidRemapper } from './uuid-remapper';
 import type {
   BackupManifest,
@@ -238,11 +238,11 @@ async function deleteUserData(userId: string): Promise<void> {
     ...projects.map((p) => repos.projects.delete(p.id)),
   ]);
 
-  // Delete files from S3
+  // Delete files from storage
   for (const file of files) {
     try {
-      if (file.s3Key) {
-        await s3FileService.deleteByS3Key(file.s3Key);
+      if (file.storageKey) {
+        await fileStorageManager.deleteFile(file);
       }
       await repos.files.delete(file.id);
     } catch (error) {
@@ -346,8 +346,10 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
   }
 
   // List and count backups
-  const backupKeys = await s3FileService.listUserFiles(userId, 'backups');
-  const backupsCount = backupKeys.length;
+  const allBackupFiles = files.filter(
+    (f) => f.folderPath === '/backups' || f.originalFilename?.endsWith('.zip')
+  );
+  const backupsCount = allBackupFiles.length;
 
   // Now delete everything using the existing function (includes templates)
   await deleteUserData(userId);
@@ -364,17 +366,11 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
     }
   }
 
-  // Delete backups from S3
-  for (const backupKey of backupKeys) {
-    try {
-      await s3FileService.deleteByS3Key(backupKey);
-    } catch (error) {
-      moduleLogger.warn('Failed to delete backup', {
-        backupKey,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
+  // Delete backups from storage (note: already deleted by deleteUserData above)
+  // but we log for clarity
+  moduleLogger.info('Backups deleted with other files', {
+    backupsCount,
+  });
 
   // Reset sync data
   // Delete mappings for each instance (so entities get re-mapped on next sync)
@@ -491,8 +487,10 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
     syncMappingsCount += mappings.length;
   }
 
-  // List and count backups
-  const backupKeys = await s3FileService.listUserFiles(userId, 'backups');
+  // List and count backups from files
+  const backupFiles = files.filter(
+    (f) => f.folderPath === '/backups' || f.originalFilename?.endsWith('.zip')
+  );
 
   return {
     characters: characters.length,
@@ -502,7 +500,7 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
     files: files.length,
     memories: memoriesCount,
     apiKeys: apiKeys.length,
-    backups: backupKeys.length,
+    backups: backupFiles.length,
     projects: projects.length,
     profiles: {
       connection: connectionProfiles.length,
@@ -788,34 +786,34 @@ export async function restore(
     }
   }
 
-  // 5. Files (upload to S3 and create metadata)
+  // 5. Files (upload to storage and create metadata)
   moduleLogger.debug('Restoring files', { count: data.files.length });
   let filesRestored = 0;
   for (const file of data.files) {
     try {
       const fileBuffer = getFileFromZip(zipBuffer, file);
       if (fileBuffer) {
-        // Upload to S3 using backup file ID for the key
-        await s3FileService.uploadUserFile(
-          targetUserId,
-          file.id,
-          file.originalFilename,
-          file.category,
-          fileBuffer,
-          file.mimeType
-        );
-
-        // Create file metadata
-        // IMPORTANT: Pass the file.id to ensure metadata matches S3 storage path
-        const { id: backupId, userId, createdAt, updatedAt, s3Key, s3Bucket, ...fileData } = file;
-        const newS3Key = s3FileService.generateS3Key({
+        // Upload to storage using file storage manager
+        const uploadResult = await fileStorageManager.uploadFile({
           userId: targetUserId,
           fileId: file.id,
           filename: file.originalFilename,
+          content: fileBuffer,
+          contentType: file.mimeType,
           projectId: file.projectId || null,
           folderPath: file.folderPath || '/',
         });
-        const createdFile = await repos.files.create({ ...fileData, s3Key: newS3Key }, { id: file.id });
+
+        // Create file metadata with storage key and mount point ID
+        const { id: backupId, userId, createdAt, updatedAt, s3Key, s3Bucket, storageKey, mountPointId, ...fileData } = file;
+        const createdFile = await repos.files.create(
+          {
+            ...fileData,
+            storageKey: uploadResult.storageKey,
+            mountPointId: uploadResult.mountPointId,
+          },
+          { id: file.id }
+        );
         fileIdMap.set(backupId, createdFile.id);
         filesRestored++;
       } else {

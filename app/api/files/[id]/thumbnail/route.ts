@@ -16,8 +16,7 @@ import sharp from 'sharp';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
-import { downloadFile as downloadS3File, uploadFile, fileExists } from '@/lib/s3/operations';
-import { validateS3Config } from '@/lib/s3/config';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { canResizeImage } from '@/lib/files/image-processing';
 
 const DEFAULT_THUMBNAIL_SIZE = 150;
@@ -25,12 +24,10 @@ const MAX_THUMBNAIL_SIZE = 300;
 const THUMBNAIL_QUALITY = 80;
 
 /**
- * Build the S3 key for a cached thumbnail
+ * Build the storage key for a cached thumbnail
  */
-function buildThumbnailKey(userId: string, fileId: string, size: number): string {
-  const config = validateS3Config();
-  const prefix = config.pathPrefix || '';
-  return `${prefix}users/${userId}/thumbnails/${fileId}_${size}.webp`;
+function buildThumbnailStorageKey(userId: string, fileId: string, size: number): string {
+  return `users/${userId}/thumbnails/${fileId}_${size}.webp`;
 }
 
 /**
@@ -98,58 +95,70 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return NextResponse.redirect(new URL(`/api/files/${fileId}`, request.url));
       }
 
-      if (!fileEntry.s3Key) {
-        logger.error('File has no S3 key', { context, fileId });
+      if (!fileEntry.storageKey) {
+        logger.error('File has no storage key', { context, fileId });
         return serverError('File not available');
       }
 
       // Check for cached thumbnail
-      const thumbnailKey = buildThumbnailKey(user.id, fileId, size);
+      const thumbnailStorageKey = buildThumbnailStorageKey(user.id, fileId, size);
 
       logger.debug('Checking for cached thumbnail', {
         context,
         fileId,
-        thumbnailKey,
+        thumbnailStorageKey,
       });
 
-      const thumbnailExists = await fileExists(thumbnailKey);
+      // Create a temporary file entry for the thumbnail cache check
+      const thumbnailEntry = { ...fileEntry, storageKey: thumbnailStorageKey };
 
-      if (thumbnailExists) {
-        logger.debug('Serving cached thumbnail', {
-          context,
-          fileId,
-          thumbnailKey,
-        });
+      try {
+        const thumbnailExists = await fileStorageManager.fileExists(thumbnailEntry);
 
-        try {
-          const thumbnailBuffer = await downloadS3File(thumbnailKey);
-
-          return new NextResponse(new Uint8Array(thumbnailBuffer), {
-            headers: {
-              'Content-Type': 'image/webp',
-              'Content-Length': thumbnailBuffer.length.toString(),
-              'Cache-Control': 'public, max-age=31536000, immutable',
-            },
-          });
-        } catch (cacheError) {
-          logger.warn('Failed to serve cached thumbnail, will regenerate', {
+        if (thumbnailExists) {
+          logger.debug('Serving cached thumbnail', {
             context,
             fileId,
-            thumbnailKey,
-            error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+            thumbnailStorageKey,
           });
-          // Fall through to regeneration
+
+          try {
+            const thumbnailBuffer = await fileStorageManager.downloadFile(thumbnailEntry);
+
+            return new NextResponse(new Uint8Array(thumbnailBuffer), {
+              headers: {
+                'Content-Type': 'image/webp',
+                'Content-Length': thumbnailBuffer.length.toString(),
+                'Cache-Control': 'public, max-age=31536000, immutable',
+              },
+            });
+          } catch (cacheError) {
+            logger.warn('Failed to serve cached thumbnail, will regenerate', {
+              context,
+              fileId,
+              thumbnailStorageKey,
+              error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+            });
+            // Fall through to regeneration
+          }
         }
+      } catch (existsError) {
+        logger.debug('Thumbnail existence check failed, will regenerate', {
+          context,
+          fileId,
+          error: existsError instanceof Error ? existsError.message : 'Unknown error',
+        });
+        // Fall through to regeneration
       }
 
       // Download original image
       logger.debug('Downloading original image for thumbnail generation', {
         context,
         fileId,
-        s3Key: fileEntry.s3Key,
+        storageKey: fileEntry.storageKey,
       });
 
-      const originalBuffer = await downloadS3File(fileEntry.s3Key);
+      const originalBuffer = await fileStorageManager.downloadFile(fileEntry);
 
       logger.debug('Original image downloaded', {
         context,
@@ -181,22 +190,28 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         targetSize: size,
       });
 
-      // Cache the thumbnail in S3 (async, don't wait)
-      uploadFile(thumbnailKey, thumbnailBuffer, 'image/webp', {
+      // Cache the thumbnail (async, don't wait)
+      fileStorageManager.uploadFile({
         userId: user.id,
-        fileId,
-        thumbnailSize: String(size),
+        fileId: `${fileId}_thumb_${size}`,
+        filename: `${fileId}_${size}.webp`,
+        content: thumbnailBuffer,
+        contentType: 'image/webp',
+        metadata: {
+          originalFileId: fileId,
+          thumbnailSize: String(size),
+        },
       }).then(() => {
-        logger.debug('Thumbnail cached to S3', {
+        logger.debug('Thumbnail cached to storage', {
           context,
           fileId,
-          thumbnailKey,
+          thumbnailStorageKey,
         });
       }).catch((cacheError) => {
         logger.warn('Failed to cache thumbnail', {
           context,
           fileId,
-          thumbnailKey,
+          thumbnailStorageKey,
           error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
         });
       });

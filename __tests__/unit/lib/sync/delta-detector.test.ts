@@ -95,8 +95,8 @@ const mockRepositories: MockRepositories = {
   },
 };
 
-// Mock the S3 file service download function
-const mockDownloadUserFile = jest.fn();
+// Mock the file storage manager download function
+const mockDownloadFile = jest.fn();
 
 // Mock the mongodb repositories - must be called before importing the module under test
 jest.mock('@/lib/mongodb/repositories', () => ({
@@ -113,10 +113,10 @@ jest.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock the S3 file service
-jest.mock('@/lib/s3/file-service', () => ({
-  s3FileService: {
-    downloadUserFile: mockDownloadUserFile,
+// Mock the file storage manager
+jest.mock('@/lib/file-storage/manager', () => ({
+  fileStorageManager: {
+    downloadFile: mockDownloadFile,
   },
 }));
 
@@ -148,7 +148,7 @@ describe('Sync Delta Detector', () => {
     mockRepositories.connections.findApiKeyById.mockResolvedValue(null);
     mockRepositories.roleplayTemplates.findByUserId.mockResolvedValue([]);
     mockRepositories.promptTemplates.findByUserId.mockResolvedValue([]);
-    mockDownloadUserFile.mockReset();
+    mockDownloadFile.mockReset();
   });
 
   // ============================================================================
@@ -295,7 +295,7 @@ describe('Sync Delta Detector', () => {
         mockRepositories.chats.findByUserId.mockResolvedValue([chat]);
         mockRepositories.chats.findById.mockResolvedValue(chat);
         mockRepositories.memories.findByCharacterId.mockResolvedValue([memory]);
-        mockDownloadUserFile.mockResolvedValue(Buffer.from('test content'));
+        mockDownloadFile.mockResolvedValue(Buffer.from('test content'));
 
         const result = await detectDeltas({
           userId: testUserId,
@@ -596,7 +596,7 @@ describe('Sync Delta Detector', () => {
       const fileContent = Buffer.from('small file content');
 
       mockRepositories.files.findByUserId.mockResolvedValue([smallFile]);
-      mockDownloadUserFile.mockResolvedValue(fileContent);
+      mockDownloadFile.mockResolvedValue(fileContent);
 
       const result = await detectDeltas({
         userId: testUserId,
@@ -639,7 +639,7 @@ describe('Sync Delta Detector', () => {
       });
 
       mockRepositories.files.findByUserId.mockResolvedValue([file]);
-      mockDownloadUserFile.mockResolvedValue(Buffer.from('content'));
+      mockDownloadFile.mockResolvedValue(Buffer.from('content'));
 
       const result = await detectDeltas({
         userId: testUserId,
@@ -660,7 +660,7 @@ describe('Sync Delta Detector', () => {
       });
 
       mockRepositories.files.findByUserId.mockResolvedValue([file]);
-      mockDownloadUserFile.mockRejectedValue(new Error('Download failed'));
+      mockDownloadFile.mockRejectedValue(new Error('Download failed'));
 
       const result = await detectDeltas({
         userId: testUserId,
@@ -782,7 +782,7 @@ describe('Sync Delta Detector', () => {
       mockRepositories.characters.findByUserId.mockResolvedValue([character]);
       mockRepositories.tags.findByUserId.mockResolvedValue([tag]);
       mockRepositories.files.findByUserId.mockResolvedValue([file]);
-      mockDownloadUserFile.mockResolvedValue(Buffer.from('content'));
+      mockDownloadFile.mockResolvedValue(Buffer.from('content'));
 
       const counts = await countDeltas({
         userId: testUserId,

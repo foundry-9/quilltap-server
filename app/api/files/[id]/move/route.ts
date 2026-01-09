@@ -10,8 +10,7 @@ import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, forbidden } from '@/lib/api/responses';
 import { validateFolderPath, normalizeFolderPath } from '@/lib/files/folder-utils';
-import { buildS3Key } from '@/lib/s3/client';
-import { s3FileService } from '@/lib/s3/file-service';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
 interface MoveRequest {
   folderPath?: string;
@@ -165,10 +164,10 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         return serverError('Failed to update file');
       }
 
-      // If folder or project changed, move the S3 object
-      const oldS3Key = fileEntry.s3Key;
-      if (oldS3Key && (folderChanged || projectChanged)) {
-        const newS3Key = buildS3Key({
+      // If folder or project changed, move the storage object
+      const oldStorageKey = fileEntry.storageKey;
+      if (oldStorageKey && (folderChanged || projectChanged)) {
+        const newStorageKey = fileStorageManager.buildStorageKey({
           userId: user.id,
           fileId,
           filename: updatedFile.originalFilename,
@@ -176,32 +175,78 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
           folderPath: updatedFile.folderPath ?? '/',
         });
 
-        if (newS3Key !== oldS3Key) {
-          logger.debug('Moving S3 object', {
+        if (newStorageKey !== oldStorageKey) {
+          logger.debug('Moving storage object', {
             context,
             fileId,
-            oldS3Key,
-            newS3Key,
+            oldStorageKey,
+            newStorageKey,
           });
 
           try {
-            await s3FileService.moveFile(oldS3Key, newS3Key);
+            const backend = fileStorageManager.getBackendForFile(fileEntry);
 
-            // Update the s3Key in the database
-            await repos.files.update(fileId, { s3Key: newS3Key });
+            // Try to use backend copy if available, otherwise download and re-upload
+            if (backend.copy) {
+              await backend.copy(oldStorageKey, newStorageKey);
+              logger.debug('Storage object copied via backend', {
+                context,
+                fileId,
+                oldStorageKey,
+                newStorageKey,
+              });
+            } else {
+              // Download from old location and upload to new location
+              const content = await fileStorageManager.downloadFile(fileEntry);
+              await fileStorageManager.uploadFile({
+                userId: user.id,
+                fileId,
+                filename: updatedFile.originalFilename,
+                content,
+                contentType: fileEntry.mimeType,
+                projectId: updatedFile.projectId ?? null,
+                folderPath: updatedFile.folderPath || '/',
+              });
+              logger.debug('Storage object moved via download-upload', {
+                context,
+                fileId,
+                oldStorageKey,
+                newStorageKey,
+              });
+            }
 
-            logger.info('S3 object moved successfully', {
+            // Delete the old file from storage
+            try {
+              await backend.delete(oldStorageKey);
+              logger.debug('Old storage object deleted', {
+                context,
+                fileId,
+                oldStorageKey,
+              });
+            } catch (deleteError) {
+              logger.warn('Failed to delete old storage object', {
+                context,
+                fileId,
+                oldStorageKey,
+                error: deleteError instanceof Error ? deleteError.message : 'Unknown error',
+              });
+            }
+
+            // Update the storageKey in the database
+            await repos.files.update(fileId, { storageKey: newStorageKey });
+
+            logger.info('Storage object moved successfully', {
               context,
               fileId,
-              oldS3Key,
-              newS3Key,
+              oldStorageKey,
+              newStorageKey,
             });
-          } catch (s3Error) {
+          } catch (storageError) {
             // Log the error but don't fail the request - metadata is already updated
             logger.error(
-              'Failed to move S3 object, metadata updated but S3 key unchanged',
-              { context, fileId, oldS3Key, newS3Key },
-              s3Error instanceof Error ? s3Error : undefined
+              'Failed to move storage object, metadata updated but storage key unchanged',
+              { context, fileId, oldStorageKey, newStorageKey },
+              storageError instanceof Error ? storageError : undefined
             );
             // Revert the metadata update to keep consistency
             await repos.files.update(fileId, {
@@ -213,7 +258,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         }
       }
 
-      // Re-fetch to get the updated s3Key
+      // Re-fetch to get the updated storageKey
       const finalFile = await repos.files.findById(fileId);
 
       logger.info('File moved/renamed successfully', {
@@ -222,7 +267,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         newFolderPath: finalFile?.folderPath,
         newFilename: finalFile?.originalFilename,
         newProjectId: finalFile?.projectId,
-        newS3Key: finalFile?.s3Key,
+        newStorageKey: finalFile?.storageKey,
       });
 
       return NextResponse.json({

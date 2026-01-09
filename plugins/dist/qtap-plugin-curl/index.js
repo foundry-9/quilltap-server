@@ -5572,7 +5572,8 @@ function formatCurlOutput(output) {
   }
   return lines.join("\n");
 }
-var index_default = { plugin };
+var pluginExport = { plugin };
+var index_default = pluginExport;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   plugin

@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, forbidden } from '@/lib/api/responses';
-import { downloadFile as downloadS3File, getPresignedUrl, deleteFile as deleteS3File } from '@/lib/s3/operations';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getFileAssociations } from '@/lib/files/get-file-associations';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import type { FileEntry } from '@/lib/schemas/file.types';
@@ -51,12 +51,12 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('File');
       }
 
-      if (!fileEntry.s3Key) {
-        logger.error('File has no S3 key - may need migration', { context: 'GET /api/files/[id]', fileId });
+      if (!fileEntry.storageKey) {
+        logger.error('File has no storage key - may need migration', { context: 'GET /api/files/[id]', fileId });
         return serverError('File not available - migration required');
       }
 
-      logger.debug('Serving file from S3', { context: 'GET /api/files/[id]', fileId, s3Key: fileEntry.s3Key });
+      logger.debug('Serving file from storage', { context: 'GET /api/files/[id]', fileId, storageKey: fileEntry.storageKey });
 
       // Check if we should use presigned URL redirect or proxy through API
       // For HTTP endpoints (e.g., local MinIO), we must proxy to avoid mixed content issues
@@ -64,35 +64,44 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const isHttpEndpoint = s3Endpoint.startsWith('http://');
       const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
 
-      // Use presigned URL redirect for large files ONLY if endpoint is HTTPS or AWS S3 (no custom endpoint)
+      // Try to use presigned URL redirect for large files
       if (fileEntry.size > LARGE_FILE_THRESHOLD && !isHttpEndpoint) {
-        logger.debug('File size exceeds threshold, generating presigned URL redirect', {
+        logger.debug('File size exceeds threshold, attempting presigned URL redirect', {
           context: 'GET /api/files/[id]',
           fileId,
           fileSize: fileEntry.size,
           threshold: LARGE_FILE_THRESHOLD,
         });
 
-        const presignedUrl = await getPresignedUrl(fileEntry.s3Key);
-        logger.debug('Presigned URL generated successfully', {
-          context: 'GET /api/files/[id]',
-          fileId,
-          hasUrl: !!presignedUrl,
-        });
+        try {
+          const presignedUrl = await fileStorageManager.getFileUrl(fileEntry, { presigned: true });
+          logger.debug('Presigned URL generated successfully', {
+            context: 'GET /api/files/[id]',
+            fileId,
+            hasUrl: !!presignedUrl,
+          });
 
-        return NextResponse.redirect(presignedUrl);
+          return NextResponse.redirect(presignedUrl);
+        } catch (error) {
+          logger.debug('Presigned URL generation failed, falling back to proxy download', {
+            context: 'GET /api/files/[id]',
+            fileId,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          // Fall through to proxy download
+        }
       }
 
       // Download file and serve through API
-      logger.debug('Downloading file from S3', {
+      logger.debug('Downloading file from storage', {
         context: 'GET /api/files/[id]',
         fileId,
         fileSize: fileEntry.size,
       });
 
-      const buffer = await downloadS3File(fileEntry.s3Key);
+      const buffer = await fileStorageManager.downloadFile(fileEntry);
 
-      logger.debug('File downloaded from S3', {
+      logger.debug('File downloaded from storage', {
         context: 'GET /api/files/[id]',
         fileId,
         downloadedSize: buffer.length,
@@ -251,7 +260,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('File');
       }
 
-      logger.debug('Deleting file', { context: 'DELETE /api/files/[id]', fileId, hasS3Key: !!fileEntry.s3Key, force, dissociate });
+      logger.debug('Deleting file', { context: 'DELETE /api/files/[id]', fileId, hasStorageKey: !!fileEntry.storageKey, force, dissociate });
 
       // Handle dissociation if requested
       if (dissociate && fileEntry.linkedTo.length > 0) {
@@ -312,29 +321,29 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         }
       }
 
-      // Delete from S3 if file has s3Key
-      if (fileEntry.s3Key) {
-        logger.debug('Deleting file from S3', {
+      // Delete from storage if file has storageKey
+      if (fileEntry.storageKey) {
+        logger.debug('Deleting file from storage', {
           context: 'DELETE /api/files/[id]',
           fileId,
-          s3Key: fileEntry.s3Key,
+          storageKey: fileEntry.storageKey,
         });
 
         try {
-          await deleteS3File(fileEntry.s3Key);
-          logger.debug('File deleted from S3', {
+          await fileStorageManager.deleteFile(fileEntry);
+          logger.debug('File deleted from storage', {
             context: 'DELETE /api/files/[id]',
             fileId,
-            s3Key: fileEntry.s3Key,
+            storageKey: fileEntry.storageKey,
           });
-        } catch (s3Error) {
-          logger.warn('Failed to delete file from S3', {
+        } catch (storageError) {
+          logger.warn('Failed to delete file from storage', {
             context: 'DELETE /api/files/[id]',
             fileId,
-            s3Key: fileEntry.s3Key,
-            error: s3Error instanceof Error ? s3Error.message : 'Unknown error',
+            storageKey: fileEntry.storageKey,
+            error: storageError instanceof Error ? storageError.message : 'Unknown error',
           });
-          // Continue with metadata deletion even if S3 deletion fails
+          // Continue with metadata deletion even if storage deletion fails
         }
       }
 
@@ -358,7 +367,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       logger.info('File deleted successfully', {
         context: 'DELETE /api/files/[id]',
         fileId,
-        hadS3Key: !!fileEntry.s3Key,
+        hadStorageKey: !!fileEntry.storageKey,
       });
 
       return NextResponse.json({ success: true });

@@ -14,7 +14,7 @@
  * This migration must pass before any file storage operations can proceed.
  */
 
-import { validateS3Config, testS3Connection } from '@/lib/s3/config';
+import { validateS3Config, testS3Connection } from '../lib/s3-utils';
 import { logger } from '@/lib/logger';
 import type { Migration, MigrationResult } from '../migration-types';
 

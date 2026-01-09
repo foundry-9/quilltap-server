@@ -163,4 +163,5 @@ function formatCurlOutput(output: CurlToolOutput): string {
 }
 
 // Default export for compatibility
-export default { plugin };
+const pluginExport = { plugin };
+export default pluginExport;

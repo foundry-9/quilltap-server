@@ -8,8 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { notFound, badRequest, serverError } from '@/lib/api/responses'
-import { uploadFile as uploadS3File } from '@/lib/s3/operations'
-import { buildS3Key } from '@/lib/s3/client'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 import { detectTextContent, getBestMimeType } from '@/lib/files/text-detection'
 import type { FileCategory } from '@/lib/schemas/types'
 
@@ -111,31 +110,26 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // Generate a new file ID
       const fileId = crypto.randomUUID()
 
-      // Upload to S3
-      const s3Key = buildS3Key({
+      // Upload to file storage
+      const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
         userId: user.id,
         fileId,
         filename: file.name,
+        content: buffer,
+        contentType: mimeType,
         projectId,
         folderPath: folderPath || '/',
       })
-      await uploadS3File(s3Key, buffer, mimeType, {
-        userId: user.id,
-        fileId,
-        category,
-        filename: file.name,
-        sha256,
-      })
 
-      logger.debug('Uploaded project file to S3', {
+      logger.debug('Uploaded project file to storage', {
         context: 'POST /api/projects/:id/files/upload',
         fileId,
-        s3Key,
+        storageKey,
         size: buffer.length,
       })
 
       // Create metadata in repository with project association
-      // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
+      // IMPORTANT: Pass the fileId to ensure metadata matches storage path
       const fileEntry = await repos.files.create({
         userId: user.id,
         sha256,
@@ -153,7 +147,8 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         generationRevisedPrompt: null,
         description: null,
         tags: [],
-        s3Key,
+        storageKey,
+        mountPointId,
         projectId,
         folderPath: folderPath || '/',
       }, { id: fileId })

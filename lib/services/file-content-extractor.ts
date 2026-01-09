@@ -14,7 +14,7 @@
  */
 
 import { logger } from '@/lib/logger'
-import { downloadFile } from '@/lib/s3/operations'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 import type { FileEntry } from '@/lib/schemas/types'
 
 /**
@@ -261,20 +261,20 @@ export async function extractFileContent(file: FileEntry): Promise<ExtractedCont
     }
   }
 
-  // Download file from S3
+  // Download file from storage
   let buffer: Buffer
   try {
-    if (!file.s3Key) {
+    if (!file.storageKey) {
       return {
         success: false,
         contentType: 'error',
-        error: 'File has no S3 storage reference',
+        error: 'File has no storage key',
       }
     }
-    buffer = await downloadFile(file.s3Key)
+    buffer = await fileStorageManager.downloadFile(file)
   } catch (error) {
-    log.error('Failed to download file from S3', {
-      s3Key: file.s3Key,
+    log.error('Failed to download file from storage', {
+      storageKey: file.storageKey,
       error: error instanceof Error ? error.message : String(error),
     })
     return {

@@ -33,6 +33,8 @@ import { addUseNativeWebSearchFieldMigration } from './add-use-native-web-search
 import { restructureS3KeysMigration } from './restructure-s3-keys';
 // Memory aboutCharacterId population
 import { populateMemoryAboutCharacterIdsMigration } from './populate-memory-about-character-ids';
+// Mount points migration
+import { createMountPointsMigration } from './create-mount-points';
 
 /**
  * All available migrations.
@@ -66,6 +68,8 @@ export const migrations: Migration[] = [
   restructureS3KeysMigration,
   // Memory aboutCharacterId population
   populateMemoryAboutCharacterIdsMigration,
+  // Mount points migration
+  createMountPointsMigration,
 ];
 
 export {
@@ -96,4 +100,6 @@ export {
   restructureS3KeysMigration,
   // Memory aboutCharacterId population
   populateMemoryAboutCharacterIdsMigration,
+  // Mount points migration
+  createMountPointsMigration,
 };

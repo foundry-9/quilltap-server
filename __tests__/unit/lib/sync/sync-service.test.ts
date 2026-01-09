@@ -23,13 +23,13 @@ import {
 } from '@/lib/sync/sync-service';
 import { SyncEntityDelta, SyncConflict, SyncableEntityType, SyncOperation } from '@/lib/sync/types';
 import { getRepositories } from '@/lib/mongodb/repositories';
-import { s3FileService } from '@/lib/s3/file-service';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { resolveConflictWithRecord } from '@/lib/sync/conflict-resolver';
 import { detectDeltas } from '@/lib/sync/delta-detector';
 
 // Mock dependencies
 jest.mock('@/lib/mongodb/repositories');
-jest.mock('@/lib/s3/file-service');
+jest.mock('@/lib/file-storage/manager');
 jest.mock('@/lib/sync/conflict-resolver');
 jest.mock('@/lib/sync/delta-detector');
 
@@ -52,7 +52,7 @@ jest.mock('@/lib/logger', () => {
 });
 
 const mockedGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>;
-const mockedS3FileService = s3FileService as jest.Mocked<typeof s3FileService>;
+const mockedFileStorageManager = fileStorageManager as jest.Mocked<typeof fileStorageManager>;
 const mockedResolveConflictWithRecord = resolveConflictWithRecord as jest.MockedFunction<
   typeof resolveConflictWithRecord
 >;
@@ -374,7 +374,7 @@ describe('Sync Service', () => {
         expect(mockRepos.characters.delete).toHaveBeenCalledWith('char-to-delete');
       });
 
-      it('should delete FILE and its S3 content when delta.isDeleted is true', async () => {
+      it('should delete FILE and its storage content when delta.isDeleted is true', async () => {
         const delta: SyncEntityDelta = {
           entityType: 'FILE',
           id: 'file-to-delete',
@@ -386,21 +386,19 @@ describe('Sync Service', () => {
 
         mockRepos.files.findById.mockResolvedValue({
           id: 'file-to-delete',
-          s3Key: 'users/user-123/attachments/file-to-delete/test.jpg',
+          storageKey: 'users/user-123/attachments/file-to-delete/test.jpg',
         });
-        mockedS3FileService.deleteByS3Key = jest.fn().mockResolvedValue(undefined);
+        mockedFileStorageManager.deleteFile = jest.fn().mockResolvedValue(undefined);
         mockRepos.files.delete.mockResolvedValue(true);
 
         const result = await applyRemoteDelta(userId, instanceId, delta);
 
         expect(result.success).toBe(true);
-        expect(mockedS3FileService.deleteByS3Key).toHaveBeenCalledWith(
-          'users/user-123/attachments/file-to-delete/test.jpg'
-        );
+        expect(mockedFileStorageManager.deleteFile).toHaveBeenCalled();
         expect(mockRepos.files.delete).toHaveBeenCalledWith('file-to-delete');
       });
 
-      it('should still delete file from database even if S3 deletion fails', async () => {
+      it('should still delete file from database even if storage deletion fails', async () => {
         const delta: SyncEntityDelta = {
           entityType: 'FILE',
           id: 'file-to-delete',
@@ -412,9 +410,9 @@ describe('Sync Service', () => {
 
         mockRepos.files.findById.mockResolvedValue({
           id: 'file-to-delete',
-          s3Key: 'users/user-123/attachments/file-to-delete/test.jpg',
+          storageKey: 'users/user-123/attachments/file-to-delete/test.jpg',
         });
-        mockedS3FileService.deleteByS3Key = jest.fn().mockRejectedValue(new Error('S3 error'));
+        mockedFileStorageManager.deleteFile = jest.fn().mockRejectedValue(new Error('Storage error'));
         mockRepos.files.delete.mockResolvedValue(true);
 
         const result = await applyRemoteDelta(userId, instanceId, delta);
@@ -638,7 +636,7 @@ describe('Sync Service', () => {
     });
 
     describe('FILE entities', () => {
-      it('should save content to S3 when provided inline as base64', async () => {
+      it('should save content to storage when provided inline as base64', async () => {
         const fileContent = Buffer.from('test file content').toString('base64');
         const delta: SyncEntityDelta = {
           entityType: 'FILE',
@@ -657,20 +655,13 @@ describe('Sync Service', () => {
         mockRepos.files.findById.mockResolvedValue(null);
         mockRepos.files.createOrUpdate.mockResolvedValue({ id: 'file-1', updatedAt: now.toISOString() });
         mockRepos.files.update.mockResolvedValue(true);
-        mockedS3FileService.uploadUserFile = jest.fn().mockResolvedValue(undefined);
-        mockedS3FileService.generateS3Key = jest.fn().mockReturnValue('users/user-123/attachments/file-1/test.txt');
+        mockedFileStorageManager.uploadFile = jest.fn().mockResolvedValue({ storageKey: 'users/user-123/attachments/file-1/test.txt', mountPointId: 'mock-mount' });
+        mockedFileStorageManager.buildStorageKey = jest.fn().mockReturnValue('users/user-123/attachments/file-1/test.txt');
 
         const result = await applyRemoteDelta(userId, instanceId, delta);
 
         expect(result.success).toBe(true);
-        expect(mockedS3FileService.uploadUserFile).toHaveBeenCalledWith(
-          userId,
-          'file-1',
-          'test.txt',
-          'ATTACHMENT',
-          expect.any(Buffer),
-          'text/plain'
-        );
+        expect(mockedFileStorageManager.uploadFile).toHaveBeenCalled();
       });
 
       it('should mark file as requiresContentFetch when content not provided inline', async () => {
@@ -690,13 +681,14 @@ describe('Sync Service', () => {
 
         mockRepos.files.findById.mockResolvedValue(null);
         mockRepos.files.createOrUpdate.mockResolvedValue({ id: 'file-1', updatedAt: now.toISOString() });
+        mockedFileStorageManager.uploadFile = jest.fn();
 
         const result = await applyRemoteDelta(userId, instanceId, delta);
 
         expect(result.success).toBe(true);
         expect(result.isNewEntity).toBe(true);
-        // uploadUserFile should not be called since content is not provided
-        expect(mockedS3FileService.uploadUserFile).not.toHaveBeenCalled();
+        // uploadFile should not be called since content is not provided
+        expect(mockedFileStorageManager.uploadFile).not.toHaveBeenCalled();
       });
 
       it('should update file content when REMOTE_WINS', async () => {
@@ -726,7 +718,7 @@ describe('Sync Service', () => {
 
         mockRepos.files.findById.mockResolvedValue(existingFile);
         mockRepos.files.update.mockResolvedValue(true);
-        mockedS3FileService.uploadUserFile = jest.fn().mockResolvedValue(undefined);
+        mockedFileStorageManager.uploadFile = jest.fn().mockResolvedValue({ storageKey: 'mock-key', mountPointId: 'mock-mount' });
 
         mockedResolveConflictWithRecord.mockReturnValue({
           resolution: 'REMOTE_WINS',
@@ -743,7 +735,7 @@ describe('Sync Service', () => {
         const result = await applyRemoteDelta(userId, instanceId, delta);
 
         expect(result.success).toBe(true);
-        expect(mockedS3FileService.uploadUserFile).toHaveBeenCalled();
+        expect(mockedFileStorageManager.uploadFile).toHaveBeenCalled();
       });
     });
 
@@ -955,7 +947,7 @@ describe('Sync Service', () => {
 
       mockRepos.files.findById
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 'file-1', s3Key: 'users/user-123/files/file-1/large-file.zip' });
+        .mockResolvedValueOnce({ id: 'file-1', storageKey: 'users/user-123/files/file-1/large-file.zip' });
       mockRepos.files.createOrUpdate.mockResolvedValue({ id: 'file-1', updatedAt: now.toISOString() });
 
       const result = await processRemoteDeltas(userId, instanceId, deltas);

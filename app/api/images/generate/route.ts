@@ -12,8 +12,7 @@ import { createLLMProvider } from '@/lib/llm'
 import { logger } from '@/lib/logger'
 import { createHash } from 'crypto'
 import { z } from 'zod'
-import { uploadFile as uploadS3File } from '@/lib/s3/operations'
-import { buildS3Key } from '@/lib/s3/client'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 import { getInheritedTags } from '@/lib/files/tag-inheritance'
 import type { FileCategory, FileSource } from '@/lib/schemas/types'
 
@@ -150,22 +149,17 @@ export const POST = createAuthenticatedHandler(async (request, { user, repos }) 
         // Build linkedTo from tags (entity IDs)
         const linkedTo = tags?.map(t => t.tagId) || []
 
-        // Upload to S3
-        const s3Key = buildS3Key({
+        // Upload to file storage
+        const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
           userId: user.id,
           fileId,
           filename,
+          content: imageBuffer,
+          contentType: generatedImage.mimeType,
           projectId: null,
           folderPath: '/',
         })
-        await uploadS3File(s3Key, imageBuffer, generatedImage.mimeType, {
-          userId: user.id,
-          fileId,
-          category,
-          filename,
-          sha256,
-        })
-        logger.debug('Uploaded generated image to S3', { fileId, s3Key, size: imageBuffer.length })
+        logger.debug('Uploaded generated image to storage', { fileId, storageKey, size: imageBuffer.length })
 
         // Inherit tags from linked entities
         const inheritedTags = await getInheritedTags(linkedTo, user.id)
@@ -178,7 +172,7 @@ export const POST = createAuthenticatedHandler(async (request, { user, repos }) 
         })
 
         // Create database record using files repository (FileEntry format)
-        // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
+        // IMPORTANT: Pass the fileId to ensure metadata matches storage path
         const file = await repos.files.create({
           sha256,
           userId: user.id,
@@ -192,7 +186,8 @@ export const POST = createAuthenticatedHandler(async (request, { user, repos }) 
           generationModel: profile.modelName,
           generationRevisedPrompt: generatedImage.revisedPrompt || null,
           tags: inheritedTags,
-          s3Key,
+          storageKey,
+          mountPointId,
         }, { id: fileId })
 
         // Use API route for S3-backed files

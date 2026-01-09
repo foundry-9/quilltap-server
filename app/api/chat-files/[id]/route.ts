@@ -11,7 +11,7 @@ import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
 import { notFound, badRequest, serverError, unauthorized, validationError } from '@/lib/api/responses'
-import { deleteFile as deleteS3File } from '@/lib/s3/operations'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 
 const tagSchema = z.object({
   tagType: z.enum(['CHARACTER', 'PERSONA']),
@@ -222,21 +222,21 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         return unauthorized()
       }
 
-      // Delete from S3 if file has S3 key
-      if (fileEntry.s3Key) {
+      // Delete from storage if file has storageKey
+      if (fileEntry.storageKey) {
         try {
-          await deleteS3File(fileEntry.s3Key)
-          logger.debug('DELETE /api/chat-files/[id] - Deleted from S3', {
+          await fileStorageManager.deleteFile(fileEntry)
+          logger.debug('DELETE /api/chat-files/[id] - Deleted from storage', {
             fileId: id,
-            s3Key: fileEntry.s3Key,
+            storageKey: fileEntry.storageKey,
           })
-        } catch (s3Error) {
-          logger.warn('DELETE /api/chat-files/[id] - Failed to delete from S3', {
+        } catch (storageError) {
+          logger.warn('DELETE /api/chat-files/[id] - Failed to delete from storage', {
             fileId: id,
-            s3Key: fileEntry.s3Key,
-            error: s3Error instanceof Error ? s3Error.message : 'Unknown error',
+            storageKey: fileEntry.storageKey,
+            error: storageError instanceof Error ? storageError.message : 'Unknown error',
           })
-          // Continue with metadata deletion even if S3 deletion fails
+          // Continue with metadata deletion even if storage deletion fails
         }
       }
 

@@ -11,47 +11,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { downloadFile, deleteFile, listFiles } from '@/lib/s3/operations';
-import { validateS3Config } from '@/lib/s3/config';
+import { getRepositories } from '@/lib/repositories/factory';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getErrorMessage } from '@/lib/errors';
 import { notFound, serverError } from '@/lib/api/responses';
 
 const moduleLogger = logger.child({ module: 'api:capabilities-report:id' });
 
-/**
- * Find the S3 key for a report by ID
- */
-async function findReportS3Key(userId: string, reportId: string): Promise<string | null> {
-  const config = validateS3Config();
-  const prefix = config.pathPrefix || '';
-  const reportPrefix = `${prefix}users/${userId}/REPORT/${reportId}_`;
-
-  const keys = await listFiles(reportPrefix, 10);
-  return keys.length > 0 ? keys[0] : null;
-}
-
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
-  async (req, { user }, { id: reportId }) => {
+  async (req, { user, repos }, { id: reportId }) => {
     try {
       const userId = user.id;
 
       moduleLogger.info('Getting capabilities report', { userId, reportId });
 
-      // Find the report S3 key
-      const s3Key = await findReportS3Key(userId, reportId);
-      if (!s3Key) {
+      // Find the report file in the database from DOCUMENT category
+      const allDocuments = await repos.files.findByCategory('DOCUMENT');
+      const reportFile = allDocuments.find((f) => f.id === reportId && f.folderPath === '/reports');
+
+      if (!reportFile) {
         return notFound('Report');
       }
 
       // Download the report content
-      const buffer = await downloadFile(s3Key);
+      const buffer = await fileStorageManager.downloadFile(reportFile);
       const content = buffer.toString('utf-8');
-
-      // Extract filename from key
-      const parts = s3Key.split('/');
-      const filenamePart = parts[parts.length - 1];
-      const underscoreIndex = filenamePart.indexOf('_');
-      const filename = underscoreIndex > 0 ? filenamePart.substring(underscoreIndex + 1) : filenamePart;
 
       moduleLogger.info('Retrieved capabilities report', {
         userId,
@@ -68,7 +52,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           status: 200,
           headers: {
             'Content-Type': 'text/markdown',
-            'Content-Disposition': `attachment; filename="${filename}"`,
+            'Content-Disposition': `attachment; filename="${reportFile.originalFilename}"`,
             'Content-Length': String(buffer.length),
           },
         });
@@ -76,7 +60,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 
       return NextResponse.json({
         reportId,
-        filename,
+        filename: reportFile.originalFilename,
         content,
         size: buffer.length,
       });
@@ -89,22 +73,27 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 );
 
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
-  async (req, { user }, { id: reportId }) => {
+  async (req, { user, repos }, { id: reportId }) => {
     try {
       const userId = user.id;
 
       moduleLogger.info('Deleting capabilities report', { userId, reportId });
 
-      // Find the report S3 key
-      const s3Key = await findReportS3Key(userId, reportId);
-      if (!s3Key) {
+      // Find the report file in the database from DOCUMENT category
+      const allDocuments = await repos.files.findByCategory('DOCUMENT');
+      const reportFile = allDocuments.find((f) => f.id === reportId && f.folderPath === '/reports');
+
+      if (!reportFile) {
         return notFound('Report');
       }
 
-      // Delete the report
-      await deleteFile(s3Key);
+      // Delete the report from storage
+      await fileStorageManager.deleteFile(reportFile);
 
-      moduleLogger.info('Deleted capabilities report', { userId, reportId, s3Key });
+      // Delete the file entry from database
+      await repos.files.delete(reportFile.id);
+
+      moduleLogger.info('Deleted capabilities report', { userId, reportId });
 
       return NextResponse.json({ success: true });
     } catch (error) {

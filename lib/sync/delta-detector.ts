@@ -8,7 +8,7 @@
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/mongodb/repositories';
 import { SyncableEntityType, SyncEntityDelta, FILE_CONTENT_SIZE_THRESHOLD } from './types';
-import { s3FileService } from '@/lib/s3/file-service';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
 /**
  * Options for delta detection
@@ -168,21 +168,19 @@ async function getEntityDeltas(
             // Prepare file data for sync
             const fileData: Record<string, unknown> = {
               ...file,
-              // Don't sync S3-specific references - let local instance manage storage
+              // Don't sync storage-specific references - let local instance manage storage
+              storageKey: undefined,
+              mountPointId: undefined,
+              // Strip legacy S3 fields as well
               s3Key: undefined,
               s3Bucket: undefined,
             };
 
             // For small files, include base64 content inline
             // For large files, set flag for separate content fetch
-            if (file.size < FILE_CONTENT_SIZE_THRESHOLD && file.s3Key) {
+            if (file.size < FILE_CONTENT_SIZE_THRESHOLD && file.storageKey) {
               try {
-                const content = await s3FileService.downloadUserFile(
-                  file.userId,
-                  file.id,
-                  file.originalFilename,
-                  file.category
-                );
+                const content = await fileStorageManager.downloadFile(file);
                 fileData.content = content.toString('base64');
                 fileData.requiresContentFetch = false;
                 logger.debug('Added file delta with inline content', {

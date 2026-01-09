@@ -63,10 +63,15 @@ const envSchema = z
     MONGODB_CONNECTION_TIMEOUT_MS: z.string().regex(/^\d+$/).optional(),
     MONGODB_MAX_POOL_SIZE: z.string().regex(/^\d+$/).optional(),
 
-    // S3 Configuration (required - S3 is the only supported file storage backend)
-    // NOTE: 'disabled' option is deprecated and will be removed in a future version.
-    // Use the migration plugin (qtap-plugin-upgrade) to migrate local files to S3.
-    S3_MODE: z.enum(['embedded', 'external', 'disabled']).optional().default('embedded'),
+    // File Storage Configuration
+    // Path for local filesystem storage (built-in backend)
+    QUILLTAP_FILE_STORAGE_PATH: z.string().optional().default('./data/files'),
+    // Encryption key for mount point secrets (auto-generated if not set, falls back to ENCRYPTION_MASTER_PEPPER)
+    QUILLTAP_ENCRYPTION_KEY: z.string().min(32).optional(),
+
+    // S3 Configuration (optional - S3 is now a plugin, local filesystem is the default)
+    // These env vars are used to auto-create an S3 mount point during migration
+    S3_MODE: z.enum(['embedded', 'external', 'disabled']).optional().default('disabled'),
     S3_ENDPOINT: z.string().url().optional(),
     S3_REGION: z.string().optional().default('us-east-1'),
     S3_ACCESS_KEY: z.string().optional(),
@@ -140,7 +145,8 @@ export function validateEnv(): Env {
       MONGODB_MODE: 'external',
       MONGODB_DATA_DIR: '/data/mongodb',
       DATA_BACKEND: 'mongodb',
-      S3_MODE: 'embedded',
+      QUILLTAP_FILE_STORAGE_PATH: './data/files',
+      S3_MODE: 'disabled',
       S3_REGION: 'us-east-1',
       S3_BUCKET: 'quilltap-files',
       LOG_LEVEL: 'info',

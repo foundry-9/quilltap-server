@@ -230,32 +230,60 @@ jest.mock('@/lib/repositories/factory', () => ({
   clearUserRepositoryCache: jest.fn(),
 }))
 
-// Mock S3 operations - used by cascade-delete and other modules
-jest.mock('@/lib/s3/operations', () => ({
-  uploadFile: jest.fn().mockResolvedValue(undefined),
-  downloadFile: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
-  deleteFile: jest.fn().mockResolvedValue(undefined),
-  fileExists: jest.fn().mockResolvedValue(true),
-  getPresignedUrl: jest.fn().mockResolvedValue('https://mock-s3.com/presigned-url'),
-  getPresignedUploadUrl: jest.fn().mockResolvedValue('https://mock-s3.com/presigned-upload-url'),
-  getPublicUrl: jest.fn().mockResolvedValue('https://mock-s3.com/public-url'),
-  getFileMetadata: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg', lastModified: new Date() }),
-  listFiles: jest.fn().mockResolvedValue([]),
-}))
+// Mock file storage manager - used by cascade-delete and other modules
+jest.mock('@/lib/file-storage/manager', () => {
+  const mockBackend = {
+    getMetadata: jest.fn().mockReturnValue({
+      providerId: 'local',
+      displayName: 'Local Storage',
+      description: 'Mock local storage',
+      capabilities: {
+        presignedUrls: false,
+        publicUrls: false,
+        streamingUpload: true,
+        streamingDownload: true,
+        copy: true,
+        list: true,
+        metadata: true,
+      },
+    }),
+    testConnection: jest.fn().mockResolvedValue({ success: true, message: 'Mock connection OK', latencyMs: 1 }),
+    upload: jest.fn().mockResolvedValue(undefined),
+    download: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
+    delete: jest.fn().mockResolvedValue(undefined),
+    exists: jest.fn().mockResolvedValue(true),
+    copy: jest.fn().mockResolvedValue(undefined),
+    getFileMetadata: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg', lastModified: new Date() }),
+    list: jest.fn().mockResolvedValue([]),
+    getProxyUrl: jest.fn().mockImplementation((key: string) => `/api/files/proxy/${key}`),
+  }
 
-// Mock S3 client module
-jest.mock('@/lib/s3/client', () => ({
-  getS3Client: jest.fn().mockReturnValue({}),
-  getS3Bucket: jest.fn().mockReturnValue('mock-bucket'),
-  buildS3Key: jest.fn().mockImplementation((params: { userId: string; fileId: string; filename: string; projectId?: string | null; folderPath?: string }) => {
-    const { userId, fileId, filename, projectId, folderPath } = params;
-    if (projectId) {
-      const normalizedFolder = folderPath && folderPath !== '/' ? folderPath.replace(/^\//, '') : '';
-      return `users/${userId}/${projectId}/${normalizedFolder}${fileId}_${filename}`;
-    }
-    return `users/${userId}/_general/${fileId}_${filename}`;
-  }),
-}))
+  return {
+    fileStorageManager: {
+      initialize: jest.fn().mockResolvedValue(undefined),
+      isInitialized: jest.fn().mockReturnValue(true),
+      registerProviderPlugin: jest.fn(),
+      getBackend: jest.fn().mockReturnValue(mockBackend),
+      getDefaultBackend: jest.fn().mockReturnValue(mockBackend),
+      getBackendForFile: jest.fn().mockReturnValue(mockBackend),
+      getBackendForProject: jest.fn().mockReturnValue(mockBackend),
+      uploadFile: jest.fn().mockResolvedValue({ storageKey: 'mock-storage-key', mountPointId: 'mock-mount-point' }),
+      downloadFile: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
+      deleteFile: jest.fn().mockResolvedValue(undefined),
+      getFileUrl: jest.fn().mockResolvedValue('http://localhost:3000/api/files/proxy/mock-key'),
+      fileExists: jest.fn().mockResolvedValue(true),
+      buildStorageKey: jest.fn().mockImplementation((params: { userId: string; fileId: string; filename: string; projectId?: string | null; folderPath?: string }) => {
+        const { userId, fileId, filename, projectId, folderPath } = params;
+        if (projectId) {
+          const normalizedFolder = folderPath && folderPath !== '/' ? folderPath.replace(/^\//, '') : '';
+          return `users/${userId}/${projectId}/${normalizedFolder}${fileId}_${filename}`;
+        }
+        return `users/${userId}/_general/${fileId}_${filename}`;
+      }),
+    },
+    FileStorageManager: jest.fn(),
+  }
+})
 
 // Mock vector store for embedding operations
 jest.mock('@/lib/embedding/vector-store', () => ({

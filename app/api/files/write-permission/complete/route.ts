@@ -12,8 +12,7 @@ import { z } from 'zod';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
-import { s3FileService } from '@/lib/s3/file-service';
-import { buildS3Key } from '@/lib/s3/client';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { createHash } from 'crypto';
 
 // Validation schema for completing a pending write
@@ -138,25 +137,16 @@ export const POST = createAuthenticatedHandler(
       const sha256 = createHash('sha256').update(new Uint8Array(contentBuffer)).digest('hex');
       const fileId = crypto.randomUUID();
 
-      // Upload to S3
-      const s3Key = buildS3Key({
+      // Upload to file storage
+      const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
         userId: user.id,
         fileId,
         filename,
+        content: contentBuffer,
+        contentType: mimeType,
         projectId,
         folderPath,
       });
-
-      await s3FileService.uploadUserFile(
-        user.id,
-        fileId,
-        filename,
-        'DOCUMENT',
-        contentBuffer,
-        mimeType,
-        projectId,
-        folderPath
-      );
 
       // Create file entry
       const fileEntry = await repos.files.create({
@@ -175,8 +165,8 @@ export const POST = createAuthenticatedHandler(
         tags: [],
         projectId,
         folderPath,
-        s3Key,
-        s3Bucket: undefined,
+        storageKey,
+        mountPointId,
       }, { id: fileId });
 
       log.info('File created after approval', {

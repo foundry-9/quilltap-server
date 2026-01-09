@@ -638,6 +638,39 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
   }
 
   /**
+   * Find file by storage key
+   * Used for serving files via proxy route with proper authentication
+   * @param storageKey - The storage key to search for
+   */
+  async findByStorageKey(storageKey: string): Promise<FileEntry | null> {
+    try {
+      const collection = await this.getCollection();
+      const file = await collection.findOne({ storageKey });
+
+      if (file) {
+        logger.debug('Found file by storage key', {
+          context: 'files-repository',
+          storageKey,
+        });
+        return this.validate(file);
+      }
+
+      logger.debug('File not found by storage key', {
+        context: 'files-repository',
+        storageKey,
+      });
+      return null;
+    } catch (error) {
+      logger.error('Error finding file by storage key', {
+        context: 'files-repository',
+        storageKey,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Find general files (not in any project)
    * @param userId - The user ID for ownership verification
    */

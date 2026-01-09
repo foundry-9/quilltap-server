@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-01-09
+
+### Added
+
+- Added file storage plugin types for building custom storage backend plugins:
+  - `FileBackendCapabilities` - Interface describing storage backend features
+  - `FileBackendMetadata` - Backend registration metadata
+  - `FileMetadata` - Stored file metadata (size, contentType, lastModified)
+  - `FileStorageBackend` - Core interface with upload, download, delete, exists, and optional operations
+  - `FileStorageConfigField` - Configuration field definitions for plugin setup UI
+  - `FileStorageProviderPlugin` - Main plugin interface for storage providers
+  - `FileStoragePluginExport` - Standard export type for file storage plugins
+- Added `@types/node` to devDependencies for Node.js type support (Buffer, Readable)
+
 ## [1.5.1] - 2026-01-05
 
 ### Added

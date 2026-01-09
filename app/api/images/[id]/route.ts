@@ -9,7 +9,7 @@
 import { NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { getFilePath } from '@/lib/api/middleware/file-path';
-import { deleteFile as deleteS3File, downloadFile as downloadS3File } from '@/lib/s3/operations';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import type { FileEntry } from '@/lib/schemas/types';
@@ -132,14 +132,13 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Image');
       }
 
-      // Check if the underlying file actually exists in S3 (to detect orphaned metadata)
+      // Check if the underlying file actually exists in storage (to detect orphaned metadata)
       let fileExists = false;
-      if (image.s3Key) {
+      if (image.storageKey) {
         try {
-          await downloadS3File(image.s3Key);
-          fileExists = true;
+          fileExists = await fileStorageManager.fileExists(image);
         } catch {
-          logger.debug('DELETE /api/images/[id] - S3 file does not exist (orphaned)', { imageId: id, s3Key: image.s3Key });
+          logger.debug('DELETE /api/images/[id] - Storage file does not exist (orphaned)', { imageId: id, storageKey: image.storageKey });
         }
       }
 
@@ -203,18 +202,18 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         return badRequest('Image is in use', 'This image is currently being used as an avatar or in chat overrides. Please remove all usages before deleting.');
       }
 
-      // Delete from S3 if file has s3Key
-      if (image.s3Key) {
+      // Delete from storage if file has storageKey
+      if (image.storageKey) {
         try {
-          await deleteS3File(image.s3Key);
-          logger.debug('DELETE /api/images/[id] - Deleted from S3', { imageId: id, s3Key: image.s3Key });
-        } catch (s3Error) {
-          logger.warn('DELETE /api/images/[id] - Failed to delete from S3', {
+          await fileStorageManager.deleteFile(image);
+          logger.debug('DELETE /api/images/[id] - Deleted from storage', { imageId: id, storageKey: image.storageKey });
+        } catch (storageError) {
+          logger.warn('DELETE /api/images/[id] - Failed to delete from storage', {
             imageId: id,
-            s3Key: image.s3Key,
-            error: s3Error instanceof Error ? s3Error.message : 'Unknown error',
+            storageKey: image.storageKey,
+            error: storageError instanceof Error ? storageError.message : 'Unknown error',
           });
-          // Continue with metadata deletion even if S3 deletion fails
+          // Continue with metadata deletion even if storage deletion fails
         }
       }
 

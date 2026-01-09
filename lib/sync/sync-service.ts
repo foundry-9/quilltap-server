@@ -17,7 +17,7 @@ import {
 import { checkVersionCompatibility, getLocalVersionInfo } from './version-checker';
 import { resolveConflictWithRecord } from './conflict-resolver';
 import { detectDeltas } from './delta-detector';
-import { s3FileService } from '@/lib/s3/file-service';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { ChatEvent } from '@/lib/schemas/types';
 
 /**
@@ -220,29 +220,25 @@ async function createLocalEntity(
           const category = (createData as any).category || 'ATTACHMENT';
           const mimeType = (createData as any).mimeType || 'application/octet-stream';
 
-          await s3FileService.uploadUserFile(
-            userId,
-            fileEntry.id,
-            originalFilename,
-            category,
-            buffer,
-            mimeType
-          );
-
-          // Update file entry with S3 key
-          const s3Key = s3FileService.generateS3Key({
+          const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
             userId,
             fileId: fileEntry.id,
             filename: originalFilename,
+            content: buffer,
+            contentType: mimeType,
             projectId: fileEntry.projectId || null,
             folderPath: fileEntry.folderPath || '/',
           });
-          await repos.files.update(fileEntry.id, { s3Key });
+
+          // Update file entry with storage key and mount point ID
+          await repos.files.update(fileEntry.id, { storageKey, mountPointId });
 
           logger.debug('Saved file content from sync', {
             context: 'sync:sync-service',
             fileId: fileEntry.id,
             size: buffer.length,
+            storageKey,
+            mountPointId,
           });
         } else if (requiresContentFetch) {
           logger.info('File requires separate content fetch', {
@@ -383,22 +379,27 @@ async function updateLocalEntity(
         if (fileContent && typeof fileContent === 'string' && existingFile) {
           const buffer = Buffer.from(fileContent, 'base64');
           const originalFilename = (updateData as any).originalFilename || existingFile.originalFilename;
-          const category = (updateData as any).category || existingFile.category;
           const mimeType = (updateData as any).mimeType || existingFile.mimeType;
 
-          await s3FileService.uploadUserFile(
-            existingFile.userId,
-            id,
-            originalFilename,
-            category,
-            buffer,
-            mimeType
-          );
+          const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
+            userId: existingFile.userId,
+            fileId: id,
+            filename: originalFilename,
+            content: buffer,
+            contentType: mimeType,
+            projectId: existingFile.projectId || null,
+            folderPath: existingFile.folderPath || '/',
+          });
+
+          // Update file entry with new storage key and mount point ID
+          await repos.files.update(id, { storageKey, mountPointId });
 
           logger.debug('Updated file content from sync', {
             context: 'sync:sync-service',
             fileId: id,
             size: buffer.length,
+            storageKey,
+            mountPointId,
           });
         }
         return true;
@@ -482,14 +483,14 @@ async function deleteLocalEntity(entityType: SyncableEntityType, id: string): Pr
       case 'FILE': {
         // Get file info to delete from storage
         const file = await repos.files.findById(id);
-        if (file && file.s3Key) {
+        if (file && file.storageKey) {
           try {
-            await s3FileService.deleteByS3Key(file.s3Key);
+            await fileStorageManager.deleteFile(file);
           } catch (storageError) {
             logger.warn('Failed to delete file from storage during sync', {
               context: 'sync:sync-service',
               fileId: id,
-              s3Key: file.s3Key,
+              storageKey: file.storageKey,
               error: storageError instanceof Error ? storageError.message : String(storageError),
             });
             // Continue with database deletion even if storage deletion fails
@@ -590,10 +591,10 @@ export async function processRemoteDeltas(
         delta.entityType === 'FILE' &&
         delta.data?.requiresContentFetch === true
       ) {
-        // Check if the local file has content (s3Key) already
+        // Check if the local file has content (storageKey) already
         const repos = getRepositories();
         const localFile = await repos.files.findById(delta.id);
-        if (!localFile?.s3Key) {
+        if (!localFile?.storageKey) {
           filesNeedingContent.push({
             fileId: delta.id,
             originalFilename: (delta.data?.originalFilename as string) || localFile?.originalFilename,
@@ -602,7 +603,7 @@ export async function processRemoteDeltas(
             context: 'sync:sync-service',
             fileId: delta.id,
             isNewEntity: result.isNewEntity,
-            hasS3Key: !!localFile?.s3Key,
+            hasStorageKey: !!localFile?.storageKey,
           });
         }
       }

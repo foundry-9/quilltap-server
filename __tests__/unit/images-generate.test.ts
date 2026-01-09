@@ -8,7 +8,7 @@ import { getServerSession } from '@/lib/auth/session'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { getRepositories } from '@/lib/repositories/factory'
-import { uploadFile as uploadS3File } from '@/lib/s3/operations'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 import { getInheritedTags } from '@/lib/files/tag-inheritance'
 import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
 
@@ -16,13 +16,13 @@ import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryConta
 const mockRepos = createMockRepositoryContainer()
 
 // Note: Mocks for next-auth, @/lib/encryption, @/lib/llm, @/lib/repositories/factory,
-// @/lib/s3/operations, @/lib/s3/client, and @/lib/files/tag-inheritance are defined in jest.setup.ts
+// @/lib/file-storage/manager, and @/lib/files/tag-inheritance are defined in jest.setup.ts
 
 const mockGetServerSession = jest.mocked(getServerSession)
 const mockDecryptApiKey = jest.mocked(decryptApiKey)
 const mockCreateLLMProvider = jest.mocked(createLLMProvider)
 const mockGetRepositories = jest.mocked(getRepositories)
-const mockUploadS3File = jest.mocked(uploadS3File)
+const mockFileStorageManager = jest.mocked(fileStorageManager)
 const mockGetInheritedTags = jest.mocked(getInheritedTags)
 
 // Helper to create a mock NextRequest
@@ -81,8 +81,8 @@ describe('POST /api/images/generate', () => {
     mockRepos.images = mockImagesRepo as any
     mockRepos.files = mockImagesRepo as any
 
-    // Setup S3 and tag inheritance mocks (base mocks are in jest.setup.ts, but reset here)
-    mockUploadS3File.mockResolvedValue(undefined)
+    // Setup file storage and tag inheritance mocks (base mocks are in jest.setup.ts, but reset here)
+    mockFileStorageManager.uploadFile.mockResolvedValue({ storageKey: 'mock-storage-key', mountPointId: 'mock-mount-point' })
     mockGetInheritedTags.mockResolvedValue([])
   })
 
@@ -248,7 +248,7 @@ describe('POST /api/images/generate', () => {
     expect(data.metadata.prompt).toBe('a beautiful landscape')
     expect(data.metadata.provider).toBe('OPENAI')
     expect(mockProvider.generateImage).toHaveBeenCalled()
-    expect(mockUploadS3File).toHaveBeenCalled()
+    expect(mockFileStorageManager.uploadFile).toHaveBeenCalled()
 
     // Verify new Phase 4 fields are set correctly
     // Second argument is { id: fileId } to ensure metadata ID matches S3 path

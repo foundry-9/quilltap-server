@@ -1,7 +1,7 @@
 import { previewDeleteAllUserData } from '@/lib/backup/restore-service'
 import { getUserRepositories } from '@/lib/repositories/user-scoped'
 import { getRepositories } from '@/lib/repositories/factory'
-import { s3FileService } from '@/lib/s3/file-service'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 
 jest.mock('@/lib/repositories/user-scoped', () => ({
   getUserRepositories: jest.fn(),
@@ -11,15 +11,15 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
-jest.mock('@/lib/s3/file-service', () => ({
-  s3FileService: {
+jest.mock('@/lib/file-storage/manager', () => ({
+  fileStorageManager: {
     listUserFiles: jest.fn(),
   },
 }))
 
 const mockedGetUserRepositories = getUserRepositories as jest.MockedFunction<typeof getUserRepositories>
 const mockedGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
-const mockedListUserFiles = s3FileService.listUserFiles as jest.MockedFunction<typeof s3FileService.listUserFiles>
+const mockedListUserFiles = fileStorageManager.listUserFiles as jest.MockedFunction<typeof fileStorageManager.listUserFiles>
 
 describe('backup restore service - delete preview', () => {
   beforeEach(() => {
@@ -34,7 +34,10 @@ describe('backup restore service - delete preview', () => {
       personas: { findAll: jest.fn().mockResolvedValue([{ id: 'persona-1' }]) },
       chats: { findAll: jest.fn().mockResolvedValue([{ id: 'chat-1' }]) },
       tags: { findAll: jest.fn().mockResolvedValue([{ id: 'tag-1' }]) },
-      files: { findAll: jest.fn().mockResolvedValue([{ id: 'file-1' }]) },
+      files: { findAll: jest.fn().mockResolvedValue([
+        { id: 'file-1', folderPath: '/documents' },  // Regular file
+        { id: 'backup-1', folderPath: '/backups', originalFilename: 'backup-2024.zip' },  // Backup file
+      ]) },
       connections: {
         findAll: jest.fn().mockResolvedValue([{ id: 'conn-1' }]),
         getAllApiKeys: jest.fn().mockResolvedValue([{ id: 'api-1' }, { id: 'api-2' }]),
@@ -85,14 +88,12 @@ describe('backup restore service - delete preview', () => {
     }
     mockedGetRepositories.mockReturnValue(globalRepos as any)
 
-    mockedListUserFiles.mockResolvedValue(['backups/user-1/backup.zip'])
-
     const summary = await previewDeleteAllUserData('user-1')
 
     expect(summary.characters).toBe(2)
     expect(summary.personas).toBe(1)
     expect(summary.chats).toBe(1)
-    expect(summary.files).toBe(1)
+    expect(summary.files).toBe(2)  // 1 regular file + 1 backup file
     expect(summary.memories).toBe(3) // 2 for char-1, 1 for char-2
     expect(summary.apiKeys).toBe(2)
     expect(summary.backups).toBe(1)
@@ -100,6 +101,6 @@ describe('backup restore service - delete preview', () => {
     expect(summary.templates).toEqual({ prompt: 1, roleplay: 2 })
     // syncApiKeys is 0 because they are preserved (not deleted) during data deletion
     expect(summary.sync).toEqual({ instances: 1, mappings: 3, operations: 2, syncApiKeys: 0 })
-    expect(s3FileService.listUserFiles).toHaveBeenCalledWith('user-1', 'backups')
+    // Backups are now counted from files in the files repository, not from storage
   })
 })

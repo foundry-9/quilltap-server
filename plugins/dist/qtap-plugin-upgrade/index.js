@@ -31859,6 +31859,10 @@ var init_console = __esm({
 });
 
 // ../../../lib/logging/transports/file.ts
+function buildRotatedLogPath(logDir, filename, rotation) {
+  const rotatedName = [filename, String(rotation)].join(".");
+  return (0, import_path33.join)(logDir, rotatedName);
+}
 var import_fs, import_path33, FileTransport;
 var init_file = __esm({
   "../../../lib/logging/transports/file.ts"() {
@@ -31951,20 +31955,20 @@ var init_file = __esm({
       async rotateFile(filename) {
         try {
           const basePath = (0, import_path33.join)(this.logDir, filename);
-          const oldestPath = (0, import_path33.join)(this.logDir, `${filename}.${this.maxFiles}`);
+          const oldestPath = buildRotatedLogPath(this.logDir, filename, this.maxFiles);
           try {
             await import_fs.promises.unlink(oldestPath);
           } catch {
           }
           for (let i = this.maxFiles - 1; i >= 1; i--) {
-            const oldPath = (0, import_path33.join)(this.logDir, `${filename}.${i}`);
-            const newPath = (0, import_path33.join)(this.logDir, `${filename}.${i + 1}`);
+            const oldPath = buildRotatedLogPath(this.logDir, filename, i);
+            const newPath = buildRotatedLogPath(this.logDir, filename, i + 1);
             try {
               await import_fs.promises.rename(oldPath, newPath);
             } catch {
             }
           }
-          const rotatedPath = (0, import_path33.join)(this.logDir, `${filename}.1`);
+          const rotatedPath = buildRotatedLogPath(this.logDir, filename, 1);
           try {
             await import_fs.promises.rename(basePath, rotatedPath);
           } catch {
@@ -31992,6 +31996,16 @@ var init_transports = __esm({
 });
 
 // ../../../lib/env.ts
+var env_exports = {};
+__export(env_exports, {
+  checkIsUserManaged: () => checkIsUserManaged,
+  env: () => env,
+  isDevelopment: () => isDevelopment,
+  isProduction: () => isProduction,
+  isTest: () => isTest,
+  isUserManaged: () => isUserManaged,
+  validateEnv: () => validateEnv
+});
 function validateEnv() {
   if (isBuildPhase) {
     return {
@@ -32003,7 +32017,8 @@ function validateEnv() {
       MONGODB_MODE: "external",
       MONGODB_DATA_DIR: "/data/mongodb",
       DATA_BACKEND: "mongodb",
-      S3_MODE: "embedded",
+      QUILLTAP_FILE_STORAGE_PATH: "./data/files",
+      S3_MODE: "disabled",
       S3_REGION: "us-east-1",
       S3_BUCKET: "quilltap-files",
       LOG_LEVEL: "info",
@@ -32114,10 +32129,14 @@ var init_env = __esm({
       MONGODB_DATA_DIR: import_zod.z.string().optional().default("/data/mongodb"),
       MONGODB_CONNECTION_TIMEOUT_MS: import_zod.z.string().regex(/^\d+$/).optional(),
       MONGODB_MAX_POOL_SIZE: import_zod.z.string().regex(/^\d+$/).optional(),
-      // S3 Configuration (required - S3 is the only supported file storage backend)
-      // NOTE: 'disabled' option is deprecated and will be removed in a future version.
-      // Use the migration plugin (qtap-plugin-upgrade) to migrate local files to S3.
-      S3_MODE: import_zod.z.enum(["embedded", "external", "disabled"]).optional().default("embedded"),
+      // File Storage Configuration
+      // Path for local filesystem storage (built-in backend)
+      QUILLTAP_FILE_STORAGE_PATH: import_zod.z.string().optional().default("./data/files"),
+      // Encryption key for mount point secrets (auto-generated if not set, falls back to ENCRYPTION_MASTER_PEPPER)
+      QUILLTAP_ENCRYPTION_KEY: import_zod.z.string().min(32).optional(),
+      // S3 Configuration (optional - S3 is now a plugin, local filesystem is the default)
+      // These env vars are used to auto-create an S3 mount point during migration
+      S3_MODE: import_zod.z.enum(["embedded", "external", "disabled"]).optional().default("disabled"),
       S3_ENDPOINT: import_zod.z.string().url().optional(),
       S3_REGION: import_zod.z.string().optional().default("us-east-1"),
       S3_ACCESS_KEY: import_zod.z.string().optional(),
@@ -33758,11 +33777,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger5, logLevel) {
-  if (!logger5 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger6, logLevel) {
+  if (!logger6 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger5[fnLevel].bind(logger5);
+    return logger6[fnLevel].bind(logger6);
   }
 }
 var noopLogger = {
@@ -33773,22 +33792,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger5 = client.logger;
+  const logger6 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger5) {
+  if (!logger6) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger5);
+  const cachedLogger = cachedLoggers.get(logger6);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger5, logLevel),
-    warn: makeLogFn("warn", logger5, logLevel),
-    info: makeLogFn("info", logger5, logLevel),
-    debug: makeLogFn("debug", logger5, logLevel)
+    error: makeLogFn("error", logger6, logLevel),
+    warn: makeLogFn("warn", logger6, logLevel),
+    info: makeLogFn("info", logger6, logLevel),
+    debug: makeLogFn("debug", logger6, logLevel)
   };
-  cachedLoggers.set(logger5, [logLevel, levelLogger]);
+  cachedLoggers.set(logger6, [logLevel, levelLogger]);
   return levelLogger;
 }
 var formatRequestDetails = (details) => {
@@ -33822,7 +33841,7 @@ var Stream = class _Stream {
   }
   static fromSSEResponse(response, controller, client) {
     let consumed = false;
-    const logger5 = client ? loggerFor(client) : console;
+    const logger6 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -33842,8 +33861,8 @@ var Stream = class _Stream {
             try {
               data = JSON.parse(sse.data);
             } catch (e) {
-              logger5.error(`Could not parse message into JSON:`, sse.data);
-              logger5.error(`From chunk:`, sse.raw);
+              logger6.error(`Could not parse message into JSON:`, sse.data);
+              logger6.error(`From chunk:`, sse.raw);
               throw e;
             }
             if (data && data.error) {
@@ -39659,7 +39678,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger5 = {
+  const logger6 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -39691,7 +39710,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger5;
+  return logger6;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -41931,13 +41950,11 @@ var validateMongoDBConfigMigration = {
   }
 };
 
-// ../../../lib/s3/config.ts
+// lib/s3-utils.ts
 var import_zod5 = require("zod");
 var import_client_s3 = require("@aws-sdk/client-s3");
-init_logger();
-init_errors();
 var s3ConfigSchema = import_zod5.z.object({
-  mode: import_zod5.z.enum(["embedded", "external"]),
+  mode: import_zod5.z.enum(["embedded", "external", "disabled"]),
   endpoint: import_zod5.z.string().url().optional(),
   region: import_zod5.z.string().min(1, "S3 region is required"),
   accessKey: import_zod5.z.string().optional(),
@@ -41947,71 +41964,31 @@ var s3ConfigSchema = import_zod5.z.object({
   publicUrl: import_zod5.z.string().url().optional(),
   forcePathStyle: import_zod5.z.boolean()
 });
-function sanitizeCredentials(accessKey, secretKey) {
-  const maskSecret = () => "****";
-  return {
-    accessKey: accessKey ? `${accessKey.slice(0, 4)}...${accessKey.slice(-4)}` : maskSecret(),
-    secretKey: maskSecret()
-  };
-}
-function sanitizeEndpoint(endpoint) {
-  if (!endpoint) return void 0;
-  try {
-    const url = new URL(endpoint);
-    return url.toString();
-  } catch {
-    return "****";
-  }
-}
-function validateCredentials(accessKey, secretKey, endpoint, logger_inst) {
-  const errors = [];
-  if (endpoint) {
-    if (!accessKey) {
-      const errorMsg = "S3_ACCESS_KEY is required when using S3_ENDPOINT";
-      logger_inst.warn(errorMsg);
-      errors.push(errorMsg);
-    }
-    if (!secretKey) {
-      const errorMsg = "S3_SECRET_KEY is required when using S3_ENDPOINT";
-      logger_inst.warn(errorMsg);
-      errors.push(errorMsg);
-    }
-  } else if (!accessKey && !secretKey) {
-    logger_inst.info("No explicit S3 credentials provided - using AWS SDK default credential chain");
-  }
-  return errors;
-}
-function validateRegionEndpoint(mode, endpoint, region, logger_inst) {
-  const errors = [];
-  if (mode === "external" && !endpoint && !region.trim()) {
-    const errorMsg = "S3_REGION is required for external S3 mode when S3_ENDPOINT is not set";
-    logger_inst.warn(errorMsg);
-    errors.push(errorMsg);
-  }
-  return errors;
-}
+var s3Client = null;
 function validateS3Config() {
-  const logger_inst = logger.child({ module: "s3:config" });
-  const modeEnv = process.env.S3_MODE || "embedded";
+  const modeEnv = process.env.S3_MODE || "disabled";
   const errors = [];
-  if (modeEnv !== "embedded" && modeEnv !== "external") {
-    const errorMsg = `Invalid S3_MODE="${modeEnv}". Must be "embedded" or "external".`;
-    logger_inst.error(errorMsg);
+  if (modeEnv !== "embedded" && modeEnv !== "external" && modeEnv !== "disabled") {
     return {
-      mode: "embedded",
+      mode: "disabled",
       region: "us-east-1",
       bucket: "",
       forcePathStyle: false,
       isConfigured: false,
-      errors: [errorMsg]
+      errors: [`Invalid S3_MODE="${modeEnv}". Must be "embedded", "external", or "disabled".`]
     };
   }
   const mode = modeEnv;
-  logger_inst.debug("Starting S3 configuration validation", {
-    mode,
-    endpoint: sanitizeEndpoint(process.env.S3_ENDPOINT),
-    bucket: process.env.S3_BUCKET
-  });
+  if (mode === "disabled") {
+    return {
+      mode,
+      region: "us-east-1",
+      bucket: "",
+      forcePathStyle: false,
+      isConfigured: false,
+      errors: ["S3 storage is disabled"]
+    };
+  }
   const endpoint = process.env.S3_ENDPOINT;
   const region = process.env.S3_REGION || "us-east-1";
   const accessKey = process.env.S3_ACCESS_KEY;
@@ -42020,10 +41997,14 @@ function validateS3Config() {
   const pathPrefix = process.env.S3_PATH_PREFIX;
   const publicUrl = process.env.S3_PUBLIC_URL;
   const forcePathStyle = endpoint ? true : process.env.S3_FORCE_PATH_STYLE === "true";
-  errors.push(
-    ...validateCredentials(accessKey, secretKey, endpoint, logger_inst),
-    ...validateRegionEndpoint(mode, endpoint, region, logger_inst)
-  );
+  if (endpoint) {
+    if (!accessKey) {
+      errors.push("S3_ACCESS_KEY is required when using S3_ENDPOINT");
+    }
+    if (!secretKey) {
+      errors.push("S3_SECRET_KEY is required when using S3_ENDPOINT");
+    }
+  }
   const configData = {
     mode,
     endpoint: endpoint || void 0,
@@ -42036,14 +42017,6 @@ function validateS3Config() {
     forcePathStyle
   };
   if (errors.length > 0) {
-    logger_inst.info("S3 configuration validation complete", {
-      mode,
-      isConfigured: false,
-      errorCount: errors.length,
-      hasEndpoint: !!endpoint,
-      hasPublicUrl: !!publicUrl,
-      bucket
-    });
     return {
       ...configData,
       isConfigured: false,
@@ -42052,22 +42025,6 @@ function validateS3Config() {
   }
   try {
     const validated = s3ConfigSchema.parse(configData);
-    logger_inst.debug("S3 configuration validated successfully with Zod schema", {
-      mode: validated.mode,
-      endpoint: sanitizeEndpoint(validated.endpoint),
-      region: validated.region,
-      bucket: validated.bucket,
-      forcePathStyle: validated.forcePathStyle,
-      credentials: sanitizeCredentials(validated.accessKey, validated.secretKey)
-    });
-    logger_inst.info("S3 configuration validation complete", {
-      mode: validated.mode,
-      isConfigured: true,
-      errorCount: 0,
-      hasEndpoint: !!validated.endpoint,
-      hasPublicUrl: !!validated.publicUrl,
-      bucket: validated.bucket
-    });
     return {
       ...validated,
       isConfigured: true,
@@ -42075,31 +42032,10 @@ function validateS3Config() {
     };
   } catch (error) {
     if (error instanceof import_zod5.z.ZodError) {
-      const validationErrors = error.errors.map((err) => {
-        const path5 = err.path.join(".");
-        return `${path5}: ${err.message}`;
-      });
-      errors.push(...validationErrors);
-      logger_inst.warn("S3 configuration validation failed with Zod schema", {
-        errors: validationErrors,
-        mode
-      });
+      errors.push(...error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`));
     } else {
-      const errorMessage = getErrorMessage(error);
-      errors.push(errorMessage);
-      logger_inst.error("S3 configuration validation error", {
-        error: errorMessage,
-        mode
-      });
+      errors.push(error instanceof Error ? error.message : "Unknown validation error");
     }
-    logger_inst.info("S3 configuration validation complete", {
-      mode,
-      isConfigured: false,
-      errorCount: errors.length,
-      hasEndpoint: !!endpoint,
-      hasPublicUrl: !!publicUrl,
-      bucket
-    });
     return {
       ...configData,
       isConfigured: false,
@@ -42108,25 +42044,15 @@ function validateS3Config() {
   }
 }
 async function testS3Connection() {
-  const logger_inst = logger.child({ module: "s3:config" });
   const config = validateS3Config();
   if (!config.isConfigured) {
-    const errorMsg = `S3 configuration is invalid: ${config.errors.join("; ")}`;
-    logger_inst.error(errorMsg);
     return {
       success: false,
-      message: errorMsg
+      message: `S3 configuration is invalid: ${config.errors.join("; ")}`
     };
   }
   try {
-    logger_inst.debug("Creating S3 client for connection test", {
-      endpoint: config.endpoint,
-      region: config.region,
-      bucket: config.bucket,
-      forcePathStyle: config.forcePathStyle,
-      hasExplicitCredentials: !!(config.accessKey && config.secretKey)
-    });
-    const client = new import_client_s3.S3Client({
+    const clientConfig = {
       region: config.region,
       ...config.accessKey && config.secretKey && {
         credentials: {
@@ -42138,19 +42064,13 @@ async function testS3Connection() {
         endpoint: config.endpoint,
         forcePathStyle: config.forcePathStyle
       }
-    });
+    };
+    const testClient = new import_client_s3.S3Client(clientConfig);
     const startTime = Date.now();
     try {
-      const command = new import_client_s3.HeadBucketCommand({
-        Bucket: config.bucket
-      });
-      logger_inst.debug("Sending HeadBucketCommand", { bucket: config.bucket });
-      await client.send(command);
+      const command = new import_client_s3.HeadBucketCommand({ Bucket: config.bucket });
+      await testClient.send(command);
       const latencyMs = Date.now() - startTime;
-      logger_inst.info("S3 connection test successful", {
-        bucket: config.bucket,
-        latencyMs
-      });
       return {
         success: true,
         message: `Successfully connected to S3 bucket "${config.bucket}"`,
@@ -42161,61 +42081,150 @@ async function testS3Connection() {
       if (error instanceof Error) {
         const errorName = error.name;
         if (errorName === "NotFound") {
-          const errorMsg2 = `S3 bucket "${config.bucket}" does not exist or is not accessible`;
-          logger_inst.error(errorMsg2, {}, error);
           return {
             success: false,
-            message: errorMsg2,
+            message: `S3 bucket "${config.bucket}" does not exist or is not accessible`,
             latencyMs
           };
         }
         if (errorName === "Forbidden") {
-          const errorMsg2 = `Access denied to S3 bucket "${config.bucket}". Check credentials and bucket permissions`;
-          logger_inst.error(errorMsg2, {}, error);
           return {
             success: false,
-            message: errorMsg2,
+            message: `Access denied to S3 bucket "${config.bucket}". Check credentials and bucket permissions`,
             latencyMs
           };
         }
         if (errorName === "InvalidAccessKeyId" || errorName === "SignatureDoesNotMatch") {
-          const errorMsg2 = "Invalid S3 credentials (access key or secret key)";
-          logger_inst.error(errorMsg2, {}, error);
           return {
             success: false,
-            message: errorMsg2,
+            message: "Invalid S3 credentials (access key or secret key)",
             latencyMs
           };
         }
-        const errorMsg = `S3 connection test failed: ${error.message}`;
-        logger_inst.error(errorMsg, {
-          errorName,
-          bucket: config.bucket
-        }, error);
         return {
           success: false,
-          message: errorMsg,
+          message: `S3 connection test failed: ${error.message}`,
           latencyMs
         };
       }
-      logger_inst.error("S3 connection test failed with unknown error", {
-        bucket: config.bucket
-      });
       return {
         success: false,
         message: "S3 connection test failed with unknown error",
         latencyMs
       };
     } finally {
-      client.destroy();
+      testClient.destroy();
     }
   } catch (error) {
-    const errorMsg = `Failed to initialize S3 client: ${getErrorMessage(error)}`;
-    logger_inst.error(errorMsg, {}, error instanceof Error ? error : void 0);
     return {
       success: false,
-      message: errorMsg
+      message: `Failed to initialize S3 client: ${error instanceof Error ? error.message : "Unknown error"}`
     };
+  }
+}
+function getS3Client() {
+  if (s3Client) {
+    return s3Client;
+  }
+  const config = validateS3Config();
+  if (!config.isConfigured) {
+    throw new Error(`S3 configuration is invalid: ${config.errors.join("; ")}`);
+  }
+  const clientConfig = {
+    region: config.region
+  };
+  if (config.accessKey && config.secretKey) {
+    clientConfig.credentials = {
+      accessKeyId: config.accessKey,
+      secretAccessKey: config.secretKey
+    };
+  }
+  if (config.endpoint) {
+    clientConfig.endpoint = config.endpoint;
+    clientConfig.forcePathStyle = config.forcePathStyle;
+  }
+  s3Client = new import_client_s3.S3Client(clientConfig);
+  return s3Client;
+}
+function getS3Bucket() {
+  const config = validateS3Config();
+  if (!config.bucket) {
+    throw new Error("S3 bucket not configured");
+  }
+  return config.bucket;
+}
+function sanitizeFilename(filename) {
+  return filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+function normalizeS3FolderPath(folderPath) {
+  if (!folderPath || folderPath === "/") {
+    return "";
+  }
+  return folderPath.replace(/^\//, "");
+}
+function buildS3Key(params) {
+  const { userId, fileId, filename, projectId, folderPath } = params;
+  const config = validateS3Config();
+  const prefix = config.pathPrefix || "";
+  const safeFilename = sanitizeFilename(filename);
+  const normalizedFolder = normalizeS3FolderPath(folderPath);
+  if (projectId) {
+    return `${prefix}users/${userId}/${projectId}/${normalizedFolder}${fileId}_${safeFilename}`;
+  }
+  return `${prefix}users/${userId}/_general/${fileId}_${safeFilename}`;
+}
+async function uploadFile(key, body, contentType, metadata) {
+  const client = getS3Client();
+  const bucket = getS3Bucket();
+  const sanitizedMetadata = metadata ? Object.fromEntries(
+    Object.entries(metadata).map(
+      ([k, v]) => /[^\x00-\x7F]/.test(v) ? [k, `base64:${Buffer.from(v, "utf-8").toString("base64")}`] : [k, v]
+    )
+  ) : void 0;
+  const command = new import_client_s3.PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+    Metadata: sanitizedMetadata
+  });
+  await client.send(command);
+}
+async function deleteFile(key) {
+  const client = getS3Client();
+  const bucket = getS3Bucket();
+  const command = new import_client_s3.DeleteObjectCommand({
+    Bucket: bucket,
+    Key: key
+  });
+  await client.send(command);
+}
+async function copyObject(sourceKey, destinationKey) {
+  const client = getS3Client();
+  const bucket = getS3Bucket();
+  const command = new import_client_s3.CopyObjectCommand({
+    Bucket: bucket,
+    CopySource: `${bucket}/${sourceKey}`,
+    Key: destinationKey
+  });
+  await client.send(command);
+}
+async function fileExists(key) {
+  const client = getS3Client();
+  const bucket = getS3Bucket();
+  try {
+    const command = new import_client_s3.HeadObjectCommand({
+      Bucket: bucket,
+      Key: key
+    });
+    await client.send(command);
+    return true;
+  } catch (error) {
+    const err = error;
+    if (err.name === "NoSuchKey" || err.$metadata?.httpStatusCode === 404) {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -44443,7 +44452,7 @@ async function updateFile(id, updates) {
   await writeAllEntries(entries);
   return validated;
 }
-async function deleteFile(id) {
+async function deleteFile2(id) {
   const entries = await readAllEntries();
   const entry = entries.find((e) => e.id === id);
   if (!entry) {
@@ -44464,234 +44473,6 @@ async function deleteFile(id) {
   }
   await writeAllEntries(filtered);
   return true;
-}
-
-// ../../../lib/s3/client.ts
-var import_client_s32 = require("@aws-sdk/client-s3");
-init_logger();
-var s3Client = null;
-function sanitizeFilename(filename) {
-  return filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-}
-function getS3Client() {
-  const moduleLogger = logger.child({ module: "s3:client" });
-  if (s3Client) {
-    moduleLogger.debug("Returning existing S3 client");
-    return s3Client;
-  }
-  moduleLogger.debug("Creating new S3 client instance");
-  try {
-    const config = validateS3Config();
-    if (!config.isConfigured) {
-      const errorMsg = `S3 configuration is invalid: ${config.errors.join("; ")}`;
-      moduleLogger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-    const clientConfig = {
-      region: config.region
-    };
-    if (config.accessKey && config.secretKey) {
-      clientConfig.credentials = {
-        accessKeyId: config.accessKey,
-        secretAccessKey: config.secretKey
-      };
-      moduleLogger.debug("Using explicit S3 credentials");
-    } else {
-      moduleLogger.debug("Using AWS SDK default credential chain (IAM role, env vars, etc.)");
-    }
-    if (config.endpoint) {
-      clientConfig.endpoint = config.endpoint;
-      clientConfig.forcePathStyle = config.forcePathStyle;
-      moduleLogger.debug("S3 endpoint configured", {
-        endpoint: config.endpoint,
-        forcePathStyle: config.forcePathStyle
-      });
-    }
-    moduleLogger.debug("S3 client configuration created", {
-      region: config.region,
-      bucket: config.bucket,
-      hasEndpoint: !!config.endpoint,
-      forcePathStyle: config.forcePathStyle
-    });
-    s3Client = new import_client_s32.S3Client(clientConfig);
-    moduleLogger.info("S3 client initialized", {
-      region: config.region,
-      bucket: config.bucket,
-      endpoint: config.endpoint || "AWS S3"
-    });
-    return s3Client;
-  } catch (error) {
-    const errorMsg = `Failed to initialize S3 client: ${error instanceof Error ? error.message : "Unknown error"}`;
-    moduleLogger.error(errorMsg, {}, error instanceof Error ? error : void 0);
-    throw error;
-  }
-}
-function getS3Bucket() {
-  const moduleLogger = logger.child({ module: "s3:client" });
-  const config = validateS3Config();
-  if (!config.bucket) {
-    const errorMsg = "S3 bucket not configured";
-    moduleLogger.error(errorMsg);
-    throw new Error(errorMsg);
-  }
-  moduleLogger.debug("Retrieved S3 bucket name", { bucket: config.bucket });
-  return config.bucket;
-}
-function normalizeS3FolderPath(folderPath) {
-  if (!folderPath || folderPath === "/") {
-    return "";
-  }
-  return folderPath.replace(/^\//, "");
-}
-function buildS3Key(params) {
-  const moduleLogger = logger.child({ module: "s3:client" });
-  const { userId, fileId, filename, projectId, folderPath } = params;
-  const config = validateS3Config();
-  const prefix = config.pathPrefix || "";
-  const safeFilename = sanitizeFilename(filename);
-  const normalizedFolder = normalizeS3FolderPath(folderPath);
-  let key;
-  if (projectId) {
-    key = `${prefix}users/${userId}/${projectId}/${normalizedFolder}${fileId}_${safeFilename}`;
-  } else {
-    key = `${prefix}users/${userId}/_general/${fileId}_${safeFilename}`;
-  }
-  moduleLogger.debug("Built S3 key", {
-    userId,
-    fileId,
-    projectId: projectId || "none",
-    folderPath: folderPath || "/",
-    normalizedFolder: normalizedFolder || "root",
-    prefix: prefix || "none",
-    originalFilename: filename,
-    safeFilename,
-    key
-  });
-  return key;
-}
-
-// ../../../lib/s3/operations.ts
-var import_client_s33 = require("@aws-sdk/client-s3");
-var import_s3_request_presigner = require("@aws-sdk/s3-request-presigner");
-init_logger();
-function requireS3Client() {
-  const client = getS3Client();
-  if (!client) {
-    throw new Error('S3 is disabled. Enable S3 by setting S3_MODE to "external" or "embedded".');
-  }
-  return client;
-}
-function sanitizeMetadata(metadata) {
-  if (!metadata) return void 0;
-  const sanitized = {};
-  for (const [key, value] of Object.entries(metadata)) {
-    if (/[^\x00-\x7F]/.test(value)) {
-      sanitized[key] = `base64:${Buffer.from(value, "utf-8").toString("base64")}`;
-    } else {
-      sanitized[key] = value;
-    }
-  }
-  return sanitized;
-}
-async function uploadFile(key, body, contentType, metadata) {
-  const client = requireS3Client();
-  const bucket = getS3Bucket();
-  const sanitizedMetadata = sanitizeMetadata(metadata);
-  try {
-    logger.debug("Uploading file to S3", {
-      key,
-      contentType,
-      bucket,
-      hasMetadata: !!metadata
-    });
-    const command = new import_client_s33.PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      Body: body,
-      ContentType: contentType,
-      Metadata: sanitizedMetadata
-    });
-    await client.send(command);
-    logger.info("File uploaded to S3", {
-      key,
-      contentType,
-      bucket
-    });
-  } catch (error) {
-    logger.error(
-      "Failed to upload file to S3",
-      { key, contentType, bucket },
-      error
-    );
-    throw error;
-  }
-}
-async function deleteFile2(key) {
-  const client = requireS3Client();
-  const bucket = getS3Bucket();
-  try {
-    logger.debug("Deleting file from S3", { key, bucket });
-    const command = new import_client_s33.DeleteObjectCommand({
-      Bucket: bucket,
-      Key: key
-    });
-    await client.send(command);
-    logger.info("File deleted from S3", { key, bucket });
-  } catch (error) {
-    logger.error(
-      "Failed to delete file from S3",
-      { key, bucket },
-      error
-    );
-    throw error;
-  }
-}
-async function copyObject(sourceKey, destinationKey) {
-  const client = requireS3Client();
-  const bucket = getS3Bucket();
-  try {
-    logger.debug("Copying file in S3", { sourceKey, destinationKey, bucket });
-    const command = new import_client_s33.CopyObjectCommand({
-      Bucket: bucket,
-      CopySource: `${bucket}/${sourceKey}`,
-      Key: destinationKey
-    });
-    await client.send(command);
-    logger.info("File copied in S3", { sourceKey, destinationKey, bucket });
-  } catch (error) {
-    logger.error(
-      "Failed to copy file in S3",
-      { sourceKey, destinationKey, bucket },
-      error
-    );
-    throw error;
-  }
-}
-async function fileExists(key) {
-  const client = requireS3Client();
-  const bucket = getS3Bucket();
-  try {
-    logger.debug("Checking if file exists in S3", { key, bucket });
-    const command = new import_client_s33.HeadObjectCommand({
-      Bucket: bucket,
-      Key: key
-    });
-    await client.send(command);
-    logger.debug("File exists in S3", { key, bucket });
-    return true;
-  } catch (error) {
-    const err = error;
-    if (err.name === "NoSuchKey" || err.$metadata?.httpStatusCode === 404) {
-      logger.debug("File does not exist in S3", { key, bucket });
-      return false;
-    }
-    logger.error(
-      "Failed to check file existence in S3",
-      { key, bucket },
-      error
-    );
-    throw error;
-  }
 }
 
 // migrations/migrate-files-to-s3.ts
@@ -44783,7 +44564,7 @@ var migrateFilesToS3Migration = {
                 filename: entry.originalFilename
               });
               try {
-                await deleteFile(entry.id);
+                await deleteFile2(entry.id);
                 skippedMissing++;
                 console.log("[migration.migrate-files-to-s3] Removed orphaned file metadata entry", {
                   fileId: entry.id,
@@ -46953,7 +46734,7 @@ var restructureS3KeysMigration = {
               updatedAt: (/* @__PURE__ */ new Date()).toISOString()
             });
             try {
-              await deleteFile2(oldS3Key);
+              await deleteFile(oldS3Key);
               console.log("[migration.restructure-s3-keys] Deleted old S3 object", {
                 fileId: entry.id,
                 oldS3Key
@@ -47210,6 +46991,383 @@ var populateMemoryAboutCharacterIdsMigration = {
   }
 };
 
+// migrations/create-mount-points.ts
+init_logger();
+var import_crypto2 = require("crypto");
+
+// ../../../lib/file-storage/secrets.ts
+var import_crypto = require("crypto");
+
+// ../../../lib/logging/create-logger.ts
+init_logger();
+function createLogger(module2) {
+  return logger.child({ module: module2 });
+}
+
+// ../../../lib/file-storage/secrets.ts
+var logger3 = createLogger("file-storage:secrets");
+var ALGORITHM = "aes-256-gcm";
+var KEY_LENGTH = 32;
+var IV_LENGTH = 16;
+var PBKDF2_ITERATIONS = 1e5;
+var PBKDF2_DIGEST = "sha256";
+var SALT_LENGTH = 32;
+var cachedKey = null;
+function getEncryptionKey() {
+  if (cachedKey) {
+    return cachedKey;
+  }
+  const explicitKey = process.env.QUILLTAP_ENCRYPTION_KEY;
+  if (explicitKey) {
+    logger3.debug("Using QUILLTAP_ENCRYPTION_KEY for mount point secrets", {
+      keyLength: explicitKey.length
+    });
+    cachedKey = deriveKey(explicitKey);
+    return cachedKey;
+  }
+  try {
+    const { env: env2 } = (init_env(), __toCommonJS(env_exports));
+    const pepper = env2.ENCRYPTION_MASTER_PEPPER;
+    if (!pepper) {
+      throw new Error("No encryption key configured");
+    }
+    logger3.debug("Using ENCRYPTION_MASTER_PEPPER for mount point secrets", {
+      pepperLength: pepper.length
+    });
+    cachedKey = deriveKey(pepper);
+    return cachedKey;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to load encryption master pepper";
+    logger3.error("Failed to get encryption key", {
+      error: errorMsg
+    });
+    throw new Error(
+      "Failed to get encryption key. Ensure ENCRYPTION_MASTER_PEPPER is configured."
+    );
+  }
+}
+function deriveKey(secret) {
+  const salt = (0, import_crypto.createHash)("sha256").update("quilltap-mount-secrets" + secret).digest().slice(0, SALT_LENGTH);
+  return (0, import_crypto.pbkdf2Sync)(
+    secret,
+    new Uint8Array(salt),
+    PBKDF2_ITERATIONS,
+    KEY_LENGTH,
+    PBKDF2_DIGEST
+  );
+}
+function encryptSecrets(secrets) {
+  if (!secrets || typeof secrets !== "object") {
+    throw new Error("Secrets must be a valid object");
+  }
+  try {
+    const key = getEncryptionKey();
+    const iv = (0, import_crypto.randomBytes)(IV_LENGTH);
+    const cipher = (0, import_crypto.createCipheriv)(
+      ALGORITHM,
+      new Uint8Array(key),
+      new Uint8Array(iv)
+    );
+    const jsonData = JSON.stringify(secrets);
+    let encrypted = cipher.update(jsonData, "utf8", "hex");
+    encrypted += cipher.final("hex");
+    const authTag = cipher.getAuthTag();
+    const combined = iv.toString("hex") + authTag.toString("hex") + encrypted;
+    const encoded = Buffer.from(combined, "hex").toString("base64");
+    logger3.debug("Encrypted mount point secrets", {
+      secretsCount: Object.keys(secrets).length,
+      encryptedLength: encoded.length
+    });
+    return encoded;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Unknown encryption error";
+    logger3.error("Failed to encrypt secrets", {
+      error: errorMsg
+    });
+    throw new Error(`Failed to encrypt secrets: ${errorMsg}`);
+  }
+}
+
+// migrations/create-mount-points.ts
+function isMongoDBBackendEnabled13() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase14() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible13() {
+  try {
+    const db = await getMongoDatabase14();
+    await db.command({ ping: 1 });
+    return true;
+  } catch (error) {
+    logger.warn("MongoDB is not accessible for mount points migration", {
+      context: "migration.create-mount-points",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+function isS3Configured() {
+  const bucket = process.env.S3_BUCKET;
+  const accessKey = process.env.S3_ACCESS_KEY || process.env.AWS_ACCESS_KEY_ID;
+  const secretKey = process.env.S3_SECRET_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+  const hasCredentials = !!accessKey && !!secretKey;
+  const hasBucket = !!bucket && bucket !== "quilltap-files";
+  return hasCredentials && hasBucket;
+}
+async function needsSetup() {
+  try {
+    const db = await getMongoDatabase14();
+    const collection = db.collection("mount_points");
+    const defaultMountPoint = await collection.findOne({ isDefault: true });
+    return !defaultMountPoint;
+  } catch (error) {
+    logger.debug("Error checking mount_points collection", {
+      context: "migration.create-mount-points",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return true;
+  }
+}
+async function hasFilesNeedingMigration() {
+  try {
+    const db = await getMongoDatabase14();
+    const filesCollection = db.collection("files");
+    const count = await filesCollection.countDocuments({
+      mountPointId: { $exists: false }
+    });
+    return count > 0;
+  } catch (error) {
+    logger.debug("Error checking files for mount point migration", {
+      context: "migration.create-mount-points",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+var createMountPointsMigration = {
+  id: "create-mount-points-v1",
+  description: "Create mount_points collection and migrate files to use mount point system",
+  introducedInVersion: "2.7.0",
+  dependsOn: ["migrate-json-to-mongodb-v1"],
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled13()) {
+      logger.debug("MongoDB not enabled, skipping mount points migration", {
+        context: "migration.create-mount-points"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible13()) {
+      logger.debug("MongoDB not accessible, deferring mount points migration", {
+        context: "migration.create-mount-points"
+      });
+      return false;
+    }
+    const [needsMountPointSetup, needsFileMigration] = await Promise.all([
+      needsSetup(),
+      hasFilesNeedingMigration()
+    ]);
+    const needsRun = needsMountPointSetup || needsFileMigration;
+    logger.debug("Checked for mount points migration need", {
+      context: "migration.create-mount-points",
+      needsMountPointSetup,
+      needsFileMigration,
+      needsRun
+    });
+    return needsRun;
+  },
+  async run() {
+    const startTime = Date.now();
+    let mountPointCreated = false;
+    let filesUpdated = 0;
+    let mountPointId = null;
+    const errors = [];
+    logger.info("Starting mount points migration", {
+      context: "migration.create-mount-points"
+    });
+    try {
+      const db = await getMongoDatabase14();
+      const mountPointsCollection = db.collection("mount_points");
+      const filesCollection = db.collection("files");
+      logger.debug("Step 1: Creating indexes on mount_points collection", {
+        context: "migration.create-mount-points"
+      });
+      await mountPointsCollection.createIndex({ isDefault: 1 });
+      await mountPointsCollection.createIndex({ isProjectDefault: 1 });
+      await mountPointsCollection.createIndex({ scope: 1, userId: 1 });
+      await mountPointsCollection.createIndex({ backendType: 1 });
+      await mountPointsCollection.createIndex({ enabled: 1 });
+      const existingDefault = await mountPointsCollection.findOne({ isDefault: true });
+      if (!existingDefault) {
+        logger.debug("Step 2: Creating default mount point", {
+          context: "migration.create-mount-points"
+        });
+        const now = (/* @__PURE__ */ new Date()).toISOString();
+        mountPointId = (0, import_crypto2.randomUUID)();
+        if (isS3Configured()) {
+          const s3Bucket = process.env.S3_BUCKET || "quilltap-files";
+          const s3Region = process.env.S3_REGION || "us-east-1";
+          const s3Endpoint = process.env.S3_ENDPOINT;
+          const s3PathPrefix = process.env.S3_PATH_PREFIX || "";
+          const s3PublicUrl = process.env.S3_PUBLIC_URL;
+          const s3ForcePathStyle = process.env.S3_FORCE_PATH_STYLE === "true";
+          const s3AccessKey = process.env.S3_ACCESS_KEY || process.env.AWS_ACCESS_KEY_ID || "";
+          const s3SecretKey = process.env.S3_SECRET_KEY || process.env.AWS_SECRET_ACCESS_KEY || "";
+          let encryptedSecrets = null;
+          try {
+            encryptedSecrets = encryptSecrets({
+              accessKey: s3AccessKey,
+              secretKey: s3SecretKey
+            });
+          } catch (encryptError) {
+            logger.warn("Failed to encrypt S3 secrets, storing without encryption", {
+              context: "migration.create-mount-points",
+              error: encryptError instanceof Error ? encryptError.message : String(encryptError)
+            });
+          }
+          const s3MountPoint = {
+            id: mountPointId,
+            name: "S3 Storage (Migrated)",
+            description: "S3 storage migrated from environment configuration",
+            backendType: "s3",
+            backendConfig: {
+              bucket: s3Bucket,
+              region: s3Region,
+              endpoint: s3Endpoint || void 0,
+              pathPrefix: s3PathPrefix || void 0,
+              publicUrl: s3PublicUrl || void 0,
+              forcePathStyle: s3ForcePathStyle
+            },
+            encryptedSecrets,
+            scope: "system",
+            userId: null,
+            isDefault: true,
+            isProjectDefault: true,
+            enabled: true,
+            healthStatus: "unknown",
+            createdAt: now,
+            updatedAt: now
+          };
+          await mountPointsCollection.insertOne(s3MountPoint);
+          mountPointCreated = true;
+          logger.info("Created S3 mount point", {
+            context: "migration.create-mount-points",
+            mountPointId,
+            bucket: s3Bucket,
+            region: s3Region
+          });
+        } else {
+          const basePath = process.env.QUILLTAP_FILE_STORAGE_PATH || "./data/files";
+          const localMountPoint = {
+            id: mountPointId,
+            name: "Local Storage",
+            description: "Local filesystem storage",
+            backendType: "local",
+            backendConfig: {
+              basePath
+            },
+            encryptedSecrets: null,
+            scope: "system",
+            userId: null,
+            isDefault: true,
+            isProjectDefault: true,
+            enabled: true,
+            healthStatus: "unknown",
+            createdAt: now,
+            updatedAt: now
+          };
+          await mountPointsCollection.insertOne(localMountPoint);
+          mountPointCreated = true;
+          logger.info("Created local storage mount point", {
+            context: "migration.create-mount-points",
+            mountPointId,
+            basePath
+          });
+        }
+      } else {
+        mountPointId = existingDefault.id;
+        logger.debug("Default mount point already exists", {
+          context: "migration.create-mount-points",
+          mountPointId
+        });
+      }
+      if (mountPointId) {
+        logger.debug("Step 3: Migrating files to use mount point system", {
+          context: "migration.create-mount-points"
+        });
+        const filesCursor = filesCollection.find({
+          mountPointId: { $exists: false }
+        });
+        while (await filesCursor.hasNext()) {
+          const file = await filesCursor.next();
+          if (!file) continue;
+          try {
+            const updates = {
+              mountPointId
+            };
+            if (file.s3Key && !file.storageKey) {
+              updates.storageKey = file.s3Key;
+            }
+            await filesCollection.updateOne(
+              { _id: file._id },
+              { $set: updates }
+            );
+            filesUpdated++;
+          } catch (fileError) {
+            const errorMessage = fileError instanceof Error ? fileError.message : String(fileError);
+            logger.error("Error migrating file to mount point", {
+              context: "migration.create-mount-points",
+              fileId: file.id,
+              error: errorMessage
+            });
+            errors.push(`File ${file.id}: ${errorMessage}`);
+          }
+        }
+        logger.debug("Files migration completed", {
+          context: "migration.create-mount-points",
+          filesUpdated
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error("Mount points migration failed", {
+        context: "migration.create-mount-points",
+        error: errorMessage
+      });
+      return {
+        id: "create-mount-points-v1",
+        success: false,
+        itemsAffected: filesUpdated,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const success = errors.length === 0;
+    const durationMs = Date.now() - startTime;
+    logger.info("Mount points migration completed", {
+      context: "migration.create-mount-points",
+      success,
+      mountPointCreated,
+      filesUpdated,
+      durationMs
+    });
+    return {
+      id: "create-mount-points-v1",
+      success,
+      itemsAffected: filesUpdated + (mountPointCreated ? 1 : 0),
+      message: success ? `Created mount point: ${mountPointCreated}, Updated ${filesUpdated} files` : `Updated ${filesUpdated} files with ${errors.length} errors`,
+      error: errors.length > 0 ? errors.join("; ") : void 0,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
 // migrations/index.ts
 var migrations = [
   convertOpenRouterProfilesMigration,
@@ -47238,22 +47396,24 @@ var migrations = [
   // S3 key restructuring
   restructureS3KeysMigration,
   // Memory aboutCharacterId population
-  populateMemoryAboutCharacterIdsMigration
+  populateMemoryAboutCharacterIdsMigration,
+  // Mount points migration
+  createMountPointsMigration
 ];
 
 // user-migrations.ts
-var logger3 = createPluginLogger("qtap-plugin-upgrade");
-function isMongoDBBackendEnabled13() {
+var logger4 = createPluginLogger("qtap-plugin-upgrade");
+function isMongoDBBackendEnabled14() {
   const backend = process.env.DATA_BACKEND || "";
   return backend === "mongodb" || backend === "dual";
 }
-async function getMongoDatabase14() {
+async function getMongoDatabase15() {
   const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
   return getDb();
 }
 async function migrateUserCharacterSystemPrompts(userId) {
-  if (!isMongoDBBackendEnabled13()) {
-    logger3.debug("MongoDB not enabled, skipping character system prompts migration", {
+  if (!isMongoDBBackendEnabled14()) {
+    logger4.debug("MongoDB not enabled, skipping character system prompts migration", {
       context: "user-migrations.migrateUserCharacterSystemPrompts",
       userId
     });
@@ -47261,7 +47421,7 @@ async function migrateUserCharacterSystemPrompts(userId) {
   }
   const startTime = Date.now();
   try {
-    const db = await getMongoDatabase14();
+    const db = await getMongoDatabase15();
     const charactersCollection = db.collection("characters");
     const needsMigration = await charactersCollection.find({
       userId,
@@ -47272,13 +47432,13 @@ async function migrateUserCharacterSystemPrompts(userId) {
       ]
     }).toArray();
     if (needsMigration.length === 0) {
-      logger3.debug("No characters need system prompt migration for user", {
+      logger4.debug("No characters need system prompt migration for user", {
         context: "user-migrations.migrateUserCharacterSystemPrompts",
         userId
       });
       return;
     }
-    logger3.info("Migrating character system prompts for user", {
+    logger4.info("Migrating character system prompts for user", {
       context: "user-migrations.migrateUserCharacterSystemPrompts",
       userId,
       count: needsMigration.length
@@ -47311,7 +47471,7 @@ async function migrateUserCharacterSystemPrompts(userId) {
         );
         if (result.modifiedCount > 0) {
           migratedCount++;
-          logger3.debug("Migrated character system prompt", {
+          logger4.debug("Migrated character system prompt", {
             context: "user-migrations.migrateUserCharacterSystemPrompts",
             characterId: character.id,
             characterName: character.name,
@@ -47320,7 +47480,7 @@ async function migrateUserCharacterSystemPrompts(userId) {
         }
       } catch (error) {
         errorCount++;
-        logger3.error("Failed to migrate character system prompt", {
+        logger4.error("Failed to migrate character system prompt", {
           context: "user-migrations.migrateUserCharacterSystemPrompts",
           characterId: character.id,
           characterName: character.name,
@@ -47329,7 +47489,7 @@ async function migrateUserCharacterSystemPrompts(userId) {
       }
     }
     const durationMs = Date.now() - startTime;
-    logger3.info("Completed character system prompt migration for user", {
+    logger4.info("Completed character system prompt migration for user", {
       context: "user-migrations.migrateUserCharacterSystemPrompts",
       userId,
       migratedCount,
@@ -47337,7 +47497,7 @@ async function migrateUserCharacterSystemPrompts(userId) {
       durationMs
     });
   } catch (error) {
-    logger3.error("Failed to run character system prompt migration for user", {
+    logger4.error("Failed to run character system prompt migration for user", {
       context: "user-migrations.migrateUserCharacterSystemPrompts",
       userId,
       error: error instanceof Error ? error.message : String(error)
@@ -47345,7 +47505,7 @@ async function migrateUserCharacterSystemPrompts(userId) {
   }
 }
 async function runPostLoginMigrations(userId) {
-  logger3.debug("Running post-login migrations", {
+  logger4.debug("Running post-login migrations", {
     context: "user-migrations.runPostLoginMigrations",
     userId
   });
@@ -47353,8 +47513,8 @@ async function runPostLoginMigrations(userId) {
 }
 
 // index.ts
-var logger4 = createPluginLogger("qtap-plugin-upgrade");
-var upgradeLogger = logger4.child({
+var logger5 = createPluginLogger("qtap-plugin-upgrade");
+var upgradeLogger = logger5.child({
   module: "upgrade-plugin"
 });
 var plugin = {

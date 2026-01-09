@@ -111,6 +111,9 @@ describe('Roleplay Templates API', () => {
       systemPrompt: '*{{char}}* stands ready.',
       isBuiltIn: false,
       tags: [],
+      annotationButtons: [],
+      renderingPatterns: [],
+      dialogueDetection: null,
     })
   })
 

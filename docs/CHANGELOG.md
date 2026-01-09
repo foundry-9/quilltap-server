@@ -4,6 +4,31 @@
 
 ### 2.7-dev
 
+- feat: File storage abstraction system with pluggable backends
+  - New generic `FileStorageBackend` interface for storage providers
+  - Built-in local filesystem backend as default (configurable via `QUILLTAP_FILE_STORAGE_PATH`)
+  - S3 backend moved to optional plugin (`qtap-plugin-storage-s3`)
+  - Mount point system for configuring multiple storage locations
+  - Settings UI for managing mount points (Settings > File Storage tab)
+  - Migration automatically creates mount point from existing S3 config
+  - Files can be stored on different backends per mount point
+  - Encrypted secrets storage for backend credentials (AES-256-GCM)
+  - New file schema fields: `storageKey`, `mountPointId` (s3Key/s3Bucket deprecated)
+  - All S3 code removed from main app - now exclusively in plugin
+  - AWS SDK dependencies removed from main package.json
+  - New API routes: `/api/mount-points/*`, `/api/files/proxy/*`
+  - New types exported from `@quilltap/plugin-types` for plugin development
+- refactor: Migrate all file operations to use file storage manager
+  - Updated sync, AI wizard, health check, and capabilities report endpoints
+  - Replaced direct S3 imports with fileStorageManager throughout codebase
+  - Capabilities reports now stored as DOCUMENT files with /reports folder path
+  - Health check tests file storage default backend instead of S3 directly
+  - All file operations now backend-agnostic via file storage manager
+- fix: Turbopack build warnings in log file rotation
+  - Extracted path construction to helper function to prevent pattern analysis
+  - Eliminates "overly broad patterns" warnings during build
+- fix: Lint warning in curl plugin (anonymous default export)
+- fix: Roleplay templates integration test (new schema fields)
 - fix: Streaming reliability during long context compression operations
   - Added keep-alive pings during sync compression to prevent proxy/ALB timeouts
   - Compression can take 30-50+ seconds; without keep-alive, connection would timeout

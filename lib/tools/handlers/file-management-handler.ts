@@ -10,8 +10,7 @@
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
-import { s3FileService } from '@/lib/s3/file-service';
-import { buildS3Key } from '@/lib/s3/client';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { normalizeFolderPath, validateFolderPath, getFolderName, getFolderDepth } from '@/lib/files/folder-utils';
 import { FileEntry } from '@/lib/schemas/file.types';
 import {
@@ -341,27 +340,19 @@ async function executeWriteFile(
   const sha256 = createHash('sha256').update(new Uint8Array(contentBuffer)).digest('hex');
   const fileId = repos.files['generateId'](); // Access protected method
 
-  // Upload to S3
-  const s3Key = buildS3Key({
+  // Upload to file storage
+  const uploadResult = await fileStorageManager.uploadFile({
     userId: context.userId,
     fileId,
     filename,
+    content: contentBuffer,
+    contentType: mimeType,
     projectId: context.projectId,
     folderPath: targetFolderPath,
   });
-  await s3FileService.uploadUserFile(
-    context.userId,
-    fileId,
-    filename,
-    'DOCUMENT',
-    contentBuffer,
-    mimeType,
-    context.projectId,
-    targetFolderPath
-  );
 
   // Create file entry
-  // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
+  // IMPORTANT: Pass the fileId to ensure metadata matches storage path
   const fileEntry = await repos.files.create({
     userId: context.userId,
     sha256,
@@ -378,8 +369,8 @@ async function executeWriteFile(
     tags: [],
     projectId: context.projectId,
     folderPath: targetFolderPath,
-    s3Key,
-    s3Bucket: undefined, // Will use default bucket
+    storageKey: uploadResult.storageKey,
+    mountPointId: uploadResult.mountPointId,
   }, { id: fileId });
 
   logger.info('File created successfully', {

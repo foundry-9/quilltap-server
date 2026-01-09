@@ -21,10 +21,8 @@
  */
 
 import type { Migration, MigrationResult } from '../migration-types';
-import { validateS3Config } from '@/lib/s3/config';
+import { validateS3Config, buildS3Key, copyObject, deleteFile as deleteS3File, fileExists } from '../lib/s3-utils';
 import { getAllFiles, updateFile } from '../lib/file-manager';
-import { buildS3Key } from '@/lib/s3/client';
-import { copyObject, deleteFile as deleteS3File, fileExists } from '@/lib/s3/operations';
 
 /**
  * Error categorization for migration

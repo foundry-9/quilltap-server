@@ -12,7 +12,7 @@ import { createLLMProvider } from '@/lib/llm'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
-import { downloadFile } from '@/lib/s3/operations'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 import { logger } from '@/lib/logger'
 import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses'
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types'
@@ -259,12 +259,12 @@ async function generateImageDescription(
   visionProfile: ConnectionProfile,
   apiKey: string
 ): Promise<string> {
-  // Download image from S3
-  if (!imageFile.s3Key) {
-    throw new Error('Image file has no S3 key')
+  // Download image from storage
+  if (!imageFile.storageKey) {
+    throw new Error('Image file has no storage key')
   }
 
-  const imageBuffer = await downloadFile(imageFile.s3Key)
+  const imageBuffer = await fileStorageManager.downloadFile(imageFile)
 
   // Check image size - most vision models have a 5MB limit
   if (imageBuffer.length > MAX_VISION_IMAGE_SIZE) {
@@ -280,7 +280,7 @@ async function generateImageDescription(
   // Create file attachment
   const attachment: FileAttachment = {
     id: imageFile.id,
-    filepath: imageFile.s3Key,
+    filepath: imageFile.storageKey,
     filename: imageFile.originalFilename,
     mimeType: imageFile.mimeType,
     size: imageBuffer.length,

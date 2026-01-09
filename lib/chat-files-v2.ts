@@ -1,14 +1,13 @@
 /**
  * Chat file utility functions for handling file uploads in chat messages
- * Version 2: Uses repository pattern for metadata storage and S3 for file storage when enabled
+ * Version 2: Uses repository pattern for metadata storage and centralized file storage manager
  */
 
 import { createHash } from 'node:crypto';
 import { extname } from 'node:path';
 import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
-import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as downloadS3File } from './s3/operations';
-import { buildS3Key } from './s3/client';
+import { fileStorageManager } from './file-storage/manager';
 import { detectTextContent, getBestMimeType } from './files/text-detection';
 import type { FileEntry, FileCategory, Provider } from './schemas/types';
 import { logger } from '@/lib/logger';
@@ -256,15 +255,15 @@ export async function uploadChatFile(
       if (resolution === 'replace' && conflictingFileId) {
         // Delete the existing file first
         const existingFile = await repos.files.findById(conflictingFileId);
-        if (existingFile && existingFile.s3Key) {
+        if (existingFile) {
           try {
-            await deleteS3File(existingFile.s3Key);
-            logger.debug('Deleted existing file from S3 for replacement', {
+            await fileStorageManager.deleteFile(existingFile);
+            logger.debug('Deleted existing file from storage for replacement', {
               context: 'chat-files-v2',
               fileId: conflictingFileId,
             });
           } catch (error) {
-            logger.error('Failed to delete existing file from S3', {
+            logger.error('Failed to delete existing file from storage', {
               context: 'chat-files-v2',
               fileId: conflictingFileId,
             }, error instanceof Error ? error : undefined);
@@ -373,22 +372,21 @@ async function uploadFileToProject(
   // Generate a new file ID
   const fileId = crypto.randomUUID();
 
-  // Upload to S3
-  const s3Key = buildS3Key({
+  // Upload to file storage
+  const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
     userId,
     fileId,
     filename,
+    content: buffer,
+    contentType: mimeType,
     projectId: projectId || null,
     folderPath: '/',
+    metadata: {
+      category,
+      sha256,
+    },
   });
-  await uploadS3File(s3Key, buffer, mimeType, {
-    userId,
-    fileId,
-    category,
-    filename,
-    sha256,
-  });
-  logger.debug('Uploaded chat file to S3', { fileId, s3Key, size: buffer.length, projectId });
+  logger.debug('Uploaded chat file to storage', { fileId, storageKey, mountPointId, size: buffer.length, projectId });
 
   // Inherit tags from the chat (and any other linked entities)
   const inheritedTags = await getInheritedTags(linkedTo, userId);
@@ -400,7 +398,7 @@ async function uploadFileToProject(
   });
 
   // Create metadata in repository
-  // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
+  // IMPORTANT: Pass the fileId to ensure metadata matches storage path
   const fileEntry = await repos.files.create({
     userId,
     sha256,
@@ -420,10 +418,11 @@ async function uploadFileToProject(
     tags: inheritedTags,
     projectId: projectId || null,
     folderPath: '/',
-    s3Key,
+    storageKey,
+    mountPointId,
   }, { id: fileId });
 
-  logger.debug('Created chat file metadata in repository', { fileId: fileEntry.id, s3Key, projectId });
+  logger.debug('Created chat file metadata in repository', { fileId: fileEntry.id, storageKey, mountPointId, projectId });
 
   return {
     id: fileEntry.id,
@@ -462,16 +461,16 @@ async function readFileAsBase64(
     throw new Error(`File not found: ${fileId}`);
   }
 
-  if (!entry.s3Key) {
-    throw new Error(`File ${fileId} has no S3 key - file may need migration`);
+  if (!entry.storageKey) {
+    throw new Error(`File ${fileId} has no storage key - file may need migration`);
   }
 
-  // Download from S3
-  let buffer = await downloadS3File(entry.s3Key);
+  // Download from file storage
+  let buffer = await fileStorageManager.downloadFile(entry);
   let outputMimeType = mimeType;
   let wasResized = false;
 
-  logger.debug('Downloaded file from S3 for base64', { fileId, s3Key: entry.s3Key, size: buffer.length });
+  logger.debug('Downloaded file from storage for base64', { fileId, storageKey: entry.storageKey, size: buffer.length });
 
   // Check if this is an image that might need resizing
   if (provider && mimeType.startsWith('image/') && canResizeImage(mimeType)) {
@@ -589,14 +588,12 @@ export async function deleteChatFileById(fileId: string): Promise<void> {
     return;
   }
 
-  // Delete the file bytes from S3
-  if (entry.s3Key) {
-    try {
-      await deleteS3File(entry.s3Key);
-      logger.debug('Deleted chat file from S3', { fileId, s3Key: entry.s3Key });
-    } catch (error) {
-      logger.error('Failed to delete chat file from S3', { fileId, s3Key: entry.s3Key }, error instanceof Error ? error : undefined);
-    }
+  // Delete the file bytes from storage
+  try {
+    await fileStorageManager.deleteFile(entry);
+    logger.debug('Deleted chat file from storage', { fileId, storageKey: entry.storageKey });
+  } catch (error) {
+    logger.error('Failed to delete chat file from storage', { fileId, storageKey: entry.storageKey }, error instanceof Error ? error : undefined);
   }
 
   // Delete metadata from repository
@@ -623,13 +620,13 @@ export async function readChatFileBuffer(fileId: string): Promise<Buffer> {
     throw new Error(`File not found: ${fileId}`);
   }
 
-  if (!entry.s3Key) {
-    throw new Error(`File ${fileId} has no S3 key - file may need migration`);
+  if (!entry.storageKey) {
+    throw new Error(`File ${fileId} has no storage key - file may need migration`);
   }
 
-  // Download from S3
-  const buffer = await downloadS3File(entry.s3Key);
-  logger.debug('Downloaded chat file from S3', { fileId, s3Key: entry.s3Key, size: buffer.length });
+  // Download from file storage
+  const buffer = await fileStorageManager.downloadFile(entry);
+  logger.debug('Downloaded chat file from storage', { fileId, storageKey: entry.storageKey, size: buffer.length });
   return buffer;
 }
 

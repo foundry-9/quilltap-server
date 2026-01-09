@@ -34,6 +34,7 @@ export { ChatSettingsRepository } from './chat-settings.repository';
 export { ProjectsRepository } from './projects.repository';
 export { FilePermissionsRepository } from './file-permissions.repository';
 export { PluginConfigRepository } from './plugin-config.repository';
+export { MountPointsRepository } from './mount-points.repository';
 
 // Import all repository classes
 import { MongoBaseRepository } from './base.repository';
@@ -59,6 +60,7 @@ import { ChatSettingsRepository } from './chat-settings.repository';
 import { ProjectsRepository } from './projects.repository';
 import { FilePermissionsRepository } from './file-permissions.repository';
 import { PluginConfigRepository } from './plugin-config.repository';
+import { MountPointsRepository } from './mount-points.repository';
 
 /**
  * Container interface for all repository instances.
@@ -93,6 +95,8 @@ export interface RepositoryContainer {
   filePermissions: FilePermissionsRepository;
   // Plugin configuration repository
   pluginConfigs: PluginConfigRepository;
+  // Mount points repository
+  mountPoints: MountPointsRepository;
 }
 
 /**
@@ -139,6 +143,8 @@ export function createRepositories(): RepositoryContainer {
       filePermissions: new FilePermissionsRepository(),
       // Plugin configuration repository
       pluginConfigs: new PluginConfigRepository(),
+      // Mount points repository
+      mountPoints: new MountPointsRepository(),
     };
 
     logger.debug('Repository container created successfully', {

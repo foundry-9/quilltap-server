@@ -12,6 +12,7 @@ import AppearanceTab from '@/components/settings/appearance-tab'
 import RoleplayTemplatesTab from '@/components/settings/roleplay-templates'
 import PromptsTab from '@/components/settings/prompts-tab'
 import NPCsTab from '@/components/settings/npcs-tab'
+import StorageTab from '@/components/settings/storage-tab'
 import { EntityTabs, Tab } from '@/components/tabs'
 
 const SETTINGS_TABS: Tab[] = [
@@ -79,6 +80,15 @@ const SETTINGS_TABS: Tab[] = [
     ),
   },
   {
+    id: 'storage',
+    label: 'File Storage',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+      </svg>
+    ),
+  },
+  {
     id: 'tags',
     label: 'Tags',
     icon: (
@@ -133,6 +143,8 @@ export default function SettingsPage() {
         return <EmbeddingProfilesTab />
       case 'plugins':
         return <PluginsTab />
+      case 'storage':
+        return <StorageTab />
       case 'tags':
         return <TagsTab />
       case 'npcs':

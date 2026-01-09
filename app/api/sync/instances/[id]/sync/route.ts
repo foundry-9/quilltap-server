@@ -25,7 +25,7 @@ import {
   FileNeedingContent,
 } from '@/lib/sync/sync-service';
 import { SyncConflict, SyncResult, SyncDirection, SyncProgress } from '@/lib/sync/types';
-import { s3FileService } from '@/lib/s3/file-service';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
 /**
  * Helper to update sync progress
@@ -301,24 +301,21 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
               const localFile = await repos.files.findById(fileInfo.fileId);
               if (localFile) {
                 // Upload content to local storage
-                await s3FileService.uploadUserFile(
-                  localFile.userId,
-                  localFile.id,
-                  localFile.originalFilename,
-                  localFile.category,
-                  content,
-                  mimeType || localFile.mimeType || 'application/octet-stream'
-                );
-
-                // Update file entry with S3 key
-                const s3Key = s3FileService.generateS3Key({
+                const uploadResult = await fileStorageManager.uploadFile({
                   userId: localFile.userId,
                   fileId: localFile.id,
                   filename: localFile.originalFilename,
+                  content,
+                  contentType: mimeType || localFile.mimeType || 'application/octet-stream',
                   projectId: localFile.projectId || null,
                   folderPath: localFile.folderPath || '/',
                 });
-                await repos.files.update(localFile.id, { s3Key });
+
+                // Update file entry with storage key and mount point ID
+                await repos.files.update(localFile.id, {
+                  storageKey: uploadResult.storageKey,
+                  mountPointId: uploadResult.mountPointId,
+                });
 
                 filesFetched++;
                 logger.debug('Fetched and stored file content', {

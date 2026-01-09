@@ -5,8 +5,7 @@
 
 import { createHash } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
-import { uploadFile as uploadS3File } from '@/lib/s3/operations';
-import { buildS3Key } from '@/lib/s3/client';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { decryptApiKey } from '@/lib/encryption';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
@@ -81,22 +80,22 @@ async function saveGeneratedImage(
     // Generate a new file ID
     const fileId = crypto.randomUUID();
 
-    // Upload to S3
-    const s3Key = buildS3Key({
+    // Upload to file storage
+    const uploadResult = await fileStorageManager.uploadFile({
       userId,
       fileId,
       filename: originalFilename,
+      content: buffer,
+      contentType: mimeType,
       projectId: null,
       folderPath: '/',
     });
-    await uploadS3File(s3Key, buffer, mimeType, {
-      userId,
+    logger.debug('Uploaded generated image to file storage', {
       fileId,
-      category,
-      filename: originalFilename,
-      sha256,
+      storageKey: uploadResult.storageKey,
+      mountPointId: uploadResult.mountPointId,
+      size: buffer.length,
     });
-    logger.debug('Uploaded generated image to S3', { fileId, s3Key, size: buffer.length });
 
     // Inherit tags from linked entities (e.g., the chat)
     const inheritedTags = await getInheritedTags(linkedTo, userId);
@@ -109,7 +108,7 @@ async function saveGeneratedImage(
     });
 
     // Create metadata in repository
-    // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
+    // IMPORTANT: Pass the fileId to ensure metadata matches storage path
     const fileEntry = await repos.files.create({
       userId,
       sha256,
@@ -126,7 +125,8 @@ async function saveGeneratedImage(
       generationRevisedPrompt: metadata.revisedPrompt || null,
       description: null,
       tags: inheritedTags,
-      s3Key,
+      storageKey: uploadResult.storageKey,
+      mountPointId: uploadResult.mountPointId,
     }, { id: fileId });
 
     // Always use API route for S3-backed files

@@ -106,20 +106,20 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
 
       mode = bodyMode
 
-      logger.debug('Downloading backup from S3', {
+      logger.debug('Downloading backup from storage', {
         context: 'POST /api/tools/backup/restore',
         userId: user.id,
-        s3Key,
+        storageKey: s3Key,
         mode,
       })
 
-      // Download backup from S3
-      zipBuffer = await downloadBackupFromS3(s3Key)
+      // Download backup from storage
+      zipBuffer = await downloadBackupFromS3(user.id, s3Key)
 
-      logger.debug('Backup downloaded from S3', {
+      logger.debug('Backup downloaded from storage', {
         context: 'POST /api/tools/backup/restore',
         userId: user.id,
-        s3Key,
+        storageKey: s3Key,
         fileSize: zipBuffer.length,
       })
     } else {

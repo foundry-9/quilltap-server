@@ -1,14 +1,13 @@
 /**
  * Image utility functions for handling uploads, URL imports, and image processing
- * Version 2: Uses repository pattern for metadata storage and S3 for file storage when enabled
+ * Version 2: Uses repository pattern for metadata storage and file storage manager for file storage
  */
 
 import { createHash } from 'node:crypto';
 import { extname } from 'node:path';
 import fetch from 'node-fetch';
 import { getRepositories } from './repositories/factory';
-import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as downloadS3File } from './s3/operations';
-import { buildS3Key } from './s3/client';
+import { fileStorageManager } from './file-storage/manager';
 import type { FileEntry, FileSource, FileCategory } from './schemas/types';
 import { logger } from './logger';
 import { getInheritedTags, mergeTags } from './files/tag-inheritance';
@@ -114,16 +113,12 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   if (existingFiles.length > 0) {
     const existing = existingFiles[0];
 
-    // Verify the actual file bytes still exist in S3 before returning the cached entry
+    // Verify the actual file bytes still exist in storage before returning the cached entry
     let fileExists = false;
-    if (existing.s3Key) {
-      try {
-        // Try to download from S3 to verify it exists
-        await downloadS3File(existing.s3Key);
-        fileExists = true;
-      } catch {
-        logger.debug('S3 file no longer exists, will re-upload', { fileId: existing.id, s3Key: existing.s3Key });
-      }
+    try {
+      fileExists = await fileStorageManager.fileExists(existing);
+    } catch {
+      logger.debug('File no longer exists in storage, will re-upload', { fileId: existing.id, storageKey: existing.storageKey });
     }
 
     if (fileExists) {
@@ -148,21 +143,20 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   // Generate a new file ID
   const fileId = crypto.randomUUID();
 
-  // Upload to S3
-  const s3Key = buildS3Key({
+  // Upload to storage
+  const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
     userId,
     fileId,
     filename: originalFilename,
-    projectId: null,
+    content: buffer,
+    contentType: mimeType,
+    metadata: {
+      category,
+      filename: originalFilename,
+      sha256,
+    },
   });
-  await uploadS3File(s3Key, buffer, mimeType, {
-    userId,
-    fileId,
-    category,
-    filename: originalFilename,
-    sha256,
-  });
-  logger.debug('Uploaded file to S3', { fileId, s3Key, size: buffer.length });
+  logger.debug('Uploaded file to storage', { fileId, storageKey, mountPointId, size: buffer.length });
 
   // Inherit tags from linked entities and merge with any explicitly provided tags
   const inheritedTags = await getInheritedTags(linkedTo, userId);
@@ -177,7 +171,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   });
 
   // Create metadata in repository
-  // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
+  // IMPORTANT: Pass the fileId to ensure metadata matches storage path
   const fileEntry = await repos.files.create({
     userId,
     sha256,
@@ -194,15 +188,16 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
     generationRevisedPrompt: generationRevisedPrompt || null,
     description: description || null,
     tags: finalTags,
-    s3Key,
+    storageKey,
+    mountPointId,
   }, { id: fileId });
 
-  logger.debug('Created file metadata in repository', { fileId: fileEntry.id, s3Key });
+  logger.debug('Created file metadata in repository', { fileId: fileEntry.id, storageKey, mountPointId });
   return fileEntry;
 }
 
 /**
- * Delete a file - removes bytes from S3 and metadata from repository
+ * Delete a file - removes bytes from storage and metadata from repository
  */
 async function deleteFile(fileId: string): Promise<boolean> {
   const repos = getRepositories();
@@ -213,13 +208,13 @@ async function deleteFile(fileId: string): Promise<boolean> {
     return false;
   }
 
-  // Delete the file bytes from S3
-  if (entry.s3Key) {
+  // Delete the file bytes from storage
+  if (entry.storageKey) {
     try {
-      await deleteS3File(entry.s3Key);
-      logger.debug('Deleted file from S3', { fileId, s3Key: entry.s3Key });
+      await fileStorageManager.deleteFile(entry);
+      logger.debug('Deleted file from storage', { fileId, storageKey: entry.storageKey });
     } catch (error) {
-      logger.error('Failed to delete file from S3', { fileId, s3Key: entry.s3Key }, error instanceof Error ? error : undefined);
+      logger.error('Failed to delete file from storage', { fileId, storageKey: entry.storageKey }, error instanceof Error ? error : undefined);
     }
   }
 
@@ -230,7 +225,7 @@ async function deleteFile(fileId: string): Promise<boolean> {
 }
 
 /**
- * Read a file as buffer from S3
+ * Read a file as buffer from storage
  */
 async function readFile(fileId: string): Promise<Buffer> {
   const repos = getRepositories();
@@ -240,13 +235,13 @@ async function readFile(fileId: string): Promise<Buffer> {
     throw new Error(`File not found: ${fileId}`);
   }
 
-  if (!entry.s3Key) {
-    throw new Error(`File ${fileId} has no S3 key - file may need migration`);
+  if (!entry.storageKey) {
+    throw new Error(`File ${fileId} has no storage key - file may need migration`);
   }
 
-  // Download from S3
-  const buffer = await downloadS3File(entry.s3Key);
-  logger.debug('Downloaded file from S3', { fileId, s3Key: entry.s3Key, size: buffer.length });
+  // Download from storage
+  const buffer = await fileStorageManager.downloadFile(entry);
+  logger.debug('Downloaded file from storage', { fileId, storageKey: entry.storageKey, size: buffer.length });
   return buffer;
 }
 

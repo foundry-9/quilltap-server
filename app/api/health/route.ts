@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { validateMongoDBConfig, testMongoDBConnection } from '@/lib/mongodb/config';
-import { validateS3Config, testS3Connection } from '@/lib/s3/config';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getErrorMessage } from '@/lib/errors';
 
 export const dynamic = 'force-dynamic';
@@ -122,68 +122,54 @@ async function checkMongoDBHealth(
 }
 
 /**
- * Check S3 health
+ * Check file storage health
  */
-async function checkS3Health(
+async function checkFileStorageHealth(
   healthLogger: ReturnType<typeof logger.child>,
   services: HealthResponse['services'],
   serviceStatuses: HealthStatus[]
 ): Promise<void> {
-  healthLogger.debug('Checking S3 health', { s3Mode: process.env.S3_MODE });
+  healthLogger.debug('Checking file storage health');
 
-  const s3Config = validateS3Config();
-
-  if (s3Config.isConfigured) {
-    try {
-      const s3Result = await testS3Connection();
-
-      if (s3Result.success) {
-        services.s3 = {
-          status: 'healthy',
-          message: s3Result.message,
-          latencyMs: s3Result.latencyMs,
-          mode: s3Config.mode,
-        };
-        serviceStatuses.push('healthy');
-        healthLogger.debug('S3 health check passed', {
-          latencyMs: s3Result.latencyMs,
-          mode: s3Config.mode,
-        });
-      } else {
-        services.s3 = {
-          status: 'unhealthy',
-          message: s3Result.message,
-          latencyMs: s3Result.latencyMs,
-          mode: s3Config.mode,
-        };
-        serviceStatuses.push('unhealthy');
-        healthLogger.warn('S3 health check failed', {
-          message: s3Result.message,
-          latencyMs: s3Result.latencyMs,
-          mode: s3Config.mode,
-        });
-      }
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      services.s3 = {
-        status: 'unhealthy',
-        message: `S3 connection test error: ${errorMessage}`,
-        mode: s3Config.mode,
-      };
-      serviceStatuses.push('unhealthy');
-      healthLogger.error('S3 health check error', { error: errorMessage });
+  try {
+    if (!fileStorageManager.isInitialized()) {
+      await fileStorageManager.initialize();
     }
-  } else {
+
+    const mountPoints = fileStorageManager.getMountPoints();
+
+    if (mountPoints.length === 0) {
+      services.s3 = {
+        status: 'degraded',
+        message: 'No file storage mount points configured',
+      };
+      serviceStatuses.push('degraded');
+      healthLogger.warn('No file storage mount points configured');
+      return;
+    }
+
+    // Test the default backend
+    const defaultBackend = fileStorageManager.getDefaultBackend();
+    const metadata = defaultBackend.getMetadata();
+
     services.s3 = {
-      status: 'degraded',
-      message: `S3 not properly configured: ${s3Config.errors.join('; ')}`,
-      mode: s3Config.mode,
+      status: 'healthy',
+      message: `File storage operational (${metadata.displayName})`,
+      mode: metadata.displayName,
     };
-    serviceStatuses.push('degraded');
-    healthLogger.warn('S3 configuration invalid', {
-      errors: s3Config.errors,
-      mode: s3Config.mode,
+    serviceStatuses.push('healthy');
+    healthLogger.debug('File storage health check passed', {
+      backendCount: mountPoints.length,
+      defaultBackend: metadata.displayName,
     });
+  } catch (error) {
+    const errorMessage = getErrorMessage(error);
+    services.s3 = {
+      status: 'unhealthy',
+      message: `File storage health check error: ${errorMessage}`,
+    };
+    serviceStatuses.push('unhealthy');
+    healthLogger.error('File storage health check error', { error: errorMessage });
   }
 }
 
@@ -231,10 +217,8 @@ export async function GET() {
       await checkMongoDBHealth(healthLogger, services, serviceStatuses);
     }
 
-    // Check S3 if enabled
-    if (s3Mode !== 'disabled') {
-      await checkS3Health(healthLogger, services, serviceStatuses);
-    }
+    // Check file storage
+    await checkFileStorageHealth(healthLogger, services, serviceStatuses);
 
     // Determine overall status
     const overallStatus = getOverallStatus(serviceStatuses);

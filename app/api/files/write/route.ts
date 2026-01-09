@@ -11,8 +11,7 @@ import { z } from 'zod';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { badRequest, forbidden, serverError } from '@/lib/api/responses';
-import { s3FileService } from '@/lib/s3/file-service';
-import { buildS3Key } from '@/lib/s3/client';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { normalizeFolderPath, validateFolderPath } from '@/lib/files/folder-utils';
 
 // Validation schema for file write
@@ -84,32 +83,25 @@ export const POST = createAuthenticatedHandler(
       // Sanitize filename (prevent path traversal)
       const sanitizedFilename = filename.replace(/[/\\:*?"<>|]/g, '_');
 
-      // Upload to S3
-      const s3Key = buildS3Key({
+      // Upload to file storage
+      log.debug('Uploading file to storage', {
+        fileId,
+        filename: sanitizedFilename,
+        size: contentBuffer.length,
+      });
+
+      const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
         userId: user.id,
         fileId,
         filename: sanitizedFilename,
+        content: contentBuffer,
+        contentType: mimeType,
         projectId: targetProjectId,
         folderPath,
       });
 
-      log.debug('Uploading file to S3', {
-        fileId,
-        s3Key,
-        size: contentBuffer.length,
-      });
-
-      await s3FileService.uploadUserFile(
-        user.id,
-        fileId,
-        sanitizedFilename,
-        'DOCUMENT',
-        contentBuffer,
-        mimeType
-      );
-
       // Create file entry
-      // IMPORTANT: Pass the fileId to ensure metadata matches S3 storage path
+      // IMPORTANT: Pass the fileId to ensure metadata matches storage path
       const fileEntry = await repos.files.create({
         userId: user.id,
         sha256,
@@ -126,8 +118,8 @@ export const POST = createAuthenticatedHandler(
         tags: [],
         projectId: targetProjectId,
         folderPath,
-        s3Key,
-        s3Bucket: undefined,
+        storageKey,
+        mountPointId,
       }, { id: fileId });
 
       log.info('File created successfully', {

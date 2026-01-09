@@ -1,10 +1,10 @@
 /**
  * Backup Delete Endpoint
- * DELETE /api/tools/backup/delete - Delete a backup from S3
+ * DELETE /api/tools/backup/delete - Delete a backup from storage
  *
  * Request body:
  * {
- *   s3Key: string
+ *   s3Key: string (storage key)
  * }
  *
  * Response:
@@ -39,13 +39,13 @@ export const DELETE = createAuthenticatedHandler(async (req, { user }) => {
       return forbidden()
     }
 
-    logger.debug('Deleting backup from S3', {
+    logger.debug('Deleting backup from storage', {
       context: 'DELETE /api/tools/backup/delete',
       userId: user.id,
-      s3Key,
+      storageKey: s3Key,
     })
 
-    await deleteBackupFromS3(s3Key)
+    await deleteBackupFromS3(user.id, s3Key)
 
     logger.info('Backup deleted', {
       context: 'DELETE /api/tools/backup/delete',

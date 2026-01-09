@@ -21,10 +21,8 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { Migration, MigrationResult } from '../migration-types';
-import { validateS3Config } from '@/lib/s3/config';
+import { validateS3Config, buildS3Key, getS3Bucket, uploadFile } from '../lib/s3-utils';
 import { getAllFiles, updateFile, deleteFile } from '../lib/file-manager';
-import { buildS3Key, getS3Bucket } from '@/lib/s3/client';
-import { uploadFile } from '@/lib/s3/operations';
 
 /**
  * Error categorization for migration

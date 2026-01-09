@@ -13,7 +13,7 @@ import { logger } from '@/lib/logger';
 import { getServerSession } from '@/lib/auth/session';
 import { getAuthenticatedUserForSync } from '@/lib/sync/api-key-auth';
 import { getRepositories } from '@/lib/mongodb/repositories';
-import { downloadFile as downloadS3File } from '@/lib/s3/operations';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { createSyncLogCollector } from '@/lib/sync/sync-log-collector';
 
 /**
@@ -96,46 +96,45 @@ export async function GET(
     }
 
     // Check if file has storage reference
-    if (!file.s3Key) {
-      syncLogs.error('File has no S3 key (content not stored)', {
+    if (!file.storageKey) {
+      syncLogs.error('File has no storage key (content not stored)', {
         fileId,
         filename: file.originalFilename,
         category: file.category,
       });
-      logger.warn('Sync file content requested for file without S3 key', {
+      logger.warn('Sync file content requested for file without storage key', {
         context: 'api:sync:files:content',
         userId,
         fileId,
       });
       return NextResponse.json(
-        { error: 'File has no content (no S3 key)', serverLogs: syncLogs.getLogs() },
+        { error: 'File has no content (no storage key)', serverLogs: syncLogs.getLogs() },
         { status: 404 }
       );
     }
 
-    // Download file content using the stored s3Key directly
-    // This matches how /api/files/[id] serves files
+    // Download file content using the file storage manager
     let content: Buffer;
     try {
-      content = await downloadS3File(file.s3Key);
+      content = await fileStorageManager.downloadFile(file);
     } catch (downloadError) {
       const duration = Date.now() - startTime;
       const errorMessage = downloadError instanceof Error ? downloadError.message : String(downloadError);
       const errorName = downloadError instanceof Error ? downloadError.name : 'UnknownError';
 
-      syncLogs.error('S3 download failed', {
+      syncLogs.error('File download failed', {
         fileId,
         filename: file.originalFilename,
-        s3Key: file.s3Key,
+        storageKey: file.storageKey,
         errorName,
         errorMessage,
       });
 
-      logger.error('Failed to download file from S3 for sync', {
+      logger.error('Failed to download file for sync', {
         context: 'api:sync:files:content',
         userId,
         fileId,
-        s3Key: file.s3Key,
+        storageKey: file.storageKey,
         error: errorMessage,
         durationMs: duration,
       });

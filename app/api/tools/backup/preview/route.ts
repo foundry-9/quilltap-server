@@ -45,12 +45,12 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
       })
       zipBuffer = Buffer.from(await file.arrayBuffer())
     } else if (s3Key) {
-      logger.debug('Preview from S3 backup', {
+      logger.debug('Preview from backup in storage', {
         context: 'POST /api/tools/backup/preview',
         userId: user.id,
-        s3Key,
+        storageKey: s3Key,
       })
-      zipBuffer = await downloadBackupFromS3(s3Key)
+      zipBuffer = await downloadBackupFromS3(user.id, s3Key)
     }
 
     if (!zipBuffer) {

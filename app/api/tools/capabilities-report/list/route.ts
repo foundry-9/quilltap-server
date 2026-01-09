@@ -8,8 +8,6 @@
 import { NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { s3FileService } from '@/lib/s3/file-service';
-import { getFileMetadata } from '@/lib/s3/operations';
 import { getErrorMessage } from '@/lib/errors';
 
 const moduleLogger = logger.child({ module: 'api:capabilities-report:list' });
@@ -17,47 +15,28 @@ const moduleLogger = logger.child({ module: 'api:capabilities-report:list' });
 export interface ReportInfo {
   id: string;
   filename: string;
-  s3Key: string;
+  storageKey: string;
   createdAt: string;
   size: number;
 }
 
-export const GET = createAuthenticatedHandler(async (req, { user }) => {
+export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
     const userId = user.id;
     moduleLogger.info('Listing capabilities reports', { userId });
 
-    // List all files in the REPORT category
-    const keys = await s3FileService.listUserFiles(userId, 'REPORT');
+    // List all files in the DOCUMENT category from /reports folder
+    const allDocuments = await repos.files.findByCategory('DOCUMENT');
+    const reportFiles = allDocuments.filter((f) => f.folderPath === '/reports');
 
-    // Get metadata for each file
-    const reports: ReportInfo[] = [];
-
-    for (const s3Key of keys) {
-      try {
-        const metadata = await getFileMetadata(s3Key);
-        if (!metadata) continue;
-
-        // Parse the filename to extract info
-        // Format: users/{userId}/REPORT/{reportId}_{filename}
-        const parts = s3Key.split('/');
-        const filenamePart = parts[parts.length - 1];
-        const underscoreIndex = filenamePart.indexOf('_');
-
-        const reportId = underscoreIndex > 0 ? filenamePart.substring(0, underscoreIndex) : filenamePart;
-        const filename = underscoreIndex > 0 ? filenamePart.substring(underscoreIndex + 1) : filenamePart;
-
-        reports.push({
-          id: reportId,
-          filename,
-          s3Key,
-          createdAt: metadata.lastModified.toISOString(),
-          size: metadata.size,
-        });
-      } catch (error) {
-        moduleLogger.warn('Failed to get metadata for report', { s3Key, error });
-      }
-    }
+    // Convert to ReportInfo format
+    const reports: ReportInfo[] = reportFiles.map((file) => ({
+      id: file.id,
+      filename: file.originalFilename,
+      storageKey: file.storageKey || '',
+      createdAt: file.createdAt, // Already a string from TimestampSchema
+      size: file.size || 0,
+    }));
 
     // Sort by creation date, newest first
     reports.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
