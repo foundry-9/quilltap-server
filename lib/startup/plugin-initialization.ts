@@ -18,6 +18,8 @@ import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/
 import { initializeToolRegistry, toolRegistry } from '@/lib/plugins/tool-registry';
 import type { ToolPlugin } from '@/lib/plugins/interfaces/tool-plugin';
 import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugins/plugin-logger-bridge';
+import { fileStorageManager } from '@/lib/file-storage/manager';
+import type { FileStorageProviderPlugin } from '@/lib/file-storage/interfaces';
 import packageJson from '@/package.json';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
@@ -541,6 +543,54 @@ async function performInitialization(): Promise<PluginInitializationResult> {
           tools: toolStats.tools,
         });
       }
+    }
+
+    // Initialize file storage registry from enabled plugins with FILE_BACKEND capability
+    logger.debug('Initializing file storage backend plugins');
+    const fileBackendPlugins = pluginRegistry.getEnabledByCapability('FILE_BACKEND');
+    if (fileBackendPlugins.length > 0) {
+      for (const loadedPlugin of fileBackendPlugins) {
+        try {
+          const mainFile = loadedPlugin.manifest.main || 'index.js';
+          const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+
+          logger.debug('Loading file backend plugin module', {
+            plugin: loadedPlugin.manifest.name,
+            path: modulePath,
+          });
+
+          // Use require() to load the compiled JavaScript module
+          const pluginModule = dynamicRequire(modulePath);
+
+          if (pluginModule?.plugin) {
+            fileStorageManager.registerProviderPlugin(pluginModule.plugin as FileStorageProviderPlugin);
+            logger.debug('File backend plugin loaded', {
+              plugin: loadedPlugin.manifest.name,
+              backendId: (pluginModule.plugin as FileStorageProviderPlugin)?.metadata?.backendId,
+            });
+          } else if (pluginModule?.default?.plugin) {
+            fileStorageManager.registerProviderPlugin(pluginModule.default.plugin as FileStorageProviderPlugin);
+            logger.debug('File backend plugin loaded (default export)', {
+              plugin: loadedPlugin.manifest.name,
+              backendId: (pluginModule.default.plugin as FileStorageProviderPlugin)?.metadata?.backendId,
+            });
+          } else {
+            logger.warn('File backend plugin module does not export a plugin object', {
+              plugin: loadedPlugin.manifest.name,
+              exports: Object.keys(pluginModule),
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to load file backend plugin module', {
+            plugin: loadedPlugin.manifest.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      logger.info('File backend plugins initialized', {
+        total: fileBackendPlugins.length,
+      });
     }
 
     return result;

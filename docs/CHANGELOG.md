@@ -24,6 +24,10 @@
   - Capabilities reports now stored as DOCUMENT files with /reports folder path
   - Health check tests file storage default backend instead of S3 directly
   - All file operations now backend-agnostic via file storage manager
+- fix: FILE_BACKEND plugins not loading during initialization
+  - Added `fileBackendConfig` schema to plugin manifest (was causing validation failure)
+  - Added FILE_BACKEND capability handler in plugin-initialization.ts
+  - S3 storage plugin now loads correctly and registers with file storage manager
 - fix: Turbopack build warnings in log file rotation
   - Extracted path construction to helper function to prevent pattern analysis
   - Eliminates "overly broad patterns" warnings during build
