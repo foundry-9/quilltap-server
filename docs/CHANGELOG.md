@@ -4,6 +4,34 @@
 
 ### 2.7-dev
 
+- feat: Inline file write permission prompt in chat
+  - New `FileWritePermissionPrompt` component displays prominently at the bottom of chat when LLM requests file write
+  - Auto-scrolls into view to ensure user sees the permission request
+  - Quick approve/deny buttons for immediate action
+  - "View Details & Options" opens full modal for content preview and broader permission scopes
+  - Replaced automatic modal popup with inline prompt for better UX
+  - Clear visual indication with card styling, file info, and action buttons
+- fix: Modal z-index issue causing dialogs to appear behind sidebar
+  - Increased `qt-dialog-overlay` z-index from 50 to 60
+  - Modals now correctly appear above the left sidebar (z-50)
+  - Fixes FileWriteApprovalModal and other BaseModal-based dialogs not being visible
+- fix: File write permission prompt never appearing
+  - `requiresPermission` flag was nested inside `data` but tool-executor checked top level
+  - Handler now propagates `requiresPermission`, `filename`, `folderPath` to top-level output
+  - SSE stream now correctly sends permission info to frontend for prompt display
+- fix: File write approval failing with "fileId required" error
+  - `SINGLE_FILE` scope requires an existing fileId, but we're approving NEW files
+  - Quick approve now grants `PROJECT` or `GENERAL` permission based on context
+  - Modal approval also fixed to use the same logic
+  - Removed misleading "approve this write only" option that couldn't work
+- feat: Deferred file write execution with user approval flow
+  - Tool execution now pauses when permission is needed instead of returning immediate error
+  - LLM sees "Waiting for user approval" instead of an error message
+  - New `/api/files/write-permission/complete` endpoint handles approval/denial
+  - On approve: grants permission, executes write, creates success tool message
+  - On deny: creates denial tool message
+  - Tool messages appear in chat so LLM sees the result in subsequent interactions
+  - Frontend prompt and modal updated to use completion endpoint
 - feat: Remove file type restrictions and add text content detection
   - All file types can now be uploaded (general files, project files, attachments)
   - Backend automatically detects if file content is plain text by sampling bytes

@@ -26,7 +26,7 @@ interface FileWriteApprovalModalProps {
   onClose: () => void
   request: FileWriteRequest | null
   chatId: string
-  onApprove: (scope: 'SINGLE_FILE' | 'PROJECT' | 'GENERAL') => Promise<void>
+  onApprove: (scope: 'PROJECT' | 'GENERAL') => Promise<void>
   onDeny: () => void
 }
 
@@ -39,7 +39,6 @@ export default function FileWriteApprovalModal({
   onDeny,
 }: Readonly<FileWriteApprovalModalProps>) {
   const [saving, setSaving] = useState(false)
-  const [selectedScope, setSelectedScope] = useState<'single' | 'project' | 'general'>('single')
 
   if (!request) return null
 
@@ -51,58 +50,43 @@ export default function FileWriteApprovalModal({
   const handleApprove = async () => {
     try {
       setSaving(true)
+
       clientLogger.debug('[FileWriteApprovalModal] Approving file write', {
         filename: request.filename,
-        scope: selectedScope,
         projectId: request.projectId,
       })
 
-      // Determine permission scope based on selection
-      let permissionScope: 'SINGLE_FILE' | 'PROJECT' | 'GENERAL'
-      if (selectedScope === 'project' && isProjectFile) {
-        permissionScope = 'PROJECT'
-      } else if (selectedScope === 'general' && !isProjectFile) {
-        permissionScope = 'GENERAL'
-      } else {
-        // For single file approval, we don't create a persistent permission
-        // The actual write is handled by the parent component
-        permissionScope = 'SINGLE_FILE'
-      }
-
-      // Grant permission via API
-      const permissionBody: Record<string, unknown> = {
-        scope: permissionScope,
-        chatId,
-      }
-
-      if (permissionScope === 'PROJECT' && request.projectId) {
-        permissionBody.projectId = request.projectId
-      }
-
-      const res = await fetch('/api/files/write-permission', {
+      // Call completion endpoint which grants permission AND executes the write
+      const res = await fetch('/api/files/write-permission/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(permissionBody),
+        body: JSON.stringify({
+          chatId,
+          action: 'approve',
+          pendingWrite: {
+            filename: request.filename,
+            content: request.content,
+            mimeType: request.mimeType,
+            folderPath: request.folderPath,
+            projectId: request.projectId,
+          },
+        }),
       })
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to grant permission')
+        throw new Error(errorData.error || 'Failed to complete file write')
       }
 
-      clientLogger.info('[FileWriteApprovalModal] Permission granted', {
-        scope: permissionScope,
-        projectId: request.projectId,
+      const result = await res.json()
+      clientLogger.info('[FileWriteApprovalModal] File write completed', {
+        fileId: result.file?.id,
+        filename: result.file?.filename,
       })
 
-      showSuccessToast(
-        permissionScope === 'PROJECT'
-          ? `File write permission granted for project "${request.projectName}"`
-          : permissionScope === 'GENERAL'
-          ? 'File write permission granted for general files'
-          : 'File write approved'
-      )
+      showSuccessToast(result.message || 'File created successfully')
 
+      const permissionScope: 'PROJECT' | 'GENERAL' = isProjectFile ? 'PROJECT' : 'GENERAL'
       await onApprove(permissionScope)
       onClose()
     } catch (error) {
@@ -116,10 +100,36 @@ export default function FileWriteApprovalModal({
     }
   }
 
-  const handleDeny = () => {
-    clientLogger.debug('[FileWriteApprovalModal] File write denied', {
-      filename: request.filename,
-    })
+  const handleDeny = async () => {
+    try {
+      clientLogger.debug('[FileWriteApprovalModal] Denying file write', {
+        filename: request.filename,
+      })
+
+      // Call completion endpoint with deny action
+      await fetch('/api/files/write-permission/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId,
+          action: 'deny',
+          pendingWrite: {
+            filename: request.filename,
+            content: request.content,
+            mimeType: request.mimeType,
+            folderPath: request.folderPath,
+            projectId: request.projectId,
+          },
+        }),
+      })
+
+      clientLogger.info('[FileWriteApprovalModal] File write denied')
+    } catch (error) {
+      clientLogger.error('[FileWriteApprovalModal] Failed to send denial', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    // Always close and notify parent, even if API call failed
     onDeny()
     onClose()
   }
@@ -179,69 +189,25 @@ export default function FileWriteApprovalModal({
           </div>
         </div>
 
-        {/* Permission scope selection */}
-        <div>
-          <label className="qt-label mb-2">Permission Scope</label>
-          <div className="space-y-2">
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="scope"
-                value="single"
-                checked={selectedScope === 'single'}
-                onChange={() => setSelectedScope('single')}
-                disabled={saving}
-                className="mt-1"
-              />
-              <div>
-                <div className="font-medium">Approve this write only</div>
-                <div className="qt-text-xs text-muted-foreground">
-                  One-time approval for this specific file
-                </div>
-              </div>
-            </label>
-
-            {isProjectFile && (
-              <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="scope"
-                  value="project"
-                  checked={selectedScope === 'project'}
-                  onChange={() => setSelectedScope('project')}
-                  disabled={saving}
-                  className="mt-1"
-                />
-                <div>
-                  <div className="font-medium">
-                    Approve all writes to &quot;{request.projectName || 'this project'}&quot;
-                  </div>
-                  <div className="qt-text-xs text-muted-foreground">
-                    Allow future file writes to this project without asking
-                  </div>
-                </div>
-              </label>
-            )}
-
-            {!isProjectFile && (
-              <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="scope"
-                  value="general"
-                  checked={selectedScope === 'general'}
-                  onChange={() => setSelectedScope('general')}
-                  disabled={saving}
-                  className="mt-1"
-                />
-                <div>
-                  <div className="font-medium">Approve all general file writes</div>
-                  <div className="qt-text-xs text-muted-foreground">
-                    Allow future file writes to general files without asking
-                  </div>
-                </div>
-              </label>
-            )}
+        {/* Permission info */}
+        <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+          <div className="flex items-start gap-2">
+            <svg className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="qt-text-sm">
+              {isProjectFile ? (
+                <>
+                  <span className="font-medium">Approving will grant write permission</span> for all files in
+                  &quot;{request.projectName || 'this project'}&quot;.
+                </>
+              ) : (
+                <>
+                  <span className="font-medium">Approving will grant write permission</span> for all general files
+                  (files not in any project).
+                </>
+              )}
+            </div>
           </div>
         </div>
 

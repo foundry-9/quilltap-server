@@ -44,6 +44,16 @@ export async function processToolCalls(
     const toolCall = toolCalls[toolIndex]
     const toolResult = await executeToolCallWithContext(toolCall, toolContext)
 
+    // Debug: Log what we received from executeToolCallWithContext
+    logger.debug('Tool execution result received', {
+      toolName: toolResult.toolName,
+      success: toolResult.success,
+      requiresPermission: toolResult.requiresPermission,
+      hasPendingWrite: !!toolResult.pendingWrite,
+      error: toolResult.error,
+      resultKeys: toolResult.result ? Object.keys(toolResult.result as object) : [],
+    })
+
     if (toolResult.success && Array.isArray(toolResult.result)) {
       for (const img of toolResult.result) {
         if (img.filepath && img.id) {
@@ -59,6 +69,44 @@ export async function processToolCalls(
           })
         }
       }
+    }
+
+    // Handle permission-required case differently - don't add to toolMessages yet
+    // The frontend will show a prompt, and when user approves/denies,
+    // the /api/files/write-permission/complete endpoint will handle the rest
+    if (toolResult.requiresPermission) {
+      logger.info('Tool requires permission, sending pending status to frontend', {
+        toolName: toolResult.toolName,
+        pendingWrite: toolResult.pendingWrite,
+      })
+
+      // Send SSE event for frontend to show permission prompt
+      // Don't add to toolMessages - we don't want LLM to see an error yet
+      controller.enqueue(
+        encoder.encode(
+          `data: ${JSON.stringify({
+            toolResult: {
+              index: toolIndex,
+              name: toolResult.toolName,
+              success: false,
+              requiresPermission: true,
+              pendingWrite: toolResult.pendingWrite,
+              status: 'pending_approval',
+            },
+          })}\n\n`
+        )
+      )
+
+      // Add a placeholder message indicating we're waiting for approval
+      // This prevents the LLM from thinking the tool errored
+      toolMessages.push({
+        toolName: toolResult.toolName,
+        success: true, // Mark as success so LLM doesn't see it as an error
+        content: 'File write request sent to user for approval. Waiting for response.',
+        arguments: toolCall.arguments,
+        metadata: toolResult.metadata,
+      })
+      continue
     }
 
     let resultText: string
@@ -78,19 +126,13 @@ export async function processToolCalls(
       metadata: toolResult.metadata,
     })
 
-    // Build tool result payload, including permission info if present
+    // Build tool result payload
     const toolResultPayload: Record<string, unknown> = {
       index: toolIndex,
       name: toolResult.toolName,
       success: toolResult.success,
       result: toolResult.result,
     };
-
-    // Include permission requirement info for file writes
-    if (toolResult.requiresPermission) {
-      toolResultPayload.requiresPermission = true;
-      toolResultPayload.pendingWrite = toolResult.pendingWrite;
-    }
 
     controller.enqueue(
       encoder.encode(

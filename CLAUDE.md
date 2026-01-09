@@ -91,6 +91,10 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
 - I am developing this in macOS, so take BSD versions of tools into account, and the fact that I have installed homebrew's coreutils and gnu-sed so that you can use GNU versions of things with "g"-prefixed utilities if you need them.
 - I am using "npm run devssl" to work on this while we're working, so the base URL is probably `https://localhost:3000/` if you want to try something.
 - You should track what's going on with the running "npm run devssl" process, which is nearly always running while we're working on this, by tailing or searching the `logs/combined.log` file. You can figure out what time it is (I think it's using universal time, not local time), and then look for things that we just tried by working through that log.
+- To access MongoDB directly via Docker, use: `docker exec f9-quilltap-mongo-1 mongosh quilltap --quiet --eval "YOUR_QUERY_HERE"`. Examples:
+  - List documents: `docker exec f9-quilltap-mongo-1 mongosh quilltap --quiet --eval "db.COLLECTION.find().toArray()"`
+  - Delete documents: `docker exec f9-quilltap-mongo-1 mongosh quilltap --quiet --eval "db.COLLECTION.deleteMany({})"`
+  - Query with filter: `docker exec f9-quilltap-mongo-1 mongosh quilltap --quiet --eval "db.COLLECTION.find({field: 'value'}).toArray()"`
 - This is built in Next.js 15+, so don't look in middleware.ts, but consider proxy.ts, for things you would expect there.
 - If asked to fix linting errors, do not change out HTML `<img>` tags for Next.js `<Image>` tags; there is a reason that we don't use them sometimes, usually related to their being pulled in via APIs so Next.js can't know what it's going to display.
 - Every time we change a plugin, let's go ahead and bump the release number (the last of the three numbers in semver) on its package.json, and re-run `npm run build:plugins` before we add things to the commit.

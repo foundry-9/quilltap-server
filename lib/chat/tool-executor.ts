@@ -362,11 +362,26 @@ export async function executeToolCallWithContext(
 
       const result = await executeFileManagementTool(toolCall.arguments, fileContext);
 
+      // Debug: Log the file management result structure
+      logger.debug('File management tool result', {
+        success: result.success,
+        action: result.action,
+        requiresPermission: result.requiresPermission,
+        hasError: !!result.error,
+        error: result.error,
+        hasData: !!result.data,
+        dataKeys: result.data ? Object.keys(result.data) : [],
+      });
+
       // Format results for LLM consumption
       const formattedResult = formatFileManagementResults(result);
 
       // Check if permission is required for write operations
       if (result.requiresPermission) {
+        logger.info('File management requires permission, returning pendingWrite', {
+          filename: result.filename,
+          folderPath: result.folderPath,
+        });
         const args = toolCall.arguments as Record<string, unknown>;
         return {
           toolName: 'file_management',

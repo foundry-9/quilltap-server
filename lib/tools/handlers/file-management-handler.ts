@@ -355,7 +355,9 @@ async function executeWriteFile(
     filename,
     'DOCUMENT',
     contentBuffer,
-    mimeType
+    mimeType,
+    context.projectId,
+    targetFolderPath
   );
 
   // Create file entry
@@ -615,6 +617,21 @@ export async function executeFileManagementTool(
           };
         }
         const result = await executeWriteFile(context, input);
+
+        // Propagate requiresPermission to top level for tool-executor handling
+        if (result.requiresPermission) {
+          return {
+            success: false,
+            action,
+            data: result,
+            error: result.message,
+            requiresPermission: true,
+            filename: result.filename,
+            folderPath: result.folderPath,
+            message: result.message,
+          };
+        }
+
         return {
           success: result.success,
           action,

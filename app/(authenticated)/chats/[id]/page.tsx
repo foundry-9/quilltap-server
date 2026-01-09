@@ -18,6 +18,7 @@ import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceMod
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
 import FileWriteApprovalModal from '@/components/chat/FileWriteApprovalModal'
+import FileWritePermissionPrompt from '@/components/chat/FileWritePermissionPrompt'
 import FileConflictDialog from '@/components/chat/FileConflictDialog'
 import { MemoryCascadeDialog } from '@/components/ui/MemoryCascadeDialog'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
@@ -153,6 +154,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       projectId: string | null
     }
     projectName?: string
+    /** The participant ID that made the write request, so we can trigger them to continue */
+    respondingParticipantId?: string
   } | null>(null)
   const [selectLLMProfileDialogState, setSelectLLMProfileDialogState] = useState<{
     isOpen: boolean
@@ -1727,7 +1730,24 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
               // Handle tool results
               if (data.toolResult) {
-                const { index, name, success, result, requiresPermission, pendingWrite } = data.toolResult
+                const { index, name, success, result, requiresPermission, pendingWrite, status } = data.toolResult
+
+                // Debug log for all tool results
+                clientLogger.debug('[Chat] Received tool result', {
+                  name,
+                  success,
+                  requiresPermission,
+                  hasPendingWrite: !!pendingWrite,
+                  status,
+                  pendingWrite: pendingWrite ? {
+                    filename: pendingWrite.filename,
+                    hasContent: !!pendingWrite.content,
+                    contentLength: pendingWrite.content?.length,
+                    folderPath: pendingWrite.folderPath,
+                    projectId: pendingWrite.projectId,
+                  } : undefined,
+                })
+
                 // Update pending tool call status by index (more reliable) or fall back to name
                 setPendingToolCalls(prev => prev.map((tc, idx) =>
                   (index !== undefined && idx === index) || (index === undefined && tc.name === name)
@@ -1737,9 +1757,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
                 // Handle file write permission requirement
                 if (requiresPermission && pendingWrite) {
-                  clientLogger.debug('[Chat] File write permission required', { pendingWrite })
+                  clientLogger.info('[Chat] File write permission required - setting approval state', {
+                    pendingWrite,
+                    respondingParticipantId,
+                  })
                   setFileWriteApprovalState({
-                    isOpen: true,
+                    isOpen: false, // Start with modal closed; inline prompt shows first
                     pendingWrite: {
                       filename: pendingWrite.filename || 'unknown',
                       content: pendingWrite.content,
@@ -1748,8 +1771,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       projectId: pendingWrite.projectId ?? chat?.projectId ?? null,
                     },
                     projectName: chat?.projectName ?? undefined,
+                    // Store the responding participant so we can trigger them to continue after approval
+                    respondingParticipantId: respondingParticipantId ?? undefined,
                   })
-                  showInfoToast('The LLM is requesting permission to write a file.')
+                  // Toast removed - inline prompt provides clear visual indication
                 }
 
                 // Only show toast/status for image generation
@@ -2158,6 +2183,59 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               onDismiss={turnManagement.handleDismissEphemeral}
             />
 
+            {/* Inline file write permission prompt */}
+            {fileWriteApprovalState && (
+              <FileWritePermissionPrompt
+                request={{
+                  filename: fileWriteApprovalState.pendingWrite.filename,
+                  content: fileWriteApprovalState.pendingWrite.content,
+                  mimeType: fileWriteApprovalState.pendingWrite.mimeType,
+                  folderPath: fileWriteApprovalState.pendingWrite.folderPath,
+                  projectId: fileWriteApprovalState.pendingWrite.projectId,
+                }}
+                projectName={fileWriteApprovalState.projectName}
+                chatId={id}
+                onApprove={async () => {
+                  // Store participant ID before clearing state
+                  const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
+                  setFileWriteApprovalState(null)
+                  // Refresh chat to show any new files/messages
+                  await fetchChat()
+                  // Trigger the LLM to continue and respond to the tool result
+                  if (participantToTrigger) {
+                    clientLogger.debug('[Chat] Triggering continue mode after file write approval', {
+                      participantId: participantToTrigger,
+                    })
+                    // Small delay to ensure the tool message is saved first
+                    setTimeout(() => {
+                      triggerContinueMode(participantToTrigger)
+                    }, 500)
+                  }
+                }}
+                onDeny={async () => {
+                  // Store participant ID before clearing state
+                  const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
+                  setFileWriteApprovalState(null)
+                  showInfoToast('File write denied.')
+                  // Refresh chat to show the denial tool message
+                  await fetchChat()
+                  // Trigger the LLM to continue and acknowledge the denial
+                  if (participantToTrigger) {
+                    clientLogger.debug('[Chat] Triggering continue mode after file write denial', {
+                      participantId: participantToTrigger,
+                    })
+                    setTimeout(() => {
+                      triggerContinueMode(participantToTrigger)
+                    }, 500)
+                  }
+                }}
+                onViewDetails={() => {
+                  // Open the modal for full details
+                  setFileWriteApprovalState(prev => prev ? { ...prev, isOpen: true } : null)
+                }}
+              />
+            )}
+
             {/* Streaming message - using extracted component */}
             <StreamingMessage
               streaming={streaming}
@@ -2415,13 +2493,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             }}
             chatId={id}
             onApprove={async () => {
+              // Store participant ID before clearing state
+              const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
               setFileWriteApprovalState(null)
               // Refresh chat to show any new files/messages
               await fetchChat()
+              // Trigger the LLM to continue and respond to the tool result
+              if (participantToTrigger) {
+                setTimeout(() => {
+                  triggerContinueMode(participantToTrigger)
+                }, 500)
+              }
             }}
-            onDeny={() => {
+            onDeny={async () => {
+              // Store participant ID before clearing state
+              const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
               setFileWriteApprovalState(null)
               showInfoToast('File write denied.')
+              // Refresh chat to show the denial tool message
+              await fetchChat()
+              // Trigger the LLM to continue and acknowledge the denial
+              if (participantToTrigger) {
+                setTimeout(() => {
+                  triggerContinueMode(participantToTrigger)
+                }, 500)
+              }
             }}
           />
         )}
