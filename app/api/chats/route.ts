@@ -405,6 +405,7 @@ async function autoGenerateFirstMessage(
   }
 
   try {
+    // First attempt: with full context (memories + project)
     const greeting = await generateGreetingMessage({
       systemPrompt: context.systemPrompt,
       characterName: context.character.name,
@@ -418,7 +419,52 @@ async function autoGenerateFirstMessage(
       participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
       projectContext,
     })
-    return greeting
+
+    if (greeting) {
+      return greeting
+    }
+
+    // If empty and we had memories, retry without them (content filter safeguard)
+    if (participantMemories.length > 0) {
+      logger.info('[autoGenerateFirstMessage] Retrying greeting generation without memories', {
+        context: 'autoGenerateFirstMessage',
+        characterId: context.character.id,
+        characterName: context.character.name,
+        originalMemoryCount: participantMemories.length,
+      })
+
+      const retryGreeting = await generateGreetingMessage({
+        systemPrompt: context.systemPrompt,
+        characterName: context.character.name,
+        provider: connectionProfile.provider,
+        modelName: connectionProfile.modelName,
+        baseUrl: connectionProfile.baseUrl,
+        apiKey,
+        temperature: extractNumber(parameters.temperature),
+        maxTokens: extractNumber(parameters.maxTokens),
+        topP: extractNumber(parameters.topP),
+        // No memories this time, but keep project context (usually safe)
+        projectContext,
+      })
+
+      if (retryGreeting) {
+        logger.info('[autoGenerateFirstMessage] Retry without memories succeeded', {
+          context: 'autoGenerateFirstMessage',
+          characterId: context.character.id,
+        })
+        return retryGreeting
+      }
+    }
+
+    // Still empty - will fall through to default greeting
+    logger.warn('[autoGenerateFirstMessage] Greeting generation returned empty after all attempts', {
+      context: 'autoGenerateFirstMessage',
+      characterId: context.character.id,
+      characterName: context.character.name,
+      hadMemories: participantMemories.length > 0,
+      hadProjectContext: !!projectContext,
+    })
+    return ''
   } catch (error) {
     logger.error('Failed to auto-generate greeting for chat', { context: 'autoGenerateFirstMessage' }, error instanceof Error ? error : undefined)
     return ''

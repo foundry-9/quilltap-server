@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- fix: Generic greeting fallback when LLM content filter blocks auto-generation
+  - Auto-generated greetings now retry without memories if first attempt returns empty
+  - Memories containing sensitive content could trigger LLM content filters
+  - Added warning logs when LLM returns empty despite consuming tokens (likely filter hit)
+  - Retry preserves project context (usually safe) but removes participant memories
+  - If retry still fails, falls through to generic greeting with clear warning log
 - fix: OpenRouter streaming tool calls not being detected
   - Tool calls were in `choices[0].delta.toolCalls` (streaming) but parser only checked `choices[0].message.tool_calls`
   - OpenRouter SDK uses camelCase `toolCalls` but parser expected snake_case `tool_calls`

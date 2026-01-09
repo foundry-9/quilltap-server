@@ -149,5 +149,30 @@ export async function generateGreetingMessage({
     usage: response.usage ? JSON.stringify(response.usage) : undefined,
   })
 
-  return (response.content || '').trim()
+  const trimmedContent = (response.content || '').trim()
+
+  // Warn if we got an empty response - likely content filtering
+  if (!trimmedContent && response.usage && response.usage.completionTokens > 0) {
+    logger.warn('[Greeting Generation] LLM returned empty content despite consuming tokens - likely content filter hit', {
+      context: 'initial-greeting',
+      provider,
+      model: modelName,
+      characterName,
+      promptTokens: response.usage.promptTokens,
+      completionTokens: response.usage.completionTokens,
+      hadProjectContext: !!projectContext,
+      memoryCount: participantMemories?.length || 0,
+    })
+  } else if (!trimmedContent) {
+    logger.warn('[Greeting Generation] LLM returned empty content', {
+      context: 'initial-greeting',
+      provider,
+      model: modelName,
+      characterName,
+      hadProjectContext: !!projectContext,
+      memoryCount: participantMemories?.length || 0,
+    })
+  }
+
+  return trimmedContent
 }
