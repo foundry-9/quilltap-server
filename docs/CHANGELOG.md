@@ -4,6 +4,10 @@
 
 ### 2.7-dev
 
+- chore: Upgrade esbuild from 0.19.0/0.20.0/0.24.0 to 0.27.0 across all plugins
+  - Addresses security vulnerability CVE-2024-23334 in esbuild <= 0.24.2
+  - Updated 14 plugins and create-quilltap-theme package
+  - No breaking changes for plugin builds (0.25 serve() API changes and 0.27 binary loader changes don't affect plugins)
 - fix: Generic greeting fallback when LLM content filter blocks auto-generation
   - Auto-generated greetings now retry without memories if first attempt returns empty
   - Memories containing sensitive content could trigger LLM content filters

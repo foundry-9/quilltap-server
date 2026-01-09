@@ -45,7 +45,7 @@ var require_cjs = __commonJS({
       return stringValue === "[object RegExp]" || stringValue === "[object Date]" || isReactElement(value);
     }
     var canUseSymbol = typeof Symbol === "function" && Symbol.for;
-    var REACT_ELEMENT_TYPE = canUseSymbol ? Symbol.for("react.element") : 60103;
+    var REACT_ELEMENT_TYPE = canUseSymbol ? /* @__PURE__ */ Symbol.for("react.element") : 60103;
     function isReactElement(value) {
       return value.$$typeof === REACT_ELEMENT_TYPE;
     }
@@ -134,12 +134,12 @@ var require_cjs = __commonJS({
 });
 
 // index.ts
-var qtap_plugin_curl_exports = {};
-__export(qtap_plugin_curl_exports, {
-  default: () => qtap_plugin_curl_default,
+var index_exports = {};
+__export(index_exports, {
+  default: () => index_default,
   plugin: () => plugin
 });
-module.exports = __toCommonJS(qtap_plugin_curl_exports);
+module.exports = __toCommonJS(index_exports);
 
 // curl-tool.ts
 var curlToolDefinition = {
@@ -670,21 +670,20 @@ var DomHandler = class {
 // node_modules/leac/lib/leac.mjs
 var e = /\n/g;
 function n(n2) {
-  const o2 = [...n2.matchAll(e)].map((e2) => e2.index || 0);
+  const o2 = [...n2.matchAll(e)].map(((e2) => e2.index || 0));
   o2.unshift(-1);
   const s2 = t(o2, 0, o2.length);
   return (e2) => r(s2, e2);
 }
 function t(e2, n2, r2) {
-  if (r2 - n2 == 1)
-    return { offset: e2[n2], index: n2 + 1 };
+  if (r2 - n2 == 1) return { offset: e2[n2], index: n2 + 1 };
   const o2 = Math.ceil((n2 + r2) / 2), s2 = t(e2, n2, o2), l2 = t(e2, o2, r2);
   return { offset: s2.offset, low: s2, high: l2 };
 }
 function r(e2, n2) {
-  return function(e3) {
+  return (function(e3) {
     return Object.prototype.hasOwnProperty.call(e3, "index");
-  }(e2) ? { line: e2.index, column: n2 - e2.offset } : r(e2.high.offset < n2 ? e2.high : e2.low, n2);
+  })(e2) ? { line: e2.index, column: n2 - e2.offset } : r(e2.high.offset < n2 ? e2.high : e2.low, n2);
 }
 function o(e2, t2 = "", r2 = {}) {
   const o2 = "string" != typeof t2 ? t2 : r2, l2 = "string" == typeof t2 ? t2 : "", c2 = e2.map(s), f = !!o2.lineNumbers;
@@ -692,29 +691,26 @@ function o(e2, t2 = "", r2 = {}) {
     const r3 = f ? n(e3) : () => ({ line: 0, column: 0 });
     let o3 = t3;
     const s2 = [];
-    e:
-      for (; o3 < e3.length; ) {
-        let n2 = false;
-        for (const t4 of c2) {
-          t4.regex.lastIndex = o3;
-          const c3 = t4.regex.exec(e3);
-          if (c3 && c3[0].length > 0) {
-            if (!t4.discard) {
-              const e4 = r3(o3), n3 = "string" == typeof t4.replace ? c3[0].replace(new RegExp(t4.regex.source, t4.regex.flags), t4.replace) : c3[0];
-              s2.push({ state: l2, name: t4.name, text: n3, offset: o3, len: c3[0].length, line: e4.line, column: e4.column });
-            }
-            if (o3 = t4.regex.lastIndex, n2 = true, t4.push) {
-              const n3 = t4.push(e3, o3);
-              s2.push(...n3.tokens), o3 = n3.offset;
-            }
-            if (t4.pop)
-              break e;
-            break;
+    e: for (; o3 < e3.length; ) {
+      let n2 = false;
+      for (const t4 of c2) {
+        t4.regex.lastIndex = o3;
+        const c3 = t4.regex.exec(e3);
+        if (c3 && c3[0].length > 0) {
+          if (!t4.discard) {
+            const e4 = r3(o3), n3 = "string" == typeof t4.replace ? c3[0].replace(new RegExp(t4.regex.source, t4.regex.flags), t4.replace) : c3[0];
+            s2.push({ state: l2, name: t4.name, text: n3, offset: o3, len: c3[0].length, line: e4.line, column: e4.column });
           }
-        }
-        if (!n2)
+          if (o3 = t4.regex.lastIndex, n2 = true, t4.push) {
+            const n3 = t4.push(e3, o3);
+            s2.push(...n3.tokens), o3 = n3.offset;
+          }
+          if (t4.pop) break e;
           break;
+        }
       }
+      if (!n2) break;
+    }
     return { tokens: s2, offset: o3, complete: e3.length <= o3 };
   };
 }
@@ -722,21 +718,17 @@ function s(e2, n2) {
   return { ...e2, regex: l(e2, n2) };
 }
 function l(e2, n2) {
-  if (0 === e2.name.length)
-    throw new Error(`Rule #${n2} has empty name, which is not allowed.`);
-  if (function(e3) {
+  if (0 === e2.name.length) throw new Error(`Rule #${n2} has empty name, which is not allowed.`);
+  if ((function(e3) {
     return Object.prototype.hasOwnProperty.call(e3, "regex");
-  }(e2))
-    return function(e3) {
-      if (e3.global)
-        throw new Error(`Regular expression /${e3.source}/${e3.flags} contains the global flag, which is not allowed.`);
-      return e3.sticky ? e3 : new RegExp(e3.source, e3.flags + "y");
-    }(e2.regex);
-  if (function(e3) {
+  })(e2)) return (function(e3) {
+    if (e3.global) throw new Error(`Regular expression /${e3.source}/${e3.flags} contains the global flag, which is not allowed.`);
+    return e3.sticky ? e3 : new RegExp(e3.source, e3.flags + "y");
+  })(e2.regex);
+  if ((function(e3) {
     return Object.prototype.hasOwnProperty.call(e3, "str");
-  }(e2)) {
-    if (0 === e2.str.length)
-      throw new Error(`Rule #${n2} ("${e2.name}") has empty "str" property, which is not allowed.`);
+  })(e2)) {
+    if (0 === e2.str.length) throw new Error(`Rule #${n2} ("${e2.name}") has empty "str" property, which is not allowed.`);
     return new RegExp(c(e2.str), "y");
   }
   return new RegExp(c(e2.name), "y");
@@ -1972,6 +1964,7 @@ var EntityDecoder = class {
       case EntityDecoderState.NamedEntity: {
         return this.result !== 0 && (this.decodeMode !== DecodingMode.Attribute || this.result === this.treeIndex) ? this.emitNotTerminatedNamedEntity() : 0;
       }
+      // Otherwise, emit a numeric entity if we have one.
       case EntityDecoderState.NumericDecimal: {
         return this.emitNumericEntity(0, 2);
       }
@@ -3530,6 +3523,7 @@ function renderNode(node, options) {
   switch (node.type) {
     case Root:
       return render(node.children, options);
+    // @ts-expect-error We don't use `Doctype` yet
     case Doctype:
     case Directive:
       return renderDirective(node);
@@ -3951,7 +3945,7 @@ var WhitespaceProcessor = class {
     this.newlineOrNonNewlineStringRe = new RegExp(`(\\n|[^\\n]+)`, "g");
     if (options.preserveNewlines) {
       const wordOrNewlineRe = new RegExp(`\\n|[^\\n${whitespaceCodes}]+`, "gm");
-      this.shrinkWrapAdd = function(text, inlineTextBuilder, transform = (str) => str, noWrap = false) {
+      this.shrinkWrapAdd = function(text, inlineTextBuilder, transform = ((str) => str), noWrap = false) {
         if (!text) {
           return;
         }
@@ -3979,7 +3973,7 @@ var WhitespaceProcessor = class {
       };
     } else {
       const wordRe = new RegExp(`[^${whitespaceCodes}]+`, "g");
-      this.shrinkWrapAdd = function(text, inlineTextBuilder, transform = (str) => str, noWrap = false) {
+      this.shrinkWrapAdd = function(text, inlineTextBuilder, transform = ((str) => str), noWrap = false) {
         if (!text) {
           return;
         }
@@ -4144,7 +4138,7 @@ var BlockTextBuilder = class {
   }
   /** @returns { (str: string) => string } */
   _getCombinedWordTransformer() {
-    const wt = this._wordTransformer ? (str) => applyTransformer(str, this._wordTransformer) : void 0;
+    const wt = this._wordTransformer ? ((str) => applyTransformer(str, this._wordTransformer)) : void 0;
     const ce = this.options.encodeCharacters;
     return wt ? ce ? (str) => ce(wt(str)) : wt : ce;
   }
@@ -5146,7 +5140,7 @@ function compile(options = {}) {
     }
   );
   options.formatters = Object.assign({}, genericFormatters, textFormatters, options.formatters);
-  options.selectors = mergeDuplicatesPreferLast(options.selectors, (s2) => s2.selector);
+  options.selectors = mergeDuplicatesPreferLast(options.selectors, ((s2) => s2.selector));
   handleDeprecatedOptions(options);
   return compile$1(options);
 }
@@ -5159,7 +5153,7 @@ function handleDeprecatedOptions(options) {
       ([selector, definition]) => ({ ...definition, selector: selector || "*" })
     );
     options.selectors.push(...tagDefinitions);
-    options.selectors = mergeDuplicatesPreferLast(options.selectors, (s2) => s2.selector);
+    options.selectors = mergeDuplicatesPreferLast(options.selectors, ((s2) => s2.selector));
   }
   function set(obj, path, value) {
     const valueKey = path.pop();
@@ -5578,7 +5572,7 @@ function formatCurlOutput(output) {
   }
   return lines.join("\n");
 }
-var qtap_plugin_curl_default = { plugin };
+var index_default = { plugin };
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   plugin

@@ -769,9 +769,9 @@ function serverURLFromOptions(options) {
 var SDK_METADATA = {
   language: "typescript",
   openapiDocVersion: "1.0.0",
-  sdkVersion: "0.3.11",
+  sdkVersion: "0.3.12",
   genVersion: "2.788.4",
-  userAgent: "speakeasy-sdk/typescript 0.3.11 2.788.4 1.0.0 @openrouter/sdk"
+  userAgent: "speakeasy-sdk/typescript 0.3.12 2.788.4 1.0.0 @openrouter/sdk"
 };
 
 // node_modules/@openrouter/sdk/esm/lib/http.js
@@ -4809,6 +4809,132 @@ var UnprocessableEntityResponseErrorData$inboundSchema = z130.object({
   metadata: z130.nullable(z130.record(z130.string(), z130.nullable(z130.any()))).optional()
 });
 
+// node_modules/@openrouter/sdk/esm/lib/tool-event-broadcaster.js
+var ToolEventBroadcaster = class {
+  constructor() {
+    this.buffer = [];
+    this.consumers = /* @__PURE__ */ new Map();
+    this.nextConsumerId = 0;
+    this.isComplete = false;
+    this.completionError = null;
+  }
+  /**
+   * Push a new event to all consumers.
+   * Events are buffered so late-joining consumers can catch up.
+   */
+  push(event) {
+    if (this.isComplete) {
+      return;
+    }
+    this.buffer.push(event);
+    this.notifyWaitingConsumers();
+  }
+  /**
+   * Mark the broadcaster as complete - no more events will be pushed.
+   * Optionally pass an error to signal failure to all consumers.
+   * Cleans up buffer and consumers after completion.
+   */
+  complete(error) {
+    this.isComplete = true;
+    this.completionError = error ?? null;
+    this.notifyWaitingConsumers();
+    queueMicrotask(() => this.cleanup());
+  }
+  /**
+   * Clean up resources after all consumers have finished.
+   * Called automatically after complete(), but can be called manually.
+   */
+  cleanup() {
+    if (this.isComplete && this.consumers.size === 0) {
+      this.buffer = [];
+    }
+  }
+  /**
+   * Create a new consumer that can independently iterate over events.
+   * Consumers can join at any time and will receive events from position 0.
+   * Multiple consumers can be created and will all receive the same events.
+   */
+  createConsumer() {
+    const consumerId = this.nextConsumerId++;
+    const state = {
+      position: 0,
+      waitingPromise: null,
+      cancelled: false
+    };
+    this.consumers.set(consumerId, state);
+    const self = this;
+    return {
+      async next() {
+        const consumer = self.consumers.get(consumerId);
+        if (!consumer) {
+          return { done: true, value: void 0 };
+        }
+        if (consumer.cancelled) {
+          return { done: true, value: void 0 };
+        }
+        if (consumer.position < self.buffer.length) {
+          const value = self.buffer[consumer.position];
+          consumer.position++;
+          return { done: false, value };
+        }
+        if (self.isComplete) {
+          self.consumers.delete(consumerId);
+          self.cleanup();
+          if (self.completionError) {
+            throw self.completionError;
+          }
+          return { done: true, value: void 0 };
+        }
+        const waitPromise = new Promise((resolve, reject) => {
+          consumer.waitingPromise = { resolve, reject };
+          if (self.isComplete || self.completionError || consumer.position < self.buffer.length) {
+            resolve();
+          }
+        });
+        await waitPromise;
+        consumer.waitingPromise = null;
+        return this.next();
+      },
+      async return() {
+        const consumer = self.consumers.get(consumerId);
+        if (consumer) {
+          consumer.cancelled = true;
+          self.consumers.delete(consumerId);
+          self.cleanup();
+        }
+        return { done: true, value: void 0 };
+      },
+      async throw(e) {
+        const consumer = self.consumers.get(consumerId);
+        if (consumer) {
+          consumer.cancelled = true;
+          self.consumers.delete(consumerId);
+          self.cleanup();
+        }
+        throw e;
+      },
+      [Symbol.asyncIterator]() {
+        return this;
+      }
+    };
+  }
+  /**
+   * Notify all waiting consumers that new data is available or stream completed
+   */
+  notifyWaitingConsumers() {
+    for (const consumer of this.consumers.values()) {
+      if (consumer.waitingPromise) {
+        if (this.completionError) {
+          consumer.waitingPromise.reject(this.completionError);
+        } else {
+          consumer.waitingPromise.resolve();
+        }
+        consumer.waitingPromise = null;
+      }
+    }
+  }
+};
+
 // node_modules/@openrouter/sdk/esm/hooks/registration.js
 function initHooks(_hooks) {
 }
@@ -6653,7 +6779,7 @@ var z153 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/lib/event-streams.js
 var EventStream = class extends ReadableStream {
-  constructor(responseBody, parse) {
+  constructor(responseBody, parse2) {
     const upstream = responseBody.getReader();
     let buffer = new Uint8Array();
     super({
@@ -6670,7 +6796,7 @@ var EventStream = class extends ReadableStream {
             }
             const message = buffer.slice(0, match2.index);
             buffer = buffer.slice(match2.index + match2.length);
-            const item = parseMessage(message, parse);
+            const item = parseMessage(message, parse2);
             if (item && !item.done)
               return downstream.enqueue(item.value);
             if (item?.done) {
@@ -6738,7 +6864,7 @@ function findBoundary(buf) {
   }
   return null;
 }
-function parseMessage(chunk, parse) {
+function parseMessage(chunk, parse2) {
   const text2 = new TextDecoder().decode(chunk);
   const lines = text2.split(/\r\n|\r|\n/);
   const dataLines = [];
@@ -6767,7 +6893,7 @@ function parseMessage(chunk, parse) {
     return;
   if (dataLines.length)
     ret.data = dataLines.join("\n");
-  return parse(ret);
+  return parse2(ret);
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/createresponses.js
@@ -9372,12 +9498,45 @@ var ReusableReadableStream = class {
 };
 
 // node_modules/@openrouter/sdk/esm/lib/tool-executor.js
-var import_v4 = require("zod/v4");
+var z410 = __toESM(require("zod/v4"), 1);
+function isNonNullObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function sanitizeJsonSchema(obj) {
+  if (obj === null || typeof obj !== "object") {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeJsonSchema);
+  }
+  if (!isNonNullObject(obj)) {
+    return obj;
+  }
+  const result = {};
+  for (const key of Object.keys(obj)) {
+    if (!key.startsWith("~")) {
+      result[key] = sanitizeJsonSchema(obj[key]);
+    }
+  }
+  return result;
+}
+function isZodSchema(value) {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  if (!("_zod" in value)) {
+    return false;
+  }
+  return typeof value._zod === "object";
+}
 function convertZodToJsonSchema(zodSchema) {
-  const jsonSchema = (0, import_v4.toJSONSchema)(zodSchema, {
+  if (!isZodSchema(zodSchema)) {
+    throw new Error("Invalid Zod schema provided");
+  }
+  const jsonSchema = z410.toJSONSchema(zodSchema, {
     target: "draft-7"
   });
-  return jsonSchema;
+  return sanitizeJsonSchema(jsonSchema);
 }
 function convertToolsToAPIFormat(tools) {
   return tools.map((tool) => ({
@@ -9389,10 +9548,10 @@ function convertToolsToAPIFormat(tools) {
   }));
 }
 function validateToolInput(schema, args) {
-  return schema.parse(args);
+  return z410.parse(schema, args);
 }
 function validateToolOutput(schema, result) {
-  return schema.parse(result);
+  return z410.parse(schema, result);
 }
 async function executeRegularTool(tool, toolCall, context) {
   if (!isRegularExecuteTool(tool)) {
@@ -9486,10 +9645,20 @@ var ModelResult = class {
     this.initPromise = null;
     this.toolExecutionPromise = null;
     this.finalResponse = null;
-    this.preliminaryResults = /* @__PURE__ */ new Map();
+    this.toolEventBroadcaster = null;
     this.allToolExecutionRounds = [];
     this.resolvedRequest = null;
     this.options = options;
+  }
+  /**
+   * Get or create the tool event broadcaster (lazy initialization).
+   * Ensures only one broadcaster exists for the lifetime of this ModelResult.
+   */
+  ensureBroadcaster() {
+    if (!this.toolEventBroadcaster) {
+      this.toolEventBroadcaster = new ToolEventBroadcaster();
+    }
+    return this.toolEventBroadcaster;
   }
   /**
    * Type guard to check if a value is a non-streaming response
@@ -9513,7 +9682,7 @@ var ModelResult = class {
       if (hasAsyncFunctions(this.options.request)) {
         baseRequest = await resolveAsyncFunctions(this.options.request, initialContext);
       } else {
-        const { stopWhen, ...rest } = this.options.request;
+        const { stopWhen: _, ...rest } = this.options.request;
         baseRequest = rest;
       }
       this.resolvedRequest = {
@@ -9615,10 +9784,14 @@ var ModelResult = class {
           if (!tool || !hasExecuteFunction(tool)) {
             continue;
           }
-          const result = await executeTool(tool, toolCall, turnContext);
-          if (result.preliminaryResults && result.preliminaryResults.length > 0) {
-            this.preliminaryResults.set(toolCall.id, result.preliminaryResults);
-          }
+          const onPreliminaryResult = this.toolEventBroadcaster ? (callId, resultValue) => {
+            this.toolEventBroadcaster?.push({
+              type: "preliminary_result",
+              toolCallId: callId,
+              result: resultValue
+            });
+          } : void 0;
+          const result = await executeTool(tool, toolCall, turnContext, onPreliminaryResult);
           toolResults.push({
             type: "function_call_output",
             id: `output_${toolCall.id}`,
@@ -9718,7 +9891,7 @@ var ModelResult = class {
   /**
    * Stream all response events as they arrive.
    * Multiple consumers can iterate over this stream concurrently.
-   * Includes preliminary tool result events after tool execution.
+   * Preliminary tool results are streamed in REAL-TIME as generator tools yield.
    */
   getFullResponsesStream() {
     return async function* () {
@@ -9726,21 +9899,24 @@ var ModelResult = class {
       if (!this.reusableStream) {
         throw new Error("Stream not initialized");
       }
+      const broadcaster = this.ensureBroadcaster();
+      const toolEventConsumer = broadcaster.createConsumer();
+      const executionPromise = this.executeToolsIfNeeded().finally(() => {
+        broadcaster.complete();
+      });
       const consumer = this.reusableStream.createConsumer();
       for await (const event of consumer) {
         yield event;
       }
-      await this.executeToolsIfNeeded();
-      for (const [toolCallId, results] of this.preliminaryResults) {
-        for (const result of results) {
-          yield {
-            type: "tool.preliminary_result",
-            toolCallId,
-            result,
-            timestamp: Date.now()
-          };
-        }
+      for await (const event of toolEventConsumer) {
+        yield {
+          type: "tool.preliminary_result",
+          toolCallId: event.toolCallId,
+          result: event.result,
+          timestamp: Date.now()
+        };
       }
+      await executionPromise;
     }.call(this);
   }
   /**
@@ -9798,7 +9974,7 @@ var ModelResult = class {
   }
   /**
    * Stream tool call argument deltas and preliminary results.
-   * This filters the full event stream to yield:
+   * Preliminary results are streamed in REAL-TIME as generator tools yield.
    * - Tool call argument deltas as { type: "delta", content: string }
    * - Preliminary results as { type: "preliminary_result", toolCallId, result }
    */
@@ -9808,22 +9984,21 @@ var ModelResult = class {
       if (!this.reusableStream) {
         throw new Error("Stream not initialized");
       }
+      const broadcaster = this.ensureBroadcaster();
+      const toolEventConsumer = broadcaster.createConsumer();
+      const executionPromise = this.executeToolsIfNeeded().finally(() => {
+        broadcaster.complete();
+      });
       for await (const delta of extractToolDeltas(this.reusableStream)) {
         yield {
           type: "delta",
           content: delta
         };
       }
-      await this.executeToolsIfNeeded();
-      for (const [toolCallId, results] of this.preliminaryResults) {
-        for (const result of results) {
-          yield {
-            type: "preliminary_result",
-            toolCallId,
-            result
-          };
-        }
+      for await (const event of toolEventConsumer) {
+        yield event;
       }
+      await executionPromise;
     }.call(this);
   }
   /**
@@ -16744,7 +16919,7 @@ OpenAI.Evals = Evals;
 OpenAI.Containers = Containers;
 OpenAI.Videos = Videos;
 
-// ../../../node_modules/@quilltap/plugin-utils/dist/index.mjs
+// node_modules/@quilltap/plugin-utils/dist/index.mjs
 function parseOpenAIToolCalls(response) {
   const toolCalls = [];
   try {

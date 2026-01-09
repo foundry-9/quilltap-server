@@ -1244,7 +1244,7 @@ var APIResource = class {
 };
 
 // node_modules/@anthropic-ai/sdk/internal/headers.mjs
-var brand_privateNullableHeaders = Symbol.for("brand.privateNullableHeaders");
+var brand_privateNullableHeaders = /* @__PURE__ */ Symbol.for("brand.privateNullableHeaders");
 function* iterateHeaders(headers) {
   if (!headers)
     return;
@@ -11442,7 +11442,7 @@ OpenAI.Evals = Evals;
 OpenAI.Containers = Containers;
 OpenAI.Videos = Videos;
 
-// ../../../node_modules/@quilltap/plugin-utils/dist/index.mjs
+// node_modules/@quilltap/plugin-utils/dist/index.mjs
 function parseAnthropicToolCalls(response) {
   const toolCalls = [];
   try {

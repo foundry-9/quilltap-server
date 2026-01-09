@@ -6837,7 +6837,7 @@ OpenAI.Evals = Evals;
 OpenAI.Containers = Containers;
 OpenAI.Videos = Videos;
 
-// ../../../node_modules/@quilltap/plugin-utils/dist/index.mjs
+// node_modules/@quilltap/plugin-utils/dist/index.mjs
 function parseOpenAIToolCalls(response) {
   const toolCalls = [];
   try {

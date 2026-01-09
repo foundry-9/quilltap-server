@@ -73,7 +73,7 @@ var require_bson = __commonJS({
       }
     }
     var BSON_MAJOR_VERSION = 7;
-    var BSON_VERSION_SYMBOL = Symbol.for("@@mdb.bson.version");
+    var BSON_VERSION_SYMBOL = /* @__PURE__ */ Symbol.for("@@mdb.bson.version");
     var BSON_INT32_MAX = 2147483647;
     var BSON_INT32_MIN = -2147483648;
     var BSON_INT64_MAX = Math.pow(2, 63) - 1;
@@ -443,7 +443,7 @@ var require_bson = __commonJS({
     };
     var hasGlobalBuffer = typeof Buffer === "function" && Buffer.prototype?._isBuffer !== true;
     var ByteUtils = hasGlobalBuffer ? nodeJsByteUtils : webByteUtils;
-    var bsonType = Symbol.for("@@mdb.bson.type");
+    var bsonType = /* @__PURE__ */ Symbol.for("@@mdb.bson.type");
     var BSONValue = class {
       get [bsonType]() {
         return this._bsontype;
@@ -451,7 +451,7 @@ var require_bson = __commonJS({
       get [BSON_VERSION_SYMBOL]() {
         return BSON_MAJOR_VERSION;
       }
-      [Symbol.for("nodejs.util.inspect.custom")](depth, options, inspect) {
+      [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")](depth, options, inspect) {
         return this.inspect(depth, options, inspect);
       }
     };
@@ -6037,8 +6037,8 @@ var require_constants2 = __commonJS({
     ]);
     exports2.LEGACY_HELLO_COMMAND = "ismaster";
     exports2.LEGACY_HELLO_COMMAND_CAMEL_CASE = "isMaster";
-    exports2.kDecorateResult = Symbol.for("@@mdb.decorateDecryptionResult");
-    exports2.kDecoratedKeys = Symbol.for("@@mdb.decryptedKeys");
+    exports2.kDecorateResult = /* @__PURE__ */ Symbol.for("@@mdb.decorateDecryptionResult");
+    exports2.kDecoratedKeys = /* @__PURE__ */ Symbol.for("@@mdb.decryptedKeys");
   }
 });
 
@@ -7265,7 +7265,7 @@ var require_utils = __commonJS({
         }
         Object.freeze(this);
       }
-      [Symbol.for("nodejs.util.inspect.custom")]() {
+      [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")]() {
         return this.inspect();
       }
       inspect() {
@@ -7543,7 +7543,7 @@ var require_utils = __commonJS({
         decorateDecryptionResult(decrypted[k], originalValue, false);
       }
     }
-    exports2.kDispose = Symbol.dispose ?? Symbol("dispose");
+    exports2.kDispose = Symbol.dispose ?? /* @__PURE__ */ Symbol("dispose");
     function addAbortListener(signal, listener) {
       if (signal == null)
         return;
@@ -7897,15 +7897,15 @@ var require_operation = __commonJS({
     var bson_1 = require_bson2();
     var read_preference_1 = require_read_preference();
     exports2.Aspect = {
-      READ_OPERATION: Symbol("READ_OPERATION"),
-      WRITE_OPERATION: Symbol("WRITE_OPERATION"),
-      RETRYABLE: Symbol("RETRYABLE"),
-      EXPLAINABLE: Symbol("EXPLAINABLE"),
-      SKIP_COLLATION: Symbol("SKIP_COLLATION"),
-      CURSOR_CREATING: Symbol("CURSOR_CREATING"),
-      MUST_SELECT_SAME_SERVER: Symbol("MUST_SELECT_SAME_SERVER"),
-      COMMAND_BATCHING: Symbol("COMMAND_BATCHING"),
-      SUPPORTS_RAW_DATA: Symbol("SUPPORTS_RAW_DATA")
+      READ_OPERATION: /* @__PURE__ */ Symbol("READ_OPERATION"),
+      WRITE_OPERATION: /* @__PURE__ */ Symbol("WRITE_OPERATION"),
+      RETRYABLE: /* @__PURE__ */ Symbol("RETRYABLE"),
+      EXPLAINABLE: /* @__PURE__ */ Symbol("EXPLAINABLE"),
+      SKIP_COLLATION: /* @__PURE__ */ Symbol("SKIP_COLLATION"),
+      CURSOR_CREATING: /* @__PURE__ */ Symbol("CURSOR_CREATING"),
+      MUST_SELECT_SAME_SERVER: /* @__PURE__ */ Symbol("MUST_SELECT_SAME_SERVER"),
+      COMMAND_BATCHING: /* @__PURE__ */ Symbol("COMMAND_BATCHING"),
+      SUPPORTS_RAW_DATA: /* @__PURE__ */ Symbol("SUPPORTS_RAW_DATA")
     };
     var AbstractOperation = class {
       constructor(options = {}) {
@@ -8173,7 +8173,7 @@ var require_execute_operation = __commonJS({
       let session = operation.session;
       let owner;
       if (session == null) {
-        owner = Symbol();
+        owner = /* @__PURE__ */ Symbol();
         session = client.startSession({ owner, explicit: false });
       } else if (session.hasEnded) {
         throw new error_1.MongoExpiredSessionError("Use of expired sessions is not permitted");
@@ -14929,7 +14929,7 @@ var require_drop2 = __commonJS({
         const listCollectionsResult = await db.listCollections({ name }, {
           nameOnly: false,
           session: options.session,
-          timeoutContext: new abstract_cursor_1.CursorTimeoutContext(timeoutContext, Symbol())
+          timeoutContext: new abstract_cursor_1.CursorTimeoutContext(timeoutContext, /* @__PURE__ */ Symbol())
         }).toArray();
         encryptedFields = listCollectionsResult?.[0]?.options?.encryptedFields;
       }
@@ -16519,10 +16519,10 @@ var require_utils2 = __commonJS({
         Object.getOwnPropertyDescriptors(object)
       );
     }
-    var wrapperSymbol = Symbol("wrapper");
-    var implSymbol = Symbol("impl");
-    var sameObjectCaches = Symbol("SameObject caches");
-    var ctorRegistrySymbol = Symbol.for("[webidl2js] constructor registry");
+    var wrapperSymbol = /* @__PURE__ */ Symbol("wrapper");
+    var implSymbol = /* @__PURE__ */ Symbol("impl");
+    var sameObjectCaches = /* @__PURE__ */ Symbol("SameObject caches");
+    var ctorRegistrySymbol = /* @__PURE__ */ Symbol.for("[webidl2js] constructor registry");
     var AsyncIteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf(async function* () {
     }).prototype);
     function initCtorRegistry(globalObject) {
@@ -16570,7 +16570,7 @@ var require_utils2 = __commonJS({
       const impl = implForWrapper(wrapper);
       return impl ? impl : wrapper;
     }
-    var iterInternalSymbol = Symbol("internal");
+    var iterInternalSymbol = /* @__PURE__ */ Symbol("internal");
     function isArrayIndexPropName(P) {
       if (typeof P !== "string") {
         return false;
@@ -16609,21 +16609,21 @@ var require_utils2 = __commonJS({
       }
       return { value: result, done: false };
     }
-    var supportsPropertyIndex = Symbol("supports property index");
-    var supportedPropertyIndices = Symbol("supported property indices");
-    var supportsPropertyName = Symbol("supports property name");
-    var supportedPropertyNames = Symbol("supported property names");
-    var indexedGet = Symbol("indexed property get");
-    var indexedSetNew = Symbol("indexed property set new");
-    var indexedSetExisting = Symbol("indexed property set existing");
-    var namedGet = Symbol("named property get");
-    var namedSetNew = Symbol("named property set new");
-    var namedSetExisting = Symbol("named property set existing");
-    var namedDelete = Symbol("named property delete");
-    var asyncIteratorNext = Symbol("async iterator get the next iteration result");
-    var asyncIteratorReturn = Symbol("async iterator return steps");
-    var asyncIteratorInit = Symbol("async iterator initialization steps");
-    var asyncIteratorEOI = Symbol("async iterator end of iteration");
+    var supportsPropertyIndex = /* @__PURE__ */ Symbol("supports property index");
+    var supportedPropertyIndices = /* @__PURE__ */ Symbol("supported property indices");
+    var supportsPropertyName = /* @__PURE__ */ Symbol("supports property name");
+    var supportedPropertyNames = /* @__PURE__ */ Symbol("supported property names");
+    var indexedGet = /* @__PURE__ */ Symbol("indexed property get");
+    var indexedSetNew = /* @__PURE__ */ Symbol("indexed property set new");
+    var indexedSetExisting = /* @__PURE__ */ Symbol("indexed property set existing");
+    var namedGet = /* @__PURE__ */ Symbol("named property get");
+    var namedSetNew = /* @__PURE__ */ Symbol("named property set new");
+    var namedSetExisting = /* @__PURE__ */ Symbol("named property set existing");
+    var namedDelete = /* @__PURE__ */ Symbol("named property delete");
+    var asyncIteratorNext = /* @__PURE__ */ Symbol("async iterator get the next iteration result");
+    var asyncIteratorReturn = /* @__PURE__ */ Symbol("async iterator return steps");
+    var asyncIteratorInit = /* @__PURE__ */ Symbol("async iterator initialization steps");
+    var asyncIteratorEOI = /* @__PURE__ */ Symbol("async iterator end of iteration");
     module2.exports = exports2 = {
       isObject,
       hasOwn: hasOwn2,
@@ -17414,7 +17414,7 @@ var require_url_state_machine = __commonJS({
       ws: 80,
       wss: 443
     };
-    var failure = Symbol("failure");
+    var failure = /* @__PURE__ */ Symbol("failure");
     function countSymbols(str2) {
       return [...str2].length;
     }
@@ -19755,7 +19755,7 @@ var require_whatwg_url = __commonJS({
 var require_redact = __commonJS({
   "../../../node_modules/mongodb-connection-string-url/lib/redact.js"(exports2) {
     "use strict";
-    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? function(o, m, k, k2) {
+    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       var desc = Object.getOwnPropertyDescriptor(m, k);
       if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
@@ -19764,16 +19764,16 @@ var require_redact = __commonJS({
         } };
       }
       Object.defineProperty(o, k2, desc);
-    } : function(o, m, k, k2) {
+    }) : (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       o[k2] = m[k];
-    });
-    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? function(o, v) {
+    }));
+    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
       Object.defineProperty(o, "default", { enumerable: true, value: v });
-    } : function(o, v) {
+    }) : function(o, v) {
       o["default"] = v;
     });
-    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ function() {
+    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
       var ownKeys = function(o) {
         ownKeys = Object.getOwnPropertyNames || function(o2) {
           var ar = [];
@@ -19791,7 +19791,7 @@ var require_redact = __commonJS({
         __setModuleDefault(result, mod);
         return result;
       };
-    }();
+    })();
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.redactValidConnectionString = redactValidConnectionString;
     exports2.redactConnectionString = redactConnectionString;
@@ -20055,7 +20055,7 @@ var require_lib2 = __commonJS({
         const _sametype = false;
         return this.searchParams;
       }
-      [Symbol.for("nodejs.util.inspect.custom")]() {
+      [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")]() {
         const { href, origin, protocol, username, password, hosts, pathname, search, searchParams, hash } = this;
         return {
           href,
@@ -21376,7 +21376,7 @@ var require_state_machine = __commonJS({
         const cursor = client.db(db).listCollections(filter, {
           promoteLongs: false,
           promoteValues: false,
-          timeoutContext: options?.timeoutContext && new abstract_cursor_1.CursorTimeoutContext(options?.timeoutContext, Symbol()),
+          timeoutContext: options?.timeoutContext && new abstract_cursor_1.CursorTimeoutContext(options?.timeoutContext, /* @__PURE__ */ Symbol()),
           signal: options?.signal,
           nameOnly: false
         });
@@ -21425,7 +21425,7 @@ var require_state_machine = __commonJS({
           signal: void 0
         };
         if (options?.timeoutContext != null) {
-          commandOptions.timeoutContext = new abstract_cursor_1.CursorTimeoutContext(options.timeoutContext, Symbol());
+          commandOptions.timeoutContext = new abstract_cursor_1.CursorTimeoutContext(options.timeoutContext, /* @__PURE__ */ Symbol());
         }
         if (options?.signal != null) {
           commandOptions.signal = options.signal;
@@ -28825,7 +28825,7 @@ var require_executor = __commonJS({
         } else {
           const resultsMerger = new results_merger_1.ClientBulkWriteResultsMerger(this.options);
           while (commandBuilder.hasNextBatch()) {
-            const cursorContext = new abstract_cursor_1.CursorTimeoutContext(context, Symbol());
+            const cursorContext = new abstract_cursor_1.CursorTimeoutContext(context, /* @__PURE__ */ Symbol());
             const options = {
               ...this.options,
               timeoutContext: cursorContext,
@@ -30063,7 +30063,7 @@ var require_mongo_client = __commonJS({
       async withSession(optionsOrExecutor, executor) {
         const options = {
           // Always define an owner
-          owner: Symbol(),
+          owner: /* @__PURE__ */ Symbol(),
           // If it's an object inherit the options
           ...typeof optionsOrExecutor === "object" ? optionsOrExecutor : {}
         };
@@ -30179,9 +30179,9 @@ var require_change_stream = __commonJS({
     var timeout_1 = require_timeout();
     var utils_1 = require_utils();
     var CHANGE_DOMAIN_TYPES = {
-      COLLECTION: Symbol("Collection"),
-      DATABASE: Symbol("Database"),
-      CLUSTER: Symbol("Cluster")
+      COLLECTION: /* @__PURE__ */ Symbol("Collection"),
+      DATABASE: /* @__PURE__ */ Symbol("Database"),
+      CLUSTER: /* @__PURE__ */ Symbol("Cluster")
     };
     var CHANGE_STREAM_EVENTS = [constants_1.RESUME_TOKEN_CHANGED, constants_1.END, constants_1.CLOSE];
     var NO_RESUME_TOKEN_ERROR = "A change stream document has been received that lacks a resume token (_id).";
@@ -30246,7 +30246,7 @@ var require_change_stream = __commonJS({
         } else {
           throw new error_1.MongoChangeStreamError("Parent provided to ChangeStream constructor must be an instance of Collection, Db, or MongoClient");
         }
-        this.contextOwner = Symbol();
+        this.contextOwner = /* @__PURE__ */ Symbol();
         this.parent = parent;
         this.namespace = parent.s.namespace;
         if (!this.options.readPreference && parent.readPreference) {
@@ -39647,7 +39647,7 @@ OpenAI.Evals = Evals;
 OpenAI.Containers = Containers;
 OpenAI.Videos = Videos;
 
-// ../../../node_modules/@quilltap/plugin-utils/dist/index.mjs
+// node_modules/@quilltap/plugin-utils/dist/index.mjs
 function getCoreLoggerFactory() {
   return globalThis.__quilltap_logger_factory ?? null;
 }
