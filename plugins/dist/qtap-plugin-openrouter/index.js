@@ -10609,6 +10609,8 @@ var OpenRouterProvider = class {
     }
     const stream = await client.chat.send(requestParams);
     let fullMessage = null;
+    let accumulatedUsage = null;
+    let finalFinishReason = null;
     for await (const chunk of stream) {
       const content = chunk.choices?.[0]?.delta?.content;
       const finishReason = chunk.choices?.[0]?.finishReason;
@@ -10628,41 +10630,55 @@ var OpenRouterProvider = class {
           fullMessage.usage = chunk.usage;
         }
       }
-      if (content && !(finishReason && hasUsage)) {
+      if (finishReason) {
+        finalFinishReason = finishReason;
+      }
+      if (hasUsage) {
+        accumulatedUsage = {
+          promptTokens: chunk.usage?.promptTokens,
+          completionTokens: chunk.usage?.completionTokens,
+          totalTokens: chunk.usage?.totalTokens
+        };
+        logger.debug("Received usage data in stream", {
+          context: "OpenRouterProvider.streamMessage",
+          promptTokens: chunk.usage?.promptTokens,
+          completionTokens: chunk.usage?.completionTokens
+        });
+      }
+      if (content) {
         yield {
           content,
           done: false
         };
       }
-      if (finishReason && hasUsage) {
-        const usageAny = chunk.usage;
-        const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount ? {
-          cachedTokens: usageAny.cachedTokens,
-          cacheDiscount: usageAny.cacheDiscount,
-          cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
-          cacheReadInputTokens: usageAny.cacheReadInputTokens
-        } : void 0;
-        logger.debug("Stream completed", {
-          context: "OpenRouterProvider.streamMessage",
-          finishReason,
-          promptTokens: chunk.usage?.promptTokens,
-          completionTokens: chunk.usage?.completionTokens,
-          cachedTokens: cacheUsage?.cachedTokens
-        });
-        yield {
-          content: "",
-          done: true,
-          usage: {
-            promptTokens: chunk.usage?.promptTokens ?? 0,
-            completionTokens: chunk.usage?.completionTokens ?? 0,
-            totalTokens: chunk.usage?.totalTokens ?? 0
-          },
-          attachmentResults,
-          rawResponse: fullMessage,
-          cacheUsage
-        };
-      }
     }
+    const usageAny = accumulatedUsage;
+    const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount ? {
+      cachedTokens: usageAny.cachedTokens,
+      cacheDiscount: usageAny.cacheDiscount,
+      cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
+      cacheReadInputTokens: usageAny.cacheReadInputTokens
+    } : void 0;
+    logger.debug("Stream completed", {
+      context: "OpenRouterProvider.streamMessage",
+      finishReason: finalFinishReason,
+      promptTokens: accumulatedUsage?.promptTokens,
+      completionTokens: accumulatedUsage?.completionTokens,
+      hasUsage: !!accumulatedUsage,
+      cachedTokens: cacheUsage?.cachedTokens
+    });
+    yield {
+      content: "",
+      done: true,
+      usage: accumulatedUsage ? {
+        promptTokens: accumulatedUsage.promptTokens ?? 0,
+        completionTokens: accumulatedUsage.completionTokens ?? 0,
+        totalTokens: accumulatedUsage.totalTokens ?? 0
+      } : void 0,
+      attachmentResults,
+      rawResponse: fullMessage,
+      cacheUsage
+    };
   }
   async validateApiKey(apiKey) {
     try {

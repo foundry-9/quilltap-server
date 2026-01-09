@@ -73,6 +73,11 @@ import { isRecoverableRequestError } from '@/lib/llm/errors'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import {
+  getCachedCompression,
+  triggerAsyncCompression,
+  invalidateCompressionCache,
+} from './compression-cache.service'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
@@ -342,6 +347,26 @@ async function processMessage(
     } : undefined,
     defaultTimestampConfig: chatSettings.defaultTimestampConfig,
   } : null
+
+  // ============================================================================
+  // Async Pre-Compression: Get cached compression result if available
+  // ============================================================================
+  let cachedCompressionResult = null
+  if (compressionEnabled && !bypassCompression) {
+    // Try to get cached compression from previous async pre-computation
+    cachedCompressionResult = await getCachedCompression(chatId, existingMessages.length)
+    if (cachedCompressionResult) {
+      logger.info('Using cached compression from async pre-computation', {
+        chatId,
+        messageCount: existingMessages.length,
+        savings: cachedCompressionResult.compressionDetails?.totalSavings,
+      })
+    }
+  } else if (bypassCompression) {
+    // Invalidate cache when bypass is requested
+    invalidateCompressionCache(chatId)
+  }
+
   const { builtContext, formattedMessages, isInitialMessage } = await buildMessageContext(
     {
       repos,
@@ -364,6 +389,7 @@ async function processMessage(
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,
       cheapLLMSelection,
       bypassCompression,
+      cachedCompressionResult,
     },
     existingMessages,
     fileProcessing.attachmentsToSend
@@ -841,6 +867,49 @@ async function processMessage(
         userId,
         connectionProfile,
         chatSettings: memoryChatSettings,
+      })
+    }
+
+    // ============================================================================
+    // Async Pre-Compression: Trigger compression for next message
+    // ============================================================================
+    // Start compression asynchronously so it's ready for the next message
+    if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
+      // Build updated messages list (including this response)
+      const updatedMessages = [
+        ...existingMessages
+          .filter((m): m is MessageEvent => m.type === 'message' && 'role' in m && 'content' in m)
+          .map(m => ({
+            role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
+            content: m.content || '',
+          })),
+        // Add the user message we just sent (if not continue mode)
+        ...(content && !isContinueMode ? [{
+          role: 'user' as const,
+          content,
+        }] : []),
+        // Add the assistant response we just received
+        {
+          role: 'assistant' as const,
+          content: cleanedResponse,
+        },
+      ]
+
+      // Trigger async compression (fire and forget)
+      triggerAsyncCompression({
+        chatId,
+        messages: updatedMessages,
+        systemPrompt: builtContext.originalSystemPrompt,
+        compressionOptions: {
+          enabled: contextCompressionSettings.enabled,
+          windowSize: contextCompressionSettings.windowSize,
+          compressionTargetTokens: contextCompressionSettings.compressionTargetTokens,
+          systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
+          selection: cheapLLMSelection,
+          userId,
+          characterName: character.name,
+          userName: personaData?.name || 'User',
+        },
       })
     }
   } else if (toolMessages.length > 0) {

@@ -4,6 +4,19 @@
 
 ### 2.7-dev
 
+- feat: Async pre-compression for context compression
+  - Compression now starts immediately after receiving an LLM response
+  - Result is cached and ready when user sends their next message
+  - No more blocking wait for compression before message can be sent
+  - Falls back to sync compression if cache miss or in-flight
+  - New compression cache service with message-count based validation
+- fix: OpenRouter streaming token tracking
+  - Tokens weren't being displayed per message in chat
+  - Root cause: finishReason and usage arrived in separate stream chunks
+  - Fix accumulates usage across chunks and yields on stream end
+- fix: OpenAI-compatible streaming token tracking
+  - Same issue as OpenRouter, now properly tracks tokens in streaming mode
+  - Affects all providers using OpenAICompatibleProvider base class
 - feat: Sliding window context compression for long conversations
   - Reduces token costs by compressing older messages using a cheap LLM
   - Keeps last N messages (default 5) in full context while summarizing older ones

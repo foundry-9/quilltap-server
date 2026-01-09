@@ -6,7 +6,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { buildContext, type MessageWithParticipant, type BuiltContext, type ProjectContext } from '@/lib/chat/context-manager'
+import { buildContext, type MessageWithParticipant, type BuiltContext, type ProjectContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
@@ -58,6 +58,8 @@ export interface BuildMessageContextOptions {
   cheapLLMSelection?: CheapLLMSelection | null
   /** Whether to bypass compression for this request */
   bypassCompression?: boolean
+  /** Pre-computed compression result from async cache (avoids blocking on compression) */
+  cachedCompressionResult?: ContextCompressionResult | null
 }
 
 /**
@@ -276,6 +278,7 @@ export async function buildMessageContext(
     contextCompressionSettings,
     cheapLLMSelection,
     bypassCompression,
+    cachedCompressionResult,
   } = options
 
   // Build conversation messages
@@ -323,6 +326,7 @@ export async function buildMessageContext(
     contextCompressionSettings,
     cheapLLMSelection,
     bypassCompression,
+    cachedCompressionResult,
   })
 
   // Log context building results for debugging

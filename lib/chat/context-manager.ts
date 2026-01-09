@@ -141,8 +141,10 @@ export interface BuiltContext {
   debugMemories?: Array<{ summary: string; importance: number; score: number }>
   /** Debug info: the conversation summary that was included */
   debugSummary?: string
-  /** Debug info: the system prompt that was built */
+  /** Debug info: the system prompt that was built (may be compressed) */
   debugSystemPrompt?: string
+  /** Original uncompressed system prompt (for async pre-compression of next message) */
+  originalSystemPrompt?: string
   /** Whether context compression was applied */
   compressionApplied?: boolean
   /** Details about the compression (if applied) */
@@ -239,6 +241,8 @@ export interface BuildContextOptions {
   cheapLLMSelection?: CheapLLMSelection | null
   /** Whether to bypass compression for this request (e.g., requestFullContextOnNextMessage flag) */
   bypassCompression?: boolean
+  /** Pre-computed compression result from async cache (avoids blocking on compression) */
+  cachedCompressionResult?: ContextCompressionResult | null
 }
 
 /**
@@ -388,42 +392,63 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       bypassCompression,
     })
 
-    // Get user/persona name for compression prompt
-    const userName = persona?.name || 'User'
-
-    // Apply compression
-    try {
-      compressionResult = await applyContextCompression(
-        existingMessages.map(m => ({
-          role: m.role as 'user' | 'assistant' | 'system',
-          content: m.content,
-        })),
-        finalSystemPrompt,
-        {
-          enabled: contextCompressionSettings.enabled,
-          windowSize: contextCompressionSettings.windowSize,
-          compressionTargetTokens: contextCompressionSettings.compressionTargetTokens,
-          systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
-          selection: cheapLLMSelection,
-          userId,
-          characterName: character.name,
-          userName,
-        }
-      )
-
-      useCompressedContext = compressionResult.compressionApplied
+    // Check for cached compression result first (async pre-compression)
+    const { cachedCompressionResult } = options
+    if (cachedCompressionResult && cachedCompressionResult.compressionApplied) {
+      logger.info('[ContextManager] Using cached compression result (async pre-compression)', {
+        messageCount: existingMessages.length,
+        cachedSavings: cachedCompressionResult.compressionDetails?.totalSavings,
+      })
+      compressionResult = cachedCompressionResult
+      useCompressedContext = true
 
       if (compressionResult.warnings.length > 0) {
         warnings.push(...compressionResult.warnings.map(w => `[Compression] ${w}`))
       }
-
-      logger.info('[ContextManager] Compression result', {
-        compressionApplied: compressionResult.compressionApplied,
-        compressionDetails: compressionResult.compressionDetails,
+    } else {
+      // No cached result - perform synchronous compression
+      logger.info('[ContextManager] No cached compression, performing sync compression', {
+        messageCount: existingMessages.length,
+        hasCachedResult: !!cachedCompressionResult,
       })
-    } catch (error) {
-      warnings.push(`Failed to apply context compression: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      logger.error('[ContextManager] Context compression error', {}, error instanceof Error ? error : undefined)
+
+      // Get user/persona name for compression prompt
+      const userName = persona?.name || 'User'
+
+      // Apply compression
+      try {
+        compressionResult = await applyContextCompression(
+          existingMessages.map(m => ({
+            role: m.role as 'user' | 'assistant' | 'system',
+            content: m.content,
+          })),
+          finalSystemPrompt,
+          {
+            enabled: contextCompressionSettings.enabled,
+            windowSize: contextCompressionSettings.windowSize,
+            compressionTargetTokens: contextCompressionSettings.compressionTargetTokens,
+            systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
+            selection: cheapLLMSelection,
+            userId,
+            characterName: character.name,
+            userName,
+          }
+        )
+
+        useCompressedContext = compressionResult.compressionApplied
+
+        if (compressionResult.warnings.length > 0) {
+          warnings.push(...compressionResult.warnings.map(w => `[Compression] ${w}`))
+        }
+
+        logger.info('[ContextManager] Compression result', {
+          compressionApplied: compressionResult.compressionApplied,
+          compressionDetails: compressionResult.compressionDetails,
+        })
+      } catch (error) {
+        warnings.push(`Failed to apply context compression: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        logger.error('[ContextManager] Context compression error', {}, error instanceof Error ? error : undefined)
+      }
     }
   }
 
@@ -753,6 +778,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     debugMemories,
     debugSummary: chat.contextSummary || undefined,
     debugSystemPrompt: effectiveSystemPrompt,
+    // Original uncompressed system prompt (for async pre-compression)
+    originalSystemPrompt: finalSystemPrompt,
     // Compression info
     compressionApplied: useCompressedContext,
     compressionDetails: compressionResult?.compressionDetails,
