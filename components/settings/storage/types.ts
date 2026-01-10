@@ -62,13 +62,13 @@ export interface ConnectionTestResult {
 }
 
 /**
- * Health status colors for UI
+ * Health status badge classes using qt-* theme utility classes
  */
-export const HEALTH_STATUS_COLORS: Record<HealthStatus, string> = {
-  healthy: 'text-green-500',
-  degraded: 'text-yellow-500',
-  unhealthy: 'text-red-500',
-  unknown: 'text-gray-500',
+export const HEALTH_STATUS_BADGE_CLASSES: Record<HealthStatus, string> = {
+  healthy: 'qt-badge-success',
+  degraded: 'qt-badge-warning',
+  unhealthy: 'qt-badge-destructive',
+  unknown: 'qt-badge-secondary',
 }
 
 /**

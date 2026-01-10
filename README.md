@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.7.0--dev.58-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.7.0--dev.59-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -601,6 +601,7 @@ See details in [CHANGELOG](./docs/CHANGELOG.md).
 - [X] Accept any arbitrary kind of file as an attachment, and have an internal indicator to mark if this file can be treated as text/plain (like for source code or Markdown files); assume most files are UTF8 encoded
 - [X] OpenRouter (noticed it with z-ai/glm-4.6) isn't great about tool calling; need to look into that
 - [ ] Finish file read/write tool calling support with permissions
+- [ ] Get theme-storybook to match the app for everything
 
 ## Acknowledgments
 

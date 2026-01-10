@@ -2,6 +2,16 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.9] - 2026-01-10
+
+### Changed
+- Status badges (`qt-badge-success`, `qt-badge-warning`, `qt-badge-destructive`) now use `--qt-status-*` tokens for consistent theming
+- Badges use solid backgrounds with contrasting foreground colors for better readability in dark mode
+
+### Added
+- Status token CSS variables: `--qt-status-success-*`, `--qt-status-warning-*`, `--qt-status-info-*`, `--qt-status-danger-*`
+- `qt-badge-info` class using info status tokens
+
 ## [1.0.5] - 2026-01-06
 
 ### Added

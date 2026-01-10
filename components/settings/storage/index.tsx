@@ -19,7 +19,7 @@ export type {
   ConnectionTestResult,
   HealthStatus,
 } from './types'
-export { HEALTH_STATUS_COLORS, HEALTH_STATUS_LABELS } from './types'
+export { HEALTH_STATUS_BADGE_CLASSES, HEALTH_STATUS_LABELS } from './types'
 export { useMountPoints } from './hooks/useMountPoints'
 export { MountPointForm } from './MountPointForm'
 export { MountPointList } from './MountPointList'

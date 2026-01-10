@@ -4,6 +4,10 @@
 
 ### 2.7-dev
 
+- fix: Storage health badge readability in dark mode
+  - HealthBadge component now uses qt-badge-* theme utility classes
+  - Updated qt-status-* CSS variables to use solid backgrounds with contrasting foreground colors
+  - Badges now properly visible in all themes (Unhealthy shows white text on red background)
 - feat: File storage abstraction system with pluggable backends
   - New generic `FileStorageBackend` interface for storage providers
   - Built-in local filesystem backend as default (configurable via `QUILLTAP_FILE_STORAGE_PATH`)

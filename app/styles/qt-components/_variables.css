@@ -44,22 +44,23 @@
 
   /* ==========================================================================
      STATUS TOKENS
+     Use solid/semi-solid backgrounds with contrasting foreground for readability
      ========================================================================== */
-  --qt-status-success-bg: color-mix(in srgb, var(--color-success) 12%, transparent);
-  --qt-status-success-fg: var(--color-success);
-  --qt-status-success-border: color-mix(in srgb, var(--color-success) 35%, transparent);
+  --qt-status-success-bg: color-mix(in srgb, var(--color-success) 85%, transparent);
+  --qt-status-success-fg: var(--color-success-foreground);
+  --qt-status-success-border: var(--color-success);
 
-  --qt-status-warning-bg: color-mix(in srgb, var(--color-warning) 12%, transparent);
-  --qt-status-warning-fg: var(--color-warning);
-  --qt-status-warning-border: color-mix(in srgb, var(--color-warning) 35%, transparent);
+  --qt-status-warning-bg: color-mix(in srgb, var(--color-warning) 85%, transparent);
+  --qt-status-warning-fg: var(--color-warning-foreground);
+  --qt-status-warning-border: var(--color-warning);
 
-  --qt-status-info-bg: color-mix(in srgb, var(--color-info) 12%, transparent);
-  --qt-status-info-fg: var(--color-info);
-  --qt-status-info-border: color-mix(in srgb, var(--color-info) 35%, transparent);
+  --qt-status-info-bg: color-mix(in srgb, var(--color-info) 85%, transparent);
+  --qt-status-info-fg: var(--color-info-foreground);
+  --qt-status-info-border: var(--color-info);
 
-  --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 12%, transparent);
-  --qt-status-danger-fg: var(--color-destructive);
-  --qt-status-danger-border: color-mix(in srgb, var(--color-destructive) 35%, transparent);
+  --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 85%, transparent);
+  --qt-status-danger-fg: var(--color-destructive-foreground);
+  --qt-status-danger-border: var(--color-destructive);
 
   /* ==========================================================================
      CARD VARIABLES

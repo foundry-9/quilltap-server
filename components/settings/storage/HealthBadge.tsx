@@ -1,7 +1,7 @@
 'use client'
 
 import type { HealthStatus } from './types'
-import { HEALTH_STATUS_COLORS, HEALTH_STATUS_LABELS } from './types'
+import { HEALTH_STATUS_BADGE_CLASSES, HEALTH_STATUS_LABELS } from './types'
 
 interface HealthBadgeProps {
   status: HealthStatus
@@ -10,9 +10,10 @@ interface HealthBadgeProps {
 
 /**
  * Badge component showing mount point health status
+ * Uses qt-badge-* theme utility classes for proper theming support
  */
 export function HealthBadge({ status, className = '' }: HealthBadgeProps) {
-  const colorClass = HEALTH_STATUS_COLORS[status]
+  const badgeClass = HEALTH_STATUS_BADGE_CLASSES[status]
   const label = HEALTH_STATUS_LABELS[status]
 
   // Icon based on status
@@ -62,9 +63,7 @@ export function HealthBadge({ status, className = '' }: HealthBadgeProps) {
   }
 
   return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass} bg-opacity-10 bg-current ${className}`}
-    >
+    <span className={`${badgeClass} gap-1 ${className}`}>
       {getIcon()}
       {label}
     </span>

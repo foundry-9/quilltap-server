@@ -69,6 +69,23 @@
   --qt-badge-font-size: 0.875rem;
   --qt-badge-font-weight: 600;
 
+  /* Status tokens - used by status badges for consistent theming */
+  --qt-status-success-bg: color-mix(in srgb, var(--color-success) 85%, transparent);
+  --qt-status-success-fg: var(--color-success-foreground);
+  --qt-status-success-border: var(--color-success);
+
+  --qt-status-warning-bg: color-mix(in srgb, var(--color-warning) 85%, transparent);
+  --qt-status-warning-fg: var(--color-warning-foreground);
+  --qt-status-warning-border: var(--color-warning);
+
+  --qt-status-info-bg: color-mix(in srgb, var(--color-info) 85%, transparent);
+  --qt-status-info-fg: var(--color-info-foreground);
+  --qt-status-info-border: var(--color-info);
+
+  --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 85%, transparent);
+  --qt-status-danger-fg: var(--color-destructive-foreground);
+  --qt-status-danger-border: var(--color-destructive);
+
   /* Avatar variables */
   --qt-avatar-radius: 9999px;
   --qt-avatar-size: 2.5rem;
@@ -371,18 +388,27 @@
 }
 
 .qt-badge-success {
-  background-color: var(--color-success);
-  color: var(--color-success-foreground);
+  background: var(--qt-status-success-bg);
+  color: var(--qt-status-success-fg);
+  border: 1px solid var(--qt-status-success-border);
 }
 
 .qt-badge-warning {
-  background-color: var(--color-warning);
-  color: var(--color-warning-foreground);
+  background: var(--qt-status-warning-bg);
+  color: var(--qt-status-warning-fg);
+  border: 1px solid var(--qt-status-warning-border);
 }
 
 .qt-badge-destructive {
-  background-color: var(--color-destructive);
-  color: var(--color-destructive-foreground);
+  background: var(--qt-status-danger-bg);
+  color: var(--qt-status-danger-fg);
+  border: 1px solid var(--qt-status-danger-border);
+}
+
+.qt-badge-info {
+  background: var(--qt-status-info-bg);
+  color: var(--qt-status-info-fg);
+  border: 1px solid var(--qt-status-info-border);
 }
 
 .qt-badge-outline {
