@@ -10,7 +10,7 @@
  * @module file-storage/backends/local
  */
 
-import { readFile, writeFile, mkdir, access, copyFile, readdir, unlink, stat } from 'fs/promises';
+import { readFile, writeFile, mkdir, access, copyFile, readdir, unlink, stat, rmdir } from 'fs/promises';
 import { Readable } from 'stream';
 import { join, normalize, relative } from 'path';
 import { createLogger } from '../../../logging/create-logger';
@@ -100,6 +100,7 @@ export class LocalFileStorageBackend implements FileStorageBackend {
         copy: true,
         list: true,
         metadata: true,
+        folders: true,
       },
     };
   }
@@ -675,6 +676,134 @@ export class LocalFileStorageBackend implements FileStorageBackend {
       });
 
       throw new Error(`Failed to list files with prefix '${prefix}': ${errorMsg}`);
+    }
+  }
+
+  // ========================================================================
+  // FOLDER OPERATIONS
+  // ========================================================================
+
+  /**
+   * Create a folder/directory in storage
+   *
+   * Creates an empty directory at the specified path. Creates parent
+   * directories recursively if they don't exist.
+   *
+   * @param folderPath - Path for the folder to create
+   * @throws {Error} If folder creation fails
+   */
+  async createFolder(folderPath: string): Promise<void> {
+    const fullPath = this.buildSafePath(folderPath);
+
+    try {
+      await mkdir(fullPath, { recursive: true });
+      logger.debug('Created folder', {
+        folderPath,
+        fullPath,
+      });
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : 'Unknown folder creation error';
+
+      logger.error('Failed to create folder', {
+        folderPath,
+        error: errorMsg,
+      });
+
+      throw new Error(`Failed to create folder '${folderPath}': ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Delete a folder/directory from storage
+   *
+   * Removes the directory at the specified path. The directory must be empty.
+   * Succeeds silently if the directory does not exist (idempotent).
+   *
+   * @param folderPath - Path of the folder to delete
+   * @throws {Error} If folder is not empty or deletion fails
+   */
+  async deleteFolder(folderPath: string): Promise<void> {
+    const fullPath = this.buildSafePath(folderPath);
+
+    try {
+      await rmdir(fullPath);
+      logger.debug('Deleted folder', {
+        folderPath,
+        fullPath,
+      });
+    } catch (error) {
+      // Directory doesn't exist, which is fine for idempotent delete
+      if (
+        error instanceof Error &&
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ) {
+        logger.debug('Folder does not exist (idempotent delete)', {
+          folderPath,
+        });
+        return;
+      }
+
+      // Directory not empty
+      if (
+        error instanceof Error &&
+        (error as NodeJS.ErrnoException).code === 'ENOTEMPTY'
+      ) {
+        logger.warn('Cannot delete non-empty folder', {
+          folderPath,
+        });
+        throw new Error(`Cannot delete folder '${folderPath}': directory is not empty`);
+      }
+
+      const errorMsg =
+        error instanceof Error ? error.message : 'Unknown folder deletion error';
+
+      logger.error('Failed to delete folder', {
+        folderPath,
+        error: errorMsg,
+      });
+
+      throw new Error(`Failed to delete folder '${folderPath}': ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Check if a folder/directory exists in storage
+   *
+   * @param folderPath - Path to check
+   * @returns True if folder exists, false otherwise
+   * @throws {Error} If the check fails
+   */
+  async folderExists(folderPath: string): Promise<boolean> {
+    const fullPath = this.buildSafePath(folderPath);
+
+    try {
+      const stats = await stat(fullPath);
+      const exists = stats.isDirectory();
+      logger.debug('Folder exists check', {
+        folderPath,
+        exists,
+      });
+      return exists;
+    } catch (error) {
+      if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+        logger.debug('Folder does not exist', {
+          folderPath,
+        });
+        return false;
+      }
+
+      const errorMsg =
+        error instanceof Error ? error.message : 'Unknown folder existence check error';
+
+      logger.error('Folder existence check failed', {
+        folderPath,
+        error: errorMsg,
+      });
+
+      throw new Error(
+        `Failed to check if folder '${folderPath}' exists: ${errorMsg}`
+      );
     }
   }
 }

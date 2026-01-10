@@ -41,6 +41,9 @@ export interface FileBackendCapabilities {
 
   /** Supports retrieving file metadata (size, content type, modification time) */
   metadata: boolean;
+
+  /** Supports explicit folder operations (create, delete, exists) */
+  folders: boolean;
 }
 
 // ============================================================================
@@ -241,6 +244,48 @@ export interface FileStorageBackend {
    * @throws {Error} If listing fails
    */
   list?(prefix: string, maxKeys?: number): Promise<string[]>;
+
+  // ========================================================================
+  // FOLDER OPERATIONS (OPTIONAL)
+  // ========================================================================
+
+  /**
+   * Create a folder/directory in storage
+   *
+   * Creates an empty folder at the specified path. For local filesystem backends,
+   * this creates an actual directory. For S3-like backends, this is typically a no-op
+   * since folders are virtual (just key prefixes).
+   * Only available if capabilities.folders is true.
+   *
+   * @param folderPath - Path/key for the folder to create
+   * @throws {Error} If folder creation fails
+   */
+  createFolder?(folderPath: string): Promise<void>;
+
+  /**
+   * Delete a folder/directory from storage
+   *
+   * Removes the folder at the specified path. Should only succeed if the folder is empty.
+   * For local filesystem backends, this removes an actual directory.
+   * For S3-like backends, this is typically a no-op.
+   * Only available if capabilities.folders is true.
+   *
+   * @param folderPath - Path/key of the folder to delete
+   * @throws {Error} If folder is not empty or deletion fails
+   */
+  deleteFolder?(folderPath: string): Promise<void>;
+
+  /**
+   * Check if a folder/directory exists in storage
+   *
+   * Tests whether a folder is present at the specified path.
+   * Only available if capabilities.folders is true.
+   *
+   * @param folderPath - Path/key to check
+   * @returns True if folder exists, false otherwise
+   * @throws {Error} If the check fails
+   */
+  folderExists?(folderPath: string): Promise<boolean>;
 
   // ========================================================================
   // URL GENERATION (OPTIONAL)

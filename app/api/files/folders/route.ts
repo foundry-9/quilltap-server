@@ -1,12 +1,14 @@
 /**
  * Folder Operations API Route
  *
- * POST /api/files/folders - Create a folder (validates and normalizes path)
- * PATCH /api/files/folders - Rename a folder (updates all files in folder)
+ * GET /api/files/folders - List all folders for a user/project
+ * POST /api/files/folders - Create a folder entity
+ * PATCH /api/files/folders - Rename a folder
  * DELETE /api/files/folders - Delete an empty folder
  *
- * Note: Folders are implicit in this system - they exist when files reference them.
- * These operations help manage the folder structure by updating file paths.
+ * Folders are first-class entities stored in the database.
+ * For local backends, actual directories are created/deleted.
+ * For S3 backends, folders exist only in DB (S3 uses key prefixes).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,6 +21,7 @@ import {
   getParentPath,
   getFolderName,
 } from '@/lib/files/folder-utils';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
 interface CreateFolderRequest {
   path: string;
@@ -28,11 +31,6 @@ interface CreateFolderRequest {
 interface RenameFolderRequest {
   path: string;
   newName: string;
-  projectId?: string | null;
-}
-
-interface DeleteFolderRequest {
-  path: string;
   projectId?: string | null;
 }
 
@@ -69,11 +67,111 @@ function validateFolderName(name: string): { isValid: boolean; error?: string; s
 }
 
 /**
+ * Recursively ensure parent folders exist, creating them if needed
+ * Returns the ID of the immediate parent folder (or null if root)
+ */
+async function ensureParentFoldersExist(
+  repos: any,
+  userId: string,
+  path: string,
+  projectId: string | null
+): Promise<string | null> {
+  // Root folder has no parent
+  if (path === '/') {
+    return null;
+  }
+
+  const parentPath = getParentPath(path);
+
+  // If parent is root, no parent folder entity needed
+  if (parentPath === '/') {
+    return null;
+  }
+
+  // Check if parent folder exists
+  let parentFolder = await repos.folders.findByPath(userId, parentPath, projectId);
+
+  if (!parentFolder) {
+    // Recursively ensure grandparent exists
+    const grandparentId = await ensureParentFoldersExist(repos, userId, parentPath, projectId);
+
+    // Create parent folder
+    const parentName = getFolderName(parentPath) || 'Folder';
+    parentFolder = await repos.folders.create({
+      userId,
+      path: parentPath,
+      name: parentName,
+      parentFolderId: grandparentId,
+      projectId: projectId || null,
+      mountPointId: null,
+    });
+
+    logger.debug('Created parent folder', {
+      path: parentPath,
+      folderId: parentFolder.id,
+    });
+
+    // Create storage directory for local backends
+    try {
+      await fileStorageManager.createFolder({
+        userId,
+        projectId,
+        folderPath: parentPath,
+      });
+    } catch (error) {
+      logger.warn('Failed to create parent folder in storage', {
+        path: parentPath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return parentFolder.id;
+}
+
+/**
+ * GET /api/files/folders
+ * List all folders for a user/project
+ */
+export const GET = createAuthenticatedHandler(
+  async (request: NextRequest, { user, repos }) => {
+    const context = 'GET /api/files/folders';
+
+    try {
+      const url = new URL(request.url);
+      const projectId = url.searchParams.get('projectId');
+
+      logger.debug('List folders request', {
+        context,
+        projectId,
+        userId: user.id,
+      });
+
+      const folders = await repos.folders.findAllInProject(
+        user.id,
+        projectId || null
+      );
+
+      logger.debug('Retrieved folders', {
+        context,
+        count: folders.length,
+        projectId,
+      });
+
+      return NextResponse.json({
+        folders,
+        count: folders.length,
+      });
+    } catch (error) {
+      logger.error('Error listing folders', { context }, error instanceof Error ? error : undefined);
+      return serverError('Failed to list folders');
+    }
+  }
+);
+
+/**
  * POST /api/files/folders
- * Create a folder (validates path, returns success if valid)
- *
- * Since folders are implicit, this mainly validates the path and
- * could store it in a user preferences if needed.
+ * Create a folder entity
  */
 export const POST = createAuthenticatedHandler(
   async (request: NextRequest, { user, repos }) => {
@@ -102,29 +200,82 @@ export const POST = createAuthenticatedHandler(
         userId: user.id,
       });
 
-      // Check if folder already has files (already exists implicitly)
-      const existingFiles = projectId
-        ? await repos.files.findByProjectId(user.id, projectId)
-        : await repos.files.findGeneralFiles(user.id);
-
-      const folderExists = existingFiles.some(
-        (f) => (f.folderPath || '/').startsWith(normalizedPath)
+      // Check if folder already exists
+      const existingFolder = await repos.folders.findByPath(
+        user.id,
+        normalizedPath,
+        projectId || null
       );
 
-      logger.info('Folder validated', {
+      if (existingFolder) {
+        logger.debug('Folder already exists', {
+          context,
+          path: normalizedPath,
+          folderId: existingFolder.id,
+        });
+
+        return NextResponse.json({
+          success: true,
+          folder: existingFolder,
+          alreadyExists: true,
+          message: 'Folder already exists',
+        });
+      }
+
+      // Ensure parent folders exist (creates them recursively if needed)
+      const parentFolderId = await ensureParentFoldersExist(
+        repos,
+        user.id,
+        normalizedPath,
+        projectId || null
+      );
+
+      // Create the folder entity
+      const folderName = getFolderName(normalizedPath) || 'Folder';
+      const folder = await repos.folders.create({
+        userId: user.id,
+        path: normalizedPath,
+        name: folderName,
+        parentFolderId,
+        projectId: projectId || null,
+        mountPointId: null,
+      });
+
+      logger.debug('Created folder entity', {
         context,
         path: normalizedPath,
-        alreadyHasFiles: folderExists,
+        folderId: folder.id,
+        parentFolderId,
+      });
+
+      // Create storage directory for local backends
+      try {
+        await fileStorageManager.createFolder({
+          userId: user.id,
+          projectId: projectId || null,
+          folderPath: normalizedPath,
+        });
+      } catch (error) {
+        logger.warn('Failed to create folder in storage (may be S3 backend)', {
+          context,
+          path: normalizedPath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Don't fail the request - folder entity is created, storage is optional
+      }
+
+      logger.info('Folder created', {
+        context,
+        path: normalizedPath,
+        folderId: folder.id,
         projectId,
       });
 
       return NextResponse.json({
         success: true,
-        path: normalizedPath,
-        alreadyExists: folderExists,
-        message: folderExists
-          ? 'Folder already contains files'
-          : 'Folder path is valid and ready for use',
+        folder,
+        alreadyExists: false,
+        message: 'Folder created successfully',
       });
     } catch (error) {
       logger.error('Error creating folder', { context }, error instanceof Error ? error : undefined);
@@ -135,7 +286,7 @@ export const POST = createAuthenticatedHandler(
 
 /**
  * PATCH /api/files/folders
- * Rename a folder (updates folderPath for all files in the folder)
+ * Rename a folder (updates folder entity and all affected file paths)
  */
 export const PATCH = createAuthenticatedHandler(
   async (request: NextRequest, { user, repos }) => {
@@ -191,44 +342,63 @@ export const PATCH = createAuthenticatedHandler(
         userId: user.id,
       });
 
-      // Find all files in this folder or subfolders
+      // Find the folder entity
+      const folder = await repos.folders.findByPath(
+        user.id,
+        normalizedPath,
+        projectId || null
+      );
+
+      if (!folder) {
+        return notFound('Folder');
+      }
+
+      // Update the folder entity
+      await repos.folders.update(folder.id, {
+        path: newPath,
+        name: sanitizedName,
+      });
+
+      // Update all descendant folders' paths
+      const descendantFoldersUpdated = await repos.folders.updatePathPrefix(
+        user.id,
+        normalizedPath,
+        newPath,
+        projectId || null
+      );
+
+      // Update all affected file paths
       const allFiles = projectId
         ? await repos.files.findByProjectId(user.id, projectId)
         : await repos.files.findGeneralFiles(user.id);
 
-      const affectedFiles = allFiles.filter((f) => {
+      const affectedFiles = allFiles.filter((f: any) => {
         const filePath = f.folderPath || '/';
         return filePath === normalizedPath || filePath.startsWith(normalizedPath);
       });
 
-      if (affectedFiles.length === 0) {
-        logger.debug('No files in folder to rename', { context, path: normalizedPath });
-        return notFound('Folder');
-      }
-
-      // Update each affected file
-      let updatedCount = 0;
+      let filesUpdated = 0;
       for (const file of affectedFiles) {
         const oldFilePath = file.folderPath || '/';
-        // Replace the old folder prefix with the new one
         const newFilePath = oldFilePath.replace(normalizedPath, newPath);
-
         await repos.files.update(file.id, { folderPath: newFilePath });
-        updatedCount++;
+        filesUpdated++;
       }
 
       logger.info('Folder renamed successfully', {
         context,
         oldPath: normalizedPath,
         newPath,
-        filesUpdated: updatedCount,
+        foldersUpdated: descendantFoldersUpdated + 1,
+        filesUpdated,
       });
 
       return NextResponse.json({
         success: true,
         oldPath: normalizedPath,
         newPath,
-        filesUpdated: updatedCount,
+        foldersUpdated: descendantFoldersUpdated + 1,
+        filesUpdated,
       });
     } catch (error) {
       logger.error('Error renaming folder', { context }, error instanceof Error ? error : undefined);
@@ -239,7 +409,7 @@ export const PATCH = createAuthenticatedHandler(
 
 /**
  * DELETE /api/files/folders
- * Delete an empty folder (checks that no files exist in folder)
+ * Delete an empty folder (checks for files and child folders)
  */
 export const DELETE = createAuthenticatedHandler(
   async (request: NextRequest, { user, repos }) => {
@@ -274,18 +444,29 @@ export const DELETE = createAuthenticatedHandler(
         userId: user.id,
       });
 
+      // Find the folder entity
+      const folder = await repos.folders.findByPath(
+        user.id,
+        normalizedPath,
+        projectId || null
+      );
+
+      if (!folder) {
+        return notFound('Folder');
+      }
+
       // Check if any files exist in this folder or subfolders
       const allFiles = projectId
         ? await repos.files.findByProjectId(user.id, projectId)
         : await repos.files.findGeneralFiles(user.id);
 
-      const filesInFolder = allFiles.filter((f) => {
+      const filesInFolder = allFiles.filter((f: any) => {
         const filePath = f.folderPath || '/';
         return filePath === normalizedPath || filePath.startsWith(normalizedPath);
       });
 
       if (filesInFolder.length > 0) {
-        logger.debug('Cannot delete non-empty folder', {
+        logger.debug('Cannot delete non-empty folder (has files)', {
           context,
           path: normalizedPath,
           fileCount: filesInFolder.length,
@@ -293,15 +474,44 @@ export const DELETE = createAuthenticatedHandler(
         return badRequest(`Folder contains ${filesInFolder.length} file(s) and cannot be deleted`);
       }
 
-      // Folder is empty - since folders are implicit, we just confirm it's empty
-      logger.info('Empty folder confirmed', {
+      // Check if any child folders exist
+      const hasChildren = await repos.folders.hasChildren(folder.id);
+      if (hasChildren) {
+        logger.debug('Cannot delete folder with child folders', {
+          context,
+          path: normalizedPath,
+        });
+        return badRequest('Folder contains subfolders and cannot be deleted');
+      }
+
+      // Delete from storage (for local backends)
+      try {
+        await fileStorageManager.deleteFolder({
+          userId: user.id,
+          projectId: projectId || null,
+          folderPath: normalizedPath,
+        });
+      } catch (error) {
+        logger.warn('Failed to delete folder from storage', {
+          context,
+          path: normalizedPath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Don't fail the request - folder entity will be deleted
+      }
+
+      // Delete the folder entity
+      await repos.folders.delete(folder.id);
+
+      logger.info('Folder deleted', {
         context,
         path: normalizedPath,
+        folderId: folder.id,
       });
 
       return NextResponse.json({
         success: true,
-        message: 'Folder is empty and can be considered deleted',
+        message: 'Folder deleted successfully',
         path: normalizedPath,
       });
     } catch (error) {

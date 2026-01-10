@@ -23,6 +23,7 @@ Complete API reference for Quilltap v2.6.
   - [Memories](#memories)
   - [Tags](#tags)
   - [Files & Images](#files--images)
+  - [Folders](#folders)
   - [Templates](#templates)
   - [Tools & Backup](#tools--backup)
   - [Themes](#themes)
@@ -885,6 +886,119 @@ Generate an image using configured profile.
   "prompt": "A serene mountain landscape",
   "chatId": "chat-uuid",
   "characterId": "char-uuid"
+}
+```
+
+#### Folders
+
+Manage folder entities for file organization. Folders are first-class entities stored in the database.
+
+#### `GET /api/files/folders`
+
+List all folders for the authenticated user.
+
+**Query Parameters**:
+- `projectId` (optional) - Filter by project ID, or omit for general files
+
+**Response**:
+
+```json
+{
+  "folders": [
+    {
+      "id": "folder-uuid",
+      "path": "/documents/reports/",
+      "name": "reports",
+      "parentFolderId": "parent-folder-uuid",
+      "projectId": "project-uuid",
+      "createdAt": "2025-01-10T12:00:00.000Z",
+      "updatedAt": "2025-01-10T12:00:00.000Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+#### `POST /api/files/folders`
+
+Create a new folder.
+
+**Request Body**:
+
+```json
+{
+  "path": "/documents/reports/",
+  "projectId": "project-uuid"
+}
+```
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "folder": {
+    "id": "folder-uuid",
+    "path": "/documents/reports/",
+    "name": "reports",
+    "parentFolderId": "parent-folder-uuid",
+    "projectId": "project-uuid"
+  },
+  "alreadyExists": false,
+  "message": "Folder created successfully"
+}
+```
+
+#### `PATCH /api/files/folders`
+
+Rename a folder. Updates the folder entity and all affected file paths.
+
+**Request Body**:
+
+```json
+{
+  "path": "/documents/reports/",
+  "newName": "archived-reports",
+  "projectId": "project-uuid"
+}
+```
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "oldPath": "/documents/reports/",
+  "newPath": "/documents/archived-reports/",
+  "foldersUpdated": 3,
+  "filesUpdated": 15
+}
+```
+
+#### `DELETE /api/files/folders`
+
+Delete an empty folder. Returns error if folder contains files or subfolders.
+
+**Query Parameters**:
+- `path` (required) - Folder path to delete
+- `projectId` (optional) - Project ID if folder is in a project
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "message": "Folder deleted successfully",
+  "path": "/documents/reports/"
+}
+```
+
+**Error Response** (if folder not empty):
+
+```json
+{
+  "error": "Bad Request",
+  "message": "Folder contains 5 file(s) and cannot be deleted"
 }
 ```
 

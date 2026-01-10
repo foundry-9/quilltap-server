@@ -4,6 +4,19 @@
 
 ### 2.7-dev
 
+- feat: First-class folder entities with database persistence
+  - Folders are now stored as entities in the database, not derived from file paths
+  - Empty folders now persist (previously, folders with no files would disappear)
+  - New `Folder` schema with id, path, name, parentFolderId, projectId, mountPointId
+  - New `FoldersRepository` with CRUD operations and hierarchy queries
+  - Folder API endpoints: GET/POST/PATCH/DELETE `/api/files/folders`
+  - FileBrowser and FolderPicker components now fetch folders from database
+  - CreateFolderModal creates folder entities immediately via API
+  - Local storage backend creates actual directories for folders
+  - S3 backends store folders only in DB (S3 uses key prefixes, not real folders)
+  - Migration creates folder entities from existing file paths
+  - Supports sync compatibility between local and S3 systems
+  - New files: `lib/schemas/folder.types.ts`, `lib/mongodb/repositories/folders.repository.ts`
 - feat: Per-project mount point storage locations
   - Projects can now specify which mount point stores their files
   - Replaced confusing global "project default" with per-project assignment

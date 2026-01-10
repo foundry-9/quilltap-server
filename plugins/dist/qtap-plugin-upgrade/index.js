@@ -47517,6 +47517,226 @@ var perProjectMountPointsMigration = {
   }
 };
 
+// migrations/create-folder-entities.ts
+init_logger();
+var import_crypto3 = require("crypto");
+function isMongoDBBackendEnabled15() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase16() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible15() {
+  try {
+    const db = await getMongoDatabase16();
+    await db.command({ ping: 1 });
+    return true;
+  } catch (error) {
+    logger.warn("MongoDB is not accessible for folder entities migration", {
+      context: "migration.create-folder-entities",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+async function needsMigration2() {
+  try {
+    const db = await getMongoDatabase16();
+    const filesCollection = db.collection("files");
+    const foldersCollection = db.collection("folders");
+    const filesWithFolders = await filesCollection.countDocuments({
+      folderPath: { $exists: true, $ne: "/" }
+    });
+    const existingFolders = await foldersCollection.countDocuments({});
+    return filesWithFolders > 0 && existingFolders === 0;
+  } catch (error) {
+    logger.debug("Error checking for folder entities migration", {
+      context: "migration.create-folder-entities",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+function extractAllFolderPaths(folderPath) {
+  if (!folderPath || folderPath === "/") return [];
+  const paths = [];
+  const parts = folderPath.split("/").filter(Boolean);
+  let current = "/";
+  for (const part of parts) {
+    current = current === "/" ? `/${part}/` : `${current}${part}/`;
+    paths.push(current);
+  }
+  return paths;
+}
+function getParentPath(path5) {
+  if (path5 === "/") return "/";
+  const parts = path5.split("/").filter(Boolean);
+  parts.pop();
+  return parts.length === 0 ? "/" : "/" + parts.join("/") + "/";
+}
+function getFolderName(path5) {
+  const parts = path5.split("/").filter(Boolean);
+  return parts.length > 0 ? parts[parts.length - 1] : "";
+}
+var createFolderEntitiesMigration = {
+  id: "create-folder-entities-v1",
+  description: "Create first-class folder entities from existing file paths",
+  introducedInVersion: "2.9.0",
+  dependsOn: ["per-project-mount-points-v1"],
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled15()) {
+      logger.debug("MongoDB not enabled, skipping folder entities migration", {
+        context: "migration.create-folder-entities"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible15()) {
+      logger.debug("MongoDB not accessible, deferring folder entities migration", {
+        context: "migration.create-folder-entities"
+      });
+      return false;
+    }
+    return needsMigration2();
+  },
+  async run() {
+    const startTime = Date.now();
+    let foldersCreated = 0;
+    let usersProcessed = 0;
+    const errors = [];
+    logger.info("Starting folder entities migration", {
+      context: "migration.create-folder-entities"
+    });
+    try {
+      const db = await getMongoDatabase16();
+      const filesCollection = db.collection("files");
+      const foldersCollection = db.collection("folders");
+      logger.debug("Creating indexes on folders collection", {
+        context: "migration.create-folder-entities"
+      });
+      await foldersCollection.createIndex(
+        { userId: 1, path: 1, projectId: 1 },
+        { unique: true, background: true }
+      );
+      await foldersCollection.createIndex(
+        { userId: 1, parentFolderId: 1 },
+        { background: true }
+      );
+      await foldersCollection.createIndex(
+        { projectId: 1 },
+        { sparse: true, background: true }
+      );
+      const userIds = await filesCollection.distinct("userId");
+      logger.debug("Found users with files", {
+        context: "migration.create-folder-entities",
+        userCount: userIds.length
+      });
+      for (const userId of userIds) {
+        try {
+          const files = await filesCollection.find({ userId }).project({ folderPath: 1, projectId: 1 }).toArray();
+          const projectFiles = /* @__PURE__ */ new Map();
+          for (const file of files) {
+            const projectId = file.projectId || null;
+            const folderPath = file.folderPath || "/";
+            if (!projectFiles.has(projectId)) {
+              projectFiles.set(projectId, /* @__PURE__ */ new Set());
+            }
+            const paths = extractAllFolderPaths(folderPath);
+            for (const path5 of paths) {
+              projectFiles.get(projectId).add(path5);
+            }
+          }
+          for (const [projectId, folderPaths] of projectFiles) {
+            const sortedPaths = Array.from(folderPaths).sort(
+              (a, b) => a.split("/").length - b.split("/").length
+            );
+            const folderIdMap = /* @__PURE__ */ new Map();
+            for (const path5 of sortedPaths) {
+              const parentPath = getParentPath(path5);
+              const parentFolderId = parentPath === "/" ? null : folderIdMap.get(parentPath) || null;
+              const folderId = (0, import_crypto3.randomUUID)();
+              const now = /* @__PURE__ */ new Date();
+              const folder = {
+                id: folderId,
+                userId,
+                path: path5,
+                name: getFolderName(path5),
+                parentFolderId,
+                projectId,
+                mountPointId: null,
+                createdAt: now,
+                updatedAt: now
+              };
+              const existingFolder = await foldersCollection.findOne({
+                userId,
+                path: path5,
+                projectId
+              });
+              if (!existingFolder) {
+                await foldersCollection.insertOne(folder);
+                folderIdMap.set(path5, folderId);
+                foldersCreated++;
+                logger.debug("Created folder entity", {
+                  context: "migration.create-folder-entities",
+                  userId,
+                  path: path5,
+                  projectId
+                });
+              } else {
+                folderIdMap.set(path5, existingFolder.id);
+              }
+            }
+          }
+          usersProcessed++;
+        } catch (userError) {
+          const errorMessage = userError instanceof Error ? userError.message : String(userError);
+          errors.push(`User ${userId}: ${errorMessage}`);
+          logger.warn("Error processing user for folder entities", {
+            context: "migration.create-folder-entities",
+            userId,
+            error: errorMessage
+          });
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error("Folder entities migration failed", {
+        context: "migration.create-folder-entities",
+        error: errorMessage
+      });
+      return {
+        id: "create-folder-entities-v1",
+        success: false,
+        itemsAffected: foldersCreated,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const success = errors.length === 0;
+    const durationMs = Date.now() - startTime;
+    logger.info("Folder entities migration completed", {
+      context: "migration.create-folder-entities",
+      success,
+      foldersCreated,
+      usersProcessed,
+      errors: errors.length,
+      durationMs
+    });
+    return {
+      id: "create-folder-entities-v1",
+      success,
+      itemsAffected: foldersCreated,
+      message: `Created ${foldersCreated} folder entities for ${usersProcessed} users${errors.length > 0 ? ` (${errors.length} errors)` : ""}`,
+      error: errors.length > 0 ? errors.join("; ") : void 0,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
 // migrations/index.ts
 var migrations = [
   convertOpenRouterProfilesMigration,
@@ -47549,21 +47769,23 @@ var migrations = [
   // Mount points migration
   createMountPointsMigration,
   // Per-project mount points
-  perProjectMountPointsMigration
+  perProjectMountPointsMigration,
+  // Folder entities migration
+  createFolderEntitiesMigration
 ];
 
 // user-migrations.ts
 var logger4 = createPluginLogger("qtap-plugin-upgrade");
-function isMongoDBBackendEnabled15() {
+function isMongoDBBackendEnabled16() {
   const backend = process.env.DATA_BACKEND || "";
   return backend === "mongodb" || backend === "dual";
 }
-async function getMongoDatabase16() {
+async function getMongoDatabase17() {
   const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
   return getDb();
 }
 async function migrateUserCharacterSystemPrompts(userId) {
-  if (!isMongoDBBackendEnabled15()) {
+  if (!isMongoDBBackendEnabled16()) {
     logger4.debug("MongoDB not enabled, skipping character system prompts migration", {
       context: "user-migrations.migrateUserCharacterSystemPrompts",
       userId
@@ -47572,9 +47794,9 @@ async function migrateUserCharacterSystemPrompts(userId) {
   }
   const startTime = Date.now();
   try {
-    const db = await getMongoDatabase16();
+    const db = await getMongoDatabase17();
     const charactersCollection = db.collection("characters");
-    const needsMigration2 = await charactersCollection.find({
+    const needsMigration3 = await charactersCollection.find({
       userId,
       systemPrompt: { $exists: true, $nin: [null, ""] },
       $or: [
@@ -47582,7 +47804,7 @@ async function migrateUserCharacterSystemPrompts(userId) {
         { systemPrompts: { $size: 0 } }
       ]
     }).toArray();
-    if (needsMigration2.length === 0) {
+    if (needsMigration3.length === 0) {
       logger4.debug("No characters need system prompt migration for user", {
         context: "user-migrations.migrateUserCharacterSystemPrompts",
         userId
@@ -47592,11 +47814,11 @@ async function migrateUserCharacterSystemPrompts(userId) {
     logger4.info("Migrating character system prompts for user", {
       context: "user-migrations.migrateUserCharacterSystemPrompts",
       userId,
-      count: needsMigration2.length
+      count: needsMigration3.length
     });
     let migratedCount = 0;
     let errorCount = 0;
-    for (const character of needsMigration2) {
+    for (const character of needsMigration3) {
       try {
         if (!character.systemPrompt) {
           continue;

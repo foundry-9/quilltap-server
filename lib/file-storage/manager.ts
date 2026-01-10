@@ -858,6 +858,208 @@ class FileStorageManager {
   }
 
   // ========================================================================
+  // FOLDER OPERATIONS
+  // ========================================================================
+
+  /**
+   * Create a folder in storage
+   *
+   * For local backends, creates an actual directory.
+   * For S3-like backends, this is a no-op since folders are virtual.
+   *
+   * @param params - Folder creation parameters
+   * @throws {Error} If folder creation fails
+   */
+  async createFolder(params: {
+    userId: string;
+    projectId: string | null;
+    folderPath: string;
+    mountPointId?: string;
+  }): Promise<void> {
+    const { userId, projectId, folderPath, mountPointId } = params;
+
+    logger.debug('Creating folder in storage', {
+      userId,
+      projectId,
+      folderPath,
+      mountPointId,
+    });
+
+    try {
+      // Get the appropriate backend
+      let backend: FileStorageBackend;
+      if (mountPointId) {
+        const b = await this.getBackend(mountPointId);
+        if (!b) {
+          throw new Error(`Mount point not found: ${mountPointId}`);
+        }
+        backend = b;
+      } else {
+        backend = await this.getBackendForProject(projectId);
+      }
+
+      const metadata = backend.getMetadata();
+
+      // Check if backend supports folder operations
+      if (!metadata.capabilities.folders || !backend.createFolder) {
+        logger.debug('Backend does not support folder operations, skipping', {
+          providerId: metadata.providerId,
+          folderPath,
+        });
+        return;
+      }
+
+      // Build the storage path for the folder
+      const storagePath = this.buildFolderStoragePath({
+        userId,
+        projectId,
+        folderPath,
+      });
+
+      // Create the folder
+      await backend.createFolder(storagePath);
+
+      logger.info('Created folder in storage', {
+        userId,
+        projectId,
+        folderPath,
+        storagePath,
+      });
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : 'Unknown folder creation error';
+
+      logger.error('Failed to create folder in storage', {
+        userId,
+        projectId,
+        folderPath,
+        error: errorMsg,
+      });
+
+      throw new Error(`Failed to create folder '${folderPath}': ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Delete a folder from storage
+   *
+   * For local backends, removes the actual directory (must be empty).
+   * For S3-like backends, this is a no-op since folders are virtual.
+   *
+   * @param params - Folder deletion parameters
+   * @throws {Error} If folder deletion fails
+   */
+  async deleteFolder(params: {
+    userId: string;
+    projectId: string | null;
+    folderPath: string;
+    mountPointId?: string;
+  }): Promise<void> {
+    const { userId, projectId, folderPath, mountPointId } = params;
+
+    logger.debug('Deleting folder from storage', {
+      userId,
+      projectId,
+      folderPath,
+      mountPointId,
+    });
+
+    try {
+      // Get the appropriate backend
+      let backend: FileStorageBackend;
+      if (mountPointId) {
+        const b = await this.getBackend(mountPointId);
+        if (!b) {
+          throw new Error(`Mount point not found: ${mountPointId}`);
+        }
+        backend = b;
+      } else {
+        backend = await this.getBackendForProject(projectId);
+      }
+
+      const metadata = backend.getMetadata();
+
+      // Check if backend supports folder operations
+      if (!metadata.capabilities.folders || !backend.deleteFolder) {
+        logger.debug('Backend does not support folder operations, skipping', {
+          providerId: metadata.providerId,
+          folderPath,
+        });
+        return;
+      }
+
+      // Build the storage path for the folder
+      const storagePath = this.buildFolderStoragePath({
+        userId,
+        projectId,
+        folderPath,
+      });
+
+      // Delete the folder
+      await backend.deleteFolder(storagePath);
+
+      logger.info('Deleted folder from storage', {
+        userId,
+        projectId,
+        folderPath,
+        storagePath,
+      });
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : 'Unknown folder deletion error';
+
+      logger.error('Failed to delete folder from storage', {
+        userId,
+        projectId,
+        folderPath,
+        error: errorMsg,
+      });
+
+      throw new Error(`Failed to delete folder '${folderPath}': ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Build a storage path for a folder
+   *
+   * Generates a consistent storage path based on user ID, project ID, and folder path.
+   *
+   * Format: `users/{userId}/{projectId or '_general'}/{folderPath}`
+   *
+   * @param params - Path generation parameters
+   * @returns Storage path
+   */
+  private buildFolderStoragePath(params: {
+    userId: string;
+    projectId: string | null;
+    folderPath: string;
+  }): string {
+    const { userId, projectId, folderPath } = params;
+
+    // Build base path components
+    const userPath = `users/${userId}`;
+    const projectPath = projectId ? projectId : '_general';
+    const folder = folderPath.replace(/^\/+|\/+$/g, ''); // Remove leading/trailing slashes
+
+    // Build full path
+    const pathParts = [userPath, projectPath];
+    if (folder) {
+      pathParts.push(folder);
+    }
+
+    const storagePath = pathParts.join('/');
+
+    logger.debug('Built folder storage path', {
+      userId,
+      projectId,
+      folderPath,
+      storagePath,
+    });
+
+    return storagePath;
+  }
+
+  // ========================================================================
   // STORAGE KEY GENERATION
   // ========================================================================
 

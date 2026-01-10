@@ -39,6 +39,15 @@ interface FileBrowserProps {
   className?: string
 }
 
+/** Database folder type from API */
+interface DbFolder {
+  id: string
+  path: string
+  name: string
+  parentFolderId: string | null
+  projectId: string | null
+}
+
 export default function FileBrowser({
   projectId,
   title,
@@ -48,6 +57,7 @@ export default function FileBrowser({
   className = '',
 }: Readonly<FileBrowserProps>) {
   const [files, setFiles] = useState<FileInfo[]>([])
+  const [dbFolders, setDbFolders] = useState<DbFolder[]>([])
   const [loading, setLoading] = useState(true)
   const [currentFolder, setCurrentFolder] = useState('/')
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
@@ -87,21 +97,42 @@ export default function FileBrowser({
   const fetchFiles = useCallback(async () => {
     try {
       setLoading(true)
-      const url = projectId
+      const filesUrl = projectId
         ? `/api/projects/${projectId}/files`
         : '/api/files/general'
 
-      clientLogger.debug('[FileBrowser] Fetching files', { projectId, url })
+      const foldersUrl = projectId
+        ? `/api/files/folders?projectId=${projectId}`
+        : '/api/files/folders'
 
-      const res = await fetch(url)
-      if (res.ok) {
-        const data = await res.json()
+      clientLogger.debug('[FileBrowser] Fetching files and folders', { projectId, filesUrl, foldersUrl })
+
+      // Fetch files and folders in parallel
+      const [filesRes, foldersRes] = await Promise.all([
+        fetch(filesUrl),
+        fetch(foldersUrl),
+      ])
+
+      if (filesRes.ok) {
+        const data = await filesRes.json()
         setFiles(data.files || [])
         clientLogger.debug('[FileBrowser] Loaded files', {
           count: data.files?.length || 0,
         })
       } else {
         throw new Error('Failed to fetch files')
+      }
+
+      if (foldersRes.ok) {
+        const data = await foldersRes.json()
+        setDbFolders(data.folders || [])
+        clientLogger.debug('[FileBrowser] Loaded folders from DB', {
+          count: data.folders?.length || 0,
+        })
+      } else {
+        // Non-fatal - continue with derived folders only
+        clientLogger.warn('[FileBrowser] Failed to fetch folders from DB, using derived folders')
+        setDbFolders([])
       }
     } catch (error) {
       clientLogger.error('[FileBrowser] Failed to fetch files', {
@@ -126,10 +157,44 @@ export default function FileBrowser({
     return sortFiles(filtered, sort)
   }, [files, currentFolder, sort])
 
-  // Get subfolders in current folder
+  // Get subfolders in current folder (merge DB folders with derived folders)
   const subfolders = useMemo(() => {
-    const folderSet = new Map<string, number>()
+    // Map to track folders by path
+    const folderMap = new Map<string, FolderInfo>()
 
+    // First, add DB folders that are direct children of currentFolder
+    for (const dbFolder of dbFolders) {
+      // Check if this folder is a direct child of currentFolder
+      const folderPath = dbFolder.path
+      if (folderPath === currentFolder) continue // Skip current folder itself
+
+      // Determine parent path for comparison
+      const pathParts = folderPath.split('/').filter(Boolean)
+      const currentParts = currentFolder.split('/').filter(Boolean)
+
+      // Check if this is a direct child (one level deeper)
+      if (pathParts.length === currentParts.length + 1) {
+        // Check if the parent path matches
+        const parentPath = currentParts.length === 0 ? '/' : '/' + currentParts.join('/') + '/'
+        if (parentPath === currentFolder) {
+          // Count files in this folder
+          const fileCount = files.filter(f => {
+            const fp = f.folderPath || '/'
+            return fp === folderPath || fp.startsWith(folderPath)
+          }).length
+
+          folderMap.set(folderPath, {
+            path: folderPath,
+            name: dbFolder.name,
+            fileCount,
+            id: dbFolder.id,
+            isDbFolder: true,
+          })
+        }
+      }
+    }
+
+    // Then, derive folders from file paths (for backwards compatibility)
     for (const file of files) {
       const fileFolderPath = file.folderPath || '/'
       if (fileFolderPath.startsWith(currentFolder) && fileFolderPath !== currentFolder) {
@@ -138,18 +203,35 @@ export default function FileBrowser({
         const nextSlash = remainder.indexOf('/')
         if (nextSlash > 0) {
           const subfolder = currentFolder + remainder.slice(0, nextSlash + 1)
-          folderSet.set(subfolder, (folderSet.get(subfolder) || 0) + 1)
+
+          // Only add if not already in map from DB
+          if (!folderMap.has(subfolder)) {
+            const existing = folderMap.get(subfolder)
+            if (existing) {
+              // Increment file count
+              existing.fileCount++
+            } else {
+              const name = subfolder.split('/').filter(Boolean).pop() || subfolder
+              folderMap.set(subfolder, {
+                path: subfolder,
+                name,
+                fileCount: 1,
+                isDbFolder: false,
+              })
+            }
+          } else {
+            // Already exists from DB, just update file count if needed
+            const existing = folderMap.get(subfolder)!
+            // File count already computed for DB folders
+          }
         }
       }
     }
 
-    const result: FolderInfo[] = []
-    for (const [path, count] of folderSet) {
-      const name = path.split('/').filter(Boolean).pop() || path
-      result.push({ path, name, fileCount: count })
-    }
+    // Convert to array and sort
+    const result: FolderInfo[] = Array.from(folderMap.values())
     return result.sort((a, b) => a.name.localeCompare(b.name))
-  }, [files, currentFolder])
+  }, [files, dbFolders, currentFolder])
 
   const handleFolderClick = (folder: string) => {
     setCurrentFolder(folder)
@@ -427,6 +509,8 @@ export default function FileBrowser({
         projectId={projectId}
         onSuccess={(folderPath) => {
           clientLogger.debug('[FileBrowser] Folder created', { folderPath })
+          // Refresh the file and folder list to include the new folder
+          fetchFiles()
           // Navigate to the new folder
           setCurrentFolder(folderPath)
         }}

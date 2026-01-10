@@ -37,6 +37,8 @@ import { populateMemoryAboutCharacterIdsMigration } from './populate-memory-abou
 import { createMountPointsMigration } from './create-mount-points';
 // Per-project mount points
 import { perProjectMountPointsMigration } from './per-project-mount-points';
+// Folder entities migration
+import { createFolderEntitiesMigration } from './create-folder-entities';
 
 /**
  * All available migrations.
@@ -74,6 +76,8 @@ export const migrations: Migration[] = [
   createMountPointsMigration,
   // Per-project mount points
   perProjectMountPointsMigration,
+  // Folder entities migration
+  createFolderEntitiesMigration,
 ];
 
 export {
@@ -108,4 +112,6 @@ export {
   createMountPointsMigration,
   // Per-project mount points
   perProjectMountPointsMigration,
+  // Folder entities migration
+  createFolderEntitiesMigration,
 };

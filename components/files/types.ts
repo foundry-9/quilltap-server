@@ -23,6 +23,10 @@ export interface FolderInfo {
   path: string
   name: string
   fileCount: number
+  /** Database folder ID (if from DB, undefined if derived from file paths) */
+  id?: string
+  /** Whether this folder exists in the database */
+  isDbFolder?: boolean
 }
 
 export type SortField = 'name' | 'type' | 'size' | 'date'

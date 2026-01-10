@@ -81,14 +81,16 @@ export default function CreateFolderModal({
       }
 
       const data = await res.json()
+      const folderPath = data.folder?.path || newFolderPath
 
       showSuccessToast(data.alreadyExists ? 'Folder already exists' : 'Folder created')
       clientLogger.info('[CreateFolderModal] Folder created', {
-        path: data.path,
+        path: folderPath,
+        folderId: data.folder?.id,
         alreadyExists: data.alreadyExists,
       })
 
-      onSuccess?.(data.path)
+      onSuccess?.(folderPath)
       onClose()
     } catch (error) {
       clientLogger.error('[CreateFolderModal] Failed to create folder', {
