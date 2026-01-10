@@ -203,30 +203,6 @@ export class MountPointsRepository extends MongoBaseRepository<MountPoint> {
   }
 
   /**
-   * Find the project default mount point (isProjectDefault=true)
-   * @returns The project default mount point or null if none set
-   */
-  async findProjectDefault(): Promise<MountPoint | null> {
-    try {
-      const collection = await this.getCollection();
-      const mountPoint = await collection.findOne({ isProjectDefault: true });
-
-      if (mountPoint) {
-        logger.debug('Found project default mount point', { mountPointId: mountPoint.id });
-        return this.validate(mountPoint);
-      }
-
-      logger.debug('No project default mount point found');
-      return null;
-    } catch (error) {
-      logger.error('Error finding project default mount point', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  /**
    * Find mount points by scope
    * @param scope The scope ('system' or 'user')
    * @param userId Optional user ID for filtering user-scoped mount points
@@ -340,36 +316,6 @@ export class MountPointsRepository extends MongoBaseRepository<MountPoint> {
   }
 
   /**
-   * Set a mount point as the project default (clears isProjectDefault on all others first)
-   * @param id The mount point ID to set as project default
-   */
-  async setProjectDefault(id: string): Promise<void> {
-    try {
-      const collection = await this.getCollection();
-
-      // Clear isProjectDefault from all other mount points
-      await collection.updateMany(
-        { id: { $ne: id } },
-        { $set: { isProjectDefault: false, updatedAt: this.getCurrentTimestamp() } }
-      );
-
-      // Set this mount point as project default
-      await collection.updateOne(
-        { id },
-        { $set: { isProjectDefault: true, updatedAt: this.getCurrentTimestamp() } }
-      );
-
-      logger.info('Mount point set as project default', { mountPointId: id });
-    } catch (error) {
-      logger.error('Error setting project default mount point', {
-        mountPointId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  /**
    * Update health status of a mount point and record last health check timestamp
    * @param id The mount point ID
    * @param status The health status ('healthy', 'degraded', 'unhealthy', 'unknown')
@@ -415,9 +361,7 @@ export class MountPointsRepository extends MongoBaseRepository<MountPoint> {
    */
   async clearOrphanedDefaults(): Promise<void> {
     try {
-      const collection = await this.getCollection();
-
-      // Update any mount point with isDefault or isProjectDefault that no longer exists
+      // Update any mount point with isDefault that no longer exists
       // This is handled by clearing defaults from specific non-existent IDs if needed
       // For now, this is a no-op maintenance method that could be expanded
 

@@ -4,6 +4,16 @@
 
 ### 2.7-dev
 
+- feat: Per-project mount point storage locations
+  - Projects can now specify which mount point stores their files
+  - Replaced confusing global "project default" with per-project assignment
+  - File migration when changing a project's mount point (batch processing with progress tracking)
+  - New API endpoints: `GET/PUT/DELETE /api/projects/[id]/mount-point`
+  - Project settings UI with mount point selector and migration confirmation
+  - Mount point deletion now shows which projects are using it
+  - Automatic migration removes `isProjectDefault` field from mount points
+  - New Project schema field: `mountPointId`
+  - New file: `lib/file-storage/project-file-migration.ts`
 - fix: Storage health badge readability in dark mode
   - HealthBadge component now uses qt-badge-* theme utility classes
   - Updated qt-status-* CSS variables to use solid backgrounds with contrasting foreground colors

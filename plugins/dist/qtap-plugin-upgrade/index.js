@@ -47196,7 +47196,6 @@ var createMountPointsMigration = {
         context: "migration.create-mount-points"
       });
       await mountPointsCollection.createIndex({ isDefault: 1 });
-      await mountPointsCollection.createIndex({ isProjectDefault: 1 });
       await mountPointsCollection.createIndex({ scope: 1, userId: 1 });
       await mountPointsCollection.createIndex({ backendType: 1 });
       await mountPointsCollection.createIndex({ enabled: 1 });
@@ -47245,7 +47244,6 @@ var createMountPointsMigration = {
             scope: "system",
             userId: null,
             isDefault: true,
-            isProjectDefault: true,
             enabled: true,
             healthStatus: "unknown",
             createdAt: now,
@@ -47273,7 +47271,6 @@ var createMountPointsMigration = {
             scope: "system",
             userId: null,
             isDefault: true,
-            isProjectDefault: true,
             enabled: true,
             healthStatus: "unknown",
             createdAt: now,
@@ -47368,6 +47365,158 @@ var createMountPointsMigration = {
   }
 };
 
+// migrations/per-project-mount-points.ts
+init_logger();
+function isMongoDBBackendEnabled14() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase15() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible14() {
+  try {
+    const db = await getMongoDatabase15();
+    await db.command({ ping: 1 });
+    return true;
+  } catch (error) {
+    logger.warn("MongoDB is not accessible for per-project mount points migration", {
+      context: "migration.per-project-mount-points",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+async function needsMigration() {
+  try {
+    const db = await getMongoDatabase15();
+    const mountPointsCollection = db.collection("mount_points");
+    const hasIsProjectDefault = await mountPointsCollection.findOne({
+      isProjectDefault: { $exists: true }
+    });
+    return hasIsProjectDefault !== null;
+  } catch (error) {
+    logger.debug("Error checking for per-project mount points migration", {
+      context: "migration.per-project-mount-points",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return false;
+  }
+}
+var perProjectMountPointsMigration = {
+  id: "per-project-mount-points-v1",
+  description: "Remove isProjectDefault from mount points and add projects.mountPointId index",
+  introducedInVersion: "2.8.0",
+  dependsOn: ["create-mount-points-v1"],
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled14()) {
+      logger.debug("MongoDB not enabled, skipping per-project mount points migration", {
+        context: "migration.per-project-mount-points"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible14()) {
+      logger.debug("MongoDB not accessible, deferring per-project mount points migration", {
+        context: "migration.per-project-mount-points"
+      });
+      return false;
+    }
+    return needsMigration();
+  },
+  async run() {
+    const startTime = Date.now();
+    let mountPointsUpdated = 0;
+    let indexCreated = false;
+    const errors = [];
+    logger.info("Starting per-project mount points migration", {
+      context: "migration.per-project-mount-points"
+    });
+    try {
+      const db = await getMongoDatabase15();
+      const mountPointsCollection = db.collection("mount_points");
+      const projectsCollection = db.collection("projects");
+      logger.debug("Step 1: Removing isProjectDefault field from mount points", {
+        context: "migration.per-project-mount-points"
+      });
+      const updateResult = await mountPointsCollection.updateMany(
+        { isProjectDefault: { $exists: true } },
+        { $unset: { isProjectDefault: "" } }
+      );
+      mountPointsUpdated = updateResult.modifiedCount;
+      logger.debug("Removed isProjectDefault from mount points", {
+        context: "migration.per-project-mount-points",
+        mountPointsUpdated
+      });
+      logger.debug("Step 2: Dropping isProjectDefault index if it exists", {
+        context: "migration.per-project-mount-points"
+      });
+      try {
+        await mountPointsCollection.dropIndex("isProjectDefault_1");
+        logger.debug("Dropped isProjectDefault index", {
+          context: "migration.per-project-mount-points"
+        });
+      } catch (indexError) {
+        logger.debug("isProjectDefault index did not exist or could not be dropped", {
+          context: "migration.per-project-mount-points",
+          error: indexError instanceof Error ? indexError.message : String(indexError)
+        });
+      }
+      logger.debug("Step 3: Creating index on projects.mountPointId", {
+        context: "migration.per-project-mount-points"
+      });
+      try {
+        await projectsCollection.createIndex(
+          { mountPointId: 1 },
+          { sparse: true, background: true }
+        );
+        indexCreated = true;
+        logger.debug("Created projects.mountPointId index", {
+          context: "migration.per-project-mount-points"
+        });
+      } catch (indexError) {
+        logger.debug("Could not create projects.mountPointId index (may already exist)", {
+          context: "migration.per-project-mount-points",
+          error: indexError instanceof Error ? indexError.message : String(indexError)
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error("Per-project mount points migration failed", {
+        context: "migration.per-project-mount-points",
+        error: errorMessage
+      });
+      return {
+        id: "per-project-mount-points-v1",
+        success: false,
+        itemsAffected: mountPointsUpdated,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const success = errors.length === 0;
+    const durationMs = Date.now() - startTime;
+    logger.info("Per-project mount points migration completed", {
+      context: "migration.per-project-mount-points",
+      success,
+      mountPointsUpdated,
+      indexCreated,
+      durationMs
+    });
+    return {
+      id: "per-project-mount-points-v1",
+      success,
+      itemsAffected: mountPointsUpdated,
+      message: `Removed isProjectDefault from ${mountPointsUpdated} mount points, index created: ${indexCreated}`,
+      error: errors.length > 0 ? errors.join("; ") : void 0,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
 // migrations/index.ts
 var migrations = [
   convertOpenRouterProfilesMigration,
@@ -47398,21 +47547,23 @@ var migrations = [
   // Memory aboutCharacterId population
   populateMemoryAboutCharacterIdsMigration,
   // Mount points migration
-  createMountPointsMigration
+  createMountPointsMigration,
+  // Per-project mount points
+  perProjectMountPointsMigration
 ];
 
 // user-migrations.ts
 var logger4 = createPluginLogger("qtap-plugin-upgrade");
-function isMongoDBBackendEnabled14() {
+function isMongoDBBackendEnabled15() {
   const backend = process.env.DATA_BACKEND || "";
   return backend === "mongodb" || backend === "dual";
 }
-async function getMongoDatabase15() {
+async function getMongoDatabase16() {
   const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
   return getDb();
 }
 async function migrateUserCharacterSystemPrompts(userId) {
-  if (!isMongoDBBackendEnabled14()) {
+  if (!isMongoDBBackendEnabled15()) {
     logger4.debug("MongoDB not enabled, skipping character system prompts migration", {
       context: "user-migrations.migrateUserCharacterSystemPrompts",
       userId
@@ -47421,9 +47572,9 @@ async function migrateUserCharacterSystemPrompts(userId) {
   }
   const startTime = Date.now();
   try {
-    const db = await getMongoDatabase15();
+    const db = await getMongoDatabase16();
     const charactersCollection = db.collection("characters");
-    const needsMigration = await charactersCollection.find({
+    const needsMigration2 = await charactersCollection.find({
       userId,
       systemPrompt: { $exists: true, $nin: [null, ""] },
       $or: [
@@ -47431,7 +47582,7 @@ async function migrateUserCharacterSystemPrompts(userId) {
         { systemPrompts: { $size: 0 } }
       ]
     }).toArray();
-    if (needsMigration.length === 0) {
+    if (needsMigration2.length === 0) {
       logger4.debug("No characters need system prompt migration for user", {
         context: "user-migrations.migrateUserCharacterSystemPrompts",
         userId
@@ -47441,11 +47592,11 @@ async function migrateUserCharacterSystemPrompts(userId) {
     logger4.info("Migrating character system prompts for user", {
       context: "user-migrations.migrateUserCharacterSystemPrompts",
       userId,
-      count: needsMigration.length
+      count: needsMigration2.length
     });
     let migratedCount = 0;
     let errorCount = 0;
-    for (const character of needsMigration) {
+    for (const character of needsMigration2) {
       try {
         if (!character.systemPrompt) {
           continue;

@@ -175,7 +175,6 @@ export const createMountPointsMigration: Migration = {
       });
 
       await mountPointsCollection.createIndex({ isDefault: 1 });
-      await mountPointsCollection.createIndex({ isProjectDefault: 1 });
       await mountPointsCollection.createIndex({ scope: 1, userId: 1 });
       await mountPointsCollection.createIndex({ backendType: 1 });
       await mountPointsCollection.createIndex({ enabled: 1 });
@@ -235,7 +234,6 @@ export const createMountPointsMigration: Migration = {
             scope: 'system',
             userId: null,
             isDefault: true,
-            isProjectDefault: true,
             enabled: true,
             healthStatus: 'unknown',
             createdAt: now,
@@ -267,7 +265,6 @@ export const createMountPointsMigration: Migration = {
             scope: 'system',
             userId: null,
             isDefault: true,
-            isProjectDefault: true,
             enabled: true,
             healthStatus: 'unknown',
             createdAt: now,

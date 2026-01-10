@@ -35,6 +35,8 @@ import { restructureS3KeysMigration } from './restructure-s3-keys';
 import { populateMemoryAboutCharacterIdsMigration } from './populate-memory-about-character-ids';
 // Mount points migration
 import { createMountPointsMigration } from './create-mount-points';
+// Per-project mount points
+import { perProjectMountPointsMigration } from './per-project-mount-points';
 
 /**
  * All available migrations.
@@ -70,6 +72,8 @@ export const migrations: Migration[] = [
   populateMemoryAboutCharacterIdsMigration,
   // Mount points migration
   createMountPointsMigration,
+  // Per-project mount points
+  perProjectMountPointsMigration,
 ];
 
 export {
@@ -102,4 +106,6 @@ export {
   populateMemoryAboutCharacterIdsMigration,
   // Mount points migration
   createMountPointsMigration,
+  // Per-project mount points
+  perProjectMountPointsMigration,
 };

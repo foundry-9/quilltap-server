@@ -415,4 +415,59 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
       throw error;
     }
   }
+
+  // ============================================================================
+  // MOUNT POINT OPERATIONS
+  // ============================================================================
+
+  /**
+   * Set the mount point for a project
+   * @param projectId The project ID
+   * @param mountPointId The mount point ID (null to clear)
+   * @returns Promise<Project | null> The updated project if found, null otherwise
+   */
+  async setMountPoint(projectId: string, mountPointId: string | null): Promise<Project | null> {
+    logger.debug('Setting mount point for project', { projectId, mountPointId });
+    try {
+      return await this.update(projectId, { mountPointId });
+    } catch (error) {
+      logger.error('Error setting mount point for project', {
+        projectId,
+        mountPointId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Find projects using a specific mount point
+   * @param mountPointId The mount point ID
+   * @returns Promise<Project[]> Array of projects using this mount point
+   */
+  async findByMountPointId(mountPointId: string): Promise<Project[]> {
+    try {
+      const collection = await this.getCollection();
+      const results = await collection.find({ mountPointId }).toArray();
+
+      const projects = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((project): project is Project => project !== null);
+
+      logger.debug('Found projects by mount point', { mountPointId, count: projects.length });
+      return projects;
+    } catch (error) {
+      logger.error('Error finding projects by mount point', {
+        mountPointId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
 }

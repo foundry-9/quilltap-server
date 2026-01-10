@@ -11,7 +11,7 @@ interface MountPointCardProps {
   onEdit: (mountPoint: MountPoint) => void
   onDelete: (id: string) => Promise<boolean>
   onTestConnection: (id: string) => Promise<ConnectionTestResult>
-  onSetDefault: (id: string, type: 'general' | 'project') => Promise<boolean>
+  onSetDefault: (id: string) => Promise<boolean>
 }
 
 /**
@@ -60,9 +60,9 @@ export function MountPointCard({
     }
   }
 
-  const handleSetDefault = async (type: 'general' | 'project') => {
+  const handleSetDefault = async () => {
     try {
-      await onSetDefault(mountPoint.id, type)
+      await onSetDefault(mountPoint.id)
     } catch (error) {
       clientLogger.error('Set default failed', { error })
     }
@@ -103,11 +103,6 @@ export function MountPointCard({
         {mountPoint.isDefault && (
           <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
             Default
-          </span>
-        )}
-        {mountPoint.isProjectDefault && (
-          <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-            Project Default
           </span>
         )}
       </div>
@@ -168,18 +163,10 @@ export function MountPointCard({
           </button>
           {!mountPoint.isDefault && (
             <button
-              onClick={() => handleSetDefault('general')}
+              onClick={handleSetDefault}
               className="qt-button qt-button-secondary text-sm"
             >
               Set as Default
-            </button>
-          )}
-          {!mountPoint.isProjectDefault && (
-            <button
-              onClick={() => handleSetDefault('project')}
-              className="qt-button qt-button-secondary text-sm"
-            >
-              Set as Project Default
             </button>
           )}
           <button

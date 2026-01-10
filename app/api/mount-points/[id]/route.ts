@@ -218,7 +218,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
  * DELETE /api/mount-points/[id]
  * Delete a mount point
  *
- * Note: If mount point is the default or project default, response includes a warning
+ * Note: If mount point is the default or used by projects, response includes a warning
  */
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
@@ -249,23 +249,26 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         )
       }
 
-      // Check if this is a default mount point and warn about orphaned files
+      // Check if any projects are using this mount point
+      const projectsUsingMountPoint = await repos.projects.findByMountPointId(id)
+
+      // Check if this is the default mount point
       const isDefault = existingMountPoint.isDefault
-      const isProjectDefault = existingMountPoint.isProjectDefault
       let orphanedWarning = null
 
-      if (isDefault || isProjectDefault) {
+      if (isDefault || projectsUsingMountPoint.length > 0) {
         orphanedWarning = {
-          message: 'Warning: This mount point is marked as default',
+          message: 'Warning: This mount point is in use',
           isDefault,
-          isProjectDefault,
+          projectCount: projectsUsingMountPoint.length,
+          projectNames: projectsUsingMountPoint.map(p => p.name).slice(0, 5),
           note: 'Files stored in this mount point may become orphaned if no other mount point is available',
         }
 
-        logger.warn('Deleting default mount point', {
+        logger.warn('Deleting mount point that is in use', {
           mountPointId: id,
           isDefault,
-          isProjectDefault,
+          projectCount: projectsUsingMountPoint.length,
         })
       }
 
@@ -279,11 +282,21 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         )
       }
 
+      // Clear the mount point from any projects that were using it
+      if (projectsUsingMountPoint.length > 0) {
+        for (const project of projectsUsingMountPoint) {
+          await repos.projects.setMountPoint(project.id, null)
+        }
+        logger.info('Cleared mount point from projects', {
+          mountPointId: id,
+          projectCount: projectsUsingMountPoint.length,
+        })
+      }
+
       logger.info('Mount point deleted', {
         mountPointId: id,
         name: existingMountPoint.name,
         wasDefault: isDefault,
-        wasProjectDefault: isProjectDefault,
       })
 
       // Refresh the file storage manager to remove the deleted mount point

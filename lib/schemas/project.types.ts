@@ -35,6 +35,9 @@ export const ProjectSchema = z.object({
   color: HexColorSchema.nullable().optional(), // Accent color for sidebar/UI
   icon: z.string().max(50).nullable().optional(), // Icon identifier (emoji or icon name)
 
+  // Storage
+  mountPointId: UUIDSchema.nullable().optional(), // Storage mount point for project files
+
   // Timestamps
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

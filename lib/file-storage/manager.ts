@@ -9,7 +9,8 @@
  * - Multiple storage backend support via mount points
  * - Provider plugin registration for custom backends
  * - Automatic backend instantiation with secret decryption
- * - Project-level and per-user default mount point selection
+ * - Per-project mount point configuration (projects can specify their storage location)
+ * - System default mount point for general files
  * - Consistent storage key generation
  * - Comprehensive error handling and logging
  *
@@ -29,6 +30,7 @@ import type { FileEntry } from '@/lib/schemas/file.types';
 import { createLogger } from '@/lib/logging/create-logger';
 import { env } from '@/lib/env';
 import { mountPointsRepository } from '@/lib/mongodb/repositories/mount-points.repository';
+import { getRepositories } from '@/lib/repositories/factory';
 
 const logger = createLogger('file-storage:manager');
 
@@ -139,9 +141,6 @@ class FileStorageManager {
   /** Default mount point ID (system default) */
   private defaultMountPointId: string | null = null;
 
-  /** Project default mount point ID */
-  private projectDefaultMountPointId: string | null = null;
-
   /** Whether the manager has been initialized */
   private initialized: boolean = false;
 
@@ -160,16 +159,12 @@ class FileStorageManager {
       // Load mount points from database
       await this.refreshMountPoints();
 
-      // Identify default mount points
+      // Identify the default mount point
       for (const [id, mountPoint] of this.mountPoints) {
         if (mountPoint.isDefault && !this.defaultMountPointId) {
           this.defaultMountPointId = id;
           logger.info('Set default mount point', { mountPointId: id });
-        }
-
-        if (mountPoint.isProjectDefault && !this.projectDefaultMountPointId) {
-          this.projectDefaultMountPointId = id;
-          logger.info('Set project default mount point', { mountPointId: id });
+          break;
         }
       }
 
@@ -312,10 +307,8 @@ class FileStorageManager {
   /**
    * Get the backend for a project
    *
-   * Returns the project default backend if configured, otherwise returns
-   * the system default backend.
-   *
-   * Future: Check project-specific settings for backend override.
+   * Checks if the project has a specific mount point configured, otherwise
+   * returns the system default backend.
    *
    * @param projectId - The project ID (null for general files)
    * @returns The backend instance
@@ -324,9 +317,33 @@ class FileStorageManager {
   async getBackendForProject(projectId: string | null): Promise<FileStorageBackend> {
     logger.debug('Getting backend for project', { projectId });
 
-    // In the future, check project-specific settings here
+    // Check if the project has a specific mount point configured
+    if (projectId) {
+      try {
+        const project = await getRepositories().projects.findById(projectId);
+        if (project?.mountPointId) {
+          const backend = await this.getBackend(project.mountPointId);
+          if (backend) {
+            logger.debug('Using project-specific mount point', {
+              projectId,
+              mountPointId: project.mountPointId,
+            });
+            return backend;
+          }
+          logger.warn('Project mount point not found, falling back to default', {
+            projectId,
+            mountPointId: project.mountPointId,
+          });
+        }
+      } catch (error) {
+        logger.warn('Error looking up project mount point, falling back to default', {
+          projectId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
-    // Fall back to project default or system default
+    // Fall back to system default
     const backend = await this.getDefaultBackend();
 
     if (!backend) {
@@ -401,12 +418,22 @@ class FileStorageManager {
   }
 
   /**
-   * Get the project default mount point ID
+   * Get the mount point ID for a specific project
    *
-   * @returns The project default mount point ID, or null if not set
+   * @param projectId - The project ID
+   * @returns The project's mount point ID, or null if not set
    */
-  getProjectDefaultMountPointId(): string | null {
-    return this.projectDefaultMountPointId;
+  async getProjectMountPointId(projectId: string): Promise<string | null> {
+    try {
+      const project = await getRepositories().projects.findById(projectId);
+      return project?.mountPointId || null;
+    } catch (error) {
+      logger.warn('Error looking up project mount point', {
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
   }
 
   /**
@@ -485,7 +512,6 @@ class FileStorageManager {
       this.mountPoints.clear();
       this.backends.clear();
       this.defaultMountPointId = null;
-      this.projectDefaultMountPointId = null;
 
       // Populate mount points map
       for (const mp of mountPoints) {

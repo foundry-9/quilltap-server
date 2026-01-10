@@ -11,42 +11,21 @@ import { fileStorageManager } from '@/lib/file-storage/manager'
 
 /**
  * POST /api/mount-points/[id]/set-default
- * Set this mount point as the default
- *
- * Query params:
- *   - type: 'general' (default) to set as general default, 'project' to set as project default
+ * Set this mount point as the system default
  *
  * Response: {
  *   success: boolean,
  *   mountPointId: string,
- *   type: 'general' | 'project',
  *   isDefault: boolean,
- *   isProjectDefault: boolean,
  *   message: string
  * }
  */
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      // Get query parameter for type
-      const { searchParams } = new URL(req.url)
-      const type = searchParams.get('type') || 'general'
-
-      if (type !== 'general' && type !== 'project') {
-        logger.warn('Invalid type parameter for set-default', {
-          mountPointId: id,
-          type,
-        })
-        return NextResponse.json(
-          { error: 'Invalid type parameter. Use "general" or "project"' },
-          { status: 400 }
-        )
-      }
-
       logger.debug('Setting mount point as default', {
         mountPointId: id,
         userId: user.id,
-        type,
       })
 
       // Fetch the mount point
@@ -83,20 +62,12 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         )
       }
 
-      // Set the appropriate default flag
-      if (type === 'general') {
-        logger.info('Setting mount point as general default', {
-          mountPointId: id,
-          name: mountPoint.name,
-        })
-        await repos.mountPoints.setDefault(id)
-      } else {
-        logger.info('Setting mount point as project default', {
-          mountPointId: id,
-          name: mountPoint.name,
-        })
-        await repos.mountPoints.setProjectDefault(id)
-      }
+      // Set as default
+      logger.info('Setting mount point as default', {
+        mountPointId: id,
+        name: mountPoint.name,
+      })
+      await repos.mountPoints.setDefault(id)
 
       // Fetch the updated mount point
       const updatedMountPoint = await repos.mountPoints.findById(id)
@@ -111,20 +82,13 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       const response = {
         success: true,
         mountPointId: updatedMountPoint.id,
-        type,
         isDefault: updatedMountPoint.isDefault,
-        isProjectDefault: updatedMountPoint.isProjectDefault,
-        message:
-          type === 'general'
-            ? `Mount point "${updatedMountPoint.name}" is now the default storage location`
-            : `Mount point "${updatedMountPoint.name}" is now the default project storage location`,
+        message: `Mount point "${updatedMountPoint.name}" is now the default storage location`,
       }
 
       logger.info('Mount point default status updated', {
         mountPointId: id,
-        type,
         isDefault: updatedMountPoint.isDefault,
-        isProjectDefault: updatedMountPoint.isProjectDefault,
       })
 
       // Refresh the file storage manager to pick up the new default
@@ -136,7 +100,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         }
         logger.debug('File storage manager refreshed after setting default', {
           mountPointId: id,
-          type,
         })
       } catch (refreshError) {
         logger.warn('Failed to refresh file storage manager after setting default', {

@@ -9,7 +9,7 @@ interface MountPointListProps {
   onEdit: (mountPoint: MountPoint) => void
   onDelete: (id: string) => Promise<boolean>
   onTestConnection: (id: string) => Promise<ConnectionTestResult>
-  onSetDefault: (id: string, type: 'general' | 'project') => Promise<boolean>
+  onSetDefault: (id: string) => Promise<boolean>
 }
 
 /**

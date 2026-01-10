@@ -94,7 +94,6 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
       scope: validatedData.scope,
       userId: validatedData.scope === 'user' ? user.id : null,
       isDefault: false,
-      isProjectDefault: false,
       enabled: validatedData.enabled,
       healthStatus: 'unknown',
     })

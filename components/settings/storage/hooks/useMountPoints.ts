@@ -17,7 +17,7 @@ interface UseMountPointsResult {
   updateMountPoint: (id: string, data: Partial<MountPointFormData>) => Promise<boolean>
   deleteMountPoint: (id: string) => Promise<boolean>
   testConnection: (id: string) => Promise<ConnectionTestResult>
-  setDefault: (id: string, type: 'general' | 'project') => Promise<boolean>
+  setDefault: (id: string) => Promise<boolean>
 }
 
 /**
@@ -159,9 +159,9 @@ export function useMountPoints(): UseMountPointsResult {
   }, [fetchMountPoints])
 
   const setDefault = useCallback(
-    async (id: string, type: 'general' | 'project'): Promise<boolean> => {
-      clientLogger.debug('Setting default mount point', { id, type })
-      const result = await fetchJson<MountPoint>(`/api/mount-points/${id}/set-default?type=${type}`, {
+    async (id: string): Promise<boolean> => {
+      clientLogger.debug('Setting default mount point', { id })
+      const result = await fetchJson<MountPoint>(`/api/mount-points/${id}/set-default`, {
         method: 'POST',
       })
 
@@ -169,7 +169,7 @@ export function useMountPoints(): UseMountPointsResult {
         throw new Error(result.error || 'Failed to set default mount point')
       }
 
-      // Refresh mount points to get updated isDefault/isProjectDefault flags
+      // Refresh mount points to get updated isDefault flag
       await fetchMountPoints()
       return true
     },

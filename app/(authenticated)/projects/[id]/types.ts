@@ -64,8 +64,16 @@ export interface Project {
   color?: string | null
   icon?: string | null
   characterRoster: ProjectCharacter[]
+  mountPointId?: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface MountPointInfo {
+  id: string
+  name: string
+  backendType: string
+  healthStatus: string
 }
 
 export interface EditForm {

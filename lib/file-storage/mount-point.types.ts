@@ -83,9 +83,8 @@ export const MountPointSchema = z.object({
   scope: MountPointScopeEnum,
   userId: UUIDSchema.nullable(),
 
-  // Default mount point flags
+  // Default mount point flag
   isDefault: z.boolean().default(false),
-  isProjectDefault: z.boolean().default(false),
 
   // Status
   enabled: z.boolean().default(true),
