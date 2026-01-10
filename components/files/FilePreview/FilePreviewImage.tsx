@@ -32,7 +32,8 @@ export default function FilePreviewImage({
   const handleError = () => {
     setIsLoading(false)
     setError('Failed to load image')
-    clientLogger.error('[FilePreviewImage] Image load failed', { fileId: file.id })
+    // Use warn instead of error - this is handled gracefully via error state
+    clientLogger.warn('[FilePreviewImage] Image load failed', { fileId: file.id })
   }
 
   return (

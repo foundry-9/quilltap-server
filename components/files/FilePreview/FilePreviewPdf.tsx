@@ -89,7 +89,8 @@ export default function FilePreviewPdf({
         })
       } catch (err) {
         if (cancelled) return
-        clientLogger.error('[FilePreviewPdf] Failed to load PDF', {
+        // Use warn instead of error - this is handled gracefully via error state
+        clientLogger.warn('[FilePreviewPdf] Failed to load PDF', {
           fileId: file.id,
           error: err instanceof Error ? err.message : String(err),
           errorType: err?.constructor?.name || typeof err,
@@ -144,7 +145,8 @@ export default function FilePreviewPdf({
           scale,
         })
       } catch (err) {
-        clientLogger.error('[FilePreviewPdf] Failed to render page', {
+        // Use warn instead of error - page rendering failures are handled gracefully
+        clientLogger.warn('[FilePreviewPdf] Failed to render page', {
           fileId: file.id,
           page: currentPage,
           error: err instanceof Error ? err.message : String(err),

@@ -104,7 +104,8 @@ export function useFilePreview({
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to load file'
         setTextError(message)
-        clientLogger.error('[useFilePreview] Failed to load text content', {
+        // Use warn instead of error - this is handled gracefully via textError state
+        clientLogger.warn('[useFilePreview] Failed to load text content', {
           fileId: file.id,
           error: message,
         })
