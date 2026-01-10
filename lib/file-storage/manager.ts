@@ -28,6 +28,7 @@ import { decryptSecrets } from './secrets';
 import type { FileEntry } from '@/lib/schemas/file.types';
 import { createLogger } from '@/lib/logging/create-logger';
 import { env } from '@/lib/env';
+import { mountPointsRepository } from '@/lib/mongodb/repositories/mount-points.repository';
 
 const logger = createLogger('file-storage:manager');
 
@@ -236,7 +237,7 @@ class FileStorageManager {
    * @param mountPointId - The mount point ID
    * @returns The backend instance, or null if mount point not found
    */
-  getBackend(mountPointId: string): FileStorageBackend | null {
+  async getBackend(mountPointId: string): Promise<FileStorageBackend | null> {
     // Check if backend is already instantiated and cached
     if (this.backends.has(mountPointId)) {
       return this.backends.get(mountPointId) || null;
@@ -251,7 +252,7 @@ class FileStorageManager {
 
     // Create the backend
     try {
-      const backend = this.createBackendForMountPoint(mountPoint);
+      const backend = await this.createBackendForMountPoint(mountPoint);
       this.backends.set(mountPointId, backend);
 
       logger.debug('Created and cached backend', {
@@ -284,10 +285,10 @@ class FileStorageManager {
    * @returns The backend instance
    * @throws {Error} If no suitable backend is found
    */
-  getBackendForFile(file: FileEntry): FileStorageBackend {
+  async getBackendForFile(file: FileEntry): Promise<FileStorageBackend> {
     // Try to use the file's explicit mount point
     if (file.mountPointId) {
-      const backend = this.getBackend(file.mountPointId);
+      const backend = await this.getBackend(file.mountPointId);
       if (backend) {
         logger.debug('Got backend for file from explicit mount point', {
           fileId: file.id,
@@ -298,7 +299,7 @@ class FileStorageManager {
     }
 
     // Fall back to project or system default
-    const backend = this.getBackendForProject(file.projectId || null);
+    const backend = await this.getBackendForProject(file.projectId || null);
 
     logger.debug('Got backend for file from project/system default', {
       fileId: file.id,
@@ -320,13 +321,13 @@ class FileStorageManager {
    * @returns The backend instance
    * @throws {Error} If no suitable backend is found
    */
-  getBackendForProject(projectId: string | null): FileStorageBackend {
+  async getBackendForProject(projectId: string | null): Promise<FileStorageBackend> {
     logger.debug('Getting backend for project', { projectId });
 
     // In the future, check project-specific settings here
 
     // Fall back to project default or system default
-    const backend = this.getDefaultBackend();
+    const backend = await this.getDefaultBackend();
 
     if (!backend) {
       throw new Error(
@@ -345,7 +346,7 @@ class FileStorageManager {
    * @returns The default backend instance
    * @throws {Error} If no default backend is configured
    */
-  getDefaultBackend(): FileStorageBackend {
+  async getDefaultBackend(): Promise<FileStorageBackend> {
     if (!this.defaultMountPointId) {
       const errorMsg =
         'No default mount point configured. Create a mount point and mark it as default.';
@@ -353,7 +354,7 @@ class FileStorageManager {
       throw new Error(errorMsg);
     }
 
-    const backend = this.getBackend(this.defaultMountPointId);
+    const backend = await this.getBackend(this.defaultMountPointId);
     if (!backend) {
       const errorMsg = `Failed to get default backend for mount point ${this.defaultMountPointId}`;
       logger.error(errorMsg);
@@ -477,18 +478,25 @@ class FileStorageManager {
     logger.debug('Refreshing mount points from database');
 
     try {
-      // TODO: Load mount points from MongoDB when the database layer is ready
-      // For now, this is a placeholder that will be implemented when the
-      // mount point repository is available.
+      // Load mount points from MongoDB
+      const mountPoints = await mountPointsRepository.findAll();
 
-      // Example implementation (when ready):
-      // const mountPoints = await mountPointRepository.findAll();
-      // this.mountPoints.clear();
-      // this.backends.clear();
-      //
-      // for (const mp of mountPoints) {
-      //   this.mountPoints.set(mp.id, mp);
-      // }
+      // Clear existing state
+      this.mountPoints.clear();
+      this.backends.clear();
+      this.defaultMountPointId = null;
+      this.projectDefaultMountPointId = null;
+
+      // Populate mount points map
+      for (const mp of mountPoints) {
+        this.mountPoints.set(mp.id, mp);
+        logger.debug('Loaded mount point', {
+          mountPointId: mp.id,
+          name: mp.name,
+          backendType: mp.backendType,
+          isDefault: mp.isDefault,
+        });
+      }
 
       logger.info('Mount points refreshed', {
         count: this.mountPoints.size,
@@ -547,7 +555,7 @@ class FileStorageManager {
       let targetMountPointId = overrideMountPointId;
 
       if (!targetMountPointId) {
-        const backend = this.getBackendForProject(projectId || null);
+        const backend = await this.getBackendForProject(projectId || null);
         // Find the mount point ID for this backend
         for (const [id, cachedBackend] of this.backends) {
           if (cachedBackend === backend) {
@@ -566,7 +574,7 @@ class FileStorageManager {
       }
 
       // Get backend
-      const backend = this.getBackend(targetMountPointId);
+      const backend = await this.getBackend(targetMountPointId);
       if (!backend) {
         throw new Error(`Failed to get backend for mount point ${targetMountPointId}`);
       }
@@ -633,7 +641,7 @@ class FileStorageManager {
         throw new Error('File has no storage key. Cannot download.');
       }
 
-      const backend = this.getBackendForFile(file);
+      const backend = await this.getBackendForFile(file);
 
       const content = await backend.download(file.storageKey);
 
@@ -684,7 +692,7 @@ class FileStorageManager {
         return;
       }
 
-      const backend = this.getBackendForFile(file);
+      const backend = await this.getBackendForFile(file);
 
       await backend.delete(file.storageKey);
 
@@ -734,7 +742,7 @@ class FileStorageManager {
         throw new Error('File has no storage key. Cannot generate URL.');
       }
 
-      const backend = this.getBackendForFile(file);
+      const backend = await this.getBackendForFile(file);
       const metadata = backend.getMetadata();
 
       // Try to generate presigned URL if requested and supported
@@ -800,7 +808,7 @@ class FileStorageManager {
         return false;
       }
 
-      const backend = this.getBackendForFile(file);
+      const backend = await this.getBackendForFile(file);
       const exists = await backend.exists(file.storageKey);
 
       logger.debug('File existence check complete', {
@@ -896,7 +904,7 @@ class FileStorageManager {
    * @returns Initialized backend instance
    * @throws {Error} If backend creation fails
    */
-  private createBackendForMountPoint(mountPoint: MountPoint): FileStorageBackend {
+  private async createBackendForMountPoint(mountPoint: MountPoint): Promise<FileStorageBackend> {
     logger.debug('Creating backend for mount point', {
       mountPointId: mountPoint.id,
       backendType: mountPoint.backendType,
@@ -914,6 +922,21 @@ class FileStorageManager {
         const backend = new LocalFileStorageBackend({
           basePath: config.basePath,
         });
+
+        // Test connection and ensure directory exists
+        const testResult = await backend.testConnection();
+        if (!testResult.success) {
+          logger.warn('Local backend connection test failed', {
+            mountPointId: mountPoint.id,
+            basePath: config.basePath,
+            message: testResult.message,
+          });
+        } else {
+          logger.debug('Local backend connection test passed', {
+            mountPointId: mountPoint.id,
+            latencyMs: testResult.latencyMs,
+          });
+        }
 
         logger.info('Created local file storage backend', {
           mountPointId: mountPoint.id,

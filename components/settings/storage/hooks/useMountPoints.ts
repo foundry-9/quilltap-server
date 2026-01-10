@@ -144,14 +144,19 @@ export function useMountPoints(): UseMountPointsResult {
     })
 
     if (!result.ok) {
+      // Still refresh to show any health status changes
+      await fetchMountPoints()
       return {
         success: false,
         message: result.error || 'Connection test failed',
       }
     }
 
+    // Refresh mount points to update health status in UI
+    await fetchMountPoints()
+
     return result.data || { success: false, message: 'No response from server' }
-  }, [])
+  }, [fetchMountPoints])
 
   const setDefault = useCallback(
     async (id: string, type: 'general' | 'project'): Promise<boolean> => {

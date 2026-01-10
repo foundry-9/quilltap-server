@@ -184,7 +184,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
           });
 
           try {
-            const backend = fileStorageManager.getBackendForFile(fileEntry);
+            const backend = await fileStorageManager.getBackendForFile(fileEntry);
 
             // Try to use backend copy if available, otherwise download and re-upload
             if (backend.copy) {

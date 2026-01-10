@@ -10,6 +10,7 @@ import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
 import { MountPointSchema, LocalBackendConfigSchema, S3BackendConfigSchema } from '@/lib/file-storage/mount-point.types'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 
 // Validation schema for creating a mount point
 const createMountPointSchema = z.object({
@@ -104,6 +105,23 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
       backendType: mountPoint.backendType,
       scope: mountPoint.scope,
     })
+
+    // Refresh the file storage manager to pick up the new mount point
+    try {
+      if (!fileStorageManager.isInitialized()) {
+        await fileStorageManager.initialize()
+      } else {
+        await fileStorageManager.refreshMountPoints()
+      }
+      logger.debug('File storage manager refreshed after mount point creation', {
+        mountPointId: mountPoint.id,
+      })
+    } catch (refreshError) {
+      logger.warn('Failed to refresh file storage manager after mount point creation', {
+        mountPointId: mountPoint.id,
+        error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+      })
+    }
 
     return NextResponse.json({ mountPoint }, { status: 201 })
   } catch (error) {

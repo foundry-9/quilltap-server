@@ -106,6 +106,7 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
 - `clientLogger.*` calls on the front end nearly always need to be wrapped in a useEffect or they're going to throw errors. Anticipate this when creating or editing UI components.
 - Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports, backups, and/or migration/upgrade plugin.
 - Any files that exist in the app source code only because they are necessary for migrations should move to the migration/upgrade plugin.
+- If we make changes to anything in the `packages/` directory, we need to pause make sure we update package.json numbers and pause to allow `npm publish` to push those packages into npmjs.
 
 ## Best Practices and Principles
 

@@ -73,8 +73,14 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       const now = new Date().toISOString()
 
+      // Ensure the file storage manager is initialized
+      if (!fileStorageManager.isInitialized()) {
+        logger.debug('Initializing file storage manager for mount point test', { mountPointId: id })
+        await fileStorageManager.initialize()
+      }
+
       // Try to get the backend from the file storage manager
-      const backend = fileStorageManager.getBackend(id)
+      const backend = await fileStorageManager.getBackend(id)
 
       if (!backend) {
         // Backend could not be instantiated

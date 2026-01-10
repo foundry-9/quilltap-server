@@ -10,6 +10,7 @@ import { NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 
 /**
  * GET /api/mount-points/[id]
@@ -185,6 +186,23 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         backendType: updatedMountPoint.backendType,
       })
 
+      // Refresh the file storage manager to pick up the updated mount point
+      try {
+        if (!fileStorageManager.isInitialized()) {
+          await fileStorageManager.initialize()
+        } else {
+          await fileStorageManager.refreshMountPoints()
+        }
+        logger.debug('File storage manager refreshed after mount point update', {
+          mountPointId: id,
+        })
+      } catch (refreshError) {
+        logger.warn('Failed to refresh file storage manager after mount point update', {
+          mountPointId: id,
+          error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+        })
+      }
+
       return NextResponse.json({ mountPoint: updatedMountPoint })
     } catch (error) {
       logger.error('Error updating mount point', { endpoint: '/api/mount-points/[id]', method: 'PATCH', mountPointId: id }, error instanceof Error ? error : undefined)
@@ -267,6 +285,23 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         wasDefault: isDefault,
         wasProjectDefault: isProjectDefault,
       })
+
+      // Refresh the file storage manager to remove the deleted mount point
+      try {
+        if (!fileStorageManager.isInitialized()) {
+          await fileStorageManager.initialize()
+        } else {
+          await fileStorageManager.refreshMountPoints()
+        }
+        logger.debug('File storage manager refreshed after mount point deletion', {
+          mountPointId: id,
+        })
+      } catch (refreshError) {
+        logger.warn('Failed to refresh file storage manager after mount point deletion', {
+          mountPointId: id,
+          error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+        })
+      }
 
       const response: Record<string, any> = {
         success: true,

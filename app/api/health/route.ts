@@ -149,7 +149,7 @@ async function checkFileStorageHealth(
     }
 
     // Test the default backend
-    const defaultBackend = fileStorageManager.getDefaultBackend();
+    const defaultBackend = await fileStorageManager.getDefaultBackend();
     const metadata = defaultBackend.getMetadata();
 
     services.s3 = {

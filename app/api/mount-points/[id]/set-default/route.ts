@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 
 /**
  * POST /api/mount-points/[id]/set-default
@@ -125,6 +126,24 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         isDefault: updatedMountPoint.isDefault,
         isProjectDefault: updatedMountPoint.isProjectDefault,
       })
+
+      // Refresh the file storage manager to pick up the new default
+      try {
+        if (!fileStorageManager.isInitialized()) {
+          await fileStorageManager.initialize()
+        } else {
+          await fileStorageManager.refreshMountPoints()
+        }
+        logger.debug('File storage manager refreshed after setting default', {
+          mountPointId: id,
+          type,
+        })
+      } catch (refreshError) {
+        logger.warn('Failed to refresh file storage manager after setting default', {
+          mountPointId: id,
+          error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+        })
+      }
 
       return NextResponse.json(response)
     } catch (error) {
