@@ -172,7 +172,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Use the extracted file attachments hook
   const fileHook = useFileAttachments(id, chat?.projectId)
   const { attachedFiles, setAttachedFiles, uploadingFile } = fileHook
-  const { handleFileSelect, removeAttachedFile } = fileHook
+  const { handleFileSelect, removeAttachedFile, uploadFile } = fileHook
   const { conflictInfo, isConflictDialogOpen, resolvingConflict, handleConflictResolution, cancelConflict } = fileHook
 
   // Refs
@@ -2308,6 +2308,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onFileSelect={handleFileSelect}
           onAttachFileClick={() => {
             // File input ref will be created in component
+          }}
+          onImagePaste={async (file: File) => {
+            // Upload pasted image using the existing upload logic
+            try {
+              clientLogger.debug('[ChatPage] Uploading pasted image', {
+                filename: file.name,
+                mimeType: file.type,
+                size: file.size,
+              })
+              const success = await uploadFile(file)
+              if (success) {
+                showSuccessToast('Image pasted and attached')
+              }
+            } catch (err) {
+              clientLogger.error('[ChatPage] Error uploading pasted image:', {
+                error: err instanceof Error ? err.message : String(err),
+              })
+              showErrorToast(err instanceof Error ? err.message : 'Failed to upload pasted image')
+            }
           }}
           onGalleryClick={() => setGalleryOpen(true)}
           onGenerateImageClick={() => setGenerateImageDialogOpen(true)}

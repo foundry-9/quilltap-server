@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- feat: Paste images directly into chat textarea
+  - Pasted images from clipboard are automatically uploaded and attached to messages
+  - Uses existing file attachment infrastructure with conflict resolution
+  - Auto-generates timestamped filenames (e.g., `pasted-image-1736697400000.png`)
+  - Supports all image MIME types (JPEG, PNG, GIF, WebP)
+  - Works seamlessly with existing file upload and message composition flow
 - feat: First-class folder entities with database persistence
   - Folders are now stored as entities in the database, not derived from file paths
   - Empty folders now persist (previously, folders with no files would disappear)

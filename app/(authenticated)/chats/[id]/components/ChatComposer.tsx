@@ -52,6 +52,7 @@ interface ChatComposerProps {
   onSubmit: (e: React.FormEvent) => void
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
   onAttachFileClick?: () => void
+  onImagePaste: (file: File) => Promise<void>
   onGalleryClick: () => void
   onGenerateImageClick: () => void
   onAddCharacterClick: () => void
@@ -117,6 +118,7 @@ export function ChatComposer({
   onSubmit,
   onFileSelect,
   onAttachFileClick,
+  onImagePaste,
   onGalleryClick,
   onGenerateImageClick,
   onAddCharacterClick,
@@ -247,6 +249,39 @@ export function ChatComposer({
       }
     }
   }
+
+  // Handle paste events to detect and upload images
+  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    // Check for image items in clipboard
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      if (item.type.startsWith('image/')) {
+        e.preventDefault() // Prevent default paste behavior for images
+        const file = item.getAsFile()
+        if (file) {
+          // Generate a unique filename with timestamp
+          const timestamp = Date.now()
+          const extension = file.type.split('/')[1] || 'png'
+          const filename = `pasted-image-${timestamp}.${extension}`
+          const renamedFile = new File([file], filename, { type: file.type })
+
+          clientLogger.debug('[ChatComposer] Image pasted from clipboard', {
+            filename,
+            mimeType: file.type,
+            size: file.size,
+          })
+
+          // Upload the pasted image
+          await onImagePaste(renamedFile)
+        }
+        return // Only handle the first image
+      }
+    }
+    // Allow normal text paste to proceed if no images found
+  }, [onImagePaste])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const textarea = e.currentTarget
@@ -501,6 +536,7 @@ export function ChatComposer({
               defaultValue={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               disabled={sending || !hasActiveCharacters}
               rows={1}
               placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}

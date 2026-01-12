@@ -213,6 +213,7 @@ export function useFileAttachments(chatId: string, projectId?: string | null) {
     fileInputRef,
     handleFileSelect,
     removeAttachedFile,
+    uploadFile, // Expose for direct file uploads (e.g., from paste)
     // Conflict handling
     conflictInfo,
     isConflictDialogOpen,
