@@ -593,6 +593,21 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       });
     }
 
+    // Initialize the file storage manager after backend plugins are registered
+    // This loads mount points from the database and sets up the default backend
+    try {
+      logger.debug('Initializing file storage manager');
+      await fileStorageManager.initialize();
+      logger.info('File storage manager initialized successfully');
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to initialize file storage manager', { error: errorMsg });
+      result.warnings.push({
+        plugin: 'file-storage',
+        warnings: [`File storage initialization failed: ${errorMsg}`],
+      });
+    }
+
     return result;
   } catch (error) {
     logger.error('Failed to initialize plugin system', { error });

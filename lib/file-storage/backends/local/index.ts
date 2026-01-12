@@ -13,6 +13,7 @@
 import { readFile, writeFile, mkdir, access, copyFile, readdir, unlink, stat, rmdir } from 'fs/promises';
 import { Readable } from 'stream';
 import { join, normalize, relative } from 'path';
+import { homedir } from 'os';
 import { createLogger } from '../../../logging/create-logger';
 import type {
   FileStorageBackend,
@@ -74,9 +75,18 @@ export class LocalFileStorageBackend implements FileStorageBackend {
       throw new Error('Local file storage backend requires basePath configuration');
     }
 
-    this.basePath = normalize(config.basePath);
+    // Expand tilde to home directory (Node.js doesn't do this automatically)
+    let resolvedPath = config.basePath;
+    if (resolvedPath.startsWith('~/')) {
+      resolvedPath = join(homedir(), resolvedPath.slice(2));
+    } else if (resolvedPath === '~') {
+      resolvedPath = homedir();
+    }
+
+    this.basePath = normalize(resolvedPath);
     logger.debug('Initialized local file storage backend', {
       basePath: this.basePath,
+      originalBasePath: config.basePath,
     });
   }
 

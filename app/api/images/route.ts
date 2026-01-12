@@ -92,9 +92,9 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
                      img.source === 'IMPORTED' ? 'import' :
                      img.source === 'GENERATED' ? 'generated' : 'upload';
 
-      // Generate filepath - use API route for S3 files, local path for file-based
+      // Generate filepath - use API route for files with storage keys (S3 or mount point)
       let filepath: string;
-      if (img.s3Key) {
+      if (img.s3Key || img.storageKey) {
         filepath = `/api/files/${img.id}`;
       } else {
         const ext = img.originalFilename.includes('.')

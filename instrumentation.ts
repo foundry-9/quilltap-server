@@ -17,12 +17,14 @@ export async function register() {
       setupStdoutCapture();
     }
 
-    console.log('🚀 Server starting - initializing plugin system');
+    console.log('🚀 Server starting - initializing services');
 
     try {
       // Dynamically import everything to avoid Edge Runtime issues
       const { initializePlugins } = await import('./lib/startup/plugin-initialization');
+      const { fileStorageManager } = await import('./lib/file-storage/manager');
 
+      // Initialize plugins first (includes file storage backend plugins)
       const result = await initializePlugins();
 
       if (result.success) {
@@ -38,9 +40,16 @@ export async function register() {
           errors: result.errors,
         });
       }
+
+      // Ensure file storage manager is initialized (may already be done by plugin init)
+      if (!fileStorageManager.isInitialized()) {
+        console.log('📁 Initializing file storage manager...');
+        await fileStorageManager.initialize();
+        console.log('✅ File storage manager initialized');
+      }
     } catch (error) {
-      console.error('❌ Fatal error initializing plugin system:', error);
-      // Don't throw - allow server to start even if plugins fail
+      console.error('❌ Fatal error initializing services:', error);
+      // Don't throw - allow server to start even if initialization fails
     }
   }
 }

@@ -220,6 +220,20 @@ class FileStorageManager {
     return this.initialized;
   }
 
+  /**
+   * Ensure the manager is initialized before use
+   *
+   * This provides lazy initialization for cases where the manager
+   * is accessed before explicit initialization (e.g., in different
+   * Next.js server contexts).
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initialized) {
+      logger.debug('Lazy initializing file storage manager');
+      await this.initialize();
+    }
+  }
+
   // ========================================================================
   // BACKEND RESOLUTION
   // ========================================================================
@@ -233,6 +247,9 @@ class FileStorageManager {
    * @returns The backend instance, or null if mount point not found
    */
   async getBackend(mountPointId: string): Promise<FileStorageBackend | null> {
+    // Ensure manager is initialized (lazy initialization for different contexts)
+    await this.ensureInitialized();
+
     // Check if backend is already instantiated and cached
     if (this.backends.has(mountPointId)) {
       return this.backends.get(mountPointId) || null;
@@ -364,6 +381,9 @@ class FileStorageManager {
    * @throws {Error} If no default backend is configured
    */
   async getDefaultBackend(): Promise<FileStorageBackend> {
+    // Ensure manager is initialized (lazy initialization for different contexts)
+    await this.ensureInitialized();
+
     if (!this.defaultMountPointId) {
       const errorMsg =
         'No default mount point configured. Create a mount point and mark it as default.';

@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- fix: File storage manager initialization and image serving
+  - File storage manager now initializes during startup via instrumentation.ts
+  - Added lazy initialization to ensure manager is ready before any file operations
+  - Local storage backend now expands `~` to home directory (Node.js doesn't do this automatically)
+  - Fixed images API to check for `storageKey` (mount point system) in addition to `s3Key`
+  - Images uploaded via the new mount point system now display correctly
 - feat: Paste images directly into chat textarea
   - Pasted images from clipboard are automatically uploaded and attached to messages
   - Uses existing file attachment infrastructure with conflict resolution
