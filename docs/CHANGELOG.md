@@ -4,6 +4,15 @@
 
 ### 2.7-dev
 
+- fix: AI Wizard image preview showing broken image
+  - Fixed incorrect fallback URL `/api/images/{id}/file` to correct `/api/files/{id}`
+  - Affects both uploaded images and gallery selections in the AI Wizard
+- fix: AI Wizard generated description being wiped after applying
+  - `fetchCharacter()` was called after saving physical description, which overwrote unsaved form state
+  - Now uses a `refreshKey` prop to trigger PhysicalDescriptionList refresh without wiping form data
+- fix: File path resolution not checking storageKey
+  - `getFilePath()` in file-path middleware only checked `s3Key`, missing files with `storageKey`
+  - Now checks both `storageKey` and `s3Key` for proper file serving
 - fix: File storage manager initialization and image serving
   - File storage manager now initializes during startup via instrumentation.ts
   - Added lazy initialization to ensure manager is ready before any file operations

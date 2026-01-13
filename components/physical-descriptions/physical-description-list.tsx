@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useListManager } from '@/hooks/useListManager'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { PhysicalDescriptionCard, PhysicalDescription } from './physical-description-card'
@@ -13,9 +14,11 @@ interface PhysicalDescriptionListProps {
   // EntityType is now only 'character' - personas have been migrated to characters with controlledBy: 'user'
   entityType: 'character'
   entityId: string
+  // Optional key to trigger refetch from parent (e.g., after AI wizard creates a description)
+  refreshKey?: number
 }
 
-export function PhysicalDescriptionList({ entityType, entityId }: PhysicalDescriptionListProps) {
+export function PhysicalDescriptionList({ entityType, entityId, refreshKey }: PhysicalDescriptionListProps) {
   // All entities are now characters (personas migrated to characters with controlledBy: 'user')
   const baseUrl = `/api/characters/${entityId}/descriptions`
 
@@ -45,6 +48,13 @@ export function PhysicalDescriptionList({ entityType, entityId }: PhysicalDescri
     deleteConfirmMessage: 'Are you sure you want to delete this description?',
     deleteSuccessMessage: 'Description deleted',
   })
+
+  // Refetch when refreshKey changes (used by AI Wizard to refresh after creating description)
+  useEffect(() => {
+    if (refreshKey !== undefined && refreshKey > 0) {
+      refetch()
+    }
+  }, [refreshKey, refetch])
 
   const documentIcon = (
     <svg

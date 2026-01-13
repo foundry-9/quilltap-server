@@ -83,6 +83,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   } = useCharacterEdit(id)
 
   const [showWizard, setShowWizard] = useState(false)
+  const [physicalDescriptionsRefreshKey, setPhysicalDescriptionsRefreshKey] = useState(0)
 
   // Debug logging moved to useEffect to avoid state updates during render
   useEffect(() => {
@@ -128,7 +129,8 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
         if (response.ok) {
           showSuccessToast('Physical description created')
-          fetchCharacter() // Refresh to show new physical description
+          // Trigger refresh of PhysicalDescriptionList without wiping form state
+          setPhysicalDescriptionsRefreshKey((prev) => prev + 1)
         } else {
           const errorData = await response.json()
           showErrorToast(errorData.error || 'Failed to create physical description')
@@ -246,6 +248,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                   <PhysicalDescriptionList
                     entityType="character"
                     entityId={id}
+                    refreshKey={physicalDescriptionsRefreshKey}
                   />
                 )
 
