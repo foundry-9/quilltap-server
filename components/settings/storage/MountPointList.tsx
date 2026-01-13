@@ -10,6 +10,7 @@ interface MountPointListProps {
   onDelete: (id: string) => Promise<boolean>
   onTestConnection: (id: string) => Promise<ConnectionTestResult>
   onSetDefault: (id: string) => Promise<boolean>
+  onScanOrphans?: (mountPoint: MountPoint) => void
 }
 
 /**
@@ -22,6 +23,7 @@ export function MountPointList({
   onDelete,
   onTestConnection,
   onSetDefault,
+  onScanOrphans,
 }: MountPointListProps) {
   // Create a map of backends by ID for quick lookup
   const backendMap = new Map(availableBackends.map((b) => [b.backendId, b]))
@@ -51,6 +53,7 @@ export function MountPointList({
           onDelete={onDelete}
           onTestConnection={onTestConnection}
           onSetDefault={onSetDefault}
+          onScanOrphans={onScanOrphans}
         />
       ))}
     </div>

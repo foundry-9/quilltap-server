@@ -4,6 +4,17 @@
 
 ### 2.7-dev
 
+- feat: Orphan file recovery tool
+  - New "Scan Orphans" button on mount point cards in Storage settings
+  - Scans storage backends to find files not tracked in the database
+  - Parses storage keys to extract user, project, and filename information
+  - Adopt orphaned files with one click to create database entries
+  - Optional SHA256 hash computation for deduplication support
+  - Works with both local filesystem and S3-compatible backends
+  - New API endpoints: `POST /api/mount-points/[id]/scan-orphans` and `/adopt-orphans`
+  - New files: `lib/file-storage/orphan-recovery.ts`, `OrphanScanModal.tsx`, `useOrphanScan.ts`
+- fix: Mount point description field schema validation
+  - Changed description from `.optional()` to `.nullish()` to allow null values from database
 - fix: AI Wizard image preview showing broken image
   - Fixed incorrect fallback URL `/api/images/{id}/file` to correct `/api/files/{id}`
   - Affects both uploaded images and gallery selections in the AI Wizard

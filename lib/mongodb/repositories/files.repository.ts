@@ -671,6 +671,33 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
   }
 
   /**
+   * Find all files stored in a specific mount point
+   * @param mountPointId - The mount point ID
+   * @returns Array of file entries stored in the mount point
+   */
+  async findByMountPointId(mountPointId: string): Promise<FileEntry[]> {
+    try {
+      const collection = await this.getCollection();
+      const files = await collection.find({ mountPointId }).toArray();
+
+      logger.debug('Found files by mount point', {
+        context: 'files-repository',
+        mountPointId,
+        count: files.length,
+      });
+
+      return files.map((file: unknown) => this.validate(file));
+    } catch (error) {
+      logger.error('Error finding files by mount point', {
+        context: 'files-repository',
+        mountPointId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Find general files (not in any project)
    * @param userId - The user ID for ownership verification
    */

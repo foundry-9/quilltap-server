@@ -8,6 +8,7 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useMountPoints } from './hooks/useMountPoints'
 import { MountPointModal } from './MountPointModal'
 import { MountPointList } from './MountPointList'
+import { OrphanScanModal } from './OrphanScanModal'
 import type { MountPoint } from './types'
 
 // Re-export types and utilities for consumers
@@ -33,6 +34,7 @@ export default function StorageSettingsTab() {
   // UI states
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingMountPoint, setEditingMountPoint] = useState<MountPoint | null>(null)
+  const [scanningMountPoint, setScanningMountPoint] = useState<MountPoint | null>(null)
 
   // Data hook
   const {
@@ -76,6 +78,16 @@ export default function StorageSettingsTab() {
   const handleModalSuccess = async () => {
     clientLogger.debug('Mount point saved via modal')
     await fetchMountPoints()
+  }
+
+  const handleScanOrphans = (mountPoint: MountPoint) => {
+    clientLogger.debug('Opening orphan scan modal', { mountPointId: mountPoint.id })
+    setScanningMountPoint(mountPoint)
+  }
+
+  const handleCloseScanModal = () => {
+    clientLogger.debug('Closing orphan scan modal')
+    setScanningMountPoint(null)
   }
 
   // Show loading state during initial load
@@ -133,6 +145,7 @@ export default function StorageSettingsTab() {
         onDelete={deleteMountPoint}
         onTestConnection={testConnection}
         onSetDefault={setDefault}
+        onScanOrphans={handleScanOrphans}
       />
 
       {/* Mount Point Modal - key ensures remount when switching mount points */}
@@ -146,6 +159,15 @@ export default function StorageSettingsTab() {
         createMountPoint={createMountPoint}
         updateMountPoint={updateMountPoint}
       />
+
+      {/* Orphan Scan Modal */}
+      {scanningMountPoint && (
+        <OrphanScanModal
+          isOpen={!!scanningMountPoint}
+          onClose={handleCloseScanModal}
+          mountPoint={scanningMountPoint}
+        />
+      )}
     </div>
   )
 }

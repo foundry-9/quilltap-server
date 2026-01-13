@@ -12,6 +12,7 @@ interface MountPointCardProps {
   onDelete: (id: string) => Promise<boolean>
   onTestConnection: (id: string) => Promise<ConnectionTestResult>
   onSetDefault: (id: string) => Promise<boolean>
+  onScanOrphans?: (mountPoint: MountPoint) => void
 }
 
 /**
@@ -24,6 +25,7 @@ export function MountPointCard({
   onDelete,
   onTestConnection,
   onSetDefault,
+  onScanOrphans,
 }: MountPointCardProps) {
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null)
@@ -161,6 +163,14 @@ export function MountPointCard({
           <button onClick={() => onEdit(mountPoint)} className="qt-button qt-button-secondary text-sm">
             Edit
           </button>
+          {onScanOrphans && (
+            <button
+              onClick={() => onScanOrphans(mountPoint)}
+              className="qt-button qt-button-secondary text-sm"
+            >
+              Scan Orphans
+            </button>
+          )}
           {!mountPoint.isDefault && (
             <button
               onClick={handleSetDefault}
