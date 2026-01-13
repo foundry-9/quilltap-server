@@ -72,7 +72,7 @@ export const MountPointSchema = z.object({
   // Identity
   id: UUIDSchema,
   name: z.string().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
-  description: z.string().max(500, 'Description must be 500 characters or less').optional(),
+  description: z.string().max(500, 'Description must be 500 characters or less').nullish(),
 
   // Backend configuration
   backendType: z.string().min(1, 'Backend type is required'),
