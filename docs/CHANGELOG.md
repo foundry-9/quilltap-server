@@ -48,7 +48,22 @@
   - S3 backends store folders only in DB (S3 uses key prefixes, not real folders)
   - Migration creates folder entities from existing file paths
   - Supports sync compatibility between local and S3 systems
-  - New files: `lib/schemas/folder.types.ts`, `lib/mongodb/repositories/folders.repository.ts`
+- test: Expanded unit test coverage for v2.7-dev features
+  - Context compression: `compression.test.ts` (22 tests for shouldApplyCompression, splitMessagesForCompression, applyContextCompression, buildCompressedSystemMessage)
+  - Compression cache service: `compression-cache.service.test.ts` (17 tests for async pre-compression)
+  - Text detection utility: `text-detection.test.ts` (47 tests for isTextContent, getMimeTypeFromExtension, isTextMimeType, detectTextContent)
+  - LLM error types: `errors.test.ts` (47 tests for TokenLimitError, ContentLimitError, error detection and parsing)
+  - Recovery service: `recovery.service.test.ts` (32 tests for graceful error recovery messages)
+  - Tool registry: `tool-registry.test.ts` (28 tests for TOOL_PROVIDER plugin capability)
+  - Orphan recovery: `orphan-recovery.test.ts` (13 tests for parseStorageKey)
+  - Secrets encryption: `secrets.test.ts` (19 tests for mount point secrets encryption/decryption)
+  - Folders repository: `folders.repository.test.ts` (28 tests for CRUD and hierarchy queries)
+  - First message context: `first-message-context.test.ts` (18 tests for participant memories and project context)
+  - Memory processor: Expanded with 11 tests for aboutCharacterId/userCharacterId inter-character memory tracking
+- fix: Unhandled promise rejection in compression cache service
+  - Refactored `triggerAsyncCompression` to use async/await IIFE instead of promise chaining
+  - Errors now return a "not applied" result with warning instead of throwing
+  - Cache entries preserved on failure (with failure result) for consistent state
 - feat: Per-project mount point storage locations
   - Projects can now specify which mount point stores their files
   - Replaced confusing global "project default" with per-project assignment

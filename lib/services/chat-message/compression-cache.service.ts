@@ -129,35 +129,48 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
     windowSize: compressionOptions.windowSize,
   })
 
-  // Create the compression promise
-  const compressionPromise = applyContextCompression(
-    messages,
-    systemPrompt,
-    compressionOptions
-  ).then(result => {
-    // Update cache entry with result
-    const entry = compressionCache.get(chatId)
-    if (entry && entry.promise === compressionPromise) {
-      entry.result = result
-      delete entry.promise
-      logger.info('[CompressionCache] Async pre-compression completed', {
+  // Create the compression promise using an async helper function
+  // This avoids unhandled promise rejections by catching all errors
+  const runCompression = async (): Promise<ContextCompressionResult> => {
+    try {
+      const result = await applyContextCompression(
+        messages,
+        systemPrompt,
+        compressionOptions
+      )
+      // Update cache entry with result
+      const entry = compressionCache.get(chatId)
+      if (entry) {
+        entry.result = result
+        delete entry.promise
+        logger.info('[CompressionCache] Async pre-compression completed', {
+          chatId,
+          compressionApplied: result.compressionApplied,
+          savings: result.compressionDetails?.totalSavings,
+        })
+      }
+      return result
+    } catch (error) {
+      logger.error('[CompressionCache] Async pre-compression failed', {
         chatId,
-        compressionApplied: result.compressionApplied,
-        savings: result.compressionDetails?.totalSavings,
-      })
+      }, error instanceof Error ? error : undefined)
+      // Return a "not applied" result instead of throwing
+      // This ensures the promise resolves, avoiding unhandled rejections
+      const failureResult: ContextCompressionResult = {
+        compressionApplied: false,
+        warnings: [`Compression failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+      }
+      // Update cache with failure result instead of deleting
+      const entry = compressionCache.get(chatId)
+      if (entry) {
+        entry.result = failureResult
+        delete entry.promise
+      }
+      return failureResult
     }
-    return result
-  }).catch(error => {
-    // Remove failed entry
-    const entry = compressionCache.get(chatId)
-    if (entry && entry.promise === compressionPromise) {
-      compressionCache.delete(chatId)
-    }
-    logger.error('[CompressionCache] Async pre-compression failed', {
-      chatId,
-    }, error instanceof Error ? error : undefined)
-    throw error
-  })
+  }
+
+  const compressionPromise = runCompression()
 
   // Store the cache entry with the promise
   compressionCache.set(chatId, {
