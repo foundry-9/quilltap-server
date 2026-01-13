@@ -1,0 +1,166 @@
+/**
+ * Memories API v1 - Individual Memory Endpoint
+ *
+ * GET /api/v1/memories/[id] - Get a specific memory
+ * PUT /api/v1/memories/[id] - Update a memory
+ * DELETE /api/v1/memories/[id] - Delete a memory
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { z } from 'zod';
+import { logger } from '@/lib/logger';
+import { notFound, forbidden, serverError, validationError } from '@/lib/api/responses';
+
+// Validation schema for updating a memory
+const updateMemorySchema = z.object({
+  content: z.string().min(1).optional(),
+  summary: z.string().min(1).optional(),
+  keywords: z.array(z.string()).optional(),
+  tags: z.array(z.string().uuid()).optional(),
+  importance: z.number().min(0).max(1).optional(),
+  aboutCharacterId: z.string().uuid().nullable().optional(),
+  personaId: z.string().uuid().nullable().optional(), // Legacy support
+  chatId: z.string().uuid().nullable().optional(),
+});
+
+/**
+ * GET /api/v1/memories/[id] - Get a specific memory
+ */
+export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id: memoryId }) => {
+    try {
+      logger.debug('[Memories API v1] GET memory', {
+        memoryId,
+        userId: user.id,
+      });
+
+      // Find the memory - need to check ownership via character
+      const memory = await repos.memories.findById(memoryId);
+      if (!memory) {
+        return notFound('Memory');
+      }
+
+      // Verify ownership via character
+      const character = await repos.characters.findById(memory.characterId);
+      if (!character || character.userId !== user.id) {
+        return notFound('Memory'); // Return 404 instead of 403 to not leak existence
+      }
+
+      // Enrich with tag names
+      const allTags = await repos.tags.findAll();
+      const tagMap = new Map(allTags.map((t: any) => [t.id, t]));
+
+      const memoryWithTags = {
+        ...memory,
+        tagDetails: memory.tags
+          .map((tagId: string) => tagMap.get(tagId))
+          .filter(Boolean),
+      };
+
+      // Update access time (fire and forget)
+      repos.memories.updateAccessTime(memory.characterId, memoryId).catch((err: Error) =>
+        logger.warn('[Memories API v1] Failed to update access time', {
+          memoryId,
+          error: err.message,
+        })
+      );
+
+      return NextResponse.json({ memory: memoryWithTags });
+    } catch (error) {
+      logger.error('[Memories API v1] Error fetching memory', {}, error instanceof Error ? error : undefined);
+      return serverError('Failed to fetch memory');
+    }
+  }
+);
+
+/**
+ * PUT /api/v1/memories/[id] - Update a memory
+ */
+export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id: memoryId }) => {
+    try {
+      logger.debug('[Memories API v1] PUT memory', {
+        memoryId,
+        userId: user.id,
+      });
+
+      // Find the memory
+      const existingMemory = await repos.memories.findById(memoryId);
+      if (!existingMemory) {
+        return notFound('Memory');
+      }
+
+      // Verify ownership via character
+      const character = await repos.characters.findById(existingMemory.characterId);
+      if (!character || character.userId !== user.id) {
+        return notFound('Memory');
+      }
+
+      const body = await req.json();
+      const validatedData = updateMemorySchema.parse(body);
+
+      const memory = await repos.memories.updateForCharacter(
+        existingMemory.characterId,
+        memoryId,
+        validatedData
+      );
+
+      if (!memory) {
+        return notFound('Memory');
+      }
+
+      logger.debug('[Memories API v1] Memory updated', {
+        memoryId,
+        characterId: existingMemory.characterId,
+      });
+
+      return NextResponse.json({ memory });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return validationError(error);
+      }
+
+      logger.error('[Memories API v1] Error updating memory', {}, error instanceof Error ? error : undefined);
+      return serverError('Failed to update memory');
+    }
+  }
+);
+
+/**
+ * DELETE /api/v1/memories/[id] - Delete a memory
+ */
+export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id: memoryId }) => {
+    try {
+      logger.debug('[Memories API v1] DELETE memory', {
+        memoryId,
+        userId: user.id,
+      });
+
+      // Find the memory
+      const existingMemory = await repos.memories.findById(memoryId);
+      if (!existingMemory) {
+        return notFound('Memory');
+      }
+
+      // Verify ownership via character
+      const character = await repos.characters.findById(existingMemory.characterId);
+      if (!character || character.userId !== user.id) {
+        return notFound('Memory');
+      }
+
+      await repos.memories.deleteForCharacter(existingMemory.characterId, memoryId);
+
+      logger.info('[Memories API v1] Memory deleted', {
+        memoryId,
+        characterId: existingMemory.characterId,
+      });
+
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      logger.error('[Memories API v1] Error deleting memory', {}, error instanceof Error ? error : undefined);
+      return serverError('Failed to delete memory');
+    }
+  }
+);

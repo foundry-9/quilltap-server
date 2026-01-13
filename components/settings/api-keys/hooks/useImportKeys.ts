@@ -133,7 +133,7 @@ export function useImportKeys({
     try {
       clientLogger.debug('Verifying import passphrase', { context: 'useImportKeys' })
 
-      const response = await fetch('/api/keys/import/preview', {
+      const response = await fetch('/api/v1/api-keys?action=import-preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -190,7 +190,7 @@ export function useImportKeys({
         duplicateHandling: state.duplicateHandling,
       })
 
-      const response = await fetch('/api/keys/import', {
+      const response = await fetch('/api/v1/api-keys?action=import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -410,7 +410,7 @@ export default function ChatSettingsModal({
       setRoleplayTemplateSaving(true)
       clientLogger.debug('Updating roleplay template', { chatId, templateId })
 
-      const res = await fetch(`/api/chats/${chatId}`, {
+      const res = await fetch(`/api/v1/chats/${chatId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roleplayTemplateId: templateId }),
@@ -449,7 +449,7 @@ export default function ChatSettingsModal({
   const handleParticipantUpdate = async (participantId: string, updates: ParticipantUpdate) => {
     try {
       setLoading(true)
-      const res = await fetch(`/api/chats/${chatId}`, {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

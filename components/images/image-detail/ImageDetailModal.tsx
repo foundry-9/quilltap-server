@@ -36,7 +36,7 @@ export default function ImageDetailModal({
       try {
         clientLogger.debug('Loading characters')
         setLoadingEntities(true)
-        const charsRes = await fetch('/api/characters')
+        const charsRes = await fetch('/api/v1/characters')
 
         if (charsRes.ok) {
           const charsData = await charsRes.json()

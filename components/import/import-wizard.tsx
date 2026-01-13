@@ -152,7 +152,7 @@ export function ImportWizard({
         create_date: parseResult.metadata.createDate,
       }
 
-      const response = await fetch('/api/chats/import', {
+      const response = await fetch('/api/v1/chats?action=import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

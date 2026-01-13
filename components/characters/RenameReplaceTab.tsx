@@ -108,7 +108,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
         }
       }
 
-      const res = await fetch(`/api/characters/${characterId}/rename`, {
+      const res = await fetch(`/api/v1/characters/${characterId}?action=rename`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -169,7 +169,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
         }
       }
 
-      const res = await fetch(`/api/characters/${characterId}/rename`, {
+      const res = await fetch(`/api/v1/characters/${characterId}?action=rename`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

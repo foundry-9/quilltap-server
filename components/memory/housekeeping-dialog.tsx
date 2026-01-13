@@ -50,7 +50,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
           mergeSimilar: mergeSimilar.toString(),
         })
 
-        const res = await fetch(`/api/characters/${characterId}/memories/housekeep?${params}`)
+        const res = await fetch(`/api/v1/memories?characterId=${characterId}&action=housekeep&${params}`)
         if (!res.ok) throw new Error('Failed to fetch preview')
 
         const data = await res.json()
@@ -69,7 +69,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
   const handleRun = async () => {
     setRunning(true)
     try {
-      const res = await fetch(`/api/characters/${characterId}/memories/housekeep`, {
+      const res = await fetch(`/api/v1/memories?characterId=${characterId}&action=housekeep`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

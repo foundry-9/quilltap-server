@@ -223,7 +223,7 @@ export default function AddCharacterDialog({
         participantData.joinScenario = joinScenario.trim()
       }
 
-      const response = await fetch(`/api/chats/${chatId}`, {
+      const response = await fetch(`/api/v1/chats/${chatId}?action=add-participant`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

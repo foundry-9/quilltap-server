@@ -98,7 +98,7 @@ export function useConnectionProfiles() {
     return await fetchOp.execute(async () => {
       clientLogger.debug('Fetching connection profiles')
       // Add cache busting timestamp to force fresh data
-      const result = await fetchJson<ConnectionProfile[]>(`/api/profiles?t=${Date.now()}`, {
+      const result = await fetchJson<ConnectionProfile[]>(`/api/v1/connection-profiles?t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -124,7 +124,7 @@ export function useConnectionProfiles() {
   const fetchApiKeys = useCallback(async () => {
     try {
       clientLogger.debug('Fetching API keys')
-      const result = await fetchJson<ApiKey[]>('/api/keys')
+      const result = await fetchJson<ApiKey[]>('/api/v1/api-keys')
       if (result.ok) {
         setApiKeys(result.data || [])
         clientLogger.debug('API keys loaded', { count: result.data?.length })
@@ -170,7 +170,7 @@ export function useConnectionProfiles() {
     async (id: string) => {
       const result = await deleteOp.execute(async () => {
         clientLogger.debug('Deleting connection profile', { profileId: id })
-        const fetchResult = await fetchJson(`/api/profiles/${id}`, { method: 'DELETE' })
+        const fetchResult = await fetchJson(`/api/v1/connection-profiles/${id}`, { method: 'DELETE' })
         if (!fetchResult.ok) throw new Error(fetchResult.error || 'Failed to delete profile')
         clientLogger.debug('Profile deleted successfully', { profileId: id })
         return fetchResult.data

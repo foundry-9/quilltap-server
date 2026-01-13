@@ -1,13 +1,18 @@
 // Memories API: List and Create for a Character
 // GET /api/characters/[id]/memories - List all memories for a character
 // POST /api/characters/[id]/memories - Create a new memory for a character
+//
+// DEPRECATED: This route is deprecated in favor of /api/v1/memories
+// - GET /api/v1/memories?characterId=[id]
+// - POST /api/v1/memories (with characterId in body)
+// This route will be removed after 2026-04-15
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { createMemoryWithEmbedding } from '@/lib/memory/memory-service'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
-import { notFound, forbidden, serverError, validationError } from '@/lib/api/responses'
+import { notFound, forbidden, serverError, validationError, withDeprecationHeaders, V1_MIGRATION_DEPRECATION } from '@/lib/api/responses'
 
 // Validation schema for creating a memory
 const createMemorySchema = z.object({
@@ -98,9 +103,13 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           .filter(Boolean),
       }))
 
-      return NextResponse.json({
+      const response = NextResponse.json({
         memories: memoriesWithTags,
         count: memoriesWithTags.length,
+      })
+      return withDeprecationHeaders(response, {
+        ...V1_MIGRATION_DEPRECATION,
+        replacement: '/api/v1/memories',
       })
     } catch (error) {
       logger.error('Error fetching memories', {}, error instanceof Error ? error : undefined)
@@ -145,7 +154,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         }
       )
 
-      return NextResponse.json({ memory }, { status: 201 })
+      const response = NextResponse.json({ memory }, { status: 201 })
+      return withDeprecationHeaders(response, {
+        ...V1_MIGRATION_DEPRECATION,
+        replacement: '/api/v1/memories',
+      })
     } catch (error) {
       if (error instanceof z.ZodError) {
         return validationError(error)

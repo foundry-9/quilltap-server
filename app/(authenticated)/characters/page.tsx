@@ -86,7 +86,7 @@ export default function CharactersPage() {
   const fetchCharacters = async () => {
     try {
       clientLogger.debug('Characters page: fetching all characters')
-      const res = await fetch('/api/characters')
+      const res = await fetch('/api/v1/characters')
       if (!res.ok) throw new Error('Failed to fetch characters')
       const data = await res.json()
       setCharacters(data.characters)
@@ -110,7 +110,7 @@ export default function CharactersPage() {
     if (options.cascadeImages) params.set('cascadeImages', 'true')
 
     try {
-      const url = `/api/characters/${id}${params.toString() ? `?${params.toString()}` : ''}`
+      const url = `/api/v1/characters/${id}${params.toString() ? `?${params.toString()}` : ''}`
       const res = await fetch(url, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete character')
 
@@ -141,7 +141,7 @@ export default function CharactersPage() {
   const toggleFavorite = async (e: React.MouseEvent, id: string) => {
     e.preventDefault()
     try {
-      const res = await fetch(`/api/characters/${id}/favorite`, { method: 'PATCH' })
+      const res = await fetch(`/api/v1/characters/${id}?action=favorite`, { method: 'PATCH' })
       if (!res.ok) throw new Error('Failed to toggle favorite')
       const data = await res.json()
       setCharacters(characters.map((c) => (c.id === id ? { ...c, isFavorite: data.character.isFavorite } : c)))
@@ -179,7 +179,7 @@ export default function CharactersPage() {
     const formData = new FormData(e.currentTarget)
 
     try {
-      const res = await fetch('/api/characters/import', {
+      const res = await fetch('/api/v1/characters?action=import', {
         method: 'POST',
         body: formData,
       })
@@ -326,7 +326,7 @@ export default function CharactersPage() {
                   Chat
                 </Link>
                 <a
-                  href={`/api/characters/${character.id}/export?format=json`}
+                  href={`/api/v1/characters/${character.id}?action=export&format=json`}
                   className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted"
                   title="Export character data"
                 >

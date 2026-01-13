@@ -619,7 +619,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setIsPaused(false)
     userStoppedStreamRef.current = false
     try {
-      const response = await fetch(`/api/chats/${id}`, {
+      const response = await fetch(`/api/v1/chats/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat: { isPaused: false } }),
@@ -804,7 +804,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       abortControllerRef.current = new AbortController()
       const { signal } = abortControllerRef.current
 
-      const res = await fetch(`/api/chats/${id}/messages`, {
+      const res = await fetch(`/api/v1/messages?chatId=${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -938,7 +938,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     userStoppedStreamRef.current = paused
 
     try {
-      const response = await fetch(`/api/chats/${id}`, {
+      const response = await fetch(`/api/v1/chats/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat: { isPaused: paused } }),
@@ -958,7 +958,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     clientLogger.debug('[Chat] Toggling document editing mode', { from: documentEditingMode, to: newMode })
 
     try {
-      const response = await fetch(`/api/chats/${id}`, {
+      const response = await fetch(`/api/v1/chats/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat: { documentEditingMode: newMode } }),
@@ -1145,7 +1145,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
 
     try {
-      const res = await fetch(`/api/chats/${id}/participants`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=remove-participant`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId }),
@@ -1195,7 +1195,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     })
 
     try {
-      const res = await fetch(`/api/chats/${id}/impersonate`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=impersonate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId }),
@@ -1256,7 +1256,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     // Otherwise, stop impersonation directly
     try {
-      const res = await fetch(`/api/chats/${id}/impersonate`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=stop-impersonate`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId }),
@@ -1294,7 +1294,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     })
 
     try {
-      const res = await fetch(`/api/chats/${id}/impersonate`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=stop-impersonate`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId, newConnectionProfileId: connectionProfileId }),
@@ -1329,7 +1329,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     clientLogger.debug('[Chat] Setting active speaker', { participantId })
 
     try {
-      const res = await fetch(`/api/chats/${id}/active-speaker`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=set-active-speaker`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId }),
@@ -1619,7 +1619,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         provider: debugProviderName,
         providerType: debugProviderType,
         model: debugModel,
-        endpoint: `/api/chats/${id}/messages`,
+        endpoint: `/api/v1/messages?chatId=${id}`,
         status: 'pending',
         data: JSON.stringify(requestPayload, null, 2),
         contentType: 'application/json',
@@ -1634,7 +1634,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         provider: debugProviderName,
         providerType: debugProviderType,
         model: debugModel,
-        endpoint: `/api/chats/${id}/messages`,
+        endpoint: `/api/v1/messages?chatId=${id}`,
         status: 'streaming',
         data: '',
         contentType: 'text/event-stream',
@@ -1646,7 +1646,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       abortControllerRef.current = new AbortController()
       const { signal } = abortControllerRef.current
 
-      const res = await fetch(`/api/chats/${id}/messages`, {
+      const res = await fetch(`/api/v1/messages?chatId=${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestPayload),
@@ -1842,7 +1842,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   const pollInterval = setInterval(async () => {
                     pollCount++
                     try {
-                      const chatRes = await fetch(`/api/chats/${id}`)
+                      const chatRes = await fetch(`/api/v1/chats/${id}`)
                       if (chatRes.ok) {
                         const chatData = await chatRes.json()
                         const fetchedMessage = chatData.chat.messages.find((m: Message) => m.id === data.messageId)
@@ -2424,7 +2424,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           participants={chat?.participants || []}
           imageProfileId={chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)?.imageProfile?.id}
           onImagesGenerated={(images, prompt) => {
-            fetch(`/api/chats/${id}/tool-results`, {
+            fetch(`/api/v1/chats/${id}/tool-results`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

@@ -93,7 +93,7 @@ export default function ChatProjectModal({
       setSaving(true)
       clientLogger.debug('[ChatProjectModal] Updating chat project', { chatId, projectId })
 
-      const res = await fetch(`/api/chats/${chatId}`, {
+      const res = await fetch(`/api/v1/chats/${chatId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat: { projectId } }),

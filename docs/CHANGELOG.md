@@ -4,6 +4,42 @@
 
 ### 2.7-dev
 
+- feat: API v1 consolidation (Phases 1-4)
+  - New `/api/v1/` namespace for consolidated REST API endpoints
+  - Action parameter middleware (`lib/api/middleware/actions.ts`) for `?action=` dispatch pattern
+  - Deprecation utilities (`deprecatedRedirect`, `withDeprecationHeaders`, `buildRedirectUrl`)
+  - Consolidated endpoints:
+    - `/api/v1/memories` - unified memory CRUD
+      - GET with `?characterId=`, `?chatId=`, `?messageId=` filters
+      - POST with `?action=search|housekeep|embeddings`
+      - GET/PUT/DELETE `/api/v1/memories/[id]`
+    - `/api/v1/messages` - messages with SSE streaming
+      - GET `?chatId=` - list messages
+      - POST - send message (returns SSE stream)
+      - GET/PUT/DELETE `/api/v1/messages/[id]`
+      - POST `/api/v1/messages/[id]?action=swipe|reattribute`
+    - `/api/v1/api-keys` - API key management (renamed from /api/keys)
+      - GET - list, POST - create
+      - POST `?action=auto-associate|export|import|import-preview`
+      - GET/PUT/DELETE `/api/v1/api-keys/[id]`
+      - POST `/api/v1/api-keys/[id]?action=test`
+    - `/api/v1/connection-profiles` - connection profiles (renamed from /api/profiles)
+      - GET - list, POST - create
+      - POST `?action=test-connection|test-message`
+      - GET/PUT/DELETE `/api/v1/connection-profiles/[id]`
+      - POST `/api/v1/connection-profiles/[id]?action=add-tag|remove-tag`
+    - `/api/v1/system/backup` - backup management
+      - GET - list backups, POST - create backup
+      - GET `/api/v1/system/backup/[id]` - download
+      - DELETE `/api/v1/system/backup/[id]` - delete
+    - `/api/v1/system/restore` - restore from backup
+      - POST - restore, POST `?action=preview` - preview
+    - `/api/v1/system/jobs` - background job management
+      - GET - stats/list, POST - create job
+      - GET/DELETE `/api/v1/system/jobs/[id]`
+      - POST `/api/v1/system/jobs/[id]?action=pause|resume`
+  - Old routes continue to work with deprecation headers (Sunset: 2026-04-15)
+  - Plan documented in `.claude/plans/shiny-percolating-snail.md`
 - feat: Orphan file recovery tool
   - New "Scan Orphans" button on mount point cards in Storage settings
   - Scans storage backends to find files not tracked in the database

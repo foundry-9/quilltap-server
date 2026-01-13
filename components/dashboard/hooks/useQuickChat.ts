@@ -64,9 +64,9 @@ export function useQuickChat(): UseQuickChatReturn {
     try {
       // Fetch profiles, user-controlled characters, character details, and default partner in parallel
       const [profilesRes, userCharsRes, characterRes, defaultPartnerRes] = await Promise.all([
-        fetch('/api/profiles'),
-        fetch('/api/characters?controlledBy=user'),
-        fetch(`/api/characters/${characterId}`),
+        fetch('/api/v1/connection-profiles'),
+        fetch('/api/v1/characters?controlledBy=user'),
+        fetch(`/api/v1/characters/${characterId}`),
         fetch(`/api/characters/${characterId}/default-partner`),
       ])
 
@@ -154,7 +154,7 @@ export function useQuickChat(): UseQuickChatReturn {
         })
       }
 
-      const res = await fetch('/api/chats', {
+      const res = await fetch('/api/v1/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

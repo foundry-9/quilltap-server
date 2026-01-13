@@ -95,7 +95,7 @@ function mockQueueNetwork(queueResponses: QueueData[] = [defaultQueue]) {
       })
     }
 
-    if (url.startsWith('/api/background-jobs/')) {
+    if (url.startsWith('/api/v1/system/jobs/')) {
       return jsonResponse({ success: true })
     }
 
@@ -187,10 +187,9 @@ describe('TasksQueueCard', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/background-jobs/job-to-pause',
+        '/api/v1/system/jobs/job-to-pause?action=pause',
         expect.objectContaining({
-          method: 'PATCH',
-          body: JSON.stringify({ action: 'pause' }),
+          method: 'POST',
         })
       )
     })
@@ -202,10 +201,9 @@ describe('TasksQueueCard', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/background-jobs/job-to-resume',
+        '/api/v1/system/jobs/job-to-resume?action=resume',
         expect.objectContaining({
-          method: 'PATCH',
-          body: JSON.stringify({ action: 'resume' }),
+          method: 'POST',
         })
       )
     })

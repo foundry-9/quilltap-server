@@ -94,7 +94,7 @@ export function useExportKeys({
     try {
       clientLogger.debug('Starting API key export', { context: 'useExportKeys' })
 
-      const response = await fetch('/api/keys/export', {
+      const response = await fetch('/api/v1/api-keys?action=export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ passphrase: state.passphrase }),

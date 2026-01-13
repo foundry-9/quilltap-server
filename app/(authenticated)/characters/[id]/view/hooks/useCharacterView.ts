@@ -101,7 +101,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
   const fetchCharacter = useCallback(async () => {
     try {
-      const res = await fetch(`/api/characters/${characterId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
@@ -127,7 +127,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
   const fetchTags = useCallback(async () => {
     try {
-      const res = await fetch(`/api/characters/${characterId}/tags`)
+      const res = await fetch(`/api/v1/characters/${characterId}?action=get-tags`)
       if (!res.ok) throw new Error('Failed to fetch tags')
       const data = await res.json()
       setTags(data.tags || [])
@@ -194,7 +194,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
   const fetchUserControlledCharacters = useCallback(async () => {
     try {
-      const res = await fetch('/api/characters?controlledBy=user')
+      const res = await fetch('/api/v1/characters?controlledBy=user')
       if (res.ok) {
         const data = await res.json()
         const characters = data.characters || []
@@ -267,7 +267,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
         return
       }
 
-      const res = await fetch(`/api/characters/${characterId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -304,7 +304,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
             defaultConnectionProfileId: profileId || undefined,
           }
 
-      const res = await fetch(`/api/characters/${characterId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatePayload),
@@ -383,7 +383,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     setTogglingNpc(true)
     try {
       const newNpcValue = !character.npc
-      const res = await fetch(`/api/characters/${characterId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ npc: newNpcValue }),
@@ -408,7 +408,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     if (!character) return
     setTogglingFavorite(true)
     try {
-      const res = await fetch(`/api/characters/${characterId}/favorite`, { method: 'PATCH' })
+      const res = await fetch(`/api/v1/characters/${characterId}?action=favorite`, { method: 'PATCH' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to toggle favorite')

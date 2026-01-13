@@ -86,7 +86,7 @@ export function useSystemPrompts(
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch(`/api/characters/${characterId}/prompts`)
+      const res = await fetch(`/api/v1/characters/${characterId}?action=get-prompts`)
       if (!res.ok) throw new Error('Failed to fetch prompts')
       const data = await res.json()
       setPrompts(data)
@@ -175,7 +175,7 @@ export function useSystemPrompts(
 
       if (editingPrompt) {
         // Update existing prompt
-        const res = await fetch(`/api/characters/${characterId}/prompts/${editingPrompt.id}`, {
+        const res = await fetch(`/api/v1/characters/${characterId}?action=update-prompt&promptId=${editingPrompt.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -190,7 +190,7 @@ export function useSystemPrompts(
         clientLogger.info('Character prompt updated', { promptId: editingPrompt.id })
       } else {
         // Create new prompt
-        const res = await fetch(`/api/characters/${characterId}/prompts`, {
+        const res = await fetch(`/api/v1/characters/${characterId}?action=create-prompt`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -223,7 +223,7 @@ export function useSystemPrompts(
       setSaving(true)
       setError(null)
 
-      const res = await fetch(`/api/characters/${characterId}/prompts/${promptId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}?action=delete-prompt&promptId=${promptId}`, {
         method: 'DELETE',
       })
 
@@ -250,7 +250,7 @@ export function useSystemPrompts(
       setSaving(true)
       setError(null)
 
-      const res = await fetch(`/api/characters/${characterId}/prompts/${promptId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}?action=update-prompt&promptId=${promptId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isDefault: true }),

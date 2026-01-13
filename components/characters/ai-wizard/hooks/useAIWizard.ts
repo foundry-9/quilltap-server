@@ -273,7 +273,7 @@ export function useAIWizard({
         characterId,
       }
 
-      const response = await fetch('/api/characters/ai-wizard', {
+      const response = await fetch('/api/v1/characters?action=ai-wizard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),

@@ -56,7 +56,7 @@ export default function ChatRenameModal({
       // User is switching to auto-rename - regenerate title immediately
       try {
         setRegenerating(true)
-        const res = await fetch(`/api/chats/${chatId}/regenerate-title`, {
+        const res = await fetch(`/api/v1/chats/${chatId}?action=regenerate-title`, {
           method: 'POST',
         })
 
@@ -116,7 +116,7 @@ export default function ChatRenameModal({
         isManuallyRenamed: !useAutoRename,
       })
 
-      const res = await fetch(`/api/chats/${chatId}`, {
+      const res = await fetch(`/api/v1/chats/${chatId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

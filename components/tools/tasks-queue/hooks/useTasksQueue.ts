@@ -83,7 +83,7 @@ export function useTasksQueue() {
       setJobActionLoading(jobId)
       clientLogger.debug('Fetching job details', { jobId })
 
-      const res = await fetch(`/api/background-jobs/${jobId}`)
+      const res = await fetch(`/api/v1/system/jobs/${jobId}`)
       if (!res.ok) {
         throw new Error('Failed to fetch job details')
       }
@@ -107,10 +107,9 @@ export function useTasksQueue() {
         setJobActionLoading(jobId)
         clientLogger.debug('Pausing job', { jobId })
 
-        const res = await fetch(`/api/background-jobs/${jobId}`, {
-          method: 'PATCH',
+        const res = await fetch(`/api/v1/system/jobs/${jobId}?action=pause`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'pause' }),
         })
 
         if (!res.ok) {
@@ -137,10 +136,9 @@ export function useTasksQueue() {
         setJobActionLoading(jobId)
         clientLogger.debug('Resuming job', { jobId })
 
-        const res = await fetch(`/api/background-jobs/${jobId}`, {
-          method: 'PATCH',
+        const res = await fetch(`/api/v1/system/jobs/${jobId}?action=resume`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'resume' }),
         })
 
         if (!res.ok) {
@@ -167,7 +165,7 @@ export function useTasksQueue() {
         setJobActionLoading(jobId)
         clientLogger.debug('Deleting job', { jobId })
 
-        const res = await fetch(`/api/background-jobs/${jobId}`, {
+        const res = await fetch(`/api/v1/system/jobs/${jobId}`, {
           method: 'DELETE',
         })
 

@@ -71,7 +71,8 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
     }
 
     try {
-      const url = new URL(`/api/characters/${characterId}/chats`, window.location.origin)
+      const url = new URL(`/api/v1/characters/${characterId}`, window.location.origin)
+      url.searchParams.set('action', 'get-chats')
       url.searchParams.set('limit', String(CHATS_PER_PAGE))
       url.searchParams.set('offset', String(pageNum * CHATS_PER_PAGE))
       if (search) {

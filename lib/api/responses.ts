@@ -262,3 +262,207 @@ export async function withErrorHandling(
     return serverError(errorMessage);
   }
 }
+
+// =============================================================================
+// Deprecation & Redirect Utilities
+// =============================================================================
+// Part of the API consolidation effort (v1 REST API structure).
+// These utilities help transition from old routes to new /api/v1/* routes.
+
+/**
+ * Deprecation info for response headers
+ */
+export interface DeprecationInfo {
+  /** ISO date string when the old route will be removed */
+  sunsetDate: string;
+  /** URL to documentation about the migration */
+  docsUrl?: string;
+  /** Replacement endpoint path */
+  replacement?: string;
+}
+
+/**
+ * Create a permanent redirect response for deprecated routes
+ *
+ * Returns a 308 Permanent Redirect with deprecation headers.
+ * Use this for routes that have moved to a new location.
+ *
+ * @param newUrl - The new URL to redirect to
+ * @param deprecation - Optional deprecation metadata
+ * @returns NextResponse with 308 status and redirect headers
+ *
+ * @example
+ * ```ts
+ * // Old route: /api/characters/[id]/memories
+ * // New route: /api/v1/memories?characterId=[id]
+ *
+ * export const GET = async (req, { params }) => {
+ *   const { id } = await params;
+ *   const newUrl = `/api/v1/memories?characterId=${id}`;
+ *   return deprecatedRedirect(newUrl, {
+ *     sunsetDate: '2026-04-01',
+ *     docsUrl: '/docs/api-v1-migration',
+ *     replacement: '/api/v1/memories',
+ *   });
+ * };
+ * ```
+ */
+export function deprecatedRedirect(
+  newUrl: string,
+  deprecation?: DeprecationInfo
+): NextResponse {
+  const headers: HeadersInit = {
+    Location: newUrl,
+  };
+
+  if (deprecation) {
+    // RFC 8594 Sunset header
+    if (deprecation.sunsetDate) {
+      headers['Sunset'] = new Date(deprecation.sunsetDate).toUTCString();
+    }
+
+    // Deprecation header (draft standard)
+    headers['Deprecation'] = 'true';
+
+    // Link header for documentation
+    const links: string[] = [];
+    if (deprecation.docsUrl) {
+      links.push(`<${deprecation.docsUrl}>; rel="deprecation"`);
+    }
+    if (deprecation.replacement) {
+      links.push(`<${deprecation.replacement}>; rel="successor-version"`);
+    }
+    if (links.length > 0) {
+      headers['Link'] = links.join(', ');
+    }
+  }
+
+  return new NextResponse(null, {
+    status: 308, // Permanent Redirect (preserves method)
+    headers,
+  });
+}
+
+/**
+ * Create deprecation headers for routes that still work but are deprecated
+ *
+ * Add these headers to responses from deprecated routes that haven't
+ * been fully migrated yet.
+ *
+ * @param response - The original response
+ * @param deprecation - Deprecation metadata
+ * @returns New response with deprecation headers added
+ *
+ * @example
+ * ```ts
+ * // Route still works but is deprecated
+ * export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
+ *   const characters = await repos.characters.findByUserId(user.id);
+ *   const response = NextResponse.json({ characters });
+ *   return withDeprecationHeaders(response, {
+ *     sunsetDate: '2026-04-01',
+ *     replacement: '/api/v1/characters',
+ *   });
+ * });
+ * ```
+ */
+export function withDeprecationHeaders(
+  response: NextResponse,
+  deprecation: DeprecationInfo
+): NextResponse {
+  // Clone response to add headers
+  const newResponse = new NextResponse(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: new Headers(response.headers),
+  });
+
+  // Add deprecation headers
+  if (deprecation.sunsetDate) {
+    newResponse.headers.set('Sunset', new Date(deprecation.sunsetDate).toUTCString());
+  }
+
+  newResponse.headers.set('Deprecation', 'true');
+
+  const links: string[] = [];
+  if (deprecation.docsUrl) {
+    links.push(`<${deprecation.docsUrl}>; rel="deprecation"`);
+  }
+  if (deprecation.replacement) {
+    links.push(`<${deprecation.replacement}>; rel="successor-version"`);
+  }
+  if (links.length > 0) {
+    newResponse.headers.set('Link', links.join(', '));
+  }
+
+  return newResponse;
+}
+
+/**
+ * Build a redirect URL preserving query parameters
+ *
+ * Useful for redirecting from old routes to new routes while
+ * maintaining any query parameters from the original request.
+ *
+ * @param request - The original request
+ * @param newBasePath - The new base path to redirect to
+ * @param paramMapping - Optional mapping of old param names to new ones
+ * @returns Full URL string with query parameters
+ *
+ * @example
+ * ```ts
+ * // Redirect /api/characters/[id]/memories?limit=10
+ * // to /api/v1/memories?characterId=[id]&limit=10
+ *
+ * const newUrl = buildRedirectUrl(request, '/api/v1/memories', {
+ *   // Inject characterId from route param
+ *   additionalParams: { characterId: id }
+ * });
+ * ```
+ */
+export function buildRedirectUrl(
+  request: Request,
+  newBasePath: string,
+  options?: {
+    /** Additional parameters to add to the URL */
+    additionalParams?: Record<string, string>;
+    /** Parameters to exclude from the redirect */
+    excludeParams?: string[];
+    /** Mapping of old param names to new names */
+    renameParams?: Record<string, string>;
+  }
+): string {
+  const originalUrl = new URL(request.url);
+  const newUrl = new URL(newBasePath, originalUrl.origin);
+
+  // Copy query parameters with optional transformations
+  originalUrl.searchParams.forEach((value, key) => {
+    // Skip excluded params
+    if (options?.excludeParams?.includes(key)) {
+      return;
+    }
+
+    // Rename if mapping exists, otherwise keep original name
+    const newKey = options?.renameParams?.[key] ?? key;
+    newUrl.searchParams.set(newKey, value);
+  });
+
+  // Add additional parameters
+  if (options?.additionalParams) {
+    for (const [key, value] of Object.entries(options.additionalParams)) {
+      newUrl.searchParams.set(key, value);
+    }
+  }
+
+  return newUrl.pathname + newUrl.search;
+}
+
+/**
+ * Default deprecation info for the v1 API migration
+ *
+ * Use this as a starting point for deprecation headers.
+ */
+export const V1_MIGRATION_DEPRECATION: DeprecationInfo = {
+  sunsetDate: '2026-04-15', // ~3 months from now
+  docsUrl: '/docs/api-v1-migration',
+};

@@ -41,7 +41,7 @@ export function useChatData(chatId: string) {
 
   const fetchChat = useCallback(async () => {
     try {
-      const res = await fetch(`/api/chats/${chatId}`)
+      const res = await fetch(`/api/v1/chats/${chatId}`)
       if (!res.ok) throw new Error('Failed to fetch chat')
       const data = await res.json()
       setChat(data.chat)
@@ -114,7 +114,7 @@ export function useChatData(chatId: string) {
 
   const persistTurnState = useCallback(async (lastTurnParticipantId: string | null) => {
     try {
-      const res = await fetch(`/api/chats/${chatId}/turn`, {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=turn`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lastTurnParticipantId }),

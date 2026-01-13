@@ -94,7 +94,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     try {
       clientLogger.debug('Fetching connection profiles')
       setLoadingProfiles(true)
-      const res = await fetch('/api/profiles')
+      const res = await fetch('/api/v1/connection-profiles')
       if (!res.ok) throw new Error('Failed to fetch profiles')
       const data = await res.json()
       clientLogger.debug('Connection profiles loaded', { count: data.length })

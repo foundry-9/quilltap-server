@@ -52,7 +52,7 @@ export function useCharacterEdit(id: string) {
   const fetchCharacter = useCallback(async () => {
     try {
       clientLogger.debug('Fetching character', { characterId: id })
-      const res = await fetch(`/api/characters/${id}`, {
+      const res = await fetch(`/api/v1/characters/${id}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
@@ -133,7 +133,7 @@ export function useCharacterEdit(id: string) {
       clientLogger.debug('Saving character', { characterId: id })
 
       // Update character fields
-      const res = await fetch(`/api/characters/${id}`, {
+      const res = await fetch(`/api/v1/characters/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(state.formData),
@@ -218,7 +218,7 @@ export function useCharacterEdit(id: string) {
 
       clientLogger.debug('Setting character avatar', { characterId: id, imageId })
 
-      const res = await fetch(`/api/characters/${id}/avatar`, {
+      const res = await fetch(`/api/v1/characters/${id}?action=avatar`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: imageId || null }),
@@ -277,7 +277,7 @@ export function useCharacterEdit(id: string) {
   const clearAvatar = async () => {
     try {
       clientLogger.debug('Clearing character avatar', { characterId: id })
-      const res = await fetch(`/api/characters/${id}/avatar`, {
+      const res = await fetch(`/api/v1/characters/${id}?action=avatar`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: null }),

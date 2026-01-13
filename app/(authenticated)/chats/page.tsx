@@ -165,7 +165,7 @@ export default function ChatsPage() {
 
   const fetchChats = async () => {
     try {
-      const res = await fetch('/api/chats')
+      const res = await fetch('/api/v1/chats')
       if (!res.ok) throw new Error('Failed to fetch chats')
       const data = await res.json()
       setChats(data.chats)
@@ -217,7 +217,7 @@ export default function ChatsPage() {
     if (!confirmed) return
 
     try {
-      const res = await fetch(`/api/chats/${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/v1/chats/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete chat')
       setChats(chats.filter((c) => c.id !== id))
 

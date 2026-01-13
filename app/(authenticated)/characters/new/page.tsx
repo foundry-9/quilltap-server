@@ -80,7 +80,7 @@ export default function NewCharacterPage() {
     setError(null)
 
     try {
-      const res = await fetch('/api/characters', {
+      const res = await fetch('/api/v1/characters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),

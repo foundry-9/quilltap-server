@@ -49,7 +49,7 @@ export function ScopeSelectionStep({
     const fetchData = async () => {
       setLoading(true);
       try {
-        const charsRes = await fetch('/api/characters');
+        const charsRes = await fetch('/api/v1/characters');
 
         if (charsRes.ok) {
           const data = await charsRes.json();
