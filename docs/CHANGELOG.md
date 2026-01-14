@@ -55,6 +55,17 @@
       - POST `/api/v1/system/jobs/[id]?action=pause|resume`
   - Old routes continue to work with deprecation headers (Sunset: 2026-04-15)
   - Plan documented in `.claude/plans/shiny-percolating-snail.md`
+- fix: Missing PATCH handler for turn state persistence in v1 API
+  - Added `PATCH /api/v1/chats/[id]?action=turn` endpoint for persisting turn state
+  - Fixes 405 Method Not Allowed error when sending messages in multi-character chats
+  - Turn state (`lastTurnParticipantId`) now persists correctly through the v1 API
+- fix: Messages API v1 POST handler expecting chatId in body instead of query string
+  - Fixed `POST /api/v1/messages?chatId=` to read chatId from URL query parameter
+  - Matches the client-side fetch URL pattern and GET endpoint behavior
+  - Fixes 400 Bad Request error when sending messages
+- fix: Improved error logging for message send failures
+  - Added `chatId` and `rawError` to error context for better diagnostics
+  - Ensures all error properties are captured when exceptions occur
 - feat: Orphan file recovery tool
   - New "Scan Orphans" button on mount point cards in Storage settings
   - Scans storage backends to find files not tracked in the database

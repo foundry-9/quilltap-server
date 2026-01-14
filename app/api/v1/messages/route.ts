@@ -2,7 +2,7 @@
  * Messages API v1 - Collection Endpoint
  *
  * GET /api/v1/messages?chatId= - List messages for a chat
- * POST /api/v1/messages - Send a message (returns streaming SSE response)
+ * POST /api/v1/messages?chatId= - Send a message (returns streaming SSE response)
  *
  * The POST endpoint returns Server-Sent Events for real-time streaming.
  */
@@ -63,33 +63,47 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 });
 
 /**
- * POST /api/v1/messages - Send a message and get streaming response
+ * POST /api/v1/messages?chatId= - Send a message and get streaming response
  *
  * Returns Server-Sent Events (SSE) stream for real-time response.
  */
 export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
+    // Get chatId from query string
+    const url = new URL(req.url);
+    const chatId = url.searchParams.get('chatId');
+
+    if (!chatId) {
+      return badRequest('Query parameter required: chatId');
+    }
+
+    // Validate chatId is a UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(chatId)) {
+      return badRequest('Invalid chatId format');
+    }
+
     // Parse request body
     const body = await req.json();
     const isContinueMode = body.continueMode === true;
 
     // Validate request based on mode
     if (isContinueMode) {
-      const parsed = continueMessageWithChatIdSchema.parse(body);
+      const parsed = continueMessageSchema.parse(body);
 
       logger.debug('[Messages API v1] Continue mode request', {
-        chatId: parsed.chatId,
+        chatId,
         respondingParticipantId: parsed.respondingParticipantId,
       });
 
       // Verify chat ownership
-      const chat = await repos.chats.findById(parsed.chatId);
+      const chat = await repos.chats.findById(chatId);
       if (!chat || chat.userId !== user.id) {
         return notFound('Chat');
       }
 
       // Handle the message via orchestrator
-      const stream = await handleSendMessage(repos, parsed.chatId, user.id, {
+      const stream = await handleSendMessage(repos, chatId, user.id, {
         continueMode: true,
         respondingParticipantId: parsed.respondingParticipantId,
       });
@@ -102,22 +116,22 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         },
       });
     } else {
-      const parsed = sendMessageWithChatIdSchema.parse(body);
+      const parsed = sendMessageSchema.parse(body);
 
       logger.debug('[Messages API v1] Send message request', {
-        chatId: parsed.chatId,
+        chatId,
         contentLength: parsed.content.length,
         fileCount: parsed.fileIds?.length || 0,
       });
 
       // Verify chat ownership
-      const chat = await repos.chats.findById(parsed.chatId);
+      const chat = await repos.chats.findById(chatId);
       if (!chat || chat.userId !== user.id) {
         return notFound('Chat');
       }
 
       // Handle the message via orchestrator
-      const stream = await handleSendMessage(repos, parsed.chatId, user.id, {
+      const stream = await handleSendMessage(repos, chatId, user.id, {
         content: parsed.content,
         fileIds: parsed.fileIds,
         continueMode: false,

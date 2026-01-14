@@ -1930,14 +1930,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         const errorName = err instanceof Error ? err.name : 'UnknownErrorType'
 
         // Log with more context for debugging connection issues
+        // Explicitly set values to ensure they appear in logs (avoid undefined)
         clientLogger.error('Error sending message', {
           error: errorMessage,
           errorName,
           errorType: typeof err,
           // Capture additional error properties that may help diagnose issues
-          errorStack: err instanceof Error ? err.stack?.substring(0, 500) : undefined,
-          wasStreaming: streaming,
-          wasWaitingForResponse: waitingForResponse,
+          errorStack: err instanceof Error ? err.stack?.substring(0, 500) : 'no stack',
+          wasStreaming: streaming ? true : false,
+          wasWaitingForResponse: waitingForResponse ? true : false,
+          chatId: id,
+          // Stringify the entire error object for complete diagnostics
+          rawError: err ? JSON.stringify(err, Object.getOwnPropertyNames(err as object)) : 'null',
         })
 
         // Show user-friendly message for common network errors
