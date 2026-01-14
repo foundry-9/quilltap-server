@@ -18,6 +18,45 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
 - **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
 - **Cloud Services**: AWS first
 - **Design Documentation**: Storybook
+- **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern
+
+## API Architecture
+
+All new API routes should be created under `/api/v1/` following the consolidated REST structure:
+
+### Route Structure
+- **Collection routes**: `/api/v1/[resource]` (e.g., `/api/v1/characters`)
+- **Item routes**: `/api/v1/[resource]/[id]` (e.g., `/api/v1/characters/[id]`)
+- **System routes**: `/api/v1/system/[feature]` (e.g., `/api/v1/system/jobs`)
+
+### Action Dispatch Pattern
+Instead of creating separate routes for each action, use the `?action=` query parameter:
+```ts
+// Instead of separate routes:
+// /api/characters/[id]/favorite
+// /api/characters/[id]/export
+
+// Use action dispatch:
+// POST /api/v1/characters/[id]?action=favorite
+// GET /api/v1/characters/[id]?action=export
+
+import { createAuthenticatedParamsHandler, withActionDispatch } from '@/lib/api/middleware';
+
+export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+  withActionDispatch({
+    favorite: handleFavorite,
+    avatar: handleAvatar,
+  }, handleDefaultPost) // fallback for no action param
+);
+```
+
+### Middleware & Response Utilities
+- **Authentication**: Use `createAuthenticatedHandler` or `createAuthenticatedParamsHandler` from `@/lib/api/middleware`
+- **Action dispatch**: Use `withActionDispatch` or `withCollectionActionDispatch` from `@/lib/api/middleware/actions`
+- **Responses**: Use helpers from `@/lib/api/responses`: `successResponse`, `errorResponse`, `notFound`, `badRequest`, `validationError`, `created`, etc.
+
+### Deprecation
+Legacy routes outside `/api/v1/` have deprecation headers and will be removed after 2026-04-15. Use `withDeprecationHeaders` or `deprecatedRedirect` from `@/lib/api/responses` when maintaining legacy routes.
 
 ## Current State
 
@@ -36,7 +75,7 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
   - [components/settings/embedding-profiles/README.md](components/settings/embedding-profiles/README.md) — Covers the refactored embedding profiles tab: types, hooks, ProviderBadge, ProfileForm/List components, usage, and benefits — Grade: A (matches shipped refactor) — Last updated: 2025-12-17
   - [components/settings/prompts/README.md](components/settings/prompts/README.md) — Notes on the prompts settings tab after refactor: types, usePrompts hook, prompt cards/lists/modals, and design principles — Grade: A (accurate description) — Last updated: 2025-12-17
   - [components/tools/tasks-queue/README.md](components/tools/tasks-queue/README.md) — Overview of the tasks queue card module: types, hooks, TaskItem/Filters/Details components, API integration, and structure — Grade: A (current tasks queue docs) — Last updated: 2025-12-17
-  - [docs/API.md](docs/API.md) — Comprehensive Quilltap API reference (auth, rate limiting, endpoints for characters/chats/files/tools/themes/search/jobs) with request/response examples and SDK snippets — Grade: A (canonical API reference) — Last updated: 2025-12-17
+  - [docs/API.md](docs/API.md) — Comprehensive Quilltap API reference for v1 REST routes (characters, chats, messages, memories, api-keys, connection-profiles, system/jobs, system/backup) with action dispatch patterns and response examples — Grade: A (canonical API reference) — Last updated: 2026-01-13
   - [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md) — Backup/restore guide covering in-app backups, manual MongoDB/S3 scripts, CRON automation, encryption, disaster recovery, verification, and monitoring tips — Grade: A (operational guidance) — Last updated: 2025-12-10
   - [docs/CHANGELOG.md](docs/CHANGELOG.md) — Detailed changelog through versions 1.0–2.5, listing features, fixes, refactors, tests, themes, and status updates per release — Grade: A (release-of-record) — Last updated: 2025-12-17
   - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Production deployment guide with prerequisites, Docker/Nginx/SSL setup, env vars, data management, monitoring, backups, and troubleshooting — Grade: A (used for current deployments) — Last updated: 2025-12-06
@@ -83,6 +122,7 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
   - [packages/theme-storybook/CHANGELOG.md](packages/theme-storybook/CHANGELOG.md) — Changelog for the @quilltap/theme-storybook package — Grade: A (package changelog) — Last updated: 2025-12-31
   - [packages/create-quilltap-theme/README.md](packages/create-quilltap-theme/README.md) — Documentation for the create-quilltap-theme scaffolding CLI: usage, options, what gets created, and next steps after scaffolding — Grade: A (package documentation) — Last updated: 2025-12-31
   - [packages/create-quilltap-theme/CHANGELOG.md](packages/create-quilltap-theme/CHANGELOG.md) — Changelog for the create-quilltap-theme package — Grade: A (package changelog) — Last updated: 2025-12-31
+  - [plugins/dist/qtap-plugin-mcp/README.md](plugins/dist/qtap-plugin-mcp/README.md) — Documentation for the MCP Server Connector plugin: configuration, authentication, tool naming, security, and troubleshooting — Grade: A (plugin documentation) — Last updated: 2026-01-13
 
 ## Claude-specific instructions
 
@@ -97,6 +137,7 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
   - Delete documents: `docker exec f9-quilltap-mongo-1 mongosh quilltap --quiet --eval "db.COLLECTION.deleteMany({})"`
   - Query with filter: `docker exec f9-quilltap-mongo-1 mongosh quilltap --quiet --eval "db.COLLECTION.find({field: 'value'}).toArray()"`
 - This is built in Next.js 15+, so don't look in middleware.ts, but consider proxy.ts, for things you would expect there.
+- When creating or modifying API routes, always use the `/api/v1/` structure with action dispatch patterns. Don't create new routes outside `/api/v1/`. Use the middleware from `@/lib/api/middleware` and response helpers from `@/lib/api/responses`.
 - If asked to fix linting errors, do not change out HTML `<img>` tags for Next.js `<Image>` tags; there is a reason that we don't use them sometimes, usually related to their being pulled in via APIs so Next.js can't know what it's going to display.
 - Every time we change a plugin, let's go ahead and bump the release number (the last of the three numbers in semver) on its package.json, and re-run `npm run build:plugins` before we add things to the commit.
 - Check for Typescript errors by running "npx tsc" rather than "npm run build"

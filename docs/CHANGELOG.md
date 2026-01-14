@@ -4,6 +4,21 @@
 
 ### 2.7-dev
 
+- feat: MCP (Model Context Protocol) Server Connector plugin
+  - New built-in plugin `qtap-plugin-mcp` for connecting to MCP servers via SSE
+  - Dynamically discovers and exposes tools from connected MCP servers
+  - Tools appear as `mcp_{servername}_{toolname}` in the LLM tool list
+  - Supports multiple simultaneous server connections
+  - Authentication: Bearer tokens, API keys, and custom headers
+  - Auto-reconnection with configurable retry attempts
+  - Configuration via Settings > Tools with JSON array of server configs
+- feat: Multi-tool plugin support for ToolPlugin interface
+  - New optional methods in `@quilltap/plugin-types` v1.8.0:
+    - `getMultipleToolDefinitions()` - plugins can provide multiple tools
+    - `executeByName(toolName, input, context)` - execute specific tool by name
+    - `onConfigurationChange(config)` - callback when user config changes
+  - Tool registry automatically detects and registers multi-tool plugins
+  - New `registerMultiToolPlugin()` and `unregisterToolsByPrefix()` in tool-registry
 - feat: API v1 consolidation (Phases 1-4)
   - New `/api/v1/` namespace for consolidated REST API endpoints
   - Action parameter middleware (`lib/api/middleware/actions.ts`) for `?action=` dispatch pattern

@@ -225,6 +225,50 @@ export interface ToolPlugin {
    * @returns JSX Element representing the tool icon
    */
   renderIcon?: (props: { className?: string }) => React.ReactNode;
+
+  // ============================================================================
+  // Multi-Tool Plugin Support (optional)
+  // ============================================================================
+  // These methods enable plugins to provide multiple tools dynamically.
+  // Used by plugins like MCP that discover tools from external servers.
+
+  /**
+   * Get multiple tool definitions (optional)
+   *
+   * For plugins that provide multiple tools dynamically (e.g., MCP connector).
+   * When implemented, the registry will call this instead of getToolDefinition()
+   * and register each returned tool separately.
+   *
+   * @returns Array of tool definitions in universal format
+   */
+  getMultipleToolDefinitions?: () => UniversalTool[];
+
+  /**
+   * Execute a specific tool by name (optional)
+   *
+   * Required when getMultipleToolDefinitions is implemented.
+   * The registry routes execution to this method based on the tool name.
+   *
+   * @param toolName The name of the tool to execute (as returned by getMultipleToolDefinitions)
+   * @param input The input arguments from the LLM
+   * @param context Execution context with user/chat info and config
+   * @returns Promise resolving to the execution result
+   */
+  executeByName?: (
+    toolName: string,
+    input: Record<string, unknown>,
+    context: ToolExecutionContext
+  ) => Promise<ToolExecutionResult>;
+
+  /**
+   * Called when configuration changes (optional)
+   *
+   * Allows plugins to refresh their state when user configuration changes.
+   * For multi-tool plugins, this may trigger re-discovery of available tools.
+   *
+   * @param config The updated user configuration
+   */
+  onConfigurationChange?: (config: Record<string, unknown>) => Promise<void>;
 }
 
 /**

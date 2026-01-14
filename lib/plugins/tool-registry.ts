@@ -70,6 +70,108 @@ class ToolRegistry {
   }
 
   /**
+   * Register a multi-tool plugin
+   *
+   * For plugins that implement getMultipleToolDefinitions(), this method
+   * creates individual tool wrappers for each tool and registers them.
+   *
+   * @param plugin The multi-tool plugin to register
+   * @throws Error if plugin doesn't implement required methods
+   */
+  registerMultiToolPlugin(plugin: ToolPlugin): void {
+    if (!plugin.getMultipleToolDefinitions || !plugin.executeByName) {
+      throw new Error(
+        'Multi-tool plugin must implement getMultipleToolDefinitions and executeByName'
+      );
+    }
+
+    const tools = plugin.getMultipleToolDefinitions();
+
+    this.logger.info('Registering multi-tool plugin', {
+      pluginName: plugin.metadata.toolName,
+      toolCount: tools.length,
+    });
+
+    for (const tool of tools) {
+      const toolName = tool.function.name;
+
+      // Create a wrapper ToolPlugin for each tool that routes to executeByName
+      const wrappedPlugin: ToolPlugin = {
+        metadata: {
+          toolName,
+          displayName: tool.function.name,
+          description: tool.function.description,
+          category: plugin.metadata.category,
+        },
+        getToolDefinition: () => tool,
+        validateInput: (input) => {
+          // Basic validation - check it's an object
+          // More detailed validation happens in the multi-tool plugin's executeByName
+          return typeof input === 'object' && input !== null;
+        },
+        execute: async (input, context) => {
+          // Route to the parent plugin's executeByName method
+          return plugin.executeByName!(toolName, input, context);
+        },
+        formatResults: plugin.formatResults.bind(plugin),
+        isConfigured: plugin.isConfigured?.bind(plugin),
+        getDefaultConfig: plugin.getDefaultConfig?.bind(plugin),
+      };
+
+      try {
+        this.registerTool(wrappedPlugin);
+      } catch (error) {
+        // Log but don't fail the entire registration
+        this.logger.warn('Failed to register tool from multi-tool plugin', {
+          pluginName: plugin.metadata.toolName,
+          toolName,
+          error: getErrorMessage(error),
+        });
+      }
+    }
+
+    this.logger.debug('Multi-tool plugin registration complete', {
+      pluginName: plugin.metadata.toolName,
+      registeredTools: tools.map((t) => t.function.name),
+    });
+  }
+
+  /**
+   * Unregister all tools from a multi-tool plugin
+   *
+   * Used when reconfiguring a multi-tool plugin to remove old tools
+   * before registering updated tools.
+   *
+   * @param toolPrefix Prefix to match tool names (e.g., 'mcp_servername_')
+   * @returns Number of tools unregistered
+   */
+  unregisterToolsByPrefix(toolPrefix: string): number {
+    let count = 0;
+    const toRemove: string[] = [];
+
+    for (const toolName of this.state.tools.keys()) {
+      if (toolName.startsWith(toolPrefix)) {
+        toRemove.push(toolName);
+      }
+    }
+
+    for (const toolName of toRemove) {
+      this.state.tools.delete(toolName);
+      count++;
+      this.logger.debug('Tool unregistered', { toolName });
+    }
+
+    if (count > 0) {
+      this.logger.info('Tools unregistered by prefix', {
+        prefix: toolPrefix,
+        count,
+      });
+    }
+
+    return count;
+  }
+
+  /**
    * Get a specific tool plugin by name
    *
    * @param name The tool name (e.g., 'curl')
@@ -268,6 +370,9 @@ class ToolRegistry {
   /**
    * Initialize the registry (called by the plugin system)
    *
+   * Automatically detects multi-tool plugins (those with getMultipleToolDefinitions)
+   * and registers them appropriately.
+   *
    * @param tools Array of tool plugins to register
    */
   async initialize(tools: ToolPlugin[]): Promise<void> {
@@ -279,8 +384,20 @@ class ToolRegistry {
     this.state.tools.clear();
     this.state.errors.clear();
 
-    // Register each tool
-    for (const tool of tools) {
+    // Separate single-tool and multi-tool plugins
+    const singleToolPlugins: ToolPlugin[] = [];
+    const multiToolPlugins: ToolPlugin[] = [];
+
+    for (const plugin of tools) {
+      if (plugin.getMultipleToolDefinitions && plugin.executeByName) {
+        multiToolPlugins.push(plugin);
+      } else {
+        singleToolPlugins.push(plugin);
+      }
+    }
+
+    // Register single-tool plugins
+    for (const tool of singleToolPlugins) {
       try {
         this.registerTool(tool);
       } catch (error) {
@@ -294,11 +411,28 @@ class ToolRegistry {
       }
     }
 
+    // Register multi-tool plugins
+    for (const plugin of multiToolPlugins) {
+      try {
+        this.registerMultiToolPlugin(plugin);
+      } catch (error) {
+        const pluginName = plugin.metadata.toolName;
+        const errorMessage = getErrorMessage(error);
+        this.state.errors.set(pluginName, errorMessage);
+        this.logger.warn('Failed to register multi-tool plugin', {
+          name: pluginName,
+          error: errorMessage,
+        });
+      }
+    }
+
     this.state.initialized = true;
     this.state.lastInitTime = new Date();
 
     this.logger.info('Tool registry initialized', {
       registered: this.state.tools.size,
+      singleToolPlugins: singleToolPlugins.length,
+      multiToolPlugins: multiToolPlugins.length,
       errors: this.state.errors.size,
     });
   }
@@ -549,4 +683,37 @@ export function getToolRegistryErrors() {
  */
 export function isToolRegistryInitialized(): boolean {
   return toolRegistry.isInitialized();
+}
+
+/**
+ * Register a multi-tool plugin
+ *
+ * For plugins that provide multiple tools dynamically.
+ *
+ * @param plugin The multi-tool plugin to register
+ */
+export function registerMultiToolPlugin(plugin: ToolPlugin): void {
+  toolRegistry.registerMultiToolPlugin(plugin);
+}
+
+/**
+ * Unregister tools by prefix
+ *
+ * Removes all tools whose names start with the given prefix.
+ *
+ * @param toolPrefix The prefix to match
+ * @returns Number of tools unregistered
+ */
+export function unregisterToolsByPrefix(toolPrefix: string): number {
+  return toolRegistry.unregisterToolsByPrefix(toolPrefix);
+}
+
+/**
+ * Check if a plugin is a multi-tool plugin
+ *
+ * @param plugin The plugin to check
+ * @returns true if plugin implements multi-tool methods
+ */
+export function isMultiToolPlugin(plugin: ToolPlugin): boolean {
+  return !!(plugin.getMultipleToolDefinitions && plugin.executeByName);
 }

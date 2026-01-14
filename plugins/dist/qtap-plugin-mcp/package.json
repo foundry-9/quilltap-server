@@ -1,0 +1,28 @@
+{
+  "name": "qtap-plugin-mcp",
+  "version": "1.0.1",
+  "description": "MCP (Model Context Protocol) server connector for Quilltap",
+  "main": "index.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs"
+  },
+  "dependencies": {
+    "@quilltap/plugin-types": "^1.8.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0"
+  },
+  "keywords": [
+    "quilltap",
+    "plugin",
+    "mcp",
+    "model-context-protocol",
+    "sse",
+    "tools"
+  ],
+  "author": {
+    "name": "Foundry-9 LLC",
+    "url": "https://github.com/foundry-9"
+  },
+  "license": "MIT"
+}

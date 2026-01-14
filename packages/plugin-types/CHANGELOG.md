@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-01-13
+
+### Added
+
+- Multi-tool plugin support for `ToolPlugin` interface:
+  - `getMultipleToolDefinitions?: () => UniversalTool[]` - Allows plugins to provide multiple tools dynamically
+  - `executeByName?: (toolName, input, context) => Promise<ToolExecutionResult>` - Execute a specific tool by name (required for multi-tool plugins)
+  - `onConfigurationChange?: (config) => Promise<void>` - Callback when user configuration changes
+- These additions enable plugins like the MCP connector to discover and expose multiple tools from external servers
+
 ## [1.7.0] - 2026-01-09
 
 ### Added
