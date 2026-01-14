@@ -59,14 +59,14 @@ New nested v1 route for complex sub-entity:
 
 ### 1.4 Chat Sub-Routes → `/api/v1/chats/[id]`
 
-| Legacy Route | v1 Action | Method |
-|--------------|-----------|--------|
-| `/api/chats/[id]/messages` | `?action=send-message` | POST |
-| `/api/chats/[id]/avatars` | `?action=get-avatars` / `set-avatar` / `clear-avatar` | GET/POST/DELETE |
-| `/api/chats/[id]/files` | `?action=list-files` / `attach-file` | GET/POST |
-| `/api/chats/[id]/queue-memories` | `?action=queue-memories` | POST |
-| `/api/chats/[id]/tool-results` | `?action=store-tool-result` | POST |
-| `/api/chats/[id]/bulk-reattribute` | `?action=bulk-reattribute` | POST |
+| Legacy Route | v1 Action | Method | Status |
+|--------------|-----------|--------|--------|
+| `/api/chats/[id]/messages` | `?action=send-message` | POST | |
+| `/api/chats/[id]/avatars` | `?action=get-avatars` / `set-avatar` / `clear-avatar` | GET/POST/DELETE | |
+| `/api/chats/[id]/files` | `?action=list-files` / `attach-file` | GET/POST | |
+| `/api/chats/[id]/queue-memories` | `?action=queue-memories` | POST | |
+| `/api/chats/[id]/tool-results` | `?action=store-tool-result` | POST | |
+| `/api/chats/[id]/bulk-reattribute` | `?action=bulk-reattribute` | POST | ✅ Done |
 
 ---
 

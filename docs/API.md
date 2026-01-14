@@ -894,6 +894,30 @@ Remove a participant from the chat.
 }
 ```
 
+#### `POST /api/v1/chats/[id]?action=bulk-reattribute`
+
+Re-attribute multiple messages from one participant to another in a single operation. All memories associated with the affected messages are permanently deleted.
+
+**Request Body**:
+
+```json
+{
+  "sourceParticipantId": "participant-uuid" | null,  // null = unassigned messages
+  "targetParticipantId": "participant-uuid",
+  "roleFilter": "ASSISTANT" | "USER" | "both"  // Default: "both"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "messagesUpdated": 42,
+  "memoriesDeleted": 7
+}
+```
+
 #### `POST /api/v1/chats/[id]?action=turn`
 
 Update turn state for multi-character chat.

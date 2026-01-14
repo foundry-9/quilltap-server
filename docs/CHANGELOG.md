@@ -4,6 +4,14 @@
 
 ### 2.7-dev
 
+- fix: Added bulk-reattribute action to v1 chats endpoint
+  - Migrated bulk character replace functionality to `/api/v1/chats/[id]?action=bulk-reattribute`
+  - Fixed console error in BulkCharacterReplaceModal (was calling path-based route instead of action query param)
+  - Updated frontend to use `?action=bulk-reattribute` query parameter pattern
+  - Deprecated legacy `/api/chats/[id]/bulk-reattribute` endpoint (returns 410 with redirect)
+  - Supports re-attributing multiple messages from one participant to another with role filtering
+  - Automatically deletes associated memories from affected messages
+  - Updated API documentation with new action endpoint
 - fix: V1 API migration data structure fixes
   - Fixed multiple "X.map is not a function" errors across the application
   - Updated client code to extract nested response structures from v1 endpoints:
