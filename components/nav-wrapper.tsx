@@ -42,10 +42,10 @@ export default function NavWrapper() {
       setTagsFetched(false);
       setTagsLoading(true);
       try {
-        const res = await fetch(`/api/chats/${chatId}/tags`);
+        const res = await fetch(`/api/v1/chats/${chatId}`);
         if (res.ok) {
           const data = await res.json();
-          setTags(data.tags || []);
+          setTags(data.chat?.tags || []);
         }
       } catch (err) {
         clientLogger.error('Error loading tags:', { error: err instanceof Error ? err.message : String(err) });
@@ -70,7 +70,7 @@ export default function NavWrapper() {
       if (!tagRes.ok) throw new Error('Failed to create tag');
       const { tag } = await tagRes.json();
 
-      const attachRes = await fetch(`/api/chats/${chatId}/tags`, {
+      const attachRes = await fetch(`/api/v1/chats/${chatId}?action=add-tag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tagId: tag.id }),
@@ -89,8 +89,10 @@ export default function NavWrapper() {
     if (tagsLoading || !chatId) return;
     setTagsLoading(true);
     try {
-      const res = await fetch(`/api/chats/${chatId}/tags?tagId=${tagId}`, {
-        method: 'DELETE',
+      const res = await fetch(`/api/v1/chats/${chatId}?action=remove-tag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagId }),
       });
       if (!res.ok) throw new Error('Failed to remove tag');
       setTags(tags.filter((t) => t.id !== tagId));

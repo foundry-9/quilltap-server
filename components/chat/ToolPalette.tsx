@@ -105,7 +105,7 @@ export default function ToolPalette({
   const handleExportClick = () => {
     clientLogger.debug('[ToolPalette] Export Chat clicked', { chatId })
     // Trigger download by navigating to the export endpoint
-    window.location.href = `/api/chats/${chatId}/export`
+    window.location.href = `/api/v1/chats/${chatId}?action=export`
     onClose()
   }
 

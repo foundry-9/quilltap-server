@@ -62,6 +62,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
         .filter(k => k.length > 0)
 
       const payload = {
+        characterId,
         content: form.formData.content,
         summary: form.formData.summary,
         keywords,
@@ -70,8 +71,8 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
       }
 
       const url = isEditing
-        ? `/api/characters/${characterId}/memories/${memory.id}`
-        : `/api/characters/${characterId}/memories`
+        ? `/api/v1/memories/${memory.id}`
+        : `/api/v1/memories`
 
       const result = await fetchJson<{ id: string }>(url, {
         method: isEditing ? 'PUT' : 'POST',

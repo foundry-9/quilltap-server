@@ -102,7 +102,7 @@ export function useChatData(chatId: string) {
 
   const fetchChatMemoryCount = useCallback(async () => {
     try {
-      const res = await fetch(`/api/chats/${chatId}/memories`)
+      const res = await fetch(`/api/v1/memories?chatId=${chatId}`)
       if (res.ok) {
         const data = await res.json()
         setChatMemoryCount(data.memoryCount || 0)

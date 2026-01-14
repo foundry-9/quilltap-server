@@ -59,7 +59,7 @@ export default function GenerateImageDialog({
   const loadAllEntities = async () => {
     try {
       const [charactersRes, personasRes] = await Promise.all([
-        fetch('/api/characters'),
+        fetch('/api/v1/characters'),
         fetch('/api/personas'),
       ])
 

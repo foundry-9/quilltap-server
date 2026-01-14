@@ -466,3 +466,50 @@ export const V1_MIGRATION_DEPRECATION: DeprecationInfo = {
   sunsetDate: '2026-04-15', // ~3 months from now
   docsUrl: '/docs/api-v1-migration',
 };
+
+// =============================================================================
+// Moved to V1 - Hard Error for Removed Routes
+// =============================================================================
+
+/**
+ * Response for routes that have been permanently moved to /api/v1/
+ *
+ * Returns a 410 Gone status with clear instructions on where to find the new endpoint.
+ * Use this when a legacy route has been completely replaced by a v1 endpoint.
+ *
+ * @param newEndpoint - The new v1 endpoint path (e.g., '/api/v1/characters')
+ * @param actionHint - Optional hint about action parameter if the new route uses action dispatch
+ * @returns NextResponse with 410 status and migration instructions
+ *
+ * @example
+ * ```ts
+ * // Old route completely removed
+ * export const GET = () => movedToV1('/api/v1/characters');
+ *
+ * // With action hint
+ * export const POST = () => movedToV1('/api/v1/characters/[id]', 'action=favorite');
+ * ```
+ */
+export function movedToV1(
+  newEndpoint: string,
+  actionHint?: string
+): NextResponse<ErrorResponse> {
+  let message = `This endpoint has been removed. Use ${newEndpoint} instead.`;
+
+  if (actionHint) {
+    message = `This endpoint has been removed. Use ${newEndpoint}?${actionHint} instead.`;
+  }
+
+  return NextResponse.json(
+    {
+      error: 'Endpoint removed',
+      details: {
+        message,
+        newEndpoint,
+        actionHint: actionHint || null,
+        documentation: '/docs/api-v1-migration',
+      },
+    },
+    { status: 410 }
+  );
+}

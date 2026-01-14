@@ -4,13 +4,30 @@
 
 ### 2.7-dev
 
-- refactor: Migrate frontend API calls to `/api/v1/` pattern with action parameters
-  - Avatar endpoints: Changed from `/api/characters/[id]/avatar` to `/api/v1/characters/[id]?action=avatar`
-    - Updated in `useGalleryData.ts`, `useImageActions.ts`, `CreateNPCDialog.tsx`
-  - Character operations: Changed from `/api/characters/[id]` to `/api/v1/characters/[id]`
-    - Updated NPC management in `npcs/index.tsx` (PUT and DELETE operations)
-  - Tag endpoints: Migrated to action dispatch pattern in `tag-editor.tsx`
-    - Changed from `/api/[entity]/[id]/tags` to `/api/v1/[entity]/[id]?action=[add|remove|get]-tag`
+- **BREAKING**: Deprecated legacy API routes now return 410 Gone errors
+  - All legacy `/api/characters`, `/api/chats`, `/api/messages` routes replaced with error stubs
+  - Error responses include clear instructions pointing to the new `/api/v1/` endpoints
+  - Added `movedToV1()` helper in `lib/api/responses.ts` for consistent deprecation errors
+  - 31 legacy route files converted to deprecation stubs (~6,400 lines removed)
+- refactor: Migrate all frontend API calls to `/api/v1/` pattern
+  - Character endpoints: `/api/characters` → `/api/v1/characters`
+    - Updated: chats/page.tsx, chats/new/page.tsx, GenerateImageDialog, CreateNPCDialog, AddCharacterDialog
+  - Character actions: `/api/characters/[id]/avatar` → `/api/v1/characters/[id]?action=avatar`
+    - Updated: useGalleryData.ts, useImageActions.ts, CreateNPCDialog.tsx, npcs/index.tsx
+  - Chat endpoints: `/api/chats` → `/api/v1/chats`
+    - Updated: useChatCreation.ts, useConnectionProfiles.ts, character-conversations-tab.tsx
+  - Chat actions: `/api/chats/[id]/export` → `/api/v1/chats/[id]?action=export`
+    - Updated: ToolPalette.tsx, MobileToolPalette.tsx
+  - Chat tags: `/api/chats/[id]/tags` → `/api/v1/chats/[id]?action=add-tag|remove-tag`
+    - Updated: nav-wrapper.tsx, tag-editor.tsx
+  - Message endpoints: `/api/messages/[id]` → `/api/v1/messages/[id]`
+    - Updated: useMessageActions.ts (6 endpoints)
+  - Message actions: `/api/messages/[id]/swipe` → `/api/v1/messages/[id]?action=swipe`
+    - Updated: useMessageActions.ts
+  - Message reattribute: `/api/messages/[id]/reattribute` → `/api/v1/messages/[id]?action=reattribute`
+    - Updated: ReattributeMessageDialog.tsx
+  - Memory endpoints: `/api/characters/[id]/memories` → `/api/v1/memories?characterId=`
+    - Updated: memory-list.tsx, memory-editor.tsx, useChatData.ts
 - refactor: Standardize all tool plugins on multi-tool pattern
   - `getToolDefinitions(config)` and `executeByName(toolName, input, context)` are now required
   - Even single-tool plugins return an array (with one element) for consistency

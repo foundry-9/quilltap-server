@@ -122,7 +122,7 @@ export default function AddCharacterDialog({
 
     try {
       const [charactersRes, profilesRes] = await Promise.all([
-        fetch('/api/characters'),
+        fetch('/api/v1/characters'),
         fetch('/api/profiles'),
       ])
 

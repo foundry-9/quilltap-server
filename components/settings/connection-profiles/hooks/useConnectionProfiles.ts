@@ -32,7 +32,7 @@ export function useConnectionProfiles() {
         })
 
         // Fetch all chats to analyze message usage
-        const chatsRes = await fetch('/api/chats')
+        const chatsRes = await fetch('/api/v1/chats')
         if (!chatsRes.ok) return messageCounts
 
         const chats = await chatsRes.json()

@@ -58,13 +58,14 @@ export function MemoryList({ characterId }: MemoryListProps) {
       })
 
       const params = new URLSearchParams()
+      params.set('characterId', characterId)
       if (search) params.set('search', search)
       params.set('sortBy', sortBy)
       params.set('sortOrder', sortOrder)
       if (sourceFilter !== 'ALL') params.set('source', sourceFilter)
 
       const result = await fetchJson<{ memories: Memory[] }>(
-        `/api/characters/${characterId}/memories?${params}`
+        `/api/v1/memories?${params}`
       )
 
       if (!result.ok) {
@@ -102,7 +103,7 @@ export function MemoryList({ characterId }: MemoryListProps) {
     deleteFn: async (memoryId: string) => {
       clientLogger.debug('MemoryList: Deleting memory', { memoryId })
       const result = await fetchJson(
-        `/api/characters/${characterId}/memories/${memoryId}`,
+        `/api/v1/memories/${memoryId}`,
         { method: 'DELETE' }
       )
 

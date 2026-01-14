@@ -1393,7 +1393,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     try {
       clientLogger.info('[Chat] Deleting chat memories', { chatId: id, memoryCount: chatMemoryCount })
-      const res = await fetch(`/api/chats/${id}/memories`, { method: 'DELETE' })
+      const res = await fetch(`/api/v1/memories?chatId=${id}`, { method: 'DELETE' })
 
       if (res.ok) {
         const data = await res.json()

@@ -73,7 +73,7 @@ export function useChatCreation(): UseChatCreationReturn {
         })
       }
 
-      const res = await fetch('/api/chats', {
+      const res = await fetch('/api/v1/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

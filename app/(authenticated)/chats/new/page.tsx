@@ -94,7 +94,7 @@ export default function NewChatPage() {
       clientLogger.debug('[NewChat] Fetching data')
       try {
         const fetchPromises: Promise<Response>[] = [
-          fetch('/api/characters'),
+          fetch('/api/v1/characters'),
           fetch('/api/profiles'),
           fetch('/api/image-profiles'),
         ]

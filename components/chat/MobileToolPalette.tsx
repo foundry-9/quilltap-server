@@ -139,7 +139,7 @@ export default function MobileToolPalette({
 
   const handleExportClick = () => {
     clientLogger.debug('[MobileToolPalette] Export Chat clicked', { chatId })
-    window.location.href = `/api/chats/${chatId}/export`
+    window.location.href = `/api/v1/chats/${chatId}?action=export`
     onClose()
   }
 

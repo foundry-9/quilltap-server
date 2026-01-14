@@ -178,7 +178,7 @@ export default function ChatsPage() {
 
   const fetchCharacters = async () => {
     try {
-      const res = await fetch('/api/characters')
+      const res = await fetch('/api/v1/characters')
       if (res.ok) {
         const data = await res.json()
         setCharacters(data.characters.map((c: any) => ({ id: c.id, name: c.name, title: c.title })))

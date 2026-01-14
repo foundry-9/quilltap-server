@@ -149,7 +149,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
 
     setDeletingChatId(chatId)
     try {
-      const res = await fetch(`/api/chats/${chatId}`, { method: 'DELETE' })
+      const res = await fetch(`/api/v1/chats/${chatId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete chat')
       setChats(chats.filter(c => c.id !== chatId))
     } catch (err) {
