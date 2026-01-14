@@ -11,6 +11,7 @@ import { createAuthenticatedHandler, withCollectionActionDispatch } from '@/lib/
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, validationError } from '@/lib/api/responses';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
 // ============================================================================
 // Schemas
@@ -71,7 +72,7 @@ async function handleListBackends(req: NextRequest) {
   }
 }
 
-async function handleCreate(req: NextRequest) {
+async function handleCreate(req: NextRequest, { user, repos }: any) {
   try {
     const body = await req.json();
     const validatedData = createMountPointSchema.parse(body);
@@ -81,22 +82,19 @@ async function handleCreate(req: NextRequest) {
       backendType: validatedData.backendType,
     });
 
-    // TODO: Implement mount point creation
-    // This would involve:
-    // 1. Validating the backend configuration
-    // 2. Testing the connection
-    // 3. Creating the mount point in database
-    // 4. Registering with file storage system
-
-    const mountPoint = {
-      id: 'mp-' + Date.now(),
+    // Create the mount point in the repository
+    const mountPoint = await repos.mountPoints.create({
       name: validatedData.name,
+      description: undefined,
       backendType: validatedData.backendType,
-      path: validatedData.path,
+      backendConfig: validatedData.config || {},
+      encryptedSecrets: null,
+      scope: 'user',
+      userId: user.id,
       isDefault: validatedData.isDefault,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+      enabled: true,
+      healthStatus: 'unknown',
+    });
 
     logger.info('[Mount Points v1] Mount point created', {
       mountPointId: mountPoint.id,
@@ -134,8 +132,8 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
   try {
     logger.debug('[Mount Points v1] GET list mount points', { userId: user.id });
 
-    // TODO: Implement mount point listing from database
-    const mountPoints: any[] = [];
+    // Fetch all mount points from the repository
+    const mountPoints = await repos.mountPoints.findAll();
 
     logger.debug('[Mount Points v1] Retrieved mount points', {
       userId: user.id,
@@ -161,5 +159,5 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 // ============================================================================
 
 export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
-  return handleCreate(req);
+  return handleCreate(req, { user, repos });
 });

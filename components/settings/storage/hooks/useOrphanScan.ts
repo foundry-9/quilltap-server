@@ -78,7 +78,7 @@ export function useOrphanScan(): UseOrphanScanResult {
     try {
       clientLogger.debug('Scanning for orphan files', { mountPointId })
 
-      const result = await fetchJson<ScanOrphansResult>(`/api/mount-points/${mountPointId}/scan-orphans`, {
+      const result = await fetchJson<ScanOrphansResult>(`/api/v1/system/mount-points/${mountPointId}?action=scan-orphans`, {
         method: 'POST',
       })
 
@@ -118,7 +118,7 @@ export function useOrphanScan(): UseOrphanScanResult {
     try {
       clientLogger.debug('Adopting orphan files', { mountPointId, fileCount: storageKeys.length })
 
-      const result = await fetchJson<AdoptOrphansResult>(`/api/mount-points/${mountPointId}/adopt-orphans`, {
+      const result = await fetchJson<AdoptOrphansResult>(`/api/v1/system/mount-points/${mountPointId}?action=adopt-orphans`, {
         method: 'POST',
         body: JSON.stringify({
           storageKeys,

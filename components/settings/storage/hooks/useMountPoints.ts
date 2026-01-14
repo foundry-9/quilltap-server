@@ -33,8 +33,8 @@ export function useMountPoints(): UseMountPointsResult {
     clientLogger.debug('Loading mount points tab data')
     await executeLoad(async () => {
       const [mountPointsRes, backendsRes] = await Promise.all([
-        fetchJson<{ mountPoints: MountPoint[] }>('/api/mount-points'),
-        fetchJson<AvailableBackend[]>('/api/mount-points/backends'),
+        fetchJson<{ mountPoints: MountPoint[] }>('/api/v1/system/mount-points'),
+        fetchJson<{ backends: AvailableBackend[] }>('/api/v1/system/mount-points?action=list-backends'),
       ])
 
       if (!mountPointsRes.ok) {
@@ -45,9 +45,9 @@ export function useMountPoints(): UseMountPointsResult {
         setMountPoints(mountPointsRes.data.mountPoints)
       }
 
-      // The backends API returns an array directly
-      if (backendsRes.ok && backendsRes.data) {
-        setAvailableBackends(backendsRes.data)
+      // The backends API returns an object with backends array
+      if (backendsRes.ok && backendsRes.data?.backends) {
+        setAvailableBackends(backendsRes.data.backends)
       } else {
         // Default to local backend if backend list fails
         setAvailableBackends([
@@ -74,7 +74,7 @@ export function useMountPoints(): UseMountPointsResult {
 
   const fetchMountPoints = useCallback(async () => {
     clientLogger.debug('Fetching mount points')
-    const result = await fetchJson<{ mountPoints: MountPoint[] }>('/api/mount-points')
+    const result = await fetchJson<{ mountPoints: MountPoint[] }>('/api/v1/system/mount-points')
     if (!result.ok) {
       throw new Error(result.error || 'Failed to fetch mount points')
     }
@@ -85,7 +85,7 @@ export function useMountPoints(): UseMountPointsResult {
 
   const createMountPoint = useCallback(async (data: MountPointFormData): Promise<MountPoint | null> => {
     clientLogger.debug('Creating mount point', { name: data.name })
-    const result = await fetchJson<{ mountPoint: MountPoint }>('/api/mount-points', {
+    const result = await fetchJson<{ mountPoint: MountPoint }>('/api/v1/system/mount-points', {
       method: 'POST',
       body: JSON.stringify(data),
     })
@@ -105,7 +105,7 @@ export function useMountPoints(): UseMountPointsResult {
   const updateMountPoint = useCallback(
     async (id: string, data: Partial<MountPointFormData>): Promise<boolean> => {
       clientLogger.debug('Updating mount point', { id })
-      const result = await fetchJson<{ mountPoint: MountPoint }>(`/api/mount-points/${id}`, {
+      const result = await fetchJson<{ mountPoint: MountPoint }>(`/api/v1/system/mount-points/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       })
@@ -125,7 +125,7 @@ export function useMountPoints(): UseMountPointsResult {
 
   const deleteMountPoint = useCallback(async (id: string): Promise<boolean> => {
     clientLogger.debug('Deleting mount point', { id })
-    const result = await fetchJson<{ success: boolean }>(`/api/mount-points/${id}`, {
+    const result = await fetchJson<{ success: boolean }>(`/api/v1/system/mount-points/${id}`, {
       method: 'DELETE',
     })
 
@@ -139,7 +139,7 @@ export function useMountPoints(): UseMountPointsResult {
 
   const testConnection = useCallback(async (id: string): Promise<ConnectionTestResult> => {
     clientLogger.debug('Testing mount point connection', { id })
-    const result = await fetchJson<ConnectionTestResult>(`/api/mount-points/${id}/test`, {
+    const result = await fetchJson<ConnectionTestResult>(`/api/v1/system/mount-points/${id}?action=test`, {
       method: 'POST',
     })
 
@@ -161,7 +161,7 @@ export function useMountPoints(): UseMountPointsResult {
   const setDefault = useCallback(
     async (id: string): Promise<boolean> => {
       clientLogger.debug('Setting default mount point', { id })
-      const result = await fetchJson<MountPoint>(`/api/mount-points/${id}/set-default`, {
+      const result = await fetchJson<MountPoint>(`/api/v1/system/mount-points/${id}?action=set-default`, {
         method: 'POST',
       })
 

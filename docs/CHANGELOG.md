@@ -4,6 +4,17 @@
 
 ### 2.7-dev
 
+- fix: Mount points API migrated to v1 endpoints (2026-01-14)
+  - Updated frontend hooks to use `/api/v1/system/mount-points` instead of legacy `/api/mount-points`
+  - Implemented `GET /api/v1/system/mount-points` - list all mount points
+  - Implemented `POST /api/v1/system/mount-points` - create new mount point
+  - Implemented `GET /api/v1/system/mount-points/[id]` - fetch specific mount point
+  - Implemented `PUT /api/v1/system/mount-points/[id]` - update mount point
+  - Implemented `DELETE /api/v1/system/mount-points/[id]` - delete mount point
+  - Implemented action handlers: test, scan-orphans, adopt-orphans, set-default
+  - All endpoints now use repository layer for data access and file storage manager for backend operations
+  - Storage settings tab now makes requests to v1 endpoints with action dispatch pattern
+  - Fixes 410 Gone errors when accessing mount points settings
 - fix: Plugin toggle now works with PUT handler for enable/disable (2026-01-14)
   - Added `PUT /api/v1/plugins/[name]` handler to toggle plugins on/off
   - Handles plugin lookup by both manifest name and package name
