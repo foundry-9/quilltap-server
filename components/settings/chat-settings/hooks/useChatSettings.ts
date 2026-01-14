@@ -97,11 +97,14 @@ export function useChatSettings(): UseChatSettingsReturn {
       const res = await fetch('/api/v1/connection-profiles')
       if (!res.ok) throw new Error('Failed to fetch profiles')
       const data = await res.json()
-      clientLogger.debug('Connection profiles loaded', { count: data.length })
-      setConnectionProfiles(data)
+      const profiles = data.profiles || []
+      clientLogger.debug('Connection profiles loaded', { count: profiles.length })
+      setConnectionProfiles(profiles)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       clientLogger.error('Error loading connection profiles', { error: errorMsg })
+      // Set empty array on error to prevent map errors
+      setConnectionProfiles([])
     } finally {
       setLoadingProfiles(false)
     }
@@ -116,11 +119,14 @@ export function useChatSettings(): UseChatSettingsReturn {
       const res = await fetch('/api/v1/embedding-profiles')
       if (!res.ok) throw new Error('Failed to fetch embedding profiles')
       const data = await res.json()
-      clientLogger.debug('Embedding profiles loaded', { count: data.length })
-      setEmbeddingProfiles(data)
+      const profiles = data.profiles || []
+      clientLogger.debug('Embedding profiles loaded', { count: profiles.length })
+      setEmbeddingProfiles(profiles)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       clientLogger.error('Error loading embedding profiles', { error: errorMsg })
+      // Set empty array on error to prevent map errors
+      setEmbeddingProfiles([])
     }
   }, [])
 

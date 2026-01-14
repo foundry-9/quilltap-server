@@ -99,7 +99,7 @@ async function updateChatSettings(
   }
   if (typeof memoryCascadePreferences !== 'undefined') {
     // Validate memoryCascadePreferences structure
-    const validActions = ['DELETE_MEMORIES', 'KEEP_MEMORIES', 'ASK']
+    const validActions = ['DELETE_MEMORIES', 'KEEP_MEMORIES', 'ASK_EVERY_TIME', 'REGENERATE_MEMORIES']
     if (memoryCascadePreferences && typeof memoryCascadePreferences === 'object') {
       const prefs = memoryCascadePreferences as any
       if (prefs.onMessageDelete && !validActions.includes(prefs.onMessageDelete)) {

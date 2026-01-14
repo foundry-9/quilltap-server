@@ -3,6 +3,7 @@
  *
  * GET /api/v1/image-profiles - List all image profiles for current user
  * POST /api/v1/image-profiles - Create a new image profile
+ * POST /api/v1/image-profiles?action=validate-key - Validate an API key
  * GET /api/v1/image-profiles?action=list-models - List available image models
  */
 
@@ -13,6 +14,8 @@ import { successResponse, created, notFound, badRequest, serverError } from '@/l
 import { logger } from '@/lib/logger';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { decryptApiKey } from '@/lib/encryption';
+import { providerRegistry } from '@/lib/plugins/provider-registry';
+import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 
 /**
  * GET /api/v1/image-profiles
@@ -142,11 +145,46 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
       return badRequest('Provider is required');
     }
 
+    // Ensure plugin system is initialized
+    const pluginSystemInitialized = isPluginSystemInitialized();
+    const providerRegistryInitialized = providerRegistry.isInitialized();
+    const providerCount = providerRegistry.getAllProviders().length;
+
+    logger.debug('[Image Profiles v1] Checking plugin system for list-models', {
+      pluginSystemInitialized,
+      providerRegistryInitialized,
+      providerCount,
+    });
+
+    // Re-initialize if providers are empty (module reload in dev mode)
+    if (!pluginSystemInitialized || !providerRegistryInitialized || providerCount === 0) {
+      logger.warn('[Image Profiles v1] Provider registry empty or not initialized, re-initializing');
+      const initResult = await initializePlugins();
+      logger.info('[Image Profiles v1] Plugin system initialization result', {
+        success: initResult.success,
+        stats: initResult.stats,
+      });
+      if (!initResult.success) {
+        return serverError('Plugin system initialization failed');
+      }
+    }
+
     // Validate provider by attempting to get it
     let imageProvider;
     try {
+      // Log all available providers for debugging
+      const allProviders = providerRegistry.getAllProviders();
+      const imageProviders = allProviders.filter(p => p.capabilities.imageGeneration);
+      logger.debug('[Image Profiles v1] Available image providers', {
+        allProvidersCount: allProviders.length,
+        allProviders: allProviders.map(p => p.metadata.providerName),
+        imageProvidersCount: imageProviders.length,
+        imageProviders: imageProviders.map(p => p.metadata.providerName),
+      });
+      
       imageProvider = createImageProvider(provider);
-    } catch {
+    } catch (error) {
+      logger.error('[Image Profiles v1] Provider not available', { provider, error: error instanceof Error ? error.message : String(error) });
       return badRequest(`Provider ${provider} is not available`);
     }
 
@@ -205,9 +243,99 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
 }
 
 /**
- * POST /api/v1/image-profiles - Create a new image profile
+ * Handle validate-key action
+ * Validates an API key by attempting to get models from the provider
  */
-export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
+async function handleValidateKey(req: NextRequest, context: AuthenticatedContext) {
+  try {
+    const body = await req.json();
+    const { provider, apiKeyId } = body;
+
+    logger.debug('[Image Profiles v1] validate-key', { provider, apiKeyId });
+
+    if (!provider) {
+      return badRequest('Provider is required');
+    }
+
+    if (!apiKeyId) {
+      return badRequest('API key ID is required');
+    }
+
+    // Ensure plugin system is initialized
+    const providerCount = providerRegistry.getAllProviders().length;
+    if (providerCount === 0) {
+      logger.warn('[Image Profiles v1] Provider registry empty, re-initializing');
+      const initResult = await initializePlugins();
+      if (!initResult.success) {
+        return serverError('Plugin system initialization failed');
+      }
+    }
+
+    // Get the API key
+    const apiKey = await context.repos.connections.findApiKeyById(apiKeyId);
+    if (!apiKey) {
+      return NextResponse.json({ valid: false, message: 'API key not found' });
+    }
+
+    // Create provider instance
+    let imageProvider;
+    try {
+      imageProvider = createImageProvider(provider);
+    } catch (error) {
+      return NextResponse.json({ 
+        valid: false, 
+        message: `Provider ${provider} is not available` 
+      });
+    }
+
+    // Decrypt the API key
+    let decryptedKey: string;
+    try {
+      decryptedKey = decryptApiKey(
+        apiKey.ciphertext,
+        apiKey.iv,
+        apiKey.authTag,
+        context.user.id
+      );
+    } catch (error) {
+      logger.error('[Image Profiles v1] Failed to decrypt API key', { apiKeyId }, error instanceof Error ? error : undefined);
+      return NextResponse.json({ valid: false, message: 'Failed to decrypt API key' });
+    }
+
+    // Validate by attempting to get models
+    try {
+      const models = await imageProvider.getAvailableModels(decryptedKey);
+      
+      if (models && models.length > 0) {
+        logger.info('[Image Profiles v1] API key validated successfully', { provider, modelCount: models.length });
+        return NextResponse.json({ valid: true, message: 'API key is valid', modelCount: models.length });
+      } else {
+        return NextResponse.json({ valid: false, message: 'No models available with this API key' });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.warn('[Image Profiles v1] API key validation failed', { provider, error: errorMessage });
+      return NextResponse.json({ valid: false, message: `Validation failed: ${errorMessage}` });
+    }
+  } catch (error) {
+    logger.error('[Image Profiles v1] Error in validate-key', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to validate API key');
+  }
+}
+
+/**
+ * POST /api/v1/image-profiles - Create a new image profile
+ * POST /api/v1/image-profiles?action=validate-key - Validate an API key
+ */
+export const POST = createAuthenticatedHandler(async (req, context) => {
+  const { user, repos } = context;
+  const action = getActionParam(req);
+
+  // Handle validate-key action
+  if (action === 'validate-key') {
+    return handleValidateKey(req, context);
+  }
+
   try {
     const body = await req.json();
     const {

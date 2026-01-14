@@ -65,11 +65,11 @@ export default function ImageProfilesTab() {
     const loadProfiles = async () => {
       clientLogger.debug('Loading image profiles')
       const result = await executeLoadProfiles(async () => {
-        const response = await fetchJson<ImageProfile[]>('/api/v1/image-profiles')
+        const response = await fetchJson<{ profiles: ImageProfile[], count: number }>('/api/v1/image-profiles')
         if (!response.ok) {
           throw new Error(response.error || 'Failed to load profiles')
         }
-        return response.data || []
+        return response.data?.profiles || []
       })
       if (result) {
         clientLogger.debug('Image profiles loaded successfully', { count: result.length })
@@ -186,7 +186,7 @@ export default function ImageProfilesTab() {
             }}
           />
         ) : (
-          profiles.toSorted((a, b) => a.name.localeCompare(b.name)).map(profile => (
+          profiles.slice().sort((a, b) => a.name.localeCompare(b.name)).map(profile => (
             <div
               key={profile.id}
               className="border border-border rounded-lg p-4 hover:border-border/80 transition bg-card"

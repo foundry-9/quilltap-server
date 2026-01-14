@@ -4,6 +4,14 @@
 
 ### 2.7-dev
 
+- fix: Settings UI data structure and API endpoint issues (2026-01-14)
+  - Fixed chat settings hooks to extract `profiles` array from API responses for embedding and connection profiles
+  - Fixed memory cascade preferences validation to accept all frontend action types: ASK_EVERY_TIME, DELETE_MEMORIES, KEEP_MEMORIES, REGENERATE_MEMORIES
+  - Fixed image profiles loading to extract `profiles` from response and replaced `toSorted()` with `slice().sort()` for compatibility
+  - Added validate-key action to image profiles API (`POST /api/v1/image-profiles?action=validate-key`)
+  - Fixed image profile model fetching to use action parameter (`/api/v1/image-profiles?action=list-models`)
+  - Fixed provider registry empty state detection in development mode (handles Next.js module reloading)
+  - Added re-initialization when provider registry is empty even if marked as initialized
 - fix: Added bulk-reattribute action to v1 chats endpoint
   - Migrated bulk character replace functionality to `/api/v1/chats/[id]?action=bulk-reattribute`
   - Fixed console error in BulkCharacterReplaceModal (was calling path-based route instead of action query param)
