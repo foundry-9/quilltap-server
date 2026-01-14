@@ -35,15 +35,15 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Map entity type to API endpoint
-  const getApiPath = useCallback(() => {
+  // Map entity type to API endpoint base path
+  const getApiBasePath = useCallback(() => {
     switch (entityType) {
       case 'character':
-        return `/api/characters/${entityId}/tags`;
+        return `/api/v1/characters/${entityId}`;
       case 'chat':
-        return `/api/chats/${entityId}/tags`;
+        return `/api/v1/chats/${entityId}`;
       case 'profile':
-        return `/api/profiles/${entityId}/tags`;
+        return `/api/v1/profiles/${entityId}`;
     }
   }, [entityType, entityId]);
 
@@ -53,7 +53,8 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
 
     const loadTags = async () => {
       try {
-        const res = await fetch(getApiPath());
+        const basePath = getApiBasePath();
+        const res = await fetch(`${basePath}?action=get-tags`);
         if (res.ok) {
           const data = await res.json();
           setTags(data.tags || []);
@@ -65,7 +66,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
     };
 
     loadTags();
-  }, [entityId, getApiPath, onTagsChange]);
+  }, [entityId, getApiBasePath, onTagsChange]);
 
   // Load all available tags when input is focused
   useEffect(() => {
@@ -117,8 +118,8 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       const { tag } = await tagRes.json();
 
       // Then attach it to the entity
-      const apiPath = getApiPath();
-      const attachRes = await fetch(apiPath, {
+      const basePath = getApiBasePath();
+      const attachRes = await fetch(`${basePath}?action=add-tag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tagId: tag.id }),
@@ -147,9 +148,10 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
 
     setLoading(true);
     try {
-      const apiPath = getApiPath();
-      const res = await fetch(`${apiPath}?tagId=${tagId}`, {
-        method: 'DELETE',
+      const basePath = getApiBasePath();
+      const res = await fetch(`${basePath}?action=remove-tag&tagId=${tagId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!res.ok) {

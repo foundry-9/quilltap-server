@@ -99,7 +99,7 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
       clientLogger.debug('Setting avatar', { imageId: image.id, entityType })
 
       // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-      const endpoint = `/api/characters/${entityId}/avatar`
+      const endpoint = `/api/v1/characters/${entityId}?action=avatar`
 
       const res = await fetch(endpoint, {
         method: 'PATCH',
@@ -125,7 +125,7 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
       clientLogger.debug('Clearing avatar', { entityType })
 
       // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-      const endpoint = `/api/characters/${entityId}/avatar`
+      const endpoint = `/api/v1/characters/${entityId}?action=avatar`
 
       const res = await fetch(endpoint, {
         method: 'PATCH',
@@ -152,7 +152,7 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
       const isCurrentAvatar = currentAvatarId === image.id
       if (isCurrentAvatar && onAvatarChange) {
         // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-        const endpoint = `/api/characters/${entityId}/avatar`
+        const endpoint = `/api/v1/characters/${entityId}?action=avatar`
 
         const clearRes = await fetch(endpoint, {
           method: 'PATCH',

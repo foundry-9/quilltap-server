@@ -111,7 +111,7 @@ export function useImageActions(
         clientLogger.debug('Setting avatar', { entityType, entityId, imageId: image.id })
 
         // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-        const endpoint = `/api/characters/${entityId}/avatar`
+        const endpoint = `/api/v1/characters/${entityId}?action=avatar`
 
         const response = await fetch(endpoint, {
           method: 'PATCH',

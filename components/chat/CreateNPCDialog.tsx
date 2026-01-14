@@ -247,7 +247,7 @@ export default function CreateNPCDialog({
         characterData,
       })
 
-      const createResponse = await fetch('/api/characters', {
+      const createResponse = await fetch('/api/v1/characters', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -275,7 +275,7 @@ export default function CreateNPCDialog({
           imageId: uploadedImageId,
         })
 
-        const avatarResponse = await fetch(`/api/characters/${characterId}/avatar`, {
+        const avatarResponse = await fetch(`/api/v1/characters/${characterId}?action=avatar`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',

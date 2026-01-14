@@ -89,7 +89,7 @@ export default function NPCsTab() {
       setDeletingId(npcId)
       clientLogger.debug('Deleting NPC', { npcId, npcName })
 
-      const res = await fetch(`/api/characters/${npcId}`, {
+      const res = await fetch(`/api/v1/characters/${npcId}`, {
         method: 'DELETE',
       })
 
@@ -124,7 +124,7 @@ export default function NPCsTab() {
       setConvertingId(npcId)
       clientLogger.debug('Converting NPC to character', { npcId, npcName })
 
-      const res = await fetch(`/api/characters/${npcId}`, {
+      const res = await fetch(`/api/v1/characters/${npcId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ npc: false }),

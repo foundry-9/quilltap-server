@@ -4,6 +4,13 @@
 
 ### 2.7-dev
 
+- refactor: Migrate frontend API calls to `/api/v1/` pattern with action parameters
+  - Avatar endpoints: Changed from `/api/characters/[id]/avatar` to `/api/v1/characters/[id]?action=avatar`
+    - Updated in `useGalleryData.ts`, `useImageActions.ts`, `CreateNPCDialog.tsx`
+  - Character operations: Changed from `/api/characters/[id]` to `/api/v1/characters/[id]`
+    - Updated NPC management in `npcs/index.tsx` (PUT and DELETE operations)
+  - Tag endpoints: Migrated to action dispatch pattern in `tag-editor.tsx`
+    - Changed from `/api/[entity]/[id]/tags` to `/api/v1/[entity]/[id]?action=[add|remove|get]-tag`
 - refactor: Standardize all tool plugins on multi-tool pattern
   - `getToolDefinitions(config)` and `executeByName(toolName, input, context)` are now required
   - Even single-tool plugins return an array (with one element) for consistency
