@@ -22,6 +22,8 @@ interface Plugin {
   capabilities: string[]
   path: string
   source: PluginSource
+  scope?: 'site' | 'user'
+  packageName?: string
   hasConfigSchema?: boolean
 }
 
@@ -127,7 +129,7 @@ export default function PluginsTab() {
 
   const fetchInstalledPlugins = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/plugins/installed')
+      const res = await fetch('/api/v1/plugins?filter=installed')
       if (!res.ok) throw new Error('Failed to fetch installed plugins')
       const data = await res.json()
       setInstalledPlugins(data.plugins || [])
@@ -206,19 +208,22 @@ export default function PluginsTab() {
 
     setSearching(true)
     try {
-      const params = new URLSearchParams()
-      if (searchQuery.trim()) {
-        params.set('q', searchQuery.trim())
-      }
-
-      const res = await fetch(`/api/v1/plugins/search?${params.toString()}`)
+      const res = await fetch('/api/v1/plugins?action=search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: searchQuery.trim() || 'quilltap',
+          type: 'all',
+        }),
+      })
+      
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Search failed')
       }
 
       const data = await res.json()
-      setSearchResults(data.plugins || [])
+      setSearchResults(data.results || [])
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to search plugins')
       setSearchResults([])
@@ -230,7 +235,7 @@ export default function PluginsTab() {
   const installPlugin = async (packageName: string, scope: 'site' | 'user' = 'user') => {
     setActionInProgress(packageName)
     try {
-      const res = await fetch('/api/v1/plugins/install', {
+      const res = await fetch('/api/v1/plugins?action=install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ packageName, scope }),
@@ -257,8 +262,10 @@ export default function PluginsTab() {
         showSuccessToast(data.message || 'Plugin installed successfully!')
       }
 
-      // Refresh installed plugins list
+      // Refresh installed plugins list and switch to installed tab
       await fetchInstalledPlugins()
+      await fetchPlugins()
+      setActiveTab('installed')
 
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Installation failed')
@@ -267,20 +274,23 @@ export default function PluginsTab() {
     }
   }
 
-  const uninstallPlugin = async (packageName: string, source: string) => {
+  const uninstallPlugin = async (packageName: string, source: string, scope?: 'site' | 'user') => {
     if (source === 'bundled' || source === 'included') {
       showErrorToast('Cannot uninstall bundled plugins')
       return
     }
 
-    const scope = source === 'site' ? 'site' : 'user'
+    // Use provided scope, or derive from source for backward compatibility
+    const pluginScope = scope || (source === 'site' ? 'site' : 'user')
+
+    clientLogger.debug('Uninstalling plugin', { packageName, scope: pluginScope })
 
     setActionInProgress(packageName)
     try {
-      const res = await fetch('/api/v1/plugins/uninstall', {
+      const res = await fetch('/api/v1/plugins?action=uninstall', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packageName, scope }),
+        body: JSON.stringify({ packageName, scope: pluginScope }),
       })
 
       const data = await res.json()
@@ -291,9 +301,10 @@ export default function PluginsTab() {
 
       showSuccessToast(data.message || 'Plugin uninstalled successfully!')
 
-      // Refresh installed plugins list
+      // Refresh installed plugins list and switch to installed tab
       await fetchInstalledPlugins()
       await fetchPlugins()
+      setActiveTab('installed')
 
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Uninstall failed')
@@ -503,7 +514,7 @@ export default function PluginsTab() {
                         {/* Uninstall Button (for non-bundled plugins) */}
                         {canUninstall(plugin.source) && (
                           <button
-                            onClick={() => uninstallPlugin(plugin.name, plugin.source)}
+                            onClick={() => uninstallPlugin(plugin.packageName || plugin.name, plugin.source, plugin.scope)}
                             disabled={isUninstalling}
                             className="px-3 py-1 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
                           >

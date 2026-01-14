@@ -71,7 +71,7 @@ export function ProfileList({
         />
       )}
 
-      {profiles.toSorted((a, b) => a.name.localeCompare(b.name)).map(profile => {
+      {profiles.slice().sort((a, b) => a.name.localeCompare(b.name)).map(profile => {
         // Build badges array
         const badges: ProfileCardBadge[] = []
         if (profile.isDefault) {

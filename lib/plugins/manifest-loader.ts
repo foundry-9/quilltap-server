@@ -31,6 +31,8 @@ export interface LoadedPlugin {
   source: PluginSource;
   /** Version from package.json (preferred for display) */
   packageVersion?: string;
+  /** Package name from package.json (for npm packages, may be scoped like @org/name) */
+  packageName?: string;
 }
 
 export interface PluginLoadError {
@@ -102,6 +104,21 @@ async function getPackageVersion(pluginPath: string): Promise<string | undefined
     const packageJsonPath = path.join(pluginPath, 'package.json');
     const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
     return packageJson.version;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Get the package name from package.json
+ * @param pluginPath - Path to the plugin directory
+ * @returns Package name (may be scoped like @org/name) or undefined
+ */
+async function getPackageName(pluginPath: string): Promise<string | undefined> {
+  try {
+    const packageJsonPath = path.join(pluginPath, 'package.json');
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
+    return packageJson.name;
   } catch {
     return undefined;
   }
@@ -325,9 +342,10 @@ export async function scanPlugins(
         // Get capabilities from manifest
         const capabilities = [...manifest.capabilities];
 
-        // Determine plugin source and get package version
+        // Determine plugin source and get package info
         const source = await determinePluginSource(pluginPath);
         const packageVersion = await getPackageVersion(pluginPath);
+        const npmPackageName = await getPackageName(pluginPath);
 
         result.plugins.push({
           manifest,
@@ -337,6 +355,7 @@ export async function scanPlugins(
           capabilities,
           source,
           packageVersion,
+          packageName: npmPackageName,
         });
       }
     } catch (error) {

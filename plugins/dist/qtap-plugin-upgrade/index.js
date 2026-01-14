@@ -3397,17 +3397,17 @@ var require_bson = __commonJS({
       index = index + size;
       return index;
     }
-    function serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5) {
-      if (path5.has(value)) {
+    function serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path6) {
+      if (path6.has(value)) {
         throw new BSONError("Cannot convert circular structure to BSON");
       }
-      path5.add(value);
+      path6.add(value);
       buffer2[index++] = Array.isArray(value) ? BSON_DATA_ARRAY : BSON_DATA_OBJECT;
       const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
       index = index + numberOfWrittenBytes;
       buffer2[index++] = 0;
-      const endIndex = serializeInto(buffer2, value, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path5);
-      path5.delete(value);
+      const endIndex = serializeInto(buffer2, value, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path6);
+      path6.delete(value);
       return endIndex;
     }
     function serializeDecimal128(buffer2, key, value, index) {
@@ -3459,7 +3459,7 @@ var require_bson = __commonJS({
       buffer2[index++] = 0;
       return index;
     }
-    function serializeCode(buffer2, key, value, index, checkKeys = false, depth = 0, serializeFunctions = false, ignoreUndefined = true, path5) {
+    function serializeCode(buffer2, key, value, index, checkKeys = false, depth = 0, serializeFunctions = false, ignoreUndefined = true, path6) {
       if (value.scope && typeof value.scope === "object") {
         buffer2[index++] = BSON_DATA_CODE_W_SCOPE;
         const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
@@ -3472,7 +3472,7 @@ var require_bson = __commonJS({
         NumberUtils.setInt32LE(buffer2, index, codeSize);
         buffer2[index + 4 + codeSize - 1] = 0;
         index = index + codeSize + 4;
-        const endIndex = serializeInto(buffer2, value.scope, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path5);
+        const endIndex = serializeInto(buffer2, value.scope, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path6);
         index = endIndex - 1;
         const totalSize = endIndex - startIndex;
         startIndex += NumberUtils.setInt32LE(buffer2, startIndex, totalSize);
@@ -3528,7 +3528,7 @@ var require_bson = __commonJS({
       buffer2[index++] = 0;
       return index;
     }
-    function serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5) {
+    function serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path6) {
       buffer2[index++] = BSON_DATA_OBJECT;
       const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
       index = index + numberOfWrittenBytes;
@@ -3542,13 +3542,13 @@ var require_bson = __commonJS({
         output.$db = value.db;
       }
       output = Object.assign(output, value.fields);
-      const endIndex = serializeInto(buffer2, output, false, index, depth + 1, serializeFunctions, true, path5);
+      const endIndex = serializeInto(buffer2, output, false, index, depth + 1, serializeFunctions, true, path6);
       const size = endIndex - startIndex;
       startIndex += NumberUtils.setInt32LE(buffer2, index, size);
       return endIndex;
     }
-    function serializeInto(buffer2, object, checkKeys, startingIndex, depth, serializeFunctions, ignoreUndefined, path5) {
-      if (path5 == null) {
+    function serializeInto(buffer2, object, checkKeys, startingIndex, depth, serializeFunctions, ignoreUndefined, path6) {
+      if (path6 == null) {
         if (object == null) {
           buffer2[0] = 5;
           buffer2[1] = 0;
@@ -3567,9 +3567,9 @@ var require_bson = __commonJS({
         } else if (isDate(object) || isRegExp(object) || isUint8Array(object) || isAnyArrayBuffer(object)) {
           throw new BSONError(`date, regexp, typedarray, and arraybuffer cannot be BSON documents`);
         }
-        path5 = /* @__PURE__ */ new Set();
+        path6 = /* @__PURE__ */ new Set();
       }
-      path5.add(object);
+      path6.add(object);
       let index = startingIndex + 4;
       if (Array.isArray(object)) {
         for (let i = 0; i < object.length; i++) {
@@ -3599,7 +3599,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path6);
             }
           } else if (type === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -3613,13 +3613,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path6);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path6);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -3680,7 +3680,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path6);
             }
           } else if (type === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -3694,13 +3694,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path6);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path6);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -3760,7 +3760,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path6);
             }
           } else if (type === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -3774,13 +3774,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path5);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path6);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path5);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path6);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -3795,7 +3795,7 @@ var require_bson = __commonJS({
           }
         }
       }
-      path5.delete(object);
+      path6.delete(object);
       buffer2[index++] = 0;
       const size = index - startingIndex;
       startingIndex += NumberUtils.setInt32LE(buffer2, startingIndex, size);
@@ -17776,14 +17776,14 @@ var require_url_state_machine = __commonJS({
       return url.replace(/\u0009|\u000A|\u000D/ug, "");
     }
     function shortenPath(url) {
-      const { path: path5 } = url;
-      if (path5.length === 0) {
+      const { path: path6 } = url;
+      if (path6.length === 0) {
         return;
       }
-      if (url.scheme === "file" && path5.length === 1 && isNormalizedWindowsDriveLetter(path5[0])) {
+      if (url.scheme === "file" && path6.length === 1 && isNormalizedWindowsDriveLetter(path6[0])) {
         return;
       }
-      path5.pop();
+      path6.pop();
     }
     function includesCredentials(url) {
       return url.username !== "" || url.password !== "";
@@ -32285,10 +32285,10 @@ var init_logger = __esm({
       /**
        * Log an HTTP request
        */
-      logRequest(method, path5, statusCode, duration, context) {
+      logRequest(method, path6, statusCode, duration, context) {
         this.info("HTTP request", {
           method,
-          path: path5,
+          path: path6,
           statusCode,
           duration,
           ...context
@@ -32420,8 +32420,8 @@ function validateMongoDBConfig() {
   } catch (error) {
     if (error instanceof import_zod2.z.ZodError) {
       const validationErrors = error.errors.map((err) => {
-        const path5 = err.path.join(".");
-        return `${path5}: ${err.message}`;
+        const path6 = err.path.join(".");
+        return `${path6}: ${err.message}`;
       });
       errors.push(...validationErrors);
       logger.warn("MongoDB configuration validation failed", {
@@ -34483,12 +34483,12 @@ function encodeURIPath(str2) {
   return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
 var EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
-var createPathTagFunction = (pathEncoder = encodeURIPath) => function path5(statics, ...params) {
+var createPathTagFunction = (pathEncoder = encodeURIPath) => function path6(statics, ...params) {
   if (statics.length === 1)
     return statics[0];
   let postPath = false;
   const invalidSegments = [];
-  const path6 = statics.reduce((previousValue, currentValue, index) => {
+  const path7 = statics.reduce((previousValue, currentValue, index) => {
     if (/[?#]/.test(currentValue)) {
       postPath = true;
     }
@@ -34505,7 +34505,7 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path5(stat
     }
     return previousValue + currentValue + (index === params.length ? "" : encoded);
   }, "");
-  const pathOnly = path6.split(/[?#]/, 1)[0];
+  const pathOnly = path7.split(/[?#]/, 1)[0];
   const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
   let match;
   while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
@@ -34526,10 +34526,10 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path5(stat
     }, "");
     throw new OpenAIError(`Path parameters result in path with invalid segments:
 ${invalidSegments.map((e) => e.error).join("\n")}
-${path6}
+${path7}
 ${underline}`);
   }
-  return path6;
+  return path7;
 };
 var path = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
 
@@ -39332,9 +39332,9 @@ var OpenAI = class {
     this.apiKey = token;
     return true;
   }
-  buildURL(path5, query, defaultBaseURL) {
+  buildURL(path6, query, defaultBaseURL) {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
-    const url = isAbsoluteURL(path5) ? new URL(path5) : new URL(baseURL + (baseURL.endsWith("/") && path5.startsWith("/") ? path5.slice(1) : path5));
+    const url = isAbsoluteURL(path6) ? new URL(path6) : new URL(baseURL + (baseURL.endsWith("/") && path6.startsWith("/") ? path6.slice(1) : path6));
     const defaultQuery = this.defaultQuery();
     if (!isEmptyObj(defaultQuery)) {
       query = { ...defaultQuery, ...query };
@@ -39358,24 +39358,24 @@ var OpenAI = class {
    */
   async prepareRequest(request, { url, options }) {
   }
-  get(path5, opts) {
-    return this.methodRequest("get", path5, opts);
+  get(path6, opts) {
+    return this.methodRequest("get", path6, opts);
   }
-  post(path5, opts) {
-    return this.methodRequest("post", path5, opts);
+  post(path6, opts) {
+    return this.methodRequest("post", path6, opts);
   }
-  patch(path5, opts) {
-    return this.methodRequest("patch", path5, opts);
+  patch(path6, opts) {
+    return this.methodRequest("patch", path6, opts);
   }
-  put(path5, opts) {
-    return this.methodRequest("put", path5, opts);
+  put(path6, opts) {
+    return this.methodRequest("put", path6, opts);
   }
-  delete(path5, opts) {
-    return this.methodRequest("delete", path5, opts);
+  delete(path6, opts) {
+    return this.methodRequest("delete", path6, opts);
   }
-  methodRequest(method, path5, opts) {
+  methodRequest(method, path6, opts) {
     return this.request(Promise.resolve(opts).then((opts2) => {
-      return { method, path: path5, ...opts2 };
+      return { method, path: path6, ...opts2 };
     }));
   }
   request(options, remainingRetries = null) {
@@ -39479,8 +39479,8 @@ var OpenAI = class {
     }));
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
-  getAPIList(path5, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path5, ...opts });
+  getAPIList(path6, Page2, opts) {
+    return this.requestAPIList(Page2, { method: "get", path: path6, ...opts });
   }
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -39558,8 +39558,8 @@ var OpenAI = class {
   }
   async buildRequest(inputOptions, { retryCount = 0 } = {}) {
     const options = { ...inputOptions };
-    const { method, path: path5, query, defaultBaseURL } = options;
-    const url = this.buildURL(path5, query, defaultBaseURL);
+    const { method, path: path6, query, defaultBaseURL } = options;
+    const url = this.buildURL(path6, query, defaultBaseURL);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -41492,6 +41492,7 @@ var EmbeddingProfilesRepository = class extends BaseRepository {
 };
 
 // ../../../lib/plugins/registry.ts
+var import_path34 = __toESM(require("path"));
 init_logger();
 var PluginRegistry = class {
   constructor() {
@@ -41663,16 +41664,26 @@ var PluginRegistry = class {
     return {
       initialized: this.state.initialized,
       lastScanTime: this.state.lastScanTime?.toISOString() || null,
-      plugins: Array.from(this.state.plugins.entries()).map(([name, plugin2]) => ({
-        name,
-        title: plugin2.manifest.title,
-        version: plugin2.packageVersion ?? plugin2.manifest.version,
-        enabled: plugin2.enabled,
-        capabilities: plugin2.capabilities,
-        path: plugin2.pluginPath,
-        source: plugin2.source,
-        hasConfigSchema: Array.isArray(plugin2.manifest.configSchema) && plugin2.manifest.configSchema.length > 0
-      })),
+      plugins: Array.from(this.state.plugins.entries()).map(([name, plugin2]) => {
+        let scope;
+        if (plugin2.pluginPath.includes(import_path34.default.join("plugins", "site"))) {
+          scope = "site";
+        } else if (plugin2.pluginPath.includes(import_path34.default.join("plugins", "users"))) {
+          scope = "user";
+        }
+        return {
+          name,
+          title: plugin2.manifest.title,
+          version: plugin2.packageVersion ?? plugin2.manifest.version,
+          enabled: plugin2.enabled,
+          capabilities: plugin2.capabilities,
+          path: plugin2.pluginPath,
+          source: plugin2.source,
+          scope,
+          packageName: plugin2.packageName,
+          hasConfigSchema: Array.isArray(plugin2.manifest.configSchema) && plugin2.manifest.configSchema.length > 0
+        };
+      }),
       errors: Array.from(this.state.errors.entries()).map(([name, error]) => ({
         name,
         error
@@ -44289,15 +44300,15 @@ var migrateJsonToMongoDBMigration = {
       console.log("[migration.migrate-json-to-mongodb] Migrating vector indices...");
       try {
         const fs6 = await import("fs/promises");
-        const path5 = await import("path");
-        const vectorIndicesPath = path5.join(process.cwd(), "data", "vector-indices");
+        const path6 = await import("path");
+        const vectorIndicesPath = path6.join(process.cwd(), "data", "vector-indices");
         try {
           const files = await fs6.readdir(vectorIndicesPath);
           const jsonFiles = files.filter((f) => f.endsWith(".json"));
           if (jsonFiles.length > 0) {
             for (const file of jsonFiles) {
               try {
-                const content = await fs6.readFile(path5.join(vectorIndicesPath, file), "utf-8");
+                const content = await fs6.readFile(path6.join(vectorIndicesPath, file), "utf-8");
                 const vectorIndex = JSON.parse(content);
                 if (!vectorIndex.id) {
                   vectorIndex.id = vectorIndex.characterId;
@@ -44330,8 +44341,8 @@ var migrateJsonToMongoDBMigration = {
       console.log("[migration.migrate-json-to-mongodb] Migrating migration state...");
       try {
         const fs6 = await import("fs/promises");
-        const path5 = await import("path");
-        const migrationsFilePath = path5.join(process.cwd(), "data", "settings", "migrations.json");
+        const path6 = await import("path");
+        const migrationsFilePath = path6.join(process.cwd(), "data", "settings", "migrations.json");
         try {
           const content = await fs6.readFile(migrationsFilePath, "utf-8");
           const migrationState = JSON.parse(content);
@@ -44397,14 +44408,14 @@ var migrateJsonToMongoDBMigration = {
 
 // migrations/migrate-files-to-s3.ts
 var fs5 = __toESM(require("fs/promises"));
-var path4 = __toESM(require("path"));
+var path5 = __toESM(require("path"));
 
 // lib/file-manager.ts
 var import_fs2 = require("fs");
-var import_path34 = require("path");
+var import_path35 = require("path");
 var FILES_DIR = "public/data/files";
-var STORAGE_DIR = (0, import_path34.join)(FILES_DIR, "storage");
-var INDEX_FILE = (0, import_path34.join)(FILES_DIR, "files.jsonl");
+var STORAGE_DIR = (0, import_path35.join)(FILES_DIR, "storage");
+var INDEX_FILE = (0, import_path35.join)(FILES_DIR, "files.jsonl");
 async function ensureDirectories() {
   await import_fs2.promises.mkdir(STORAGE_DIR, { recursive: true });
 }
@@ -44458,8 +44469,8 @@ async function deleteFile2(id) {
   if (!entry) {
     return false;
   }
-  const ext = (0, import_path34.extname)(entry.originalFilename);
-  const storagePath = (0, import_path34.join)(STORAGE_DIR, `${id}${ext}`);
+  const ext = (0, import_path35.extname)(entry.originalFilename);
+  const storagePath = (0, import_path35.join)(STORAGE_DIR, `${id}${ext}`);
   try {
     await import_fs2.promises.unlink(storagePath);
   } catch (error) {
@@ -44478,7 +44489,7 @@ async function deleteFile2(id) {
 // migrations/migrate-files-to-s3.ts
 async function checkLocalStorageExists() {
   try {
-    const storagePath = path4.join(process.cwd(), "public/data/files/storage");
+    const storagePath = path5.join(process.cwd(), "public/data/files/storage");
     const stat4 = await fs5.stat(storagePath);
     return stat4.isDirectory();
   } catch {
@@ -44541,8 +44552,8 @@ var migrateFilesToS3Migration = {
       });
       for (const entry of filesToMigrate) {
         try {
-          const ext = path4.extname(entry.originalFilename);
-          const localFilePath = path4.join(
+          const ext = path5.extname(entry.originalFilename);
+          const localFilePath = path5.join(
             process.cwd(),
             "public/data/files/storage",
             `${entry.id}${ext}`
@@ -47570,14 +47581,14 @@ function extractAllFolderPaths(folderPath) {
   }
   return paths;
 }
-function getParentPath(path5) {
-  if (path5 === "/") return "/";
-  const parts = path5.split("/").filter(Boolean);
+function getParentPath(path6) {
+  if (path6 === "/") return "/";
+  const parts = path6.split("/").filter(Boolean);
   parts.pop();
   return parts.length === 0 ? "/" : "/" + parts.join("/") + "/";
 }
-function getFolderName(path5) {
-  const parts = path5.split("/").filter(Boolean);
+function getFolderName(path6) {
+  const parts = path6.split("/").filter(Boolean);
   return parts.length > 0 ? parts[parts.length - 1] : "";
 }
 var createFolderEntitiesMigration = {
@@ -47643,8 +47654,8 @@ var createFolderEntitiesMigration = {
               projectFiles.set(projectId, /* @__PURE__ */ new Set());
             }
             const paths = extractAllFolderPaths(folderPath);
-            for (const path5 of paths) {
-              projectFiles.get(projectId).add(path5);
+            for (const path6 of paths) {
+              projectFiles.get(projectId).add(path6);
             }
           }
           for (const [projectId, folderPaths] of projectFiles) {
@@ -47652,16 +47663,16 @@ var createFolderEntitiesMigration = {
               (a, b) => a.split("/").length - b.split("/").length
             );
             const folderIdMap = /* @__PURE__ */ new Map();
-            for (const path5 of sortedPaths) {
-              const parentPath = getParentPath(path5);
+            for (const path6 of sortedPaths) {
+              const parentPath = getParentPath(path6);
               const parentFolderId = parentPath === "/" ? null : folderIdMap.get(parentPath) || null;
               const folderId = (0, import_crypto3.randomUUID)();
               const now = /* @__PURE__ */ new Date();
               const folder = {
                 id: folderId,
                 userId,
-                path: path5,
-                name: getFolderName(path5),
+                path: path6,
+                name: getFolderName(path6),
                 parentFolderId,
                 projectId,
                 mountPointId: null,
@@ -47670,21 +47681,21 @@ var createFolderEntitiesMigration = {
               };
               const existingFolder = await foldersCollection.findOne({
                 userId,
-                path: path5,
+                path: path6,
                 projectId
               });
               if (!existingFolder) {
                 await foldersCollection.insertOne(folder);
-                folderIdMap.set(path5, folderId);
+                folderIdMap.set(path6, folderId);
                 foldersCreated++;
                 logger.debug("Created folder entity", {
                   context: "migration.create-folder-entities",
                   userId,
-                  path: path5,
+                  path: path6,
                   projectId
                 });
               } else {
-                folderIdMap.set(path5, existingFolder.id);
+                folderIdMap.set(path6, existingFolder.id);
               }
             }
           }

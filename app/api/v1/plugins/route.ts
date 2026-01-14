@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
+import { installPluginFromNpm, uninstallPlugin, type PluginScope } from '@/lib/plugins/installer';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -28,10 +29,12 @@ const searchPluginsSchema = z.object({
 const installPluginSchema = z.object({
   packageName: z.string().min(1, 'Package name is required'),
   version: z.string().optional(),
+  scope: z.enum(['site', 'user']).optional().default('user'),
 });
 
 const uninstallPluginSchema = z.object({
   packageName: z.string().min(1, 'Package name is required'),
+  scope: z.enum(['site', 'user']).optional().default('user'),
 });
 
 type SearchPluginsInput = z.infer<typeof searchPluginsSchema>;
@@ -41,6 +44,40 @@ type UninstallPluginInput = z.infer<typeof uninstallPluginSchema>;
 // ============================================================================
 // Action Handlers
 // ============================================================================
+
+/**
+ * Check if a package name is a valid Quilltap plugin
+ */
+function isQuilltapPlugin(name: string): boolean {
+  if (name.startsWith('qtap-plugin-')) return true;
+  if (name.startsWith('@') && name.includes('/qtap-plugin-')) return true;
+  return false;
+}
+
+/**
+ * Perform npm registry search
+ */
+async function searchNpm(searchText: string): Promise<any[]> {
+  const searchUrl = new URL('https://registry.npmjs.org/-/v1/search');
+  searchUrl.searchParams.set('text', searchText);
+  searchUrl.searchParams.set('size', '50');
+
+  const response = await fetch(searchUrl.toString(), {
+    headers: { 'Accept': 'application/json' },
+    next: { revalidate: 300 }, // Cache for 5 minutes
+  });
+
+  if (!response.ok) {
+    logger.warn('[Plugins v1] npm search request failed', {
+      searchText,
+      status: response.status,
+    });
+    return [];
+  }
+
+  const data = await response.json();
+  return data.objects || [];
+}
 
 async function handleSearch(req: NextRequest, context: any) {
   try {
@@ -53,28 +90,56 @@ async function handleSearch(req: NextRequest, context: any) {
       type: validatedData.type,
     });
 
-    // TODO: Implement npm registry search
-    const results = [
-      {
-        name: 'example-plugin',
-        packageName: '@quilltap/example-plugin',
-        title: 'Example Plugin',
-        description: 'An example plugin for demonstration',
-        version: '1.0.0',
-        type: 'tool',
-        author: 'Quilltap Team',
-        downloads: 1000,
-      },
-    ];
+    // Perform multiple searches to find both scoped and unscoped plugins
+    const query = validatedData.query.trim();
+    const searchQueries = query
+      ? [
+          `qtap-plugin-${query}`,
+          `@quilltap/ ${query}`,
+        ]
+      : [
+          '@quilltap/',
+          'qtap-plugin-',
+        ];
+
+    // Run searches in parallel
+    const searchPromises = searchQueries.map(q => searchNpm(q));
+    const results = await Promise.all(searchPromises);
+
+    // Combine and deduplicate results
+    const allObjects = results.flat();
+    const seenNames = new Set<string>();
+    const uniqueObjects = allObjects.filter(obj => {
+      const name = obj.package?.name;
+      if (!name || seenNames.has(name)) return false;
+      seenNames.add(name);
+      return true;
+    });
+
+    // Filter to only qtap-plugin-* packages and transform results
+    const plugins = uniqueObjects
+      .filter((obj: any) => obj.package?.name && isQuilltapPlugin(obj.package.name))
+      .map((obj: any) => ({
+        name: obj.package.name,
+        version: obj.package.version,
+        description: obj.package.description || 'No description available',
+        author: typeof obj.package.author === 'string'
+          ? obj.package.author
+          : obj.package.author?.name || obj.package.publisher?.username || 'Unknown',
+        keywords: obj.package.keywords || [],
+        updated: obj.package.date || '',
+        score: obj.score?.final || 0,
+        links: obj.package.links,
+      }));
 
     logger.debug('[Plugins v1] Search results returned', {
       userId: context.user.id,
-      resultCount: results.length,
+      resultCount: plugins.length,
     });
 
     return NextResponse.json({
-      results,
-      count: results.length,
+      results: plugins,
+      count: plugins.length,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -100,29 +165,46 @@ async function handleInstall(req: NextRequest, context: any) {
       userId: context.user.id,
       packageName: validatedData.packageName,
       version: validatedData.version,
+      scope: validatedData.scope,
     });
 
-    // TODO: Implement plugin installation
-    // This would involve:
-    // 1. Downloading package from npm
-    // 2. Validating manifest
-    // 3. Installing to plugins directory
-    // 4. Registering with plugin system
+    // Call the actual install function
+    const result = await installPluginFromNpm(
+      validatedData.packageName,
+      validatedData.scope as PluginScope,
+      validatedData.scope === 'user' ? context.user.id : undefined
+    );
 
-    const installed = {
-      name: validatedData.packageName,
-      title: 'Installed Plugin',
-      version: validatedData.version || '1.0.0',
-      enabled: true,
-      installedAt: new Date().toISOString(),
-    };
+    if (!result.success) {
+      logger.warn('[Plugins v1] Plugin install failed', {
+        userId: context.user.id,
+        packageName: validatedData.packageName,
+        error: result.error,
+      });
+      return badRequest(result.error || 'Failed to install plugin');
+    }
 
-    logger.info('[Plugins v1] Plugin installed', {
+    logger.info('[Plugins v1] Plugin installed successfully', {
       userId: context.user.id,
       packageName: validatedData.packageName,
+      scope: validatedData.scope,
     });
 
-    return NextResponse.json({ plugin: installed }, { status: 201 });
+    // Reinitialize plugin system to reflect changes
+    await initializePlugins();
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Plugin installed successfully',
+        plugin: {
+          name: result.manifest?.name,
+          version: result.version,
+          manifest: result.manifest,
+        },
+      },
+      { status: 201 }
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
       logger.debug('[Plugins v1] Validation error on install', { errors: error.errors });
@@ -146,22 +228,37 @@ async function handleUninstall(req: NextRequest, context: any) {
     logger.info('[Plugins v1] POST uninstall', {
       userId: context.user.id,
       packageName: validatedData.packageName,
+      scope: validatedData.scope,
     });
 
-    // TODO: Implement plugin uninstallation
-    // This would involve:
-    // 1. Removing from plugins directory
-    // 2. Unregistering from plugin system
-    // 3. Cleaning up configuration
+    // Call the actual uninstall function
+    const result = await uninstallPlugin(
+      validatedData.packageName,
+      validatedData.scope as PluginScope,
+      validatedData.scope === 'user' ? context.user.id : undefined
+    );
 
-    logger.info('[Plugins v1] Plugin uninstalled', {
+    if (!result.success) {
+      logger.warn('[Plugins v1] Plugin uninstall failed', {
+        userId: context.user.id,
+        packageName: validatedData.packageName,
+        error: result.error,
+      });
+      return badRequest(result.error || 'Failed to uninstall plugin');
+    }
+
+    logger.info('[Plugins v1] Plugin uninstalled successfully', {
       userId: context.user.id,
       packageName: validatedData.packageName,
+      scope: validatedData.scope,
     });
+
+    // Reinitialize plugin system to reflect changes
+    await initializePlugins();
 
     return NextResponse.json({
       success: true,
-      message: 'Plugin uninstalled',
+      message: 'Plugin uninstalled successfully',
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -197,23 +294,57 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get('filter');
 
+    // Get site/bundled plugins from registry
     const state = pluginRegistry.exportState();
-    let plugins = state.plugins;
+    const plugins = [...state.plugins];
+
+    // Also scan user-specific plugins
+    const { scanPlugins } = await import('@/lib/plugins/manifest-loader');
+    const userScanResult = await scanPlugins(undefined, user.id);
+    
+    // Add user plugins to the list (filter to only user-scoped ones to avoid duplicates)
+    const userPlugins = userScanResult.plugins
+      .filter(plugin => plugin.pluginPath.includes(`plugins/users/${user.id}`))
+      .map(plugin => ({
+        name: plugin.manifest.name,
+        title: plugin.manifest.title,
+        version: plugin.packageVersion ?? plugin.manifest.version,
+        enabled: plugin.enabled,
+        capabilities: plugin.capabilities,
+        path: plugin.pluginPath,
+        source: plugin.source,
+        scope: 'user' as const,
+        packageName: plugin.packageName,
+        hasConfigSchema: Array.isArray(plugin.manifest.configSchema) && plugin.manifest.configSchema.length > 0,
+      }));
+    
+    const allPlugins = [...plugins, ...userPlugins];
 
     // Apply filter
+    let filteredPlugins = allPlugins;
     if (filter === 'installed') {
-      plugins = plugins.filter((p: any) => p.enabled);
+      filteredPlugins = allPlugins.filter((p: any) => p.enabled);
       logger.debug('[Plugins v1] Filtered to installed plugins', {
         userId: user.id,
-        count: plugins.length,
+        count: filteredPlugins.length,
       });
     }
 
+    // Calculate stats including user plugins
+    const totalPlugins = allPlugins.length;
+    const enabledPlugins = allPlugins.filter((p: any) => p.enabled).length;
+    const stats = {
+      ...state.stats,
+      total: totalPlugins,
+      enabled: enabledPlugins,
+      disabled: totalPlugins - enabledPlugins,
+    };
+
     return NextResponse.json({
-      plugins,
-      stats: state.stats,
+      plugins: filteredPlugins,
+      stats,
       errors: state.errors,
-      count: plugins.length,
+      count: filteredPlugins.length,
     });
   } catch (error) {
     logger.error(

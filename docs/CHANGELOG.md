@@ -4,6 +4,58 @@
 
 ### 2.7-dev
 
+- fix: Plugin toggle now works with PUT handler for enable/disable (2026-01-14)
+  - Added `PUT /api/v1/plugins/[name]` handler to toggle plugins on/off
+  - Handles plugin lookup by both manifest name and package name
+  - Falls back to searching user plugins if not found in main registry
+  - Fixes 404 error when toggling user-installed plugins
+- fix: Improved plugin management UX with automatic tab switching (2026-01-14)
+  - Install action now automatically switches to 'Installed' tab after success
+  - Uninstall action now automatically switches to 'Installed' tab after success
+  - Both operations refresh all plugin data (fetchPlugins + fetchInstalledPlugins)
+  - Provides immediate visual feedback that operations succeeded
+- fix: Plugin stats now accurately reflect all installed plugins (2026-01-14)
+  - GET /api/v1/plugins now recalculates stats to include both registry and user-scoped plugins
+  - Stats header (Total/Enabled/Disabled) now shows correct counts immediately after changes
+  - Fixed duplicate counting by filtering user plugins to user directory only
+- fix: Plugin list now includes user-scoped plugins (2026-01-14)
+  - GET /api/v1/plugins now scans and includes user-specific plugins in addition to site/bundled plugins
+  - Filters to only include plugins from user directory to avoid duplicates
+  - User plugins are properly marked with scope: 'user'
+  - Fixes issue where installed user plugins wouldn't appear in the UI
+- fix: Implemented npm registry search for plugin discovery (2026-01-14)
+  - Added working npm registry search to v1 plugins API
+  - Supports searching for both scoped (@quilltap/qtap-plugin-*) and unscoped plugins
+  - Multiple parallel searches for better coverage
+  - Deduplicates results and filters to only Quilltap plugins
+- fix: Plugin list now refreshes after install/uninstall operations (2026-01-14)
+  - Added plugin registry reinitialization after install and uninstall
+  - Ensures UI immediately reflects changes to installed plugins
+- fix: Plugin uninstall now correctly determines scope from installation location (2026-01-14)
+  - Added scope tracking to plugin registry entries (site vs user)
+  - Plugin registry exportState now includes scope based on plugin path
+  - Uninstall function now receives and uses scope from plugin data
+  - Added packageName tracking to distinguish npm package names from manifest names
+  - Uninstall now uses packageName (e.g., @quilltap/qtap-plugin-gab-ai) instead of manifest name
+  - Fixes issue where scoped npm packages couldn't be uninstalled
+- fix: Implemented plugin install and uninstall functionality in v1 API (2026-01-14)
+  - Connected v1 plugin install action to actual `installPluginFromNpm` implementation
+  - Connected v1 plugin uninstall action to actual `uninstallPlugin` implementation
+  - Added scope parameter support for both install and uninstall operations
+  - Plugin installation and uninstallation now fully functional
+- fix: Plugins tab API endpoints updated to use v1 action dispatch pattern (2026-01-14)
+  - Fixed plugin search to use `POST /api/v1/plugins?action=search` with JSON body
+  - Fixed installed plugins list to use `GET /api/v1/plugins?filter=installed`
+  - Fixed install to use `POST /api/v1/plugins?action=install`
+  - Fixed uninstall to use `POST /api/v1/plugins?action=uninstall`
+- fix: Cancel button in form modals now always enabled except during loading (2026-01-14)
+  - Fixed FormActions component to only disable cancel button during loading operations
+  - Previously cancel was disabled when form was invalid, trapping users in dialogs
+- fix: Corrected embedding profiles models endpoint path (2026-01-14)
+  - Fixed useEmbeddingProfiles hook to use correct endpoint: `/api/v1/embedding-profiles?action=list-models`
+  - Previously calling non-existent `/api/v1/embedding-profiles/models` which returned 410 Gone
+  - Fixed ProfileList to use `slice().sort()` instead of `toSorted()` for compatibility
+  - Fixed useEmbeddingProfiles hook to extract `profiles` array from API response object
 - fix: Settings UI data structure and API endpoint issues (2026-01-14)
   - Fixed chat settings hooks to extract `profiles` array from API responses for embedding and connection profiles
   - Fixed memory cascade preferences validation to accept all frontend action types: ASK_EVERY_TIME, DELETE_MEMORIES, KEEP_MEMORIES, REGENERATE_MEMORIES

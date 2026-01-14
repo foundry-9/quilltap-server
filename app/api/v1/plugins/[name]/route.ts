@@ -3,6 +3,7 @@
  *
  * GET /api/v1/plugins/[name] - Get plugin details
  * GET /api/v1/plugins/[name]?action=get-config - Get plugin configuration
+ * PUT /api/v1/plugins/[name] - Enable/disable plugin
  * POST /api/v1/plugins/[name]?action=set-config - Update plugin configuration
  */
 
@@ -324,6 +325,89 @@ export const POST = createAuthenticatedParamsHandler<{ name: string }>(
         return handleSetConfig(req, context, name);
       default:
         return badRequest(`Unknown action: ${action}. Available actions: set-config`);
+    }
+  }
+);
+
+// ============================================================================
+// PUT Handler - Enable/Disable Plugin
+// ============================================================================
+
+export const PUT = createAuthenticatedParamsHandler<{ name: string }>(
+  async (req: NextRequest, context, { name }) => {
+    const { user } = context;
+
+    try {
+      logger.debug('[Plugins v1] PUT request to toggle plugin', { pluginName: name, userId: user.id });
+
+      // Ensure plugins are initialized
+      if (!isPluginSystemInitialized()) {
+        await initializePlugins();
+      }
+
+      const body = await req.json().catch(() => ({}));
+      const { enabled } = body;
+
+      if (enabled === undefined) {
+        return badRequest('Missing required field: enabled');
+      }
+
+      // Try to find plugin by name first in registry
+      let pluginName = name;
+      let found = false;
+      
+      if (pluginRegistry.has(pluginName)) {
+        found = true;
+      } else {
+        // Try to find by package name if direct name lookup fails
+        const allPlugins = pluginRegistry.getAll();
+        const registryPlugin = allPlugins.find(p => p.packageName === name);
+        
+        if (registryPlugin) {
+          pluginName = registryPlugin.manifest.name;
+          found = true;
+        } else {
+          // Try to find in user plugins
+          const { scanPlugins } = await import('@/lib/plugins/manifest-loader');
+          const userScanResult = await scanPlugins(undefined, user.id);
+          const userPlugin = userScanResult.plugins.find(
+            p => p.manifest.name === name || p.packageName === name
+          );
+          
+          if (userPlugin) {
+            pluginName = userPlugin.manifest.name;
+            found = true;
+          }
+        }
+      }
+
+      if (!found) {
+        logger.warn('[Plugins v1] Plugin not found for toggle', { pluginName: name, userId: user.id });
+        return notFound('Plugin');
+      }
+
+      // Enable or disable the plugin
+      if (enabled) {
+        pluginRegistry.enable(pluginName);
+      } else {
+        pluginRegistry.disable(pluginName);
+      }
+
+      logger.info('[Plugins v1] Plugin toggled', { pluginName, enabled, userId: user.id });
+
+      return NextResponse.json({
+        success: true,
+        message: `Plugin ${enabled ? 'enabled' : 'disabled'} successfully`,
+        name: pluginName,
+        enabled,
+      });
+    } catch (error) {
+      logger.error(
+        '[Plugins v1] Error toggling plugin',
+        { pluginName: name, userId: user.id },
+        error instanceof Error ? error : undefined
+      );
+      return serverError('Failed to toggle plugin');
     }
   }
 );

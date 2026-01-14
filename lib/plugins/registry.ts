@@ -5,6 +5,7 @@
  * Provides centralized access to plugin information and capabilities.
  */
 
+import path from 'path';
 import { logger } from '@/lib/logger';
 import type { LoadedPlugin, PluginScanResult } from './manifest-loader';
 import type { PluginCapability } from './index';
@@ -227,16 +228,28 @@ class PluginRegistry {
     return {
       initialized: this.state.initialized,
       lastScanTime: this.state.lastScanTime?.toISOString() || null,
-      plugins: Array.from(this.state.plugins.entries()).map(([name, plugin]) => ({
-        name,
-        title: plugin.manifest.title,
-        version: plugin.packageVersion ?? plugin.manifest.version,
-        enabled: plugin.enabled,
-        capabilities: plugin.capabilities,
-        path: plugin.pluginPath,
-        source: plugin.source,
-        hasConfigSchema: Array.isArray(plugin.manifest.configSchema) && plugin.manifest.configSchema.length > 0,
-      })),
+      plugins: Array.from(this.state.plugins.entries()).map(([name, plugin]) => {
+        // Determine scope from plugin path
+        let scope: 'site' | 'user' | undefined;
+        if (plugin.pluginPath.includes(path.join('plugins', 'site'))) {
+          scope = 'site';
+        } else if (plugin.pluginPath.includes(path.join('plugins', 'users'))) {
+          scope = 'user';
+        }
+
+        return {
+          name,
+          title: plugin.manifest.title,
+          version: plugin.packageVersion ?? plugin.manifest.version,
+          enabled: plugin.enabled,
+          capabilities: plugin.capabilities,
+          path: plugin.pluginPath,
+          source: plugin.source,
+          scope,
+          packageName: plugin.packageName,
+          hasConfigSchema: Array.isArray(plugin.manifest.configSchema) && plugin.manifest.configSchema.length > 0,
+        };
+      }),
       errors: Array.from(this.state.errors.entries()).map(([name, error]) => ({
         name,
         error,

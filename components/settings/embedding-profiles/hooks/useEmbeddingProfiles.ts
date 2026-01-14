@@ -38,9 +38,9 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
     clientLogger.debug('Loading embedding profiles tab data')
     await executeLoad(async () => {
       const [profilesRes, keysRes, modelsRes] = await Promise.all([
-        fetchJson<EmbeddingProfile[]>('/api/v1/embedding-profiles'),
+        fetchJson<{ profiles: EmbeddingProfile[]; count: number }>('/api/v1/embedding-profiles'),
         fetchJson<ApiKey[]>('/api/keys'),
-        fetchJson<Record<string, EmbeddingModel[]>>('/api/v1/embedding-profiles/models'),
+        fetchJson<Record<string, EmbeddingModel[]>>('/api/v1/embedding-profiles?action=list-models'),
       ])
 
       if (!profilesRes.ok) {
@@ -57,8 +57,8 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
         setEmbeddingModels(modelsRes.data)
       }
 
-      if (profilesRes.data) {
-        setProfiles(profilesRes.data)
+      if (profilesRes.data?.profiles) {
+        setProfiles(profilesRes.data.profiles)
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -66,12 +66,12 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
 
   const fetchProfiles = useCallback(async () => {
     clientLogger.debug('Fetching embedding profiles')
-    const result = await fetchJson<EmbeddingProfile[]>('/api/v1/embedding-profiles')
+    const result = await fetchJson<{ profiles: EmbeddingProfile[]; count: number }>('/api/v1/embedding-profiles')
     if (!result.ok) {
       throw new Error(result.error || 'Failed to fetch profiles')
     }
-    if (result.data) {
-      setProfiles(result.data)
+    if (result.data?.profiles) {
+      setProfiles(result.data.profiles)
     }
   }, [])
 

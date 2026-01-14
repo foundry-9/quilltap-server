@@ -40,6 +40,7 @@ export interface PluginRegistryEntry {
   version: string;
   installedAt: string;
   source: 'npm' | 'local';
+  scope?: 'site' | 'user';
 }
 
 export interface PluginRegistry {
@@ -301,6 +302,7 @@ export async function installPluginFromNpm(
       version: installedVersion,
       installedAt: new Date().toISOString(),
       source: 'npm',
+      scope,
     });
 
     const requiresRestart = pluginRequiresRestart(manifest);
