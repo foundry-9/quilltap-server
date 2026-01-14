@@ -5,20 +5,33 @@
 ### 2.7-dev
 
 - feat: MCP (Model Context Protocol) Server Connector plugin
-  - New built-in plugin `qtap-plugin-mcp` for connecting to MCP servers via SSE
+  - New built-in plugin `qtap-plugin-mcp` for connecting to MCP servers
+  - Uses official `@modelcontextprotocol/sdk` with Streamable HTTP and SSE transports
   - Dynamically discovers and exposes tools from connected MCP servers
-  - Tools appear as `mcp_{servername}_{toolname}` in the LLM tool list
+  - Collision-aware naming: tools use original names, only prefixed with server name on collision
   - Supports multiple simultaneous server connections
   - Authentication: Bearer tokens, API keys, and custom headers
   - Auto-reconnection with configurable retry attempts
+  - Smart JSON response handling: extracts content from structured MCP responses
   - Configuration via Settings > Tools with JSON array of server configs
 - feat: Multi-tool plugin support for ToolPlugin interface
-  - New optional methods in `@quilltap/plugin-types` v1.8.0:
-    - `getMultipleToolDefinitions()` - plugins can provide multiple tools
+  - New optional methods in `@quilltap/plugin-types` v1.8.2:
+    - `getMultipleToolDefinitions(config)` - async, plugins can provide multiple tools
     - `executeByName(toolName, input, context)` - execute specific tool by name
     - `onConfigurationChange(config)` - callback when user config changes
   - Tool registry automatically detects and registers multi-tool plugins
   - New `registerMultiToolPlugin()` and `unregisterToolsByPrefix()` in tool-registry
+  - New `hasMultiToolPlugins()` and `getMultiToolPluginNames()` helpers
+- fix: Dynamic tool discovery now happens at request time, not startup
+  - `getMultipleToolDefinitions` is async and accepts a `config` parameter
+  - Multi-tool plugins are stored as references and called dynamically when tools are needed
+  - Fixes MCP plugin showing 0 tools because config wasn't available at startup
+  - Tool registry's `getConfiguredToolDefinitions()` now merges static and dynamic tools
+- fix: Multi-tool plugin execution and result formatting
+  - Tool executor now properly loads configs for all multi-tool plugins by plugin name
+  - `formatToolResults()` now checks multi-tool plugins for formatting, not just static tools
+  - Fixed JSON double-encoding when tool results contained string data
+  - MCP plugin extracts `content` field from JSON responses for cleaner LLM output
 - feat: API v1 consolidation (Phases 1-4)
   - New `/api/v1/` namespace for consolidated REST API endpoints
   - Action parameter middleware (`lib/api/middleware/actions.ts`) for `?action=` dispatch pattern

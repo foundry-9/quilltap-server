@@ -205,12 +205,17 @@ export interface ToolPlugin {
    * Get multiple tool definitions (optional)
    *
    * For plugins that provide multiple tools dynamically (e.g., MCP connector).
-   * When implemented, the registry will call this instead of getToolDefinition()
-   * and register each returned tool separately.
+   * When implemented, the registry will call this at request time (not startup)
+   * to get the current list of tools based on configuration.
    *
-   * @returns Array of tool definitions in universal format
+   * This allows plugins to discover tools dynamically based on user config
+   * (e.g., MCP servers to connect to). The method is async to allow plugins
+   * to perform initialization or network requests during tool discovery.
+   *
+   * @param config User configuration for this plugin
+   * @returns Promise resolving to array of tool definitions in universal format
    */
-  getMultipleToolDefinitions?: () => UniversalTool[];
+  getMultipleToolDefinitions?: (config: Record<string, unknown>) => Promise<UniversalTool[]>;
 
   /**
    * Execute a specific tool by name (optional)

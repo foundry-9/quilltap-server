@@ -86,6 +86,11 @@ export function isPrivateHost(hostname: string): boolean {
 /**
  * Validate an MCP server URL
  *
+ * Note: Unlike the curl tool, we allow localhost/private IPs here because:
+ * 1. MCP servers are often local services (Obsidian plugins, local tools, etc.)
+ * 2. The user explicitly configures which servers to connect to
+ * 3. This isn't LLM-controlled input that could be manipulated for SSRF
+ *
  * @param url - URL to validate
  * @returns Validation result with error message if invalid
  */
@@ -109,13 +114,8 @@ export function validateMCPServerUrl(url: string): ValidationResult {
       };
     }
 
-    // Block private/local addresses (SSRF protection)
-    if (isPrivateHost(parsed.hostname)) {
-      return {
-        valid: false,
-        error: `Access to private/local addresses is blocked: ${parsed.hostname}`,
-      };
-    }
+    // Note: We intentionally allow localhost/private IPs for MCP servers
+    // because users explicitly configure these connections
 
     return { valid: true };
   } catch {

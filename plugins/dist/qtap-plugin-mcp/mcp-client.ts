@@ -1,47 +1,36 @@
 /**
- * MCP SSE Client
+ * MCP Client
  *
- * Handles SSE-based communication with a single MCP server.
- * Manages connection lifecycle, request/response correlation,
- * and tool discovery.
+ * Handles communication with a single MCP server using the official
+ * @modelcontextprotocol/sdk. Supports both Streamable HTTP and SSE transports
+ * with automatic fallback.
  */
 
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { logger } from '@/lib/logger';
-import { createSSEReader, parseSSEData } from './sse-parser';
 import { sanitizeCustomHeaders } from './security';
 import type {
   MCPServerConfig,
   MCPConnectionState,
   MCPToolDefinition,
-  MCPRequest,
-  MCPResponse,
-  MCPToolsListResult,
-  MCPToolCallParams,
   MCPToolCallResult,
-  PendingRequest,
-  SSEEvent,
+  MCPContentBlock,
 } from './types';
 
 const clientLogger = logger.child({ module: 'mcp-client' });
 
 /**
- * MCP SSE Client for a single server
+ * MCP Client for a single server
  *
- * Handles:
- * - SSE connection management
- * - JSON-RPC 2.0 request/response correlation
- * - Tool discovery (tools/list)
- * - Tool execution (tools/call)
- * - Connection state tracking
+ * Uses the official MCP SDK for protocol handling.
  */
 export class MCPClient {
   private config: MCPServerConfig;
-  private abortController: AbortController | null = null;
-  private pendingRequests: Map<string | number, PendingRequest> = new Map();
-  private messageId = 0;
+  private client: Client | null = null;
+  private transport: StreamableHTTPClientTransport | SSEClientTransport | null = null;
   private state: MCPConnectionState;
-  private sseReader: AsyncGenerator<SSEEvent, void, undefined> | null = null;
-  private readLoopPromise: Promise<void> | null = null;
 
   constructor(config: MCPServerConfig) {
     this.config = config;
@@ -78,11 +67,9 @@ export class MCPClient {
    * Build request headers for the MCP server
    */
   private buildHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
-      Accept: 'text/event-stream',
-      'Cache-Control': 'no-cache',
-    };
+    const headers: Record<string, string> = {};
 
+    // Add auth headers based on config
     switch (this.config.authType) {
       case 'bearer':
         if (this.config.bearerToken) {
@@ -111,7 +98,9 @@ export class MCPClient {
   }
 
   /**
-   * Connect to the MCP server via SSE
+   * Connect to the MCP server
+   *
+   * Tries Streamable HTTP first, then falls back to SSE if that fails.
    */
   async connect(): Promise<void> {
     if (this.state.status === 'connected' || this.state.status === 'ready') {
@@ -120,7 +109,8 @@ export class MCPClient {
     }
 
     this.state.status = 'connecting';
-    this.abortController = new AbortController();
+    const url = new URL(this.config.url);
+    const headers = this.buildHeaders();
 
     try {
       clientLogger.info('Connecting to MCP server', {
@@ -128,26 +118,54 @@ export class MCPClient {
         url: this.config.url,
       });
 
-      const response = await fetch(this.config.url, {
-        method: 'GET',
-        headers: this.buildHeaders(),
-        signal: this.abortController.signal,
-      });
+      // Try Streamable HTTP first (newer protocol)
+      try {
+        this.client = new Client(
+          { name: 'quilltap', version: '1.0.0' },
+          { capabilities: {} }
+        );
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+        this.transport = new StreamableHTTPClientTransport(url, {
+          requestInit: {
+            headers,
+          },
+        });
 
-      if (!response.body) {
-        throw new Error('No response body');
-      }
-
-      // Verify content type
-      const contentType = response.headers.get('content-type');
-      if (!contentType?.includes('text/event-stream')) {
-        clientLogger.warn('Unexpected content type', {
+        await this.client.connect(this.transport);
+        clientLogger.info('Connected using Streamable HTTP transport', {
           serverId: this.config.name,
-          contentType,
+        });
+      } catch (streamableError) {
+        // Fall back to SSE transport
+        clientLogger.debug('Streamable HTTP failed, falling back to SSE', {
+          serverId: this.config.name,
+          error: streamableError instanceof Error ? streamableError.message : String(streamableError),
+        });
+
+        // Close any partial connection
+        if (this.transport) {
+          try {
+            await this.transport.close();
+          } catch {
+            // Ignore close errors
+          }
+        }
+
+        this.client = new Client(
+          { name: 'quilltap', version: '1.0.0' },
+          { capabilities: {} }
+        );
+
+        // SSEClientTransport takes URL and optional options
+        this.transport = new SSEClientTransport(url, {
+          requestInit: {
+            headers,
+          },
+        });
+
+        await this.client.connect(this.transport);
+        clientLogger.info('Connected using SSE transport', {
+          serverId: this.config.name,
         });
       }
 
@@ -155,11 +173,10 @@ export class MCPClient {
       this.state.lastConnected = new Date();
       this.state.reconnectAttempts = 0;
 
-      // Start reading SSE events
-      this.sseReader = createSSEReader(response.body);
-      this.readLoopPromise = this.readLoop();
+      clientLogger.info('Connected to MCP server', {
+        serverId: this.config.name,
+      });
 
-      clientLogger.info('Connected to MCP server', { serverId: this.config.name });
     } catch (error) {
       this.state.status = 'error';
       this.state.lastError = error instanceof Error ? error.message : 'Connection failed';
@@ -174,169 +191,31 @@ export class MCPClient {
   }
 
   /**
-   * Read loop for processing SSE events
-   */
-  private async readLoop(): Promise<void> {
-    if (!this.sseReader) return;
-
-    try {
-      for await (const event of this.sseReader) {
-        this.handleSSEEvent(event);
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        clientLogger.debug('SSE read loop aborted', { serverId: this.config.name });
-      } else {
-        clientLogger.error('SSE read loop error', {
-          serverId: this.config.name,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        this.state.status = 'error';
-        this.state.lastError = error instanceof Error ? error.message : 'Read loop error';
-      }
-    }
-  }
-
-  /**
-   * Handle an incoming SSE event
-   */
-  private handleSSEEvent(event: SSEEvent): void {
-    clientLogger.debug('SSE event received', {
-      serverId: this.config.name,
-      eventType: event.event,
-      hasData: !!event.data,
-    });
-
-    // Try to parse as JSON-RPC response
-    const response = parseSSEData<MCPResponse>(event);
-    if (response && response.jsonrpc === '2.0' && response.id !== undefined) {
-      this.handleResponse(response);
-    }
-  }
-
-  /**
-   * Handle a JSON-RPC response
-   */
-  private handleResponse(response: MCPResponse): void {
-    const pending = this.pendingRequests.get(response.id);
-
-    if (!pending) {
-      clientLogger.warn('Received response for unknown request', {
-        serverId: this.config.name,
-        id: response.id,
-      });
-      return;
-    }
-
-    // Clear timeout and remove from pending
-    clearTimeout(pending.timeoutId);
-    this.pendingRequests.delete(response.id);
-
-    // Resolve or reject the promise
-    pending.resolve(response);
-  }
-
-  /**
-   * Send a JSON-RPC request and wait for response
-   */
-  async sendRequest<T>(method: string, params?: unknown): Promise<T> {
-    if (this.state.status !== 'connected' && this.state.status !== 'ready') {
-      throw new Error(`Not connected (status: ${this.state.status})`);
-    }
-
-    const id = ++this.messageId;
-    const request: MCPRequest = {
-      jsonrpc: '2.0',
-      id,
-      method,
-      params,
-    };
-
-    const timeout = (this.config.timeout || 30) * 1000;
-
-    return new Promise<T>((resolve, reject) => {
-      // Set up timeout
-      const timeoutId = setTimeout(() => {
-        this.pendingRequests.delete(id);
-        reject(new Error(`Request timeout after ${timeout}ms`));
-      }, timeout);
-
-      // Store pending request
-      this.pendingRequests.set(id, {
-        id,
-        resolve: (response: MCPResponse) => {
-          if (response.error) {
-            reject(new Error(`MCP error: ${response.error.message} (code: ${response.error.code})`));
-          } else {
-            resolve(response.result as T);
-          }
-        },
-        reject,
-        timeoutId,
-        timestamp: new Date(),
-      });
-
-      // Send request via POST to the same endpoint
-      // MCP SSE servers typically accept POST for sending messages
-      this.postRequest(request).catch((error) => {
-        clearTimeout(timeoutId);
-        this.pendingRequests.delete(id);
-        reject(error);
-      });
-    });
-  }
-
-  /**
-   * POST a JSON-RPC request to the server
-   */
-  private async postRequest(request: MCPRequest): Promise<void> {
-    const headers = this.buildHeaders();
-    headers['Content-Type'] = 'application/json';
-
-    clientLogger.debug('Sending MCP request', {
-      serverId: this.config.name,
-      method: request.method,
-      id: request.id,
-    });
-
-    const response = await fetch(this.config.url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(request),
-      signal: this.abortController?.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    // Some servers may return the response directly in the POST response
-    // instead of through SSE. Handle both cases.
-    const contentType = response.headers.get('content-type');
-    if (contentType?.includes('application/json')) {
-      try {
-        const jsonResponse = await response.json() as MCPResponse;
-        if (jsonResponse.jsonrpc === '2.0' && jsonResponse.id === request.id) {
-          // Response came directly, handle it
-          this.handleResponse(jsonResponse);
-        }
-      } catch {
-        // Ignore parse errors - response will come via SSE
-      }
-    }
-  }
-
-  /**
    * Discover tools from the MCP server
    */
   async discoverTools(): Promise<MCPToolDefinition[]> {
+    if (!this.client) {
+      throw new Error('Not connected');
+    }
+
+    if (this.state.status !== 'connected' && this.state.status !== 'ready') {
+      throw new Error(`Cannot discover tools (status: ${this.state.status})`);
+    }
+
     this.state.status = 'discovering';
 
     try {
       clientLogger.info('Discovering tools', { serverId: this.config.name });
 
-      const result = await this.sendRequest<MCPToolsListResult>('tools/list');
-      this.state.tools = result.tools || [];
+      const result = await this.client.listTools();
+
+      // Convert SDK tool format to our MCPToolDefinition format
+      this.state.tools = (result.tools || []).map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema as MCPToolDefinition['inputSchema'],
+      }));
+
       this.state.status = 'ready';
 
       clientLogger.info('Tools discovered', {
@@ -366,6 +245,10 @@ export class MCPClient {
     toolName: string,
     args: Record<string, unknown>
   ): Promise<MCPToolCallResult> {
+    if (!this.client) {
+      throw new Error('Not connected');
+    }
+
     if (this.state.status !== 'ready') {
       throw new Error(`Server not ready (status: ${this.state.status})`);
     }
@@ -375,44 +258,75 @@ export class MCPClient {
       toolName,
     });
 
-    const params: MCPToolCallParams = {
+    const result = await this.client.callTool({
       name: toolName,
       arguments: args,
-    };
+    });
 
-    const result = await this.sendRequest<MCPToolCallResult>('tools/call', params);
+    // Type definition for SDK content blocks
+    interface SDKContentBlock {
+      type: string;
+      text?: string;
+      data?: string;
+      mimeType?: string;
+    }
+
+    // Convert SDK result to our MCPToolCallResult format
+    const sdkContent = (result.content || []) as SDKContentBlock[];
+    const content: MCPContentBlock[] = sdkContent.map((block) => {
+      if (block.type === 'text') {
+        return { type: 'text' as const, text: block.text };
+      } else if (block.type === 'image') {
+        return {
+          type: 'image' as const,
+          data: block.data,
+          mimeType: block.mimeType,
+        };
+      } else if (block.type === 'resource') {
+        return {
+          type: 'resource' as const,
+          // Resource blocks have different structure
+          text: JSON.stringify(block),
+        };
+      }
+      // Unknown type, convert to text
+      return { type: 'text' as const, text: JSON.stringify(block) };
+    });
+
+    const mcpResult: MCPToolCallResult = {
+      content,
+      isError: result.isError === true,
+    };
 
     clientLogger.debug('MCP tool call completed', {
       serverId: this.config.name,
       toolName,
-      isError: result.isError,
-      contentCount: result.content?.length,
+      isError: mcpResult.isError,
+      contentCount: mcpResult.content?.length,
     });
 
-    return result;
+    return mcpResult;
   }
 
   /**
    * Disconnect from the MCP server
    */
-  disconnect(): void {
+  async disconnect(): Promise<void> {
     clientLogger.info('Disconnecting from MCP server', { serverId: this.config.name });
 
-    // Abort any pending requests
-    if (this.abortController) {
-      this.abortController.abort();
-      this.abortController = null;
+    if (this.transport) {
+      try {
+        await this.transport.close();
+      } catch (error) {
+        clientLogger.warn('Error closing transport', {
+          serverId: this.config.name,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
-    // Reject all pending requests
-    for (const [id, pending] of this.pendingRequests) {
-      clearTimeout(pending.timeoutId);
-      pending.reject(new Error('Connection closed'));
-      this.pendingRequests.delete(id);
-    }
-
-    this.sseReader = null;
-    this.readLoopPromise = null;
+    this.client = null;
+    this.transport = null;
     this.state.status = 'disconnected';
     this.state.tools = [];
   }

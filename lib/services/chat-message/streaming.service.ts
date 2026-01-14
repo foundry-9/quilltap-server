@@ -135,7 +135,7 @@ export async function buildTools(
   }
 
   // Web search tool is independent of native web search - user can enable both
-  const tools = buildToolsForProvider(connectionProfile.provider, {
+  const tools = await buildToolsForProvider(connectionProfile.provider, {
     imageGeneration: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
     memorySearch: true,

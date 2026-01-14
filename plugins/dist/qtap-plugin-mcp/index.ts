@@ -54,13 +54,36 @@ function hasValidConfiguration(toolConfig: Record<string, unknown>): boolean {
 
 /**
  * Initialize the connection manager on first use
+ *
+ * Returns a promise that resolves to true if initialization succeeded
  */
 let initialized = false;
+let lastConfigHash = '';
 
-async function ensureInitialized(toolConfig: Record<string, unknown>): Promise<void> {
-  if (initialized) return;
+function getConfigHash(config: Partial<MCPPluginConfig>): string {
+  return JSON.stringify(config.servers || '[]');
+}
 
+async function ensureInitialized(toolConfig: Record<string, unknown>): Promise<boolean> {
   const config = parseConfig(toolConfig);
+  const configHash = getConfigHash(config);
+
+  // If config changed, re-initialize
+  if (initialized && configHash !== lastConfigHash) {
+    pluginLogger.info('Config changed, re-initializing', {
+      oldHash: lastConfigHash.substring(0, 50),
+      newHash: configHash.substring(0, 50),
+    });
+    initialized = false;
+  }
+
+  if (initialized) return true;
+
+  // Don't initialize if no servers configured
+  if (!config.servers || config.servers === '[]') {
+    pluginLogger.debug('No servers configured, skipping initialization');
+    return false;
+  }
 
   pluginLogger.info('Initializing MCP plugin', {
     hasServers: config.servers !== '[]',
@@ -69,6 +92,7 @@ async function ensureInitialized(toolConfig: Record<string, unknown>): Promise<v
   try {
     await connectionManager.initialize(config);
     initialized = true;
+    lastConfigHash = configHash;
 
     const stats = connectionManager.getStats();
     pluginLogger.info('MCP plugin initialized', {
@@ -76,11 +100,12 @@ async function ensureInitialized(toolConfig: Record<string, unknown>): Promise<v
       readyCount: stats.readyCount,
       toolCount: stats.toolCount,
     });
+    return true;
   } catch (error) {
     pluginLogger.error('Failed to initialize MCP plugin', {
       error: error instanceof Error ? error.message : String(error),
     });
-    throw error;
+    return false;
   }
 }
 
@@ -88,7 +113,7 @@ async function ensureInitialized(toolConfig: Record<string, unknown>): Promise<v
  * Plugin metadata
  */
 const metadata: ToolMetadata = {
-  toolName: 'mcp_connector',
+  toolName: 'mcp',
   displayName: 'MCP Server Connector',
   description: 'Connects to MCP servers and exposes their tools to LLMs',
   category: 'integration',
@@ -135,12 +160,18 @@ export const plugin: ToolPlugin = {
    * This is called by the tool registry to get all available tools.
    * Each MCP tool is exposed as a separate tool with the naming convention:
    * mcp_{servername}_{toolname}
+   *
+   * @param config User configuration for this plugin
    */
-  getMultipleToolDefinitions(): UniversalTool[] {
+  async getMultipleToolDefinitions(config: Record<string, unknown>): Promise<UniversalTool[]> {
+    // Ensure plugin is initialized before returning tools
+    await ensureInitialized(config);
+
     const tools = connectionManager.getAllToolDefinitions();
 
     pluginLogger.debug('Getting multiple tool definitions', {
       toolCount: tools.length,
+      initialized,
     });
 
     return tools;
@@ -212,23 +243,62 @@ export const plugin: ToolPlugin = {
 
   /**
    * Format results for LLM consumption
+   *
+   * If the MCP server returns JSON with a "content" field, extract it.
+   * Otherwise, try to pretty-print JSON or return as-is.
    */
   formatResults(result: ToolExecutionResult): string {
-    if (result.formattedText) {
-      return result.formattedText;
+    const text = result.formattedText ?? result.result;
+
+    if (text === undefined || text === null) {
+      if (result.error) {
+        return `Error: ${result.error}`;
+      }
+      return '';
     }
 
-    if (result.error) {
-      return `Error: ${result.error}`;
+    // If it's not a string, stringify it
+    if (typeof text !== 'string') {
+      return JSON.stringify(text, null, 2);
     }
 
-    if (result.result !== undefined) {
-      return typeof result.result === 'string'
-        ? result.result
-        : JSON.stringify(result.result, null, 2);
+    // Try to detect and parse JSON responses
+    const trimmed = text.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+
+        // If it's an object with a "content" field, extract that
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          if (typeof parsed.content === 'string') {
+            // Return the content, optionally with metadata
+            let output = parsed.content;
+
+            // Add metadata as a note if present
+            const metadata: string[] = [];
+            if (parsed.fuzzy_match) {
+              metadata.push(`fuzzy matched`);
+            }
+            if (parsed.actual_path && parsed.actual_path !== parsed.requested_path) {
+              metadata.push(`found at: ${parsed.actual_path}`);
+            }
+
+            if (metadata.length > 0) {
+              output = `[Note: ${metadata.join(', ')}]\n\n${output}`;
+            }
+
+            return output;
+          }
+        }
+
+        // For other JSON, pretty-print it
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        // Not valid JSON, return as-is
+      }
     }
 
-    return '';
+    return text;
   },
 
   /**

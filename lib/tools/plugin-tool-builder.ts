@@ -125,10 +125,10 @@ export interface BuildToolsOptions {
  * });
  * ```
  */
-export function buildToolsForProvider(
+export async function buildToolsForProvider(
   providerName: string,
   options: BuildToolsOptions
-): unknown[] {
+): Promise<unknown[]> {
   const logger_ = logger.child({
     module: 'plugin-tool-builder',
     provider: providerName,
@@ -186,9 +186,9 @@ export function buildToolsForProvider(
 
   // Add plugin tools if enabled (defaults to true when not specified)
   if (options.includePluginTools !== false) {
-    // Get configured tool definitions from the tool registry
+    // Get configured tool definitions from the tool registry (async for multi-tool plugins)
     const toolConfigs = options.toolConfigs || new Map();
-    const pluginToolDefs = toolRegistry.getConfiguredToolDefinitions(toolConfigs);
+    const pluginToolDefs = await toolRegistry.getConfiguredToolDefinitions(toolConfigs);
 
     if (pluginToolDefs.length > 0) {
       universalTools.push(...pluginToolDefs);

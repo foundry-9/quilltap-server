@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] - 2026-01-14
+
+### Changed
+
+- **Breaking**: `getMultipleToolDefinitions` now accepts a `config` parameter
+  - Old signature: `getMultipleToolDefinitions?: () => UniversalTool[]`
+  - New signature: `getMultipleToolDefinitions?: (config: Record<string, unknown>) => UniversalTool[]`
+  - This allows multi-tool plugins to discover tools dynamically based on user configuration
+  - Required for plugins like MCP that need configuration to connect to external servers
+
 ## [1.8.0] - 2026-01-13
 
 ### Added

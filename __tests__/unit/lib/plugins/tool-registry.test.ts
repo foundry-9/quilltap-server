@@ -326,36 +326,36 @@ describe('Tool Registry', () => {
   })
 
   describe('getConfiguredToolDefinitions', () => {
-    it('includes tools without isConfigured method', () => {
+    it('includes tools without isConfigured method', async () => {
       toolRegistry.registerTool(makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'simple-tool' }),
         isConfigured: undefined,
       }))
 
-      const definitions = toolRegistry.getConfiguredToolDefinitions(new Map())
+      const definitions = await toolRegistry.getConfiguredToolDefinitions(new Map())
 
       expect(definitions).toHaveLength(1)
     })
 
-    it('excludes unconfigured tools with isConfigured method', () => {
+    it('excludes unconfigured tools with isConfigured method', async () => {
       toolRegistry.registerTool(makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'configured-tool' }),
         isConfigured: (config: Record<string, unknown>) => !!config.apiKey,
       }))
 
-      const definitions = toolRegistry.getConfiguredToolDefinitions(new Map())
+      const definitions = await toolRegistry.getConfiguredToolDefinitions(new Map())
 
       expect(definitions).toHaveLength(0)
     })
 
-    it('includes configured tools', () => {
+    it('includes configured tools', async () => {
       toolRegistry.registerTool(makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'configured-tool' }),
         isConfigured: (config: Record<string, unknown>) => !!config.apiKey,
       }))
 
       const configs = new Map([['configured-tool', { apiKey: 'test-key' }]])
-      const definitions = toolRegistry.getConfiguredToolDefinitions(configs)
+      const definitions = await toolRegistry.getConfiguredToolDefinitions(configs)
 
       expect(definitions).toHaveLength(1)
     })

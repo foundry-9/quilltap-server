@@ -2,122 +2,133 @@
  * Tool Generator
  *
  * Converts MCP tool definitions to Quilltap's UniversalTool format.
- * Handles tool name prefixing and schema transformation.
+ * Uses original tool names by default, only prefixes with server name on collision.
  */
 
 import type { UniversalTool } from '@quilltap/plugin-types';
-import type { MCPToolDefinition, ToolMapping, ParsedToolName } from './types';
+import type { MCPToolDefinition, ToolMapping } from './types';
 
 /**
- * Tool name prefix for all MCP tools
- */
-export const MCP_TOOL_PREFIX = 'mcp';
-
-/**
- * Generate a Quilltap tool name from server and MCP tool names
+ * Sanitize a tool name for use in the Quilltap namespace
  *
- * Format: mcp_{servername}_{toolname}
- *
- * @param serverId - Server identifier (sanitized name)
- * @param mcpToolName - Original tool name from MCP server
- * @returns Quilltap-compatible tool name
+ * @param name - Original tool name
+ * @returns Sanitized name (lowercase, alphanumeric + underscore)
  */
-export function generateToolName(serverId: string, mcpToolName: string): string {
-  // Sanitize the MCP tool name (replace non-alphanumeric with underscore)
-  const sanitizedToolName = mcpToolName
+export function sanitizeToolName(name: string): string {
+  return name
     .toLowerCase()
     .replace(/[^a-z0-9_]/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_|_$/g, '');
-
-  return `${MCP_TOOL_PREFIX}_${serverId}_${sanitizedToolName}`;
 }
 
 /**
- * Parse a Quilltap tool name to extract server and original tool name
- *
- * @param toolName - Quilltap tool name (mcp_servername_toolname)
- * @returns Parsed components or null if invalid format
+ * Information about a tool before collision resolution
  */
-export function parseToolName(toolName: string): ParsedToolName | null {
-  // Must start with mcp_
-  if (!toolName.startsWith(`${MCP_TOOL_PREFIX}_`)) {
-    return null;
-  }
-
-  // Remove prefix
-  const remainder = toolName.slice(MCP_TOOL_PREFIX.length + 1);
-
-  // Find first underscore to separate server from tool
-  const underscoreIndex = remainder.indexOf('_');
-  if (underscoreIndex === -1) {
-    return null;
-  }
-
-  const serverId = remainder.slice(0, underscoreIndex);
-  const originalName = remainder.slice(underscoreIndex + 1);
-
-  if (!serverId || !originalName) {
-    return null;
-  }
-
-  return { serverId, originalName };
+interface PendingTool {
+  serverId: string;
+  serverDisplayName: string;
+  mcpTool: MCPToolDefinition;
+  sanitizedName: string;
 }
 
 /**
- * Generate prefix for unregistering tools from a specific server
+ * Convert MCP tools from multiple servers to UniversalTool format
+ * with collision-aware naming.
  *
- * @param serverId - Server identifier
- * @returns Prefix string for tool matching
- */
-export function getServerToolPrefix(serverId: string): string {
-  return `${MCP_TOOL_PREFIX}_${serverId}_`;
-}
-
-/**
- * Convert an MCP tool definition to Quilltap's UniversalTool format
+ * Rules:
+ * - Use original tool name by default
+ * - If multiple servers have the same tool name, prefix with server name
+ * - Only prefix the colliding tools, not all tools from that server
  *
- * @param serverId - Server identifier
- * @param serverDisplayName - Server display name for description
- * @param mcpTool - MCP tool definition
- * @returns UniversalTool definition
- */
-export function convertToUniversalTool(
-  serverId: string,
-  serverDisplayName: string,
-  mcpTool: MCPToolDefinition
-): UniversalTool {
-  const quilltapName = generateToolName(serverId, mcpTool.name);
-
-  // Build description with server attribution
-  const description = mcpTool.description
-    ? `[${serverDisplayName}] ${mcpTool.description}`
-    : `[${serverDisplayName}] Tool: ${mcpTool.name}`;
-
-  // Convert input schema to OpenAI function parameters format
-  const parameters: UniversalTool['function']['parameters'] = {
-    type: 'object',
-    properties: mcpTool.inputSchema.properties || {},
-    required: mcpTool.inputSchema.required || [],
-  };
-
-  return {
-    type: 'function',
-    function: {
-      name: quilltapName,
-      description,
-      parameters,
-    },
-  };
-}
-
-/**
- * Convert multiple MCP tools to UniversalTool format and create mappings
- *
- * @param serverId - Server identifier
- * @param serverDisplayName - Server display name
- * @param mcpTools - Array of MCP tool definitions
+ * @param serverTools - Map of serverId to { displayName, tools }
+ * @param existingToolNames - Set of tool names already in use (e.g., built-in Quilltap tools)
  * @returns Object with tools array and mappings for lookup
+ */
+export function convertToolsWithCollisionHandling(
+  serverTools: Map<string, { displayName: string; tools: MCPToolDefinition[] }>,
+  existingToolNames: Set<string> = new Set()
+): {
+  tools: UniversalTool[];
+  mappings: ToolMapping[];
+} {
+  // Step 1: Collect all pending tools and track name usage
+  const pendingTools: PendingTool[] = [];
+  const nameUsage = new Map<string, PendingTool[]>(); // sanitized name -> tools using it
+
+  for (const [serverId, { displayName, tools }] of serverTools) {
+    for (const mcpTool of tools) {
+      const sanitizedName = sanitizeToolName(mcpTool.name);
+
+      const pending: PendingTool = {
+        serverId,
+        serverDisplayName: displayName,
+        mcpTool,
+        sanitizedName,
+      };
+
+      pendingTools.push(pending);
+
+      // Track which tools want this name
+      if (!nameUsage.has(sanitizedName)) {
+        nameUsage.set(sanitizedName, []);
+      }
+      nameUsage.get(sanitizedName)!.push(pending);
+    }
+  }
+
+  // Step 2: Determine final names - prefix only on collision
+  const tools: UniversalTool[] = [];
+  const mappings: ToolMapping[] = [];
+
+  for (const pending of pendingTools) {
+    const usageList = nameUsage.get(pending.sanitizedName)!;
+    const hasCollision = usageList.length > 1 || existingToolNames.has(pending.sanitizedName);
+
+    // Use original name if no collision, otherwise prefix with server name
+    const quilltapName = hasCollision
+      ? `${sanitizeToolName(pending.serverId)}_${pending.sanitizedName}`
+      : pending.sanitizedName;
+
+    // Build description with server attribution (always helpful to know source)
+    const description = pending.mcpTool.description
+      ? `[${pending.serverDisplayName}] ${pending.mcpTool.description}`
+      : `[${pending.serverDisplayName}] Tool: ${pending.mcpTool.name}`;
+
+    // Convert input schema to OpenAI function parameters format
+    const parameters: UniversalTool['function']['parameters'] = {
+      type: 'object',
+      properties: pending.mcpTool.inputSchema.properties || {},
+      required: pending.mcpTool.inputSchema.required || [],
+    };
+
+    const universalTool: UniversalTool = {
+      type: 'function',
+      function: {
+        name: quilltapName,
+        description,
+        parameters,
+      },
+    };
+
+    tools.push(universalTool);
+
+    mappings.push({
+      quilltapName,
+      mcpName: pending.mcpTool.name, // Original MCP name for calling the server
+      serverId: pending.serverId,
+      definition: pending.mcpTool,
+    });
+  }
+
+  return { tools, mappings };
+}
+
+/**
+ * Legacy function for backward compatibility - converts tools from a single server
+ * Use convertToolsWithCollisionHandling for multi-server scenarios
+ *
+ * @deprecated Use convertToolsWithCollisionHandling instead
  */
 export function convertTools(
   serverId: string,
@@ -127,22 +138,9 @@ export function convertTools(
   tools: UniversalTool[];
   mappings: ToolMapping[];
 } {
-  const tools: UniversalTool[] = [];
-  const mappings: ToolMapping[] = [];
-
-  for (const mcpTool of mcpTools) {
-    const universalTool = convertToUniversalTool(serverId, serverDisplayName, mcpTool);
-    tools.push(universalTool);
-
-    mappings.push({
-      quilltapName: universalTool.function.name,
-      mcpName: mcpTool.name,
-      serverId,
-      definition: mcpTool,
-    });
-  }
-
-  return { tools, mappings };
+  const serverTools = new Map<string, { displayName: string; tools: MCPToolDefinition[] }>();
+  serverTools.set(serverId, { displayName: serverDisplayName, tools: mcpTools });
+  return convertToolsWithCollisionHandling(serverTools);
 }
 
 /**
@@ -159,4 +157,18 @@ export function createToolIndex(mappings: ToolMapping[]): Map<string, ToolMappin
   }
 
   return index;
+}
+
+// Legacy exports removed - no longer needed with new naming scheme
+export const MCP_TOOL_PREFIX = ''; // No longer used
+export function generateToolName(serverId: string, mcpToolName: string): string {
+  // Legacy - just sanitize the name
+  return sanitizeToolName(mcpToolName);
+}
+export function parseToolName(_toolName: string): null {
+  // Legacy - no longer used, lookup by toolIndex instead
+  return null;
+}
+export function getServerToolPrefix(serverId: string): string {
+  return `${sanitizeToolName(serverId)}_`;
 }

@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
 import type { UniversalTool } from '@quilltap/plugin-types';
 import { MCPClient } from './mcp-client';
 import { parseServerConfigs } from './security';
-import { convertTools, createToolIndex, getServerToolPrefix, parseToolName } from './tool-generator';
+import { convertToolsWithCollisionHandling } from './tool-generator';
 import type {
   MCPServerConfig,
   MCPPluginConfig,
@@ -80,7 +80,7 @@ export class MCPConnectionManager {
     for (const [serverId, client] of this.clients) {
       if (!newServerIds.has(serverId)) {
         managerLogger.info('Disconnecting removed server', { serverId });
-        client.disconnect();
+        await client.disconnect();
         this.clients.delete(serverId);
       }
     }
@@ -96,7 +96,7 @@ export class MCPConnectionManager {
           managerLogger.info('Server config changed, reconnecting', {
             serverId: serverConfig.name,
           });
-          existingClient.disconnect();
+          await existingClient.disconnect();
           this.clients.delete(serverConfig.name);
           await this.connectServer(serverConfig);
         }
@@ -137,28 +137,42 @@ export class MCPConnectionManager {
 
   /**
    * Rebuild the unified tool index from all connected servers
+   *
+   * Uses collision-aware naming:
+   * - Tools use their original name by default
+   * - If multiple servers have same tool name, prefix with server name
    */
   private async rebuildToolIndex(): Promise<void> {
     this.allTools = [];
     this.toolIndex.clear();
 
+    // Collect tools from all ready servers
+    const serverTools = new Map<string, { displayName: string; tools: import('./types').MCPToolDefinition[] }>();
+
     for (const [serverId, client] of this.clients) {
       if (!client.isReady()) continue;
 
       const config = client.getConfig();
-      const mcpTools = client.getTools();
-      const { tools, mappings } = convertTools(serverId, config.displayName, mcpTools);
+      serverTools.set(serverId, {
+        displayName: config.displayName,
+        tools: client.getTools(),
+      });
+    }
 
-      this.allTools.push(...tools);
+    // Convert with collision detection across all servers
+    // TODO: Pass existingToolNames from Quilltap's built-in tools for full collision detection
+    const { tools, mappings } = convertToolsWithCollisionHandling(serverTools);
 
-      for (const mapping of mappings) {
-        this.toolIndex.set(mapping.quilltapName, mapping);
-      }
+    this.allTools = tools;
+
+    for (const mapping of mappings) {
+      this.toolIndex.set(mapping.quilltapName, mapping);
     }
 
     managerLogger.info('Tool index rebuilt', {
       totalTools: this.allTools.length,
       servers: Array.from(this.clients.keys()),
+      toolNames: this.allTools.map(t => t.function.name),
     });
   }
 
@@ -185,6 +199,8 @@ export class MCPConnectionManager {
 
   /**
    * Execute a tool by its Quilltap name
+   *
+   * Looks up the tool in the index to get the server and original MCP name.
    */
   async executeTool(
     quilltapToolName: string,
@@ -199,19 +215,19 @@ export class MCPConnectionManager {
   }> {
     const startTime = Date.now();
 
-    // Parse tool name to get server and original name
-    const parsed = parseToolName(quilltapToolName);
-    if (!parsed) {
+    // Look up tool in index
+    const mapping = this.toolIndex.get(quilltapToolName);
+    if (!mapping) {
       return {
         success: false,
-        error: `Invalid MCP tool name format: ${quilltapToolName}`,
+        error: `Unknown MCP tool: ${quilltapToolName}`,
         serverId: '',
         originalToolName: '',
         executionTimeMs: Date.now() - startTime,
       };
     }
 
-    const { serverId, originalName } = parsed;
+    const { serverId, mcpName } = mapping;
 
     // Get the client for this server
     const client = this.clients.get(serverId);
@@ -220,7 +236,7 @@ export class MCPConnectionManager {
         success: false,
         error: `MCP server not found: ${serverId}`,
         serverId,
-        originalToolName: originalName,
+        originalToolName: mcpName,
         executionTimeMs: Date.now() - startTime,
       };
     }
@@ -230,14 +246,14 @@ export class MCPConnectionManager {
         success: false,
         error: `MCP server not ready: ${serverId} (status: ${client.getState().status})`,
         serverId,
-        originalToolName: originalName,
+        originalToolName: mcpName,
         executionTimeMs: Date.now() - startTime,
       };
     }
 
     try {
-      // Execute the tool
-      const result = await client.callTool(originalName, args);
+      // Execute the tool using the original MCP name
+      const result = await client.callTool(mcpName, args);
 
       // Format content from response
       const content = this.formatMCPContent(result);
@@ -247,7 +263,7 @@ export class MCPConnectionManager {
         content,
         error: result.isError ? content : undefined,
         serverId,
-        originalToolName: originalName,
+        originalToolName: mcpName,
         executionTimeMs: Date.now() - startTime,
       };
     } catch (error) {
@@ -255,7 +271,7 @@ export class MCPConnectionManager {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
         serverId,
-        originalToolName: originalName,
+        originalToolName: mcpName,
         executionTimeMs: Date.now() - startTime,
       };
     }
@@ -329,11 +345,11 @@ export class MCPConnectionManager {
   /**
    * Disconnect from all servers
    */
-  disconnectAll(): void {
+  async disconnectAll(): Promise<void> {
     managerLogger.info('Disconnecting all MCP servers');
 
     for (const [serverId, client] of this.clients) {
-      client.disconnect();
+      await client.disconnect();
     }
 
     this.clients.clear();

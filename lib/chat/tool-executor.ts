@@ -141,40 +141,60 @@ export async function executeToolCallWithContext(
   const { chatId, userId, imageProfileId, characterId, embeddingProfileId } = context;
 
   try {
-    // Check tool registry first for plugin-provided tools
-    if (toolRegistry.hasTool(toolCall.name)) {
+    // Check tool registry for plugin-provided tools (static or multi-tool)
+    // hasTool checks static registry, hasMultiToolPlugin checks multi-tool plugins
+    const isStaticTool = toolRegistry.hasTool(toolCall.name);
+    const isMultiToolPluginTool = !isStaticTool && toolRegistry.hasMultiToolPlugins();
+
+    if (isStaticTool || isMultiToolPluginTool) {
       logger.debug('Executing plugin tool', {
         context: 'tool-executor',
         toolName: toolCall.name,
+        isStaticTool,
+        isMultiToolPluginTool,
       });
 
       // Fetch user's tool configuration from database
       let toolConfig: Record<string, unknown> = {};
       try {
         const repos = getRepositories();
-        // Get the plugin name for this tool (tools are registered with their plugin name prefix)
-        const toolMetadata = toolRegistry.getToolMetadata(toolCall.name);
-        if (toolMetadata) {
-          // Look up config by tool name (plugin stores config keyed by plugin name)
-          // For built-in plugins, the plugin name matches the tool name pattern
+
+        if (isStaticTool) {
+          // For static tools, look up config by tool name pattern
           const pluginName = `qtap-plugin-${toolCall.name}`;
           const userConfig = await repos.pluginConfigs.findByUserAndPlugin(userId, pluginName);
           if (userConfig) {
             toolConfig = userConfig.config;
-            logger.debug('Loaded tool config from database', {
+            logger.debug('Loaded static tool config from database', {
               context: 'tool-executor',
               toolName: toolCall.name,
               pluginName,
               configKeys: Object.keys(toolConfig),
             });
           } else {
-            // Use default config from tool plugin
             toolConfig = toolRegistry.getDefaultConfig(toolCall.name);
-            logger.debug('Using default tool config', {
+            logger.debug('Using default static tool config', {
               context: 'tool-executor',
               toolName: toolCall.name,
               configKeys: Object.keys(toolConfig),
             });
+          }
+        } else {
+          // For multi-tool plugins (like MCP), we need to load configs for all multi-tool plugins
+          // The tool registry's executeTool will find the right plugin
+          const multiToolPluginNames = toolRegistry.getMultiToolPluginNames();
+          for (const pluginName of multiToolPluginNames) {
+            const fullPluginName = `qtap-plugin-${pluginName}`;
+            const userConfig = await repos.pluginConfigs.findByUserAndPlugin(userId, fullPluginName);
+            if (userConfig) {
+              // Pass the config under the plugin name key so executeTool can find it
+              toolConfig[pluginName] = userConfig.config;
+              logger.debug('Loaded multi-tool plugin config', {
+                context: 'tool-executor',
+                toolName: toolCall.name,
+                pluginName: fullPluginName,
+              });
+            }
           }
         }
       } catch (configError) {
@@ -183,7 +203,9 @@ export async function executeToolCallWithContext(
           toolName: toolCall.name,
           error: configError instanceof Error ? configError.message : String(configError),
         });
-        toolConfig = toolRegistry.getDefaultConfig(toolCall.name);
+        if (isStaticTool) {
+          toolConfig = toolRegistry.getDefaultConfig(toolCall.name);
+        }
       }
 
       // Build context for plugin tool execution
@@ -205,13 +227,18 @@ export async function executeToolCallWithContext(
       // Format results for LLM
       const formattedResult = toolRegistry.formatToolResults(toolCall.name, result);
 
+      // Build result object - only spread if result.result is a plain object
+      const resultData = result.success ? {
+        formattedText: formattedResult,
+        ...(result.result && typeof result.result === 'object' && !Array.isArray(result.result)
+          ? result.result as object
+          : { rawResult: result.result }),
+      } : null;
+
       return {
         toolName: toolCall.name,
         success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          ...result.result as object,
-        } : null,
+        result: resultData,
         error: result.success ? undefined : result.error,
         metadata: result.metadata,
       };
