@@ -187,7 +187,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
           throw new Error('Base URL is required for this provider')
         }
 
-        const fetchResult = await fetchJson<any>('/api/models', {
+        const fetchResult = await fetchJson<any>('/api/v1/models', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

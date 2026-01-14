@@ -55,7 +55,7 @@ export function ImageProfilePicker({
         if (!res.ok) throw new Error('Failed to fetch profiles')
 
         const data = await res.json()
-        setProfiles(data)
+        setProfiles(data.profiles || [])
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch profiles')
       } finally {

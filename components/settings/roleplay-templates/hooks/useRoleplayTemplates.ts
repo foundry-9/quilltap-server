@@ -84,7 +84,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
 
   const fetchChatSettings = useCallback(async () => {
     try {
-      const res = await fetch('/api/chat-settings')
+      const res = await fetch('/api/v1/settings/chat')
       if (!res.ok) throw new Error('Failed to fetch chat settings')
       const data = await res.json()
       setDefaultTemplateId(data.defaultRoleplayTemplateId || null)
@@ -108,7 +108,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       setDefaultSaving(true)
       setError(null)
 
-      const res = await fetch('/api/chat-settings', {
+      const res = await fetch('/api/v1/settings/chat', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ defaultRoleplayTemplateId: templateId }),

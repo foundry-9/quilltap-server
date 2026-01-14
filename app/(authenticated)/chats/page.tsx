@@ -205,7 +205,7 @@ export default function ChatsPage() {
       const res = await fetch('/api/v1/connection-profiles')
       if (res.ok) {
         const data = await res.json()
-        setProfiles(data.map((p: any) => ({ id: p.id, name: p.name })))
+        setProfiles((data.profiles || []).map((p: any) => ({ id: p.id, name: p.name })))
       }
     } catch (err) {
       clientLogger.error('Failed to fetch profiles:', { error: err instanceof Error ? err.message : String(err) })

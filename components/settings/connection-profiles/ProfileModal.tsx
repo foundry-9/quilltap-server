@@ -65,7 +65,7 @@ export function ProfileModal({
     if (isOpen && profile?.id) {
       const fetchModelsForEdit = async () => {
         try {
-          const result = await fetchJson<any>('/api/models', {
+          const result = await fetchJson<any>('/api/v1/models', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -254,7 +254,7 @@ export function ProfileModal({
                         className="qt-select"
                       >
                         <option value="">Select an API Key</option>
-                        {apiKeys
+                        {(apiKeys || [])
                           .filter((key) => key.provider === form.formData.provider)
                           .map((key) => (
                             <option key={key.id} value={key.id}>

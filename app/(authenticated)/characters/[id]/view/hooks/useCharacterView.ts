@@ -142,8 +142,9 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
       const res = await fetch('/api/v1/connection-profiles')
       if (res.ok) {
         const data = await res.json()
-        setProfiles(data.map((p: any) => ({ id: p.id, name: p.name })))
-        clientLogger.debug('Connection profiles loaded', { count: data.length })
+        const profiles = data.profiles || []
+        setProfiles(profiles.map((p: any) => ({ id: p.id, name: p.name })))
+        clientLogger.debug('Connection profiles loaded', { count: profiles.length })
       }
     } catch (err) {
       clientLogger.error('Failed to fetch profiles:', { error: err instanceof Error ? err.message : String(err) })

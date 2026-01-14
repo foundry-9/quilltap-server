@@ -40,11 +40,14 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
     // Transform to response format
     const providerList = plugins.map((plugin) => ({
       id: plugin.metadata.providerName,
-      name: plugin.metadata.displayName,
+      name: plugin.metadata.providerName,
+      displayName: plugin.metadata.displayName,
       description: plugin.metadata.description,
       abbreviation: plugin.metadata.abbreviation,
       colors: plugin.metadata.colors,
       type: 'llm',
+      capabilities: plugin.capabilities,
+      configRequirements: plugin.config,
     }));
 
     logger.info('[Providers v1] Listed providers', {

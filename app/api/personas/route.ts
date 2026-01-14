@@ -1,5 +1,10 @@
 /**
- * Personas API
+ * DEPRECATED - DO NOT USE
+ * 
+ * This endpoint should be removed and replaced with /api/v1/personas
+ * All client code should be migrated to the v1 API.
+ * 
+ * Legacy Personas API
  * GET /api/personas - List all personas for authenticated user
  * POST /api/personas - Create a new persona
  */

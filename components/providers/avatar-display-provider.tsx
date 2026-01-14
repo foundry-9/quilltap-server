@@ -51,7 +51,7 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
         setLoading(true)
         clientLogger.debug('AvatarDisplayProvider: Fetching avatar display style')
 
-        const res = await fetch('/api/chat-settings')
+        const res = await fetch('/api/v1/settings/chat')
         if (!res.ok) {
           // 401 is expected when not logged in - don't log as error
           if (res.status === 401) {
@@ -134,7 +134,7 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
       // Optimistic update
       setStyle(newStyle)
 
-      const res = await fetch('/api/chat-settings', {
+      const res = await fetch('/api/v1/settings/chat', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ avatarDisplayStyle: newStyle }),

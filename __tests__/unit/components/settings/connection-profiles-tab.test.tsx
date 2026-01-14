@@ -47,7 +47,10 @@ describe('ConnectionProfilesTab max tokens limit', () => {
       if (url === '/api/v1/api-keys') {
         return {
           ok: true,
-          data: [{ id: 'key-1', label: 'Primary', provider: 'OPENAI', isActive: true }],
+          data: {
+            apiKeys: [{ id: 'key-1', label: 'Primary', provider: 'OPENAI', isActive: true }],
+            count: 1,
+          },
         }
       }
 
@@ -79,7 +82,7 @@ describe('ConnectionProfilesTab max tokens limit', () => {
       }
 
       // Fetch models
-      if (url === '/api/models') {
+      if (url === '/api/v1/models') {
         return {
           ok: true,
           data: {
@@ -163,7 +166,7 @@ describe('ConnectionProfilesTab max tokens limit', () => {
     // Wait for models to be fetched
     await waitFor(() => {
       expect(fetchJsonMock).toHaveBeenCalledWith(
-        '/api/models',
+        '/api/v1/models',
         expect.objectContaining({ method: 'POST' })
       )
     })

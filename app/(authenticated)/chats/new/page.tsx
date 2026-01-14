@@ -124,8 +124,8 @@ export default function NewChatPage() {
 
         if (profilesRes.ok) {
           const data = await profilesRes.json()
-          setProfiles(data || [])
-          clientLogger.debug('[NewChat] Loaded profiles', { count: data?.length || 0 })
+          setProfiles(data.profiles || [])
+          clientLogger.debug('[NewChat] Loaded profiles', { count: data.profiles?.length || 0 })
         }
 
         if (imageProfilesRes.ok) {

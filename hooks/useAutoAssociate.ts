@@ -36,7 +36,7 @@ export function useAutoAssociate(logContext?: string): () => Promise<void> {
       context: logContext || 'useAutoAssociate',
     })
     try {
-      const response = await fetchJson<AutoAssociateResponse>('/api/v1/api-keys/auto-associate', {
+      const response = await fetchJson<AutoAssociateResponse>('/api/v1/api-keys?action=auto-associate', {
         method: 'POST',
       })
       if (response.ok && response.data?.associations?.length) {

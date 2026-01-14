@@ -148,7 +148,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
     const fetchFromApi = async () => {
       try {
-        const response = await fetch('/api/chat-settings')
+        const response = await fetch('/api/v1/settings/chat')
         if (response.ok) {
           const settings = await response.json()
           if (settings.sidebarWidth && settings.sidebarWidth !== width) {
@@ -185,7 +185,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
     apiDebounceRef.current = setTimeout(async () => {
       try {
-        const response = await fetch('/api/chat-settings', {
+        const response = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sidebarWidth: width }),

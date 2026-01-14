@@ -98,7 +98,7 @@ export function useConnectionProfiles() {
     return await fetchOp.execute(async () => {
       clientLogger.debug('Fetching connection profiles')
       // Add cache busting timestamp to force fresh data
-      const result = await fetchJson<ConnectionProfile[]>(`/api/v1/connection-profiles?t=${Date.now()}`, {
+      const result = await fetchJson<{ profiles: ConnectionProfile[], count: number }>(`/api/v1/connection-profiles?t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -110,7 +110,7 @@ export function useConnectionProfiles() {
         throw new Error(result.error || 'Failed to fetch profiles')
       }
 
-      const data = result.data || []
+      const data = result.data?.profiles || []
 
       // Tags are already included in the profile response from /api/profiles
       // No need to fetch them separately
@@ -124,10 +124,10 @@ export function useConnectionProfiles() {
   const fetchApiKeys = useCallback(async () => {
     try {
       clientLogger.debug('Fetching API keys')
-      const result = await fetchJson<ApiKey[]>('/api/v1/api-keys')
+      const result = await fetchJson<{ apiKeys: ApiKey[], count: number }>('/api/v1/api-keys')
       if (result.ok) {
-        setApiKeys(result.data || [])
-        clientLogger.debug('API keys loaded', { count: result.data?.length })
+        setApiKeys(result.data?.apiKeys || [])
+        clientLogger.debug('API keys loaded', { count: result.data?.apiKeys?.length })
       } else {
         throw new Error(result.error)
       }
@@ -139,7 +139,7 @@ export function useConnectionProfiles() {
   const fetchProviders = useCallback(async () => {
     try {
       clientLogger.debug('Fetching providers configuration')
-      const result = await fetchJson<{ providers: ProviderConfig[] }>('/api/providers')
+      const result = await fetchJson<{ providers: ProviderConfig[], count: number }>('/api/v1/providers')
       if (result.ok) {
         const providerList = result.data?.providers || []
         setProviders(providerList)
@@ -157,7 +157,7 @@ export function useConnectionProfiles() {
 
   const fetchChatSettings = useCallback(async () => {
     try {
-      const result = await fetchJson<any>('/api/chat-settings')
+      const result = await fetchJson<any>('/api/v1/settings/chat')
       if (result.ok) {
         setCheapDefaultProfileId(result.data?.cheapLLMSettings?.defaultCheapProfileId || null)
       }

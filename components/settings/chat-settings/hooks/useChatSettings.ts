@@ -63,7 +63,7 @@ export function useChatSettings(): UseChatSettingsReturn {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        const res = await fetch('/api/chat-settings')
+        const res = await fetch('/api/v1/settings/chat')
         if (!res.ok) throw new Error('Failed to fetch chat settings')
         const data = await res.json()
         clientLogger.debug('Chat settings loaded', { settingsId: data.id })
@@ -155,7 +155,7 @@ export function useChatSettings(): UseChatSettingsReturn {
         setError(null)
         setSuccess(false)
 
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ avatarDisplayMode: mode }),
@@ -194,7 +194,7 @@ export function useChatSettings(): UseChatSettingsReturn {
         setError(null)
         setSuccess(false)
 
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ avatarDisplayStyle: style }),
@@ -238,7 +238,7 @@ export function useChatSettings(): UseChatSettingsReturn {
         setError(null)
         setSuccess(false)
 
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cheapLLMSettings: { ...settings.cheapLLMSettings, ...updates } }),
@@ -274,7 +274,7 @@ export function useChatSettings(): UseChatSettingsReturn {
         setSaving(true)
         setError(null)
 
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageDescriptionProfileId: profileId }),
@@ -310,7 +310,7 @@ export function useChatSettings(): UseChatSettingsReturn {
         setSuccess(false)
 
         const currentPrefs = settings.memoryCascadePreferences || DEFAULT_MEMORY_CASCADE_PREFERENCES
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -352,7 +352,7 @@ export function useChatSettings(): UseChatSettingsReturn {
         setSuccess(false)
 
         const currentSettings = settings.tokenDisplaySettings || DEFAULT_TOKEN_DISPLAY_SETTINGS
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -394,7 +394,7 @@ export function useChatSettings(): UseChatSettingsReturn {
         setSuccess(false)
 
         const currentSettings = settings.contextCompressionSettings || DEFAULT_CONTEXT_COMPRESSION_SETTINGS
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

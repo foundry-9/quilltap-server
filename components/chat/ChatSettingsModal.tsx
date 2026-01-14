@@ -365,24 +365,24 @@ export default function ChatSettingsModal({
     try {
       setLoading(true)
       const [profilesRes, imageProfilesRes, apiKeysRes] = await Promise.all([
-        fetch('/api/profiles'),
+        fetch('/api/v1/connection-profiles'),
         fetch('/api/v1/image-profiles'),
-        fetch('/api/keys'),
+        fetch('/api/v1/api-keys'),
       ])
 
       if (profilesRes.ok) {
         const data = await profilesRes.json()
-        setConnectionProfiles(data)
+        setConnectionProfiles(data.profiles || [])
       }
 
       if (imageProfilesRes.ok) {
         const data = await imageProfilesRes.json()
-        setImageProfiles(data)
+        setImageProfiles(data.profiles || [])
       }
 
       if (apiKeysRes.ok) {
         const data = await apiKeysRes.json()
-        setApiKeys(data)
+        setApiKeys(data.apiKeys || [])
         clientLogger.debug('Fetched API keys for profile validation', { count: data.length })
       }
     } catch (error) {

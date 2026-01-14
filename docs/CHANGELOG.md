@@ -4,6 +4,28 @@
 
 ### 2.7-dev
 
+- fix: V1 API migration data structure fixes
+  - Fixed multiple "X.map is not a function" errors across the application
+  - Updated client code to extract nested response structures from v1 endpoints:
+    - Connection profiles: `data.profiles` instead of `data`
+    - API keys: `data.apiKeys` instead of `data`
+    - Providers: `data.providers` instead of `data`
+    - Image profiles: `data.profiles` instead of `data`
+  - Fixed async/await bug in `/api/v1/models` POST handler (missing await on createLLMProvider)
+  - Added missing POST handler to `/api/v1/models` endpoint for fetching models
+  - Created `/api/v1/settings/chat` endpoint (GET/PUT for chat settings)
+  - Created `/api/v1/logs` endpoint (POST for browser logs with rate limiting)
+  - Deprecated legacy endpoints with movedToV1() helper:
+    - `/api/chat-settings` → `/api/v1/settings/chat`
+    - `/api/logs` → `/api/v1/logs`
+  - Migrated client code to v1 endpoints:
+    - ChatSettingsModal: `/api/profiles`, `/api/keys` → v1 equivalents
+    - All chat settings hooks/components → `/api/v1/settings/chat`
+    - Model fetching → `/api/v1/models`
+  - Fixed provider data structure to include capabilities and configRequirements
+  - Fixed provider name/displayName mismatch (using providerName as 'name' field)
+  - Fixed auto-associate URL format to use query parameter pattern
+  - Added deprecation notice to `/api/personas` (pending v1 migration)
 - feat: Added missing v1 roleplay-templates [id] route
   - GET `/api/v1/roleplay-templates/[id]` - Retrieve single template
   - PUT `/api/v1/roleplay-templates/[id]` - Update template with validation
@@ -48,6 +70,7 @@
     - Tests will be re-enabled after v1 migration complete
   - Fixed lint warnings in test files and MCP plugin
 - **BREAKING**: Deprecated legacy API routes now return 410 Gone errors
+
   - All legacy `/api/characters`, `/api/chats`, `/api/messages` routes replaced with error stubs
   - Error responses include clear instructions pointing to the new `/api/v1/` endpoints
   - Added `movedToV1()` helper in `lib/api/responses.ts` for consistent deprecation errors
