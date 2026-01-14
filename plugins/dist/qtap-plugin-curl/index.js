@@ -5477,21 +5477,25 @@ var plugin = {
     category: "Network"
   },
   /**
-   * Get the tool definition in universal format
+   * Get tool definitions (multi-tool pattern)
+   *
+   * Returns an array containing the curl tool definition.
    */
-  getToolDefinition() {
-    return curlToolDefinition;
+  async getToolDefinitions(_config) {
+    return [curlToolDefinition];
   },
   /**
-   * Validate input arguments
+   * Execute a tool by name (multi-tool pattern)
+   *
+   * Routes execution to the curl handler.
    */
-  validateInput(input) {
-    return validateCurlInput(input);
-  },
-  /**
-   * Execute the curl request
-   */
-  async execute(input, context) {
+  async executeByName(toolName, input, context) {
+    if (toolName !== "curl") {
+      return {
+        success: false,
+        error: `Unknown tool: ${toolName}. This plugin only provides the 'curl' tool.`
+      };
+    }
     const curlInput = input;
     const config = context.toolConfig;
     const output = await executeCurlRequest(curlInput, config);
@@ -5507,6 +5511,12 @@ var plugin = {
         timing: output.timing
       }
     };
+  },
+  /**
+   * Validate input arguments
+   */
+  validateInput(input) {
+    return validateCurlInput(input);
   },
   /**
    * Format results for LLM consumption

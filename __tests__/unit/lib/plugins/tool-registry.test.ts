@@ -1,7 +1,7 @@
 /**
  * Unit Tests for Tool Registry
  * Tests lib/plugins/tool-registry.ts
- * v2.7-dev: TOOL_PROVIDER Plugin Capability
+ * v2.7-dev: TOOL_PROVIDER Plugin Capability with multi-tool pattern
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
@@ -61,11 +61,12 @@ interface ToolExecutionResult {
   error?: string
 }
 
+// Updated interface for multi-tool pattern
 interface ToolPlugin {
   metadata: ToolMetadata
-  getToolDefinition: () => UniversalTool
+  getToolDefinitions: (config: Record<string, unknown>) => Promise<UniversalTool[]>
+  executeByName: (toolName: string, input: unknown, context: ToolExecutionContext) => Promise<ToolExecutionResult>
   validateInput: (input: unknown) => boolean
-  execute: (input: unknown, context: ToolExecutionContext) => Promise<ToolExecutionResult>
   formatResults: (result: ToolExecutionResult) => string
   isConfigured?: (config: Record<string, unknown>) => boolean
   getDefaultConfig?: () => Record<string, unknown>
@@ -74,23 +75,30 @@ interface ToolPlugin {
 
 interface ToolRegistryType {
   registerTool: (plugin: ToolPlugin) => void
+  registerPlugin: (plugin: ToolPlugin) => void
   getTool: (name: string) => ToolPlugin | null
+  getPlugin: (name: string) => ToolPlugin | null
   getAllTools: () => ToolPlugin[]
+  getAllPlugins: () => ToolPlugin[]
   hasTool: (name: string) => boolean
+  hasPlugin: (name: string) => boolean
   getToolNames: () => string[]
+  getPluginNames: () => string[]
   getToolMetadata: (name: string) => ToolMetadata | null
+  getPluginMetadata: (name: string) => ToolMetadata | null
   getAllToolMetadata: () => ToolMetadata[]
+  getAllPluginMetadata: () => ToolMetadata[]
   getToolDefinitions: () => UniversalTool[]
-  getConfiguredToolDefinitions: (configs: Map<string, Record<string, unknown>>) => UniversalTool[]
+  getConfiguredToolDefinitions: (configs: Map<string, Record<string, unknown>>) => Promise<UniversalTool[]>
   executeTool: (name: string, input: unknown, context: ToolExecutionContext) => Promise<ToolExecutionResult>
-  formatToolResults: (name: string, result: ToolExecutionResult) => string
+  formatToolResults: (name: string, result: ToolExecutionResult) => Promise<string>
   getDefaultConfig: (name: string) => Record<string, unknown>
   initialize: (tools: ToolPlugin[]) => Promise<void>
   isInitialized: () => boolean
-  getErrors: () => Array<{ tool: string; error: string }>
-  getStats: () => { total: number; errors: number; initialized: boolean; tools: string[]; lastInitTime: Date | null }
+  getErrors: () => Array<{ plugin: string; error: string }>
+  getStats: () => { total: number; errors: number; initialized: boolean; plugins: string[]; lastInitTime: string | null }
   reset: () => void
-  exportState: () => { initialized: boolean; tools: Array<{ name: string; displayName: string; hasIcon: boolean; requiresConfiguration: boolean }> }
+  exportState: () => { initialized: boolean; plugins: Array<{ name: string; displayName: string; hasIcon: boolean; requiresConfiguration: boolean }> }
 }
 
 // Import using require after mocks
@@ -128,14 +136,22 @@ const makeToolDefinition = (overrides: Partial<UniversalTool> = {}): UniversalTo
   ...overrides,
 })
 
-const makeToolPlugin = (overrides: Partial<ToolPlugin> = {}): ToolPlugin => ({
-  metadata: makeToolMetadata(),
-  getToolDefinition: jest.fn(() => makeToolDefinition()),
-  validateInput: jest.fn(() => true),
-  execute: jest.fn(async () => ({ success: true, result: 'executed' })),
-  formatResults: jest.fn((result: ToolExecutionResult) => JSON.stringify(result)),
-  ...overrides,
-})
+// Updated to use multi-tool pattern
+const makeToolPlugin = (overrides: Partial<ToolPlugin> = {}): ToolPlugin => {
+  const metadata = overrides.metadata || makeToolMetadata()
+  const toolDef = makeToolDefinition({
+    function: { ...makeToolDefinition().function, name: metadata.toolName },
+  })
+
+  return {
+    metadata,
+    getToolDefinitions: jest.fn(async () => [toolDef]),
+    executeByName: jest.fn(async () => ({ success: true, result: 'executed' })),
+    validateInput: jest.fn(() => true),
+    formatResults: jest.fn((result: ToolExecutionResult) => JSON.stringify(result)),
+    ...overrides,
+  }
+}
 
 const makeExecutionContext = (overrides: Partial<ToolExecutionContext> = {}): ToolExecutionContext => ({
   userId: 'user-123',
@@ -170,7 +186,7 @@ describe('Tool Registry', () => {
 
       toolRegistry.registerTool(plugin1)
 
-      expect(() => toolRegistry.registerTool(plugin2)).toThrow("Tool 'test-tool' is already registered")
+      expect(() => toolRegistry.registerTool(plugin2)).toThrow("Plugin 'test-tool' is already registered")
     })
 
     it('registers multiple unique tools', () => {
@@ -299,32 +315,6 @@ describe('Tool Registry', () => {
     })
   })
 
-  describe('getToolDefinitions', () => {
-    it('returns tool definitions for all registered tools', () => {
-      const definition1 = makeToolDefinition({
-        function: { ...makeToolDefinition().function, name: 'tool-1' },
-      })
-      const definition2 = makeToolDefinition({
-        function: { ...makeToolDefinition().function, name: 'tool-2' },
-      })
-
-      toolRegistry.registerTool(makeToolPlugin({
-        metadata: makeToolMetadata({ toolName: 'tool-1' }),
-        getToolDefinition: () => definition1,
-      }))
-      toolRegistry.registerTool(makeToolPlugin({
-        metadata: makeToolMetadata({ toolName: 'tool-2' }),
-        getToolDefinition: () => definition2,
-      }))
-
-      const definitions = toolRegistry.getToolDefinitions()
-
-      expect(definitions).toHaveLength(2)
-      expect(definitions).toContainEqual(definition1)
-      expect(definitions).toContainEqual(definition2)
-    })
-  })
-
   describe('getConfiguredToolDefinitions', () => {
     it('includes tools without isConfigured method', async () => {
       toolRegistry.registerTool(makeToolPlugin({
@@ -363,14 +353,14 @@ describe('Tool Registry', () => {
 
   describe('executeTool', () => {
     it('executes tool successfully', async () => {
-      const executeFn = jest.fn<(input: unknown, context: ToolExecutionContext) => Promise<ToolExecutionResult>>()
-      executeFn.mockResolvedValue({
+      const executeByNameFn = jest.fn<(toolName: string, input: unknown, context: ToolExecutionContext) => Promise<ToolExecutionResult>>()
+      executeByNameFn.mockResolvedValue({
         success: true,
         result: { answer: 42 },
       })
 
       toolRegistry.registerTool(makeToolPlugin({
-        execute: executeFn,
+        executeByName: executeByNameFn,
       }))
 
       const context = makeExecutionContext()
@@ -378,7 +368,7 @@ describe('Tool Registry', () => {
 
       expect(result.success).toBe(true)
       expect(result.result).toEqual({ answer: 42 })
-      expect(executeFn).toHaveBeenCalledWith({ input: 'test' }, context)
+      expect(executeByNameFn).toHaveBeenCalledWith('test-tool', { input: 'test' }, expect.any(Object))
     })
 
     it('returns error for non-existent tool', async () => {
@@ -401,7 +391,7 @@ describe('Tool Registry', () => {
       expect(result.error).toContain('Invalid input')
     })
 
-    it('returns error when tool requires configuration but not configured', async () => {
+    it('skips unconfigured tools when finding tool to execute', async () => {
       toolRegistry.registerTool(makeToolPlugin({
         isConfigured: (config: Record<string, unknown>) => !!config.apiKey,
       }))
@@ -409,13 +399,14 @@ describe('Tool Registry', () => {
       const context = makeExecutionContext({ toolConfig: {} })
       const result = await toolRegistry.executeTool('test-tool', { input: 'test' }, context)
 
+      // Tool is skipped during search because it's not configured
       expect(result.success).toBe(false)
-      expect(result.error).toContain('not properly configured')
+      expect(result.error).toContain('not found')
     })
 
     it('catches and reports execution errors', async () => {
       toolRegistry.registerTool(makeToolPlugin({
-        execute: async () => { throw new Error('Execution failed') },
+        executeByName: async () => { throw new Error('Execution failed') },
       }))
 
       const context = makeExecutionContext()
@@ -427,20 +418,20 @@ describe('Tool Registry', () => {
   })
 
   describe('formatToolResults', () => {
-    it('formats results using tool formatter', () => {
+    it('formats results using tool formatter', async () => {
       toolRegistry.registerTool(makeToolPlugin({
         formatResults: (result: ToolExecutionResult) => `Formatted: ${JSON.stringify(result)}`,
       }))
 
       const result: ToolExecutionResult = { success: true, result: 'data' }
-      const formatted = toolRegistry.formatToolResults('test-tool', result)
+      const formatted = await toolRegistry.formatToolResults('test-tool', result)
 
       expect(formatted).toBe('Formatted: {"success":true,"result":"data"}')
     })
 
-    it('returns JSON for non-existent tool', () => {
+    it('returns JSON for non-existent tool', async () => {
       const result: ToolExecutionResult = { success: true, result: 'data' }
-      const formatted = toolRegistry.formatToolResults('nonexistent', result)
+      const formatted = await toolRegistry.formatToolResults('nonexistent', result)
 
       expect(formatted).toBe(JSON.stringify(result))
     })
@@ -510,7 +501,7 @@ describe('Tool Registry', () => {
 
       const errors = toolRegistry.getErrors()
       expect(errors).toHaveLength(1)
-      expect(errors[0].tool).toBe('tool-1')
+      expect(errors[0].plugin).toBe('tool-1')
     })
 
     it('sets initialization timestamp', async () => {
@@ -533,8 +524,8 @@ describe('Tool Registry', () => {
       expect(stats.total).toBe(2)
       expect(stats.errors).toBe(0)
       expect(stats.initialized).toBe(true)
-      expect(stats.tools).toContain('tool-1')
-      expect(stats.tools).toContain('tool-2')
+      expect(stats.plugins).toContain('tool-1')
+      expect(stats.plugins).toContain('tool-2')
     })
   })
 
@@ -569,11 +560,11 @@ describe('Tool Registry', () => {
       const state = toolRegistry.exportState()
 
       expect(state.initialized).toBe(true)
-      expect(state.tools).toHaveLength(1)
-      expect(state.tools[0].name).toBe('export-test')
-      expect(state.tools[0].displayName).toBe('Export Test')
-      expect(state.tools[0].hasIcon).toBe(true)
-      expect(state.tools[0].requiresConfiguration).toBe(true)
+      expect(state.plugins).toHaveLength(1)
+      expect(state.plugins[0].name).toBe('export-test')
+      expect(state.plugins[0].displayName).toBe('Export Test')
+      expect(state.plugins[0].hasIcon).toBe(true)
+      expect(state.plugins[0].requiresConfiguration).toBe(true)
     })
   })
 

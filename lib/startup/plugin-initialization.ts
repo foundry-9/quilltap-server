@@ -540,7 +540,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         const toolStats = toolRegistry.getStats();
         logger.info('Tool plugins initialized', {
           total: toolStats.total,
-          tools: toolStats.tools,
+          plugins: toolStats.plugins,
         });
       }
     }

@@ -114,6 +114,10 @@ export interface ToolExecutionResult {
 /**
  * Main Tool Plugin Interface
  *
+ * All tool plugins use the multi-tool pattern, providing an array of tools
+ * (even if it's just one tool). This standardized approach makes it easy
+ * to extend plugins with additional tools over time.
+ *
  * Plugins implementing this interface can be dynamically loaded and used
  * by the Quilltap application to provide custom tools for LLM interactions.
  *
@@ -127,16 +131,9 @@ export interface ToolExecutionResult {
  *     displayName: 'curl',
  *     description: 'Make HTTP requests to fetch web content',
  *   },
- *   getToolDefinition: () => ({
- *     type: 'function',
- *     function: {
- *       name: 'curl',
- *       description: 'Make HTTP requests...',
- *       parameters: { ... }
- *     }
- *   }),
+ *   getToolDefinitions: async () => [curlToolDefinition],
  *   validateInput: (input) => { ... },
- *   execute: async (input, context) => { ... },
+ *   executeByName: async (toolName, input, context) => { ... },
  *   formatResults: (result) => JSON.stringify(result),
  * };
  * ```
@@ -147,41 +144,52 @@ export interface ToolPlugin {
    */
   metadata: ToolMetadata;
 
+  // ============================================================================
+  // Required Methods (Multi-Tool Pattern)
+  // ============================================================================
+  // All tool plugins use these methods to provide one or more tools.
+
   /**
-   * Get the tool definition in universal (OpenAI) format
+   * Get tool definitions in universal (OpenAI) format
    *
-   * Returns the tool's schema that will be sent to LLMs.
-   * This is called when building tool arrays for LLM requests.
+   * Returns an array of tool definitions that will be sent to LLMs.
+   * Even single-tool plugins return an array (with one element).
    *
-   * @returns Tool definition in universal format
+   * This method is async to allow plugins to perform initialization
+   * or network requests during tool discovery (e.g., MCP servers).
+   *
+   * @param config User configuration for this plugin
+   * @returns Promise resolving to array of tool definitions in universal format
    */
-  getToolDefinition: () => UniversalTool;
+  getToolDefinitions: (config: Record<string, unknown>) => Promise<UniversalTool[]>;
+
+  /**
+   * Execute a tool by name
+   *
+   * The registry routes execution to this method based on the tool name.
+   * For single-tool plugins, the toolName will match metadata.toolName.
+   *
+   * @param toolName The name of the tool to execute
+   * @param input The input arguments from the LLM
+   * @param context Execution context with user/chat info and config
+   * @returns Promise resolving to the execution result
+   */
+  executeByName: (
+    toolName: string,
+    input: Record<string, unknown>,
+    context: ToolExecutionContext
+  ) => Promise<ToolExecutionResult>;
 
   /**
    * Validate input arguments before execution
    *
    * Checks whether the provided input matches the expected schema.
-   * Called before execute() to ensure valid inputs.
+   * Called before executeByName() to ensure valid inputs.
    *
    * @param input The input arguments to validate
    * @returns true if valid, false otherwise
    */
   validateInput: (input: unknown) => boolean;
-
-  /**
-   * Execute the tool with the given input and context
-   *
-   * This is the main tool execution logic. It receives the parsed
-   * arguments from the LLM and returns the result.
-   *
-   * @param input The input arguments from the LLM
-   * @param context Execution context with user/chat info and config
-   * @returns Promise resolving to the execution result
-   */
-  execute: (
-    input: Record<string, unknown>,
-    context: ToolExecutionContext
-  ) => Promise<ToolExecutionResult>;
 
   /**
    * Format results for LLM consumption
@@ -193,6 +201,10 @@ export interface ToolPlugin {
    * @returns Formatted string for LLM consumption
    */
   formatResults: (result: ToolExecutionResult) => string;
+
+  // ============================================================================
+  // Optional Methods
+  // ============================================================================
 
   /**
    * Check if the tool is properly configured (optional)
@@ -226,44 +238,6 @@ export interface ToolPlugin {
    */
   renderIcon?: (props: { className?: string }) => React.ReactNode;
 
-  // ============================================================================
-  // Multi-Tool Plugin Support (optional)
-  // ============================================================================
-  // These methods enable plugins to provide multiple tools dynamically.
-  // Used by plugins like MCP that discover tools from external servers.
-
-  /**
-   * Get multiple tool definitions (optional)
-   *
-   * For plugins that provide multiple tools dynamically (e.g., MCP connector).
-   * When implemented, the registry will call this at request time (not startup)
-   * to get the current list of tools based on configuration.
-   *
-   * This allows plugins to discover tools dynamically based on user config
-   * (e.g., MCP servers to connect to).
-   *
-   * @param config User configuration for this plugin
-   * @returns Promise resolving to array of tool definitions in universal format
-   */
-  getMultipleToolDefinitions?: (config: Record<string, unknown>) => Promise<UniversalTool[]>;
-
-  /**
-   * Execute a specific tool by name (optional)
-   *
-   * Required when getMultipleToolDefinitions is implemented.
-   * The registry routes execution to this method based on the tool name.
-   *
-   * @param toolName The name of the tool to execute (as returned by getMultipleToolDefinitions)
-   * @param input The input arguments from the LLM
-   * @param context Execution context with user/chat info and config
-   * @returns Promise resolving to the execution result
-   */
-  executeByName?: (
-    toolName: string,
-    input: Record<string, unknown>,
-    context: ToolExecutionContext
-  ) => Promise<ToolExecutionResult>;
-
   /**
    * Called when configuration changes (optional)
    *
@@ -273,6 +247,30 @@ export interface ToolPlugin {
    * @param config The updated user configuration
    */
   onConfigurationChange?: (config: Record<string, unknown>) => Promise<void>;
+
+  // ============================================================================
+  // Deprecated Methods (for backwards compatibility)
+  // ============================================================================
+  // These methods are deprecated in favor of the multi-tool pattern above.
+  // They may be removed in a future version.
+
+  /**
+   * @deprecated Use getToolDefinitions instead.
+   */
+  getToolDefinition?: () => UniversalTool;
+
+  /**
+   * @deprecated Use executeByName instead.
+   */
+  execute?: (
+    input: Record<string, unknown>,
+    context: ToolExecutionContext
+  ) => Promise<ToolExecutionResult>;
+
+  /**
+   * @deprecated Use getToolDefinitions instead.
+   */
+  getMultipleToolDefinitions?: (config: Record<string, unknown>) => Promise<UniversalTool[]>;
 }
 
 /**

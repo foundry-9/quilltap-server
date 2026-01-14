@@ -13224,27 +13224,8 @@ var metadata = {
   description: "Connects to MCP servers and exposes their tools to LLMs",
   category: "integration"
 };
-var placeholderToolDefinition = {
-  type: "function",
-  function: {
-    name: "mcp_connector",
-    description: "MCP Server Connector - this tool provides access to tools from connected MCP servers",
-    parameters: {
-      type: "object",
-      properties: {},
-      required: []
-    }
-  }
-};
 var plugin = {
   metadata,
-  /**
-   * Get the placeholder tool definition
-   * (Not used - getMultipleToolDefinitions takes precedence)
-   */
-  getToolDefinition() {
-    return placeholderToolDefinition;
-  },
   /**
    * Get all tool definitions from connected MCP servers
    *
@@ -13254,10 +13235,10 @@ var plugin = {
    *
    * @param config User configuration for this plugin
    */
-  async getMultipleToolDefinitions(config) {
+  async getToolDefinitions(config) {
     await ensureInitialized(config);
     const tools = connectionManager.getAllToolDefinitions();
-    pluginLogger.debug("Getting multiple tool definitions", {
+    pluginLogger.debug("Getting tool definitions", {
       toolCount: tools.length,
       initialized
     });
@@ -13270,15 +13251,6 @@ var plugin = {
    */
   validateInput(input) {
     return typeof input === "object" && input !== null;
-  },
-  /**
-   * Execute the placeholder tool (not used for multi-tool plugins)
-   */
-  async execute(_input, _context) {
-    return {
-      success: false,
-      error: "This is a multi-tool plugin. Use specific MCP tools like mcp_servername_toolname instead."
-    };
   },
   /**
    * Execute a specific tool by name

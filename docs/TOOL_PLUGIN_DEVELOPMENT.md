@@ -358,6 +358,8 @@ When `isConfigured` returns `false`:
 
 ### The ToolPlugin Interface
 
+All tool plugins use the **multi-tool pattern** - they provide an array of tools via `getToolDefinitions()` and execute them via `executeByName()`. Even single-tool plugins return an array (with one element). This standardized approach makes it easy to extend plugins with additional tools over time.
+
 Your plugin must export an object implementing the `ToolPlugin` interface:
 
 ```typescript
@@ -370,18 +372,20 @@ interface ToolPlugin {
     category?: string;
   };
 
-  // Required methods
-  getToolDefinition(): UniversalTool;
-  validateInput(input: unknown): boolean;
-  execute(
+  // Required methods (multi-tool pattern)
+  getToolDefinitions(config: Record<string, unknown>): Promise<UniversalTool[]>;
+  executeByName(
+    toolName: string,
     input: Record<string, unknown>,
     context: ToolExecutionContext
   ): Promise<ToolExecutionResult>;
+  validateInput(input: unknown): boolean;
   formatResults(result: ToolExecutionResult): string;
 
   // Optional methods
   isConfigured?(config: Record<string, unknown>): boolean;
   getDefaultConfig?(): Record<string, unknown>;
+  onConfigurationChange?(config: Record<string, unknown>): Promise<void>;
 }
 ```
 
@@ -523,18 +527,31 @@ export const plugin: ToolPlugin = {
     category: 'Utilities',
   },
 
-  getToolDefinition(): UniversalTool {
-    return calculatorToolDefinition;
+  /**
+   * Get tool definitions (multi-tool pattern)
+   * Returns an array of tools - even single-tool plugins return an array.
+   */
+  async getToolDefinitions(_config: Record<string, unknown>): Promise<UniversalTool[]> {
+    return [calculatorToolDefinition];
   },
 
-  validateInput(input: unknown): boolean {
-    return validateCalculatorInput(input);
-  },
-
-  async execute(
+  /**
+   * Execute a tool by name (multi-tool pattern)
+   * For single-tool plugins, the toolName will match metadata.toolName.
+   */
+  async executeByName(
+    toolName: string,
     input: Record<string, unknown>,
     context: ToolExecutionContext
   ): Promise<ToolExecutionResult> {
+    // For single-tool plugins, verify the tool name
+    if (toolName !== 'calculator') {
+      return {
+        success: false,
+        error: `Unknown tool: ${toolName}`,
+      };
+    }
+
     const calcInput = input as unknown as CalculatorInput;
     const output = await executeCalculation(calcInput);
 
@@ -547,6 +564,10 @@ export const plugin: ToolPlugin = {
         expression: calcInput.expression,
       },
     };
+  },
+
+  validateInput(input: unknown): boolean {
+    return validateCalculatorInput(input);
   },
 
   formatResults(result: ToolExecutionResult): string {
@@ -750,15 +771,19 @@ if (!p) {
 
 console.log('Plugin loaded successfully');
 console.log('Tool name:', p.metadata.toolName);
-console.log('Has getToolDefinition:', typeof p.getToolDefinition === 'function');
+console.log('Has getToolDefinitions:', typeof p.getToolDefinitions === 'function');
+console.log('Has executeByName:', typeof p.executeByName === 'function');
 console.log('Has validateInput:', typeof p.validateInput === 'function');
-console.log('Has execute:', typeof p.execute === 'function');
 console.log('Has formatResults:', typeof p.formatResults === 'function');
 
-// Test tool definition
-const def = p.getToolDefinition();
-console.log('Tool definition name:', def.function.name);
-console.log('Parameters:', Object.keys(def.function.parameters.properties || {}));
+// Test tool definitions
+p.getToolDefinitions({}).then(defs => {
+  console.log('Tool count:', defs.length);
+  defs.forEach(def => {
+    console.log('Tool definition name:', def.function.name);
+    console.log('Parameters:', Object.keys(def.function.parameters.properties || {}));
+  });
+});
 "
 ```
 

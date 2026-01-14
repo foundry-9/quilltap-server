@@ -4,6 +4,15 @@
 
 ### 2.7-dev
 
+- refactor: Standardize all tool plugins on multi-tool pattern
+  - `getToolDefinitions(config)` and `executeByName(toolName, input, context)` are now required
+  - Even single-tool plugins return an array (with one element) for consistency
+  - Simplifies plugin development - easy to add more tools to any plugin later
+  - Tool registry simplified to handle all plugins uniformly
+  - Old methods (`getToolDefinition`, `execute`, `getMultipleToolDefinitions`) deprecated but supported
+  - Updated `@quilltap/plugin-types` to v1.9.0
+  - Updated `qtap-plugin-curl` (v1.0.4) and `qtap-plugin-mcp` (v1.1.3) to new pattern
+  - Updated TOOL_PLUGIN_DEVELOPMENT.md with new interface examples
 - feat: MCP (Model Context Protocol) Server Connector plugin
   - New built-in plugin `qtap-plugin-mcp` for connecting to MCP servers
   - Uses official `@modelcontextprotocol/sdk` with Streamable HTTP and SSE transports

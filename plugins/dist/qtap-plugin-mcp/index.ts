@@ -120,39 +120,13 @@ const metadata: ToolMetadata = {
 };
 
 /**
- * Placeholder tool definition (not used - we implement getMultipleToolDefinitions)
- */
-const placeholderToolDefinition: UniversalTool = {
-  type: 'function',
-  function: {
-    name: 'mcp_connector',
-    description:
-      'MCP Server Connector - this tool provides access to tools from connected MCP servers',
-    parameters: {
-      type: 'object',
-      properties: {},
-      required: [],
-    },
-  },
-};
-
-/**
  * MCP Server Connector Plugin Implementation
  *
- * This is a multi-tool plugin that dynamically provides tools from connected
- * MCP servers. It implements getMultipleToolDefinitions and executeByName
- * instead of the standard single-tool methods.
+ * Uses the standard multi-tool pattern with getToolDefinitions() and executeByName().
+ * Dynamically provides tools from connected MCP servers.
  */
 export const plugin: ToolPlugin = {
   metadata,
-
-  /**
-   * Get the placeholder tool definition
-   * (Not used - getMultipleToolDefinitions takes precedence)
-   */
-  getToolDefinition(): UniversalTool {
-    return placeholderToolDefinition;
-  },
 
   /**
    * Get all tool definitions from connected MCP servers
@@ -163,13 +137,13 @@ export const plugin: ToolPlugin = {
    *
    * @param config User configuration for this plugin
    */
-  async getMultipleToolDefinitions(config: Record<string, unknown>): Promise<UniversalTool[]> {
+  async getToolDefinitions(config: Record<string, unknown>): Promise<UniversalTool[]> {
     // Ensure plugin is initialized before returning tools
     await ensureInitialized(config);
 
     const tools = connectionManager.getAllToolDefinitions();
 
-    pluginLogger.debug('Getting multiple tool definitions', {
+    pluginLogger.debug('Getting tool definitions', {
       toolCount: tools.length,
       initialized,
     });
@@ -184,20 +158,6 @@ export const plugin: ToolPlugin = {
    */
   validateInput(input: unknown): boolean {
     return typeof input === 'object' && input !== null;
-  },
-
-  /**
-   * Execute the placeholder tool (not used for multi-tool plugins)
-   */
-  async execute(
-    _input: Record<string, unknown>,
-    _context: ToolExecutionContext
-  ): Promise<ToolExecutionResult> {
-    return {
-      success: false,
-      error:
-        'This is a multi-tool plugin. Use specific MCP tools like mcp_servername_toolname instead.',
-    };
   },
 
   /**

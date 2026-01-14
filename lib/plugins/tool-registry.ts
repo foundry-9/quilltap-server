@@ -4,8 +4,8 @@
  * Singleton registry for managing LLM tool plugins.
  * Provides centralized access to tool plugins, metadata, and execution methods.
  *
- * This registry integrates with the main plugin system, automatically discovering
- * and registering plugins with the TOOL_PROVIDER capability.
+ * All tool plugins use the multi-tool pattern - they provide an array of tools
+ * via getToolDefinitions() and execute tools via executeByName().
  *
  * @module plugins/tool-registry
  */
@@ -26,9 +26,8 @@ import { getErrorMessage } from '@/lib/errors';
 
 export interface ToolRegistryState {
   initialized: boolean;
-  tools: Map<string, ToolPlugin>;
-  /** Multi-tool plugins that provide tools dynamically based on configuration */
-  multiToolPlugins: Map<string, ToolPlugin>;
+  /** All registered tool plugins */
+  plugins: Map<string, ToolPlugin>;
   errors: Map<string, string>;
   lastInitTime: Date | null;
 }
@@ -40,8 +39,7 @@ export interface ToolRegistryState {
 class ToolRegistry {
   private state: ToolRegistryState = {
     initialized: false,
-    tools: new Map(),
-    multiToolPlugins: new Map(),
+    plugins: new Map(),
     errors: new Map(),
     lastInitTime: null,
   };
@@ -54,260 +52,187 @@ class ToolRegistry {
    * Register a tool plugin
    *
    * @param plugin The tool plugin to register
-   * @throws Error if tool with same name is already registered
+   * @throws Error if plugin with same name is already registered
    */
-  registerTool(plugin: ToolPlugin): void {
-    const toolName = plugin.metadata.toolName;
+  registerPlugin(plugin: ToolPlugin): void {
+    const pluginName = plugin.metadata.toolName;
 
-    if (this.state.tools.has(toolName)) {
-      const error = `Tool '${toolName}' is already registered`;
+    if (this.state.plugins.has(pluginName)) {
+      const error = `Plugin '${pluginName}' is already registered`;
       this.logger.warn(error);
       throw new Error(error);
     }
 
-    this.state.tools.set(toolName, plugin);
-    this.logger.debug('Tool registered', {
-      name: toolName,
+    // Validate that plugin has required methods (new pattern)
+    // or deprecated methods (for backwards compatibility)
+    const hasNewPattern = typeof plugin.getToolDefinitions === 'function' && typeof plugin.executeByName === 'function';
+    const hasLegacyMultiTool = typeof plugin.getMultipleToolDefinitions === 'function' && typeof plugin.executeByName === 'function';
+    const hasLegacySingleTool = typeof plugin.getToolDefinition === 'function' && typeof plugin.execute === 'function';
+
+    if (!hasNewPattern && !hasLegacyMultiTool && !hasLegacySingleTool) {
+      const error = `Plugin '${pluginName}' must implement getToolDefinitions/executeByName or legacy methods`;
+      this.logger.error(error);
+      throw new Error(error);
+    }
+
+    this.state.plugins.set(pluginName, plugin);
+    this.logger.debug('Plugin registered', {
+      name: pluginName,
       displayName: plugin.metadata.displayName,
+      hasNewPattern,
+      hasLegacyMultiTool,
+      hasLegacySingleTool,
     });
   }
 
   /**
-   * Register a multi-tool plugin
+   * Get a specific plugin by name
    *
-   * For plugins that implement getMultipleToolDefinitions(), this method
-   * stores a reference to the plugin. Tools are dynamically generated when
-   * getConfiguredToolDefinitions() is called with user configuration.
-   *
-   * This allows plugins like MCP to discover tools based on user-configured
-   * servers rather than at startup time.
-   *
-   * @param plugin The multi-tool plugin to register
-   * @throws Error if plugin doesn't implement required methods
+   * @param name The plugin name
+   * @returns The plugin or null if not found
    */
-  registerMultiToolPlugin(plugin: ToolPlugin): void {
-    if (!plugin.getMultipleToolDefinitions || !plugin.executeByName) {
-      throw new Error(
-        'Multi-tool plugin must implement getMultipleToolDefinitions and executeByName'
-      );
-    }
-
-    const pluginName = plugin.metadata.toolName;
-
-    this.logger.info('Registering multi-tool plugin', {
-      pluginName,
-    });
-
-    // Store the plugin reference - tools will be generated dynamically
-    this.state.multiToolPlugins.set(pluginName, plugin);
-
-    this.logger.debug('Multi-tool plugin registered for dynamic tool generation', {
-      pluginName,
-    });
+  getPlugin(name: string): ToolPlugin | null {
+    return this.state.plugins.get(name) || null;
   }
 
   /**
-   * Unregister all tools from a multi-tool plugin
+   * Get all registered plugins
    *
-   * Used when reconfiguring a multi-tool plugin to remove old tools
-   * before registering updated tools.
-   *
-   * @param toolPrefix Prefix to match tool names (e.g., 'mcp_servername_')
-   * @returns Number of tools unregistered
+   * @returns Array of all registered plugins
    */
-  unregisterToolsByPrefix(toolPrefix: string): number {
-    let count = 0;
-    const toRemove: string[] = [];
-
-    for (const toolName of this.state.tools.keys()) {
-      if (toolName.startsWith(toolPrefix)) {
-        toRemove.push(toolName);
-      }
-    }
-
-    for (const toolName of toRemove) {
-      this.state.tools.delete(toolName);
-      count++;
-      this.logger.debug('Tool unregistered', { toolName });
-    }
-
-    if (count > 0) {
-      this.logger.info('Tools unregistered by prefix', {
-        prefix: toolPrefix,
-        count,
-      });
-    }
-
-    return count;
+  getAllPlugins(): ToolPlugin[] {
+    return Array.from(this.state.plugins.values());
   }
 
   /**
-   * Get a specific tool plugin by name
+   * Check if a plugin is registered
    *
-   * @param name The tool name (e.g., 'curl')
-   * @returns The tool plugin or null if not found
+   * @param name The plugin name
+   * @returns true if plugin is registered
    */
-  getTool(name: string): ToolPlugin | null {
-    return this.state.tools.get(name) || null;
+  hasPlugin(name: string): boolean {
+    return this.state.plugins.has(name);
   }
 
   /**
-   * Get all registered tool plugins
+   * Get list of all registered plugin names
    *
-   * @returns Array of all registered tool plugins
+   * @returns Array of plugin names
    */
-  getAllTools(): ToolPlugin[] {
-    return Array.from(this.state.tools.values());
+  getPluginNames(): string[] {
+    return Array.from(this.state.plugins.keys());
   }
 
   /**
-   * Check if a tool is registered
+   * Get metadata for a specific plugin
    *
-   * @param name The tool name
-   * @returns true if tool is registered, false otherwise
+   * @param name The plugin name
+   * @returns The plugin metadata or null if not found
    */
-  hasTool(name: string): boolean {
-    return this.state.tools.has(name);
-  }
-
-  /**
-   * Check if any multi-tool plugins are registered
-   *
-   * Multi-tool plugins (like MCP) provide tools dynamically
-   * and need special handling for config lookup.
-   *
-   * @returns true if any multi-tool plugins are registered
-   */
-  hasMultiToolPlugins(): boolean {
-    return this.state.multiToolPlugins.size > 0;
-  }
-
-  /**
-   * Get names of all registered multi-tool plugins
-   *
-   * Used for loading configs for all multi-tool plugins.
-   *
-   * @returns Array of plugin names (e.g., ['mcp'])
-   */
-  getMultiToolPluginNames(): string[] {
-    return Array.from(this.state.multiToolPlugins.keys());
-  }
-
-  /**
-   * Get list of all registered tool names
-   *
-   * Useful for populating UI elements and tool selection
-   *
-   * @returns Array of tool names (e.g., ['curl', 'calculator', ...])
-   */
-  getToolNames(): string[] {
-    return Array.from(this.state.tools.keys());
-  }
-
-  /**
-   * Get metadata for a specific tool
-   *
-   * Metadata includes display name, description, category, etc.
-   * Useful for UI rendering and tool identification.
-   *
-   * @param name The tool name
-   * @returns The tool metadata or null if not found
-   */
-  getToolMetadata(name: string): ToolMetadata | null {
-    const plugin = this.getTool(name);
+  getPluginMetadata(name: string): ToolMetadata | null {
+    const plugin = this.getPlugin(name);
     return plugin?.metadata || null;
   }
 
   /**
-   * Get the plugin name that owns a tool
+   * Get metadata for all registered plugins
    *
-   * For static tools, returns the tool's plugin name.
-   * For multi-tool plugins (like MCP), returns the parent plugin name.
-   *
-   * @param toolName The tool name to look up
-   * @returns The plugin name (e.g., 'mcp') or null if not found
+   * @returns Array of plugin metadata objects
    */
-  getPluginNameForTool(toolName: string): string | null {
-    // Check static tools first
-    const staticTool = this.getTool(toolName);
-    if (staticTool) {
-      return staticTool.metadata.toolName;
-    }
-
-    // Check multi-tool plugins
-    for (const [pluginName] of this.state.multiToolPlugins) {
-      // For multi-tool plugins, the plugin name is the key
-      // We can't check tool ownership here without async, so we store that
-      // info when tools are discovered. For now, return the plugin name
-      // if this tool might belong to it (we'll verify in executeTool)
-    }
-
-    // Return null - the tool executor will need to check multi-tool plugins
-    return null;
+  getAllPluginMetadata(): ToolMetadata[] {
+    return this.getAllPlugins().map(p => p.metadata);
   }
 
   /**
-   * Get metadata for all registered tools
+   * Get tool definitions from a plugin
    *
-   * @returns Array of tool metadata objects
+   * Handles both new pattern (getToolDefinitions) and legacy patterns.
+   *
+   * @param plugin The plugin
+   * @param config User configuration
+   * @returns Promise resolving to array of tool definitions
    */
-  getAllToolMetadata(): ToolMetadata[] {
-    return this.getAllTools().map(t => t.metadata);
+  private async getPluginToolDefinitions(
+    plugin: ToolPlugin,
+    config: Record<string, unknown>
+  ): Promise<UniversalTool[]> {
+    // New pattern: getToolDefinitions
+    if (typeof plugin.getToolDefinitions === 'function') {
+      return plugin.getToolDefinitions(config);
+    }
+
+    // Legacy pattern: getMultipleToolDefinitions
+    if (typeof plugin.getMultipleToolDefinitions === 'function') {
+      return plugin.getMultipleToolDefinitions(config);
+    }
+
+    // Legacy pattern: getToolDefinition (single tool)
+    if (typeof plugin.getToolDefinition === 'function') {
+      return [plugin.getToolDefinition()];
+    }
+
+    return [];
   }
 
   /**
-   * Get tool definitions in universal (OpenAI) format
+   * Execute a tool via a plugin
    *
-   * Returns all tool definitions for sending to LLMs.
-   * Used by plugin-tool-builder to include plugin tools.
+   * Handles both new pattern (executeByName) and legacy pattern (execute).
    *
-   * @returns Array of tool definitions in universal format
+   * @param plugin The plugin
+   * @param toolName The tool name
+   * @param input The input arguments
+   * @param context The execution context
+   * @returns Promise resolving to execution result
    */
-  getToolDefinitions(): UniversalTool[] {
-    return this.getAllTools().map(tool => tool.getToolDefinition());
+  private async executePluginTool(
+    plugin: ToolPlugin,
+    toolName: string,
+    input: Record<string, unknown>,
+    context: ToolExecutionContext
+  ): Promise<ToolExecutionResult> {
+    // New pattern: executeByName
+    if (typeof plugin.executeByName === 'function') {
+      return plugin.executeByName(toolName, input, context);
+    }
+
+    // Legacy pattern: execute (for single-tool plugins)
+    if (typeof plugin.execute === 'function') {
+      return plugin.execute(input, context);
+    }
+
+    return {
+      success: false,
+      error: `Plugin '${plugin.metadata.toolName}' does not implement execution methods`,
+    };
   }
 
   /**
    * Get tool definitions for tools that are properly configured
    *
    * Filters out tools that require configuration but haven't been configured.
-   * Also generates tools dynamically from multi-tool plugins.
    *
-   * @param toolConfigs Map of tool name to user configuration
+   * @param toolConfigs Map of plugin name to user configuration
    * @returns Promise resolving to array of tool definitions for configured tools
    */
-  async getConfiguredToolDefinitions(toolConfigs: Map<string, Record<string, unknown>>): Promise<UniversalTool[]> {
+  async getConfiguredToolDefinitions(
+    toolConfigs: Map<string, Record<string, unknown>>
+  ): Promise<UniversalTool[]> {
     const tools: UniversalTool[] = [];
 
-    // Get tools from statically registered plugins
-    for (const tool of this.getAllTools()) {
-      // If tool doesn't require configuration check, include it
-      if (!tool.isConfigured) {
-        tools.push(tool.getToolDefinition());
-        continue;
-      }
-      // Otherwise check if it's configured
-      const config = toolConfigs.get(tool.metadata.toolName) || {};
-      if (tool.isConfigured(config)) {
-        tools.push(tool.getToolDefinition());
-      }
-    }
-
-    // Get tools dynamically from multi-tool plugins
-    for (const [pluginName, plugin] of this.state.multiToolPlugins) {
+    for (const [pluginName, plugin] of this.state.plugins) {
       const config = toolConfigs.get(pluginName) || {};
 
-      // Check if plugin is configured
+      // Check if plugin is configured (if it requires configuration)
       if (plugin.isConfigured && !plugin.isConfigured(config)) {
-        this.logger.debug('Multi-tool plugin not configured, skipping', { pluginName });
+        this.logger.debug('Plugin not configured, skipping', { pluginName });
         continue;
       }
 
       try {
-        // Get tools dynamically - pass config to allow discovery (async)
-        const pluginTools = await plugin.getMultipleToolDefinitions!(config);
+        const pluginTools = await this.getPluginToolDefinitions(plugin, config);
 
-        this.logger.debug('Got dynamic tools from multi-tool plugin', {
+        this.logger.debug('Got tool definitions from plugin', {
           pluginName,
           toolCount: pluginTools.length,
           tools: pluginTools.map(t => t.function.name),
@@ -315,7 +240,7 @@ class ToolRegistry {
 
         tools.push(...pluginTools);
       } catch (error) {
-        this.logger.error('Error getting tools from multi-tool plugin', {
+        this.logger.error('Error getting tools from plugin', {
           pluginName,
           error: getErrorMessage(error),
         });
@@ -323,6 +248,44 @@ class ToolRegistry {
     }
 
     return tools;
+  }
+
+  /**
+   * Find which plugin owns a tool by checking tool definitions
+   *
+   * @param toolName The tool name to find
+   * @param toolConfigs Map of plugin name to user configuration
+   * @returns The plugin and its config, or null if not found
+   */
+  private async findPluginForTool(
+    toolName: string,
+    toolConfigs: Map<string, Record<string, unknown>>
+  ): Promise<{ plugin: ToolPlugin; config: Record<string, unknown> } | null> {
+    for (const [pluginName, plugin] of this.state.plugins) {
+      const config = toolConfigs.get(pluginName) || {};
+
+      // Skip if plugin is not configured
+      if (plugin.isConfigured && !plugin.isConfigured(config)) {
+        continue;
+      }
+
+      try {
+        const pluginTools = await this.getPluginToolDefinitions(plugin, config);
+        const ownsTool = pluginTools.some(t => t.function.name === toolName);
+
+        if (ownsTool) {
+          return { plugin, config };
+        }
+      } catch (error) {
+        this.logger.warn('Error checking plugin for tool', {
+          toolName,
+          pluginName,
+          error: getErrorMessage(error),
+        });
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -334,147 +297,84 @@ class ToolRegistry {
    * @param input The input arguments from the LLM
    * @param context Execution context with user/chat info
    * @returns Promise resolving to the execution result
-   * @throws Error if tool not found or execution fails
    */
   async executeTool(
     toolName: string,
     input: Record<string, unknown>,
     context: ToolExecutionContext
   ): Promise<ToolExecutionResult> {
-    // First, try to find in statically registered tools
-    const tool = this.getTool(toolName);
+    // Build tool configs map from context
+    // The context.toolConfig might be a flat config or nested by plugin name
+    const toolConfigs = new Map<string, Record<string, unknown>>();
 
-    if (tool) {
-      // Check configuration if required
-      if (tool.isConfigured && !tool.isConfigured(context.toolConfig)) {
-        const error = `Tool '${toolName}' is not properly configured`;
-        this.logger.warn(error, { toolName });
-        return {
-          success: false,
-          error,
-        };
-      }
-
-      // Validate input
-      if (!tool.validateInput(input)) {
-        const error = `Invalid input for tool '${toolName}'`;
-        this.logger.warn(error, { toolName, input });
-        return {
-          success: false,
-          error,
-        };
-      }
-
-      try {
-        this.logger.debug('Executing tool', {
-          toolName,
-          inputKeys: Object.keys(input),
-        });
-
-        const result = await tool.execute(input, context);
-
-        this.logger.debug('Tool execution completed', {
-          toolName,
-          success: result.success,
-        });
-
-        return result;
-      } catch (error) {
-        const errorMessage = getErrorMessage(error);
-        this.logger.error('Tool execution failed', {
-          toolName,
-          error: errorMessage,
-        });
-        return {
-          success: false,
-          error: errorMessage,
-        };
+    // First, add all plugin names with their specific configs if nested
+    for (const pluginName of this.state.plugins.keys()) {
+      const nestedConfig = context.toolConfig[pluginName] as Record<string, unknown> | undefined;
+      if (nestedConfig && typeof nestedConfig === 'object') {
+        toolConfigs.set(pluginName, nestedConfig);
+      } else {
+        // Use the full config if not nested
+        toolConfigs.set(pluginName, context.toolConfig);
       }
     }
 
-    // Tool not in static registry - check multi-tool plugins
-    for (const [pluginName, plugin] of this.state.multiToolPlugins) {
-      if (!plugin.executeByName) continue;
+    // Find which plugin owns this tool
+    const found = await this.findPluginForTool(toolName, toolConfigs);
 
-      // Get config for this specific plugin
-      // Config may be passed directly or nested under the plugin name key
-      const rawConfig = context.toolConfig || {};
-      const pluginConfig = (rawConfig[pluginName] as Record<string, unknown>) || rawConfig;
-
-      // Skip if plugin is not configured
-      if (plugin.isConfigured && !plugin.isConfigured(pluginConfig)) {
-        this.logger.debug('Skipping unconfigured multi-tool plugin', {
-          pluginName,
-          toolName,
-        });
-        continue;
-      }
-
-      // Get tools from this plugin to check if it owns this tool
-      try {
-        const pluginTools = await plugin.getMultipleToolDefinitions!(pluginConfig);
-        const ownsTool = pluginTools.some((t) => t.function.name === toolName);
-
-        if (ownsTool) {
-          this.logger.debug('Routing to multi-tool plugin', {
-            toolName,
-            pluginName,
-          });
-
-          // Validate input
-          if (!plugin.validateInput(input)) {
-            const error = `Invalid input for tool '${toolName}'`;
-            this.logger.warn(error, { toolName, input });
-            return {
-              success: false,
-              error,
-            };
-          }
-
-          try {
-            // Pass context with plugin-specific config
-            const pluginContext = {
-              ...context,
-              toolConfig: pluginConfig,
-            };
-            const result = await plugin.executeByName(toolName, input, pluginContext);
-
-            this.logger.debug('Multi-tool execution completed', {
-              toolName,
-              pluginName,
-              success: result.success,
-            });
-
-            return result;
-          } catch (error) {
-            const errorMessage = getErrorMessage(error);
-            this.logger.error('Multi-tool execution failed', {
-              toolName,
-              pluginName,
-              error: errorMessage,
-            });
-            return {
-              success: false,
-              error: errorMessage,
-            };
-          }
-        }
-      } catch (error) {
-        this.logger.warn('Error checking multi-tool plugin for tool', {
-          toolName,
-          pluginName,
-          error: getErrorMessage(error),
-        });
-      }
+    if (!found) {
+      const error = `Tool '${toolName}' not found in any registered plugin`;
+      this.logger.error(error);
+      return {
+        success: false,
+        error,
+      };
     }
 
-    // Tool not found anywhere
-    const error = `Tool '${toolName}' not found in registry or multi-tool plugins`;
-    this.logger.error(error);
-    return {
-      success: false,
-      error,
-    };
+    const { plugin, config } = found;
+
+    this.logger.debug('Executing tool', {
+      toolName,
+      pluginName: plugin.metadata.toolName,
+      inputKeys: Object.keys(input),
+    });
+
+    // Validate input
+    if (!plugin.validateInput(input)) {
+      const error = `Invalid input for tool '${toolName}'`;
+      this.logger.warn(error, { toolName, input });
+      return {
+        success: false,
+        error,
+      };
+    }
+
+    try {
+      // Execute with plugin-specific config in context
+      const pluginContext = {
+        ...context,
+        toolConfig: config,
+      };
+      const result = await this.executePluginTool(plugin, toolName, input, pluginContext);
+
+      this.logger.debug('Tool execution completed', {
+        toolName,
+        pluginName: plugin.metadata.toolName,
+        success: result.success,
+      });
+
+      return result;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      this.logger.error('Tool execution failed', {
+        toolName,
+        pluginName: plugin.metadata.toolName,
+        error: errorMessage,
+      });
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
   }
 
   /**
@@ -482,20 +382,20 @@ class ToolRegistry {
    *
    * @param toolName The name of the tool
    * @param result The execution result to format
+   * @param toolConfigs Map of plugin name to user configuration
    * @returns Formatted string for LLM consumption
    */
-  formatToolResults(toolName: string, result: ToolExecutionResult): string {
-    // Check static tools first
-    const tool = this.getTool(toolName);
-    if (tool) {
-      return tool.formatResults(result);
-    }
+  async formatToolResults(
+    toolName: string,
+    result: ToolExecutionResult,
+    toolConfigs?: Map<string, Record<string, unknown>>
+  ): Promise<string> {
+    // Try to find the plugin that owns this tool
+    const configs = toolConfigs || new Map<string, Record<string, unknown>>();
+    const found = await this.findPluginForTool(toolName, configs);
 
-    // Check multi-tool plugins - use their formatResults method
-    for (const [, plugin] of this.state.multiToolPlugins) {
-      if (plugin.formatResults) {
-        return plugin.formatResults(result);
-      }
+    if (found?.plugin.formatResults) {
+      return found.plugin.formatResults(result);
     }
 
     // Fallback: if result has formattedText, use it directly
@@ -508,69 +408,39 @@ class ToolRegistry {
   }
 
   /**
-   * Get default configuration for a tool
+   * Get default configuration for a plugin
    *
-   * @param toolName The tool name
+   * @param pluginName The plugin name
    * @returns Default configuration or empty object
    */
-  getDefaultConfig(toolName: string): Record<string, unknown> {
-    const tool = this.getTool(toolName);
-    return tool?.getDefaultConfig?.() || {};
+  getDefaultConfig(pluginName: string): Record<string, unknown> {
+    const plugin = this.getPlugin(pluginName);
+    return plugin?.getDefaultConfig?.() || {};
   }
 
   /**
    * Initialize the registry (called by the plugin system)
    *
-   * Automatically detects multi-tool plugins (those with getMultipleToolDefinitions)
-   * and registers them appropriately.
-   *
-   * @param tools Array of tool plugins to register
+   * @param plugins Array of tool plugins to register
    */
-  async initialize(tools: ToolPlugin[]): Promise<void> {
+  async initialize(plugins: ToolPlugin[]): Promise<void> {
     this.logger.info('Initializing tool registry', {
-      toolCount: tools.length,
+      pluginCount: plugins.length,
     });
 
     // Clear existing state
-    this.state.tools.clear();
+    this.state.plugins.clear();
     this.state.errors.clear();
 
-    // Separate single-tool and multi-tool plugins
-    const singleToolPlugins: ToolPlugin[] = [];
-    const multiToolPlugins: ToolPlugin[] = [];
-
-    for (const plugin of tools) {
-      if (plugin.getMultipleToolDefinitions && plugin.executeByName) {
-        multiToolPlugins.push(plugin);
-      } else {
-        singleToolPlugins.push(plugin);
-      }
-    }
-
-    // Register single-tool plugins
-    for (const tool of singleToolPlugins) {
+    // Register all plugins
+    for (const plugin of plugins) {
       try {
-        this.registerTool(tool);
-      } catch (error) {
-        const toolName = tool.metadata.toolName;
-        const errorMessage = getErrorMessage(error);
-        this.state.errors.set(toolName, errorMessage);
-        this.logger.warn('Failed to register tool', {
-          name: toolName,
-          error: errorMessage,
-        });
-      }
-    }
-
-    // Register multi-tool plugins
-    for (const plugin of multiToolPlugins) {
-      try {
-        this.registerMultiToolPlugin(plugin);
+        this.registerPlugin(plugin);
       } catch (error) {
         const pluginName = plugin.metadata.toolName;
         const errorMessage = getErrorMessage(error);
         this.state.errors.set(pluginName, errorMessage);
-        this.logger.warn('Failed to register multi-tool plugin', {
+        this.logger.warn('Failed to register plugin', {
           name: pluginName,
           error: errorMessage,
         });
@@ -581,9 +451,7 @@ class ToolRegistry {
     this.state.lastInitTime = new Date();
 
     this.logger.info('Tool registry initialized', {
-      registered: this.state.tools.size,
-      singleToolPlugins: singleToolPlugins.length,
-      multiToolPlugins: multiToolPlugins.length,
+      registered: this.state.plugins.size,
       errors: this.state.errors.size,
     });
   }
@@ -591,26 +459,26 @@ class ToolRegistry {
   /**
    * Get registry statistics
    *
-   * @returns Statistics about registered tools
+   * @returns Statistics about registered plugins
    */
   getStats() {
     return {
-      total: this.state.tools.size,
+      total: this.state.plugins.size,
       errors: this.state.errors.size,
       initialized: this.state.initialized,
       lastInitTime: this.state.lastInitTime?.toISOString() || null,
-      tools: Array.from(this.state.tools.keys()),
+      plugins: Array.from(this.state.plugins.keys()),
     };
   }
 
   /**
-   * Get all errors from tool registration
+   * Get all errors from plugin registration
    *
    * @returns Array of registration errors
    */
-  getErrors(): Array<{ tool: string; error: string }> {
-    return Array.from(this.state.errors.entries()).map(([tool, error]) => ({
-      tool,
+  getErrors(): Array<{ plugin: string; error: string }> {
+    return Array.from(this.state.errors.entries()).map(([plugin, error]) => ({
+      plugin,
       error,
     }));
   }
@@ -631,7 +499,7 @@ class ToolRegistry {
    */
   reset(): void {
     this.state.initialized = false;
-    this.state.tools.clear();
+    this.state.plugins.clear();
     this.state.errors.clear();
     this.state.lastInitTime = null;
     this.logger.debug('Tool registry reset');
@@ -646,7 +514,7 @@ class ToolRegistry {
     return {
       initialized: this.state.initialized,
       lastInitTime: this.state.lastInitTime?.toISOString() || null,
-      tools: Array.from(this.state.tools.entries()).map(([name, plugin]) => ({
+      plugins: Array.from(this.state.plugins.entries()).map(([name, plugin]) => ({
         name,
         displayName: plugin.metadata.displayName,
         description: plugin.metadata.description,
@@ -654,12 +522,114 @@ class ToolRegistry {
         hasIcon: !!plugin.renderIcon,
         requiresConfiguration: !!plugin.isConfigured,
       })),
-      errors: Array.from(this.state.errors.entries()).map(([tool, error]) => ({
-        tool,
+      errors: Array.from(this.state.errors.entries()).map(([plugin, error]) => ({
+        plugin,
         error,
       })),
       stats: this.getStats(),
     };
+  }
+
+  // ============================================================================
+  // BACKWARDS COMPATIBILITY
+  // ============================================================================
+  // These methods maintain backwards compatibility with code that uses the old
+  // registry API. They delegate to the new unified plugin handling.
+
+  /**
+   * @deprecated Use registerPlugin instead
+   */
+  registerTool(plugin: ToolPlugin): void {
+    this.registerPlugin(plugin);
+  }
+
+  /**
+   * @deprecated Use registerPlugin instead
+   */
+  registerMultiToolPlugin(plugin: ToolPlugin): void {
+    this.registerPlugin(plugin);
+  }
+
+  /**
+   * @deprecated Use getPlugin instead
+   */
+  getTool(name: string): ToolPlugin | null {
+    return this.getPlugin(name);
+  }
+
+  /**
+   * @deprecated Use getAllPlugins instead
+   */
+  getAllTools(): ToolPlugin[] {
+    return this.getAllPlugins();
+  }
+
+  /**
+   * @deprecated Use hasPlugin instead
+   */
+  hasTool(name: string): boolean {
+    return this.hasPlugin(name);
+  }
+
+  /**
+   * @deprecated All plugins now use the multi-tool pattern
+   */
+  hasMultiToolPlugins(): boolean {
+    return this.state.plugins.size > 0;
+  }
+
+  /**
+   * @deprecated Use getPluginNames instead
+   */
+  getMultiToolPluginNames(): string[] {
+    return this.getPluginNames();
+  }
+
+  /**
+   * @deprecated Use getPluginNames instead
+   */
+  getToolNames(): string[] {
+    return this.getPluginNames();
+  }
+
+  /**
+   * @deprecated Use getPluginMetadata instead
+   */
+  getToolMetadata(name: string): ToolMetadata | null {
+    return this.getPluginMetadata(name);
+  }
+
+  /**
+   * @deprecated Use getAllPluginMetadata instead
+   */
+  getAllToolMetadata(): ToolMetadata[] {
+    return this.getAllPluginMetadata();
+  }
+
+  /**
+   * @deprecated Use getConfiguredToolDefinitions instead
+   */
+  getToolDefinitions(): UniversalTool[] {
+    // This synchronous method can't work with async getToolDefinitions
+    // Return empty and log warning
+    this.logger.warn('getToolDefinitions() is deprecated - use getConfiguredToolDefinitions() instead');
+    return [];
+  }
+
+  /**
+   * @deprecated No longer needed - all plugins use unified pattern
+   */
+  unregisterToolsByPrefix(_toolPrefix: string): number {
+    this.logger.warn('unregisterToolsByPrefix() is deprecated and no longer has any effect');
+    return 0;
+  }
+
+  /**
+   * @deprecated No longer needed - all plugins use unified pattern
+   */
+  getPluginNameForTool(_toolName: string): string | null {
+    this.logger.warn('getPluginNameForTool() is deprecated - use findPluginForTool() internally');
+    return null;
   }
 }
 
@@ -682,97 +652,95 @@ export const toolRegistry = new ToolRegistry();
  * @param plugin The tool plugin to register
  */
 export function registerTool(plugin: ToolPlugin): void {
-  toolRegistry.registerTool(plugin);
+  toolRegistry.registerPlugin(plugin);
 }
 
 /**
  * Get a tool plugin by name
  *
- * @param name The tool name
- * @returns The tool plugin or null
+ * @param name The plugin name
+ * @returns The plugin or null
  */
 export function getTool(name: string): ToolPlugin | null {
-  return toolRegistry.getTool(name);
+  return toolRegistry.getPlugin(name);
 }
 
 /**
  * Get all registered tool plugins
  *
- * @returns Array of all registered tools
+ * @returns Array of all registered plugins
  */
 export function getAllTools(): ToolPlugin[] {
-  return toolRegistry.getAllTools();
+  return toolRegistry.getAllPlugins();
 }
 
 /**
- * Check if a tool is registered
+ * Check if a plugin is registered
  *
- * @param name The tool name
- * @returns true if tool exists
+ * @param name The plugin name
+ * @returns true if plugin exists
  */
 export function hasTool(name: string): boolean {
-  return toolRegistry.hasTool(name);
+  return toolRegistry.hasPlugin(name);
 }
 
 /**
- * Check if any multi-tool plugins are registered
+ * Check if any plugins are registered
  *
- * @returns true if any multi-tool plugins exist
+ * @returns true if any plugins exist
  */
 export function hasMultiToolPlugins(): boolean {
   return toolRegistry.hasMultiToolPlugins();
 }
 
 /**
- * Get names of all registered multi-tool plugins
+ * Get names of all registered plugins
  *
  * @returns Array of plugin names
  */
 export function getMultiToolPluginNames(): string[] {
-  return toolRegistry.getMultiToolPluginNames();
+  return toolRegistry.getPluginNames();
 }
 
 /**
- * Get list of tool names
+ * Get list of plugin names
  *
- * @returns Array of tool names
+ * @returns Array of plugin names
  */
 export function getToolNames(): string[] {
-  return toolRegistry.getToolNames();
+  return toolRegistry.getPluginNames();
 }
 
 /**
- * Get tool metadata
+ * Get plugin metadata
  *
- * @param name The tool name
- * @returns Tool metadata or null
+ * @param name The plugin name
+ * @returns Plugin metadata or null
  */
 export function getToolMetadata(name: string): ToolMetadata | null {
-  return toolRegistry.getToolMetadata(name);
+  return toolRegistry.getPluginMetadata(name);
 }
 
 /**
- * Get all tool metadata
+ * Get all plugin metadata
  *
- * @returns Array of metadata for all tools
+ * @returns Array of metadata for all plugins
  */
 export function getAllToolMetadata(): ToolMetadata[] {
-  return toolRegistry.getAllToolMetadata();
+  return toolRegistry.getAllPluginMetadata();
 }
 
 /**
- * Get all tool definitions in universal format
- *
- * @returns Array of tool definitions
+ * @deprecated Use getConfiguredToolDefinitions instead
  */
 export function getToolDefinitions(): UniversalTool[] {
   return toolRegistry.getToolDefinitions();
 }
 
 /**
- * Get tool definitions for configured tools only
+ * Get tool definitions for configured plugins only
  *
- * @param toolConfigs Map of tool name to user configuration
+ * @param toolConfigs Map of plugin name to user configuration
  * @returns Promise resolving to array of tool definitions
  */
 export async function getConfiguredToolDefinitions(
@@ -804,33 +772,36 @@ export async function executeTool(
  * @param result The execution result
  * @returns Formatted string
  */
-export function formatToolResults(toolName: string, result: ToolExecutionResult): string {
+export async function formatToolResults(
+  toolName: string,
+  result: ToolExecutionResult
+): Promise<string> {
   return toolRegistry.formatToolResults(toolName, result);
 }
 
 /**
- * Get default configuration for a tool
+ * Get default configuration for a plugin
  *
- * @param toolName The tool name
+ * @param pluginName The plugin name
  * @returns Default configuration
  */
-export function getDefaultToolConfig(toolName: string): Record<string, unknown> {
-  return toolRegistry.getDefaultConfig(toolName);
+export function getDefaultToolConfig(pluginName: string): Record<string, unknown> {
+  return toolRegistry.getDefaultConfig(pluginName);
 }
 
 /**
  * Initialize the tool registry
  *
- * @param tools Array of tool plugins to register
+ * @param plugins Array of tool plugins to register
  */
-export async function initializeToolRegistry(tools: ToolPlugin[]): Promise<void> {
-  return toolRegistry.initialize(tools);
+export async function initializeToolRegistry(plugins: ToolPlugin[]): Promise<void> {
+  return toolRegistry.initialize(plugins);
 }
 
 /**
  * Get registry statistics
  *
- * @returns Statistics about registered tools
+ * @returns Statistics about registered plugins
  */
 export function getToolRegistryStats() {
   return toolRegistry.getStats();
@@ -855,34 +826,26 @@ export function isToolRegistryInitialized(): boolean {
 }
 
 /**
- * Register a multi-tool plugin
- *
- * For plugins that provide multiple tools dynamically.
- *
- * @param plugin The multi-tool plugin to register
+ * @deprecated Use registerTool instead
  */
 export function registerMultiToolPlugin(plugin: ToolPlugin): void {
-  toolRegistry.registerMultiToolPlugin(plugin);
+  toolRegistry.registerPlugin(plugin);
 }
 
 /**
- * Unregister tools by prefix
- *
- * Removes all tools whose names start with the given prefix.
- *
- * @param toolPrefix The prefix to match
- * @returns Number of tools unregistered
+ * @deprecated No longer needed
  */
 export function unregisterToolsByPrefix(toolPrefix: string): number {
   return toolRegistry.unregisterToolsByPrefix(toolPrefix);
 }
 
 /**
- * Check if a plugin is a multi-tool plugin
+ * Check if a plugin uses the multi-tool pattern
  *
  * @param plugin The plugin to check
- * @returns true if plugin implements multi-tool methods
+ * @returns true (all plugins now use multi-tool pattern)
+ * @deprecated All plugins use multi-tool pattern now
  */
-export function isMultiToolPlugin(plugin: ToolPlugin): boolean {
-  return !!(plugin.getMultipleToolDefinitions && plugin.executeByName);
+export function isMultiToolPlugin(_plugin: ToolPlugin): boolean {
+  return true;
 }

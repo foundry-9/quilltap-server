@@ -18,6 +18,8 @@ import type { CurlToolInput, CurlToolConfig, CurlToolOutput } from './types';
 
 /**
  * curl Tool Plugin Implementation
+ *
+ * Uses the standard multi-tool pattern with getToolDefinitions() and executeByName().
  */
 export const plugin: ToolPlugin = {
   metadata: {
@@ -28,26 +30,32 @@ export const plugin: ToolPlugin = {
   },
 
   /**
-   * Get the tool definition in universal format
+   * Get tool definitions (multi-tool pattern)
+   *
+   * Returns an array containing the curl tool definition.
    */
-  getToolDefinition(): UniversalTool {
-    return curlToolDefinition;
+  async getToolDefinitions(_config: Record<string, unknown>): Promise<UniversalTool[]> {
+    return [curlToolDefinition];
   },
 
   /**
-   * Validate input arguments
+   * Execute a tool by name (multi-tool pattern)
+   *
+   * Routes execution to the curl handler.
    */
-  validateInput(input: unknown): boolean {
-    return validateCurlInput(input);
-  },
-
-  /**
-   * Execute the curl request
-   */
-  async execute(
+  async executeByName(
+    toolName: string,
     input: Record<string, unknown>,
     context: ToolExecutionContext
   ): Promise<ToolExecutionResult> {
+    // Verify this is the curl tool
+    if (toolName !== 'curl') {
+      return {
+        success: false,
+        error: `Unknown tool: ${toolName}. This plugin only provides the 'curl' tool.`,
+      };
+    }
+
     // Cast input to typed format (validated by validateInput before this is called)
     const curlInput = input as unknown as CurlToolInput;
 
@@ -69,6 +77,13 @@ export const plugin: ToolPlugin = {
         timing: output.timing,
       },
     };
+  },
+
+  /**
+   * Validate input arguments
+   */
+  validateInput(input: unknown): boolean {
+    return validateCurlInput(input);
   },
 
   /**
