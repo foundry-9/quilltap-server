@@ -74,7 +74,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
 
     const loadAllTags = async () => {
       try {
-        const res = await fetch('/api/tags');
+        const res = await fetch('/api/v1/tags');
         if (res.ok) {
           const data = await res.json();
           setAllTags(data.tags || []);
@@ -105,7 +105,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
     setLoading(true);
     try {
       // First, create or get the tag
-      const tagRes = await fetch('/api/tags', {
+      const tagRes = await fetch('/api/v1/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: tagName.trim() }),

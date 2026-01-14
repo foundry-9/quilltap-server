@@ -83,12 +83,12 @@ export interface UseListManagerResult<T> {
  *   handleEditorSave,
  * } = useListManager({
  *   fetchFn: async () => {
- *     const res = await fetch('/api/memories')
+ *     const res = await fetch('/api/v1/memories')
  *     if (!res.ok) throw new Error('Failed to fetch')
  *     return (await res.json()).memories
  *   },
  *   deleteFn: async (id) => {
- *     const res = await fetch(`/api/memories/${id}`, { method: 'DELETE' })
+ *     const res = await fetch(`/api/v1/memories/${id}`, { method: 'DELETE' })
  *     if (!res.ok) throw new Error('Failed to delete')
  *   },
  *   deleteConfirmMessage: 'Are you sure you want to delete this memory?',

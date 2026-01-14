@@ -366,7 +366,7 @@ export default function ChatSettingsModal({
       setLoading(true)
       const [profilesRes, imageProfilesRes, apiKeysRes] = await Promise.all([
         fetch('/api/profiles'),
-        fetch('/api/image-profiles'),
+        fetch('/api/v1/image-profiles'),
         fetch('/api/keys'),
       ])
 
@@ -395,7 +395,7 @@ export default function ChatSettingsModal({
 
   const fetchRoleplayTemplates = async () => {
     try {
-      const res = await fetch('/api/roleplay-templates')
+      const res = await fetch('/api/v1/roleplay-templates')
       if (res.ok) {
         const data = await res.json()
         setRoleplayTemplates(data)

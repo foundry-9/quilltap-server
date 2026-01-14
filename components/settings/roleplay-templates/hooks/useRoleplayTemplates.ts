@@ -68,7 +68,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch('/api/roleplay-templates')
+      const res = await fetch('/api/v1/roleplay-templates')
       if (!res.ok) throw new Error('Failed to fetch templates')
       const data = await res.json()
       setTemplates(data)
@@ -161,7 +161,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
 
       if (editingTemplate) {
         // Update existing template
-        const res = await fetch(`/api/roleplay-templates/${editingTemplate.id}`, {
+        const res = await fetch(`/api/v1/roleplay-templates/${editingTemplate.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -180,7 +180,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         clientLogger.info('Roleplay template updated', { templateId: updated.id })
       } else {
         // Create new template
-        const res = await fetch('/api/roleplay-templates', {
+        const res = await fetch('/api/v1/roleplay-templates', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -213,7 +213,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       setSaving(true)
       setError(null)
 
-      const res = await fetch(`/api/roleplay-templates/${templateId}`, {
+      const res = await fetch(`/api/v1/roleplay-templates/${templateId}`, {
         method: 'DELETE',
       })
 

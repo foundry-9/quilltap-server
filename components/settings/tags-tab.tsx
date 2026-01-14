@@ -31,7 +31,7 @@ export default function TagsTab() {
     const requestId = ++tagFetchIdRef.current
     setLoading(true)
     try {
-      const res = await fetch('/api/tags', { cache: 'no-store' })
+      const res = await fetch('/api/v1/tags', { cache: 'no-store' })
       if (!res.ok) {
         throw new Error('Failed to load tags')
       }
@@ -60,7 +60,7 @@ export default function TagsTab() {
     setTagSaving(tagId)
 
     try {
-      const res = await fetch(`/api/tags/${tagId}`, {
+      const res = await fetch(`/api/v1/tags/${tagId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ visualStyle }),
@@ -170,7 +170,7 @@ export default function TagsTab() {
     async (tagId: string, nextValue: boolean) => {
       setQuickHideSavingId(tagId)
       try {
-        const res = await fetch(`/api/tags/${tagId}`, {
+        const res = await fetch(`/api/v1/tags/${tagId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ quickHide: nextValue }),

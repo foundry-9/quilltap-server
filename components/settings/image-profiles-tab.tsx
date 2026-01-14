@@ -65,7 +65,7 @@ export default function ImageProfilesTab() {
     const loadProfiles = async () => {
       clientLogger.debug('Loading image profiles')
       const result = await executeLoadProfiles(async () => {
-        const response = await fetchJson<ImageProfile[]>('/api/image-profiles')
+        const response = await fetchJson<ImageProfile[]>('/api/v1/image-profiles')
         if (!response.ok) {
           throw new Error(response.error || 'Failed to load profiles')
         }
@@ -99,7 +99,7 @@ export default function ImageProfilesTab() {
 
   const refreshProfiles = async () => {
     clientLogger.debug('Refreshing image profiles')
-    const response = await fetchJson<ImageProfile[]>('/api/image-profiles')
+    const response = await fetchJson<ImageProfile[]>('/api/v1/image-profiles')
     if (response.ok && response.data) {
       setProfiles(response.data)
       clientLogger.debug('Profiles refreshed', { count: response.data.length })

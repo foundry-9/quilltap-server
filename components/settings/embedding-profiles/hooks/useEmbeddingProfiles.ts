@@ -38,9 +38,9 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
     clientLogger.debug('Loading embedding profiles tab data')
     await executeLoad(async () => {
       const [profilesRes, keysRes, modelsRes] = await Promise.all([
-        fetchJson<EmbeddingProfile[]>('/api/embedding-profiles'),
+        fetchJson<EmbeddingProfile[]>('/api/v1/embedding-profiles'),
         fetchJson<ApiKey[]>('/api/keys'),
-        fetchJson<Record<string, EmbeddingModel[]>>('/api/embedding-profiles/models'),
+        fetchJson<Record<string, EmbeddingModel[]>>('/api/v1/embedding-profiles/models'),
       ])
 
       if (!profilesRes.ok) {
@@ -66,7 +66,7 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
 
   const fetchProfiles = useCallback(async () => {
     clientLogger.debug('Fetching embedding profiles')
-    const result = await fetchJson<EmbeddingProfile[]>('/api/embedding-profiles')
+    const result = await fetchJson<EmbeddingProfile[]>('/api/v1/embedding-profiles')
     if (!result.ok) {
       throw new Error(result.error || 'Failed to fetch profiles')
     }

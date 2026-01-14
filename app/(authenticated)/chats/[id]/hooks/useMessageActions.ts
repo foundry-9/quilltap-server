@@ -122,7 +122,7 @@ export function useMessageActions(
     // If user wants to remember, update settings
     if (rememberChoice) {
       try {
-        await fetch('/api/settings/chat', {
+        await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

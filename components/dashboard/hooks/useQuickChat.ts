@@ -67,7 +67,7 @@ export function useQuickChat(): UseQuickChatReturn {
         fetch('/api/v1/connection-profiles'),
         fetch('/api/v1/characters?controlledBy=user'),
         fetch(`/api/v1/characters/${characterId}`),
-        fetch(`/api/characters/${characterId}/default-partner`),
+        fetch(`/api/v1/characters/${characterId}/default-partner`),
       ])
 
       let fetchedProfiles: ConnectionProfile[] = []

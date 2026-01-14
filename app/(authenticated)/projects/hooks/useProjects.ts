@@ -26,7 +26,7 @@ export function useProjects(): UseProjectsReturn {
       setLoading(true)
       setError(null)
 
-      const res = await fetch('/api/projects')
+      const res = await fetch('/api/v1/projects')
       if (!res.ok) throw new Error('Failed to fetch projects')
 
       const data = await res.json()
@@ -45,7 +45,7 @@ export function useProjects(): UseProjectsReturn {
     try {
       clientLogger.debug('useProjects: creating project', { name })
 
-      const res = await fetch('/api/projects', {
+      const res = await fetch('/api/v1/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, description }),
@@ -72,7 +72,7 @@ export function useProjects(): UseProjectsReturn {
     try {
       clientLogger.debug('useProjects: deleting project', { projectId: id })
 
-      const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/v1/projects/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete project')
 
       setProjects(prev => prev.filter(p => p.id !== id))

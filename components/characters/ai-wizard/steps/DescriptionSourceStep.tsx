@@ -63,7 +63,7 @@ export function DescriptionSourceStep({
         formData.append('tags', JSON.stringify([{ tagType: 'CHARACTER', tagId: characterId }]))
       }
 
-      const response = await fetch('/api/images', {
+      const response = await fetch('/api/v1/images', {
         method: 'POST',
         body: formData,
       })

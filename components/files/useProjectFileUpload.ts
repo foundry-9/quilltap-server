@@ -77,7 +77,7 @@ export function useProjectFileUpload({
           mimeType: file.type,
         })
 
-        const res = await fetch(`/api/projects/${projectId}/files/upload`, {
+        const res = await fetch(`/api/v1/projects/${projectId}/files/upload`, {
           method: 'POST',
           body: formData,
         })

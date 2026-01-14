@@ -62,7 +62,7 @@ export default function NewCharacterPage() {
   useEffect(() => {
     const fetchProfiles = async () => {
       try {
-        const res = await fetch('/api/profiles')
+        const res = await fetch('/api/v1/connection-profiles')
         if (res.ok) {
           const data = await res.json()
           setProfiles(data)
@@ -102,7 +102,7 @@ export default function NewCharacterPage() {
             name: pendingPhysicalDescription.current.name,
           })
 
-          const descResponse = await fetch(`/api/characters/${characterId}/descriptions`, {
+          const descResponse = await fetch(`/api/v1/characters/${characterId}?action=descriptions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

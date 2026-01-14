@@ -98,7 +98,7 @@ export default function FileBrowser({
     try {
       setLoading(true)
       const filesUrl = projectId
-        ? `/api/projects/${projectId}/files`
+        ? `/api/v1/projects/${projectId}/files`
         : '/api/files/general'
 
       const foldersUrl = projectId

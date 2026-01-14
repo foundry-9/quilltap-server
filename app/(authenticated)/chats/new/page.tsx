@@ -95,13 +95,13 @@ export default function NewChatPage() {
       try {
         const fetchPromises: Promise<Response>[] = [
           fetch('/api/v1/characters'),
-          fetch('/api/profiles'),
-          fetch('/api/image-profiles'),
+          fetch('/api/v1/connection-profiles'),
+          fetch('/api/v1/image-profiles'),
         ]
 
         // Fetch project info if projectId is provided
         if (projectIdParam) {
-          fetchPromises.push(fetch(`/api/projects/${projectIdParam}`))
+          fetchPromises.push(fetch(`/api/v1/projects/${projectIdParam}`))
         }
 
         const responses = await Promise.all(fetchPromises)
@@ -137,7 +137,7 @@ export default function NewChatPage() {
         // Handle project response
         if (projectRes && projectRes.ok) {
           const data = await projectRes.json()
-          setProject(data.project)
+          setProject(data.project || data)
           clientLogger.debug('[NewChat] Loaded project', { projectId: data.project?.id, name: data.project?.name })
         } else if (projectRes && !projectRes.ok) {
           clientLogger.warn('[NewChat] Failed to load project', { projectId: projectIdParam, status: projectRes.status })

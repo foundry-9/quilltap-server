@@ -1,34 +1,12 @@
-import { NextResponse } from 'next/server'
-import { providerRegistry } from '@/lib/plugins/provider-registry'
-import { logger } from '@/lib/logger'
-
 /**
- * GET /api/providers
- * Get all registered LLM providers with their configuration requirements
+ * DEPRECATED - Providers API (Legacy Route)
+ * This route has been moved to /api/v1/providers
+ *
+ * 410 Gone - Endpoint permanently removed
  */
+
+import { movedToV1 } from '@/lib/api/responses'
+
 export async function GET() {
-  try {
-    const state = providerRegistry.exportState()
-
-    logger.debug('Fetching providers list', {
-      context: 'GET /api/providers',
-      providerCount: state.providers.length,
-      initialized: state.initialized,
-    })
-
-    return NextResponse.json({
-      providers: state.providers,
-      initialized: state.initialized,
-      stats: state.stats,
-    })
-  } catch (error) {
-    logger.error('Failed to get providers', {
-      context: 'GET /api/providers',
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return NextResponse.json(
-      { error: 'Failed to retrieve providers' },
-      { status: 500 }
-    )
-  }
+  return movedToV1('/api/v1/providers')
 }

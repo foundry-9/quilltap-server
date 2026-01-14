@@ -113,7 +113,7 @@ export function useChatSettings(): UseChatSettingsReturn {
   const fetchEmbeddingProfiles = useCallback(async () => {
     try {
       clientLogger.debug('Fetching embedding profiles')
-      const res = await fetch('/api/embedding-profiles')
+      const res = await fetch('/api/v1/embedding-profiles')
       if (!res.ok) throw new Error('Failed to fetch embedding profiles')
       const data = await res.json()
       clientLogger.debug('Embedding profiles loaded', { count: data.length })

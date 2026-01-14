@@ -60,7 +60,7 @@ export default function GenerateImageDialog({
     try {
       const [charactersRes, personasRes] = await Promise.all([
         fetch('/api/v1/characters'),
-        fetch('/api/personas'),
+        fetch('/api/v1/personas'),
       ])
 
       if (!charactersRes.ok || !personasRes.ok) {

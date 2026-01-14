@@ -59,7 +59,7 @@ export default function ChatGalleryImageViewModal({
         // Check if image exists in gallery with these tags
         const params = new URLSearchParams()
         if (characterId) {
-          const charRes = await fetch(`/api/images?tagType=CHARACTER&tagId=${characterId}`)
+          const charRes = await fetch(`/api/v1/images?tagType=CHARACTER&tagId=${characterId}`)
           if (charRes.ok) {
             const charData = await safeJsonParse<{ data?: Array<{ filepath: string }> }>(charRes)
             const found = (charData.data || []).some((img) => img.filepath === file.filepath)
@@ -67,7 +67,7 @@ export default function ChatGalleryImageViewModal({
           }
         }
         if (personaId) {
-          const personaRes = await fetch(`/api/images?tagType=PERSONA&tagId=${personaId}`)
+          const personaRes = await fetch(`/api/v1/images?tagType=PERSONA&tagId=${personaId}`)
           if (personaRes.ok) {
             const personaData = await safeJsonParse<{ data?: Array<{ filepath: string }> }>(personaRes)
             const found = (personaData.data || []).some((img) => img.filepath === file.filepath)
@@ -116,7 +116,7 @@ export default function ChatGalleryImageViewModal({
     try {
       if (isTaggedToCharacter) {
         // Find the image in gallery first
-        const imagesRes = await fetch(`/api/images?tagType=CHARACTER&tagId=${characterId}`)
+        const imagesRes = await fetch(`/api/v1/images?tagType=CHARACTER&tagId=${characterId}`)
         const imagesData = await safeJsonParse<{ data?: Array<{ id: string; filepath: string }>; error?: string }>(imagesRes)
         if (!imagesRes.ok) throw new Error(imagesData.error || 'Failed to find image')
         const galleryImage = (imagesData.data || []).find((img) => img.filepath === file.filepath)
@@ -170,7 +170,7 @@ export default function ChatGalleryImageViewModal({
     try {
       if (isTaggedToPersona) {
         // Find the image in gallery first
-        const imagesRes = await fetch(`/api/images?tagType=PERSONA&tagId=${personaId}`)
+        const imagesRes = await fetch(`/api/v1/images?tagType=PERSONA&tagId=${personaId}`)
         const imagesData = await safeJsonParse<{ data?: Array<{ id: string; filepath: string }>; error?: string }>(imagesRes)
         if (!imagesRes.ok) throw new Error(imagesData.error || 'Failed to find image')
         const galleryImage = (imagesData.data || []).find((img) => img.filepath === file.filepath)

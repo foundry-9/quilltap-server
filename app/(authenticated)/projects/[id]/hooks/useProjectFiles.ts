@@ -23,7 +23,7 @@ export function useProjectFiles(projectId: string): UseProjectFilesReturn {
   const fetchFiles = useCallback(async () => {
     try {
       clientLogger.debug('useProjectFiles: fetching files', { projectId })
-      const res = await fetch(`/api/projects/${projectId}/files`)
+      const res = await fetch(`/api/v1/projects/${projectId}?action=list-files`)
       if (res.ok) {
         const data = await res.json()
         setFiles(data.files || [])

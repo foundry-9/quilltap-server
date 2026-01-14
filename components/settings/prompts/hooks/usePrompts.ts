@@ -27,7 +27,7 @@ export function usePrompts() {
   const fetchTemplates = useCallback(async () => {
     clientLogger.debug('Fetching prompt templates')
     const result = await fetchOp.execute(async () => {
-      const response = await fetchJson<PromptTemplate[]>('/api/prompt-templates')
+      const response = await fetchJson<PromptTemplate[]>('/api/v1/prompt-templates')
       if (!response.ok) {
         throw new Error(response.error || 'Failed to fetch templates')
       }
@@ -56,7 +56,7 @@ export function usePrompts() {
           // Update existing template
           clientLogger.debug('Updating template', { templateId: editingId })
           const response = await fetchJson<PromptTemplate>(
-            `/api/prompt-templates/${editingId}`,
+            `/api/v1/prompt-templates/${editingId}`,
             {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
@@ -76,7 +76,7 @@ export function usePrompts() {
         } else {
           // Create new template
           clientLogger.debug('Creating new template')
-          const response = await fetchJson<PromptTemplate>('/api/prompt-templates', {
+          const response = await fetchJson<PromptTemplate>('/api/v1/prompt-templates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(formData),
@@ -126,7 +126,7 @@ export function usePrompts() {
       clientLogger.debug('Deleting template', { templateId })
 
       const result = await deleteOp.execute(async () => {
-        const response = await fetchJson<void>(`/api/prompt-templates/${templateId}`, {
+        const response = await fetchJson<void>(`/api/v1/prompt-templates/${templateId}`, {
           method: 'DELETE',
         })
 

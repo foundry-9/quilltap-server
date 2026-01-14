@@ -43,7 +43,7 @@ export default function NPCsTab() {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        const res = await fetch('/api/characters?npc=true')
+        const res = await fetch('/api/v1/characters?npc=true')
         if (!res.ok) {
           throw new Error('Failed to fetch NPCs')
         }

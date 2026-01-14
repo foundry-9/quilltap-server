@@ -64,7 +64,7 @@ export default function ChatProjectModal({
   const fetchProjects = async () => {
     try {
       setLoading(true)
-      const res = await fetch('/api/projects')
+      const res = await fetch('/api/v1/projects')
       if (res.ok) {
         const data = await res.json()
         setProjects(data.projects || [])

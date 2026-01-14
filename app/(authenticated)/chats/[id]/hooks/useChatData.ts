@@ -22,7 +22,7 @@ export function useChatData(chatId: string) {
 
   const fetchChatSettings = useCallback(async () => {
     try {
-      const res = await fetch('/api/chat-settings')
+      const res = await fetch('/api/v1/settings/chat')
       if (!res.ok) {
         const errorBody = await res.text().catch(() => 'Unable to read response body')
         throw new Error(`Failed to fetch chat settings: ${res.status} ${res.statusText} - ${errorBody}`)
@@ -89,7 +89,7 @@ export function useChatData(chatId: string) {
 
   const fetchChatPhotoCount = useCallback(async () => {
     try {
-      const res = await fetch(`/api/chats/${chatId}/files`)
+      const res = await fetch(`/api/v1/chats/${chatId}?action=files`)
       if (res.ok) {
         const data = await res.json()
         const imageCount = (data.files || []).filter((f: { mimeType: string }) => f.mimeType.startsWith('image/')).length

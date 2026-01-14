@@ -24,7 +24,7 @@ const STORAGE_KEY = 'quilltap.quickHide.activeTags'
 const QuickHideContext = createContext<QuickHideContextValue | null>(null)
 
 async function fetchQuickHideTags(): Promise<QuickHideTag[]> {
-  const res = await fetch('/api/tags', { cache: 'no-store' })
+  const res = await fetch('/api/v1/tags', { cache: 'no-store' })
   if (!res.ok) {
     throw new Error('Failed to load tags')
   }

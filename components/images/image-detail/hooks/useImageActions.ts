@@ -44,13 +44,13 @@ export function useImageActions(
         if (isTagged) {
           // Remove tag - try both CHARACTER and PERSONA for backwards compatibility
           // First try CHARACTER (the new type)
-          let response = await fetch(`/api/images/${image.id}/tags?tagType=CHARACTER&tagId=${characterId}`, {
+          let response = await fetch(`/api/v1/images/${image.id}/tags?tagType=CHARACTER&tagId=${characterId}`, {
             method: 'DELETE',
           })
 
           // If CHARACTER tag doesn't exist, try PERSONA (legacy)
           if (!response.ok) {
-            response = await fetch(`/api/images/${image.id}/tags?tagType=PERSONA&tagId=${characterId}`, {
+            response = await fetch(`/api/v1/images/${image.id}/tags?tagType=PERSONA&tagId=${characterId}`, {
               method: 'DELETE',
             })
           }
@@ -69,7 +69,7 @@ export function useImageActions(
           clientLogger.debug('Character tag removed successfully', { characterId })
         } else {
           // Add tag - always use CHARACTER for new tags
-          const response = await fetch(`/api/images/${image.id}/tags`, {
+          const response = await fetch(`/api/v1/images/${image.id}/tags`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

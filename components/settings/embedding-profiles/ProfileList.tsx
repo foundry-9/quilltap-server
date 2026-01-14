@@ -37,7 +37,7 @@ export function ProfileList({
   const handleDelete = async (id: string) => {
     clientLogger.debug('Deleting embedding profile', { profileId: id })
     await executeDelete(async () => {
-      const result = await fetchJson('/api/embedding-profiles/' + id, { method: 'DELETE' })
+      const result = await fetchJson('/api/v1/embedding-profiles/' + id, { method: 'DELETE' })
       if (!result.ok) {
         throw new Error(result.error || 'Failed to delete profile')
       }

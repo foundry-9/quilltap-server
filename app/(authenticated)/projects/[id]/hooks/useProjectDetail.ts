@@ -39,7 +39,7 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
   const fetchProject = useCallback(async () => {
     try {
       clientLogger.debug('useProjectDetail: fetching project', { projectId })
-      const res = await fetch(`/api/projects/${projectId}`)
+      const res = await fetch(`/api/v1/projects/${projectId}`)
       if (!res.ok) throw new Error('Project not found')
       const data = await res.json()
       setProject(data.project)
@@ -61,8 +61,8 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
   const handleSave = useCallback(async () => {
     try {
       clientLogger.debug('useProjectDetail: saving project', { projectId })
-      const res = await fetch(`/api/projects/${projectId}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/v1/projects/${projectId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editForm.name,
@@ -89,8 +89,8 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     if (!project) return
     try {
       clientLogger.debug('useProjectDetail: toggling allowAnyCharacter', { projectId, current: project.allowAnyCharacter })
-      const res = await fetch(`/api/projects/${projectId}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/v1/projects/${projectId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ allowAnyCharacter: !project.allowAnyCharacter }),
       })
@@ -110,8 +110,10 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
   const handleRemoveCharacter = useCallback(async (characterId: string) => {
     try {
       clientLogger.debug('useProjectDetail: removing character', { projectId, characterId })
-      const res = await fetch(`/api/projects/${projectId}/characters?characterId=${characterId}`, {
+      const res = await fetch(`/api/v1/projects/${projectId}?action=remove-character`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId }),
       })
 
       if (!res.ok) throw new Error('Failed to remove character')

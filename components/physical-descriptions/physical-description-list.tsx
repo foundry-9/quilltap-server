@@ -20,7 +20,7 @@ interface PhysicalDescriptionListProps {
 
 export function PhysicalDescriptionList({ entityType, entityId, refreshKey }: PhysicalDescriptionListProps) {
   // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-  const baseUrl = `/api/characters/${entityId}/descriptions`
+  const baseUrl = `/api/v1/characters/${entityId}/descriptions`
 
   const {
     items: descriptions,

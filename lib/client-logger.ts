@@ -195,7 +195,7 @@ class ClientLogger {
    */
   private async sendLogs(logs: LogEntry[]): Promise<BatchFlushResult> {
     try {
-      const response = await fetch('/api/logs', {
+      const response = await fetch('/api/v1/logs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

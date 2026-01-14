@@ -53,7 +53,7 @@ export function useProjectChats(projectId: string): UseProjectChatsReturn {
 
     try {
       clientLogger.debug('useProjectChats: fetching chats', { projectId })
-      const res = await fetch(`/api/projects/${projectId}/chats?limit=${DEFAULT_LIMIT}&offset=0`)
+      const res = await fetch(`/api/v1/projects/${projectId}?action=list-chats&limit=${DEFAULT_LIMIT}&offset=0`)
       if (res.ok) {
         const data = await res.json()
         setChats(data.chats || [])
@@ -84,7 +84,7 @@ export function useProjectChats(projectId: string): UseProjectChatsReturn {
 
     try {
       clientLogger.debug('useProjectChats: loading more chats', { projectId, offset: newOffset })
-      const res = await fetch(`/api/projects/${projectId}/chats?limit=${DEFAULT_LIMIT}&offset=${newOffset}`)
+      const res = await fetch(`/api/v1/projects/${projectId}?action=list-chats&limit=${DEFAULT_LIMIT}&offset=${newOffset}`)
       if (res.ok) {
         const data = await res.json()
         setChats(prev => [...prev, ...(data.chats || [])])
@@ -109,8 +109,10 @@ export function useProjectChats(projectId: string): UseProjectChatsReturn {
   const handleRemoveChat = useCallback(async (chatId: string) => {
     try {
       clientLogger.debug('useProjectChats: removing chat', { projectId, chatId })
-      const res = await fetch(`/api/projects/${projectId}/chats?chatId=${chatId}`, {
+      const res = await fetch(`/api/v1/projects/${projectId}?action=remove-chat`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId }),
       })
 
       if (!res.ok) throw new Error('Failed to remove chat')

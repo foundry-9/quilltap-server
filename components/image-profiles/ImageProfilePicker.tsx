@@ -43,7 +43,7 @@ export function ImageProfilePicker({
         setLoading(true)
         setError(null)
 
-        const url = new URL('/api/image-profiles', window.location.origin)
+        const url = new URL('/api/v1/image-profiles', window.location.origin)
         if (characterId) {
           url.searchParams.set('sortByCharacter', characterId)
         }

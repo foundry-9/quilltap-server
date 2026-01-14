@@ -62,7 +62,7 @@ export default function NavWrapper() {
     if (tagsLoading || !tagName.trim() || !chatId) return;
     setTagsLoading(true);
     try {
-      const tagRes = await fetch('/api/tags', {
+      const tagRes = await fetch('/api/v1/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: tagName.trim() }),

@@ -67,7 +67,7 @@ export function ProfileModal({
         isDefault: form.formData.isDefault,
       }
 
-      const url = profile?.id ? `/api/embedding-profiles/${profile.id}` : '/api/embedding-profiles'
+      const url = profile?.id ? `/api/v1/embedding-profiles/${profile.id}` : '/api/v1/embedding-profiles'
       const method = profile?.id ? 'PUT' : 'POST'
 
       const result = await fetchJson(url, {

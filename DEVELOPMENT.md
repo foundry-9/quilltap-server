@@ -223,6 +223,23 @@ The application uses a centralized logging system configurable via environment v
 
 In development, logs can be viewed in the DevConsole (accessible from the user menu).
 
+## Checklist before release
+
+1. Unless we're implementing an interface or an instance of a generic provider of some kind, we should never directly access the filesystem in this app; we should be using our generic file provider for that
+2. Create unit tests to expand coverage for any new functionality, and test specifically for the bugs that were fixed when we apply bugfixes (to ensure there are no regression issues going forward)
+3. Refactor according to best practices, including:
+    - respect encapsulation and single source of truth. If a feature requires duplicate code, consider inheritance
+    - SRP
+    - DRY
+    - KISS
+    - YAGNI
+4. Ensure that API endpoints adhere to the `/api/v{version}/{entityname}` standard to try to streamline and minimize API maintenance
+5. Run a test for dead code and refactor that out. Use `npx knip` if it's helpful.
+6. Ensure that the debug logging we always create for new work has been removed unless we still need it.
+7. Verify that new UI components that were created adhere to the standard of using `qt-*` theme utility classes
+8. As much as possible, plugins should be self-contained or use `plugin-types` and `plugin-utils` to access Quilltap internals; even distributed plugins in `plugins/dist/` should use these, since these plugins are models to independent plugin developers
+9. If we updated any packages (in `packages/`), make sure that those are published to npmjs and properly installed in any NPM package.json files that exist throughout the application, including other packages, plugins, and the primary one at the root level
+
 ## Testing Your Changes
 
 1. Check for TypeScript errors: `npx tsc`

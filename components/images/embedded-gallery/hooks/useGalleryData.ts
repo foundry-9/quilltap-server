@@ -14,7 +14,7 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
     setLoading(true)
     try {
       // Fetch ALL images for the user, not filtered by tag
-      const res = await fetch('/api/images')
+      const res = await fetch('/api/v1/images')
       if (!res.ok) throw new Error('Failed to fetch images')
       const json = await res.json()
       setAllImages(json.data || [])
@@ -56,7 +56,7 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
 
       if (isTagged && existingTag) {
         // Remove the existing tag (use its actual tagType for the API call)
-        const res = await fetch(`/api/images/${image.id}/tags?tagType=${existingTag.tagType}&tagId=${entityId}`, {
+        const res = await fetch(`/api/v1/images/${image.id}/tags?tagType=${existingTag.tagType}&tagId=${entityId}`, {
           method: 'DELETE',
         })
         if (!res.ok) throw new Error('Failed to remove tag')
@@ -65,7 +65,7 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
       } else {
         // Add new tag - always use CHARACTER for new tags
         const tagType = 'CHARACTER'
-        const res = await fetch(`/api/images/${image.id}/tags`, {
+        const res = await fetch(`/api/v1/images/${image.id}/tags`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tagType, tagId: entityId }),
@@ -167,7 +167,7 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
         clientLogger.debug('Avatar cleared before deletion')
       }
 
-      const res = await fetch(`/api/images/${image.id}`, {
+      const res = await fetch(`/api/v1/images/${image.id}`, {
         method: 'DELETE',
       })
 

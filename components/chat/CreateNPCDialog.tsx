@@ -183,7 +183,7 @@ export default function CreateNPCDialog({
         formData.append('referenceType', 'CHARACTER')
         formData.append('referenceId', 'pending')
 
-        const uploadResponse = await fetch('/api/images', {
+        const uploadResponse = await fetch('/api/v1/images', {
           method: 'POST',
           body: formData,
         })

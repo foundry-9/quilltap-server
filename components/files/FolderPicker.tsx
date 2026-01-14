@@ -56,7 +56,7 @@ export default function FolderPicker({
       setLoading(true)
       const scope = projectId ? 'project' : 'general'
       const filesUrl = projectId
-        ? `/api/projects/${projectId}/files`
+        ? `/api/v1/projects/${projectId}/files`
         : '/api/files/general'
       const foldersUrl = projectId
         ? `/api/files/folders?projectId=${projectId}`

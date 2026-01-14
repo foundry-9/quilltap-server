@@ -70,7 +70,7 @@ export function PhysicalDescriptionEditor({
       }
 
       // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-      const baseUrl = `/api/characters/${entityId}/descriptions`
+      const baseUrl = `/api/v1/characters/${entityId}/descriptions`
 
       const url = isEditing ? `${baseUrl}/${description.id}` : baseUrl
       const method = isEditing ? 'PUT' : 'POST'

@@ -170,7 +170,7 @@ export default function BulkCharacterReplaceModal({
     })
 
     try {
-      const response = await fetch(`/api/chats/${chatId}/bulk-reattribute`, {
+      const response = await fetch(`/api/v1/chats/${chatId}/bulk-reattribute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

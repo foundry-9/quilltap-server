@@ -31,7 +31,7 @@ export function TagStyleProvider({ children }: { children: React.ReactNode }) {
 
     try {
       // Fetch tags directly - visual styles are now stored on the tag entities
-      const res = await fetch('/api/tags', { cache: 'no-store' });
+      const res = await fetch('/api/v1/tags', { cache: 'no-store' });
       if (res.status === 401) {
         setStyles({});
       } else if (!res.ok) {

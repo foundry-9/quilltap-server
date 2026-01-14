@@ -107,7 +107,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     try {
       setLoading(true)
       if (mode === 'chat' && chatId) {
-        const response = await fetch(`/api/chats/${chatId}/files`)
+        const response = await fetch(`/api/v1/chats/${chatId}/files`)
         const data = await response.json()
 
         if (!response.ok) {
@@ -121,7 +121,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
           tagType: mode === 'character' ? 'CHARACTER' : 'PERSONA',
           tagId: mode === 'character' ? (characterId as string) : (personaId as string),
         })
-        const response = await fetch(`/api/images?${params.toString()}`)
+        const response = await fetch(`/api/v1/images?${params.toString()}`)
         const data = await response.json()
 
         if (!response.ok) {

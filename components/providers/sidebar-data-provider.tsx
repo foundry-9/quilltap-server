@@ -102,7 +102,7 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
   const fetchCharacters = useCallback(async () => {
     try {
       clientLogger.debug('SidebarDataProvider: Fetching characters')
-      const response = await fetch('/api/sidebar/characters')
+      const response = await fetch('/api/v1/ui/sidebar?type=characters')
       if (!response.ok) {
         throw new Error(`Failed to fetch characters: ${response.status}`)
       }
@@ -125,7 +125,7 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
   const fetchChats = useCallback(async () => {
     try {
       clientLogger.debug('SidebarDataProvider: Fetching chats')
-      const response = await fetch('/api/sidebar/chats')
+      const response = await fetch('/api/v1/ui/sidebar?type=chats')
       if (!response.ok) {
         throw new Error(`Failed to fetch chats: ${response.status}`)
       }
@@ -148,7 +148,7 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
   const fetchProjects = useCallback(async () => {
     try {
       clientLogger.debug('SidebarDataProvider: Fetching projects')
-      const response = await fetch('/api/sidebar/projects')
+      const response = await fetch('/api/v1/ui/sidebar?type=projects')
       if (!response.ok) {
         throw new Error(`Failed to fetch projects: ${response.status}`)
       }

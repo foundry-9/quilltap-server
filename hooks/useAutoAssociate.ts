@@ -17,7 +17,7 @@ interface AutoAssociateResponse {
  * Hook to trigger auto-association of profiles with API keys.
  *
  * This hook consolidates the common auto-associate pattern found in multiple settings tabs.
- * It calls the /api/keys/auto-associate endpoint and shows toast notifications for
+ * It calls the /api/v1/api-keys/auto-associate endpoint and shows toast notifications for
  * any successful associations.
  *
  * @param logContext - Context string for logging (e.g., 'embedding-profiles', 'connection-profiles')
@@ -36,7 +36,7 @@ export function useAutoAssociate(logContext?: string): () => Promise<void> {
       context: logContext || 'useAutoAssociate',
     })
     try {
-      const response = await fetchJson<AutoAssociateResponse>('/api/keys/auto-associate', {
+      const response = await fetchJson<AutoAssociateResponse>('/api/v1/api-keys/auto-associate', {
         method: 'POST',
       })
       if (response.ok && response.data?.associations?.length) {

@@ -190,7 +190,7 @@ export default function ChatsPage() {
 
   const fetchPersonas = async () => {
     try {
-      const res = await fetch('/api/personas')
+      const res = await fetch('/api/v1/personas')
       if (res.ok) {
         const data = await res.json()
         setPersonas(data.map((p: any) => ({ id: p.id, name: p.name, title: p.title })))
@@ -202,7 +202,7 @@ export default function ChatsPage() {
 
   const fetchProfiles = async () => {
     try {
-      const res = await fetch('/api/profiles')
+      const res = await fetch('/api/v1/connection-profiles')
       if (res.ok) {
         const data = await res.json()
         setProfiles(data.map((p: any) => ({ id: p.id, name: p.name })))

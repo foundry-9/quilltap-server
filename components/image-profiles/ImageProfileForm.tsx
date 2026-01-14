@@ -70,7 +70,7 @@ export function ImageProfileForm({
     const fetchModels = async () => {
       try {
         setIsFetchingModels(true)
-        const url = new URL('/api/image-profiles/models', window.location.origin)
+        const url = new URL('/api/v1/image-profiles/models', window.location.origin)
         url.searchParams.set('provider', formData.provider)
         if (formData.apiKeyId) {
           url.searchParams.set('apiKeyId', formData.apiKeyId)
@@ -141,7 +141,7 @@ export function ImageProfileForm({
 
     try {
       setIsValidatingKey(true)
-      const res = await fetch('/api/image-profiles/validate-key', {
+      const res = await fetch('/api/v1/image-profiles/validate-key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -182,8 +182,8 @@ export function ImageProfileForm({
 
     try {
       const url = profile
-        ? `/api/image-profiles/${profile.id}`
-        : '/api/image-profiles'
+        ? `/api/v1/image-profiles/${profile.id}`
+        : '/api/v1/image-profiles'
 
       const method = profile ? 'PUT' : 'POST'
 

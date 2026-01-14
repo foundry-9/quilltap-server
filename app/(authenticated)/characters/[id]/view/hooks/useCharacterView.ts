@@ -139,7 +139,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
   const fetchProfiles = useCallback(async () => {
     try {
-      const res = await fetch('/api/profiles')
+      const res = await fetch('/api/v1/connection-profiles')
       if (res.ok) {
         const data = await res.json()
         setProfiles(data.map((p: any) => ({ id: p.id, name: p.name })))
@@ -152,7 +152,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
   const fetchPersonas = useCallback(async () => {
     try {
-      const res = await fetch('/api/personas')
+      const res = await fetch('/api/v1/personas')
       if (res.ok) {
         const data = await res.json()
         setPersonas(data.map((p: any) => ({ id: p.id, name: p.name, title: p.title })))
@@ -181,7 +181,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
   const fetchImageProfiles = useCallback(async () => {
     try {
-      const res = await fetch('/api/image-profiles')
+      const res = await fetch('/api/v1/image-profiles')
       if (res.ok) {
         const data = await res.json()
         setImageProfiles(data)

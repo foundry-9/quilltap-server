@@ -317,4 +317,5 @@ export const plugin: ToolPlugin = {
 };
 
 // Export for standard plugin loading
-export default { plugin };
+const pluginExport = { plugin };
+export default pluginExport;

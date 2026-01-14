@@ -115,7 +115,7 @@ export default function PluginsTab() {
 
   const fetchPlugins = useCallback(async () => {
     try {
-      const res = await fetch('/api/plugins')
+      const res = await fetch('/api/v1/plugins')
       if (!res.ok) throw new Error('Failed to fetch plugins')
       const data = await res.json()
       setPlugins(data.plugins || [])
@@ -127,7 +127,7 @@ export default function PluginsTab() {
 
   const fetchInstalledPlugins = useCallback(async () => {
     try {
-      const res = await fetch('/api/plugins/installed')
+      const res = await fetch('/api/v1/plugins/installed')
       if (!res.ok) throw new Error('Failed to fetch installed plugins')
       const data = await res.json()
       setInstalledPlugins(data.plugins || [])
@@ -162,7 +162,7 @@ export default function PluginsTab() {
   const handleTogglePlugin = async (pluginName: string, currentEnabled: boolean) => {
     setToggling(prev => new Set(prev).add(pluginName))
     try {
-      const res = await fetch(`/api/plugins/${encodeURIComponent(pluginName)}`, {
+      const res = await fetch(`/api/v1/plugins/${encodeURIComponent(pluginName)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !currentEnabled }),
@@ -211,7 +211,7 @@ export default function PluginsTab() {
         params.set('q', searchQuery.trim())
       }
 
-      const res = await fetch(`/api/plugins/search?${params.toString()}`)
+      const res = await fetch(`/api/v1/plugins/search?${params.toString()}`)
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Search failed')
@@ -230,7 +230,7 @@ export default function PluginsTab() {
   const installPlugin = async (packageName: string, scope: 'site' | 'user' = 'user') => {
     setActionInProgress(packageName)
     try {
-      const res = await fetch('/api/plugins/install', {
+      const res = await fetch('/api/v1/plugins/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ packageName, scope }),
@@ -277,7 +277,7 @@ export default function PluginsTab() {
 
     setActionInProgress(packageName)
     try {
-      const res = await fetch('/api/plugins/uninstall', {
+      const res = await fetch('/api/v1/plugins/uninstall', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ packageName, scope }),

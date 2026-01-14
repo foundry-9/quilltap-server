@@ -50,8 +50,7 @@ jest.mock('@/lib/memory/memory-service', () => ({
 }))
 
 // Import after mocks are set up
-const { loadParticipantMemories, loadProjectContext, buildFirstMessageContext } = 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+const { loadParticipantMemories, loadProjectContext, buildFirstMessageContext } =
   require('@/lib/chat/first-message-context') as typeof import('@/lib/chat/first-message-context')
 
 // Test fixtures

@@ -107,7 +107,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
       }
 
       // Queue the jobs via the chat-specific endpoint
-      const response = await fetch(`/api/chats/${chat.id}/queue-memories`, {
+      const response = await fetch(`/api/v1/chats/${chat.id}/queue-memories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
