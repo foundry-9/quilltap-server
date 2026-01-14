@@ -18,8 +18,7 @@ jest.mock('@/lib/toast', () => ({
 // Mock fetch
 global.fetch = jest.fn()
 
-// TODO: Fix test - component not rendering as expected after API changes
-describe.skip('DeletedImagePlaceholder', () => {
+describe('DeletedImagePlaceholder', () => {
   const mockImageId = 'test-image-id'
   const mockFilename = 'test-image.png'
   const mockOnCleanup = jest.fn()
@@ -134,7 +133,7 @@ describe.skip('DeletedImagePlaceholder', () => {
       })
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(`/api/images/${mockImageId}`, {
+        expect(global.fetch).toHaveBeenCalledWith(`/api/v1/images/${mockImageId}`, {
           method: 'DELETE',
         })
       })

@@ -35,8 +35,7 @@ jest.mock('@/components/images/DeletedImagePlaceholder', () => ({
 // Mock fetch
 global.fetch = jest.fn()
 
-// TODO: Fix test - component not rendering images as expected after API changes
-describe.skip('PhotoGalleryModal - Deleted Image Handling', () => {
+describe('PhotoGalleryModal - Deleted Image Handling', () => {
   const mockChatFiles = [
     {
       id: 'file-1',
@@ -62,7 +61,7 @@ describe.skip('PhotoGalleryModal - Deleted Image Handling', () => {
     jest.clearAllMocks()
     document.body.style.overflow = '' // Reset overflow
     ;(global.fetch as jest.Mock).mockImplementation((url) => {
-      if (url.includes('/api/chats/')) {
+      if (url.includes('/api/v1/chats/')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ files: mockChatFiles }),
@@ -185,7 +184,7 @@ describe.skip('PhotoGalleryModal - Deleted Image Handling', () => {
 
       await waitFor(() => {
         // Should reload the gallery
-        expect(global.fetch).toHaveBeenCalledWith('/api/chats/chat-1/files')
+        expect(global.fetch).toHaveBeenCalledWith('/api/v1/chats/chat-1/files')
       })
     })
   })
@@ -193,7 +192,7 @@ describe.skip('PhotoGalleryModal - Deleted Image Handling', () => {
   describe('Character mode - deleted image handling', () => {
     beforeEach(() => {
       ;(global.fetch as jest.Mock).mockImplementation((url) => {
-        if (url.includes('/api/images')) {
+        if (url.includes('/api/v1/images')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({
@@ -249,7 +248,7 @@ describe.skip('PhotoGalleryModal - Deleted Image Handling', () => {
   describe('Persona mode - deleted image handling', () => {
     beforeEach(() => {
       ;(global.fetch as jest.Mock).mockImplementation((url) => {
-        if (url.includes('/api/images')) {
+        if (url.includes('/api/v1/images')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({

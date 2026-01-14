@@ -4,12 +4,12 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
 import type { RoleplayTemplate } from '@/lib/schemas/types'
-import { GET as listRoleplayTemplates, POST as createRoleplayTemplate } from '@/app/api/roleplay-templates/route'
+import { GET as listRoleplayTemplates, POST as createRoleplayTemplate } from '@/app/api/v1/roleplay-templates/route'
 import {
   GET as getRoleplayTemplate,
   PUT as updateRoleplayTemplate,
   DELETE as deleteRoleplayTemplate,
-} from '@/app/api/roleplay-templates/[id]/route'
+} from '@/app/api/v1/roleplay-templates/[id]/route'
 import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
 import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
@@ -95,13 +95,12 @@ beforeEach(() => {
   mockGetServerSession.mockResolvedValue(defaultSession as any)
 })
 
-// TODO: Update tests for v1 API - legacy routes now return 410
-describe.skip('Roleplay Template Routes', () => {
-  describe('GET /api/roleplay-templates', () => {
+describe('Roleplay Template Routes', () => {
+  describe('GET /api/v1/roleplay-templates', () => {
     it('requires authentication', async () => {
       mockGetServerSession.mockResolvedValueOnce(null as any)
 
-      const res = await listRoleplayTemplates(createMockRequest('http://localhost/api/roleplay-templates'))
+      const res = await listRoleplayTemplates(createMockRequest('http://localhost/api/v1/roleplay-templates'))
       const data = await res.json()
 
       expect(res.status).toBe(401)
@@ -116,7 +115,7 @@ describe.skip('Roleplay Template Routes', () => {
 
       mockRoleplayRepo.findAllForUser.mockResolvedValue([userBeta, builtinZulu, builtinAlpha])
 
-      const res = await listRoleplayTemplates(createMockRequest('http://localhost/api/roleplay-templates'))
+      const res = await listRoleplayTemplates(createMockRequest('http://localhost/api/v1/roleplay-templates'))
       const data = await res.json()
 
       expect(res.status).toBe(200)
@@ -129,10 +128,10 @@ describe.skip('Roleplay Template Routes', () => {
     })
   })
 
-  describe('POST /api/roleplay-templates', () => {
+  describe('POST /api/v1/roleplay-templates', () => {
     it('rejects empty names', async () => {
       const req = createMockRequest(
-        'http://localhost/api/roleplay-templates',
+        'http://localhost/api/v1/roleplay-templates',
         { name: '   ', description: 'desc', systemPrompt: 'stay IC' },
         'POST',
       )
@@ -149,7 +148,7 @@ describe.skip('Roleplay Template Routes', () => {
       mockRoleplayRepo.findByName.mockResolvedValue(buildTemplate({ id: 'existing' }))
 
       const req = createMockRequest(
-        'http://localhost/api/roleplay-templates',
+        'http://localhost/api/v1/roleplay-templates',
         { name: 'Standard', description: 'desc', systemPrompt: 'stay IC' },
         'POST',
       )
@@ -175,7 +174,7 @@ describe.skip('Roleplay Template Routes', () => {
       mockRoleplayRepo.create.mockResolvedValue(createdTemplate)
 
       const req = createMockRequest(
-        'http://localhost/api/roleplay-templates',
+        'http://localhost/api/v1/roleplay-templates',
         {
           name: '  My Template  ',
           description: '  desc  ',
@@ -203,12 +202,12 @@ describe.skip('Roleplay Template Routes', () => {
     })
   })
 
-  describe('GET /api/roleplay-templates/[id]', () => {
+  describe('GET /api/v1/roleplay-templates/[id]', () => {
     it('requires authentication', async () => {
       mockGetServerSession.mockResolvedValueOnce(null as any)
 
       const res = await getRoleplayTemplate(
-        createMockRequest('http://localhost/api/roleplay-templates/template-1'),
+        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1'),
         createParams('template-1') as any,
       )
 
@@ -220,26 +219,26 @@ describe.skip('Roleplay Template Routes', () => {
       mockRoleplayRepo.findById.mockResolvedValue(null)
 
       const res = await getRoleplayTemplate(
-        createMockRequest('http://localhost/api/roleplay-templates/template-1'),
+        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1'),
         createParams('template-1') as any,
       )
       const data = await res.json()
 
       expect(res.status).toBe(404)
-      expect(data).toEqual({ error: 'Template not found' })
+      expect(data).toEqual({ error: 'Roleplay template not found' })
     })
 
     it('denies access to other user templates', async () => {
       mockRoleplayRepo.findById.mockResolvedValue(buildTemplate({ userId: 'other-user', isBuiltIn: false }))
 
       const res = await getRoleplayTemplate(
-        createMockRequest('http://localhost/api/roleplay-templates/template-1'),
+        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1'),
         createParams('template-1') as any,
       )
       const data = await res.json()
 
       expect(res.status).toBe(404)
-      expect(data).toEqual({ error: 'Template not found' })
+      expect(data).toEqual({ error: 'Roleplay template not found' })
     })
 
     it('returns template when accessible', async () => {
@@ -247,7 +246,7 @@ describe.skip('Roleplay Template Routes', () => {
       mockRoleplayRepo.findById.mockResolvedValue(template)
 
       const res = await getRoleplayTemplate(
-        createMockRequest('http://localhost/api/roleplay-templates/template-1'),
+        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1'),
         createParams('template-1') as any,
       )
       const data = await res.json()
@@ -257,12 +256,12 @@ describe.skip('Roleplay Template Routes', () => {
     })
   })
 
-  describe('PUT /api/roleplay-templates/[id]', () => {
+  describe('PUT /api/v1/roleplay-templates/[id]', () => {
     it('rejects updates when user does not own template', async () => {
       mockRoleplayRepo.findById.mockResolvedValue(buildTemplate({ userId: 'other-user', isBuiltIn: false }))
 
       const res = await updateRoleplayTemplate(
-        createMockRequest('http://localhost/api/roleplay-templates/template-1', { name: 'New Name' }, 'PUT'),
+        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1', { name: 'New Name' }, 'PUT'),
         createParams('template-1') as any,
       )
 
@@ -276,13 +275,13 @@ describe.skip('Roleplay Template Routes', () => {
       )
 
       const res = await updateRoleplayTemplate(
-        createMockRequest('http://localhost/api/roleplay-templates/template-1', { name: 'New Name' }, 'PUT'),
+        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1', { name: 'New Name' }, 'PUT'),
         createParams('template-1') as any,
       )
       const data = await res.json()
 
       expect(res.status).toBe(403)
-      expect(data).toEqual({ error: 'Built-in templates cannot be modified' })
+      expect(data).toEqual({ error: 'Cannot edit built-in roleplay templates' })
       expect(mockRoleplayRepo.update).not.toHaveBeenCalled()
     })
 
@@ -292,7 +291,7 @@ describe.skip('Roleplay Template Routes', () => {
       mockRoleplayRepo.findByName.mockResolvedValue(buildTemplate({ id: 'template-2', name: 'New Name' }))
 
       const res = await updateRoleplayTemplate(
-        createMockRequest('http://localhost/api/roleplay-templates/template-1', { name: 'New Name' }, 'PUT'),
+        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1', { name: 'New Name' }, 'PUT'),
         createParams('template-1') as any,
       )
       const data = await res.json()
@@ -311,7 +310,7 @@ describe.skip('Roleplay Template Routes', () => {
 
       const res = await updateRoleplayTemplate(
         createMockRequest(
-          'http://localhost/api/roleplay-templates/template-1',
+          'http://localhost/api/v1/roleplay-templates/template-1',
           { name: '  New Name ', description: '  desc ', systemPrompt: '  Formatted output ' },
           'PUT',
         ),
@@ -329,12 +328,12 @@ describe.skip('Roleplay Template Routes', () => {
     })
   })
 
-  describe('DELETE /api/roleplay-templates/[id]', () => {
+  describe('DELETE /api/v1/roleplay-templates/[id]', () => {
     it('denies deleting templates from other users', async () => {
       mockRoleplayRepo.findById.mockResolvedValue(buildTemplate({ userId: 'other-user', isBuiltIn: false }))
 
       const res = await deleteRoleplayTemplate(
-        createMockRequest('http://localhost/api/roleplay-templates/template-1', undefined, 'DELETE'),
+        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1', undefined, 'DELETE'),
         createParams('template-1') as any,
       )
 
@@ -348,13 +347,13 @@ describe.skip('Roleplay Template Routes', () => {
       )
 
       const res = await deleteRoleplayTemplate(
-        createMockRequest('http://localhost/api/roleplay-templates/template-1', undefined, 'DELETE'),
+        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1', undefined, 'DELETE'),
         createParams('template-1') as any,
       )
       const data = await res.json()
 
       expect(res.status).toBe(403)
-      expect(data).toEqual({ error: 'Built-in templates cannot be deleted' })
+      expect(data).toEqual({ error: 'Cannot delete built-in roleplay templates' })
       expect(mockRoleplayRepo.delete).not.toHaveBeenCalled()
     })
 
@@ -363,14 +362,14 @@ describe.skip('Roleplay Template Routes', () => {
       mockRoleplayRepo.delete.mockResolvedValue(true)
 
       const res = await deleteRoleplayTemplate(
-        createMockRequest('http://localhost/api/roleplay-templates/template-1', undefined, 'DELETE'),
+        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1', undefined, 'DELETE'),
         createParams('template-1') as any,
       )
       const data = await res.json()
 
       expect(res.status).toBe(200)
       expect(mockRoleplayRepo.delete).toHaveBeenCalledWith('template-1')
-      expect(data).toEqual({ success: true })
+      expect(data).toEqual({ success: true, deletedId: 'template-1' })
     })
   })
 })

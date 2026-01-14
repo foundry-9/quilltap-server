@@ -29,8 +29,7 @@ jest.mock('@/components/images/DeletedImagePlaceholder', () => ({
 // Mock fetch
 global.fetch = jest.fn()
 
-// TODO: Fix test - component not rendering images as expected after API changes
-describe.skip('ImageGallery - Deleted Image Handling', () => {
+describe('ImageGallery - Deleted Image Handling', () => {
   const mockImages = [
     {
       id: 'valid-image-1',
@@ -155,7 +154,7 @@ describe.skip('ImageGallery - Deleted Image Handling', () => {
 
       await waitFor(() => {
         // Should reload images after cleanup
-        expect(global.fetch).toHaveBeenCalledWith('/api/images?tagType=CHARACTER&tagId=char-1')
+        expect(global.fetch).toHaveBeenCalledWith('/api/v1/images?tagType=CHARACTER&tagId=char-1')
       })
     })
   })

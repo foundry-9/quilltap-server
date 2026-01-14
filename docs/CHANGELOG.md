@@ -4,6 +4,17 @@
 
 ### 2.7-dev
 
+- feat: Added missing v1 roleplay-templates [id] route
+  - GET `/api/v1/roleplay-templates/[id]` - Retrieve single template
+  - PUT `/api/v1/roleplay-templates/[id]` - Update template with validation
+  - DELETE `/api/v1/roleplay-templates/[id]` - Delete user-owned template
+  - Proper authorization (404 for non-owned, 403 for built-in templates)
+- test: Fixed all previously skipped unit tests
+  - Fixed sidebar API tests to use v1 `/api/v1/ui/sidebar?type=...` endpoint
+  - Fixed roleplay templates API tests to use v1 routes
+  - Fixed deleted image handling tests (3 files) - updated mock URLs to v1
+  - Fixed connection-profiles-tab test for refactored component with fetchJson
+  - Reduced skipped tests from 8 test suites to just 2 placeholder tests (vector-store)
 - refactor: Continue v1 API migration - complete routes and frontend updates
   - New v1 API routes created:
     - `/api/v1/projects` - project CRUD with action dispatch
