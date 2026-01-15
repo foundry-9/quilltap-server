@@ -1,58 +1,12 @@
 /**
- * Capabilities Report List API
+ * DEPRECATED - Capabilities Report List API (Legacy Route)
+ * This route has been moved to /api/v1/system/tools?action=capabilities-report-list
  *
- * GET /api/tools/capabilities-report/list
- * Lists all saved capabilities reports for the user
+ * 410 Gone - Endpoint permanently removed
  */
 
-import { NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
-import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { movedToV1 } from '@/lib/api/responses'
 
-const moduleLogger = logger.child({ module: 'api:capabilities-report:list' });
-
-export interface ReportInfo {
-  id: string;
-  filename: string;
-  storageKey: string;
-  createdAt: string;
-  size: number;
+export async function GET() {
+  return movedToV1('/api/v1/system/tools?action=capabilities-report-list')
 }
-
-export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
-  try {
-    const userId = user.id;
-    moduleLogger.info('Listing capabilities reports', { userId });
-
-    // List all files in the DOCUMENT category from /reports folder
-    const allDocuments = await repos.files.findByCategory('DOCUMENT');
-    const reportFiles = allDocuments.filter((f) => f.folderPath === '/reports');
-
-    // Convert to ReportInfo format
-    const reports: ReportInfo[] = reportFiles.map((file) => ({
-      id: file.id,
-      filename: file.originalFilename,
-      storageKey: file.storageKey || '',
-      createdAt: file.createdAt, // Already a string from TimestampSchema
-      size: file.size || 0,
-    }));
-
-    // Sort by creation date, newest first
-    reports.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    moduleLogger.info('Listed capabilities reports', {
-      userId,
-      count: reports.length,
-    });
-
-    return NextResponse.json({ reports });
-  } catch (error) {
-    const errorMessage = getErrorMessage(error);
-    moduleLogger.error('Failed to list capabilities reports', { error: errorMessage }, error instanceof Error ? error : undefined);
-    return NextResponse.json(
-      { error: 'Failed to list reports', details: errorMessage },
-      { status: 500 }
-    );
-  }
-});

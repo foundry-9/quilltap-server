@@ -80,13 +80,14 @@ function mockQueueNetwork(queueResponses: QueueData[] = [defaultQueue]) {
     const url = typeof input === 'string' ? input : input.url
     const method = init?.method ?? 'GET'
 
-    if (url === '/api/tools/tasks-queue' && method === 'GET') {
+    // v1 system tools endpoint for tasks-queue
+    if (url === '/api/v1/system/tools?action=tasks-queue' && method === 'GET') {
       const response = queueResponses[Math.min(queueGetCount, queueResponses.length - 1)]
       queueGetCount += 1
       return jsonResponse(response)
     }
 
-    if (url === '/api/tools/tasks-queue' && method === 'POST') {
+    if (url === '/api/v1/system/tools?action=tasks-queue' && method === 'POST') {
       const body = init?.body ? JSON.parse(init.body as string) : {}
       return jsonResponse({
         success: true,
@@ -125,7 +126,7 @@ describe('TasksQueueCard', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/tools/tasks-queue',
+      '/api/v1/system/tools?action=tasks-queue',
       expect.objectContaining({
         cache: 'no-store',
       })
@@ -144,7 +145,7 @@ describe('TasksQueueCard', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/tools/tasks-queue',
+        '/api/v1/system/tools?action=tasks-queue',
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ action: 'start' }),
@@ -152,7 +153,7 @@ describe('TasksQueueCard', () => {
       )
     })
     // Initial GET + refresh after start
-    const getCalls = fetchMock.mock.calls.filter(([url, init]) => url === '/api/tools/tasks-queue' && (!init || init.method === undefined))
+    const getCalls = fetchMock.mock.calls.filter(([url, init]) => url === '/api/v1/system/tools?action=tasks-queue' && (!init || init.method === undefined))
     expect(getCalls.length).toBeGreaterThanOrEqual(1)
   })
 

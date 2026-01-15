@@ -21,7 +21,7 @@ export function useTasksQueue() {
       setError(null)
       clientLogger.debug('Fetching tasks queue status')
 
-      const res = await fetch('/api/tools/tasks-queue', {
+      const res = await fetch('/api/v1/system/tools?action=tasks-queue', {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
       })
@@ -52,7 +52,7 @@ export function useTasksQueue() {
         setError(null)
         clientLogger.debug(`Sending queue control action: ${action}`)
 
-        const res = await fetch('/api/tools/tasks-queue', {
+        const res = await fetch('/api/v1/system/tools?action=tasks-queue', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action }),

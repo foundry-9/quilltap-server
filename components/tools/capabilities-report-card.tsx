@@ -37,7 +37,7 @@ export function CapabilitiesReportCard() {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch('/api/tools/capabilities-report/list', {
+      const res = await fetch('/api/v1/system/tools?action=capabilities-report-list', {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
       })
@@ -60,7 +60,7 @@ export function CapabilitiesReportCard() {
       setError(null)
       clientLogger.info('Generating capabilities report')
 
-      const res = await fetch('/api/tools/capabilities-report/generate', {
+      const res = await fetch('/api/v1/system/tools?action=capabilities-report-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -103,7 +103,7 @@ export function CapabilitiesReportCard() {
       setLoading(true)
       clientLogger.info('Viewing capabilities report', { reportId: report.id })
 
-      const res = await fetch(`/api/tools/capabilities-report/${report.id}`)
+      const res = await fetch(`/api/v1/system/tools?action=capabilities-report-get&reportId=${report.id}`)
       if (!res.ok) throw new Error('Failed to load report')
 
       const data = await res.json()
@@ -131,8 +131,10 @@ export function CapabilitiesReportCard() {
     try {
       clientLogger.info('Deleting capabilities report', { reportId: report.id })
 
-      const res = await fetch(`/api/tools/capabilities-report/${report.id}`, {
-        method: 'DELETE',
+      const res = await fetch('/api/v1/system/tools?action=capabilities-report-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId: report.id }),
       })
 
       if (!res.ok) throw new Error('Failed to delete report')
@@ -350,7 +352,7 @@ export function CapabilitiesReportCard() {
 
                   {/* Download Button */}
                   <a
-                    href={`/api/tools/capabilities-report/${report.id}?download=true`}
+                    href={`/api/v1/system/tools?action=capabilities-report-get&reportId=${report.id}&download=true`}
                     download={report.filename}
                     className="qt-button qt-button-icon qt-button-primary p-2"
                     title="Download Report"

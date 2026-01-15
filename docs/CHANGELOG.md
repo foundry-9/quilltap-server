@@ -4,6 +4,25 @@
 
 ### 2.7-dev
 
+- feat: System Tools API routes migrated to v1 with action dispatch pattern (2026-01-15)
+  - Enhanced `/api/v1/system/tools` with full functionality:
+    - `action=delete-data` (POST) and `action=delete-data-preview` (GET) for data deletion
+    - `action=tasks-queue` (GET for status, POST for start/stop control)
+    - `action=export` (POST), `action=export-entities` (GET), `action=export-preview` (GET)
+    - `action=import-preview` (POST), `action=import-execute` (POST)
+    - `action=capabilities-report-generate` (POST), `action=capabilities-report-list` (GET)
+    - `action=capabilities-report-get` (GET), `action=capabilities-report-delete` (POST)
+  - Converted legacy mount-point action routes to `movedToV1()`:
+    - `/api/mount-points/[id]`, `/api/mount-points/backends`
+    - `/api/mount-points/[id]/test`, `/api/mount-points/[id]/set-default`
+    - `/api/mount-points/[id]/scan-orphans`, `/api/mount-points/[id]/adopt-orphans`
+  - Converted legacy tools routes to `movedToV1()`:
+    - `/api/tools/tasks-queue`, `/api/tools/delete-data`
+    - `/api/tools/quilltap-export/*`, `/api/tools/quilltap-import/*`
+    - `/api/tools/capabilities-report/*`
+  - Updated 7 frontend components to use v1 system tools endpoints:
+    - SettingsCard (mount points), useTasksQueue, DeleteDataCard
+    - useExportData, useImportData, CapabilitiesReportCard, CapabilitiesReportDialog
 - feat: Files API routes migrated to v1 with action dispatch pattern (2026-01-15)
   - Added folder actions to `/api/v1/files/folders`: create, rename, delete (via POST with action param)
   - Added write-permission actions: revoke, complete (via POST with action param)

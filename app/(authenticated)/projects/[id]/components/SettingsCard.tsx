@@ -85,7 +85,7 @@ export function SettingsCard({
     try {
       const [mpDataRes, mpOptionsRes] = await Promise.all([
         fetchJson<MountPointData>(`/api/projects/${project.id}/mount-point`),
-        fetchJson<{ mountPoints: MountPointOption[] }>('/api/mount-points'),
+        fetchJson<{ mountPoints: MountPointOption[] }>('/api/v1/system/mount-points'),
       ])
 
       if (mpDataRes.ok && mpDataRes.data) {

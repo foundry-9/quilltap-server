@@ -196,7 +196,7 @@ export function useImportData({
           exportType: exportData.manifest.exportType,
         })
 
-        const response = await fetch('/api/tools/quilltap-import', {
+        const response = await fetch('/api/v1/system/tools?action=import-preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ exportData }),
@@ -313,7 +313,7 @@ export function useImportData({
         importMemories: state.importMemories,
       })
 
-      const response = await fetch('/api/tools/quilltap-import/execute', {
+      const response = await fetch('/api/v1/system/tools?action=import-execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

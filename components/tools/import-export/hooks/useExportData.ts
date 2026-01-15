@@ -174,7 +174,7 @@ export function useExportData({
         entityType: type,
       })
 
-      const response = await fetch(`/api/tools/quilltap-export/entities?type=${type}`)
+      const response = await fetch(`/api/v1/system/tools?action=export-entities&type=${type}`)
 
       if (!response.ok) {
         const data = await response.json()
@@ -285,7 +285,7 @@ export function useExportData({
         includeMemories: state.includeMemories,
       })
 
-      const response = await fetch('/api/tools/quilltap-export', {
+      const response = await fetch('/api/v1/system/tools?action=export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

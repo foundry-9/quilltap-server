@@ -51,7 +51,7 @@ export function DeleteDataCard() {
 
     try {
       clientLogger.info('Loading delete preview')
-      const response = await fetch('/api/tools/delete-data')
+      const response = await fetch('/api/v1/system/tools?action=delete-data-preview')
       if (!response.ok) {
         throw new Error('Failed to load data preview')
       }
@@ -92,7 +92,7 @@ export function DeleteDataCard() {
 
     try {
       clientLogger.info('Starting complete data deletion')
-      const response = await fetch('/api/tools/delete-data', {
+      const response = await fetch('/api/v1/system/tools?action=delete-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirm: 'DELETE_ALL_MY_DATA' }),
