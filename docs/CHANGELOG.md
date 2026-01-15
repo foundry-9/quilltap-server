@@ -4,6 +4,23 @@
 
 ### 2.7-dev
 
+- feat: Characters API routes completed migration to v1 with action dispatch pattern (2026-01-15)
+  - Added new actions to `/api/v1/characters/[id]`:
+    - GET: `chats`, `cascade-preview`, `default-partner`, `personas`, `get-tags`
+    - POST: `toggle-controlled-by`, `set-default-partner`, `link-persona`, `unlink-persona`
+  - Created nested v1 routes for character descriptions and prompts:
+    - `/api/v1/characters/[id]/descriptions` (GET, POST)
+    - `/api/v1/characters/[id]/descriptions/[descId]` (GET, PUT, DELETE)
+    - `/api/v1/characters/[id]/prompts` (GET, POST)
+    - `/api/v1/characters/[id]/prompts/[promptId]` (GET, PUT, DELETE)
+  - Converted legacy character action routes to `movedToV1()`:
+    - `/api/characters/[id]/chats`, `/api/characters/[id]/controlled-by`
+    - `/api/characters/[id]/default-partner`, `/api/characters/[id]/cascade-preview`
+    - `/api/characters/[id]/descriptions/*`, `/api/characters/[id]/prompts/*`
+    - `/api/characters/[id]/personas`
+  - Updated frontend components to use v1 endpoints:
+    - characters/page.tsx, useCharacterView.ts, edit/page.tsx
+    - system-prompts-editor/hooks/useSystemPrompts.ts
 - feat: Connection Profiles API routes migrated to v1 (2026-01-15)
   - Converted legacy `/api/keys/*` routes to `movedToV1()`:
     - `/api/keys` (GET, POST) -> `/api/v1/api-keys`

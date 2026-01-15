@@ -156,7 +156,7 @@ export default function CharactersPage() {
   const toggleControlledBy = async (e: React.MouseEvent, id: string) => {
     e.preventDefault()
     try {
-      const res = await fetch(`/api/characters/${id}/controlled-by`, { method: 'PATCH' })
+      const res = await fetch(`/api/v1/characters/${id}?action=toggle-controlled-by`, { method: 'POST' })
       if (!res.ok) throw new Error('Failed to toggle controlled-by')
       const data = await res.json()
       setCharacters(characters.map((c) => (c.id === id ? { ...c, controlledBy: data.character.controlledBy } : c)))

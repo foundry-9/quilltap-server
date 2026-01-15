@@ -166,10 +166,11 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
   const fetchDefaultPersona = useCallback(async () => {
     try {
-      const res = await fetch(`/api/characters/${characterId}/personas`)
+      const res = await fetch(`/api/v1/characters/${characterId}?action=personas`)
       if (res.ok) {
         const data = await res.json()
-        const defaultPersona = data.find((cp: any) => cp.isDefault)
+        const personasList = data.personas || []
+        const defaultPersona = personasList.find((cp: any) => cp.isDefault)
         if (defaultPersona) {
           setDefaultPersonaId(defaultPersona.personaId)
           clientLogger.debug('Default persona loaded', { personaId: defaultPersona.personaId })
@@ -213,7 +214,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
   const fetchDefaultPartner = useCallback(async () => {
     try {
-      const res = await fetch(`/api/characters/${characterId}/default-partner`)
+      const res = await fetch(`/api/v1/characters/${characterId}?action=default-partner`)
       if (res.ok) {
         const data = await res.json()
         if (data.partnerId) {
@@ -327,14 +328,16 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     try {
       // First, remove the current default if there is one
       if (defaultPersonaId) {
-        await fetch(`/api/characters/${characterId}/personas?personaId=${defaultPersonaId}`, {
-          method: 'DELETE',
+        await fetch(`/api/v1/characters/${characterId}?action=unlink-persona`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ personaId: defaultPersonaId }),
         })
       }
 
       // If a new persona is selected, link it as default
       if (personaId) {
-        const res = await fetch(`/api/characters/${characterId}/personas`, {
+        const res = await fetch(`/api/v1/characters/${characterId}?action=link-persona`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -360,8 +363,8 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const handleSaveDefaultPartner = async (partnerId: string) => {
     setSavingPartner(true)
     try {
-      const res = await fetch(`/api/characters/${characterId}/default-partner`, {
-        method: 'PUT',
+      const res = await fetch(`/api/v1/characters/${characterId}?action=set-default-partner`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ partnerId: partnerId || null }),
       })
@@ -429,7 +432,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     if (!character) return
     setTogglingControlledBy(true)
     try {
-      const res = await fetch(`/api/characters/${characterId}/controlled-by`, { method: 'PATCH' })
+      const res = await fetch(`/api/v1/characters/${characterId}?action=toggle-controlled-by`, { method: 'POST' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to toggle controlled-by')

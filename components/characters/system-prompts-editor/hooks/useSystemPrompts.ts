@@ -86,11 +86,11 @@ export function useSystemPrompts(
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch(`/api/v1/characters/${characterId}?action=get-prompts`)
+      const res = await fetch(`/api/v1/characters/${characterId}/prompts`)
       if (!res.ok) throw new Error('Failed to fetch prompts')
       const data = await res.json()
-      setPrompts(data)
-      clientLogger.debug('Fetched character system prompts', { count: data.length })
+      setPrompts(data.prompts || [])
+      clientLogger.debug('Fetched character system prompts', { count: data.prompts?.length || 0 })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
@@ -175,7 +175,7 @@ export function useSystemPrompts(
 
       if (editingPrompt) {
         // Update existing prompt
-        const res = await fetch(`/api/v1/characters/${characterId}?action=update-prompt&promptId=${editingPrompt.id}`, {
+        const res = await fetch(`/api/v1/characters/${characterId}/prompts/${editingPrompt.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -190,7 +190,7 @@ export function useSystemPrompts(
         clientLogger.info('Character prompt updated', { promptId: editingPrompt.id })
       } else {
         // Create new prompt
-        const res = await fetch(`/api/v1/characters/${characterId}?action=create-prompt`, {
+        const res = await fetch(`/api/v1/characters/${characterId}/prompts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -223,7 +223,7 @@ export function useSystemPrompts(
       setSaving(true)
       setError(null)
 
-      const res = await fetch(`/api/v1/characters/${characterId}?action=delete-prompt&promptId=${promptId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}/prompts/${promptId}`, {
         method: 'DELETE',
       })
 

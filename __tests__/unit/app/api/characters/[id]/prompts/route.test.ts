@@ -1,5 +1,5 @@
 /**
- * Integration tests for legacy prompts route
+ * Unit tests for legacy prompts route
  * Tests that legacy route returns 410 Gone with redirect info
  *
  * Actual functionality is now in /api/v1/characters/[id]/prompts
@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals
 let GET: typeof import('@/app/api/characters/[id]/prompts/route').GET;
 let POST: typeof import('@/app/api/characters/[id]/prompts/route').POST;
 
-describe('Legacy Character Prompts Route (movedToV1)', () => {
+describe('Legacy Prompts Route (movedToV1)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 

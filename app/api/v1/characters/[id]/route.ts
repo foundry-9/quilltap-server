@@ -4,11 +4,24 @@
  * GET /api/v1/characters/[id] - Get a specific character
  * PUT /api/v1/characters/[id] - Update a character
  * DELETE /api/v1/characters/[id] - Delete a character (supports cascade)
- * GET /api/v1/characters/[id]?action=export - Export character
- * POST /api/v1/characters/[id]?action=favorite - Toggle favorite
- * POST /api/v1/characters/[id]?action=avatar - Set avatar
- * POST /api/v1/characters/[id]?action=add-tag - Add tag
- * POST /api/v1/characters/[id]?action=remove-tag - Remove tag
+ *
+ * GET Actions:
+ * - export - Export character
+ * - chats - List recent chats with this character
+ * - cascade-preview - Get cascade delete preview
+ * - default-partner - Get default partner
+ * - personas - List linked personas
+ * - get-tags - Get character tags
+ *
+ * POST Actions:
+ * - favorite - Toggle favorite
+ * - avatar - Set avatar
+ * - add-tag - Add tag
+ * - remove-tag - Remove tag
+ * - toggle-controlled-by - Toggle user/LLM control
+ * - set-default-partner - Set default partner
+ * - link-persona - Link a persona
+ * - unlink-persona - Unlink a persona
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,7 +29,7 @@ import { revalidatePath } from 'next/cache';
 import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext } from '@/lib/api/middleware';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { getActionParam } from '@/lib/api/middleware/actions';
-import { executeCascadeDelete } from '@/lib/cascade-delete';
+import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter } from '@/lib/sillytavern/character';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -62,6 +75,19 @@ const removeTagSchema = z.object({
   tagId: z.string().uuid(),
 });
 
+const setDefaultPartnerSchema = z.object({
+  partnerId: z.string().uuid().nullable(),
+});
+
+const linkPersonaSchema = z.object({
+  personaId: z.string().uuid(),
+  isDefault: z.boolean().optional().default(false),
+});
+
+const unlinkPersonaSchema = z.object({
+  personaId: z.string().uuid(),
+});
+
 // ============================================================================
 // GET Handler
 // ============================================================================
@@ -69,84 +95,286 @@ const removeTagSchema = z.object({
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   const action = getActionParam(req);
 
-  // Handle export action
-  if (action === 'export') {
-    try {
-      const { searchParams } = new URL(req.url);
-      const format = searchParams.get('format') || 'json';
-
-      const character = await repos.characters.findById(id);
-
-      if (!checkOwnership(character, user.id)) {
-        return notFound('Character');
-      }
-
-      const stCharacter = exportSTCharacter(character);
-
-      if (format === 'png') {
-        if (!character.avatarUrl) {
-          return badRequest('Character must have an avatar for PNG export');
-        }
-
-        // PNG export not yet implemented
-        return NextResponse.json(
-          {
-            error: 'PNG export requires avatar storage implementation. Use JSON export for now.',
-          },
-          { status: 501 }
-        );
-      } else {
-        return new NextResponse(JSON.stringify(stCharacter, null, 2), {
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Disposition': `attachment; filename="${character.name}.json"`,
-          },
-        });
-      }
-    } catch (error) {
-      logger.error('[Characters v1] Error exporting character', { characterId: id }, error instanceof Error ? error : undefined);
-      return serverError('Failed to export character');
-    }
+  // First verify ownership for all actions
+  const character = await repos.characters.findById(id);
+  if (!checkOwnership(character, user.id)) {
+    return notFound('Character');
   }
 
-  // Default: get character
-  try {
-    logger.debug('[Characters v1] GET character', { characterId: id, userId: user.id });
+  switch (action) {
+    // Export character
+    case 'export': {
+      try {
+        const { searchParams } = new URL(req.url);
+        const format = searchParams.get('format') || 'json';
 
-    const character = await repos.characters.findById(id);
+        const stCharacter = exportSTCharacter(character);
 
-    if (!checkOwnership(character, user.id)) {
-      return notFound('Character');
-    }
+        if (format === 'png') {
+          if (!character.avatarUrl) {
+            return badRequest('Character must have an avatar for PNG export');
+          }
 
-    // Get default image
-    let defaultImage = null;
-    if (character.defaultImageId) {
-      const fileEntry = await repos.files.findById(character.defaultImageId);
-      if (fileEntry) {
-        defaultImage = {
-          id: fileEntry.id,
-          filepath: getFilePath(fileEntry),
-          url: null,
-        };
+          // PNG export not yet implemented
+          return NextResponse.json(
+            {
+              error: 'PNG export requires avatar storage implementation. Use JSON export for now.',
+            },
+            { status: 501 }
+          );
+        } else {
+          return new NextResponse(JSON.stringify(stCharacter, null, 2), {
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Disposition': `attachment; filename="${character.name}.json"`,
+            },
+          });
+        }
+      } catch (error) {
+        logger.error('[Characters v1] Error exporting character', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to export character');
       }
     }
 
-    // Get chat count
-    const chats = await repos.chats.findByCharacterId(id);
+    // List recent chats with this character
+    case 'chats': {
+      try {
+        const { searchParams } = new URL(req.url);
+        const search = searchParams.get('search')?.toLowerCase() || '';
+        const limit = parseInt(searchParams.get('limit') || '10', 10);
+        const offset = parseInt(searchParams.get('offset') || '0', 10);
 
-    const enrichedCharacter = {
-      ...character,
-      defaultImage,
-      _count: {
-        chats: chats.length,
-      },
-    };
+        // Get chats with this character
+        const allChats = await repos.chats.findByCharacterId(id);
 
-    return NextResponse.json({ character: enrichedCharacter });
-  } catch (error) {
-    logger.error('[Characters v1] Error fetching character', { characterId: id }, error instanceof Error ? error : undefined);
-    return serverError('Failed to fetch character');
+        // Filter by user and sort by updatedAt descending
+        let userChats = allChats
+          .filter((chat) => chat.userId === user.id)
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+        // Pre-fetch messages for search if needed, and for enrichment
+        const chatsWithMessages = await Promise.all(
+          userChats.map(async (chat) => {
+            const allMessages = await repos.chats.getMessages(chat.id);
+            return { chat, messages: allMessages };
+          })
+        );
+
+        // Apply search filter if provided
+        let filteredChats = chatsWithMessages;
+        if (search) {
+          filteredChats = chatsWithMessages.filter(({ chat, messages }) => {
+            // Search in title
+            if (chat.title?.toLowerCase().includes(search)) {
+              return true;
+            }
+            // Search in message content
+            return messages.some(msg =>
+              msg.type === 'message' && msg.content.toLowerCase().includes(search)
+            );
+          });
+        }
+
+        // Apply pagination
+        const paginatedChats = filteredChats.slice(offset, offset + limit);
+
+        // Enrich chats with related data
+        const enrichedChats = await Promise.all(
+          paginatedChats.map(async ({ chat, messages }) => {
+            // Get persona participant if present
+            const personaParticipant = chat.participants.find(p => p.type === 'PERSONA' && p.personaId);
+            let persona = null;
+            if (personaParticipant?.personaId) {
+              const personaData = await repos.personas.findById(personaParticipant.personaId);
+              if (personaData) {
+                persona = {
+                  id: personaData.id,
+                  name: personaData.name,
+                  title: personaData.title,
+                };
+              }
+            }
+
+            // Get tags
+            const tagData = await Promise.all(
+              (chat.tags || []).map(async (tagId) => {
+                const tag = await repos.tags.findById(tagId);
+                return tag ? { tag: { id: tag.id, name: tag.name } } : null;
+              })
+            );
+            logger.debug('[Characters v1] Fetched tags for chat', { chatId: chat.id, tagCount: tagData.filter(Boolean).length });
+
+            // Get all messages and count them for badge
+            const messageCount = messages.filter((msg) => msg.type === 'message').length;
+
+            // Get last 3 messages for preview
+            const recentMessages = messages
+              .filter((msg) => msg.type === 'message')
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              .slice(0, 3)
+              .map((msg) => ({
+                id: msg.id,
+                role: msg.role,
+                content: msg.content,
+                createdAt: msg.createdAt,
+              }));
+
+            return {
+              id: chat.id,
+              title: chat.title,
+              createdAt: chat.createdAt,
+              updatedAt: chat.updatedAt,
+              character: {
+                id: character.id,
+                name: character.name,
+              },
+              persona,
+              messages: recentMessages,
+              tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
+              _count: {
+                messages: messageCount,
+              },
+            };
+          })
+        );
+
+        logger.debug('[Characters v1] Fetched character chats', { characterId: id, count: enrichedChats.length });
+        return NextResponse.json({ chats: enrichedChats, total: filteredChats.length });
+      } catch (error) {
+        logger.error('[Characters v1] Error fetching character chats', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to fetch chats');
+      }
+    }
+
+    // Get cascade delete preview
+    case 'cascade-preview': {
+      try {
+        const preview = await getCascadeDeletePreview(id);
+
+        if (!preview) {
+          return serverError('Failed to generate preview');
+        }
+
+        logger.debug('[Characters v1] Generated cascade preview', { characterId: id });
+        return NextResponse.json({
+          characterId: preview.characterId,
+          characterName: preview.characterName,
+          exclusiveChats: preview.exclusiveChats.map(c => ({
+            id: c.chat.id,
+            title: c.chat.title,
+            messageCount: c.messageCount,
+            lastMessageAt: c.chat.lastMessageAt,
+          })),
+          exclusiveCharacterImageCount: preview.exclusiveCharacterImages.length,
+          exclusiveChatImageCount: preview.exclusiveChatImages.length,
+          totalExclusiveImageCount:
+            preview.exclusiveCharacterImages.length + preview.exclusiveChatImages.length,
+          memoryCount: preview.memoryCount,
+        });
+      } catch (error) {
+        logger.error('[Characters v1] Error generating cascade delete preview', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to generate preview');
+      }
+    }
+
+    // Get default partner
+    case 'default-partner': {
+      try {
+        logger.debug('[Characters v1] Fetched default partner', { characterId: id, partnerId: character.defaultPartnerId });
+        return NextResponse.json({
+          partnerId: character.defaultPartnerId || null,
+        });
+      } catch (error) {
+        logger.error('[Characters v1] Error fetching default partner', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to fetch default partner');
+      }
+    }
+
+    // List linked personas
+    case 'personas': {
+      try {
+        // Get persona details for each linked persona
+        const personaLinks = await Promise.all(
+          character.personaLinks.map(async (link) => {
+            const persona = await repos.personas.findById(link.personaId);
+            return persona
+              ? {
+                  personaId: link.personaId,
+                  isDefault: link.isDefault,
+                  persona,
+                }
+              : null;
+          })
+        );
+
+        // Filter out null values (personas that no longer exist)
+        const validLinks = personaLinks.filter(Boolean);
+
+        logger.debug('[Characters v1] Fetched character personas', { characterId: id, count: validLinks.length });
+        return NextResponse.json({ personas: validLinks });
+      } catch (error) {
+        logger.error('[Characters v1] Error fetching character personas', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to fetch character personas');
+      }
+    }
+
+    // Get character tags
+    case 'get-tags': {
+      try {
+        // Get tag details for each tag ID
+        const tagDetails = await Promise.all(
+          (character.tags || []).map(async (tagId) => {
+            const tag = await repos.tags.findById(tagId);
+            return tag ? { id: tag.id, name: tag.name, visualStyle: tag.visualStyle } : null;
+          })
+        );
+
+        // Filter out null values (tags that no longer exist)
+        const validTags = tagDetails.filter(Boolean);
+
+        logger.debug('[Characters v1] Fetched character tags', { characterId: id, count: validTags.length });
+        return NextResponse.json({ tags: validTags });
+      } catch (error) {
+        logger.error('[Characters v1] Error fetching character tags', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to fetch character tags');
+      }
+    }
+
+    // Default: get character
+    default: {
+      try {
+        logger.debug('[Characters v1] GET character', { characterId: id, userId: user.id });
+
+        // Get default image
+        let defaultImage = null;
+        if (character.defaultImageId) {
+          const fileEntry = await repos.files.findById(character.defaultImageId);
+          if (fileEntry) {
+            defaultImage = {
+              id: fileEntry.id,
+              filepath: getFilePath(fileEntry),
+              url: null,
+            };
+          }
+        }
+
+        // Get chat count
+        const chats = await repos.chats.findByCharacterId(id);
+
+        const enrichedCharacter = {
+          ...character,
+          defaultImage,
+          _count: {
+            chats: chats.length,
+          },
+        };
+
+        return NextResponse.json({ character: enrichedCharacter });
+      } catch (error) {
+        logger.error('[Characters v1] Error fetching character', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to fetch character');
+      }
+    }
   }
 });
 
@@ -373,7 +601,137 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       }
     }
 
+    case 'toggle-controlled-by': {
+      try {
+        // Toggle the controlledBy property
+        const newControlledBy = character.controlledBy === 'user' ? 'llm' : 'user';
+        const updatedCharacter = await repos.characters.setControlledBy(id, newControlledBy);
+
+        logger.info('[Characters v1] ControlledBy toggled', { characterId: id, controlledBy: newControlledBy });
+
+        return NextResponse.json({ character: updatedCharacter });
+      } catch (error) {
+        logger.error('[Characters v1] Error toggling controlledBy', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to toggle controlled-by');
+      }
+    }
+
+    case 'set-default-partner': {
+      try {
+        const body = await req.json();
+        const { partnerId } = setDefaultPartnerSchema.parse(body);
+
+        // If partnerId is provided, verify it exists and is user-controlled
+        if (partnerId) {
+          const partner = await repos.characters.findById(partnerId);
+          if (!partner || partner.userId !== user.id) {
+            return notFound('Partner character');
+          }
+          if (partner.controlledBy !== 'user') {
+            return badRequest('Partner must be a user-controlled character');
+          }
+          if (partnerId === id) {
+            return badRequest('Character cannot be its own partner');
+          }
+        }
+
+        await repos.characters.update(id, {
+          defaultPartnerId: partnerId,
+        });
+
+        logger.info('[Characters v1] Default partner updated', {
+          characterId: id,
+          partnerId,
+        });
+
+        return NextResponse.json({
+          partnerId,
+          success: true,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return validationError(error);
+        }
+        logger.error('[Characters v1] Error updating default partner', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to update default partner');
+      }
+    }
+
+    case 'link-persona': {
+      try {
+        const body = await req.json();
+        const { personaId, isDefault } = linkPersonaSchema.parse(body);
+
+        // Verify persona belongs to user
+        const persona = await repos.personas.findById(personaId);
+
+        if (!persona || persona.userId !== user.id) {
+          return notFound('Persona');
+        }
+
+        // If setting as default, unset any existing default
+        if (isDefault) {
+          const updatedLinks = character.personaLinks.map((link) => ({
+            ...link,
+            isDefault: false,
+          }));
+          await repos.characters.update(id, { personaLinks: updatedLinks });
+        }
+
+        // Add persona link using repository method
+        await repos.characters.addPersona(id, personaId, isDefault);
+
+        // Get updated character to return the link
+        const updatedCharacter = await repos.characters.findById(id);
+        const link = updatedCharacter?.personaLinks.find((l) => l.personaId === personaId);
+
+        logger.info('[Characters v1] Persona linked', {
+          characterId: id,
+          personaId,
+          isDefault,
+        });
+
+        return NextResponse.json(
+          {
+            personaId,
+            isDefault: link?.isDefault || false,
+            persona,
+          },
+          { status: 201 }
+        );
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return validationError(error);
+        }
+        logger.error('[Characters v1] Error linking persona', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to link persona to character');
+      }
+    }
+
+    case 'unlink-persona': {
+      try {
+        const body = await req.json();
+        const { personaId } = unlinkPersonaSchema.parse(body);
+
+        // Remove the persona link
+        await repos.characters.removePersona(id, personaId);
+
+        logger.info('[Characters v1] Persona unlinked', {
+          characterId: id,
+          personaId,
+        });
+
+        return NextResponse.json({ success: true });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return validationError(error);
+        }
+        logger.error('[Characters v1] Error unlinking persona', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to unlink persona from character');
+      }
+    }
+
     default:
-      return badRequest(`Unknown action: ${action}. Available actions: favorite, avatar, add-tag, remove-tag`);
+      return badRequest(`Unknown action: ${action}. Available actions: favorite, avatar, add-tag, remove-tag, toggle-controlled-by, set-default-partner, link-persona, unlink-persona`);
   }
 });

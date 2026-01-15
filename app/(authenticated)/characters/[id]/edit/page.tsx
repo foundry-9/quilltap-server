@@ -114,7 +114,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     if (data.physicalDescription) {
       try {
         // Use the correct API endpoint for character physical descriptions
-        const response = await fetch(`/api/characters/${id}/descriptions`, {
+        const response = await fetch(`/api/v1/characters/${id}/descriptions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
