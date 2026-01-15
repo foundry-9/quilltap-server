@@ -4,6 +4,13 @@
 
 ### 2.7-dev
 
+- fix: Frontend v1 API response data structure mismatches (2026-01-15)
+  - `usePrompts`: Fixed to expect `{ templates, count }` and `{ template }` from v1 API
+  - `usePersonaDisplayName`: Changed to use legacy `/api/personas` (v1 route doesn't exist)
+  - `useConnectionProfiles`: Fixed chats API response extraction (`chatsData.chats`)
+  - `useEmbeddingProfiles`: Migrated from legacy `/api/keys` to `/api/v1/api-keys`
+  - `useTasksQueue`: Fixed job details extraction from `{ job }` wrapper
+  - `GenerateImageDialog`: Changed to use legacy `/api/personas` for deprecated personas
 - fix: Mount points API migrated to v1 endpoints (2026-01-14)
   - Updated frontend hooks to use `/api/v1/system/mount-points` instead of legacy `/api/mount-points`
   - Implemented `GET /api/v1/system/mount-points` - list all mount points

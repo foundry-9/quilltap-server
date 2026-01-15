@@ -35,7 +35,8 @@ export function useConnectionProfiles() {
         const chatsRes = await fetch('/api/v1/chats')
         if (!chatsRes.ok) return messageCounts
 
-        const chats = await chatsRes.json()
+        const chatsData = await chatsRes.json()
+        const chats = chatsData.chats || []
         if (!Array.isArray(chats)) return messageCounts
 
         // For each chat, count messages by profile

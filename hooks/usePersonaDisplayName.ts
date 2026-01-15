@@ -39,7 +39,8 @@ export function usePersonaDisplayName(): UsePersonaDisplayNameResult {
   useEffect(() => {
     const fetchPersonas = async () => {
       try {
-        const res = await fetch('/api/v1/personas')
+        // NOTE: Personas are deprecated - using legacy route until fully migrated to characters
+        const res = await fetch('/api/personas')
         if (!res.ok) {
           if (res.status === 401) {
             clientLogger.debug('Not authenticated, cannot check persona names')

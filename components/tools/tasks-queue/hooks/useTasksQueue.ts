@@ -88,8 +88,8 @@ export function useTasksQueue() {
         throw new Error('Failed to fetch job details')
       }
 
-      const job = await res.json()
-      setSelectedJob(job)
+      const data = await res.json()
+      setSelectedJob(data.job)
       setShowJobDialog(true)
       clientLogger.debug('Job details fetched', { jobId })
     } catch (err) {

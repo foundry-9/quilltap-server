@@ -27,11 +27,11 @@ export function usePrompts() {
   const fetchTemplates = useCallback(async () => {
     clientLogger.debug('Fetching prompt templates')
     const result = await fetchOp.execute(async () => {
-      const response = await fetchJson<PromptTemplate[]>('/api/v1/prompt-templates')
+      const response = await fetchJson<{ templates: PromptTemplate[]; count: number }>('/api/v1/prompt-templates')
       if (!response.ok) {
         throw new Error(response.error || 'Failed to fetch templates')
       }
-      return response.data || []
+      return response.data?.templates || []
     })
     if (result) {
       setTemplates(result)
@@ -55,7 +55,7 @@ export function usePrompts() {
         if (editingId) {
           // Update existing template
           clientLogger.debug('Updating template', { templateId: editingId })
-          const response = await fetchJson<PromptTemplate>(
+          const response = await fetchJson<{ template: PromptTemplate }>(
             `/api/v1/prompt-templates/${editingId}`,
             {
               method: 'PUT',
@@ -68,15 +68,15 @@ export function usePrompts() {
             throw new Error(response.error || 'Failed to update template')
           }
 
-          if (!response.data) {
+          if (!response.data?.template) {
             throw new Error('No data returned from server')
           }
 
-          return response.data
+          return response.data.template
         } else {
           // Create new template
           clientLogger.debug('Creating new template')
-          const response = await fetchJson<PromptTemplate>('/api/v1/prompt-templates', {
+          const response = await fetchJson<{ template: PromptTemplate }>('/api/v1/prompt-templates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(formData),
@@ -86,11 +86,11 @@ export function usePrompts() {
             throw new Error(response.error || 'Failed to create template')
           }
 
-          if (!response.data) {
+          if (!response.data?.template) {
             throw new Error('No data returned from server')
           }
 
-          return response.data
+          return response.data.template
         }
       })
 
