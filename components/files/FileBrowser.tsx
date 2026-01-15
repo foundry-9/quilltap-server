@@ -99,11 +99,11 @@ export default function FileBrowser({
       setLoading(true)
       const filesUrl = projectId
         ? `/api/v1/projects/${projectId}/files`
-        : '/api/files/general'
+        : '/api/v1/files?filter=general'
 
       const foldersUrl = projectId
-        ? `/api/files/folders?projectId=${projectId}`
-        : '/api/files/folders'
+        ? `/api/v1/files/folders?projectId=${projectId}`
+        : '/api/v1/files/folders'
 
       clientLogger.debug('[FileBrowser] Fetching files and folders', { projectId, filesUrl, foldersUrl })
 
@@ -262,7 +262,7 @@ export default function FileBrowser({
 
     try {
       clientLogger.debug('[FileBrowser] Deleting file', { fileId })
-      const res = await fetch(`/api/files/${fileId}`, { method: 'DELETE' })
+      const res = await fetch(`/api/v1/files/${fileId}`, { method: 'DELETE' })
       const data = await res.json().catch(() => ({}))
 
       if (res.ok) {
@@ -303,7 +303,7 @@ export default function FileBrowser({
         fileId: deleteConfirmation.fileId,
       })
       const res = await fetch(
-        `/api/files/${deleteConfirmation.fileId}?dissociate=true`,
+        `/api/v1/files/${deleteConfirmation.fileId}?dissociate=true`,
         { method: 'DELETE' }
       )
 

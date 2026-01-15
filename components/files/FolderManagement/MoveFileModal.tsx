@@ -67,8 +67,8 @@ export default function MoveFileModal({
         to: selectedFolder,
       })
 
-      const res = await fetch(`/api/files/${file.id}/move`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/v1/files/${file.id}?action=move`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           folderPath: selectedFolder,

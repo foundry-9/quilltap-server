@@ -77,7 +77,7 @@ export function FileWritePermissionPrompt({
       })
 
       // Call completion endpoint which grants permission AND executes the write
-      const res = await fetch('/api/files/write-permission/complete', {
+      const res = await fetch('/api/v1/files/write-permissions?action=complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -124,7 +124,7 @@ export function FileWritePermissionPrompt({
       })
 
       // Call completion endpoint with deny action
-      const res = await fetch('/api/files/write-permission/complete', {
+      const res = await fetch('/api/v1/files/write-permissions?action=complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

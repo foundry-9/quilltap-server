@@ -4,6 +4,17 @@
 
 ### 2.7-dev
 
+- feat: Files API routes migrated to v1 with action dispatch pattern (2026-01-15)
+  - Added folder actions to `/api/v1/files/folders`: create, rename, delete (via POST with action param)
+  - Added write-permission actions: revoke, complete (via POST with action param)
+  - Added general files filter: `GET /api/v1/files?filter=general`
+  - Created `/api/v1/files/proxy/[...key]` for file proxy access
+  - Converted all legacy `/api/files/*` routes to return `movedToV1()` (410 Gone)
+  - Updated 12 frontend components to use v1 file endpoints:
+    - FileBrowser, FolderPicker, CreateFolderModal, MoveFileModal, RenameModal
+    - FileThumbnail, MoveToProjectModal, AttachmentPromotionMenu
+    - FileWriteApprovalModal, FileWritePermissionPrompt, FilePermissionsManager
+    - files-section sidebar component
 - fix: File path URLs migrated to v1 API endpoints (2026-01-15)
   - Updated all hardcoded `/api/files/` paths to `/api/v1/files/` across the codebase
   - Fixed `getFilePath()` utility in `lib/api/middleware/file-path.ts`

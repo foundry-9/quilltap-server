@@ -64,7 +64,7 @@ export default function FileThumbnail({
   const containerRef = useRef<HTMLDivElement>(null)
 
   const canShowThumbnail = supportsThumbnail(mimeType)
-  const thumbnailUrl = canShowThumbnail ? `/api/files/${fileId}/thumbnail?size=${size}` : null
+  const thumbnailUrl = canShowThumbnail ? `/api/v1/files/${fileId}?action=thumbnail&size=${size}` : null
 
   // Lazy loading with Intersection Observer
   useEffect(() => {

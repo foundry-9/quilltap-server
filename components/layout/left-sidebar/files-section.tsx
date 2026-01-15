@@ -118,7 +118,7 @@ export function FilesSection() {
   const fetchFiles = useCallback(async () => {
     try {
       clientLogger.debug('FilesSection: Fetching general files')
-      const response = await fetch('/api/files/general')
+      const response = await fetch('/api/v1/files?filter=general')
       if (!response.ok) {
         throw new Error(`Failed to fetch files: ${response.status}`)
       }

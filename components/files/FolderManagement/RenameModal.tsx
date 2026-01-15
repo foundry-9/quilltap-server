@@ -92,8 +92,8 @@ export default function RenameModal(props: Readonly<RenameModalProps>) {
           newName: trimmedName,
         })
 
-        const res = await fetch(`/api/files/${props.file.id}/move`, {
-          method: 'PATCH',
+        const res = await fetch(`/api/v1/files/${props.file.id}?action=move`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             filename: trimmedName,
@@ -121,8 +121,8 @@ export default function RenameModal(props: Readonly<RenameModalProps>) {
           newName: trimmedName,
         })
 
-        const res = await fetch('/api/files/folders', {
-          method: 'PATCH',
+        const res = await fetch('/api/v1/files/folders?action=rename', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             path: props.folderPath,

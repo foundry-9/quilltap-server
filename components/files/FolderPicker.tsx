@@ -57,10 +57,10 @@ export default function FolderPicker({
       const scope = projectId ? 'project' : 'general'
       const filesUrl = projectId
         ? `/api/v1/projects/${projectId}/files`
-        : '/api/files/general'
+        : '/api/v1/files?filter=general'
       const foldersUrl = projectId
-        ? `/api/files/folders?projectId=${projectId}`
-        : '/api/files/folders'
+        ? `/api/v1/files/folders?projectId=${projectId}`
+        : '/api/v1/files/folders'
 
       clientLogger.debug('[FolderPicker] Fetching folders', { scope, projectId })
 
@@ -165,7 +165,7 @@ export default function FolderPicker({
       clientLogger.debug('[FolderPicker] Creating folder', { path: newPath, projectId })
 
       // Create the folder via API
-      const res = await fetch('/api/files/folders', {
+      const res = await fetch('/api/v1/files/folders?action=create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

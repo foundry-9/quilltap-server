@@ -103,7 +103,7 @@ export default function MoveToProjectModal({
         isGeneralFiles: isGeneralFilesSelected,
       })
 
-      const res = await fetch(`/api/files/${fileId}/promote`, {
+      const res = await fetch(`/api/v1/files/${fileId}?action=promote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -66,7 +66,7 @@ export default function FilePermissionsManager({
       setLoading(true)
       clientLogger.debug('[FilePermissionsManager] Fetching permissions')
 
-      const res = await fetch('/api/files/write-permission')
+      const res = await fetch('/api/v1/files/write-permissions')
       if (res.ok) {
         const data = await res.json()
         setPermissions(data.permissions || [])
@@ -99,8 +99,10 @@ export default function FilePermissionsManager({
       setRevoking(permissionId)
       clientLogger.debug('[FilePermissionsManager] Revoking permission', { permissionId })
 
-      const res = await fetch(`/api/files/write-permission/${permissionId}`, {
-        method: 'DELETE',
+      const res = await fetch('/api/v1/files/write-permissions?action=revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissionId }),
       })
 
       if (res.ok) {
@@ -133,8 +135,10 @@ export default function FilePermissionsManager({
 
       // Revoke each permission
       for (const permission of permissions) {
-        await fetch(`/api/files/write-permission/${permission.id}`, {
-          method: 'DELETE',
+        await fetch('/api/v1/files/write-permissions?action=revoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ permissionId: permission.id }),
         })
       }
 

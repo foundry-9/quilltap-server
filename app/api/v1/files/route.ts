@@ -1,7 +1,7 @@
 /**
  * Files API v1 - Collection Endpoint
  *
- * GET /api/v1/files - List files
+ * GET /api/v1/files - List files (filter by projectId, folderPath, or filter=general)
  * POST /api/v1/files?action=write - Write/create a file
  */
 
@@ -35,44 +35,54 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
     const searchParams = request.nextUrl.searchParams;
     const projectId = searchParams.get('projectId');
     const folderPath = searchParams.get('folderPath');
+    const filter = searchParams.get('filter');
 
     // Get all files for this user
     const allFiles = await repos.files.findByUserId(user.id);
 
-    // Filter by project if provided
+    // Filter files based on parameters
     let files = allFiles;
-    if (projectId) {
-      files = files.filter(f => f.projectId === projectId);
+
+    // filter=general returns only files without a project
+    if (filter === 'general') {
+      files = files.filter((f: any) => f.projectId === null || f.projectId === undefined);
+    } else if (projectId) {
+      // Filter by specific project
+      files = files.filter((f: any) => f.projectId === projectId);
     }
 
     // Filter by folder if provided
     if (folderPath) {
       const normalizedPath = normalizeFolderPath(folderPath);
-      files = files.filter(f => f.folderPath === normalizedPath);
+      files = files.filter((f: any) => f.folderPath === normalizedPath);
     }
 
     // Sort by createdAt descending
-    files.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    files.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    logger.info('[Files v1] Retrieved file list', { userId: user.id, fileCount: files.length });
+    logger.info('[Files v1] Retrieved file list', { userId: user.id, fileCount: files.length, filter });
 
     return successResponse({
-      data: files.map(file => ({
+      files: files.map((file: any) => ({
         id: file.id,
         userId: file.userId,
+        originalFilename: file.originalFilename,
         filename: file.originalFilename,
         filepath: getFilePath(file),
         mimeType: file.mimeType,
         size: file.size,
         category: file.category,
+        description: file.description,
         projectId: file.projectId,
-        folderPath: file.folderPath,
+        folderPath: file.folderPath || '/',
+        width: file.width,
+        height: file.height,
         createdAt: file.createdAt,
         updatedAt: file.updatedAt,
       })),
     });
   } catch (error) {
-    logger.error('[Files v1] Error listing files', { userId: (request as any).user?.id }, error instanceof Error ? error : undefined);
+    logger.error('[Files v1] Error listing files', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to list files');
   }
 });

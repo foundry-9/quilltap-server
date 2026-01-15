@@ -94,7 +94,7 @@ export default function AttachmentPromotionMenu({
         folderPath: selectedFolderPath,
       })
 
-      const res = await fetch(`/api/files/${attachmentId}/promote`, {
+      const res = await fetch(`/api/v1/files/${attachmentId}?action=promote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
