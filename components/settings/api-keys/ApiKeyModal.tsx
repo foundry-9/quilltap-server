@@ -59,7 +59,7 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
     })
 
     const result = await createKey.execute(async () => {
-      const response = await fetchJson<ApiKeyResponse>('/api/keys', {
+      const response = await fetchJson<{ apiKey: ApiKeyResponse }>('/api/v1/api-keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form.formData),
@@ -70,10 +70,10 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
       }
 
       clientLogger.debug('API key created successfully', {
-        id: response.data?.id,
-        associations: response.data?.associations?.length || 0,
+        id: response.data?.apiKey?.id,
+        associations: response.data?.apiKey?.associations?.length || 0,
       })
-      return response.data!
+      return response.data!.apiKey
     })
 
     if (result) {

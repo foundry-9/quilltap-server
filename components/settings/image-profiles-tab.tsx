@@ -85,10 +85,10 @@ export default function ImageProfilesTab() {
   useEffect(() => {
     const loadApiKeys = async () => {
       clientLogger.debug('Loading API keys for image profiles')
-      const response = await fetchJson<ApiKey[]>('/api/keys')
-      if (response.ok && response.data) {
-        clientLogger.debug('API keys loaded successfully', { count: response.data.length })
-        setApiKeys(response.data)
+      const response = await fetchJson<{ apiKeys: ApiKey[]; count: number }>('/api/v1/api-keys')
+      if (response.ok && response.data?.apiKeys) {
+        clientLogger.debug('API keys loaded successfully', { count: response.data.apiKeys.length })
+        setApiKeys(response.data.apiKeys)
       } else {
         clientLogger.error('Failed to load API keys', { error: response.error })
       }

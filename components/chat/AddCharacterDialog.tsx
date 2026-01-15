@@ -123,7 +123,7 @@ export default function AddCharacterDialog({
     try {
       const [charactersRes, profilesRes] = await Promise.all([
         fetch('/api/v1/characters'),
-        fetch('/api/profiles'),
+        fetch('/api/v1/connection-profiles'),
       ])
 
       if (!charactersRes.ok || !profilesRes.ok) {
@@ -134,7 +134,7 @@ export default function AddCharacterDialog({
       const profilesData = await profilesRes.json()
 
       const loadedCharacters = charactersData.characters || []
-      const loadedProfiles = Array.isArray(profilesData) ? profilesData : []
+      const loadedProfiles = profilesData.profiles || []
 
       setCharacters(loadedCharacters)
       setConnectionProfiles(loadedProfiles)

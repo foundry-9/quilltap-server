@@ -69,19 +69,20 @@ export function useAIWizard({
     const fetchProfiles = async () => {
       try {
         setLoadingProfiles(true)
-        const response = await fetch('/api/profiles')
+        const response = await fetch('/api/v1/connection-profiles')
         if (!response.ok) {
           throw new Error('Failed to fetch connection profiles')
         }
         const data = await response.json()
-        setProfiles(data)
+        const profileList = data.profiles || []
+        setProfiles(profileList)
 
         // Auto-select default profile if available
-        const defaultProfile = data.find((p: ConnectionProfile) => p.isDefault)
+        const defaultProfile = profileList.find((p: ConnectionProfile) => p.isDefault)
         if (defaultProfile) {
           setPrimaryProfileId(defaultProfile.id)
-        } else if (data.length > 0) {
-          setPrimaryProfileId(data[0].id)
+        } else if (profileList.length > 0) {
+          setPrimaryProfileId(profileList[0].id)
         }
       } catch (err) {
         clientLogger.error('Failed to fetch profiles for AI wizard', {

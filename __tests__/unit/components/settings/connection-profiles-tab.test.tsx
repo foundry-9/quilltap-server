@@ -38,9 +38,19 @@ describe('ConnectionProfilesTab max tokens limit', () => {
 
     // Setup default mock responses for fetchJson
     fetchJsonMock.mockImplementation(async (url: string, options?: any) => {
-      // Connection profiles list
-      if (url.includes('/api/v1/connection-profiles')) {
-        return { ok: true, data: [] }
+      // Test connection (v1 endpoint) - check before general connection-profiles
+      if (url === '/api/v1/connection-profiles?action=test-connection') {
+        return { ok: true, data: { message: 'Connected' } }
+      }
+
+      // Test message (v1 endpoint) - check before general connection-profiles
+      if (url === '/api/v1/connection-profiles?action=test-message') {
+        return { ok: true, data: { message: 'ok' } }
+      }
+
+      // Connection profiles list (no action param)
+      if (url === '/api/v1/connection-profiles' || url.startsWith('/api/v1/connection-profiles/')) {
+        return { ok: true, data: { profiles: [], count: 0 } }
       }
 
       // API keys
@@ -76,11 +86,6 @@ describe('ConnectionProfilesTab max tokens limit', () => {
         return { ok: true, data: { cheapLLMSettings: { defaultCheapProfileId: null } } }
       }
 
-      // Test connection
-      if (url === '/api/profiles/test-connection') {
-        return { ok: true, data: { message: 'Connected' } }
-      }
-
       // Fetch models
       if (url === '/api/v1/models') {
         return {
@@ -97,11 +102,6 @@ describe('ConnectionProfilesTab max tokens limit', () => {
             ],
           },
         }
-      }
-
-      // Test message
-      if (url === '/api/profiles/test-message') {
-        return { ok: true, data: { message: 'ok' } }
       }
 
       // Default response
@@ -152,7 +152,7 @@ describe('ConnectionProfilesTab max tokens limit', () => {
 
     // Verify connection test was called
     expect(fetchJsonMock).toHaveBeenCalledWith(
-      '/api/profiles/test-connection',
+      '/api/v1/connection-profiles?action=test-connection',
       expect.objectContaining({ method: 'POST' })
     )
 

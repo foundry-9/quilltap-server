@@ -98,14 +98,14 @@ export default function CreateNPCDialog({
     clientLogger.debug('[CreateNPCDialog] Loading connection profiles')
 
     try {
-      const response = await fetch('/api/profiles')
+      const response = await fetch('/api/v1/connection-profiles')
 
       if (!response.ok) {
         throw new Error('Failed to load connection profiles')
       }
 
       const profilesData = await response.json()
-      const loadedProfiles = Array.isArray(profilesData) ? profilesData : []
+      const loadedProfiles = profilesData.profiles || []
 
       setConnectionProfiles(loadedProfiles)
 

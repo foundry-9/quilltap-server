@@ -43,7 +43,7 @@ export default function ApiKeysTab() {
   const fetchApiKeysData = async () => {
     clientLogger.debug('Fetching API keys')
     const result = await loadKeys.execute(async () => {
-      const response = await fetchJson<ApiKey[]>('/api/keys', {
+      const response = await fetchJson<{ apiKeys: ApiKey[]; count: number }>('/api/v1/api-keys', {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
       })
@@ -53,9 +53,9 @@ export default function ApiKeysTab() {
       }
 
       clientLogger.debug('API keys fetched successfully', {
-        count: response.data?.length || 0,
+        count: response.data?.apiKeys?.length || 0,
       })
-      return response.data || []
+      return response.data?.apiKeys || []
     })
 
     if (result) {
@@ -90,7 +90,7 @@ export default function ApiKeysTab() {
 
     clientLogger.debug('Deleting API key', { id: deleteConfirmId })
     const result = await deleteKey.execute(async () => {
-      const response = await fetchJson<void>(`/api/keys/${deleteConfirmId}`, {
+      const response = await fetchJson<void>(`/api/v1/api-keys/${deleteConfirmId}`, {
         method: 'DELETE',
       })
 
@@ -114,7 +114,7 @@ export default function ApiKeysTab() {
 
     const result = await testKey.execute(async () => {
       const response = await fetchJson<{ valid: boolean; error?: string }>(
-        `/api/keys/${id}/test`,
+        `/api/v1/api-keys/${id}?action=test`,
         { method: 'POST' }
       )
 

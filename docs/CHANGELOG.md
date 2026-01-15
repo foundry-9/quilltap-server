@@ -4,6 +4,22 @@
 
 ### 2.7-dev
 
+- feat: Connection Profiles API routes migrated to v1 (2026-01-15)
+  - Converted legacy `/api/keys/*` routes to `movedToV1()`:
+    - `/api/keys` (GET, POST) -> `/api/v1/api-keys`
+    - `/api/keys/[id]` (GET, PUT, DELETE) -> `/api/v1/api-keys/{id}`
+    - `/api/keys/[id]/test` -> `/api/v1/api-keys/{id}?action=test`
+    - `/api/keys/auto-associate` -> `/api/v1/api-keys?action=auto-associate`
+    - `/api/keys/export`, `/api/keys/import`, `/api/keys/import/preview`
+  - Converted legacy `/api/profiles/*` routes to `movedToV1()`:
+    - `/api/profiles` (GET, POST) -> `/api/v1/connection-profiles`
+    - `/api/profiles/[id]` (GET, PUT, DELETE) -> `/api/v1/connection-profiles/{id}`
+    - `/api/profiles/[id]/tags` -> action dispatch on `/api/v1/connection-profiles/{id}`
+    - `/api/profiles/test-connection` -> `/api/v1/connection-profiles?action=test-connection`
+    - `/api/profiles/test-message` -> `/api/v1/connection-profiles?action=test-message`
+  - Updated 7 frontend components to use v1 endpoints:
+    - api-keys-tab.tsx, ApiKeyModal.tsx, image-profiles-tab.tsx
+    - useProfileForm.ts, useAIWizard.ts, AddCharacterDialog.tsx, CreateNPCDialog.tsx
 - feat: System Tools API routes migrated to v1 with action dispatch pattern (2026-01-15)
   - Enhanced `/api/v1/system/tools` with full functionality:
     - `action=delete-data` (POST) and `action=delete-data-preview` (GET) for data deletion

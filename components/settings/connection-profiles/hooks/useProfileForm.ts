@@ -150,7 +150,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
         }
 
         // Test the connection
-        const fetchResult = await fetchJson<any>('/api/profiles/test-connection', {
+        const fetchResult = await fetchJson<any>('/api/v1/connection-profiles?action=test-connection', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -226,7 +226,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
           throw new Error('Model name is required')
         }
 
-        const fetchResult = await fetchJson<any>('/api/profiles/test-message', {
+        const fetchResult = await fetchJson<any>('/api/v1/connection-profiles?action=test-message', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -264,7 +264,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
       const result = await saveOp.execute(async () => {
         clientLogger.debug('Saving connection profile', { editingId, profileName: form.formData.name })
         const method = editingId ? 'PUT' : 'POST'
-        const url = editingId ? `/api/profiles/${editingId}` : '/api/profiles'
+        const url = editingId ? `/api/v1/connection-profiles/${editingId}` : '/api/v1/connection-profiles'
         const requestBody = buildRequestBody()
 
         const fetchResult = await fetchJson<any>(url, {
