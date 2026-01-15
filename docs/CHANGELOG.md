@@ -4,6 +4,28 @@
 
 ### 2.7-dev
 
+- fix: File path URLs migrated to v1 API endpoints (2026-01-15)
+  - Updated all hardcoded `/api/files/` paths to `/api/v1/files/` across the codebase
+  - Fixed `getFilePath()` utility in `lib/api/middleware/file-path.ts`
+  - Fixed `getFileApiPath()` in `lib/images-v2.ts` and `lib/chat-files-v2.ts`
+  - Fixed image generation handler to return v1 file paths
+  - Fixed v1 images, projects, and sidebar routes to return v1 file paths
+  - Fixed frontend FilePreview hooks for download, delete, and preview URLs
+  - Fixed user profile avatar route to store v1 file paths
+  - Fixed S3 storage plugin proxy URL (version bumped to 1.0.1)
+  - Resolves broken avatar/image display throughout the application
+- feat: Authentication routes migrated to v1 API (2026-01-15)
+  - Created `/api/v1/auth/signup` - user registration endpoint
+  - Created `/api/v1/auth/change-password` - password change endpoint
+  - Created `/api/v1/auth/delete-account` - account deletion endpoint
+  - Created `/api/v1/auth/2fa/*` - all 2FA endpoints (setup, enable, disable, status, regenerate-backup-codes, trusted-devices)
+  - Created `/api/v1/auth/oauth/[provider]/*` - OAuth authorize and callback endpoints
+  - Converted all legacy `/api/auth/*` routes to return `movedToV1()` (410 Gone)
+  - Updated frontend auth pages and components to use v1 endpoints
+  - Updated session provider to use `/api/v1/auth/session`
+  - Updated Google OAuth plugin to use v1 callback URL (version 1.1.2)
+  - Fixed v1 auth/status endpoint to include full OAuth provider information
+  - Fixed v1 auth/session endpoint response format for frontend compatibility
 - fix: Frontend v1 API response data structure mismatches (2026-01-15)
   - `usePrompts`: Fixed to expect `{ templates, count }` and `{ template }` from v1 API
   - `usePersonaDisplayName`: Changed to use legacy `/api/personas` (v1 route doesn't exist)

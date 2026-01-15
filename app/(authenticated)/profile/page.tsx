@@ -56,7 +56,7 @@ export default function ProfilePage() {
     clientLogger.debug('Fetching auth status for profile page')
 
     try {
-      const res = await fetch('/api/auth/status')
+      const res = await fetch('/api/v1/auth/status')
       if (res.ok) {
         const data = await res.json()
         setAuthDisabled(data.authDisabled || false)

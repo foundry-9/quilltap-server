@@ -300,7 +300,7 @@ export class S3FileStorageBackend implements FileStorageBackend {
     const fullKey = this.buildKey(key);
     // For proxy URLs, we typically return a presigned URL or internal API endpoint
     // This would be the internal proxy endpoint
-    return `/api/files/${key}`;
+    return `/api/v1/files/${key}`;
   }
 
   // ========================================================================

@@ -95,7 +95,7 @@ export const PATCH = createAuthenticatedHandler(async (request, { user, repos })
     }
 
     // Update user with the image URL (file API path) or null
-    const imageUrl = imageId ? `/api/files/${imageId}` : null;
+    const imageUrl = imageId ? `/api/v1/files/${imageId}` : null;
     const updatedUser = await repos.users.update(userId, { image: imageUrl });
 
     if (!updatedUser) {

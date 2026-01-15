@@ -54,7 +54,7 @@ export function useFilePreview({
     () => getPreviewType(file.mimeType, file.isPlainText),
     [file.mimeType, file.isPlainText]
   )
-  const fileUrl = useMemo(() => `/api/files/${file.id}`, [file.id])
+  const fileUrl = useMemo(() => `/api/v1/files/${file.id}`, [file.id])
 
   const currentIndex = useMemo(
     () => files.findIndex(f => f.id === file.id),

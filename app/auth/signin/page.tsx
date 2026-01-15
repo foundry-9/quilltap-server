@@ -43,7 +43,7 @@ function SignInForm() {
   useEffect(() => {
     async function fetchAuthStatus() {
       try {
-        const response = await fetch('/api/auth/status');
+        const response = await fetch('/api/v1/auth/status');
         if (response.ok) {
           const data = await response.json();
           setAuthStatus(data);
@@ -76,7 +76,7 @@ function SignInForm() {
         .find(row => row.startsWith('totp_trusted_device='))
         ?.split('=')[1];
 
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch("/api/v1/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -104,7 +104,7 @@ function SignInForm() {
         // Login successful - if TOTP was verified and remember device is checked, create trusted device
         if (needsTotp && rememberDevice && totpCode) {
           try {
-            await fetch('/api/auth/2fa/trusted-devices', {
+            await fetch('/api/v1/auth/2fa/trusted-devices', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
@@ -126,7 +126,7 @@ function SignInForm() {
   function handleOAuthSignIn(providerId: string) {
     // Redirect to Arctic OAuth authorization endpoint
     const callbackUrl = encodeURIComponent("/");
-    window.location.href = `/api/auth/oauth/${providerId}/authorize?callbackUrl=${callbackUrl}`;
+    window.location.href = `/api/v1/auth/oauth/${providerId}/authorize?callbackUrl=${callbackUrl}`;
   }
 
   // Render Google icon SVG

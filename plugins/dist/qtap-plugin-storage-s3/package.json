@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-storage-s3",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "S3 file storage plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",

@@ -108,7 +108,7 @@ function generateUniqueFilename(
  * Get the filepath for a file - always returns API path for S3-backed files
  */
 function getFileApiPath(fileId: string): string {
-  return `/api/files/${fileId}`;
+  return `/api/v1/files/${fileId}`;
 }
 
 /**

@@ -86,7 +86,7 @@ async function handleCharacters(repos: any, userId: string) {
             || null;
         }
         if (imageToUse) {
-          defaultImage = `/api/files/${imageToUse.id}`;
+          defaultImage = `/api/v1/files/${imageToUse.id}`;
         }
       }
 
@@ -170,7 +170,7 @@ async function handleChats(repos: any, userId: string) {
           const anyImage = images[0];
           const imageToUse = avatarImage || anyImage;
           if (imageToUse) {
-            avatarUrl = `/api/files/${imageToUse.id}`;
+            avatarUrl = `/api/v1/files/${imageToUse.id}`;
           }
         }
 

@@ -938,7 +938,7 @@ function checkEnvVars(requiredVars) {
 }
 function getCallbackUrl() {
   const baseUrl = process.env.BASE_URL || "http://localhost:3000";
-  return `${baseUrl}/api/auth/oauth/google/callback`;
+  return `${baseUrl}/api/v1/auth/oauth/google/callback`;
 }
 function isConfigured() {
   const status = getConfigStatus();

@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-auth-google",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Google OAuth authentication provider for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",

@@ -64,7 +64,7 @@ function getExtension(filename: string): string {
  * Get the filepath for a file - always returns the API path for S3-backed files
  */
 function getFileApiPath(fileId: string): string {
-  return `/api/files/${fileId}`;
+  return `/api/v1/files/${fileId}`;
 }
 
 interface CreateFileParams {

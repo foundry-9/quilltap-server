@@ -2,12 +2,20 @@
  * Auth API v1 - Session Endpoint
  *
  * GET /api/v1/auth/session - Get current session info
+ *
+ * Returns the current session for authenticated users.
+ * Used by the frontend SessionProvider to get session state.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextRequest } from 'next/server';
+import { getServerSession, type ExtendedSession } from '@/lib/auth/session';
 import { logger } from '@/lib/logger';
-import { successResponse, unauthorized } from '@/lib/api/responses';
+import { successResponse } from '@/lib/api/responses';
+
+interface SessionResponse {
+  user: ExtendedSession['user'] | null;
+  expires: string | null;
+}
 
 // ============================================================================
 // GET Handler
@@ -19,16 +27,17 @@ export async function GET(req: NextRequest) {
 
     if (!session) {
       logger.debug('[Auth v1] Session check - no active session');
-      return unauthorized('No active session');
+      return successResponse<SessionResponse>({
+        user: null,
+        expires: null,
+      });
     }
 
     logger.debug('[Auth v1] Session retrieved', { userId: session.user.id });
 
-    return successResponse({
-      session: {
-        user: session.user,
-        expires: session.expires,
-      },
+    return successResponse<SessionResponse>({
+      user: session.user,
+      expires: session.expires,
     });
   } catch (error) {
     logger.error(
@@ -38,6 +47,9 @@ export async function GET(req: NextRequest) {
     );
 
     // Even on error, return no session (not an error response)
-    return unauthorized('Invalid session');
+    return successResponse<SessionResponse>({
+      user: null,
+      expires: null,
+    });
   }
 }

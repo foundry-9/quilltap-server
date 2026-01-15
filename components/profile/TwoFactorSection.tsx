@@ -91,7 +91,7 @@ export function TwoFactorSection({
     clientLogger.debug('Starting 2FA setup')
 
     try {
-      const res = await fetch('/api/auth/2fa/setup', {
+      const res = await fetch('/api/v1/auth/2fa/setup', {
         method: 'POST',
       })
 
@@ -121,7 +121,7 @@ export function TwoFactorSection({
     clientLogger.debug('Verifying 2FA code', { codeLength: verificationCode.length })
 
     try {
-      const res = await fetch('/api/auth/2fa/enable', {
+      const res = await fetch('/api/v1/auth/2fa/enable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -161,7 +161,7 @@ export function TwoFactorSection({
     clientLogger.debug('Disabling 2FA')
 
     try {
-      const res = await fetch('/api/auth/2fa/disable', {
+      const res = await fetch('/api/v1/auth/2fa/disable', {
         method: 'POST',
       })
 
@@ -197,7 +197,7 @@ export function TwoFactorSection({
     clientLogger.debug('Regenerating backup codes')
 
     try {
-      const res = await fetch('/api/auth/2fa/regenerate-backup-codes', {
+      const res = await fetch('/api/v1/auth/2fa/regenerate-backup-codes', {
         method: 'POST',
       })
 

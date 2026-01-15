@@ -126,7 +126,7 @@ export function ProfileMenu() {
 
   // Check if auth is disabled
   useEffect(() => {
-    fetch('/api/auth/status')
+    fetch('/api/v1/auth/status')
       .then(res => res.json())
       .then(data => {
         if (data.authDisabled) {
@@ -179,7 +179,7 @@ export function ProfileMenu() {
     setIsOpen(false)
     if (isMobile) closeMobile()
     try {
-      await fetch('/api/auth/logout', {
+      await fetch('/api/v1/auth/logout', {
         method: 'POST',
         credentials: 'include',
       })

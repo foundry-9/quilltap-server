@@ -21,7 +21,7 @@ import type { FileEntry, Character, Persona } from '@/lib/schemas/types';
  * const file = await repos.files.findById(character.defaultImageId);
  * if (file) {
  *   const filepath = getFilePath(file);
- *   // Returns '/api/files/{id}' for files with storageKey or s3Key
+ *   // Returns '/api/v1/files/{id}' for files with storageKey or s3Key
  *   // Returns 'data/files/storage/{id}.ext' for legacy local files
  * }
  * ```
@@ -29,7 +29,7 @@ import type { FileEntry, Character, Persona } from '@/lib/schemas/types';
 export function getFilePath(file: FileEntry): string {
   // Files with storage keys (S3, mount points, etc.) use the API route
   if (file.storageKey || file.s3Key) {
-    return `/api/files/${file.id}`;
+    return `/api/v1/files/${file.id}`;
   }
 
   // Legacy local files - construct path with extension

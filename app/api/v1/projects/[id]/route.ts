@@ -113,10 +113,25 @@ async function handleGetDefault(req: NextRequest, context: AuthenticatedContext,
           chat.participants?.some((p: any) => p.characterId === charId)
         );
 
+        // Get default image for avatar display
+        let defaultImage = null;
+        if (char.defaultImageId) {
+          const file = await repos.files.findById(char.defaultImageId);
+          if (file) {
+            defaultImage = {
+              id: file.id,
+              filepath: getFilePath(file),
+              url: null,
+            };
+          }
+        }
+
         return {
           id: char.id,
           name: char.name,
           avatarUrl: char.avatarUrl,
+          defaultImageId: char.defaultImageId,
+          defaultImage,
           tags: char.tags || [],
           chatCount: charProjectChats.length,
         };
@@ -224,7 +239,8 @@ async function handleListChats(req: NextRequest, context: AuthenticatedContext, 
                 if (imageFile) {
                   defaultImage = {
                     id: imageFile.id,
-                    filepath: `/api/files/${imageFile.id}`,
+                    filepath: getFilePath(imageFile),
+                    url: null,
                   };
                 }
               }

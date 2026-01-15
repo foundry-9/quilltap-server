@@ -28,7 +28,7 @@ export function TwoFactorPrompt() {
     // Fetch 2FA status
     async function checkStatus() {
       try {
-        const res = await fetch('/api/auth/2fa/status')
+        const res = await fetch('/api/v1/auth/2fa/status')
         if (res.ok) {
           const data = await res.json()
           setStatus(data)

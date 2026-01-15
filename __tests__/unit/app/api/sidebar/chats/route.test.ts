@@ -257,7 +257,7 @@ describe('Sidebar Chats API Route (v1)', () => {
         expect(chat.participants[0].name).toBe('Alice')
         expect(chat.participants[0].avatarUrl).toBe('https://example.com/alice.png')
         expect(chat.participants[1].name).toBe('Bob')
-        expect(chat.participants[1].avatarUrl).toBe('/api/files/img-1')
+        expect(chat.participants[1].avatarUrl).toBe('/api/v1/files/img-1')
       })
 
       it('should collect character tags for filtering', async () => {

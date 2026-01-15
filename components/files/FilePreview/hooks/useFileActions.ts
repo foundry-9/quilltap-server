@@ -72,7 +72,7 @@ export function useFileActions({
 
     // Create a download link
     const link = document.createElement('a')
-    link.href = `/api/files/${file.id}`
+    link.href = `/api/v1/files/${file.id}`
     link.download = file.originalFilename || file.filename || 'download'
     document.body.appendChild(link)
     link.click()
@@ -92,7 +92,7 @@ export function useFileActions({
 
     try {
       // No longer using force=true - respect associations
-      const response = await fetch(`/api/files/${file.id}`, {
+      const response = await fetch(`/api/v1/files/${file.id}`, {
         method: 'DELETE',
       })
 
@@ -147,7 +147,7 @@ export function useFileActions({
     })
 
     try {
-      const response = await fetch(`/api/files/${pendingDelete.fileId}?dissociate=true`, {
+      const response = await fetch(`/api/v1/files/${pendingDelete.fileId}?dissociate=true`, {
         method: 'DELETE',
       })
 

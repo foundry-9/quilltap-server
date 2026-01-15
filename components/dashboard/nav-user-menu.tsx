@@ -105,7 +105,7 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
 
   // Check if auth is disabled (no point showing sign out if auto-logged in)
   useEffect(() => {
-    fetch('/api/auth/status')
+    fetch('/api/v1/auth/status')
       .then(res => res.json())
       .then(data => {
         if (data.authDisabled) {
@@ -145,7 +145,7 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
   const handleSignOut = async () => {
     clientLogger.info('User signing out from user menu')
     try {
-      await fetch('/api/auth/logout', {
+      await fetch('/api/v1/auth/logout', {
         method: 'POST',
         credentials: 'include',
       })

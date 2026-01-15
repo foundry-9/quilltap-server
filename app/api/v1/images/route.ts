@@ -125,7 +125,7 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
                      img.source === 'GENERATED' ? 'generated' : 'upload';
 
       // Use API route for file path
-      const filepath = (img.storageKey || img.s3Key) ? `/api/files/${img.id}` : img.originalFilename;
+      const filepath = (img.storageKey || img.s3Key) ? `/api/v1/files/${img.id}` : img.originalFilename;
 
       return {
         id: img.id,
@@ -290,7 +290,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
         }, { id: fileId });
 
         // Use API route for file path
-        const filepath = `/api/files/${file.id}`;
+        const filepath = `/api/v1/files/${file.id}`;
 
         return {
           id: file.id,

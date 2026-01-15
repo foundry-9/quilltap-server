@@ -316,7 +316,7 @@ describe('Sidebar Characters API Route (v1)', () => {
         const body = await response.json()
 
         expect(response.status).toBe(200)
-        expect(body.characters[0].defaultImage).toBe('/api/files/img-1')
+        expect(body.characters[0].defaultImage).toBe('/api/v1/files/img-1')
       })
 
       it('should fallback to avatar-tagged image', async () => {
@@ -331,7 +331,7 @@ describe('Sidebar Characters API Route (v1)', () => {
         const body = await response.json()
 
         expect(response.status).toBe(200)
-        expect(body.characters[0].defaultImage).toBe('/api/files/img-1')
+        expect(body.characters[0].defaultImage).toBe('/api/v1/files/img-1')
       })
 
       it('should limit to 10 characters', async () => {

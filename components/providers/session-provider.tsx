@@ -79,7 +79,7 @@ function CustomSessionProvider({
 
   const fetchSession = useCallback(async (): Promise<Session | null> => {
     try {
-      const response = await fetch("/api/auth/session", {
+      const response = await fetch("/api/v1/auth/session", {
         credentials: "include",
       });
 

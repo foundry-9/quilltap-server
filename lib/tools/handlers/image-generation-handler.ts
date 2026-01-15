@@ -130,11 +130,11 @@ async function saveGeneratedImage(
     }, { id: fileId });
 
     // Always use API route for S3-backed files
-    const filepath = `/api/files/${fileEntry.id}`;
+    const filepath = `/api/v1/files/${fileEntry.id}`;
 
     return {
       id: fileEntry.id,
-      url: `/api/images/${fileEntry.id}`,
+      url: `/api/v1/images/${fileEntry.id}`,
       filename: fileEntry.originalFilename,
       revisedPrompt: metadata.revisedPrompt,
       filepath,

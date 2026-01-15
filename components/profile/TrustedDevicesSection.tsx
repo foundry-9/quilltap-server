@@ -93,7 +93,7 @@ export function TrustedDevicesSection({ totpEnabled }: TrustedDevicesSectionProp
     clientLogger.debug('Loading trusted devices')
 
     try {
-      const res = await fetch('/api/auth/2fa/trusted-devices')
+      const res = await fetch('/api/v1/auth/2fa/trusted-devices')
       if (res.ok) {
         const data = await res.json()
         setDevices(data.devices || [])
@@ -124,7 +124,7 @@ export function TrustedDevicesSection({ totpEnabled }: TrustedDevicesSectionProp
     clientLogger.debug('Revoking trusted device', { deviceId })
 
     try {
-      const res = await fetch(`/api/auth/2fa/trusted-devices?deviceId=${deviceId}`, {
+      const res = await fetch(`/api/v1/auth/2fa/trusted-devices?deviceId=${deviceId}`, {
         method: 'DELETE',
       })
 
@@ -150,7 +150,7 @@ export function TrustedDevicesSection({ totpEnabled }: TrustedDevicesSectionProp
     clientLogger.debug('Revoking all trusted devices')
 
     try {
-      const res = await fetch('/api/auth/2fa/trusted-devices?all=true', {
+      const res = await fetch('/api/v1/auth/2fa/trusted-devices?all=true', {
         method: 'DELETE',
       })
 
