@@ -8,7 +8,7 @@ import { useClickOutside } from '@/hooks/useClickOutside'
 interface EntityOption {
   id: string
   name: string
-  type: 'character' | 'persona'
+  type: 'character'
 }
 
 interface Participant {
@@ -58,34 +58,23 @@ export default function GenerateImageDialog({
 
   const loadAllEntities = async () => {
     try {
-      const [charactersRes, personasRes] = await Promise.all([
-        fetch('/api/v1/characters'),
-        // NOTE: Personas are deprecated - using legacy route until fully migrated to characters
-        fetch('/api/personas'),
-      ])
+      clientLogger.debug('Loading all characters for image dialog')
+      const charactersRes = await fetch('/api/v1/characters')
 
-      if (!charactersRes.ok || !personasRes.ok) {
-        throw new Error('Failed to load entities')
+      if (!charactersRes.ok) {
+        throw new Error('Failed to load characters')
       }
 
       const charactersData = await charactersRes.json()
-      const personasData = await personasRes.json()
-
       const characters = charactersData.characters || []
-      const personas = Array.isArray(personasData) ? personasData : personasData.personas || []
 
-      const entities: EntityOption[] = [
-        ...characters.map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          type: 'character' as const,
-        })),
-        ...personas.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          type: 'persona' as const,
-        })),
-      ]
+      clientLogger.debug('Loaded characters', { count: characters.length })
+
+      const entities: EntityOption[] = characters.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        type: 'character' as const,
+      }))
 
       // Sort alphabetically
       entities.sort((a, b) => a.name.localeCompare(b.name))
@@ -93,7 +82,7 @@ export default function GenerateImageDialog({
       setAllEntities(entities)
     } catch (error) {
       clientLogger.error('Error loading entities', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast('Failed to load characters and personas')
+      showErrorToast('Failed to load characters')
     }
   }
 

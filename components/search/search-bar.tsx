@@ -70,7 +70,7 @@ export function SearchBar() {
     clientLogger.debug('Performing inline search', { query: searchQuery })
 
     try {
-      const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&limit=20`)
+      const response = await fetch(`/api/v1/ui/search?q=${encodeURIComponent(searchQuery)}&limit=20`)
 
       if (!response.ok) {
         throw new Error(`Search failed: ${response.status}`)

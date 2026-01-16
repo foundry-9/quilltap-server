@@ -111,7 +111,7 @@ export default function ImageProfilesTab() {
   const handleDelete = async (id: string) => {
     clientLogger.debug('Deleting image profile', { profileId: id })
     const result = await executeDelete(async () => {
-      const response = await fetchJson(`/api/image-profiles/${id}`, { method: 'DELETE' })
+      const response = await fetchJson(`/api/v1/image-profiles/${id}`, { method: 'DELETE' })
       if (!response.ok) {
         throw new Error(response.error || 'Failed to delete profile')
       }

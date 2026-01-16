@@ -34,7 +34,7 @@ export function useRestoreData(isOpen: boolean) {
     setState((prev) => ({ ...prev, loadingBackups: true }))
     try {
       clientLogger.info('Loading S3 backups')
-      const response = await fetch('/api/tools/backup/list')
+      const response = await fetch('/api/v1/system/backup')
       if (!response.ok) throw new Error('Failed to load backups')
       const data = await response.json()
       setState((prev) => ({
@@ -99,7 +99,7 @@ export function useRestoreData(isOpen: boolean) {
         formData.append('s3Key', state.selectedS3Key)
       }
 
-      const previewResponse = await fetch('/api/tools/backup/preview', {
+      const previewResponse = await fetch('/api/v1/system/restore?action=preview', {
         method: 'POST',
         body: formData,
       })
@@ -194,7 +194,7 @@ export function useRestoreData(isOpen: boolean) {
         }
         formData.append('mode', state.restoreMode === 'replace' ? 'replace' : 'new-account')
 
-        const response = await fetch('/api/tools/backup/restore', {
+        const response = await fetch('/api/v1/system/restore', {
           method: 'POST',
           body: formData,
         })

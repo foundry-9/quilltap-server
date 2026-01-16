@@ -123,12 +123,13 @@ export default function ChatGalleryImageViewModal({
 
         if (galleryImage) {
           // Remove tag
-          const params = new URLSearchParams({
-            tagType: 'CHARACTER',
-            tagId: characterId,
-          })
-          const res = await fetch(`/api/images/${galleryImage.id}/tags?${params.toString()}`, {
-            method: 'DELETE',
+          const res = await fetch(`/api/v1/images/${galleryImage.id}?action=remove-tag`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tagType: 'CHARACTER',
+              tagId: characterId,
+            }),
           })
           if (!res.ok) {
             const data = await safeJsonParse<{ error?: string }>(res)
@@ -177,12 +178,13 @@ export default function ChatGalleryImageViewModal({
 
         if (galleryImage) {
           // Remove tag
-          const params = new URLSearchParams({
-            tagType: 'PERSONA',
-            tagId: personaId,
-          })
-          const res = await fetch(`/api/images/${galleryImage.id}/tags?${params.toString()}`, {
-            method: 'DELETE',
+          const res = await fetch(`/api/v1/images/${galleryImage.id}?action=remove-tag`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tagType: 'PERSONA',
+              tagId: personaId,
+            }),
           })
           if (!res.ok) {
             const data = await safeJsonParse<{ error?: string }>(res)

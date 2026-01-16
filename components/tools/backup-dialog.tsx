@@ -36,7 +36,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
         body.filename = filename
       }
 
-      const response = await fetch('/api/tools/backup/create', {
+      const response = await fetch('/api/v1/system/backup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -55,7 +55,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
 
       if (destination === 'download' && data.backupId) {
         // Trigger download
-        const downloadUrl = `/api/tools/backup/download?backupId=${data.backupId}`
+        const downloadUrl = `/api/v1/system/backup/${data.backupId}`
         const link = document.createElement('a')
         link.href = downloadUrl
         link.download = data.filename || `quilltap-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`

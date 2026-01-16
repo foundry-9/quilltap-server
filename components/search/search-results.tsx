@@ -201,7 +201,7 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
 function TagResultCard({ result, query, onResultClick }: { result: TagSearchResult; query: string; onResultClick?: () => void }) {
   return (
     <Link
-      href={`/api/search?q=${encodeURIComponent(result.name)}&types=characters,personas,chats,memories`}
+      href={`/api/v1/ui/search?q=${encodeURIComponent(result.name)}&types=characters,personas,chats,memories`}
       onClick={(e) => {
         // For tags, we want to show items with this tag
         // This will be handled by the SearchDialog to show expanded results

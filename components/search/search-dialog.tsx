@@ -62,7 +62,7 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
 
     try {
       const typesParam = types.join(',')
-      const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&types=${typesParam}&limit=30`)
+      const response = await fetch(`/api/v1/ui/search?q=${encodeURIComponent(searchQuery)}&types=${typesParam}&limit=30`)
 
       if (!response.ok) {
         throw new Error(`Search failed: ${response.status}`)

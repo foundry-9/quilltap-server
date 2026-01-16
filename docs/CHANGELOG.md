@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- feat: Migrate remaining frontend components to v1 API endpoints (2026-01-16)
+  - Updated GenerateImageDialog to use `/api/v1/characters` instead of deprecated `/api/personas`
+  - Updated ChatGalleryImageViewModal image tag removal to use POST with `?action=remove-tag`
+  - Updated image-profiles-tab DELETE to use `/api/v1/image-profiles`
+  - Updated search components (search-bar, search-dialog, search-results) to use `/api/v1/ui/search`
+  - Updated backup/restore components to use `/api/v1/system/backup` and `/api/v1/system/restore`
 - fix: Fix capabilities report generation 500 error (2026-01-15)
   - Fixed sha256 hash computation using string input instead of Buffer to resolve TypeScript type mismatch
   - Report files now properly save with valid SHA256 hash
