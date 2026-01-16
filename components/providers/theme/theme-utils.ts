@@ -146,9 +146,10 @@ export async function fetchThemePreference(): Promise<{
   showNavThemeSelector: boolean;
 } | null> {
   try {
-    const response = await fetch('/api/theme-preference');
+    const response = await fetch('/api/v1/user/profile?action=theme-preference');
     if (response.ok) {
-      const preference = await response.json();
+      const json = await response.json();
+      const preference = json.data || json;
       return {
         activeThemeId: preference.activeThemeId ?? null,
         colorMode: preference.colorMode ?? 'system',
@@ -178,7 +179,7 @@ export async function saveThemePreference(
   }>
 ): Promise<void> {
   try {
-    const response = await fetch('/api/theme-preference', {
+    const response = await fetch('/api/v1/user/profile?action=theme-preference', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(preference),

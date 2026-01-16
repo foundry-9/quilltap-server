@@ -1,9 +1,9 @@
 /**
- * Image Generation API Tests
- * Phase 3: Image Generation Endpoint
+ * Image Generation API Tests (v1)
+ * Tests POST /api/v1/images?action=generate
  */
 
-import { POST } from '@/app/api/images/generate/route'
+import { POST } from '@/app/api/v1/images/route'
 import { getServerSession } from '@/lib/auth/session'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
@@ -11,6 +11,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { fileStorageManager } from '@/lib/file-storage/manager'
 import { getInheritedTags } from '@/lib/files/tag-inheritance'
 import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
+import { NextRequest } from 'next/server'
 
 // Create mock repos before jest.mock
 const mockRepos = createMockRepositoryContainer()
@@ -25,16 +26,20 @@ const mockGetRepositories = jest.mocked(getRepositories)
 const mockFileStorageManager = jest.mocked(fileStorageManager)
 const mockGetInheritedTags = jest.mocked(getInheritedTags)
 
-// Helper to create a mock NextRequest
+// Helper to create a mock NextRequest with action=generate query parameter
 function createMockRequest(body: any) {
+  const url = new URL('http://localhost:3000/api/v1/images?action=generate')
   return {
     json: jest.fn().mockResolvedValue(body),
-  } as any
+    nextUrl: url,
+    url: url.toString(),
+    headers: new Headers({ 'Content-Type': 'application/json' }),
+  } as unknown as NextRequest
 }
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000'
 
-describe('POST /api/images/generate', () => {
+describe('POST /api/v1/images?action=generate', () => {
   let mockConnectionsRepo: any
   let mockImagesRepo: any
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
@@ -116,7 +121,7 @@ describe('POST /api/images/generate', () => {
     expect(response.status).toBe(400)
   })
 
-  it('should return 404 if connection profile not found', async () => {
+  it('should return 400 if connection profile not found', async () => {
     mockGetServerSession.mockResolvedValueOnce({
       user: { id: 'test-user-id', email: 'test@example.com' },
     } as any)
@@ -129,7 +134,7 @@ describe('POST /api/images/generate', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(400)
   })
 
   it('should return 400 if provider does not support image generation', async () => {
@@ -242,7 +247,7 @@ describe('POST /api/images/generate', () => {
     const response = await POST(request)
     const data = await response.json()
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(201)
     expect(data.data).toBeDefined()
     expect(data.data).toHaveLength(1)
     expect(data.metadata.prompt).toBe('a beautiful landscape')
@@ -250,9 +255,9 @@ describe('POST /api/images/generate', () => {
     expect(mockProvider.generateImage).toHaveBeenCalled()
     expect(mockFileStorageManager.uploadFile).toHaveBeenCalled()
 
-    // Verify new Phase 4 fields are set correctly
+    // Verify fields are set correctly
     // Second argument is { id: fileId } to ensure metadata ID matches S3 path
-    expect(mockImagesRepo.create).toHaveBeenCalledWith(
+    expect(mockRepos.files.create).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'GENERATED',
         generationPrompt: 'a beautiful landscape',
@@ -345,7 +350,7 @@ describe('POST /api/images/generate', () => {
     const response = await POST(request)
     const data = await response.json()
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(201)
     expect(data.data[0].tags).toHaveLength(1)
     expect(data.data[0].tags[0].tagType).toBe('CHARACTER')
   })
@@ -428,7 +433,7 @@ describe('POST /api/images/generate', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(201)
     expect(mockProvider.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: 'a test image',

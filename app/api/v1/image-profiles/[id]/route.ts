@@ -7,12 +7,25 @@
  * POST /api/v1/image-profiles/[id]?action=generate - Generate image using this profile
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
-import { notFound, badRequest, serverError, messageResponse } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, messageResponse, validationError, successResponse } from '@/lib/api/responses';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
+import { executeImageGenerationTool } from '@/lib/tools/handlers/image-generation-handler';
 import { logger } from '@/lib/logger';
+import { z } from 'zod';
+
+const generateImageSchema = z.object({
+  prompt: z.string().min(1).max(4000),
+  chatId: z.string().uuid().optional(),
+  count: z.number().int().min(1).max(10).optional().default(1),
+  size: z.string().optional(),
+  quality: z.enum(['standard', 'hd']).optional(),
+  style: z.enum(['vivid', 'natural']).optional(),
+  aspectRatio: z.string().optional(),
+  negativePrompt: z.string().optional(),
+});
 
 /**
  * GET /api/v1/image-profiles/[id]
@@ -226,6 +239,85 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
     } catch (error) {
       logger.error('[Image Profiles v1] Error deleting profile', { profileId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete image profile');
+    }
+  }
+);
+
+/**
+ * POST /api/v1/image-profiles/[id]?action=generate
+ * Generate images using this profile with placeholder expansion support
+ */
+export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    const action = getActionParam(req);
+
+    if (action !== 'generate') {
+      return badRequest(`Unknown action: ${action}. Available actions: generate`);
+    }
+
+    try {
+      logger.debug('[Image Profiles v1] Generating image', { profileId: id, userId: user.id });
+
+      // Verify profile exists and belongs to user
+      const profile = await repos.imageProfiles.findById(id);
+
+      if (!profile || profile.userId !== user.id) {
+        return notFound('Image profile');
+      }
+
+      // Validate request body
+      const body = await req.json();
+      const validated = generateImageSchema.parse(body);
+
+      // Execute image generation with prompt expansion support
+      const result = await executeImageGenerationTool(
+        {
+          prompt: validated.prompt,
+          count: validated.count,
+          size: validated.size,
+          quality: validated.quality,
+          style: validated.style,
+          aspectRatio: validated.aspectRatio,
+          negativePrompt: validated.negativePrompt,
+        },
+        {
+          userId: user.id,
+          profileId: id,
+          chatId: validated.chatId,
+        }
+      );
+
+      if (!result.success) {
+        logger.warn('[Image Profiles v1] Image generation failed', {
+          profileId: id,
+          error: result.error,
+        });
+        return badRequest(result.error || 'Image generation failed');
+      }
+
+      logger.info('[Image Profiles v1] Image generation complete', {
+        profileId: id,
+        imageCount: result.images?.length || 0,
+      });
+
+      return successResponse({
+        success: true,
+        data: result.images,
+        expandedPrompt: result.expandedPrompt,
+        metadata: {
+          originalPrompt: validated.prompt,
+          provider: result.provider,
+          model: result.model,
+          count: result.images?.length || 0,
+        },
+      }, 201);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return validationError(error);
+      }
+
+      logger.error('[Image Profiles v1] Error generating image', { profileId: id }, error instanceof Error ? error : undefined);
+      return serverError('Failed to generate images');
     }
   }
 );

@@ -4,6 +4,24 @@
 
 ### 2.7-dev
 
+- feat: Image generation and user profile routes migrated to v1 API (2026-01-15)
+  - Added `?action=generate` to `/api/v1/image-profiles/[id]` for image generation with placeholder support
+  - Added user profile actions to `/api/v1/user/profile`:
+    - GET/PUT `?action=theme-preference` - Get/update theme preference
+    - PATCH `?action=set-avatar` - Set or clear profile avatar
+  - Converted legacy routes to `movedToV1()`:
+    - `/api/images/generate` → `/api/v1/images?action=generate`
+    - `/api/images/[id]/tags` → `/api/v1/images/[id]?action=add-tag|remove-tag`
+    - `/api/image-profiles/[id]/generate` → `/api/v1/image-profiles/[id]?action=generate`
+    - `/api/image-profiles/validate-key` → `/api/v1/image-profiles?action=validate-key`
+    - `/api/user/profile` → `/api/v1/user/profile`
+    - `/api/user/profile/avatar` → `/api/v1/user/profile?action=set-avatar`
+    - `/api/theme-preference` → `/api/v1/user/profile?action=theme-preference`
+  - Updated frontend components to use v1 endpoints:
+    - profile/page.tsx profile fetching
+    - ProfileEditSection.tsx profile update and avatar
+    - GenerateImageDialog.tsx image generation
+    - theme-utils.ts theme preference fetch/save
 - feat: Chat operations migrated to v1 API with action dispatch pattern (2026-01-15)
   - Added new actions to `/api/v1/chats/[id]`:
     - GET: `get-avatars` - Get avatar overrides for chat

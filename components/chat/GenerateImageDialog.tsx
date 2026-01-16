@@ -142,7 +142,7 @@ export default function GenerateImageDialog({
     setIsGenerating(true)
 
     try {
-      const response = await fetch(`/api/image-profiles/${imageProfileId}/generate`, {
+      const response = await fetch(`/api/v1/image-profiles/${imageProfileId}?action=generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

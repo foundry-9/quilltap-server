@@ -34,15 +34,16 @@ export default function ProfilePage() {
     clientLogger.debug('Fetching user profile')
 
     try {
-      const res = await fetch('/api/user/profile')
+      const res = await fetch('/api/v1/user/profile')
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to load profile')
       }
 
       const data = await res.json()
-      setProfile(data)
-      clientLogger.debug('Profile loaded', { userId: data.id })
+      const profile = data.profile || data
+      setProfile(profile)
+      clientLogger.debug('Profile loaded', { userId: profile.id })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load profile'
       setError(message)

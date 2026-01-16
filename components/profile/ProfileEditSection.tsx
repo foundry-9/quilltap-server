@@ -79,7 +79,7 @@ export function ProfileEditSection({
     clientLogger.debug('Saving profile', { name, email })
 
     try {
-      const res = await fetch('/api/user/profile', {
+      const res = await fetch('/api/v1/user/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -93,7 +93,8 @@ export function ProfileEditSection({
         throw new Error(data.error || 'Failed to update profile')
       }
 
-      const updatedProfile = await res.json()
+      const data = await res.json()
+      const updatedProfile = data.profile || data
       clientLogger.info('Profile updated successfully', { userId: profile.id })
       onProfileUpdate(updatedProfile)
       showSuccessToast('Profile updated successfully')
@@ -110,7 +111,7 @@ export function ProfileEditSection({
     clientLogger.debug('Updating profile avatar', { imageId })
 
     try {
-      const res = await fetch('/api/user/profile/avatar', {
+      const res = await fetch('/api/v1/user/profile?action=set-avatar', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: imageId || null }),
@@ -121,7 +122,8 @@ export function ProfileEditSection({
         throw new Error(data.error || 'Failed to update avatar')
       }
 
-      const updatedProfile = await res.json()
+      const avatarData = await res.json()
+      const updatedProfile = avatarData.profile || avatarData
       clientLogger.info('Profile avatar updated', { userId: profile.id, imageId })
       onProfileUpdate(updatedProfile)
       setAvatarRefreshKey((k) => k + 1)
