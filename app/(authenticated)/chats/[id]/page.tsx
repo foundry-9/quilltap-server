@@ -424,24 +424,34 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Set project link and cost summary in toolbar
   const { setLeftContent, setRightContent } = usePageToolbar()
   useEffect(() => {
-    if (chat?.projectId && chat?.projectName) {
+    if (chat?.title) {
       setLeftContent(
-        <a
-          href={`/projects/${chat.projectId}`}
-          className="hidden md:inline-flex items-center gap-2 text-sm qt-text-secondary hover:text-foreground transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-          </svg>
-          <span>{chat.projectName}</span>
-        </a>
+        <div className="hidden md:flex items-center gap-2 text-sm min-w-0">
+          {chat.projectId && chat.projectName && (
+            <>
+              <a
+                href={`/projects/${chat.projectId}`}
+                className="inline-flex items-center gap-1.5 qt-text-secondary hover:text-foreground transition-colors flex-shrink-0"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                <span>{chat.projectName}</span>
+              </a>
+              <span className="qt-text-muted">/</span>
+            </>
+          )}
+          <span className="qt-text-primary truncate" title={chat.title}>
+            {chat.title}
+          </span>
+        </div>
       )
     } else {
       setLeftContent(null)
     }
     // Clear on unmount
     return () => setLeftContent(null)
-  }, [chat?.projectId, chat?.projectName, setLeftContent])
+  }, [chat?.projectId, chat?.projectName, chat?.title, setLeftContent])
 
   // Set cost summary in toolbar right section
   useEffect(() => {

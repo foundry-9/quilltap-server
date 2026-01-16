@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- feat: Display chat title in toolbar header (2026-01-16)
+  - Shows chat name between project name (if any) and search bar
+  - Updates automatically when chat is renamed (auto or manual)
+  - Displays as "Project / Chat Title" when project exists
+  - Long titles truncate with tooltip showing full title
 - fix: Ensure MongoDB is initialized before migrations run on container startup (2026-01-16)
   - Migrations were being skipped on hosted deployments because MongoDB wasn't ready when `shouldRun()` checked
   - The `initialized` flag prevented re-attempts, leaving data in pre-migration state
