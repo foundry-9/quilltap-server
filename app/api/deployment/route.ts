@@ -1,20 +1,6 @@
-import { NextResponse } from 'next/server';
-import { isUserManaged } from '@/lib/env';
-import { logger } from '@/lib/logger';
+import { movedToV1 } from '@/lib/api/responses';
 
 /**
- * GET /api/deployment
- * Returns deployment information including whether this is a user-managed (self-hosted) deployment
+ * @deprecated Use /api/v1/system/deployment instead
  */
-export async function GET() {
-  logger.debug('Deployment info requested', {
-    context: 'deployment-GET',
-    isUserManaged,
-  });
-
-  return NextResponse.json({
-    isUserManaged,
-    // isHosted is the inverse - true if this is a hosted/cloud deployment
-    isHosted: !isUserManaged,
-  });
-}
+export const GET = () => movedToV1('/api/v1/system/deployment');

@@ -141,7 +141,7 @@ export default function PluginsTab() {
 
   const fetchDeploymentInfo = useCallback(async () => {
     try {
-      const res = await fetch('/api/deployment')
+      const res = await fetch('/api/v1/system/deployment')
       if (!res.ok) throw new Error('Failed to fetch deployment info')
       const data: DeploymentInfo = await res.json()
       setDeploymentInfo(data)

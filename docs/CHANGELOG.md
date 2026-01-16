@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- feat: Migrate system startup routes to v1 and remove dead code (2026-01-16)
+  - Created `/api/v1/system/deployment` for deployment info
+  - Created `/api/v1/system/plugins/initialize` for plugin initialization
+  - Deprecated old routes with `movedToV1()`: `/api/deployment`, `/api/startup/initialize-plugins`
+  - Removed dead code: `/api/startup/refresh-pricing` (never called), `/api/files/test` (never called)
+  - Updated frontend: plugins-tab.tsx, plugin-initializer.tsx
 - feat: Migrate remaining frontend components to v1 API endpoints (2026-01-16)
   - Updated GenerateImageDialog to use `/api/v1/characters` instead of deprecated `/api/personas`
   - Updated ChatGalleryImageViewModal image tag removal to use POST with `?action=remove-tag`

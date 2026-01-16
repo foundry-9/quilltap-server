@@ -32,7 +32,7 @@ async function initializePlugins(): Promise<void> {
   initializationTriggered = true
 
   try {
-    const response = await fetch('/api/startup/initialize-plugins', {
+    const response = await fetch('/api/v1/system/plugins/initialize', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
