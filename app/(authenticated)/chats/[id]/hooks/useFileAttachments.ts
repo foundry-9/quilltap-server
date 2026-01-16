@@ -75,7 +75,7 @@ export function useFileAttachments(chatId: string, projectId?: string | null) {
       formData.append('conflictingFileId', conflictingFileId)
     }
 
-    const res = await fetch(`/api/chats/${chatId}/files`, {
+    const res = await fetch(`/api/v1/chats/${chatId}/files`, {
       method: 'POST',
       body: formData,
     })

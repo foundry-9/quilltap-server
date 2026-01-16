@@ -4,6 +4,25 @@
 
 ### 2.7-dev
 
+- feat: Chat operations migrated to v1 API with action dispatch pattern (2026-01-15)
+  - Added new actions to `/api/v1/chats/[id]`:
+    - GET: `get-avatars` - Get avatar overrides for chat
+    - POST: `set-avatar`, `remove-avatar` - Manage avatar overrides
+    - POST: `add-tool-result` - Add tool result messages
+    - POST: `queue-memories` - Queue memory extraction jobs
+  - Created nested v1 routes for streaming and FormData operations:
+    - `/api/v1/chats/[id]/messages` (POST) - Send messages with streaming response
+    - `/api/v1/chats/[id]/files` (GET, POST) - Upload and list chat files
+  - Converted legacy chat action routes to `movedToV1()`:
+    - `/api/chats/[id]/avatars` (GET, POST, DELETE)
+    - `/api/chats/[id]/messages` (POST)
+    - `/api/chats/[id]/tool-results` (POST)
+    - `/api/chats/[id]/queue-memories` (POST)
+    - `/api/chats/[id]/files` (GET, POST)
+  - Updated frontend components to use v1 endpoints:
+    - page.tsx queue-memories and tool-results calls
+    - useFileAttachments.ts file upload
+    - useConnectionProfiles.ts message counting
 - feat: Characters API routes completed migration to v1 with action dispatch pattern (2026-01-15)
   - Added new actions to `/api/v1/characters/[id]`:
     - GET: `chats`, `cascade-preview`, `default-partner`, `personas`, `get-tags`

@@ -1435,7 +1435,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         characterName: characterParticipant.character.name,
       })
 
-      const res = await fetch(`/api/chats/${id}/queue-memories`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=queue-memories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2428,7 +2428,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           participants={chat?.participants || []}
           imageProfileId={chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)?.imageProfile?.id}
           onImagesGenerated={(images, prompt) => {
-            fetch(`/api/v1/chats/${id}/tool-results`, {
+            fetch(`/api/v1/chats/${id}?action=add-tool-result`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

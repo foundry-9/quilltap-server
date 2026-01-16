@@ -43,12 +43,13 @@ export function useConnectionProfiles() {
         await Promise.all(
           chats.map(async (chat: any) => {
             try {
-              // Get messages for this chat
-              const messagesRes = await fetch(`/api/chats/${chat.id}/messages`)
-              if (!messagesRes.ok) return
+              // Get chat with messages from v1 API
+              const chatRes = await fetch(`/api/v1/chats/${chat.id}`)
+              if (!chatRes.ok) return
 
-              const messages = await messagesRes.json()
-              if (!Array.isArray(messages.messages)) return
+              const chatData = await chatRes.json()
+              const messages = chatData.chat?.messages
+              if (!Array.isArray(messages)) return
 
               // Get CHARACTER participants with their connection profiles
               const characterParticipants = (chat.participants || []).filter(
@@ -59,7 +60,7 @@ export function useConnectionProfiles() {
 
               // Count ASSISTANT messages
               // Distribute messages among character participants based on conversation flow
-              const assistantMessages = messages.messages.filter((m: any) => m.role === 'ASSISTANT')
+              const assistantMessages = messages.filter((m: any) => m.role === 'ASSISTANT')
 
               if (assistantMessages.length === 0) return
 

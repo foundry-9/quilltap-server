@@ -6,6 +6,7 @@
  * DELETE /api/v1/chats/[id] - Delete a chat
  * GET /api/v1/chats/[id]?action=export - Export chat (SillyTavern JSONL)
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
+ * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
  * POST /api/v1/chats/[id]?action=regenerate-title - Regenerate chat title
  * POST /api/v1/chats/[id]?action=add-tag - Add tag
  * POST /api/v1/chats/[id]?action=remove-tag - Remove tag
@@ -17,6 +18,10 @@
  * POST /api/v1/chats/[id]?action=update-participant - Update participant
  * POST /api/v1/chats/[id]?action=remove-participant - Remove participant
  * POST /api/v1/chats/[id]?action=bulk-reattribute - Re-attribute multiple messages
+ * POST /api/v1/chats/[id]?action=set-avatar - Set avatar override for character
+ * POST /api/v1/chats/[id]?action=remove-avatar - Remove avatar override
+ * POST /api/v1/chats/[id]?action=add-tool-result - Add tool result message
+ * POST /api/v1/chats/[id]?action=queue-memories - Queue memory extraction jobs
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)
  */
 
@@ -42,6 +47,9 @@ import {
 } from '@/lib/chat/turn-manager';
 import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
 import { deleteMemoryWithVector } from '@/lib/memory/memory-service';
+import { enqueueMemoryExtractionBatch, ensureProcessorRunning, type MessagePair } from '@/lib/background-jobs';
+import { getErrorMessage } from '@/lib/errors';
+import { randomUUID } from 'node:crypto';
 import type { ChatMetadata, ChatParticipantBase, MessageEvent, Character, ChatEvent } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { z } from 'zod';
@@ -136,6 +144,45 @@ const bulkReattributeSchema = z.object({
   targetParticipantId: z.string().uuid(),
   roleFilter: z.enum(['ASSISTANT', 'USER', 'both']).default('both'),
 });
+
+const avatarOverrideSchema = z.object({
+  characterId: z.string(),
+  imageId: z.string(),
+});
+
+const removeAvatarSchema = z.object({
+  characterId: z.string(),
+});
+
+const toolResultSchema = z.object({
+  tool: z.string(),
+  initiatedBy: z.enum(['user', 'character']).default('user'),
+  prompt: z.string().optional(),
+  result: z.any().optional(),
+  images: z.array(z.object({
+    id: z.string(),
+    filename: z.string(),
+  })).optional(),
+});
+
+const queueMemoriesSchema = z.object({
+  characterId: z.string().optional(),
+  characterName: z.string().optional(),
+  messagePairs: z.array(z.object({
+    userMessageId: z.string(),
+    assistantMessageId: z.string(),
+    userContent: z.string(),
+    assistantContent: z.string(),
+  })).optional(),
+});
+
+/**
+ * Extended message pair with character info for multi-character support
+ */
+interface MessagePairWithCharacter extends MessagePair {
+  characterId: string;
+  characterName: string;
+}
 
 // ============================================================================
 // Helper Functions
@@ -569,6 +616,48 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     } catch (error) {
       logger.error('[Chats v1] Error exporting chat', { chatId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to export chat');
+    }
+  }
+
+  // Handle get-avatars action
+  if (action === 'get-avatars') {
+    try {
+      logger.debug('[Chats v1] Getting avatar overrides', { chatId: id });
+
+      const chat = await repos.chats.findById(id);
+      if (!chat || chat.userId !== user.id) {
+        return notFound('Chat');
+      }
+
+      // Get all characters that have avatar overrides for this chat
+      const allCharacters = await repos.characters.findByUserId(user.id);
+
+      // Collect avatar overrides from all characters for this chat
+      const enrichedOverrides = await Promise.all(
+        allCharacters.flatMap(character =>
+          (character.avatarOverrides || [])
+            .filter(override => override.chatId === id)
+            .map(async (override) => {
+              const fileEntry = await repos.files.findById(override.imageId);
+              return {
+                chatId: id,
+                characterId: character.id,
+                imageId: override.imageId,
+                character: { id: character.id, name: character.name },
+                image: fileEntry ? {
+                  id: fileEntry.id,
+                  filepath: getFilePath(fileEntry),
+                  url: null,
+                } : null,
+              };
+            })
+        )
+      );
+
+      return NextResponse.json({ data: enrichedOverrides });
+    } catch (error) {
+      logger.error('[Chats v1] Error fetching avatar overrides', { chatId: id }, error instanceof Error ? error : undefined);
+      return serverError('Failed to fetch avatar overrides');
     }
   }
 
@@ -1400,9 +1489,387 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       }
     }
 
+    case 'set-avatar': {
+      try {
+        const body = await req.json();
+        const { characterId, imageId } = avatarOverrideSchema.parse(body);
+
+        logger.debug('[Chats v1] Setting avatar override', { chatId: id, characterId, imageId });
+
+        // Verify character exists and belongs to user
+        const character = await repos.characters.findById(characterId);
+        if (!character || character.userId !== user.id) {
+          return notFound('Character');
+        }
+
+        // Verify image exists in repository and belongs to user
+        const fileEntry = await repos.files.findById(imageId);
+        if (!fileEntry || fileEntry.userId !== user.id) {
+          return notFound('Image');
+        }
+
+        // Update character's avatarOverrides array
+        const existingOverrides = character.avatarOverrides || [];
+        const overrideIndex = existingOverrides.findIndex(o => o.chatId === id);
+
+        let updatedOverrides;
+        if (overrideIndex >= 0) {
+          // Update existing override
+          updatedOverrides = [...existingOverrides];
+          updatedOverrides[overrideIndex] = { chatId: id, imageId };
+        } else {
+          // Add new override
+          updatedOverrides = [...existingOverrides, { chatId: id, imageId }];
+        }
+
+        await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
+
+        const override = {
+          chatId: id,
+          characterId,
+          imageId,
+          character: { id: character.id, name: character.name },
+          image: {
+            id: fileEntry.id,
+            filepath: getFilePath(fileEntry),
+            url: null,
+          },
+        };
+
+        logger.info('[Chats v1] Avatar override set', { chatId: id, characterId, imageId });
+
+        return NextResponse.json({ data: override });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return validationError(error);
+        }
+        logger.error('[Chats v1] Error setting avatar override', { chatId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to set avatar override');
+      }
+    }
+
+    case 'remove-avatar': {
+      try {
+        const body = await req.json();
+        const { characterId } = removeAvatarSchema.parse(body);
+
+        logger.debug('[Chats v1] Removing avatar override', { chatId: id, characterId });
+
+        // Verify character exists and belongs to user
+        const character = await repos.characters.findById(characterId);
+        if (!character || character.userId !== user.id) {
+          return notFound('Character');
+        }
+
+        // Remove avatar override from character's avatarOverrides array
+        const existingOverrides = character.avatarOverrides || [];
+        const updatedOverrides = existingOverrides.filter(o => o.chatId !== id);
+
+        await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
+
+        logger.info('[Chats v1] Avatar override removed', { chatId: id, characterId });
+
+        return NextResponse.json({ data: { success: true } });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return validationError(error);
+        }
+        logger.error('[Chats v1] Error removing avatar override', { chatId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to remove avatar override');
+      }
+    }
+
+    case 'add-tool-result': {
+      try {
+        const body = await req.json();
+        const validated = toolResultSchema.parse(body);
+
+        logger.debug('[Chats v1] Adding tool result', { chatId: id, tool: validated.tool });
+
+        // Create a TOOL message event
+        const toolResultMessage = await repos.chats.addMessage(id, {
+          type: 'message',
+          id: randomUUID(),
+          role: 'TOOL',
+          content: JSON.stringify({
+            tool: validated.tool,
+            initiatedBy: validated.initiatedBy,
+            prompt: validated.prompt,
+            result: validated.result,
+            images: validated.images,
+            success: validated.initiatedBy === 'user' ? true : validated.result?.success ?? false,
+          }),
+          createdAt: new Date().toISOString(),
+          attachments: [],
+        });
+
+        logger.info('[Chats v1] Tool result added', { chatId: id, tool: validated.tool });
+
+        return NextResponse.json({
+          success: true,
+          message: toolResultMessage,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return validationError(error);
+        }
+        logger.error('[Chats v1] Error adding tool result', { chatId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to add tool result');
+      }
+    }
+
+    case 'queue-memories': {
+      try {
+        const body = await req.json();
+        const { characterId, characterName, messagePairs } = queueMemoriesSchema.parse(body);
+
+        logger.debug('[Chats v1] Queueing memory extraction', { chatId: id, characterId });
+
+        // Get cheap LLM settings to determine which connection profile to use
+        const chatSettings = await repos.chatSettings.findByUserId(user.id);
+        const cheapLLMSettings = chatSettings?.cheapLLMSettings;
+
+        logger.debug('[Chats v1] Cheap LLM settings', {
+          strategy: cheapLLMSettings?.strategy,
+          defaultCheapProfileId: cheapLLMSettings?.defaultCheapProfileId,
+          userDefinedProfileId: cheapLLMSettings?.userDefinedProfileId,
+        });
+
+        // Determine connection profile based on strategy
+        let connectionProfileId: string | null | undefined = null;
+        let profile = null;
+
+        // Try global default first (if set and valid)
+        if (cheapLLMSettings?.defaultCheapProfileId) {
+          profile = await repos.connections.findById(cheapLLMSettings.defaultCheapProfileId);
+          if (profile && profile.userId === user.id) {
+            connectionProfileId = cheapLLMSettings.defaultCheapProfileId;
+            logger.debug('[Chats v1] Using global default cheap LLM', { profileId: connectionProfileId });
+          }
+        }
+
+        // If no valid global default, use strategy-based selection
+        if (!connectionProfileId && cheapLLMSettings?.strategy === 'USER_DEFINED' && cheapLLMSettings?.userDefinedProfileId) {
+          profile = await repos.connections.findById(cheapLLMSettings.userDefinedProfileId);
+          if (profile && profile.userId === user.id) {
+            connectionProfileId = cheapLLMSettings.userDefinedProfileId;
+            logger.debug('[Chats v1] Using user-defined cheap LLM', { profileId: connectionProfileId });
+          }
+        }
+
+        if (!connectionProfileId || !profile) {
+          logger.warn('[Chats v1] No valid cheap LLM configured', {
+            userId: user.id,
+            strategy: cheapLLMSettings?.strategy,
+          });
+          return badRequest('No valid cheap LLM configured. Please set a cheap LLM profile in settings.');
+        }
+
+        logger.debug('[Chats v1] Using cheap LLM profile', {
+          profileId: connectionProfileId,
+          profileName: profile.name,
+          provider: profile.provider,
+        });
+
+        // Build a map of participantId -> character info for multi-character support
+        const participantCharacterMap = new Map<string, { characterId: string; characterName: string }>();
+        for (const participant of chat.participants) {
+          if (participant.type === 'CHARACTER' && participant.characterId) {
+            const char = await repos.characters.findById(participant.characterId);
+            if (char && char.userId === user.id) {
+              participantCharacterMap.set(participant.id, {
+                characterId: char.id,
+                characterName: char.name,
+              });
+            }
+          }
+        }
+
+        // Fallback character (the one passed in request, if valid)
+        let fallbackCharacter: { characterId: string; characterName: string } | null = null;
+        if (characterId) {
+          const character = await repos.characters.findById(characterId);
+          if (character && character.userId === user.id) {
+            fallbackCharacter = {
+              characterId: character.id,
+              characterName: characterName || character.name,
+            };
+          }
+        }
+
+        // Use provided message pairs or build them from chat messages
+        let pairsWithCharacter: MessagePairWithCharacter[];
+
+        if (messagePairs && Array.isArray(messagePairs) && messagePairs.length > 0) {
+          // Use provided pairs with fallback character
+          if (!fallbackCharacter) {
+            return notFound('Character');
+          }
+          pairsWithCharacter = messagePairs.map((pair) => ({
+            ...pair,
+            characterId: fallbackCharacter!.characterId,
+            characterName: fallbackCharacter!.characterName,
+          }));
+        } else {
+          // Build message pairs from chat messages, respecting each message's participantId
+          const messages = await repos.chats.getMessages(id);
+          const messageList = messages.filter(
+            (m): m is MessageEvent =>
+              m.type === 'message' && (m.role === 'USER' || m.role === 'ASSISTANT')
+          );
+
+          // Helper to get character name for a participant
+          const getParticipantName = (participantId: string | null | undefined): string => {
+            if (!participantId) return 'Character';
+            const charInfo = participantCharacterMap.get(participantId);
+            return charInfo?.characterName || 'Character';
+          };
+
+          // Helper to get persona name for user messages
+          const userParticipant = chat.participants.find(p => p.type === 'PERSONA');
+          const personaName = userParticipant?.personaId
+            ? (await repos.personas.findById(userParticipant.personaId))?.name || 'User'
+            : 'User';
+
+          pairsWithCharacter = [];
+
+          // Track the index of the last user message
+          let lastUserMessageIndex = -1;
+
+          for (let i = 0; i < messageList.length; i++) {
+            const msg = messageList[i];
+
+            if (msg.role === 'USER') {
+              lastUserMessageIndex = i;
+            } else if (msg.role === 'ASSISTANT' && lastUserMessageIndex >= 0) {
+              // This is an assistant message - create a memory extraction entry
+              const userMessage = messageList[lastUserMessageIndex];
+
+              // Determine which character this assistant message belongs to
+              let targetCharacter = fallbackCharacter;
+              if (msg.participantId) {
+                const participantChar = participantCharacterMap.get(msg.participantId);
+                if (participantChar) {
+                  targetCharacter = participantChar;
+                }
+              }
+
+              // Skip if we couldn't determine the character
+              if (!targetCharacter) {
+                logger.warn('[Chats v1] Skipping message - no character found', {
+                  chatId: id,
+                  assistantMessageId: msg.id,
+                  participantId: msg.participantId,
+                });
+                continue;
+              }
+
+              // Build context: include all messages from last user message to this assistant message
+              let contextContent: string;
+
+              if (i === lastUserMessageIndex + 1) {
+                // Simple case: assistant message directly follows user message
+                contextContent = userMessage.content;
+              } else {
+                // Multi-character case: include intervening messages for context
+                const contextParts: string[] = [];
+                contextParts.push(`${personaName}: ${userMessage.content}`);
+
+                // Add all messages between user message and this assistant message
+                for (let j = lastUserMessageIndex + 1; j < i; j++) {
+                  const intermediateMsg = messageList[j];
+                  if (intermediateMsg.role === 'ASSISTANT') {
+                    const speakerName = getParticipantName(intermediateMsg.participantId);
+                    contextParts.push(`${speakerName}: ${intermediateMsg.content}`);
+                  }
+                }
+
+                contextContent = contextParts.join('\n\n');
+              }
+
+              pairsWithCharacter.push({
+                userMessageId: userMessage.id,
+                assistantMessageId: msg.id,
+                userContent: contextContent,
+                assistantContent: msg.content,
+                characterId: targetCharacter.characterId,
+                characterName: targetCharacter.characterName,
+              });
+            }
+          }
+        }
+
+        if (pairsWithCharacter.length === 0) {
+          return badRequest('No message pairs found to analyze');
+        }
+
+        // Group pairs by character for efficient batch processing
+        const pairsByCharacter = new Map<string, { characterName: string; pairs: MessagePair[] }>();
+        for (const pair of pairsWithCharacter) {
+          const existing = pairsByCharacter.get(pair.characterId);
+          if (existing) {
+            existing.pairs.push({
+              userMessageId: pair.userMessageId,
+              assistantMessageId: pair.assistantMessageId,
+              userContent: pair.userContent,
+              assistantContent: pair.assistantContent,
+            });
+          } else {
+            pairsByCharacter.set(pair.characterId, {
+              characterName: pair.characterName,
+              pairs: [{
+                userMessageId: pair.userMessageId,
+                assistantMessageId: pair.assistantMessageId,
+                userContent: pair.userContent,
+                assistantContent: pair.assistantContent,
+              }],
+            });
+          }
+        }
+
+        logger.info('[Chats v1] Queueing memory extraction jobs', {
+          chatId: id,
+          characterCount: pairsByCharacter.size,
+          totalPairs: pairsWithCharacter.length,
+        });
+
+        // Queue jobs for each character
+        const allJobIds: string[] = [];
+        for (const [charId, { characterName: charName, pairs }] of pairsByCharacter) {
+          const jobIds = await enqueueMemoryExtractionBatch(
+            user.id,
+            id,
+            charId,
+            charName,
+            connectionProfileId,
+            pairs,
+            { priority: 0 } // Low priority for bulk operations
+          );
+          allJobIds.push(...jobIds);
+        }
+
+        // Start the processor if not already running
+        ensureProcessorRunning();
+
+        return NextResponse.json({
+          success: true,
+          jobCount: allJobIds.length,
+          chatId: id,
+          characterCount: pairsByCharacter.size,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return validationError(error);
+        }
+        const errorMessage = getErrorMessage(error);
+        logger.error('[Chats v1] Error queueing memories', { chatId: id, error: errorMessage });
+        return serverError(errorMessage);
+      }
+    }
+
     default:
       return badRequest(
-        `Unknown action: ${action}. Available actions: regenerate-title, add-tag, remove-tag, impersonate, stop-impersonate, set-active-speaker, turn, add-participant, update-participant, remove-participant, bulk-reattribute`
+        `Unknown action: ${action}. Available actions: regenerate-title, add-tag, remove-tag, impersonate, stop-impersonate, set-active-speaker, turn, add-participant, update-participant, remove-participant, bulk-reattribute, get-avatars, set-avatar, remove-avatar, add-tool-result, queue-memories`
       );
   }
 });
