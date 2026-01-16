@@ -142,6 +142,7 @@ export function SidebarFooter() {
           href="/settings"
           className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
           onClick={handleItemClick}
+          title={isCollapsed ? 'Settings' : undefined}
         >
           <SettingsIcon className="qt-left-sidebar-item-icon w-5 h-5" />
           {!isCollapsed && <span className="qt-left-sidebar-item-label">Settings</span>}
@@ -151,6 +152,7 @@ export function SidebarFooter() {
           href="/tools"
           className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
           onClick={handleItemClick}
+          title={isCollapsed ? 'Tools' : undefined}
         >
           <ToolsIcon className="qt-left-sidebar-item-icon w-5 h-5" />
           {!isCollapsed && <span className="qt-left-sidebar-item-label">Tools</span>}

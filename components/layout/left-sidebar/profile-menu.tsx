@@ -168,6 +168,7 @@ export function ProfileMenu() {
         type="button"
         onClick={handleToggle}
         className="qt-left-sidebar-profile w-full"
+        title={isCollapsed ? 'Profile' : undefined}
         aria-label="User menu"
         aria-expanded={isOpen}
         aria-haspopup="menu"
@@ -197,7 +198,7 @@ export function ProfileMenu() {
 
       {/* Dropdown menu */}
       {isOpen && (
-        <div className="absolute bottom-full left-0 right-0 mb-2 bg-popover border border-border rounded-lg shadow-lg overflow-hidden z-50">
+        <div className={`absolute bottom-full mb-2 bg-popover border border-border rounded-lg shadow-lg overflow-hidden z-50 ${isCollapsed ? 'left-0 w-48' : 'left-0 right-0'}`}>
           <div className="p-2 space-y-1">
             {/* Profile link */}
             <button

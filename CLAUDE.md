@@ -25,12 +25,15 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
 All new API routes should be created under `/api/v1/` following the consolidated REST structure:
 
 ### Route Structure
+
 - **Collection routes**: `/api/v1/[resource]` (e.g., `/api/v1/characters`)
 - **Item routes**: `/api/v1/[resource]/[id]` (e.g., `/api/v1/characters/[id]`)
 - **System routes**: `/api/v1/system/[feature]` (e.g., `/api/v1/system/jobs`)
 
 ### Action Dispatch Pattern
+
 Instead of creating separate routes for each action, use the `?action=` query parameter:
+
 ```ts
 // Instead of separate routes:
 // /api/characters/[id]/favorite
@@ -51,11 +54,13 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 ```
 
 ### Middleware & Response Utilities
+
 - **Authentication**: Use `createAuthenticatedHandler` or `createAuthenticatedParamsHandler` from `@/lib/api/middleware`
 - **Action dispatch**: Use `withActionDispatch` or `withCollectionActionDispatch` from `@/lib/api/middleware/actions`
 - **Responses**: Use helpers from `@/lib/api/responses`: `successResponse`, `errorResponse`, `notFound`, `badRequest`, `validationError`, `created`, etc.
 
 ### Deprecation
+
 Legacy routes outside `/api/v1/` have deprecation headers and will be removed after 2026-04-15. Use `withDeprecationHeaders` or `deprecatedRedirect` from `@/lib/api/responses` when maintaining legacy routes.
 
 ## Current State
@@ -128,7 +133,7 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
 
 - If you have access to Opus and agents, then plan work in Opus and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work.
 - If you are asked to work on a large change (adding a significant feature, a refactor that does a lot of things, or something else that touches a lot of files), then plan it in Opus and delegate the work to Haiku agents.
-- For every new feature and all existing functionality that is updated or touched, make sure that there are debug logs being fired for everything, and appropriate levels of logging for everything else, using the built-in logging system in this app
+- For every new feature and all existing functionality that is updated or touched in the backend, make sure that there are debug logs being fired for everything, and appropriate levels of logging for everything else, using the built-in logging system in this app
 - I am developing this in macOS, so take BSD versions of tools into account, and the fact that I have installed homebrew's coreutils and gnu-sed so that you can use GNU versions of things with "g"-prefixed utilities if you need them.
 - I am using "npm run devssl" to work on this while we're working, so the base URL is probably `https://localhost:3000/` if you want to try something.
 - You should track what's going on with the running "npm run devssl" process, which is nearly always running while we're working on this, by tailing or searching the `logs/combined.log` file. You can figure out what time it is (I think it's using universal time, not local time), and then look for things that we just tried by working through that log.

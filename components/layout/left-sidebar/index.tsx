@@ -11,31 +11,12 @@
 import { useSidebar } from '@/components/providers/sidebar-provider'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { SidebarHeader } from './sidebar-header'
-import { SidebarSection } from './sidebar-section'
 import { SidebarFooter } from './sidebar-footer'
 import { ProjectsSection } from './projects-section'
 import { FilesSection } from './files-section'
 import { CharactersSection } from './characters-section'
 import { ChatsSection } from './chats-section'
-
-/**
- * Folder icon (for Projects)
- */
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-    </svg>
-  )
-}
+import { CollapsedNav } from './collapsed-nav'
 
 
 export function LeftSidebar() {
@@ -67,19 +48,26 @@ export function LeftSidebar() {
       <aside className={sidebarClasses} style={sidebarStyle} aria-label="Main navigation">
         <SidebarHeader />
 
-        <div className="qt-left-sidebar-content">
-          {/* Projects section */}
-          <ProjectsSection />
+        {/* When collapsed (desktop only), show compact navigation buttons */}
+        {isCollapsed && !isMobile ? (
+          <div className="qt-left-sidebar-content">
+            <CollapsedNav />
+          </div>
+        ) : (
+          <div className="qt-left-sidebar-content">
+            {/* Projects section */}
+            <ProjectsSection />
 
-          {/* Files section */}
-          <FilesSection />
+            {/* Files section */}
+            <FilesSection />
 
-          {/* Characters section */}
-          <CharactersSection />
+            {/* Characters section */}
+            <CharactersSection />
 
-          {/* Chats section - grows to fill remaining space */}
-          <ChatsSection />
-        </div>
+            {/* Chats section - grows to fill remaining space */}
+            <ChatsSection />
+          </div>
+        )}
 
         <SidebarFooter />
 
@@ -102,3 +90,4 @@ export { SidebarSection } from './sidebar-section'
 export { SidebarItem, ViewAllLink } from './sidebar-item'
 export { SidebarHeader } from './sidebar-header'
 export { SidebarFooter } from './sidebar-footer'
+export { CollapsedNav } from './collapsed-nav'

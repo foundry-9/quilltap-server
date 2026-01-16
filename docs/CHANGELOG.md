@@ -4,6 +4,14 @@
 
 ### 2.7-dev
 
+- feat: Collapsed sidebar shows quick navigation buttons (2026-01-16)
+  - When sidebar is collapsed, shows icon buttons for: Projects, Files, Characters, Chats
+  - Existing Quilltap quill icon serves as home button (no separate home icon)
+  - No divider between header and navigation buttons when collapsed
+  - Clicking a button expands the sidebar and navigates to that section's "view all" page
+  - Footer shows: Settings, Tools, Themes (if enabled), Hide (if tags exist), Profile
+  - All buttons have tooltips when collapsed
+  - Created new CollapsedNav component with dedicated CSS classes
 - feat: Complete removal of DevConsole functionality (2026-01-16)
   - Removed DevConsole component and all tabs (Server Logs, Browser Console, Chat Debug)
   - Removed DevConsoleProvider, DebugProvider, and DebugModeSync

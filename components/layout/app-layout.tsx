@@ -57,7 +57,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       <div className="qt-app-main">
         <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <PageToolbar />
-          {children}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {children}
+          </div>
         </main>
         <FooterWrapper />
       </div>

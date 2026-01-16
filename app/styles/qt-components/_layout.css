@@ -445,7 +445,7 @@
   }
 
   .qt-left-sidebar-collapsed .qt-left-sidebar-header {
-    @apply flex-col justify-center items-center gap-2 px-2 py-3;
+    @apply flex-col justify-center items-center gap-2 px-2 py-3 border-b-0;
     height: auto;
   }
 
@@ -615,6 +615,26 @@
   }
 
   /**
+   * Collapsed navigation - quick access buttons when sidebar is collapsed
+   */
+  .qt-collapsed-nav {
+    @apply flex flex-col items-center gap-1;
+    @apply px-2 py-3;
+  }
+
+  .qt-collapsed-nav-button {
+    @apply flex items-center justify-center;
+    @apply w-10 h-10 rounded-md;
+    @apply transition-colors duration-150;
+    cursor: pointer;
+    color: var(--color-foreground);
+  }
+
+  .qt-collapsed-nav-button:hover {
+    background: var(--qt-sidebar-item-hover-bg);
+  }
+
+  /**
    * Sidebar footer - settings, tools, profile
    */
   .qt-left-sidebar-footer {
@@ -625,6 +645,7 @@
 
   .qt-left-sidebar-collapsed .qt-left-sidebar-footer {
     @apply items-center p-2;
+    border-top: none;
   }
 
   /**

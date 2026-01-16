@@ -2,6 +2,11 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.10] - 2026-01-16
+
+### Added
+- Collapsed navigation classes (`qt-collapsed-nav`, `qt-collapsed-nav-button`) for sidebar quick-access buttons when collapsed
+
 ## [1.0.9] - 2026-01-10
 
 ### Changed
