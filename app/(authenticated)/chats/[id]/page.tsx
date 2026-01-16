@@ -2319,6 +2319,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           isGenerating={streaming || waitingForResponse}
           userParticipantId={userParticipantId}
           respondingParticipantId={respondingParticipantId}
+          waitingForResponse={waitingForResponse}
           isPaused={isPaused}
           onTogglePause={togglePause}
           onNudge={turnManagement.handleNudge}

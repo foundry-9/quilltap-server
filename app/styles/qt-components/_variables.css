@@ -228,6 +228,7 @@
   --qt-page-max-width: 64rem;
 
   --qt-chat-sidebar-width: 20rem;
+  --qt-chat-sidebar-collapsed-width: 4rem;
   --qt-chat-sidebar-bg: var(--color-card);
   --qt-chat-sidebar-border: var(--color-border);
   --qt-chat-sidebar-header-border: var(--color-border);

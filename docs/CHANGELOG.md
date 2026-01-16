@@ -4,6 +4,14 @@
 
 ### 2.7-dev
 
+- feat: Collapsible ParticipantSidebar for multi-character chats (2026-01-16)
+  - Sidebar now defaults to collapsed state showing mini avatars
+  - Collapsed view displays: toggle chevron, icon-only pause button, vertical avatar stack
+  - Visual indicators: solid green border for current turn, pulsating border for streaming
+  - Blue badge shows queue position on avatars
+  - Click any avatar or chevron to expand to full sidebar
+  - State persists via localStorage (`quilltap.participant-sidebar.collapsed`)
+  - Added comprehensive unit tests for collapsed state functionality
 - feat: Collapsed sidebar shows quick navigation buttons (2026-01-16)
   - When sidebar is collapsed, shows icon buttons for: Projects, Files, Characters, Chats
   - Existing Quilltap quill icon serves as home button (no separate home icon)
