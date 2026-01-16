@@ -65,8 +65,8 @@ export function useSyncOperations() {
     clientLogger.debug('Fetching sync operations', { instanceId })
 
     const url = instanceId
-      ? `/api/sync/operations?instanceId=${encodeURIComponent(instanceId)}`
-      : '/api/sync/operations'
+      ? `/api/v1/sync/operations?instanceId=${encodeURIComponent(instanceId)}`
+      : '/api/v1/sync/operations'
 
     const result = await fetchOp.execute(async () => {
       return fetchWithRetry(async () => {

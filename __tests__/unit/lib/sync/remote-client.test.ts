@@ -127,7 +127,7 @@ describe('Sync Remote Client', () => {
   });
 
   describe('remoteHandshake', () => {
-    it('should POST to /api/sync/handshake with Bearer token', async () => {
+    it('should POST to /api/v1/sync?action=handshake with Bearer token', async () => {
       const instance = createMockInstance();
       const handshakeResponse: SyncHandshakeResponse = {
         compatible: true,
@@ -145,7 +145,7 @@ describe('Sync Remote Client', () => {
       await remoteHandshake(instance);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://remote.quilltap.io/api/sync/handshake',
+        'https://remote.quilltap.io/api/v1/sync?action=handshake',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -219,7 +219,7 @@ describe('Sync Remote Client', () => {
   });
 
   describe('fetchRemoteDeltas', () => {
-    it('should POST to /api/sync/delta with correct parameters', async () => {
+    it('should POST to /api/v1/sync?action=delta with correct parameters', async () => {
       const instance = createMockInstance();
       const deltaResponse = {
         serverTimestamp: '2025-01-15T12:00:00.000Z',
@@ -234,7 +234,7 @@ describe('Sync Remote Client', () => {
       const callArgs = mockFetch.mock.calls[0];
       const body = JSON.parse(callArgs[1].body);
 
-      expect(callArgs[0]).toBe('https://remote.quilltap.io/api/sync/delta');
+      expect(callArgs[0]).toBe('https://remote.quilltap.io/api/v1/sync?action=delta');
       expect(callArgs[1].method).toBe('POST');
       expect(body.sinceTimestamp).toBe('2025-01-14T00:00:00.000Z');
       expect(body.limit).toBe(50);
@@ -316,7 +316,7 @@ describe('Sync Remote Client', () => {
   });
 
   describe('pushToRemote', () => {
-    it('should POST to /api/sync/push with deltas', async () => {
+    it('should POST to /api/v1/sync?action=push with deltas', async () => {
       const instance = createMockInstance();
       const deltas: SyncEntityDelta[] = [
         {
@@ -342,7 +342,7 @@ describe('Sync Remote Client', () => {
       const callArgs = mockFetch.mock.calls[0];
       const body = JSON.parse(callArgs[1].body);
 
-      expect(callArgs[0]).toBe('https://remote.quilltap.io/api/sync/push');
+      expect(callArgs[0]).toBe('https://remote.quilltap.io/api/v1/sync?action=push');
       expect(callArgs[1].method).toBe('POST');
       expect(body.deltas).toEqual(deltas);
     });
@@ -405,7 +405,7 @@ describe('Sync Remote Client', () => {
   });
 
   describe('fetchRemoteMappings', () => {
-    it('should GET from /api/sync/mappings with instanceId param', async () => {
+    it('should GET from /api/v1/sync?action=mappings with instanceId param', async () => {
       const instance = createMockInstance({ id: 'my-instance-id' });
       const mappingsResponse = { mappings: [] };
 
@@ -414,7 +414,7 @@ describe('Sync Remote Client', () => {
       await fetchRemoteMappings(instance);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://remote.quilltap.io/api/sync/mappings?instanceId=my-instance-id',
+        'https://remote.quilltap.io/api/v1/sync?action=mappings&instanceId=my-instance-id',
         expect.objectContaining({
           method: 'GET',
         })
@@ -479,7 +479,7 @@ describe('Sync Remote Client', () => {
       await fetchRemoteFileContent(instance, 'file-123');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://remote.quilltap.io/api/sync/files/file-123/content',
+        'https://remote.quilltap.io/api/v1/sync/files/file-123',
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
@@ -568,7 +568,7 @@ describe('Sync Remote Client', () => {
   });
 
   describe('testRemoteConnection', () => {
-    it('should POST to /api/sync/handshake', async () => {
+    it('should POST to /api/v1/sync?action=handshake', async () => {
       const url = 'https://test.quilltap.io';
       const apiKey = 'test-api-key';
       const handshakeResponse: SyncHandshakeResponse = {
@@ -581,7 +581,7 @@ describe('Sync Remote Client', () => {
       await testRemoteConnection(url, apiKey);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://test.quilltap.io/api/sync/handshake',
+        'https://test.quilltap.io/api/v1/sync?action=handshake',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -784,7 +784,7 @@ describe('Sync Remote Client', () => {
       await remoteHandshake(instance);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://custom.domain.com:8443/api/sync/handshake',
+        'https://custom.domain.com:8443/api/v1/sync?action=handshake',
         expect.anything()
       );
     });

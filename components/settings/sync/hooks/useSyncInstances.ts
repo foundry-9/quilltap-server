@@ -81,7 +81,7 @@ export function useSyncInstances() {
     clientLogger.debug('Fetching sync instances')
     const result = await fetchOp.execute(async () => {
       return fetchWithRetry(async () => {
-        const response = await fetchJson<{ instances: SyncInstanceDisplay[] }>('/api/sync/instances')
+        const response = await fetchJson<{ instances: SyncInstanceDisplay[] }>('/api/v1/sync/instances')
         clientLogger.debug('Sync instances response', {
           ok: response.ok,
           status: response.status,
@@ -112,7 +112,7 @@ export function useSyncInstances() {
       })
 
       const result = await saveOp.execute(async () => {
-        const response = await fetchJson<SyncInstanceDisplay>('/api/sync/instances', {
+        const response = await fetchJson<SyncInstanceDisplay>('/api/v1/sync/instances', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -155,7 +155,7 @@ export function useSyncInstances() {
       })
 
       const result = await saveOp.execute(async () => {
-        const response = await fetchJson<SyncInstanceDisplay>(`/api/sync/instances/${id}`, {
+        const response = await fetchJson<SyncInstanceDisplay>(`/api/v1/sync/instances/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -195,7 +195,7 @@ export function useSyncInstances() {
       clientLogger.debug('Deleting sync instance', { instanceId })
 
       const result = await deleteOp.execute(async () => {
-        const response = await fetchJson<void>(`/api/sync/instances/${instanceId}`, {
+        const response = await fetchJson<void>(`/api/v1/sync/instances/${instanceId}`, {
           method: 'DELETE',
         })
 
@@ -226,7 +226,7 @@ export function useSyncInstances() {
 
       const result = await testOp.execute(async () => {
         const response = await fetchJson<ConnectionTestResult>(
-          `/api/sync/instances/${instanceId}/test`,
+          `/api/v1/sync/instances/${instanceId}?action=test`,
           {
             method: 'POST',
           }

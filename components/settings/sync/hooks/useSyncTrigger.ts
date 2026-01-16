@@ -47,16 +47,16 @@ export function useSyncTrigger() {
       setActiveOperationId(null) // Reset for new sync
 
       const result = await syncOp.execute(async () => {
-        // Build URL with query parameters
+        // Build URL with action=sync parameter and other options
         const params = new URLSearchParams()
+        params.set('action', 'sync')
         if (forceFull) {
           params.set('forceFull', 'true')
         }
         if (direction !== 'BIDIRECTIONAL') {
           params.set('direction', direction)
         }
-        const queryString = params.toString()
-        const url = `/api/sync/instances/${instanceId}/sync${queryString ? `?${queryString}` : ''}`
+        const url = `/api/v1/sync/instances/${instanceId}?${params.toString()}`
 
         const response = await fetchJson<SyncResult>(url, {
           method: 'POST',

@@ -68,7 +68,7 @@ export function useSyncApiKeys() {
     clientLogger.debug('Fetching sync API keys')
     const result = await fetchOp.execute(async () => {
       return fetchWithRetry(async () => {
-        const response = await fetchJson<{ keys: SyncApiKeyDisplay[] }>('/api/sync/api-keys')
+        const response = await fetchJson<{ keys: SyncApiKeyDisplay[] }>('/api/v1/sync/api-keys')
         clientLogger.debug('Sync API keys response', {
           ok: response.ok,
           status: response.status,
@@ -96,7 +96,7 @@ export function useSyncApiKeys() {
       clientLogger.debug('Creating sync API key', { name })
 
       const result = await createOp.execute(async () => {
-        const response = await fetchJson<CreateApiKeyResult>('/api/sync/api-keys', {
+        const response = await fetchJson<CreateApiKeyResult>('/api/v1/sync/api-keys', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name }),
@@ -136,7 +136,7 @@ export function useSyncApiKeys() {
       clientLogger.debug('Deleting sync API key', { keyId })
 
       const result = await deleteOp.execute(async () => {
-        const response = await fetchJson<void>(`/api/sync/api-keys/${keyId}`, {
+        const response = await fetchJson<void>(`/api/v1/sync/api-keys/${keyId}`, {
           method: 'DELETE',
         })
 

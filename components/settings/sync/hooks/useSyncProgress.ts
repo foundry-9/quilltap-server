@@ -75,7 +75,7 @@ export function useSyncProgress(
 
     try {
       const response = await fetchJson<SyncProgressResponse>(
-        `/api/sync/operations/${opId}/progress`,
+        `/api/v1/sync/operations/${opId}?action=progress`,
         { method: 'GET' }
       )
 

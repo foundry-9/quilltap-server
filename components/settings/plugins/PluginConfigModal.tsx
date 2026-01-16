@@ -67,7 +67,7 @@ export function PluginConfigModal({
     try {
       clientLogger.debug('Loading plugin config', { pluginName })
 
-      const response = await fetch(`/api/plugins/${encodeURIComponent(pluginName)}/config`)
+      const response = await fetch(`/api/v1/plugins/${encodeURIComponent(pluginName)}?action=get-config`)
       const data = await response.json()
 
       if (!response.ok) {
@@ -110,8 +110,8 @@ export function PluginConfigModal({
     try {
       clientLogger.debug('Saving plugin config', { pluginName })
 
-      const response = await fetch(`/api/plugins/${encodeURIComponent(pluginName)}/config`, {
-        method: 'PUT',
+      const response = await fetch(`/api/v1/plugins/${encodeURIComponent(pluginName)}?action=set-config`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config: formData }),
       })

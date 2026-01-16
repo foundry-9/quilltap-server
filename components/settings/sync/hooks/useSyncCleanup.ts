@@ -32,7 +32,7 @@ export function useSyncCleanup() {
     clientLogger.debug('Executing sync data cleanup')
 
     const result = await cleanupOp.execute(async () => {
-      const response = await fetchJson<CleanupResult>('/api/sync/cleanup', {
+      const response = await fetchJson<CleanupResult>('/api/v1/sync?action=cleanup', {
         method: 'POST',
       })
 
