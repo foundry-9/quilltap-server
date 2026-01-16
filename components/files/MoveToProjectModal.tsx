@@ -8,7 +8,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import FolderPicker from '@/components/files/FolderPicker'
@@ -56,11 +55,6 @@ export default function MoveToProjectModal({
   // Fetch projects when modal opens
   useEffect(() => {
     if (isOpen) {
-      clientLogger.debug('[MoveToProjectModal] Modal opened', {
-        fileId,
-        fileName,
-        currentProjectId,
-      })
       fetchProjects()
       // Reset selections
       setSelectedValue('')
@@ -75,12 +69,9 @@ export default function MoveToProjectModal({
       if (res.ok) {
         const data = await res.json()
         setProjects(data.projects || [])
-        clientLogger.debug('[MoveToProjectModal] Fetched projects', {
-          count: data.projects?.length || 0,
-        })
       }
     } catch (error) {
-      clientLogger.error('[MoveToProjectModal] Failed to fetch projects', {
+      console.error('[MoveToProjectModal] Failed to fetch projects', {
         error: error instanceof Error ? error.message : String(error),
       })
     } finally {
@@ -95,13 +86,6 @@ export default function MoveToProjectModal({
     try {
       setSaving(true)
       const targetProjectId = isGeneralFilesSelected ? null : selectedProjectId
-
-      clientLogger.debug('[MoveToProjectModal] Moving file', {
-        fileId,
-        targetProjectId,
-        folderPath: selectedFolderPath,
-        isGeneralFiles: isGeneralFilesSelected,
-      })
 
       const res = await fetch(`/api/v1/files/${fileId}?action=promote`, {
         method: 'POST',
@@ -122,19 +106,12 @@ export default function MoveToProjectModal({
         ? 'General Files'
         : (projects.find(p => p.id === targetProjectId)?.name || 'project')
 
-      clientLogger.info('[MoveToProjectModal] File moved', {
-        fileId,
-        targetProjectId,
-        projectName,
-        result,
-      })
-
       showSuccessToast(`"${fileName}" moved to ${projectName}`)
       onSuccess?.(targetProjectId, projectName)
       onClose()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      clientLogger.error('[MoveToProjectModal] Failed to move file', {
+      console.error('[MoveToProjectModal] Failed to move file', {
         fileId,
         error: errorMessage,
       })

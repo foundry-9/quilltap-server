@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import type { BackupInfo } from '@/lib/backup/types'
@@ -33,7 +32,6 @@ export function useRestoreData(isOpen: boolean) {
   const loadS3Backups = useCallback(async () => {
     setState((prev) => ({ ...prev, loadingBackups: true }))
     try {
-      clientLogger.info('Loading S3 backups')
       const response = await fetch('/api/v1/system/backup')
       if (!response.ok) throw new Error('Failed to load backups')
       const data = await response.json()
@@ -44,7 +42,7 @@ export function useRestoreData(isOpen: boolean) {
       }))
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to load backups')
-      clientLogger.error('Failed to load S3 backups', { error: errorMessage })
+      console.error('Failed to load S3 backups', { error: errorMessage })
       setState((prev) => ({ ...prev, backupsLoaded: true }))
     } finally {
       setState((prev) => ({ ...prev, loadingBackups: false }))
@@ -87,10 +85,6 @@ export function useRestoreData(isOpen: boolean) {
     setState((prev) => ({ ...prev, loadingPreview: true, error: null }))
 
     try {
-      clientLogger.info('Fetching restore preview', {
-        hasFile: !!state.selectedFile,
-        hasS3Key: !!state.selectedS3Key,
-      })
 
       const formData = new FormData()
       if (state.selectedFile) {
@@ -115,14 +109,10 @@ export function useRestoreData(isOpen: boolean) {
         preview: previewData.preview,
         step: 'preview',
       }))
-
-      clientLogger.info('Preview loaded successfully', {
-        preview: previewData.preview,
-      })
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to preview backup')
       setState((prev) => ({ ...prev, error: errorMessage }))
-      clientLogger.error('Failed to fetch preview', { error: errorMessage })
+      console.error('Failed to fetch preview', { error: errorMessage })
       showErrorToast(errorMessage)
     } finally {
       setState((prev) => ({ ...prev, loadingPreview: false }))
@@ -180,12 +170,6 @@ export function useRestoreData(isOpen: boolean) {
       }))
 
       try {
-        clientLogger.info('Starting restore', {
-          mode: state.restoreMode,
-          hasFile: !!state.selectedFile,
-          hasS3Key: !!state.selectedS3Key,
-        })
-
         const formData = new FormData()
         if (state.selectedFile) {
           formData.append('file', state.selectedFile)
@@ -210,10 +194,6 @@ export function useRestoreData(isOpen: boolean) {
           restoreSummary: data.summary,
         }))
 
-        clientLogger.info('Restore completed successfully', {
-          summary: data.summary,
-        })
-
         showSuccessToast('Backup restored successfully')
       } catch (err) {
         const errorMessage = getErrorMessage(err, 'Failed to restore backup')
@@ -222,7 +202,7 @@ export function useRestoreData(isOpen: boolean) {
           error: errorMessage,
           step: 'mode',
         }))
-        clientLogger.error('Restore failed', { error: errorMessage })
+        console.error('Restore failed', { error: errorMessage })
         showErrorToast(errorMessage)
       } finally {
         setState((prev) => ({ ...prev, restoring: false }))

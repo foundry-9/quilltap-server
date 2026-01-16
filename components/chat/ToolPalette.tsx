@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface ToolPaletteProps {
@@ -85,88 +84,56 @@ export default function ToolPalette({
   }
 
   const handleRenameClick = () => {
-    clientLogger.debug('[ToolPalette] Rename clicked')
     onRenameClick?.()
     onClose()
   }
 
   const handleProjectClick = () => {
-    clientLogger.debug('[ToolPalette] Project clicked', { projectName })
     onProjectClick?.()
     onClose()
   }
 
   const handleAddCharacterClick = () => {
-    clientLogger.debug('[ToolPalette] Add Character clicked')
     onAddCharacterClick?.()
     onClose()
   }
 
   const handleExportClick = () => {
-    clientLogger.debug('[ToolPalette] Export Chat clicked', { chatId })
     // Trigger download by navigating to the export endpoint
     window.location.href = `/api/v1/chats/${chatId}?action=export`
     onClose()
   }
 
   const handleDeleteChatMemoriesClick = () => {
-    clientLogger.debug('[ToolPalette] Delete Chat Memories clicked', { chatId, chatMemoryCount })
     onDeleteChatMemoriesClick?.()
     onClose()
   }
 
   const handleReextractMemoriesClick = () => {
-    clientLogger.debug('[ToolPalette] Re-extract Memories clicked', { chatId })
     onReextractMemoriesClick?.()
     onClose()
   }
 
   const handleAttachFileClick = () => {
-    clientLogger.debug('[ToolPalette] Attach File clicked')
     onAttachFileClick?.()
     onClose()
   }
 
   const handleSearchReplaceClick = () => {
-    clientLogger.debug('[ToolPalette] Search & Replace clicked', { chatId })
     onSearchReplaceClick?.()
     onClose()
   }
 
   const handleBulkCharacterReplaceClick = () => {
-    clientLogger.debug('[ToolPalette] Bulk Character Replace clicked', { chatId })
     onBulkCharacterReplaceClick?.()
     onClose()
   }
 
   const handleTogglePreview = () => {
-    clientLogger.debug('[ToolPalette] Toggle Preview clicked', { showPreview })
     onTogglePreview?.()
     onClose()
   }
 
-  // Debug logging when palette opens
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('[ToolPalette] Opened', {
-        showAddCharacter,
-        hasAddCharacterCallback: !!onAddCharacterClick,
-        hasDeleteMemoriesCallback: !!onDeleteChatMemoriesClick,
-        hasReextractMemoriesCallback: !!onReextractMemoriesClick,
-        hasSearchReplaceCallback: !!onSearchReplaceClick,
-        hasBulkCharacterReplaceCallback: !!onBulkCharacterReplaceClick,
-        hasRenameCallback: !!onRenameClick,
-        hasProjectCallback: !!onProjectClick,
-        projectName,
-        chatPhotoCount,
-        hasImageProfile,
-        chatId,
-        chatMemoryCount,
-        hasAttachFile: !!onAttachFileClick,
-        hasPreviewToggle: !!onTogglePreview,
-      })
-    }
-  }, [isOpen, showAddCharacter, onAddCharacterClick, onDeleteChatMemoriesClick, onReextractMemoriesClick, onSearchReplaceClick, onBulkCharacterReplaceClick, onRenameClick, onProjectClick, projectName, chatPhotoCount, hasImageProfile, chatId, chatMemoryCount, onAttachFileClick, onTogglePreview])
 
   if (!isOpen) return null
 

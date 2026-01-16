@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { TrustedDevice } from './types'
-import { clientLogger } from '@/lib/client-logger'
 
 export interface TrustedDevicesSectionProps {
   totpEnabled: boolean
@@ -77,9 +76,6 @@ export function TrustedDevicesSection({ totpEnabled }: TrustedDevicesSectionProp
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    clientLogger.debug('TrustedDevicesSection mounted', { totpEnabled })
-  }, [totpEnabled])
 
   const loadDevices = useCallback(async () => {
     if (!totpEnabled) {
@@ -90,23 +86,21 @@ export function TrustedDevicesSection({ totpEnabled }: TrustedDevicesSectionProp
 
     setLoading(true)
     setError('')
-    clientLogger.debug('Loading trusted devices')
 
     try {
       const res = await fetch('/api/v1/auth/2fa/trusted-devices')
       if (res.ok) {
         const data = await res.json()
         setDevices(data.devices || [])
-        clientLogger.debug('Trusted devices loaded', { count: data.devices?.length || 0 })
       } else {
         const data = await res.json()
         setError(data.error || 'Failed to load trusted devices')
-        clientLogger.error('Failed to load trusted devices', { error: data.error })
+        console.error('Failed to load trusted devices', { error: data.error })
       }
     } catch (err: unknown) {
       const message = 'Failed to load trusted devices'
       setError(message)
-      clientLogger.error('Failed to load trusted devices', { error: err })
+      console.error('Failed to load trusted devices', { error: err })
     } finally {
       setLoading(false)
     }
@@ -121,8 +115,6 @@ export function TrustedDevicesSection({ totpEnabled }: TrustedDevicesSectionProp
       return
     }
 
-    clientLogger.debug('Revoking trusted device', { deviceId })
-
     try {
       const res = await fetch(`/api/v1/auth/2fa/trusted-devices?deviceId=${deviceId}`, {
         method: 'DELETE',
@@ -130,15 +122,14 @@ export function TrustedDevicesSection({ totpEnabled }: TrustedDevicesSectionProp
 
       if (res.ok) {
         setDevices((prev) => prev.filter((d) => d.id !== deviceId))
-        clientLogger.info('Trusted device revoked', { deviceId })
       } else {
         const data = await res.json()
         alert(data.error || 'Failed to revoke device')
-        clientLogger.error('Failed to revoke device', { error: data.error })
+        console.error('Failed to revoke device', { error: data.error })
       }
     } catch (err) {
       alert('Failed to revoke device')
-      clientLogger.error('Failed to revoke device', { error: err })
+      console.error('Failed to revoke device', { error: err })
     }
   }
 
@@ -147,8 +138,6 @@ export function TrustedDevicesSection({ totpEnabled }: TrustedDevicesSectionProp
       return
     }
 
-    clientLogger.debug('Revoking all trusted devices')
-
     try {
       const res = await fetch('/api/v1/auth/2fa/trusted-devices?all=true', {
         method: 'DELETE',
@@ -156,15 +145,14 @@ export function TrustedDevicesSection({ totpEnabled }: TrustedDevicesSectionProp
 
       if (res.ok) {
         setDevices([])
-        clientLogger.info('All trusted devices revoked')
       } else {
         const data = await res.json()
         alert(data.error || 'Failed to revoke devices')
-        clientLogger.error('Failed to revoke all devices', { error: data.error })
+        console.error('Failed to revoke all devices', { error: data.error })
       }
     } catch (err) {
       alert('Failed to revoke devices')
-      clientLogger.error('Failed to revoke all devices', { error: err })
+      console.error('Failed to revoke all devices', { error: err })
     }
   }
 

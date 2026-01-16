@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -20,7 +19,7 @@ export function useConnectionProfiles() {
 
   const fetchOp = useAsyncOperation<ConnectionProfile[]>()
   const deleteOp = useAsyncOperation<any>()
-  const triggerAutoAssociate = useAutoAssociate('connection-profiles')
+  const triggerAutoAssociate = useAutoAssociate()
 
   const countMessagesPerProfile = useCallback(
     async (profilesList: ConnectionProfile[]) => {
@@ -82,14 +81,14 @@ export function useConnectionProfiles() {
                 })
               }
             } catch (err) {
-              clientLogger.error(`Error processing chat ${chat.id}`, { error: getErrorMessage(err) })
+              console.error(`Error processing chat ${chat.id}`, { error: getErrorMessage(err) })
             }
           })
         )
 
         return messageCounts
       } catch (err) {
-        clientLogger.error('Error counting messages per profile', { error: getErrorMessage(err) })
+        console.error('Error counting messages per profile', { error: getErrorMessage(err) })
         return {}
       }
     },
@@ -98,7 +97,6 @@ export function useConnectionProfiles() {
 
   const fetchProfiles = useCallback(async () => {
     return await fetchOp.execute(async () => {
-      clientLogger.debug('Fetching connection profiles')
       // Add cache busting timestamp to force fresh data
       const result = await fetchJson<{ profiles: ConnectionProfile[], count: number }>(`/api/v1/connection-profiles?t=${Date.now()}`, {
         cache: 'no-store',
@@ -117,7 +115,6 @@ export function useConnectionProfiles() {
       // Tags are already included in the profile response from /api/profiles
       // No need to fetch them separately
       setProfiles(data)
-      clientLogger.debug('Profiles loaded successfully', { count: data.length })
       return data
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -125,35 +122,28 @@ export function useConnectionProfiles() {
 
   const fetchApiKeys = useCallback(async () => {
     try {
-      clientLogger.debug('Fetching API keys')
       const result = await fetchJson<{ apiKeys: ApiKey[], count: number }>('/api/v1/api-keys')
       if (result.ok) {
         setApiKeys(result.data?.apiKeys || [])
-        clientLogger.debug('API keys loaded', { count: result.data?.apiKeys?.length })
       } else {
         throw new Error(result.error)
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch API keys', { error: getErrorMessage(err) })
+      console.error('Failed to fetch API keys', { error: getErrorMessage(err) })
     }
   }, [])
 
   const fetchProviders = useCallback(async () => {
     try {
-      clientLogger.debug('Fetching providers configuration')
       const result = await fetchJson<{ providers: ProviderConfig[], count: number }>('/api/v1/providers')
       if (result.ok) {
         const providerList = result.data?.providers || []
         setProviders(providerList)
-        clientLogger.debug('Providers loaded', {
-          count: providerList.length,
-          providers: providerList.map((p: ProviderConfig) => p.name),
-        })
       } else {
         throw new Error(result.error)
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch providers', { error: getErrorMessage(err) })
+      console.error('Failed to fetch providers', { error: getErrorMessage(err) })
     }
   }, [])
 
@@ -164,17 +154,15 @@ export function useConnectionProfiles() {
         setCheapDefaultProfileId(result.data?.cheapLLMSettings?.defaultCheapProfileId || null)
       }
     } catch (err) {
-      clientLogger.error('Error fetching chat settings', { error: getErrorMessage(err) })
+      console.error('Error fetching chat settings', { error: getErrorMessage(err) })
     }
   }, [])
 
   const handleDelete = useCallback(
     async (id: string) => {
       const result = await deleteOp.execute(async () => {
-        clientLogger.debug('Deleting connection profile', { profileId: id })
         const fetchResult = await fetchJson(`/api/v1/connection-profiles/${id}`, { method: 'DELETE' })
         if (!fetchResult.ok) throw new Error(fetchResult.error || 'Failed to delete profile')
-        clientLogger.debug('Profile deleted successfully', { profileId: id })
         return fetchResult.data
       })
 

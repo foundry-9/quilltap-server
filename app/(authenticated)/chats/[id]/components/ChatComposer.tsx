@@ -5,7 +5,6 @@ import ToolPalette from '@/components/chat/ToolPalette'
 import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import MessageContent from '@/components/chat/MessageContent'
-import { clientLogger } from '@/lib/client-logger'
 import type { AttachedFile } from '../types'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
@@ -160,7 +159,6 @@ export function ChatComposer({
 
   // Handler that triggers the file input click - the file input lives in this component
   const handleAttachFileClick = () => {
-    clientLogger.debug('[ChatComposer] Triggering file input click')
     fileInputRef.current?.click()
     // Also call the parent's callback in case it needs to do something
     onAttachFileClick?.()
@@ -175,7 +173,6 @@ export function ChatComposer({
     // Only sync if parent cleared the input (input is now empty but textarea isn't)
     // This is the main case we need: after submission, parent sets input to ''
     if (input === '' && textarea.value !== '' && lastExternalInputRef.current !== '') {
-      clientLogger.debug('[ChatComposer] Parent cleared input, syncing textarea')
       textarea.value = ''
       resizeTextarea(textarea, maxHeightRef.current)
     }
@@ -243,7 +240,6 @@ export function ChatComposer({
           form.dispatchEvent(new Event('submit', { bubbles: true }))
           setTimeout(() => {
             textarea.focus({ preventScroll: true })
-            clientLogger.debug('[ChatComposer] Re-focused textarea after submit')
           }, 10)
         }, 0)
       }
@@ -267,12 +263,6 @@ export function ChatComposer({
           const extension = file.type.split('/')[1] || 'png'
           const filename = `pasted-image-${timestamp}.${extension}`
           const renamedFile = new File([file], filename, { type: file.type })
-
-          clientLogger.debug('[ChatComposer] Image pasted from clipboard', {
-            filename,
-            mimeType: file.type,
-            size: file.size,
-          })
 
           // Upload the pasted image
           await onImagePaste(renamedFile)

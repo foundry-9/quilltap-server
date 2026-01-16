@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { clientLogger } from '@/lib/client-logger'
 import type {
   SearchResult,
   SearchType,
@@ -26,7 +25,6 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
     <Link
       href={result.url}
       onClick={() => {
-        clientLogger.debug('Search result clicked', { type: 'character', id: result.id, query })
         onResultClick?.()
       }}
       className="block p-3 hover:bg-accent rounded-lg transition-colors"
@@ -80,7 +78,6 @@ function PersonaResultCard({ result, query, onResultClick }: { result: PersonaSe
     <Link
       href={result.url}
       onClick={() => {
-        clientLogger.debug('Search result clicked', { type: 'persona', id: result.id, query })
         onResultClick?.()
       }}
       className="block p-3 hover:bg-accent rounded-lg transition-colors"
@@ -135,7 +132,6 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
     <Link
       href={result.url}
       onClick={() => {
-        clientLogger.debug('Search result clicked', { type: 'chat', id: result.id, query })
         onResultClick?.()
       }}
       className="block p-3 hover:bg-accent rounded-lg transition-colors"
@@ -205,7 +201,6 @@ function TagResultCard({ result, query, onResultClick }: { result: TagSearchResu
       onClick={(e) => {
         // For tags, we want to show items with this tag
         // This will be handled by the SearchDialog to show expanded results
-        clientLogger.debug('Tag search result clicked', { type: 'tag', id: result.id, name: result.name, query })
         onResultClick?.()
       }}
       className="block p-3 hover:bg-accent rounded-lg transition-colors"
@@ -242,7 +237,6 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
     <Link
       href={result.url}
       onClick={() => {
-        clientLogger.debug('Search result clicked', { type: 'memory', id: result.id, query })
         onResultClick?.()
       }}
       className="block p-3 hover:bg-accent rounded-lg transition-colors"

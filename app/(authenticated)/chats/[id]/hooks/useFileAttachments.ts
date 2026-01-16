@@ -1,7 +1,6 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { FileConflictInfo, ConflictResolution } from '@/components/chat/FileConflictDialog'
@@ -84,10 +83,6 @@ export function useFileAttachments(chatId: string, projectId?: string | null) {
 
     // Check for duplicate response
     if ('duplicate' in data && data.duplicate) {
-      clientLogger.debug('[FileAttachments] Duplicate detected', {
-        conflictType: data.conflictType,
-        existingFilename: data.existingFile.filename,
-      })
 
       // Store conflict info and pending file for resolution
       setConflictInfo({
@@ -135,7 +130,7 @@ export function useFileAttachments(chatId: string, projectId?: string | null) {
       }
       // If not success, conflict dialog is shown
     } catch (err) {
-      clientLogger.error('Error uploading file:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Error uploading file:', { error: err instanceof Error ? err.message : String(err) })
       showErrorToast(err instanceof Error ? err.message : 'Failed to upload file')
     } finally {
       setUploadingFile(false)
@@ -151,17 +146,12 @@ export function useFileAttachments(chatId: string, projectId?: string | null) {
    */
   const handleConflictResolution = useCallback(async (resolution: ConflictResolution) => {
     if (!pendingFile || !conflictInfo) {
-      clientLogger.error('[FileAttachments] No pending file for resolution')
+      console.error('[FileAttachments] No pending file for resolution')
       return
     }
 
     setResolvingConflict(true)
     try {
-      clientLogger.debug('[FileAttachments] Resolving conflict', {
-        resolution,
-        filename: pendingFile.name,
-        conflictingFileId: conflictInfo.existingFile.id,
-      })
 
       const success = await uploadFile(
         pendingFile,
@@ -183,7 +173,7 @@ export function useFileAttachments(chatId: string, projectId?: string | null) {
       setConflictInfo(null)
       setPendingFile(null)
     } catch (err) {
-      clientLogger.error('[FileAttachments] Error resolving conflict:', {
+      console.error('[FileAttachments] Error resolving conflict:', {
         error: err instanceof Error ? err.message : String(err),
       })
       showErrorToast(err instanceof Error ? err.message : 'Failed to resolve conflict')
@@ -196,7 +186,6 @@ export function useFileAttachments(chatId: string, projectId?: string | null) {
    * Cancel the conflict dialog
    */
   const cancelConflict = useCallback(() => {
-    clientLogger.debug('[FileAttachments] Conflict cancelled')
     setIsConflictDialogOpen(false)
     setConflictInfo(null)
     setPendingFile(null)

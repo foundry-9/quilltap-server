@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import type { MountPoint, AvailableBackend, MountPointFormData, BackendConfigField } from './types'
 
 interface MountPointFormProps {
@@ -67,7 +66,6 @@ export function MountPointForm({
 
   // Log form mount
   useEffect(() => {
-    clientLogger.debug('MountPointForm mounted', { isEditing, backendType })
   }, [isEditing, backendType])
 
   const handleConfigChange = (fieldName: string, value: unknown) => {

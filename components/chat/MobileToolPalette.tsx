@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface MobileToolPaletteProps {
@@ -76,22 +75,6 @@ export default function MobileToolPalette({
     onEscape: onClose,
   })
 
-  // Debug logging when palette opens
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('[MobileToolPalette] Opened', {
-        showAddCharacter,
-        hasImageProfile,
-        chatPhotoCount,
-        chatId,
-        chatMemoryCount,
-        hasRenameCallback: !!onRenameClick,
-        hasProjectCallback: !!onProjectClick,
-        projectName,
-        hasBulkCharacterReplaceCallback: !!onBulkCharacterReplaceClick,
-      })
-    }
-  }, [isOpen, showAddCharacter, hasImageProfile, chatPhotoCount, chatId, chatMemoryCount, onRenameClick, onProjectClick, projectName, onBulkCharacterReplaceClick])
 
   // Handlers that close palette after action
   const handleAttachFileClick = () => {
@@ -115,7 +98,6 @@ export default function MobileToolPalette({
   }
 
   const handleAddCharacterClick = () => {
-    clientLogger.debug('[MobileToolPalette] Add Character clicked')
     onAddCharacterClick?.()
     onClose()
   }
@@ -126,37 +108,31 @@ export default function MobileToolPalette({
   }
 
   const handleRenameClick = () => {
-    clientLogger.debug('[MobileToolPalette] Rename clicked')
     onRenameClick?.()
     onClose()
   }
 
   const handleProjectClick = () => {
-    clientLogger.debug('[MobileToolPalette] Project clicked', { projectName })
     onProjectClick?.()
     onClose()
   }
 
   const handleExportClick = () => {
-    clientLogger.debug('[MobileToolPalette] Export Chat clicked', { chatId })
     window.location.href = `/api/v1/chats/${chatId}?action=export`
     onClose()
   }
 
   const handleDeleteChatMemoriesClick = () => {
-    clientLogger.debug('[MobileToolPalette] Delete Chat Memories clicked', { chatId, chatMemoryCount })
     onDeleteChatMemoriesClick?.()
     onClose()
   }
 
   const handleReextractMemoriesClick = () => {
-    clientLogger.debug('[MobileToolPalette] Re-extract Memories clicked', { chatId })
     onReextractMemoriesClick?.()
     onClose()
   }
 
   const handleBulkCharacterReplaceClick = () => {
-    clientLogger.debug('[MobileToolPalette] Bulk Character Replace clicked', { chatId })
     onBulkCharacterReplaceClick?.()
     onClose()
   }

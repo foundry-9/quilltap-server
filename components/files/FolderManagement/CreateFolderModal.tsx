@@ -7,7 +7,6 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 
@@ -39,10 +38,7 @@ export default function CreateFolderModal({
   }, [isOpen])
 
   useEffect(() => {
-    clientLogger.debug('[CreateFolderModal] Opened', {
-      currentFolder,
-      projectId,
-    })
+    // Modal opened
   }, [currentFolder, projectId])
 
   const handleCreate = async () => {
@@ -60,12 +56,6 @@ export default function CreateFolderModal({
 
     try {
       setSaving(true)
-      clientLogger.debug('[CreateFolderModal] Creating folder', {
-        folderName: trimmedName,
-        fullPath: newFolderPath,
-        projectId,
-      })
-
       const res = await fetch('/api/v1/files/folders?action=create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,16 +74,10 @@ export default function CreateFolderModal({
       const folderPath = data.folder?.path || newFolderPath
 
       showSuccessToast(data.alreadyExists ? 'Folder already exists' : 'Folder created')
-      clientLogger.info('[CreateFolderModal] Folder created', {
-        path: folderPath,
-        folderId: data.folder?.id,
-        alreadyExists: data.alreadyExists,
-      })
-
       onSuccess?.(folderPath)
       onClose()
     } catch (error) {
-      clientLogger.error('[CreateFolderModal] Failed to create folder', {
+      console.error('[CreateFolderModal] Failed to create folder', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast(error instanceof Error ? error.message : 'Failed to create folder')

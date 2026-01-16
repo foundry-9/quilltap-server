@@ -9,7 +9,6 @@
  */
 
 import { useCallback, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import type { Project, EditForm } from '../types'
@@ -38,7 +37,6 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
 
   const fetchProject = useCallback(async () => {
     try {
-      clientLogger.debug('useProjectDetail: fetching project', { projectId })
       const res = await fetch(`/api/v1/projects/${projectId}`)
       if (!res.ok) throw new Error('Project not found')
       const data = await res.json()
@@ -48,10 +46,9 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
         description: data.project.description || '',
         instructions: data.project.instructions || '',
       })
-      clientLogger.debug('useProjectDetail: loaded project', { projectId: data.project.id })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to load project'
-      clientLogger.error('useProjectDetail: fetch error', { error: errorMsg, projectId })
+      console.error('useProjectDetail: fetch error', errorMsg)
       setError(errorMsg)
     } finally {
       setLoading(false)
@@ -60,7 +57,6 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
 
   const handleSave = useCallback(async () => {
     try {
-      clientLogger.debug('useProjectDetail: saving project', { projectId })
       const res = await fetch(`/api/v1/projects/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -77,10 +73,9 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
       setIsEditing(false)
       showSuccessToast('Project updated!')
       refreshProjects()
-      clientLogger.info('useProjectDetail: saved project', { projectId })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to update project'
-      clientLogger.error('useProjectDetail: save error', { error: errorMsg, projectId })
+      console.error('useProjectDetail: save error', errorMsg)
       showErrorToast(errorMsg)
     }
   }, [projectId, editForm, refreshProjects])
@@ -88,7 +83,6 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
   const handleToggleAllowAnyCharacter = useCallback(async () => {
     if (!project) return
     try {
-      clientLogger.debug('useProjectDetail: toggling allowAnyCharacter', { projectId, current: project.allowAnyCharacter })
       const res = await fetch(`/api/v1/projects/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -99,17 +93,15 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
       const data = await res.json()
       setProject(data.project)
       showSuccessToast(data.project.allowAnyCharacter ? 'Any character can now participate' : 'Only roster characters can participate')
-      clientLogger.info('useProjectDetail: toggled allowAnyCharacter', { projectId, allowAnyCharacter: data.project.allowAnyCharacter })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to update setting'
-      clientLogger.error('useProjectDetail: toggle error', { error: errorMsg, projectId })
+      console.error('useProjectDetail: toggle error', errorMsg)
       showErrorToast(errorMsg)
     }
   }, [project, projectId])
 
   const handleRemoveCharacter = useCallback(async (characterId: string) => {
     try {
-      clientLogger.debug('useProjectDetail: removing character', { projectId, characterId })
       const res = await fetch(`/api/v1/projects/${projectId}?action=remove-character`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -119,10 +111,9 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
       if (!res.ok) throw new Error('Failed to remove character')
       await fetchProject()
       showSuccessToast('Character removed from project')
-      clientLogger.info('useProjectDetail: removed character', { projectId, characterId })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to remove character'
-      clientLogger.error('useProjectDetail: remove character error', { error: errorMsg, projectId, characterId })
+      console.error('useProjectDetail: remove character error', errorMsg)
       showErrorToast(errorMsg)
     }
   }, [projectId, fetchProject])

@@ -8,7 +8,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
@@ -52,11 +51,6 @@ export default function ChatProjectModal({
   // Fetch projects when modal opens
   useEffect(() => {
     if (isOpen) {
-      clientLogger.debug('[ChatProjectModal] Modal opened', {
-        chatId,
-        initialProjectId,
-        initialProjectName,
-      })
       fetchProjects()
     }
   }, [isOpen, chatId, initialProjectId, initialProjectName])
@@ -68,12 +62,9 @@ export default function ChatProjectModal({
       if (res.ok) {
         const data = await res.json()
         setProjects(data.projects || [])
-        clientLogger.debug('[ChatProjectModal] Fetched projects', {
-          count: data.projects?.length || 0,
-        })
       }
     } catch (error) {
-      clientLogger.error('[ChatProjectModal] Failed to fetch projects', {
+      console.error('[ChatProjectModal] Failed to fetch projects', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast('Failed to load projects')
@@ -91,7 +82,6 @@ export default function ChatProjectModal({
 
     try {
       setSaving(true)
-      clientLogger.debug('[ChatProjectModal] Updating chat project', { chatId, projectId })
 
       const res = await fetch(`/api/v1/chats/${chatId}`, {
         method: 'PUT',
@@ -122,12 +112,6 @@ export default function ChatProjectModal({
           : 'Chat removed from project'
       )
 
-      clientLogger.info('[ChatProjectModal] Project updated for chat', {
-        chatId,
-        projectId,
-        projectName,
-      })
-
       // Refresh sidebar to update project chat counts and chat list
       refreshSidebar()
 
@@ -135,7 +119,7 @@ export default function ChatProjectModal({
       onClose()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      clientLogger.error('[ChatProjectModal] Failed to update project', {
+      console.error('[ChatProjectModal] Failed to update project', {
         chatId,
         projectId,
         error: errorMessage,

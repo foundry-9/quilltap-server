@@ -7,7 +7,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { FilePreviewRendererProps } from './types'
 
 export default function FilePreviewImage({
@@ -18,22 +17,18 @@ export default function FilePreviewImage({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    clientLogger.debug('[FilePreviewImage] Rendering image', {
-      fileId: file.id,
-      mimeType: file.mimeType,
-    })
+    // Image renderer mounted
   }, [file.id, file.mimeType])
 
   const handleLoad = () => {
     setIsLoading(false)
-    clientLogger.debug('[FilePreviewImage] Image loaded', { fileId: file.id })
   }
 
   const handleError = () => {
     setIsLoading(false)
     setError('Failed to load image')
     // Use warn instead of error - this is handled gracefully via error state
-    clientLogger.warn('[FilePreviewImage] Image load failed', { fileId: file.id })
+    console.warn('[FilePreviewImage] Image load failed', { fileId: file.id })
   }
 
   return (

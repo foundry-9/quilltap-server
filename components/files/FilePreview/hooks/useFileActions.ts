@@ -10,7 +10,6 @@
  */
 
 import { useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { FileInfo } from '../../types'
@@ -65,11 +64,6 @@ export function useFileActions({
   const canMoveToProject = true
 
   const handleDownload = useCallback(() => {
-    clientLogger.debug('[useFileActions] Downloading file', {
-      fileId: file.id,
-      filename: file.originalFilename,
-    })
-
     // Create a download link
     const link = document.createElement('a')
     link.href = `/api/v1/files/${file.id}`
@@ -88,7 +82,6 @@ export function useFileActions({
     }
 
     setIsDeleting(true)
-    clientLogger.debug('[useFileActions] Deleting file', { fileId: file.id })
 
     try {
       // No longer using force=true - respect associations
@@ -99,16 +92,11 @@ export function useFileActions({
       const data = await response.json().catch(() => ({}))
 
       if (response.ok) {
-        clientLogger.debug('[useFileActions] File deleted', { fileId: file.id })
         showSuccessToast('File deleted')
         onDelete?.(file.id)
         onClose?.()
       } else if (data.details?.code === 'FILE_HAS_ASSOCIATIONS') {
         // File has associations - show confirmation dialog
-        clientLogger.debug('[useFileActions] File has associations', {
-          fileId: file.id,
-          associations: data.details.associations,
-        })
         setPendingDelete({
           fileId: file.id,
           associations: data.details.associations,
@@ -118,7 +106,7 @@ export function useFileActions({
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to delete file'
-      clientLogger.error('[useFileActions] Delete failed', {
+      console.error('[useFileActions] Delete failed', {
         fileId: file.id,
         error: message,
       })
@@ -129,12 +117,6 @@ export function useFileActions({
   }, [file, onDelete, onClose])
 
   const handleMoveToProject = useCallback(() => {
-    clientLogger.debug('[useFileActions] Opening move modal', {
-      fileId: file.id,
-      filename: file.originalFilename,
-      currentProjectId: file.projectId,
-    })
-
     onMoveToProject?.(file.id)
   }, [file, onMoveToProject])
 
@@ -142,9 +124,6 @@ export function useFileActions({
     if (!pendingDelete) return
 
     setIsDeleting(true)
-    clientLogger.debug('[useFileActions] Confirming delete with dissociation', {
-      fileId: pendingDelete.fileId,
-    })
 
     try {
       const response = await fetch(`/api/v1/files/${pendingDelete.fileId}?dissociate=true`, {
@@ -152,9 +131,6 @@ export function useFileActions({
       })
 
       if (response.ok) {
-        clientLogger.debug('[useFileActions] File deleted with dissociation', {
-          fileId: pendingDelete.fileId,
-        })
         showSuccessToast('File deleted')
         setPendingDelete(null)
         onDelete?.(pendingDelete.fileId)
@@ -165,7 +141,7 @@ export function useFileActions({
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to delete file'
-      clientLogger.error('[useFileActions] Delete with dissociation failed', {
+      console.error('[useFileActions] Delete with dissociation failed', {
         fileId: pendingDelete.fileId,
         error: message,
       })

@@ -9,7 +9,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { logger } from '@/lib/logger';
 import { sanitizeCustomHeaders } from './security';
 import type {
   MCPServerConfig,
@@ -18,8 +17,6 @@ import type {
   MCPToolCallResult,
   MCPContentBlock,
 } from './types';
-
-const clientLogger = logger.child({ module: 'mcp-client' });
 
 /**
  * MCP Client for a single server
@@ -104,7 +101,6 @@ export class MCPClient {
    */
   async connect(): Promise<void> {
     if (this.state.status === 'connected' || this.state.status === 'ready') {
-      clientLogger.debug('Already connected', { serverId: this.config.name });
       return;
     }
 
@@ -113,11 +109,6 @@ export class MCPClient {
     const headers = this.buildHeaders();
 
     try {
-      clientLogger.info('Connecting to MCP server', {
-        serverId: this.config.name,
-        url: this.config.url,
-      });
-
       // Try Streamable HTTP first (newer protocol)
       try {
         this.client = new Client(
@@ -132,15 +123,8 @@ export class MCPClient {
         });
 
         await this.client.connect(this.transport);
-        clientLogger.info('Connected using Streamable HTTP transport', {
-          serverId: this.config.name,
-        });
       } catch (streamableError) {
         // Fall back to SSE transport
-        clientLogger.debug('Streamable HTTP failed, falling back to SSE', {
-          serverId: this.config.name,
-          error: streamableError instanceof Error ? streamableError.message : String(streamableError),
-        });
 
         // Close any partial connection
         if (this.transport) {
@@ -164,24 +148,17 @@ export class MCPClient {
         });
 
         await this.client.connect(this.transport);
-        clientLogger.info('Connected using SSE transport', {
-          serverId: this.config.name,
-        });
       }
 
       this.state.status = 'connected';
       this.state.lastConnected = new Date();
       this.state.reconnectAttempts = 0;
 
-      clientLogger.info('Connected to MCP server', {
-        serverId: this.config.name,
-      });
-
     } catch (error) {
       this.state.status = 'error';
       this.state.lastError = error instanceof Error ? error.message : 'Connection failed';
 
-      clientLogger.error('Failed to connect to MCP server', {
+      console.error('Failed to connect to MCP server', {
         serverId: this.config.name,
         error: this.state.lastError,
       });
@@ -205,8 +182,6 @@ export class MCPClient {
     this.state.status = 'discovering';
 
     try {
-      clientLogger.info('Discovering tools', { serverId: this.config.name });
-
       const result = await this.client.listTools();
 
       // Convert SDK tool format to our MCPToolDefinition format
@@ -218,18 +193,12 @@ export class MCPClient {
 
       this.state.status = 'ready';
 
-      clientLogger.info('Tools discovered', {
-        serverId: this.config.name,
-        toolCount: this.state.tools.length,
-        tools: this.state.tools.map((t) => t.name),
-      });
-
       return this.state.tools;
     } catch (error) {
       this.state.status = 'error';
       this.state.lastError = error instanceof Error ? error.message : 'Tool discovery failed';
 
-      clientLogger.error('Tool discovery failed', {
+      console.error('Tool discovery failed', {
         serverId: this.config.name,
         error: this.state.lastError,
       });
@@ -252,11 +221,6 @@ export class MCPClient {
     if (this.state.status !== 'ready') {
       throw new Error(`Server not ready (status: ${this.state.status})`);
     }
-
-    clientLogger.debug('Calling MCP tool', {
-      serverId: this.config.name,
-      toolName,
-    });
 
     const result = await this.client.callTool({
       name: toolName,
@@ -298,13 +262,6 @@ export class MCPClient {
       isError: result.isError === true,
     };
 
-    clientLogger.debug('MCP tool call completed', {
-      serverId: this.config.name,
-      toolName,
-      isError: mcpResult.isError,
-      contentCount: mcpResult.content?.length,
-    });
-
     return mcpResult;
   }
 
@@ -312,13 +269,11 @@ export class MCPClient {
    * Disconnect from the MCP server
    */
   async disconnect(): Promise<void> {
-    clientLogger.info('Disconnecting from MCP server', { serverId: this.config.name });
-
     if (this.transport) {
       try {
         await this.transport.close();
       } catch (error) {
-        clientLogger.warn('Error closing transport', {
+        console.warn('Error closing transport', {
           serverId: this.config.name,
           error: error instanceof Error ? error.message : String(error),
         });

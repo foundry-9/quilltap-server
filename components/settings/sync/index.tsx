@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { SyncFormData, SyncInstanceDisplay, INITIAL_FORM_DATA } from './types'
 import { useSyncInstances, useSyncOperations, useSyncTrigger, useSyncApiKeys, useSyncCleanup, useSyncProgress } from './hooks'
 import { InstanceList, InstanceForm, SyncHistoryPanel, ApiKeyPanel, CleanupPanel, SyncProgressBar } from './components'
@@ -88,13 +87,6 @@ export default function SyncTab() {
 
   // Log renders
   useEffect(() => {
-    clientLogger.debug('SyncTab: rendered', {
-      instanceCount: instances.instances.length,
-      operationCount: operations.operations.length,
-      apiKeyCount: apiKeys.keys.length,
-      isFormOpen,
-      editingInstanceId: editingInstance?.id,
-    })
   }, [instances.instances.length, operations.operations.length, apiKeys.keys.length, isFormOpen, editingInstance])
 
   // Open create form
@@ -106,7 +98,6 @@ export default function SyncTab() {
 
   // Open edit form
   const openEditForm = useCallback((instance: SyncInstanceDisplay) => {
-    clientLogger.debug('SyncTab: opening edit form', { instanceId: instance.id })
     setEditingInstance(instance)
     setFormData({
       name: instance.name,
@@ -132,10 +123,6 @@ export default function SyncTab() {
   // Handle form submit
   const handleFormSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
-    clientLogger.debug('SyncTab: form submitted', {
-      isEditing: !!editingInstance,
-      formData: { ...formData, apiKey: formData.apiKey ? '[REDACTED]' : '' },
-    })
 
     if (editingInstance) {
       // Update existing instance
@@ -166,7 +153,6 @@ export default function SyncTab() {
       forceFull: boolean = false,
       direction: SyncDirection = 'BIDIRECTIONAL'
     ) => {
-      clientLogger.debug('SyncTab: triggering sync', { instanceId, forceFull, direction })
       const result = await syncTrigger.triggerSync(instanceId, forceFull, direction)
       if (result) {
         // Refresh instances to get updated lastSyncAt
@@ -180,16 +166,11 @@ export default function SyncTab() {
 
   // Handle connection test
   const handleTest = useCallback(async (instanceId: string) => {
-    clientLogger.debug('SyncTab: testing connection', { instanceId })
     const result = await instances.testConnection(instanceId)
     if (result) {
       if (result.success) {
-        clientLogger.info('SyncTab: connection test successful', {
-          instanceId,
-          versionInfo: result.versionInfo,
-        })
       } else {
-        clientLogger.warn('SyncTab: connection test failed', {
+        console.warn('SyncTab: connection test failed', {
           instanceId,
           error: result.error,
         })
@@ -199,7 +180,6 @@ export default function SyncTab() {
 
   // Handle delete
   const handleDelete = useCallback(async (instanceId: string) => {
-    clientLogger.debug('SyncTab: deleting instance', { instanceId })
     await instances.deleteInstance(instanceId)
   }, [instances])
 

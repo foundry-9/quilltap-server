@@ -10,7 +10,6 @@
  */
 
 import { useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { BaseModal } from '@/components/ui/BaseModal'
 import Avatar from '@/components/ui/Avatar'
 
@@ -50,33 +49,20 @@ export function AllLLMPauseModal({
   onTakeOver,
 }: Readonly<AllLLMPauseModalProps>) {
   useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('[AllLLMPauseModal] Opened', {
-        turnCount,
-        nextPauseAt,
-        participantCount: participants.length,
-      })
-    }
+    // Modal opened
   }, [isOpen, turnCount, nextPauseAt, participants.length])
 
   const handleContinue = (turns: number) => {
-    clientLogger.debug('[AllLLMPauseModal] Continue clicked', { turns })
     onContinue(turns)
     onClose()
   }
 
   const handleStop = () => {
-    clientLogger.debug('[AllLLMPauseModal] Stop clicked')
     onStop()
     onClose()
   }
 
   const handleTakeOver = (participantId: string) => {
-    const participant = participants.find(p => p.id === participantId)
-    clientLogger.debug('[AllLLMPauseModal] Take over clicked', {
-      participantId,
-      characterName: participant?.characterName,
-    })
     onTakeOver(participantId)
     onClose()
   }

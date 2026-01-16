@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -26,8 +25,6 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
     setLoading(true)
 
     try {
-      clientLogger.info('Starting backup creation', { destination, hasFilename: !!filename })
-
       const body: Record<string, any> = {
         destination,
       }
@@ -47,11 +44,6 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create backup')
       }
-
-      clientLogger.info('Backup created successfully', {
-        destination,
-        backupId: data.backupId,
-      })
 
       if (destination === 'download' && data.backupId) {
         // Trigger download
@@ -80,7 +72,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to create backup')
       setError(errorMessage)
-      clientLogger.error('Backup creation failed', {
+      console.error('Backup creation failed', {
         error: errorMessage,
         errorType: err instanceof Error ? err.name : typeof err,
         destination,

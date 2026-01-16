@@ -7,7 +7,6 @@
  */
 
 import { useEffect, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useProjects } from './hooks/useProjects'
 import { ProjectsGrid, CreateProjectDialog, DeleteProjectDialog } from './components'
 
@@ -17,7 +16,6 @@ export default function ProjectsPage() {
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null)
 
   useEffect(() => {
-    clientLogger.debug('ProjectsPage: mounted')
     fetchProjects()
   }, [fetchProjects])
 

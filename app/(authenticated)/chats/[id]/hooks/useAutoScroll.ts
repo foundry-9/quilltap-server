@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useRef, useEffect, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import type { Virtualizer } from '@tanstack/react-virtual'
 
 interface UseAutoScrollOptions {
@@ -159,10 +158,7 @@ export function useAutoScroll({
         // Only update if state actually changed
         setIsAutoScrollEnabled(prev => {
           if (prev !== nearBottom) {
-            clientLogger.debug('[useAutoScroll] Auto-scroll state changed', {
-              enabled: nearBottom,
-              reason: nearBottom ? 'user scrolled to bottom' : 'user scrolled up'
-            })
+            // State changed
           }
           return nearBottom
         })
@@ -209,10 +205,7 @@ export function useAutoScroll({
 
     // Loading complete - start settle timer
     if (!isSettled && messageCount > 0) {
-      clientLogger.debug('[useAutoScroll] Messages loaded, starting settle timer', { messageCount })
-
       settleTimerRef.current = setTimeout(() => {
-        clientLogger.debug('[useAutoScroll] Page settled, performing initial scroll')
         setIsSettled(true)
 
         // Perform initial scroll after settling
@@ -244,7 +237,6 @@ export function useAutoScroll({
 
     // Detect streaming completion
     if (wasStreaming && !nowStreaming && isAutoScrollEnabled && isSettled) {
-      clientLogger.debug('[useAutoScroll] Streaming complete, scrolling to bottom')
       // Small delay to let the final message render
       setTimeout(() => {
         performScrollToBottom('smooth')
@@ -265,7 +257,6 @@ export function useAutoScroll({
     if (isSettled && messageCount > prevCount && !isStreaming && !isWaitingForResponse) {
       // New message added (e.g., after streaming completes and message moves to array)
       if (isAutoScrollEnabled) {
-        clientLogger.debug('[useAutoScroll] New message added, scrolling to bottom')
         setTimeout(() => {
           performScrollToBottom('smooth')
         }, 50)
@@ -277,7 +268,6 @@ export function useAutoScroll({
    * Called when user sends a message - always scrolls to bottom
    */
   const scrollOnUserMessage = useCallback(() => {
-    clientLogger.debug('[useAutoScroll] User sent message, forcing scroll to bottom')
     setIsAutoScrollEnabled(true)
     performScrollToBottom('smooth')
   }, [performScrollToBottom])
@@ -287,7 +277,6 @@ export function useAutoScroll({
    */
   const scrollOnStreamComplete = useCallback(() => {
     if (isAutoScrollEnabled) {
-      clientLogger.debug('[useAutoScroll] Stream complete, scrolling to bottom')
       performScrollToBottom('smooth')
     }
   }, [isAutoScrollEnabled, performScrollToBottom])

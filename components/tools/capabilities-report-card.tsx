@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -58,7 +57,6 @@ export function CapabilitiesReportCard() {
     try {
       setGenerating(true)
       setError(null)
-      clientLogger.info('Generating capabilities report')
 
       const res = await fetch('/api/v1/system/tools?action=capabilities-report-generate', {
         method: 'POST',
@@ -71,10 +69,6 @@ export function CapabilitiesReportCard() {
       }
 
       const data = await res.json()
-      clientLogger.info('Capabilities report generated', {
-        reportId: data.reportId,
-        filename: data.filename,
-      })
 
       showSuccessToast('Report generated successfully')
 
@@ -91,7 +85,7 @@ export function CapabilitiesReportCard() {
     } catch (err) {
       const errorMessage = getErrorMessage(err)
       setError(errorMessage)
-      clientLogger.error('Failed to generate capabilities report', { error: errorMessage })
+      console.error('Failed to generate capabilities report', { error: errorMessage })
       showErrorToast(errorMessage)
     } finally {
       setGenerating(false)
@@ -101,7 +95,6 @@ export function CapabilitiesReportCard() {
   const handleViewReport = async (report: ReportInfo) => {
     try {
       setLoading(true)
-      clientLogger.info('Viewing capabilities report', { reportId: report.id })
 
       const res = await fetch(`/api/v1/system/tools?action=capabilities-report-get&reportId=${report.id}`)
       if (!res.ok) throw new Error('Failed to load report')
@@ -115,7 +108,7 @@ export function CapabilitiesReportCard() {
       setShowDialog(true)
     } catch (err) {
       const errorMessage = getErrorMessage(err)
-      clientLogger.error('Failed to view report', { error: errorMessage })
+      console.error('Failed to view report', { error: errorMessage })
       showErrorToast('Failed to load report')
     } finally {
       setLoading(false)
@@ -129,8 +122,6 @@ export function CapabilitiesReportCard() {
     if (!confirmed) return
 
     try {
-      clientLogger.info('Deleting capabilities report', { reportId: report.id })
-
       const res = await fetch('/api/v1/system/tools?action=capabilities-report-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -139,12 +130,11 @@ export function CapabilitiesReportCard() {
 
       if (!res.ok) throw new Error('Failed to delete report')
 
-      clientLogger.info('Capabilities report deleted', { reportId: report.id })
       showSuccessToast('Report deleted')
       await fetchReports()
     } catch (err) {
       const errorMessage = getErrorMessage(err)
-      clientLogger.error('Failed to delete report', { error: errorMessage })
+      console.error('Failed to delete report', { error: errorMessage })
       showErrorToast('Failed to delete report')
     }
   }

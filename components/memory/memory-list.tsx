@@ -7,7 +7,6 @@ import { HousekeepingDialog } from './housekeeping-dialog'
 import { useListManager } from '@/hooks/useListManager'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { getErrorMessage } from '@/lib/error-utils'
-import { clientLogger } from '@/lib/client-logger'
 import { showConfirmation } from '@/lib/alert'
 import { SectionHeader } from '@/components/ui/SectionHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
@@ -50,13 +49,6 @@ export function MemoryList({ characterId }: MemoryListProps) {
   // Build the fetch function with current filters
   const fetchMemoriesWithFilters = useCallback(async (): Promise<Memory[]> => {
     try {
-      clientLogger.debug('MemoryList: Fetching memories with filters', {
-        search,
-        sortBy,
-        sortOrder,
-        sourceFilter,
-      })
-
       const params = new URLSearchParams()
       params.set('characterId', characterId)
       if (search) params.set('search', search)
@@ -72,14 +64,10 @@ export function MemoryList({ characterId }: MemoryListProps) {
         throw new Error(result.error || 'Failed to fetch memories')
       }
 
-      clientLogger.debug('MemoryList: Memories fetched successfully', {
-        count: result.data?.memories.length || 0,
-      })
-
       return result.data?.memories || []
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to fetch memories')
-      clientLogger.error('MemoryList: Fetch failed', { error: errorMessage })
+      console.error('MemoryList: Fetch failed', { error: errorMessage })
       throw new Error(errorMessage)
     }
   }, [characterId, search, sortBy, sortOrder, sourceFilter])
@@ -101,7 +89,6 @@ export function MemoryList({ characterId }: MemoryListProps) {
   } = useListManager<Memory>({
     fetchFn: fetchMemoriesWithFilters,
     deleteFn: async (memoryId: string) => {
-      clientLogger.debug('MemoryList: Deleting memory', { memoryId })
       const result = await fetchJson(
         `/api/v1/memories/${memoryId}`,
         { method: 'DELETE' }
@@ -110,8 +97,6 @@ export function MemoryList({ characterId }: MemoryListProps) {
       if (!result.ok) {
         throw new Error(result.error || 'Failed to delete memory')
       }
-
-      clientLogger.debug('MemoryList: Memory deleted successfully', { memoryId })
     },
     deleteConfirmMessage: 'Are you sure you want to delete this memory?',
     deleteSuccessMessage: 'Memory deleted',
@@ -123,7 +108,6 @@ export function MemoryList({ characterId }: MemoryListProps) {
   }, [search, sortBy, sortOrder, sourceFilter, refetch])
 
   const handleHousekeepingComplete = () => {
-    clientLogger.debug('MemoryList: Housekeeping complete, refetching')
     setShowHousekeeping(false)
     refetch()
   }

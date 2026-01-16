@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast } from '@/lib/toast'
-import { clientLogger } from '@/lib/client-logger'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
@@ -184,7 +183,7 @@ export default function ChatsPage() {
         setCharacters(data.characters.map((c: any) => ({ id: c.id, name: c.name, title: c.title })))
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch characters:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch characters:', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -196,7 +195,7 @@ export default function ChatsPage() {
         setPersonas(data.map((p: any) => ({ id: p.id, name: p.name, title: p.title })))
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch personas:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch personas:', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -208,7 +207,7 @@ export default function ChatsPage() {
         setProfiles((data.profiles || []).map((p: any) => ({ id: p.id, name: p.name })))
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch profiles:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch profiles:', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 

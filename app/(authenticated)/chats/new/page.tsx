@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
@@ -88,10 +87,7 @@ export default function NewChatPage() {
   const [project, setProject] = useState<Project | null>(null)
 
   useEffect(() => {
-    clientLogger.debug('[NewChat] Component mounted', { projectIdParam })
-
     const fetchData = async () => {
-      clientLogger.debug('[NewChat] Fetching data')
       try {
         const fetchPromises: Promise<Response>[] = [
           fetch('/api/v1/characters'),
@@ -115,35 +111,27 @@ export default function NewChatPage() {
           const userControlled = allCharacters.filter(c => c.controlledBy === 'user')
           setCharacters(llmControlled)
           setUserControlledCharacters(userControlled)
-          clientLogger.debug('[NewChat] Loaded characters', {
-            total: allCharacters.length,
-            llmControlled: llmControlled.length,
-            userControlled: userControlled.length,
-          })
         }
 
         if (profilesRes.ok) {
           const data = await profilesRes.json()
           setProfiles(data.profiles || [])
-          clientLogger.debug('[NewChat] Loaded profiles', { count: data.profiles?.length || 0 })
         }
 
         if (imageProfilesRes.ok) {
           const data = await imageProfilesRes.json()
           setImageProfiles(data || [])
-          clientLogger.debug('[NewChat] Loaded image profiles', { count: data?.length || 0 })
         }
 
         // Handle project response
         if (projectRes && projectRes.ok) {
           const data = await projectRes.json()
           setProject(data.project || data)
-          clientLogger.debug('[NewChat] Loaded project', { projectId: data.project?.id, name: data.project?.name })
         } else if (projectRes && !projectRes.ok) {
-          clientLogger.warn('[NewChat] Failed to load project', { projectId: projectIdParam, status: projectRes.status })
+          console.warn('[NewChat] Failed to load project', { projectId: projectIdParam, status: projectRes.status })
         }
       } catch (err) {
-        clientLogger.error('[NewChat] Error fetching data', {
+        console.error('[NewChat] Error fetching data', {
           error: err instanceof Error ? err.message : String(err),
         })
         showErrorToast('Failed to load data')
@@ -209,7 +197,6 @@ export default function NewChatPage() {
 
   const handleSelectCharacter = (character: Character) => {
     if (selectedCharacterIds.has(character.id)) {
-      clientLogger.debug('[NewChat] Deselecting character', { characterId: character.id })
       setSelectedCharacters((prev) =>
         prev.filter((sc) => sc.character.id !== character.id)
       )
@@ -219,11 +206,6 @@ export default function NewChatPage() {
       // Find default or first system prompt
       const defaultPrompt = character.systemPrompts?.find(p => p.isDefault) || character.systemPrompts?.[0]
       const selectedSystemPromptId = defaultPrompt?.id || null
-      clientLogger.debug('[NewChat] Selecting character', {
-        characterId: character.id,
-        connectionProfileId,
-        selectedSystemPromptId,
-      })
       setSelectedCharacters((prev) => [
         ...prev,
         { character, connectionProfileId, imageProfileId: null, selectedSystemPromptId, controlledBy: 'llm' },
@@ -233,7 +215,6 @@ export default function NewChatPage() {
 
   const handleProfileChange = (characterId: string, profileId: string) => {
     const isUserControlled = profileId === USER_CONTROLLED_PROFILE
-    clientLogger.debug('[NewChat] Changing connection profile', { characterId, profileId, isUserControlled })
     setSelectedCharacters((prev) =>
       prev.map((sc) =>
         sc.character.id === characterId
@@ -248,7 +229,6 @@ export default function NewChatPage() {
   }
 
   const handleImageProfileChange = (characterId: string, profileId: string | null) => {
-    clientLogger.debug('[NewChat] Changing image profile', { characterId, profileId })
     setSelectedCharacters((prev) =>
       prev.map((sc) =>
         sc.character.id === characterId ? { ...sc, imageProfileId: profileId } : sc
@@ -257,7 +237,6 @@ export default function NewChatPage() {
   }
 
   const handleSystemPromptChange = (characterId: string, promptId: string | null) => {
-    clientLogger.debug('[NewChat] Changing system prompt', { characterId, promptId })
     setSelectedCharacters((prev) =>
       prev.map((sc) =>
         sc.character.id === characterId ? { ...sc, selectedSystemPromptId: promptId } : sc
@@ -266,7 +245,6 @@ export default function NewChatPage() {
   }
 
   const handleRemoveCharacter = (characterId: string) => {
-    clientLogger.debug('[NewChat] Removing character', { characterId })
     setSelectedCharacters((prev) =>
       prev.filter((sc) => sc.character.id !== characterId)
     )
@@ -307,13 +285,6 @@ export default function NewChatPage() {
     }
 
     setCreating(true)
-    clientLogger.debug('[NewChat] Creating chat', {
-      characterCount: selectedCharacters.length,
-      hasUserCharacter: !!selectedUserCharacterId,
-      hasScenario: !!scenario,
-      hasTimestampConfig: !!timestampConfig,
-      projectId: project?.id || null,
-    })
 
     try {
       const participants: Array<{
@@ -370,7 +341,6 @@ export default function NewChatPage() {
       }
 
       const data = await res.json()
-      clientLogger.info('[NewChat] Chat created successfully', { chatId: data.chat.id, projectId: project?.id })
       showSuccessToast('Chat created!')
 
       // Refresh sidebar to show new chat
@@ -381,7 +351,7 @@ export default function NewChatPage() {
 
       router.push('/chats/' + data.chat.id)
     } catch (err) {
-      clientLogger.error('[NewChat] Failed to create chat', {
+      console.error('[NewChat] Failed to create chat', {
         error: err instanceof Error ? err.message : String(err),
       })
       showErrorToast(err instanceof Error ? err.message : 'Failed to create chat')

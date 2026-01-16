@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { MountPointForm } from './MountPointForm'
 import type { MountPoint, AvailableBackend, MountPointFormData } from './types'
 
@@ -34,7 +33,6 @@ export function MountPointModal({
 
   // Log modal state changes
   useEffect(() => {
-    clientLogger.debug('MountPointModal state changed', { isOpen, isEditing })
   }, [isOpen, isEditing])
 
   // Handle escape key
@@ -68,11 +66,9 @@ export function MountPointModal({
     try {
       if (isEditing && mountPoint) {
         await updateMountPoint(mountPoint.id, data)
-        clientLogger.info('Mount point updated', { id: mountPoint.id })
       } else {
         const created = await createMountPoint(data)
         if (created) {
-          clientLogger.info('Mount point created', { id: created.id })
         }
       }
 
@@ -80,7 +76,7 @@ export function MountPointModal({
       onClose()
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to save mount point'
-      clientLogger.error('Failed to save mount point', { error: errorMessage })
+      console.error('Failed to save mount point', { error: errorMessage })
       setError(errorMessage)
     } finally {
       setIsSubmitting(false)

@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 interface UserCharacterBasic {
   id: string
@@ -43,7 +42,6 @@ export function useUserCharacterDisplayName(): UseUserCharacterDisplayNameResult
         const res = await fetch('/api/v1/characters?controlledBy=user')
         if (!res.ok) {
           if (res.status === 401) {
-            clientLogger.debug('Not authenticated, cannot check character names')
             return
           }
           throw new Error(`Failed to fetch characters: ${res.status}`)
@@ -69,12 +67,8 @@ export function useUserCharacterDisplayName(): UseUserCharacterDisplayNameResult
         }
 
         setDuplicateNames(duplicates)
-        clientLogger.debug('Character name disambiguation loaded', {
-          totalCharacters: characters.length,
-          duplicateNames: duplicates.size,
-        })
       } catch (err) {
-        clientLogger.warn('Error fetching characters for display name disambiguation', {
+        console.warn('Error fetching characters for display name disambiguation', {
           error: err instanceof Error ? err.message : String(err),
         })
       } finally {

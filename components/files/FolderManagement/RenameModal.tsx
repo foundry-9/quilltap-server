@@ -7,7 +7,6 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FileInfo } from '../types'
@@ -56,17 +55,7 @@ export default function RenameModal(props: Readonly<RenameModalProps>) {
   }, [isOpen, currentName])
 
   useEffect(() => {
-    if (type === 'file') {
-      clientLogger.debug('[RenameModal] Opened for file', {
-        fileId: props.file.id,
-        currentName,
-      })
-    } else {
-      clientLogger.debug('[RenameModal] Opened for folder', {
-        folderPath: props.folderPath,
-        currentName,
-      })
-    }
+    // Component opened
   }, [type, currentName, props])
 
   const handleRename = async () => {
@@ -86,12 +75,6 @@ export default function RenameModal(props: Readonly<RenameModalProps>) {
       setSaving(true)
 
       if (type === 'file') {
-        clientLogger.debug('[RenameModal] Renaming file', {
-          fileId: props.file.id,
-          oldName: currentName,
-          newName: trimmedName,
-        })
-
         const res = await fetch(`/api/v1/files/${props.file.id}?action=move`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -108,19 +91,8 @@ export default function RenameModal(props: Readonly<RenameModalProps>) {
         const data = await res.json()
 
         showSuccessToast('File renamed')
-        clientLogger.info('[RenameModal] File renamed', {
-          fileId: props.file.id,
-          newName: trimmedName,
-        })
-
         props.onSuccess?.(data.file)
       } else {
-        clientLogger.debug('[RenameModal] Renaming folder', {
-          path: props.folderPath,
-          oldName: currentName,
-          newName: trimmedName,
-        })
-
         const res = await fetch('/api/v1/files/folders?action=rename', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -139,18 +111,12 @@ export default function RenameModal(props: Readonly<RenameModalProps>) {
         const data = await res.json()
 
         showSuccessToast(`Folder renamed (${data.filesUpdated} files updated)`)
-        clientLogger.info('[RenameModal] Folder renamed', {
-          oldPath: props.folderPath,
-          newPath: data.newPath,
-          filesUpdated: data.filesUpdated,
-        })
-
         props.onSuccess?.(data.newPath)
       }
 
       onClose()
     } catch (error) {
-      clientLogger.error('[RenameModal] Failed to rename', {
+      console.error('[RenameModal] Failed to rename', {
         type,
         error: error instanceof Error ? error.message : String(error),
       })

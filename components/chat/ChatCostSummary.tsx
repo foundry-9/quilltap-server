@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { formatTokenCount, formatCostForDisplay } from '@/lib/utils/format-tokens'
-import { clientLogger } from '@/lib/client-logger'
 
 export interface ChatCostSummaryProps {
   chatId: string
@@ -64,7 +63,6 @@ export function ChatCostSummary({
 
     async function fetchCostData() {
       try {
-        clientLogger.debug('Fetching chat cost summary', { chatId })
         const res = await fetch(`/api/v1/chats/${chatId}?action=cost`)
         if (!res.ok) {
           throw new Error('Failed to fetch cost data')
@@ -72,7 +70,7 @@ export function ChatCostSummary({
         const data = await res.json()
         setCostData(data)
       } catch (error) {
-        clientLogger.error('Failed to fetch chat cost summary', {
+        console.error('Failed to fetch chat cost summary', {
           chatId,
           error: error instanceof Error ? error.message : String(error),
         })

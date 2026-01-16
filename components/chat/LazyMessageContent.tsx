@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import MessageContent from './MessageContent'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
-import { clientLogger } from '@/lib/client-logger'
 
 interface LazyMessageContentProps {
   content: string
@@ -52,7 +51,6 @@ function LazyMessageContentInner({
           // Element entered viewport - start timer
           if (!visibilityTimerRef.current) {
             visibilityTimerRef.current = setTimeout(() => {
-              clientLogger.debug('[LazyMessageContent] Message visible for 500ms, rendering full content')
               setHasBeenVisible(true)
               observer.disconnect()
             }, VISIBILITY_DELAY_MS)

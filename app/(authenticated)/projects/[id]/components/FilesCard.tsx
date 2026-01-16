@@ -8,8 +8,7 @@
  * Includes a "Browse All" button to open the full file browser.
  */
 
-import { useEffect, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
+import { useState } from 'react'
 import FileBrowser from '@/components/files/FileBrowser'
 import FileThumbnail from '@/components/files/FileThumbnail'
 import { FilePreviewModal } from '@/components/files/FilePreview'
@@ -99,17 +98,11 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
     projectId: projectId || '',
     folderPath: '/',
     onSuccess: () => {
-      clientLogger.debug('FilesCard: files uploaded, refreshing list')
       onFilesChange?.()
     },
   })
 
-  useEffect(() => {
-    clientLogger.debug('FilesCard: rendered', { fileCount: files.length, expanded })
-  }, [files.length, expanded])
-
   const handleFileClick = (file: ProjectFile) => {
-    clientLogger.debug('FilesCard: file clicked', { fileId: file.id, filename: file.originalFilename })
     setSelectedFile(toFileInfo(file))
   }
 
@@ -243,8 +236,7 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
           file={selectedFile}
           files={filesAsFileInfo}
           onClose={() => setSelectedFile(null)}
-          onDelete={(fileId) => {
-            clientLogger.debug('FilesCard: file deleted from preview', { fileId })
+          onDelete={() => {
             setSelectedFile(null)
             onFilesChange?.()
           }}

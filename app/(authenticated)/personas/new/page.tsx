@@ -10,13 +10,11 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { clientLogger } from '@/lib/client-logger'
 
 export default function NewPersonaPage() {
   const router = useRouter()
 
   useEffect(() => {
-    clientLogger.info('[NewPersonaPage] Redirecting to New Character page - Personas deprecated')
     router.replace('/characters/new?controlledBy=user')
   }, [router])
 

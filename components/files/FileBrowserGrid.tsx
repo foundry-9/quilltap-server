@@ -7,7 +7,6 @@
  */
 
 import { useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import FileThumbnail from './FileThumbnail'
 import { FileInfo, FolderInfo, formatFileSize } from './types'
 
@@ -44,11 +43,7 @@ export default function FileBrowserGrid({
   thumbnailSize = 120,
 }: Readonly<FileBrowserGridProps>) {
   useEffect(() => {
-    clientLogger.debug('[FileBrowserGrid] Rendered', {
-      fileCount: files.length,
-      folderCount: folders.length,
-      currentFolder,
-    })
+    // Grid rendered
   }, [files.length, folders.length, currentFolder])
 
   const isEmpty = files.length === 0 && folders.length === 0 && currentFolder === '/'

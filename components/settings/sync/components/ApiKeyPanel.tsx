@@ -10,7 +10,6 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { SyncApiKeyDisplay } from '../types'
 
 interface ApiKeyPanelProps {
@@ -46,11 +45,6 @@ export function ApiKeyPanel({
 
   // Log renders
   useEffect(() => {
-    clientLogger.debug('ApiKeyPanel: rendered', {
-      keyCount: keys.length,
-      hasNewKey: !!newlyCreatedKey,
-      isExpanded,
-    })
   }, [keys.length, newlyCreatedKey, isExpanded])
 
   // Handle create
@@ -58,7 +52,6 @@ export function ApiKeyPanel({
     e.preventDefault()
     if (!keyName.trim()) return
 
-    clientLogger.debug('ApiKeyPanel: creating key', { name: keyName })
     const result = await onCreateKey(keyName.trim())
     if (result) {
       setKeyName('')
@@ -72,10 +65,9 @@ export function ApiKeyPanel({
     try {
       await navigator.clipboard.writeText(newlyCreatedKey)
       setCopied(true)
-      clientLogger.debug('ApiKeyPanel: key copied to clipboard')
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      clientLogger.error('ApiKeyPanel: failed to copy key', {
+      console.error('ApiKeyPanel: failed to copy key', {
         error: err instanceof Error ? err.message : String(err),
       })
     }

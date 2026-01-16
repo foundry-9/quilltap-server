@@ -11,8 +11,6 @@
 
 import { useTheme, type ThemeSummary } from '@/components/providers/theme-provider'
 import type { ColorMode } from '@/lib/themes/types'
-import { clientLogger } from '@/lib/client-logger'
-
 /**
  * Appearance settings state and handlers
  */
@@ -57,7 +55,6 @@ export function useAppearanceSettings(): AppearanceSettings {
    * Handle theme selection with logging
    */
   const handleThemeSelect = async (themeId: string | null) => {
-    clientLogger.info('useAppearanceSettings: selecting theme', { themeId })
     await setTheme(themeId)
   }
 
@@ -65,7 +62,6 @@ export function useAppearanceSettings(): AppearanceSettings {
    * Handle color mode change with logging
    */
   const handleColorModeChange = async (mode: ColorMode) => {
-    clientLogger.info('useAppearanceSettings: changing color mode', { mode })
     await setColorMode(mode)
   }
 
@@ -73,9 +69,6 @@ export function useAppearanceSettings(): AppearanceSettings {
    * Handle nav theme selector toggle with logging
    */
   const handleNavThemeSelectorChange = async (show: boolean) => {
-    clientLogger.info('useAppearanceSettings: changing nav theme selector visibility', {
-      show,
-    })
     await setShowNavThemeSelector(show)
   }
 

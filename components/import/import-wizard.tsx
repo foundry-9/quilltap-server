@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { SpeakerMapper } from './speaker-mapper'
@@ -100,18 +99,11 @@ export function ImportWizard({
       setMappings(defaultMappings)
 
       setStep('mapping')
-
-      clientLogger.info('File analyzed', {
-        filename: selectedFile.name,
-        speakerCount: result.speakers.length,
-        messageCount: result.messages.length,
-        isGroupChat: result.isGroupChat,
-      })
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to parse file')
       setError(errorMessage)
       setStep('file-select')
-      clientLogger.error('Error analyzing file', { error: errorMessage })
+      console.error('Error analyzing file', { error: errorMessage })
     }
   }, [selectedFile, characters, personas])
 
@@ -174,16 +166,12 @@ export function ImportWizard({
       setStep('complete')
 
       showSuccessToast('Chat imported successfully!')
-      clientLogger.info('Chat imported', {
-        chatId: imported.id,
-        messageCount: imported._count?.messages,
-      })
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to import chat')
       setError(errorMessage)
       setStep('mapping')
       showErrorToast(errorMessage)
-      clientLogger.error('Error importing chat', { error: errorMessage })
+      console.error('Error importing chat', { error: errorMessage })
     }
   }, [parseResult, mappings, defaultProfileId, createMemories])
 

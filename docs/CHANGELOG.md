@@ -4,6 +4,18 @@
 
 ### 2.7-dev
 
+- feat: Complete removal of DevConsole functionality (2026-01-16)
+  - Removed DevConsole component and all tabs (Server Logs, Browser Console, Chat Debug)
+  - Removed DevConsoleProvider, DebugProvider, and DebugModeSync
+  - Removed clientLogger client-side logging system that sent logs to server
+  - Removed stdout-capture.ts server-side output capture
+  - Removed API routes: `/api/dev/logs` (SSE), `/api/v1/logs`, `/api/logs`
+  - Removed DevConsole CSS styles (_devconsole.css)
+  - Removed DevConsole toggle from profile menu and user menu
+  - Removed DevConsoleLayout wrapper from app layout
+  - Removed all clientLogger imports and usages from ~230 files
+  - Updated qtap-plugin-mcp to remove internal clientLogger usage (v1.1.5)
+  - Standard console.log/console.error still work normally for debugging
 - feat: Migrate system startup routes to v1 and remove dead code (2026-01-16)
   - Created `/api/v1/system/deployment` for deployment info
   - Created `/api/v1/system/plugins/initialize` for plugin initialization

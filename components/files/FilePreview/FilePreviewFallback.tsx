@@ -7,7 +7,6 @@
  */
 
 import { useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { getFileIcon } from '../FileThumbnail'
 import { FileInfo, formatFileSize, formatFileDate, getFileTypeLabel } from '../types'
 
@@ -23,10 +22,7 @@ export default function FilePreviewFallback({
   fileUrl,
 }: Readonly<FilePreviewFallbackProps>) {
   useEffect(() => {
-    clientLogger.debug('[FilePreviewFallback] Rendering fallback', {
-      fileId: file.id,
-      mimeType: file.mimeType,
-    })
+    // Fallback renderer mounted
   }, [file.id, file.mimeType])
 
   return (

@@ -10,7 +10,6 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 const API_DEBOUNCE_MS = 500
 
@@ -70,7 +69,6 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       const raw = window.localStorage.getItem(STORAGE_KEY)
       if (raw === 'true') {
         setIsCollapsed(true)
-        clientLogger.debug('Loaded sidebar collapsed preference from localStorage', { isCollapsed: true })
       }
 
       const widthRaw = window.localStorage.getItem(WIDTH_STORAGE_KEY)
@@ -78,7 +76,6 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
         const parsedWidth = parseInt(widthRaw, 10)
         if (!isNaN(parsedWidth) && parsedWidth >= MIN_SIDEBAR_WIDTH && parsedWidth <= MAX_SIDEBAR_WIDTH) {
           setWidthState(parsedWidth)
-          clientLogger.debug('Loaded sidebar width from localStorage', { width: parsedWidth })
         }
       }
 
@@ -87,11 +84,10 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
         const parsed = JSON.parse(sectionsRaw)
         if (typeof parsed === 'object' && parsed !== null) {
           setSectionCollapsed(parsed)
-          clientLogger.debug('Loaded section collapsed states from localStorage', { sections: parsed })
         }
       }
     } catch (error) {
-      clientLogger.warn('Unable to load sidebar preferences', {
+      console.warn('Unable to load sidebar preferences', {
         error: error instanceof Error ? error.message : String(error)
       })
     } finally {
@@ -104,9 +100,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     if (!storageReady || typeof window === 'undefined') return
     try {
       window.localStorage.setItem(STORAGE_KEY, String(isCollapsed))
-      clientLogger.debug('Persisted sidebar collapsed preference', { isCollapsed })
     } catch (error) {
-      clientLogger.warn('Unable to persist sidebar collapsed preference', {
+      console.warn('Unable to persist sidebar collapsed preference', {
         error: error instanceof Error ? error.message : String(error)
       })
     }
@@ -117,9 +112,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     if (!storageReady || typeof window === 'undefined') return
     try {
       window.localStorage.setItem(WIDTH_STORAGE_KEY, String(width))
-      clientLogger.debug('Persisted sidebar width to localStorage', { width })
     } catch (error) {
-      clientLogger.warn('Unable to persist sidebar width', {
+      console.warn('Unable to persist sidebar width', {
         error: error instanceof Error ? error.message : String(error)
       })
     }
@@ -130,9 +124,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     if (!storageReady || typeof window === 'undefined') return
     try {
       window.localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify(sectionCollapsed))
-      clientLogger.debug('Persisted section collapsed states to localStorage', { sectionCollapsed })
     } catch (error) {
-      clientLogger.warn('Unable to persist section collapsed states', {
+      console.warn('Unable to persist section collapsed states', {
         error: error instanceof Error ? error.message : String(error)
       })
     }
@@ -156,14 +149,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
             if (apiWidth >= MIN_SIDEBAR_WIDTH && apiWidth <= MAX_SIDEBAR_WIDTH) {
               setWidthState(apiWidth)
               lastApiWidthRef.current = apiWidth
-              clientLogger.debug('Loaded sidebar width from API', { width: apiWidth })
             }
           }
         }
-      } catch (error) {
-        clientLogger.debug('Could not fetch sidebar width from API (may not be authenticated)', {
-          error: error instanceof Error ? error.message : String(error)
-        })
+      } catch {
+        // Could not fetch - may not be authenticated
       }
     }
 
@@ -192,12 +182,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
         })
         if (response.ok) {
           lastApiWidthRef.current = width
-          clientLogger.debug('Persisted sidebar width to API', { width })
         }
-      } catch (error) {
-        clientLogger.debug('Could not save sidebar width to API', {
-          error: error instanceof Error ? error.message : String(error)
-        })
+      } catch {
+        // Could not save to API
       }
     }, API_DEBOUNCE_MS)
 
@@ -214,19 +201,16 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     const handler = (event: StorageEvent) => {
       if (event.key === STORAGE_KEY && event.newValue !== null) {
         const newValue = event.newValue === 'true'
-        clientLogger.debug('Sidebar collapsed preference changed in another tab', { isCollapsed: newValue })
         setIsCollapsed(newValue)
       } else if (event.key === WIDTH_STORAGE_KEY && event.newValue !== null) {
         const parsedWidth = parseInt(event.newValue, 10)
         if (!isNaN(parsedWidth) && parsedWidth >= MIN_SIDEBAR_WIDTH && parsedWidth <= MAX_SIDEBAR_WIDTH) {
-          clientLogger.debug('Sidebar width changed in another tab', { width: parsedWidth })
           setWidthState(parsedWidth)
         }
       } else if (event.key === SECTIONS_STORAGE_KEY && event.newValue !== null) {
         try {
           const parsed = JSON.parse(event.newValue)
           if (typeof parsed === 'object' && parsed !== null) {
-            clientLogger.debug('Section collapsed states changed in another tab', { sections: parsed })
             setSectionCollapsed(parsed)
           }
         } catch {
@@ -251,7 +235,6 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       if (!mobile) {
         setIsMobileOpen(false)
       }
-      clientLogger.debug('Viewport mobile check', { isMobile: mobile, viewportWidth: window.innerWidth })
     }
 
     updateMobile()
@@ -266,7 +249,6 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsMobileOpen(false)
-        clientLogger.debug('Closed mobile sidebar via Escape key')
       }
     }
 
@@ -290,47 +272,34 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const toggleCollapse = useCallback(() => {
     setIsCollapsed(prev => {
       const next = !prev
-      queueMicrotask(() => {
-        clientLogger.info('Toggled sidebar collapse', { from: prev, to: next })
-      })
       return next
     })
   }, [])
 
   const setCollapsed = useCallback((collapsed: boolean) => {
-    queueMicrotask(() => {
-      clientLogger.info('Set sidebar collapsed', { collapsed })
-    })
     setIsCollapsed(collapsed)
   }, [])
 
   const openMobile = useCallback(() => {
     setIsMobileOpen(true)
-    clientLogger.debug('Opened mobile sidebar')
   }, [])
 
   const closeMobile = useCallback(() => {
     setIsMobileOpen(false)
-    clientLogger.debug('Closed mobile sidebar')
   }, [])
 
   const setWidth = useCallback((newWidth: number) => {
     const clampedWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, newWidth))
     setWidthState(clampedWidth)
-    clientLogger.debug('Set sidebar width', { width: clampedWidth })
   }, [])
 
   const resetWidth = useCallback(() => {
     setWidthState(DEFAULT_SIDEBAR_WIDTH)
-    clientLogger.info('Reset sidebar width to default', { width: DEFAULT_SIDEBAR_WIDTH })
   }, [])
 
   const toggleSectionCollapsed = useCallback((sectionId: string) => {
     setSectionCollapsed(prev => {
       const next = { ...prev, [sectionId]: !prev[sectionId] }
-      queueMicrotask(() => {
-        clientLogger.debug('Toggled section collapsed', { sectionId, collapsed: next[sectionId] })
-      })
       return next
     })
   }, [])

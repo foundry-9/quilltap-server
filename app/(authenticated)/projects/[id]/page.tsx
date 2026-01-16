@@ -11,7 +11,6 @@
 import { useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { clientLogger } from '@/lib/client-logger'
 import { useProjectDetail, useProjectChats, useProjectFiles, useProjectCardState } from './hooks'
 import {
   ProjectDetailHeader,
@@ -55,7 +54,6 @@ export default function ProjectDetailPage() {
   const { cardState, toggleCard } = useProjectCardState(projectId)
 
   useEffect(() => {
-    clientLogger.debug('ProjectDetailPage: mounted', { projectId })
     fetchProject()
     fetchChats()
     fetchFiles()

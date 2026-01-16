@@ -7,7 +7,6 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { FilePreviewModalProps } from './types'
 import { useFilePreview } from './hooks/useFilePreview'
 import { useFileActions } from './hooks/useFileActions'
@@ -94,14 +93,7 @@ export default function FilePreviewModal({
     }
   }, [])
 
-  // Log modal open
-  useEffect(() => {
-    clientLogger.debug('[FilePreviewModal] Opened', {
-      fileId: file.id,
-      previewType,
-      totalFiles: files.length,
-    })
-  }, [file.id, previewType, files.length])
+  // Modal opened
 
   // Handle click outside to close
   const handleBackdropClick = useCallback(

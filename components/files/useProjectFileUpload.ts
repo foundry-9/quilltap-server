@@ -6,7 +6,6 @@
  */
 
 import { useRef, useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 
@@ -46,12 +45,6 @@ export function useProjectFileUpload({
     const fileArray = Array.from(files)
     if (fileArray.length === 0) return
 
-    clientLogger.debug('[useProjectFileUpload] Starting upload', {
-      projectId,
-      folderPath,
-      fileCount: fileArray.length,
-    })
-
     setUploading(true)
     setError(null)
     setUploadProgress({ current: 0, total: fileArray.length })
@@ -70,13 +63,6 @@ export function useProjectFileUpload({
           formData.append('folderPath', folderPath)
         }
 
-        clientLogger.debug('[useProjectFileUpload] Uploading file', {
-          projectId,
-          filename: file.name,
-          size: file.size,
-          mimeType: file.type,
-        })
-
         const res = await fetch(`/api/v1/projects/${projectId}/files/upload`, {
           method: 'POST',
           body: formData,
@@ -89,21 +75,9 @@ export function useProjectFileUpload({
         }
 
         uploadedFiles.push(data.file)
-
-        if (data.duplicate) {
-          clientLogger.debug('[useProjectFileUpload] File was duplicate', {
-            filename: file.name,
-            fileId: data.file.id,
-          })
-        } else {
-          clientLogger.debug('[useProjectFileUpload] File uploaded successfully', {
-            filename: file.name,
-            fileId: data.file.id,
-          })
-        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
-        clientLogger.error('[useProjectFileUpload] Failed to upload file', {
+        console.error('[useProjectFileUpload] Failed to upload file', {
           filename: file.name,
           error: errorMessage,
         })
@@ -136,12 +110,6 @@ export function useProjectFileUpload({
         showErrorToast(`${errors.length} files failed to upload`)
       }
     }
-
-    clientLogger.debug('[useProjectFileUpload] Upload complete', {
-      projectId,
-      uploaded: uploadedFiles.length,
-      failed: errors.length,
-    })
   }, [projectId, folderPath, onSuccess])
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {

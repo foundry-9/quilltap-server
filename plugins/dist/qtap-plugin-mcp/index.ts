@@ -8,7 +8,6 @@
  * @module qtap-plugin-mcp
  */
 
-import { logger } from '@/lib/logger';
 import type {
   ToolPlugin,
   ToolMetadata,
@@ -19,8 +18,6 @@ import type {
 import { connectionManager } from './connection-manager';
 import { parseServerConfigs } from './security';
 import type { MCPPluginConfig } from './types';
-
-const pluginLogger = logger.child({ module: 'qtap-plugin-mcp' });
 
 /**
  * Parse plugin configuration from tool config
@@ -42,10 +39,6 @@ function parseConfig(toolConfig: Record<string, unknown>): Partial<MCPPluginConf
 function hasValidConfiguration(toolConfig: Record<string, unknown>): boolean {
   const serversJson = typeof toolConfig.servers === 'string' ? toolConfig.servers : '[]';
   const { servers, errors } = parseServerConfigs(serversJson);
-
-  if (errors.length > 0) {
-    pluginLogger.debug('Configuration validation errors', { errors });
-  }
 
   // Need at least one enabled server
   const enabledServers = servers.filter((s) => s.enabled);
@@ -70,10 +63,6 @@ async function ensureInitialized(toolConfig: Record<string, unknown>): Promise<b
 
   // If config changed, re-initialize
   if (initialized && configHash !== lastConfigHash) {
-    pluginLogger.info('Config changed, re-initializing', {
-      oldHash: lastConfigHash.substring(0, 50),
-      newHash: configHash.substring(0, 50),
-    });
     initialized = false;
   }
 
@@ -81,28 +70,17 @@ async function ensureInitialized(toolConfig: Record<string, unknown>): Promise<b
 
   // Don't initialize if no servers configured
   if (!config.servers || config.servers === '[]') {
-    pluginLogger.debug('No servers configured, skipping initialization');
     return false;
   }
-
-  pluginLogger.info('Initializing MCP plugin', {
-    hasServers: config.servers !== '[]',
-  });
 
   try {
     await connectionManager.initialize(config);
     initialized = true;
     lastConfigHash = configHash;
 
-    const stats = connectionManager.getStats();
-    pluginLogger.info('MCP plugin initialized', {
-      serverCount: stats.serverCount,
-      readyCount: stats.readyCount,
-      toolCount: stats.toolCount,
-    });
     return true;
   } catch (error) {
-    pluginLogger.error('Failed to initialize MCP plugin', {
+    console.error('Failed to initialize MCP plugin', {
       error: error instanceof Error ? error.message : String(error),
     });
     return false;
@@ -143,11 +121,6 @@ export const plugin: ToolPlugin = {
 
     const tools = connectionManager.getAllToolDefinitions();
 
-    pluginLogger.debug('Getting tool definitions', {
-      toolCount: tools.length,
-      initialized,
-    });
-
     return tools;
   },
 
@@ -173,20 +146,7 @@ export const plugin: ToolPlugin = {
     // Ensure plugin is initialized
     await ensureInitialized(context.toolConfig);
 
-    pluginLogger.debug('Executing MCP tool', {
-      toolName,
-      userId: context.userId,
-      chatId: context.chatId,
-    });
-
     const result = await connectionManager.executeTool(toolName, input);
-
-    pluginLogger.debug('MCP tool execution complete', {
-      toolName,
-      success: result.success,
-      serverId: result.serverId,
-      executionTimeMs: result.executionTimeMs,
-    });
 
     return {
       success: result.success,
@@ -269,10 +229,6 @@ export const plugin: ToolPlugin = {
   isConfigured(config: Record<string, unknown>): boolean {
     const isConfigured = hasValidConfiguration(config);
 
-    pluginLogger.debug('Checking configuration', {
-      isConfigured,
-    });
-
     return isConfigured;
   },
 
@@ -294,22 +250,14 @@ export const plugin: ToolPlugin = {
    * Reconfigures server connections when user settings change.
    */
   async onConfigurationChange(config: Record<string, unknown>): Promise<void> {
-    pluginLogger.info('Configuration changed, reconfiguring');
-
     const parsedConfig = parseConfig(config);
 
     try {
       await connectionManager.reconfigure(parsedConfig.servers || '[]');
 
       // Update other settings
-      const stats = connectionManager.getStats();
-      pluginLogger.info('Reconfiguration complete', {
-        serverCount: stats.serverCount,
-        readyCount: stats.readyCount,
-        toolCount: stats.toolCount,
-      });
     } catch (error) {
-      pluginLogger.error('Reconfiguration failed', {
+      console.error('Reconfiguration failed', {
         error: error instanceof Error ? error.message : String(error),
       });
     }

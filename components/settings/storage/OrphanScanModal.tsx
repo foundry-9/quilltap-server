@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useOrphanScan, OrphanFile } from './hooks/useOrphanScan'
 import type { MountPoint } from './types'
 
@@ -46,7 +45,6 @@ export function OrphanScanModal({
 
   // Log modal state changes
   useEffect(() => {
-    clientLogger.debug('OrphanScanModal state changed', { isOpen, mountPointId: mountPoint.id })
   }, [isOpen, mountPoint.id])
 
   // Handle escape key

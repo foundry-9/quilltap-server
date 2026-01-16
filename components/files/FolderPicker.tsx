@@ -8,7 +8,6 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 interface FolderInfo {
   path: string
@@ -62,8 +61,6 @@ export default function FolderPicker({
         ? `/api/v1/files/folders?projectId=${projectId}`
         : '/api/v1/files/folders'
 
-      clientLogger.debug('[FolderPicker] Fetching folders', { scope, projectId })
-
       // Fetch files and DB folders in parallel
       const [filesRes, foldersRes] = await Promise.all([
         fetch(filesUrl),
@@ -81,7 +78,6 @@ export default function FolderPicker({
       if (foldersRes.ok) {
         const data = await foldersRes.json()
         dbFolders = data.folders || []
-        clientLogger.debug('[FolderPicker] Loaded DB folders', { count: dbFolders.length })
       }
 
       // Build folder map, starting with DB folders
@@ -139,9 +135,8 @@ export default function FolderPicker({
         .sort((a, b) => a.path.localeCompare(b.path))
 
       setFolders(folderList)
-      clientLogger.debug('[FolderPicker] Loaded folders', { count: folderList.length })
     } catch (error) {
-      clientLogger.error('[FolderPicker] Failed to fetch folders', {
+      console.error('[FolderPicker] Failed to fetch folders', {
         error: error instanceof Error ? error.message : String(error),
       })
     } finally {
@@ -162,8 +157,6 @@ export default function FolderPicker({
     if (!newPath.endsWith('/')) newPath = newPath + '/'
 
     try {
-      clientLogger.debug('[FolderPicker] Creating folder', { path: newPath, projectId })
-
       // Create the folder via API
       const res = await fetch('/api/v1/files/folders?action=create', {
         method: 'POST',
@@ -188,9 +181,8 @@ export default function FolderPicker({
       onChange(folderPath)
       setNewFolderInput('')
       setShowNewFolderInput(false)
-      clientLogger.info('[FolderPicker] Created folder', { path: folderPath, folderId: data.folder?.id })
     } catch (error) {
-      clientLogger.error('[FolderPicker] Failed to create folder', {
+      console.error('[FolderPicker] Failed to create folder', {
         path: newPath,
         error: error instanceof Error ? error.message : String(error),
       })

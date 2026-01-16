@@ -8,7 +8,6 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 interface FileThumbnailProps {
   /** File ID for thumbnail generation */
@@ -88,24 +87,14 @@ export default function FileThumbnail({
     return () => observer.disconnect()
   }, [canShowThumbnail])
 
-  // Log mount
-  useEffect(() => {
-    clientLogger.debug('[FileThumbnail] Mounted', {
-      fileId,
-      mimeType,
-      canShowThumbnail,
-      size,
-    })
-  }, [fileId, mimeType, canShowThumbnail, size])
 
   const handleLoad = () => {
     setStatus('loaded')
-    clientLogger.debug('[FileThumbnail] Thumbnail loaded', { fileId })
   }
 
   const handleError = () => {
     setStatus('error')
-    clientLogger.warn('[FileThumbnail] Thumbnail load failed', { fileId, mimeType })
+    console.warn('[FileThumbnail] Thumbnail load failed', { fileId, mimeType })
   }
 
   // Fallback icon display

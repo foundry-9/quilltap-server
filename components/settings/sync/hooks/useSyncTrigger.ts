@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import type { SyncDirection } from '@/lib/sync/types'
@@ -42,7 +41,6 @@ export function useSyncTrigger() {
       forceFull: boolean = false,
       direction: SyncDirection = 'BIDIRECTIONAL'
     ) => {
-      clientLogger.debug('Triggering manual sync', { instanceId, forceFull, direction })
       setSyncingInstanceId(instanceId)
       setActiveOperationId(null) // Reset for new sync
 
@@ -80,18 +78,8 @@ export function useSyncTrigger() {
       setSyncingInstanceId(null)
 
       if (result) {
-        clientLogger.info('Manual sync completed', {
-          instanceId,
-          forceFull,
-          direction,
-          operationId: result.operationId,
-          entityCounts: result.entityCounts,
-          conflictCount: result.conflicts?.length ?? 0,
-          errorCount: result.errors?.length ?? 0,
-          duration: result.duration,
-        })
       } else {
-        clientLogger.error('Manual sync failed', { instanceId, forceFull, direction })
+        console.error('Manual sync failed', { instanceId, forceFull, direction })
       }
 
       return result

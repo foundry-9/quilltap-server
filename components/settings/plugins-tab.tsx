@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { BrandName } from '@/components/ui/brand-name'
-import { clientLogger } from '@/lib/client-logger'
 import { PluginConfigModal } from './plugins/PluginConfigModal'
 
 type PluginSource = 'included' | 'npm' | 'git' | 'manual' | 'bundled' | 'site' | 'user'
@@ -135,7 +134,6 @@ export default function PluginsTab() {
       setInstalledPlugins(data.plugins || [])
     } catch (err) {
       // Silently fail for installed plugins list, use main plugins list as fallback
-      clientLogger.debug('Failed to fetch installed plugins', { error: err })
     }
   }, [])
 
@@ -147,7 +145,6 @@ export default function PluginsTab() {
       setDeploymentInfo(data)
     } catch (err) {
       // Silently fail, assume user-managed by default
-      clientLogger.debug('Failed to fetch deployment info', { error: err })
       setDeploymentInfo({ isUserManaged: true, isHosted: false })
     }
   }, [])
@@ -282,8 +279,6 @@ export default function PluginsTab() {
 
     // Use provided scope, or derive from source for backward compatibility
     const pluginScope = scope || (source === 'site' ? 'site' : 'user')
-
-    clientLogger.debug('Uninstalling plugin', { packageName, scope: pluginScope })
 
     setActionInProgress(packageName)
     try {

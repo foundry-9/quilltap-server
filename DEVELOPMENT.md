@@ -221,7 +221,7 @@ The application uses a centralized logging system configurable via environment v
 - `LOG_OUTPUT` - `console`, `file`, or `both` (default: `console`)
 - `LOG_FILE_PATH` - Directory for log files (default: `./logs`)
 
-In development, logs can be viewed in the DevConsole (accessible from the user menu).
+In development, logs are written to `logs/combined.log` and `logs/error.log`. Use standard logging tools to tail and search these files.
 
 ## Checklist before release
 

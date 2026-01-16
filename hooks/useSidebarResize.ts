@@ -12,7 +12,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSidebar, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH } from '@/components/providers/sidebar-provider'
-import { clientLogger } from '@/lib/client-logger'
 
 interface UseSidebarResizeReturn {
   /** Ref to attach to the resize handle element */
@@ -41,11 +40,6 @@ export function useSidebarResize(): UseSidebarResizeReturn {
 
     // Add resizing class to body to prevent text selection
     document.body.classList.add('qt-left-sidebar-resizing')
-
-    clientLogger.debug('Started sidebar resize', {
-      startX: e.clientX,
-      startWidth: width,
-    })
   }, [isCollapsed, isMobile, width])
 
   useEffect(() => {
@@ -63,10 +57,6 @@ export function useSidebarResize(): UseSidebarResizeReturn {
     const handleMouseUp = () => {
       setIsResizing(false)
       document.body.classList.remove('qt-left-sidebar-resizing')
-
-      clientLogger.debug('Finished sidebar resize', {
-        finalWidth: width,
-      })
     }
 
     document.addEventListener('mousemove', handleMouseMove)

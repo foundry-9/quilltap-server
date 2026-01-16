@@ -14,7 +14,6 @@ import Link from 'next/link'
 import { useSidebar } from '@/components/providers/sidebar-provider'
 import { SidebarSection } from './sidebar-section'
 import { ViewAllLink } from './sidebar-item'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
  * File icon
@@ -117,7 +116,6 @@ export function FilesSection() {
 
   const fetchFiles = useCallback(async () => {
     try {
-      clientLogger.debug('FilesSection: Fetching general files')
       const response = await fetch('/api/v1/files?filter=general')
       if (!response.ok) {
         throw new Error(`Failed to fetch files: ${response.status}`)
@@ -126,12 +124,8 @@ export function FilesSection() {
       const allFiles = data.files || []
       setFiles(allFiles.slice(0, 5)) // Show only first 5
       setTotalCount(allFiles.length)
-      clientLogger.debug('FilesSection: Fetched files', {
-        count: allFiles.length,
-        showing: Math.min(allFiles.length, 5),
-      })
     } catch (error) {
-      clientLogger.error('FilesSection: Failed to fetch files', {
+      console.error('FilesSection: Failed to fetch files', {
         error: error instanceof Error ? error.message : String(error),
       })
       setFiles([])

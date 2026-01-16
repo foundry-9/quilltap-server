@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import type { ImageData, Character, EntityType } from '../types'
 
@@ -39,7 +38,6 @@ export function useImageActions(
 
       try {
         setTaggingInProgress((prev) => new Set(prev).add(key))
-        clientLogger.debug('Toggling character tag', { characterId, isTagged, imageId: image.id })
 
         if (isTagged) {
           // Remove tag - try both CHARACTER and PERSONA for backwards compatibility
@@ -66,7 +64,6 @@ export function useImageActions(
             return newSet
           })
           showSuccessToast('Removed from character gallery')
-          clientLogger.debug('Character tag removed successfully', { characterId })
         } else {
           // Add tag - always use CHARACTER for new tags
           const response = await fetch(`/api/v1/images/${image.id}/tags`, {
@@ -85,11 +82,10 @@ export function useImageActions(
 
           setTaggedCharacterIds((prev) => new Set(prev).add(characterId))
           showSuccessToast('Added to character gallery')
-          clientLogger.debug('Character tag added successfully', { characterId })
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to update tag'
-        clientLogger.error('Character tag toggle failed', { characterId, error: errorMessage })
+        console.error('Character tag toggle failed', { characterId, error: errorMessage })
         showErrorToast(errorMessage)
       } finally {
         setTaggingInProgress((prev) => {
@@ -108,7 +104,6 @@ export function useImageActions(
 
       try {
         setSettingAvatar((prev) => new Set(prev).add(key))
-        clientLogger.debug('Setting avatar', { entityType, entityId, imageId: image.id })
 
         // All entities are now characters (personas migrated to characters with controlledBy: 'user')
         const endpoint = `/api/v1/characters/${entityId}?action=avatar`
@@ -133,10 +128,9 @@ export function useImageActions(
 
         showSuccessToast('Set as avatar for character')
         onAvatarSet?.()
-        clientLogger.debug('Avatar set successfully', { entityType, entityId })
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to set avatar'
-        clientLogger.error('Set avatar failed', { entityType, entityId, error: errorMessage })
+        console.error('Set avatar failed', { entityType, entityId, error: errorMessage })
         showErrorToast(errorMessage)
       } finally {
         setSettingAvatar((prev) => {
@@ -151,7 +145,6 @@ export function useImageActions(
 
   const handleDownload = useCallback(async () => {
     try {
-      clientLogger.debug('Downloading image', { imageId: image.id, filename: image.filename })
       const filepath = image.url || image.filepath
       const src = filepath.startsWith('/') ? filepath : `/${filepath}`
       const response = await fetch(src)
@@ -164,10 +157,9 @@ export function useImageActions(
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-      clientLogger.debug('Image downloaded successfully', { imageId: image.id })
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      clientLogger.error('Failed to download image', { imageId: image.id, error: errorMessage })
+      console.error('Failed to download image', { imageId: image.id, error: errorMessage })
     }
   }, [image.id, image.filename, image.url, image.filepath])
 

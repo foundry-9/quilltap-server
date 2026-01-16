@@ -10,14 +10,6 @@ jest.mock('@/lib/alert', () => ({
   showConfirmation: jest.fn().mockResolvedValue(true),
 }))
 
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-  },
-}))
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { SyncOperationDisplay } from '../types'
@@ -32,12 +31,6 @@ async function fetchWithRetry<T>(
         throw lastError
       }
 
-      clientLogger.debug('Retrying fetch after transient error', {
-        attempt,
-        maxRetries,
-        error: lastError.message,
-        delayMs,
-      })
 
       await new Promise(resolve => setTimeout(resolve, delayMs))
     }
@@ -62,7 +55,6 @@ export function useSyncOperations() {
    * Note: Empty dependency array since fetchOp.execute is stable
    */
   const fetchOperations = useCallback(async (instanceId?: string) => {
-    clientLogger.debug('Fetching sync operations', { instanceId })
 
     const url = instanceId
       ? `/api/v1/sync/operations?instanceId=${encodeURIComponent(instanceId)}`
@@ -71,12 +63,6 @@ export function useSyncOperations() {
     const result = await fetchOp.execute(async () => {
       return fetchWithRetry(async () => {
         const response = await fetchJson<{ operations: SyncOperationDisplay[] }>(url)
-        clientLogger.debug('Sync operations response', {
-          ok: response.ok,
-          status: response.status,
-          hasData: !!response.data,
-          error: response.error || undefined,
-        })
         if (!response.ok) {
           throw new Error(response.error || 'Failed to fetch sync operations')
         }
@@ -86,7 +72,6 @@ export function useSyncOperations() {
 
     if (result) {
       setOperations(result)
-      clientLogger.debug('Fetched sync operations', { count: result.length })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // fetchOp.execute is stable (empty deps in useAsyncOperation)

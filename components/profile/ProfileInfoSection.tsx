@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { UserProfile } from './types'
-import { clientLogger } from '@/lib/client-logger'
 
 export interface ProfileInfoSectionProps {
   profile: UserProfile
@@ -79,10 +78,9 @@ function InfoField({
     try {
       await navigator.clipboard.writeText(value)
       setCopied(true)
-      clientLogger.debug('Copied profile field to clipboard', { field: label })
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      clientLogger.error('Failed to copy to clipboard', { error: err })
+      console.error('Failed to copy to clipboard', { error: err })
     }
   }
 
@@ -121,10 +119,6 @@ function InfoField({
  * - Updated At
  */
 export function ProfileInfoSection({ profile }: ProfileInfoSectionProps) {
-  useEffect(() => {
-    clientLogger.debug('ProfileInfoSection mounted', { userId: profile.id })
-  }, [profile.id])
-
   return (
     <div className="qt-card">
       <div className="qt-card-header">

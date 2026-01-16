@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showInfoToast, showSuccessToast } from '@/lib/toast'
 
 interface FileWriteRequest {
@@ -53,11 +52,6 @@ export function FileWritePermissionPrompt({
 
   // Log when component mounts and call onMounted for scroll handling
   useEffect(() => {
-    clientLogger.debug('[FileWritePermissionPrompt] Mounted', {
-      filename: request.filename,
-      folderPath: request.folderPath,
-      projectId: request.projectId,
-    })
 
     // Scroll into view when mounted
     if (promptRef.current) {
@@ -70,11 +64,6 @@ export function FileWritePermissionPrompt({
   const handleQuickApprove = async () => {
     try {
       setIsApproving(true)
-
-      clientLogger.debug('[FileWritePermissionPrompt] Approving file write', {
-        filename: request.filename,
-        projectId: request.projectId,
-      })
 
       // Call completion endpoint which grants permission AND executes the write
       const res = await fetch('/api/v1/files/write-permissions?action=complete', {
@@ -99,16 +88,12 @@ export function FileWritePermissionPrompt({
       }
 
       const result = await res.json()
-      clientLogger.info('[FileWritePermissionPrompt] File write completed', {
-        fileId: result.file?.id,
-        filename: result.file?.filename,
-      })
 
       showSuccessToast(result.message || 'File created successfully')
       await onApprove(request.projectId ? 'PROJECT' : 'GENERAL')
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      clientLogger.error('[FileWritePermissionPrompt] Failed to approve', {
+      console.error('[FileWritePermissionPrompt] Failed to approve', {
         error: errorMessage,
       })
       showErrorToast(errorMessage || 'Failed to approve file write')
@@ -119,10 +104,6 @@ export function FileWritePermissionPrompt({
 
   const handleDeny = async () => {
     try {
-      clientLogger.debug('[FileWritePermissionPrompt] Denying file write', {
-        filename: request.filename,
-      })
-
       // Call completion endpoint with deny action
       const res = await fetch('/api/v1/files/write-permissions?action=complete', {
         method: 'POST',
@@ -145,12 +126,11 @@ export function FileWritePermissionPrompt({
         throw new Error(errorData.error || 'Failed to deny file write')
       }
 
-      clientLogger.info('[FileWritePermissionPrompt] File write denied')
       showInfoToast('File write request denied')
       onDeny()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      clientLogger.error('[FileWritePermissionPrompt] Failed to deny', {
+      console.error('[FileWritePermissionPrompt] Failed to deny', {
         error: errorMessage,
       })
       // Still dismiss the prompt even if API call failed

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
  * Component that triggers plugin initialization on mount
@@ -40,7 +39,7 @@ async function initializePlugins(): Promise<void> {
     })
 
     if (!response.ok) {
-      clientLogger.error('Failed to initialize plugins', { error: response.statusText })
+      console.error('Failed to initialize plugins', { error: response.statusText })
       return
     }
 
@@ -50,16 +49,16 @@ async function initializePlugins(): Promise<void> {
       const stats = result.result.stats
 
       if (stats.enabled > 0) {
-        clientLogger.info(
+        console.info(
           `✓ Plugin system initialized: ${stats.enabled} enabled, ${stats.disabled} disabled, ${stats.errors} errors`
         )
       } else {
-        clientLogger.info('✓ Plugin system initialized: no plugins enabled')
+        console.info('✓ Plugin system initialized: no plugins enabled')
       }
 
       // Log warnings
       if (result.result.warnings?.length > 0) {
-        clientLogger.warn(
+        console.warn(
           `⚠ Plugin initialization warnings (${result.result.warnings.length}):`,
           { warnings: result.result.warnings }
         )
@@ -67,15 +66,15 @@ async function initializePlugins(): Promise<void> {
 
       // Log errors
       if (result.result.errors?.length > 0) {
-        clientLogger.error(
+        console.error(
           `✗ Plugin initialization errors (${result.result.errors.length}):`,
           { errors: result.result.errors }
         )
       }
     } else {
-      clientLogger.error('Plugin initialization failed', { error: result.error })
+      console.error('Plugin initialization failed', { error: result.error })
     }
   } catch (error) {
-    clientLogger.error('Error initializing plugins', { error: error instanceof Error ? error.message : String(error) })
+    console.error('Error initializing plugins', { error: error instanceof Error ? error.message : String(error) })
   }
 }

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useSidebarDataOptional } from '@/components/providers/sidebar-data-provider'
 import { BaseModal } from '@/components/ui/BaseModal'
@@ -45,11 +44,6 @@ export default function ChatRenameModal({
   }, [isOpen, useAutoRename])
 
   const handleAutoRenameToggle = async (enabled: boolean) => {
-    clientLogger.debug('[ChatRenameModal] Auto-rename toggle', {
-      chatId,
-      enabled,
-    })
-
     setUseAutoRename(enabled)
 
     if (enabled) {
@@ -68,10 +62,6 @@ export default function ChatRenameModal({
         const data = await res.json()
         setTitle(data.title)
         showSuccessToast('Title regenerated')
-        clientLogger.info('[ChatRenameModal] Title regenerated', {
-          chatId,
-          newTitle: data.title,
-        })
 
         // Refresh sidebar to show new title
         sidebarData?.refreshChats()
@@ -80,7 +70,7 @@ export default function ChatRenameModal({
         onSuccess?.(data.title, false)
         onClose()
       } catch (error) {
-        clientLogger.error('[ChatRenameModal] Failed to regenerate title', {
+        console.error('[ChatRenameModal] Failed to regenerate title', {
           error: error instanceof Error ? error.message : String(error),
         })
         showErrorToast(
@@ -110,11 +100,6 @@ export default function ChatRenameModal({
 
     try {
       setSaving(true)
-      clientLogger.debug('[ChatRenameModal] Saving title', {
-        chatId,
-        title: trimmedTitle,
-        isManuallyRenamed: !useAutoRename,
-      })
 
       const res = await fetch(`/api/v1/chats/${chatId}`, {
         method: 'PUT',
@@ -133,11 +118,6 @@ export default function ChatRenameModal({
       }
 
       showSuccessToast('Chat renamed')
-      clientLogger.info('[ChatRenameModal] Chat renamed', {
-        chatId,
-        newTitle: trimmedTitle,
-        isManuallyRenamed: !useAutoRename,
-      })
 
       // Refresh sidebar to show new title
       sidebarData?.refreshChats()
@@ -145,7 +125,7 @@ export default function ChatRenameModal({
       onSuccess?.(trimmedTitle, !useAutoRename)
       onClose()
     } catch (error) {
-      clientLogger.error('[ChatRenameModal] Failed to rename chat', {
+      console.error('[ChatRenameModal] Failed to rename chat', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast(error instanceof Error ? error.message : 'Failed to rename chat')

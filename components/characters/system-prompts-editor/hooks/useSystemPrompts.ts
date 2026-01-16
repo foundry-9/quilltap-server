@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import {
   CharacterSystemPrompt,
   PromptTemplate,
@@ -90,11 +89,10 @@ export function useSystemPrompts(
       if (!res.ok) throw new Error('Failed to fetch prompts')
       const data = await res.json()
       setPrompts(data.prompts || [])
-      clientLogger.debug('Fetched character system prompts', { count: data.prompts?.length || 0 })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      clientLogger.error('Error fetching character prompts', { error: message })
+      console.error('Error fetching character prompts', { error: message })
     } finally {
       setLoading(false)
     }
@@ -118,7 +116,7 @@ export function useSystemPrompts(
         setSamplePrompts(data)
       }
     } catch (err) {
-      clientLogger.error('Error fetching templates', {
+      console.error('Error fetching templates', {
         error: err instanceof Error ? err.message : String(err),
       })
     } finally {
@@ -187,7 +185,6 @@ export function useSystemPrompts(
         }
 
         setSuccess('Prompt updated successfully')
-        clientLogger.info('Character prompt updated', { promptId: editingPrompt.id })
       } else {
         // Create new prompt
         const res = await fetch(`/api/v1/characters/${characterId}/prompts`, {
@@ -202,7 +199,6 @@ export function useSystemPrompts(
         }
 
         setSuccess('Prompt created successfully')
-        clientLogger.info('Character prompt created')
       }
 
       closeModal()
@@ -212,7 +208,7 @@ export function useSystemPrompts(
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      clientLogger.error('Error saving prompt', { error: message })
+      console.error('Error saving prompt', { error: message })
     } finally {
       setSaving(false)
     }

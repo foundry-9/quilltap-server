@@ -11,7 +11,6 @@
 
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { TagBadge } from '@/components/tags/tag-badge'
-import { clientLogger } from '@/lib/client-logger'
 
 interface NavUserMenuQuickHideContentProps {
   /** Callback when visibility changes (optional, for parent notification) */
@@ -41,7 +40,6 @@ export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenu
   }
 
   const handleToggle = (tagId: string, tagName: string, wasHidden: boolean) => {
-    clientLogger.debug('Toggling quick-hide tag from user menu', { tagId, tagName, wasHidden })
     toggleTag(tagId)
     onVisibilityChanged?.()
   }

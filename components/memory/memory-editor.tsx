@@ -5,7 +5,6 @@ import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { FormActions } from '@/components/ui/FormActions'
-import { clientLogger } from '@/lib/client-logger'
 
 interface Tag {
   id: string
@@ -50,12 +49,6 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
     clearError()
 
     await execute(async () => {
-      clientLogger.debug('Memory editor submitting form', {
-        isEditing,
-        characterId,
-        memoryId: memory?.id,
-      })
-
       const keywords = form.formData.keywords
         .split(',')
         .map(k => k.trim())
@@ -81,17 +74,12 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
       })
 
       if (!result.ok) {
-        clientLogger.error('Failed to save memory', {
+        console.error('Failed to save memory', {
           status: result.status,
           error: result.error,
         })
         throw new Error(result.error || 'Failed to save memory')
       }
-
-      clientLogger.debug('Memory saved successfully', {
-        isEditing,
-        memoryId: result.data?.id,
-      })
 
       showSuccessToast(isEditing ? 'Memory updated' : 'Memory created')
       onSave()

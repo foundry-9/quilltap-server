@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { useDialogState } from '@/hooks/useDialogState'
 import { useWizardState } from '@/hooks/useWizardState'
@@ -41,7 +40,6 @@ export function useExportKeys({
   const { state, setState, reset } = useDialogState({
     isOpen,
     initialState,
-    logContext: 'useExportKeys',
   })
 
   // Wizard step configuration
@@ -54,7 +52,6 @@ export function useExportKeys({
         complete: { isTerminal: true },
         error: { prev: 'passphrase', isTerminal: true },
       },
-      logContext: 'useExportKeys',
     },
     state.step,
     (step) => setState((prev) => ({ ...prev, step }))
@@ -92,7 +89,6 @@ export function useExportKeys({
     setState((prev) => ({ ...prev, exporting: true, error: null }))
 
     try {
-      clientLogger.debug('Starting API key export', { context: 'useExportKeys' })
 
       const response = await fetch('/api/v1/api-keys?action=export', {
         method: 'POST',
@@ -120,17 +116,13 @@ export function useExportKeys({
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
 
-      clientLogger.info('API keys exported successfully', {
-        context: 'useExportKeys',
-        keyCount: exportFile.keyCount,
-      })
 
       wizard.goTo('complete')
       setState((prev) => ({ ...prev, exporting: false }))
       onSuccess?.()
     } catch (error) {
       const message = getErrorMessage(error)
-      clientLogger.error('Failed to export API keys', { context: 'useExportKeys', error: message })
+      console.error('Failed to export API keys', { context: 'useExportKeys', error: message })
       wizard.goTo('error')
       setState((prev) => ({ ...prev, exporting: false, error: message }))
     }

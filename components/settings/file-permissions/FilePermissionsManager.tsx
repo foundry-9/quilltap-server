@@ -8,7 +8,6 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 
 interface Permission {
@@ -64,20 +63,16 @@ export default function FilePermissionsManager({
   const fetchPermissions = useCallback(async () => {
     try {
       setLoading(true)
-      clientLogger.debug('[FilePermissionsManager] Fetching permissions')
 
       const res = await fetch('/api/v1/files/write-permissions')
       if (res.ok) {
         const data = await res.json()
         setPermissions(data.permissions || [])
-        clientLogger.debug('[FilePermissionsManager] Loaded permissions', {
-          count: data.permissions?.length || 0,
-        })
       } else {
         throw new Error('Failed to fetch permissions')
       }
     } catch (error) {
-      clientLogger.error('[FilePermissionsManager] Failed to fetch permissions', {
+      console.error('[FilePermissionsManager] Failed to fetch permissions', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast('Failed to load file permissions')
@@ -97,7 +92,6 @@ export default function FilePermissionsManager({
 
     try {
       setRevoking(permissionId)
-      clientLogger.debug('[FilePermissionsManager] Revoking permission', { permissionId })
 
       const res = await fetch('/api/v1/files/write-permissions?action=revoke', {
         method: 'POST',
@@ -108,13 +102,12 @@ export default function FilePermissionsManager({
       if (res.ok) {
         setPermissions(permissions.filter(p => p.id !== permissionId))
         showSuccessToast('Permission revoked')
-        clientLogger.info('[FilePermissionsManager] Permission revoked', { permissionId })
       } else {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to revoke permission')
       }
     } catch (error) {
-      clientLogger.error('[FilePermissionsManager] Failed to revoke permission', {
+      console.error('[FilePermissionsManager] Failed to revoke permission', {
         permissionId,
         error: error instanceof Error ? error.message : String(error),
       })
@@ -131,7 +124,6 @@ export default function FilePermissionsManager({
 
     try {
       setRevoking('all')
-      clientLogger.debug('[FilePermissionsManager] Revoking all permissions')
 
       // Revoke each permission
       for (const permission of permissions) {
@@ -144,9 +136,8 @@ export default function FilePermissionsManager({
 
       setPermissions([])
       showSuccessToast('All permissions revoked')
-      clientLogger.info('[FilePermissionsManager] All permissions revoked')
     } catch (error) {
-      clientLogger.error('[FilePermissionsManager] Failed to revoke all permissions', {
+      console.error('[FilePermissionsManager] Failed to revoke all permissions', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast('Failed to revoke some permissions')

@@ -7,18 +7,13 @@
  * Uses the FileBrowser component for navigation.
  */
 
-import { useEffect, Suspense } from 'react'
+import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { clientLogger } from '@/lib/client-logger'
 import FileBrowser from '@/components/files/FileBrowser'
 
 function FilesPageContent() {
   const searchParams = useSearchParams()
   const selectedFileId = searchParams.get('fileId')
-
-  useEffect(() => {
-    clientLogger.debug('FilesPage: mounted', { selectedFileId })
-  }, [selectedFileId])
 
   return (
     <div className="qt-page-container text-foreground">

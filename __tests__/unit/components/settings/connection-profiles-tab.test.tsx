@@ -8,15 +8,6 @@ import userEvent from '@testing-library/user-event'
 import React from 'react'
 import ConnectionProfilesTab from '@/components/settings/connection-profiles-tab'
 
-// Mock clientLogger to prevent console output and avoid module issues
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-  },
-}))
 
 // Mock fetchJson helper
 jest.mock('@/lib/fetch-helpers', () => ({

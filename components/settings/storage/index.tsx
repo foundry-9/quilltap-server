@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { SectionHeader } from '@/components/ui/SectionHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -58,35 +57,29 @@ export default function StorageSettingsTab() {
   }, []) // loadData is stable
 
   const handleEdit = (mountPoint: MountPoint) => {
-    clientLogger.debug('Editing mount point', { mountPointId: mountPoint.id })
     setEditingMountPoint(mountPoint)
     setIsModalOpen(true)
   }
 
   const handleOpenModal = () => {
-    clientLogger.debug('Opening new mount point modal')
     setEditingMountPoint(null)
     setIsModalOpen(true)
   }
 
   const handleCloseModal = () => {
-    clientLogger.debug('Closing mount point modal')
     setIsModalOpen(false)
     setEditingMountPoint(null)
   }
 
   const handleModalSuccess = async () => {
-    clientLogger.debug('Mount point saved via modal')
     await fetchMountPoints()
   }
 
   const handleScanOrphans = (mountPoint: MountPoint) => {
-    clientLogger.debug('Opening orphan scan modal', { mountPointId: mountPoint.id })
     setScanningMountPoint(mountPoint)
   }
 
   const handleCloseScanModal = () => {
-    clientLogger.debug('Closing orphan scan modal')
     setScanningMountPoint(null)
   }
 
@@ -118,7 +111,6 @@ export default function StorageSettingsTab() {
         <ErrorAlert
           message={loadError}
           onRetry={() => {
-            clientLogger.debug('Retrying load')
             window.location.reload()
           }}
         />

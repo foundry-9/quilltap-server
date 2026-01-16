@@ -5,7 +5,6 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
-import { clientLogger } from '@/lib/client-logger'
 import FormActions from '@/components/ui/FormActions'
 import MessageContent from '@/components/chat/MessageContent'
 
@@ -53,11 +52,6 @@ export function PhysicalDescriptionEditor({
 
   const handleSave = async () => {
     clearError()
-    clientLogger.debug('Physical description save initiated', {
-      isEditing,
-      entityType,
-      entityId,
-    })
 
     await executeSave(async () => {
       const payload = {
@@ -75,11 +69,6 @@ export function PhysicalDescriptionEditor({
       const url = isEditing ? `${baseUrl}/${description.id}` : baseUrl
       const method = isEditing ? 'PUT' : 'POST'
 
-      clientLogger.debug('Sending physical description request', {
-        url,
-        method,
-      })
-
       const result = await fetchJson<{ id: string }>(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -88,7 +77,7 @@ export function PhysicalDescriptionEditor({
 
       if (!result.ok) {
         const errorMessage = result.error || 'Failed to save description'
-        clientLogger.error('Physical description save failed', {
+        console.error('Physical description save failed', {
           status: result.status,
           error: errorMessage,
         })
@@ -96,9 +85,6 @@ export function PhysicalDescriptionEditor({
         throw new Error(errorMessage)
       }
 
-      clientLogger.debug('Physical description saved successfully', {
-        isEditing,
-      })
       showSuccessToast(isEditing ? 'Description updated' : 'Description created')
       onSave()
     })

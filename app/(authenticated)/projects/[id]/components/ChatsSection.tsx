@@ -10,7 +10,6 @@
 
 import { useEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
-import { clientLogger } from '@/lib/client-logger'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useContentWidthOptional } from '@/components/providers/content-width-provider'
 import { TagDisplay } from '@/components/tags/tag-display'
@@ -68,16 +67,6 @@ export function ChatsSection({
     })
   }, [chats, shouldHideByIds])
 
-  useEffect(() => {
-    clientLogger.debug('ChatsSection: rendered', {
-      chatCount: chats.length,
-      visibleCount: visibleChats.length,
-      total,
-      hasMore,
-      loading,
-      loadingMore,
-    })
-  }, [chats.length, visibleChats.length, total, hasMore, loading, loadingMore])
 
   // Set up intersection observer for infinite scroll
   const setupObserver = useCallback(() => {
@@ -88,7 +77,6 @@ export function ChatsSection({
     observerRef.current = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          clientLogger.debug('ChatsSection: load more triggered by intersection')
           onLoadMore()
         }
       },

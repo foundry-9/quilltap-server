@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useTagStyles } from '@/components/providers/tag-style-provider'
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles'
 import type { TagVisualStyle } from '@/lib/schemas/types'
@@ -45,7 +44,7 @@ export default function TagsTab() {
         })))
       }
     } catch (err) {
-      clientLogger.error('Error loading tags', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Error loading tags', { error: err instanceof Error ? err.message : String(err) })
       showErrorToast('Failed to load tags')
     } finally {
       setLoading(false)
@@ -189,7 +188,7 @@ export default function TagsTab() {
         await refreshQuickHideTags()
         showSuccessToast('Quick-hide setting saved')
       } catch (err) {
-        clientLogger.error('Error toggling quick-hide', { error: err instanceof Error ? err.message : String(err) })
+        console.error('Error toggling quick-hide', { error: err instanceof Error ? err.message : String(err) })
         showErrorToast(err instanceof Error ? err.message : 'Failed to update quick-hide')
       } finally {
         setQuickHideSavingId(current => (current === tagId ? null : current))

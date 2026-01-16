@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
@@ -58,7 +57,6 @@ export default function GenerateImageDialog({
 
   const loadAllEntities = async () => {
     try {
-      clientLogger.debug('Loading all characters for image dialog')
       const charactersRes = await fetch('/api/v1/characters')
 
       if (!charactersRes.ok) {
@@ -67,8 +65,6 @@ export default function GenerateImageDialog({
 
       const charactersData = await charactersRes.json()
       const characters = charactersData.characters || []
-
-      clientLogger.debug('Loaded characters', { count: characters.length })
 
       const entities: EntityOption[] = characters.map((c: any) => ({
         id: c.id,
@@ -81,7 +77,7 @@ export default function GenerateImageDialog({
 
       setAllEntities(entities)
     } catch (error) {
-      clientLogger.error('Error loading entities', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Error loading entities', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast('Failed to load characters')
     }
   }
@@ -172,7 +168,7 @@ export default function GenerateImageDialog({
       if (error instanceof Error) {
         showErrorToast(error.message)
       } else {
-        clientLogger.error('Unexpected error during image generation', { error: String(error) })
+        console.error('Unexpected error during image generation', { error: String(error) })
         showErrorToast('Failed to generate image')
       }
     } finally {

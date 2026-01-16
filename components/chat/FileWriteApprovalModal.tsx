@@ -8,7 +8,6 @@
  */
 
 import { useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 
@@ -51,11 +50,6 @@ export default function FileWriteApprovalModal({
     try {
       setSaving(true)
 
-      clientLogger.debug('[FileWriteApprovalModal] Approving file write', {
-        filename: request.filename,
-        projectId: request.projectId,
-      })
-
       // Call completion endpoint which grants permission AND executes the write
       const res = await fetch('/api/v1/files/write-permissions?action=complete', {
         method: 'POST',
@@ -79,10 +73,6 @@ export default function FileWriteApprovalModal({
       }
 
       const result = await res.json()
-      clientLogger.info('[FileWriteApprovalModal] File write completed', {
-        fileId: result.file?.id,
-        filename: result.file?.filename,
-      })
 
       showSuccessToast(result.message || 'File created successfully')
 
@@ -91,7 +81,7 @@ export default function FileWriteApprovalModal({
       onClose()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      clientLogger.error('[FileWriteApprovalModal] Failed to approve', {
+      console.error('[FileWriteApprovalModal] Failed to approve', {
         error: errorMessage,
       })
       showErrorToast(errorMessage || 'Failed to approve file write')
@@ -102,9 +92,6 @@ export default function FileWriteApprovalModal({
 
   const handleDeny = async () => {
     try {
-      clientLogger.debug('[FileWriteApprovalModal] Denying file write', {
-        filename: request.filename,
-      })
 
       // Call completion endpoint with deny action
       await fetch('/api/v1/files/write-permissions?action=complete', {
@@ -123,9 +110,8 @@ export default function FileWriteApprovalModal({
         }),
       })
 
-      clientLogger.info('[FileWriteApprovalModal] File write denied')
     } catch (error) {
-      clientLogger.error('[FileWriteApprovalModal] Failed to send denial', {
+      console.error('[FileWriteApprovalModal] Failed to send denial', {
         error: error instanceof Error ? error.message : String(error),
       })
     }

@@ -34,7 +34,6 @@ import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
-import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
@@ -43,7 +42,6 @@ import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
-import { useDebugOptional } from '@/components/providers/debug-provider'
 import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
@@ -91,7 +89,6 @@ import {
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   useAvatarDisplay()
-  const debug = useDebugOptional()
 
   // Use the extracted chat data hook
   const chatDataHook = useChatData(id)
@@ -232,8 +229,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setInput(savedDraft)
         lastSavedDraftRef.current = savedDraft
       }
-    } catch (err) {
-      clientLogger.warn('[Chat] Failed to restore draft from localStorage', { error: err })
+    } catch {
+      // Failed to restore draft from localStorage
     }
   }, [draftStorageKey])
 
@@ -258,8 +255,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           localStorage.removeItem(draftStorageKey)
           lastSavedDraftRef.current = ''
         }
-      } catch (err) {
-        clientLogger.warn('[Chat] Failed to save draft to localStorage', { error: err })
+      } catch {
+        // Failed to save draft to localStorage
       }
     }, 5000)
 
@@ -280,8 +277,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         clearTimeout(draftSaveTimerRef.current)
         draftSaveTimerRef.current = null
       }
-    } catch (err) {
-      clientLogger.warn('[Chat] Failed to clear draft from localStorage', { error: err })
+    } catch {
+      // Failed to clear draft from localStorage
     }
   }, [draftStorageKey])
 
@@ -289,7 +286,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
-        clientLogger.debug('[Chat] Cleanup: aborting pending request on unmount')
         abortControllerRef.current.abort()
         abortControllerRef.current = null
       }
@@ -303,10 +299,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     const pendingNav = getPendingMessageNavigation()
     if (pendingNav.scrollTo) {
-      clientLogger.debug('[Chat] Pending message navigation found', {
-        scrollTo: pendingNav.scrollTo,
-        highlight: pendingNav.highlight,
-      })
       // Wait a bit for DOM to be ready, then scroll
       setTimeout(() => {
         scrollToMessage(pendingNav.scrollTo!, {
@@ -630,10 +622,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         body: JSON.stringify({ chat: { isPaused: false } }),
       })
       if (!response.ok) {
-        clientLogger.error('[Chat] Failed to persist unpause state', { status: response.status })
+        console.error('[Chat] Failed to persist unpause state', response.status)
       }
     } catch (error) {
-      clientLogger.error('[Chat] Error persisting unpause state', { error })
+      console.error('[Chat] Error persisting unpause state', error)
     }
   }, [id])
 
@@ -746,9 +738,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     if (chat?.isPaused && isAllLLM && allLLMTurnCount > 0) {
       lastAllLLMPauseTurnCountRef.current = allLLMTurnCount
-      clientLogger.debug('[Chat] Initialized all-LLM pause count from persisted state', {
-        turnCount: allLLMTurnCount,
-      })
     }
   }, [chat?.isPaused, isAllLLM, allLLMTurnCount])
 
@@ -760,10 +749,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const pauseTurnCount = chat?.allLLMPauseTurnCount
 
     if (impersonatingIds && impersonatingIds.length > 0) {
-      clientLogger.debug('[Chat] Restoring impersonation state', {
-        impersonatingParticipantIds: impersonatingIds,
-        activeTypingParticipantId: activeTypingId,
-      })
       setImpersonatingParticipantIds(impersonatingIds)
       setActiveTypingParticipantId(activeTypingId ?? null)
     }
@@ -780,15 +765,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     const participant = participantsAsBase.find(p => p.id === participantId && p.isActive)
     if (!participant) {
-      clientLogger.warn('[Chat] Cannot trigger continue mode - participant not found or inactive', {
-        participantId,
-      })
       showErrorToast('This participant is no longer available in the chat.')
       return
     }
 
     if (!turnManagement.hasActiveCharacters) {
-      clientLogger.warn('[Chat] No active characters available for continue mode')
       showErrorToast('No characters available. Add a character to continue the conversation.')
       return
     }
@@ -910,13 +891,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           }
         }
 
-        // Known configuration issues should be warnings, not errors
-        const isConfigurationIssue = /connection profile|no api key|no active character/i.test(errorMessage)
-        const logMethod = isConfigurationIssue ? clientLogger.warn.bind(clientLogger) : clientLogger.error.bind(clientLogger)
-        logMethod(`[Chat] Continue mode ${isConfigurationIssue ? 'blocked' : 'error'}: ${errorMessage}`, {
-          errorName,
-          errorType: typeof err,
-        })
         showErrorToast(errorMessage)
       }
     } finally {
@@ -949,10 +923,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         body: JSON.stringify({ chat: { isPaused: paused } }),
       })
       if (!response.ok) {
-        clientLogger.error('[Chat] Failed to persist pause state', { status: response.status })
+        console.error('[Chat] Failed to persist pause state', response.status)
       }
     } catch (error) {
-      clientLogger.error('[Chat] Error persisting pause state', { error })
+      console.error('[Chat] Error persisting pause state', error)
     }
   }, [id])
 
@@ -960,7 +934,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const handleToggleDocumentEditingMode = useCallback(async () => {
     const newMode = !documentEditingMode
     setDocumentEditingMode(newMode)
-    clientLogger.debug('[Chat] Toggling document editing mode', { from: documentEditingMode, to: newMode })
 
     try {
       const response = await fetch(`/api/v1/chats/${id}`, {
@@ -969,10 +942,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         body: JSON.stringify({ chat: { documentEditingMode: newMode } }),
       })
       if (!response.ok) {
-        clientLogger.error('[Chat] Failed to persist document editing mode', { status: response.status })
+        console.error('[Chat] Failed to persist document editing mode', response.status)
       }
     } catch (error) {
-      clientLogger.error('[Chat] Error persisting document editing mode', { error })
+      console.error('[Chat] Error persisting document editing mode', error)
     }
   }, [id, documentEditingMode])
 
@@ -996,11 +969,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     // Check if we should pause for all-LLM chat threshold
     // Only pause if we've exceeded the last paused turn count (prevents immediate re-pause on resume)
     if (isAllLLM && shouldPauseForAllLLM(allLLMTurnCount) && allLLMTurnCount > lastAllLLMPauseTurnCountRef.current) {
-      clientLogger.info('[Chat] All-LLM pause threshold reached, auto-pausing', {
-        turnCount: allLLMTurnCount,
-        lastPausedAt: lastAllLLMPauseTurnCountRef.current,
-        nextThreshold: getNextPauseThreshold(allLLMTurnCount),
-      })
       // Track the turn count at which we paused
       lastAllLLMPauseTurnCountRef.current = allLLMTurnCount
       // Auto-pause the chat
@@ -1010,13 +978,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
 
     if (lastAutoTriggeredRef.current === effectiveNextSpeakerId) return
-
-    clientLogger.info('[Chat] Auto-triggering next character in multi-character mode', {
-      nextSpeakerId: effectiveNextSpeakerId,
-      reason: turnSelectionResult.reason,
-      isAllLLM,
-      allLLMTurnCount,
-    })
 
     lastAutoTriggeredRef.current = effectiveNextSpeakerId
 
@@ -1032,7 +993,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Toggle pause state
   const togglePause = useCallback(async () => {
     const newPausedState = !isPaused
-    clientLogger.info('[Chat] Toggling pause state', { from: isPaused, to: newPausedState })
     await setPauseState(newPausedState)
     if (newPausedState) {
       showInfoToast('Auto-responses paused')
@@ -1059,9 +1019,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setPauseState(true)
     }
     if (streamingContent) {
-      clientLogger.info('[Chat] Streaming stopped with partial content', {
-        contentLength: streamingContent.length,
-      })
       showInfoToast('Response stopped - chat paused')
     }
     setStreamingContent('')
@@ -1087,17 +1044,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [])
 
   const handleCharacterAdded = useCallback(() => {
-    clientLogger.info('[Chat] Character added, refreshing chat data')
     fetchChat()
   }, [fetchChat])
 
   const handleReattribute = useCallback((messageId: string) => {
     const message = messages.find(m => m.id === messageId)
     if (message) {
-      clientLogger.debug('[Chat] Opening re-attribute dialog', { // Useful for debugging message re-attribution
-        messageId,
-        currentParticipantId: message.participantId,
-      })
       setReattributeDialogState({
         isOpen: true,
         messageId,
@@ -1108,7 +1060,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const handleReattributed = useCallback(async () => {
     const messageId = reattributeDialogState?.messageId
-    clientLogger.info('[Chat] Message re-attributed, refreshing chat data', { messageId })
     setReattributeDialogState(null)
     await fetchChat()
     // Scroll to the reattributed message after refresh
@@ -1117,7 +1068,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         const messageElement = document.getElementById(`message-${messageId}`)
         if (messageElement) {
           messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          clientLogger.debug('[Chat] Scrolled to reattributed message', { messageId })
         }
       }, 100) // Small delay to ensure DOM is updated
     }
@@ -1127,15 +1077,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const participant = participantData.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'This character'
 
-    clientLogger.debug('[Chat] Requesting character removal', {
-      participantId,
-      characterName,
-      isGenerating: streaming || waitingForResponse,
-      currentSpeakerId: turnState.lastSpeakerId,
-    })
-
     if ((streaming || waitingForResponse) && turnState.lastSpeakerId === participantId) {
-      clientLogger.warn('[Chat] Cannot remove character while they are generating')
       showErrorToast(`Cannot remove ${characterName} while they are generating a response. Please wait for them to finish.`)
       return
     }
@@ -1145,7 +1087,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     )
 
     if (!confirmed) {
-      clientLogger.debug('[Chat] Character removal cancelled by user')
       return
     }
 
@@ -1161,7 +1102,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         throw new Error(errorData.error || 'Failed to remove character')
       }
 
-      clientLogger.info('[Chat] Character removed successfully', { participantId, characterName })
       showSuccessToast(`${characterName} has been removed from the chat`)
 
       setEphemeralMessages(prev => prev.filter(em => em.participantId !== participantId))
@@ -1177,14 +1117,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       )
 
       if (remainingCharacters.length === 0) {
-        clientLogger.warn('[Chat] No active characters remain in chat')
         showErrorToast('All characters have been removed. Add a character to continue the conversation.')
       }
     } catch (err) {
-      clientLogger.error('[Chat] Error removing character', {
-        error: err instanceof Error ? err.message : String(err),
-        participantId,
-      })
       showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
     }
   }, [id, participantData, fetchChat, streaming, waitingForResponse, turnState.lastSpeakerId, participantsAsBase])
@@ -1193,11 +1128,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const handleStartImpersonation = useCallback(async (participantId: string) => {
     const participant = participantData.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'Character'
-
-    clientLogger.info('[Chat] Starting impersonation', {
-      participantId,
-      characterName,
-    })
 
     try {
       const res = await fetch(`/api/v1/chats/${id}?action=impersonate`, {
@@ -1218,12 +1148,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setActiveTypingParticipantId(data.activeTypingParticipantId || participantId)
 
       showSuccessToast(`Now speaking as ${characterName}`)
-      clientLogger.info('[Chat] Impersonation started', { participantId, characterName })
     } catch (err) {
-      clientLogger.error('[Chat] Error starting impersonation', {
-        error: err instanceof Error ? err.message : String(err),
-        participantId,
-      })
       showErrorToast(err instanceof Error ? err.message : 'Failed to start impersonation')
     }
   }, [id, participantData])
@@ -1232,19 +1157,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const participant = participantData.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'Character'
 
-    clientLogger.info('[Chat] Stopping impersonation', {
-      participantId,
-      characterName,
-    })
-
     // Check if we need to show the LLM profile selection dialog
     // This is needed when the character doesn't have a default connection profile
     const character = participant?.character
     if (character && !participant?.connectionProfile) {
-      clientLogger.debug('[Chat] Character needs LLM profile, showing dialog', {
-        characterId: character.id,
-        characterName: character.name,
-      })
       setSelectLLMProfileDialogState({
         isOpen: true,
         participantId,
@@ -1279,12 +1195,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setActiveTypingParticipantId(data.activeTypingParticipantId || null)
 
       showSuccessToast(`Stopped speaking as ${characterName}`)
-      clientLogger.info('[Chat] Impersonation stopped', { participantId, characterName })
     } catch (err) {
-      clientLogger.error('[Chat] Error stopping impersonation', {
-        error: err instanceof Error ? err.message : String(err),
-        participantId,
-      })
       showErrorToast(err instanceof Error ? err.message : 'Failed to stop impersonation')
     }
   }, [id, participantData])
@@ -1292,11 +1203,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const handleConfirmStopImpersonation = useCallback(async (participantId: string, connectionProfileId: string) => {
     const participant = participantData.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'Character'
-
-    clientLogger.info('[Chat] Confirming stop impersonation with profile', {
-      participantId,
-      connectionProfileId,
-    })
 
     try {
       const res = await fetch(`/api/v1/chats/${id}?action=stop-impersonate`, {
@@ -1317,22 +1223,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setActiveTypingParticipantId(data.activeTypingParticipantId || null)
 
       showSuccessToast(`${characterName} is now controlled by AI`)
-      clientLogger.info('[Chat] Impersonation stopped with profile', { participantId, connectionProfileId })
 
       // Refresh chat to get updated participant connection profile
       await fetchChat()
     } catch (err) {
-      clientLogger.error('[Chat] Error stopping impersonation with profile', {
-        error: err instanceof Error ? err.message : String(err),
-        participantId,
-      })
       showErrorToast(err instanceof Error ? err.message : 'Failed to assign LLM profile')
     }
   }, [id, participantData, fetchChat])
 
   const handleSetActiveSpeaker = useCallback(async (participantId: string) => {
-    clientLogger.debug('[Chat] Setting active speaker', { participantId })
-
     try {
       const res = await fetch(`/api/v1/chats/${id}?action=set-active-speaker`, {
         method: 'PUT',
@@ -1353,29 +1252,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setImpersonatingParticipantIds(data.impersonatingParticipantIds)
       }
     } catch (err) {
-      clientLogger.error('[Chat] Error setting active speaker', {
-        error: err instanceof Error ? err.message : String(err),
-        participantId,
-      })
       showErrorToast(err instanceof Error ? err.message : 'Failed to set active speaker')
     }
   }, [id])
 
   // All-LLM pause handlers
-  const handleAllLLMContinue = useCallback((turnsToAdd: number) => {
-    clientLogger.debug('[Chat] All-LLM continue', { turnsToAdd })
+  const handleAllLLMContinue = useCallback(() => {
     setAllLLMPauseModalOpen(false)
     // The turn count will be incremented by the server after each message
   }, [])
 
   const handleAllLLMStop = useCallback(() => {
-    clientLogger.debug('[Chat] All-LLM stop')
     setAllLLMPauseModalOpen(false)
     setPauseState(true)
   }, [setPauseState])
 
   const handleAllLLMTakeOver = useCallback(async (participantId: string) => {
-    clientLogger.debug('[Chat] All-LLM take over', { participantId })
     setAllLLMPauseModalOpen(false)
     await handleStartImpersonation(participantId)
   }, [handleStartImpersonation])
@@ -1383,7 +1275,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Handle memories
   const handleDeleteChatMemories = useCallback(async () => {
     if (chatMemoryCount === 0) {
-      clientLogger.debug('[Chat] No memories to delete')
       return
     }
 
@@ -1392,26 +1283,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     )
 
     if (!confirmed) {
-      clientLogger.debug('[Chat] Memory deletion cancelled by user')
       return
     }
 
     try {
-      clientLogger.info('[Chat] Deleting chat memories', { chatId: id, memoryCount: chatMemoryCount })
       const res = await fetch(`/api/v1/memories?chatId=${id}`, { method: 'DELETE' })
 
       if (res.ok) {
         const data = await res.json()
-        clientLogger.info('[Chat] Chat memories deleted successfully', { deletedCount: data.deletedCount })
         chatDataHook.setChatMemoryCount(0)
         showSuccessToast(`Deleted ${data.deletedCount} memories`)
       } else {
         const errorData = await res.json()
-        clientLogger.error('[Chat] Failed to delete chat memories', { error: errorData.error })
         showErrorToast(`Failed to delete memories: ${errorData.error}`)
       }
-    } catch (err) {
-      clientLogger.error('[Chat] Error deleting chat memories', { error: err instanceof Error ? err.message : String(err) })
+    } catch {
       showErrorToast('Failed to delete memories')
     }
   }, [id, chatMemoryCount, chatDataHook])
@@ -1419,7 +1305,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const handleReextractMemories = useCallback(async () => {
     const characterParticipant = chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)
     if (!characterParticipant?.character) {
-      clientLogger.warn('[Chat] Cannot re-extract memories: no active character')
       showErrorToast('Cannot re-extract memories: no active character in chat')
       return
     }
@@ -1429,17 +1314,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     )
 
     if (!confirmed) {
-      clientLogger.debug('[Chat] Memory re-extraction cancelled by user')
       return
     }
 
     try {
-      clientLogger.info('[Chat] Queueing memory extraction', {
-        chatId: id,
-        characterId: characterParticipant.character.id,
-        characterName: characterParticipant.character.name,
-      })
-
       const res = await fetch(`/api/v1/chats/${id}?action=queue-memories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1451,15 +1329,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
       if (res.ok) {
         const data = await res.json()
-        clientLogger.info('[Chat] Memory extraction jobs queued', { jobCount: data.jobCount })
         showSuccessToast(`Queued ${data.jobCount} memory extraction jobs`)
       } else {
         const errorData = await res.json()
-        clientLogger.error('[Chat] Failed to queue memory extraction', { error: errorData.error })
         showErrorToast(`Failed to queue memory extraction: ${errorData.error}`)
       }
-    } catch (err) {
-      clientLogger.error('[Chat] Error queueing memory extraction', { error: err instanceof Error ? err.message : String(err) })
+    } catch {
       showErrorToast('Failed to queue memory extraction')
     }
   }, [id, chat])
@@ -1488,21 +1363,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           setRoleplayTemplateName(template.name)
           setRoleplayRenderingPatterns(template.renderingPatterns)
           setRoleplayDialogueDetection(template.dialogueDetection)
-          clientLogger.debug('[Chat] Fetched roleplay template data', {
-            templateId: chat.roleplayTemplateId,
-            templateName: template.name,
-            hasRenderingPatterns: !!template.renderingPatterns?.length,
-            hasDialogueDetection: !!template.dialogueDetection,
-          })
         } else {
           setRoleplayTemplateName(null)
           setRoleplayRenderingPatterns(undefined)
           setRoleplayDialogueDetection(undefined)
         }
-      } catch (err) {
-        clientLogger.error('[Chat] Error fetching roleplay template', {
-          error: err instanceof Error ? err.message : String(err),
-        })
+      } catch {
         setRoleplayTemplateName(null)
         setRoleplayRenderingPatterns(undefined)
         setRoleplayDialogueDetection(undefined)
@@ -1612,39 +1478,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     // Debug: Log outgoing request
     const requestPayload = { content: userMessage || 'Please look at the attached file(s).', fileIds }
-    let debugEntryId: string | undefined
-    const connectionProfile = getFirstConnectionProfile()
-    const debugProviderName = connectionProfile?.name || 'LLM Provider'
-    const debugProviderType = (connectionProfile?.apiKey?.provider || 'UNKNOWN') as import('@/components/providers/debug-provider').LLMProviderType
-    const debugModel = connectionProfile?.modelName
-
-    if (debug?.isDebugMode) {
-      debugEntryId = debug.addEntry({
-        direction: 'outgoing',
-        provider: debugProviderName,
-        providerType: debugProviderType,
-        model: debugModel,
-        endpoint: `/api/v1/messages?chatId=${id}`,
-        status: 'pending',
-        data: JSON.stringify(requestPayload, null, 2),
-        contentType: 'application/json',
-      })
-    }
-
-    // Debug: Prepare response entry
-    let responseEntryId: string | undefined
-    if (debug?.isDebugMode) {
-      responseEntryId = debug.addEntry({
-        direction: 'incoming',
-        provider: debugProviderName,
-        providerType: debugProviderType,
-        model: debugModel,
-        endpoint: `/api/v1/messages?chatId=${id}`,
-        status: 'streaming',
-        data: '',
-        contentType: 'text/event-stream',
-      })
-    }
 
     try {
       // Create AbortController for this request
@@ -1657,11 +1490,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         body: JSON.stringify(requestPayload),
         signal,
       })
-
-      // Debug: Mark request as complete
-      if (debug?.isDebugMode && debugEntryId) {
-        debug.updateEntry(debugEntryId, { status: 'complete' })
-      }
 
       if (!res.ok) {
         // Try to get error details from response
@@ -1690,11 +1518,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         const chunk = decoder.decode(value)
         const lines = chunk.split('\n')
-
-        // Debug: Append raw chunk to response entry
-        if (debug?.isDebugMode && responseEntryId) {
-          debug.appendToEntry(responseEntryId, chunk)
-        }
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -1735,23 +1558,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
               // Handle tool results
               if (data.toolResult) {
-                const { index, name, success, result, requiresPermission, pendingWrite, status } = data.toolResult
-
-                // Debug log for all tool results
-                clientLogger.debug('[Chat] Received tool result', {
-                  name,
-                  success,
-                  requiresPermission,
-                  hasPendingWrite: !!pendingWrite,
-                  status,
-                  pendingWrite: pendingWrite ? {
-                    filename: pendingWrite.filename,
-                    hasContent: !!pendingWrite.content,
-                    contentLength: pendingWrite.content?.length,
-                    folderPath: pendingWrite.folderPath,
-                    projectId: pendingWrite.projectId,
-                  } : undefined,
-                })
+                const { index, name, success, result, requiresPermission, pendingWrite } = data.toolResult
 
                 // Update pending tool call status by index (more reliable) or fall back to name
                 setPendingToolCalls(prev => prev.map((tc, idx) =>
@@ -1762,10 +1569,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
                 // Handle file write permission requirement
                 if (requiresPermission && pendingWrite) {
-                  clientLogger.info('[Chat] File write permission required - setting approval state', {
-                    pendingWrite,
-                    respondingParticipantId,
-                  })
                   setFileWriteApprovalState({
                     isOpen: false, // Start with modal closed; inline prompt shows first
                     pendingWrite: {
@@ -1803,17 +1606,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 }
               }
 
-              // Handle memory debug logs (arrive after done event)
-              if (data.debugMemoryLogs && debug?.isDebugMode && responseEntryId) {
-                debug.updateEntry(responseEntryId, { debugMemoryLogs: data.debugMemoryLogs })
-              }
-
               if (data.done) {
-                // Debug: Finalize streaming entry with stitched content
-                if (debug?.isDebugMode && responseEntryId) {
-                  debug.finalizeStreamingEntry(responseEntryId)
-                }
-
                 // Check for empty response (known Gemini API issue)
                 if (data.emptyResponse) {
                   showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
@@ -1838,33 +1631,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setRespondingParticipantId(null)
                 // Scroll to bottom now that streaming is complete
                 scrollOnStreamComplete()
-                // Refresh chat to get tool messages and memory debug logs
+                // Refresh chat to get tool messages
                 await fetchChat()
-                // Update debug entry with memory logs from the fetched chat (with polling)
-                if (debug?.isDebugMode && responseEntryId) {
-                  let pollCount = 0
-                  const maxPolls = 20 // Poll for up to 20 seconds (1 second intervals)
-                  const pollInterval = setInterval(async () => {
-                    pollCount++
-                    try {
-                      const chatRes = await fetch(`/api/v1/chats/${id}`)
-                      if (chatRes.ok) {
-                        const chatData = await chatRes.json()
-                        const fetchedMessage = chatData.chat.messages.find((m: Message) => m.id === data.messageId)
-                        if (fetchedMessage?.debugMemoryLogs) {
-                          debug.updateEntry(responseEntryId, { debugMemoryLogs: fetchedMessage.debugMemoryLogs })
-                          clearInterval(pollInterval)
-                        } else if (pollCount >= maxPolls) {
-                          clearInterval(pollInterval)
-                        }
-                      }
-                    } catch {
-                      if (pollCount >= maxPolls) {
-                        clearInterval(pollInterval)
-                      }
-                    }
-                  }, 1000)
-                }
                 // Clear tool status after a short delay
                 setTimeout(() => {
                   setToolExecutionStatus(null)
@@ -1900,9 +1668,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 /^\{\s*\}$/.test(trimmedRaw) ||
                 // Skip if it's a server-side error message (already logged on server)
                 trimmedRaw.includes('"error":')
-              if (!shouldSkip) {
-                clientLogger.debug('SSE parse issue (may be chunking artifact):', { rawLength: rawData.length })
-              }
+              // Skip logging for SSE parse issues (chunking artifacts)
             }
           }
         }
@@ -1912,15 +1678,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       const isAbort = err instanceof Error && err.name === 'AbortError'
 
       if (isAbort) {
-        // Debug: Mark entries as aborted
-        if (debug?.isDebugMode) {
-          if (debugEntryId) {
-            debug.updateEntry(debugEntryId, { status: 'complete', error: 'Aborted by user' })
-          }
-          if (responseEntryId) {
-            debug.updateEntry(responseEntryId, { status: 'complete', error: 'Aborted by user' })
-          }
-        }
         // Don't remove user message or show error for abort
         setStreamingContent('')
         setStreaming(false)
@@ -1934,36 +1691,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           : String(err) || 'Unknown error'
         const errorName = err instanceof Error ? err.name : 'UnknownErrorType'
 
-        // Log with more context for debugging connection issues
-        // Explicitly set values to ensure they appear in logs (avoid undefined)
-        clientLogger.error('Error sending message', {
-          error: errorMessage,
-          errorName,
-          errorType: typeof err,
-          // Capture additional error properties that may help diagnose issues
-          errorStack: err instanceof Error ? err.stack?.substring(0, 500) : 'no stack',
-          wasStreaming: streaming ? true : false,
-          wasWaitingForResponse: waitingForResponse ? true : false,
-          chatId: id,
-          // Stringify the entire error object for complete diagnostics
-          rawError: err ? JSON.stringify(err, Object.getOwnPropertyNames(err as object)) : 'null',
-        })
-
         // Show user-friendly message for common network errors
         const displayMessage = errorMessage === 'Unknown error' || errorMessage === 'TypeError'
           ? 'Connection lost. Please try again.'
           : errorMessage
         showErrorToast(displayMessage || 'Failed to send message')
-
-        // Debug: Mark entries as error
-        if (debug?.isDebugMode) {
-          if (debugEntryId) {
-            debug.updateEntry(debugEntryId, { status: 'error', error: errorMessage })
-          }
-          if (responseEntryId) {
-            debug.updateEntry(responseEntryId, { status: 'error', error: errorMessage })
-          }
-        }
 
         // Remove the temporary user message on error
         setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
@@ -2223,9 +1955,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   await fetchChat()
                   // Trigger the LLM to continue and respond to the tool result
                   if (participantToTrigger) {
-                    clientLogger.debug('[Chat] Triggering continue mode after file write approval', {
-                      participantId: participantToTrigger,
-                    })
                     // Small delay to ensure the tool message is saved first
                     setTimeout(() => {
                       triggerContinueMode(participantToTrigger)
@@ -2241,9 +1970,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   await fetchChat()
                   // Trigger the LLM to continue and acknowledge the denial
                   if (participantToTrigger) {
-                    clientLogger.debug('[Chat] Triggering continue mode after file write denial', {
-                      participantId: participantToTrigger,
-                    })
                     setTimeout(() => {
                       triggerContinueMode(participantToTrigger)
                     }, 500)
@@ -2321,19 +2047,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onImagePaste={async (file: File) => {
             // Upload pasted image using the existing upload logic
             try {
-              clientLogger.debug('[ChatPage] Uploading pasted image', {
-                filename: file.name,
-                mimeType: file.type,
-                size: file.size,
-              })
               const success = await uploadFile(file)
               if (success) {
                 showSuccessToast('Image pasted and attached')
               }
             } catch (err) {
-              clientLogger.error('[ChatPage] Error uploading pasted image:', {
-                error: err instanceof Error ? err.message : String(err),
-              })
               showErrorToast(err instanceof Error ? err.message : 'Failed to upload pasted image')
             }
           }}
@@ -2418,7 +2136,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           currentTitle={chat?.title || ''}
           isManuallyRenamed={chat?.isManuallyRenamed ?? false}
           onSuccess={(newTitle, isManuallyRenamed) => {
-            clientLogger.info('[Chat] Rename successful', { newTitle, isManuallyRenamed })
             // Update local chat state with new title
             if (chat) {
               setChat({ ...chat, title: newTitle, isManuallyRenamed })
@@ -2450,7 +2167,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               .then(() => {
                 fetchChat()
               })
-              .catch((err) => clientLogger.error('Failed to save tool result:', { error: err instanceof Error ? err.message : String(err) }))
+              .catch((err) => console.error('Failed to save tool result:', err instanceof Error ? err.message : String(err)))
 
             setAttachedFiles((prev) => [
               ...prev,

@@ -9,7 +9,6 @@
  */
 
 import { useCallback, useState, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import type { ProjectChat } from '../types'
@@ -52,23 +51,14 @@ export function useProjectChats(projectId: string): UseProjectChatsReturn {
     setLoading(true)
 
     try {
-      clientLogger.debug('useProjectChats: fetching chats', { projectId })
       const res = await fetch(`/api/v1/projects/${projectId}?action=list-chats&limit=${DEFAULT_LIMIT}&offset=0`)
       if (res.ok) {
         const data = await res.json()
         setChats(data.chats || [])
         setPagination(data.pagination || { total: 0, offset: 0, limit: DEFAULT_LIMIT, hasMore: false })
-        clientLogger.debug('useProjectChats: loaded chats', {
-          projectId,
-          count: data.chats?.length || 0,
-          total: data.pagination?.total || 0,
-        })
       }
     } catch (err) {
-      clientLogger.error('useProjectChats: fetch error', {
-        error: err instanceof Error ? err.message : String(err),
-        projectId,
-      })
+      console.error('useProjectChats: fetch error', err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
       fetchingRef.current = false
@@ -83,32 +73,22 @@ export function useProjectChats(projectId: string): UseProjectChatsReturn {
     const newOffset = pagination.offset + pagination.limit
 
     try {
-      clientLogger.debug('useProjectChats: loading more chats', { projectId, offset: newOffset })
       const res = await fetch(`/api/v1/projects/${projectId}?action=list-chats&limit=${DEFAULT_LIMIT}&offset=${newOffset}`)
       if (res.ok) {
         const data = await res.json()
         setChats(prev => [...prev, ...(data.chats || [])])
         setPagination(data.pagination || { total: 0, offset: newOffset, limit: DEFAULT_LIMIT, hasMore: false })
-        clientLogger.debug('useProjectChats: loaded more chats', {
-          projectId,
-          newCount: data.chats?.length || 0,
-          totalLoaded: chats.length + (data.chats?.length || 0),
-        })
       }
     } catch (err) {
-      clientLogger.error('useProjectChats: load more error', {
-        error: err instanceof Error ? err.message : String(err),
-        projectId,
-      })
+      console.error('useProjectChats: load more error', err instanceof Error ? err.message : String(err))
     } finally {
       setLoadingMore(false)
       fetchingRef.current = false
     }
-  }, [projectId, pagination, chats.length])
+  }, [projectId, pagination])
 
   const handleRemoveChat = useCallback(async (chatId: string) => {
     try {
-      clientLogger.debug('useProjectChats: removing chat', { projectId, chatId })
       const res = await fetch(`/api/v1/projects/${projectId}?action=remove-chat`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -120,10 +100,9 @@ export function useProjectChats(projectId: string): UseProjectChatsReturn {
       setPagination(prev => ({ ...prev, total: prev.total - 1 }))
       showSuccessToast('Chat removed from project')
       refreshProjects()
-      clientLogger.info('useProjectChats: removed chat', { projectId, chatId })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to remove chat'
-      clientLogger.error('useProjectChats: remove error', { error: errorMsg, projectId, chatId })
+      console.error('useProjectChats: remove error', errorMsg)
       showErrorToast(errorMsg)
     }
   }, [projectId, refreshProjects])

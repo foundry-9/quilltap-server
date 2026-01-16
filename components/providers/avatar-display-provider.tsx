@@ -12,7 +12,6 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import type { AvatarDisplayStyle } from '@/lib/avatar-styles'
 
 interface AvatarDisplayContextValue {
@@ -40,7 +39,6 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
     if (typeof document !== 'undefined') {
       const radius = style === 'RECTANGULAR' ? 'var(--radius-md)' : '9999px'
       document.documentElement.style.setProperty('--qt-avatar-radius', radius)
-      clientLogger.debug('AvatarDisplayProvider: Updated CSS variable', { style, radius })
     }
   }, [style])
 
@@ -49,13 +47,11 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
     const fetchAvatarDisplayStyle = async () => {
       try {
         setLoading(true)
-        clientLogger.debug('AvatarDisplayProvider: Fetching avatar display style')
 
         const res = await fetch('/api/v1/settings/chat')
         if (!res.ok) {
           // 401 is expected when not logged in - don't log as error
           if (res.status === 401) {
-            clientLogger.debug('AvatarDisplayProvider: Not authenticated, using default style')
             setStyle('CIRCULAR')
             return
           }
@@ -66,21 +62,16 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
         let data
         try {
           data = await res.json()
-        } catch (parseErr) {
-          clientLogger.warn('AvatarDisplayProvider: Failed to parse response as JSON, using defaults')
+        } catch {
           setStyle('CIRCULAR')
           return
         }
 
         const fetchedStyle = (data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle
-        clientLogger.debug('AvatarDisplayProvider: Loaded avatar display style', { style: fetchedStyle })
         setStyle(fetchedStyle)
       } catch (err) {
         // Network errors (like CORS, offline, etc.) are expected in some cases
         if (err instanceof TypeError && err.message.includes('fetch')) {
-          clientLogger.debug('AvatarDisplayProvider: Network error, using defaults', {
-            message: err.message
-          })
           setStyle('CIRCULAR')
           return
         }
@@ -99,7 +90,7 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
             errorMessage = String(err) || 'Unstringifiable error'
           }
         }
-        clientLogger.warn('AvatarDisplayProvider: Error fetching style', {
+        console.warn('AvatarDisplayProvider: Error fetching style', {
           error: errorMessage,
           errorType: err?.constructor?.name || typeof err
         })
@@ -116,21 +107,12 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
 
   // Sync style locally without API call (used when API was already called elsewhere)
   const syncStyle = useCallback((newStyle: AvatarDisplayStyle) => {
-    clientLogger.debug('AvatarDisplayProvider: Syncing avatar display style locally', {
-      from: style,
-      to: newStyle
-    })
     setStyle(newStyle)
-  }, [style])
+  }, [])
 
   const updateStyle = useCallback(async (newStyle: AvatarDisplayStyle) => {
     const previousStyle = style
     try {
-      clientLogger.debug('AvatarDisplayProvider: Updating avatar display style', {
-        from: previousStyle,
-        to: newStyle
-      })
-
       // Optimistic update
       setStyle(newStyle)
 
@@ -150,12 +132,10 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
         data = await res.json()
       } catch {
         // Update succeeded but response parse failed - keep the optimistic update
-        clientLogger.warn('AvatarDisplayProvider: Failed to parse update response, keeping optimistic style')
         return
       }
 
       const confirmedStyle = (data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle
-      clientLogger.debug('AvatarDisplayProvider: Avatar display style updated', { style: confirmedStyle })
       setStyle(confirmedStyle)
     } catch (err) {
       // Robust error extraction
@@ -172,7 +152,7 @@ export function AvatarDisplayProvider({ children }: { children: React.ReactNode 
           errorMessage = String(err) || 'Unstringifiable error'
         }
       }
-      clientLogger.error('AvatarDisplayProvider: Error updating style', {
+      console.error('AvatarDisplayProvider: Error updating style', {
         error: errorMessage,
         errorType: err?.constructor?.name || typeof err,
         attemptedStyle: newStyle

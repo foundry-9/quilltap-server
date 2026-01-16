@@ -11,15 +11,6 @@ import { useExportData } from '@/components/tools/import-export/hooks/useExportD
 const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
 global.fetch = mockFetch;
 
-// Mock clientLogger
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}));
 
 // Mock URL for blob creation
 const mockCreateObjectURL = jest.fn().mockReturnValue('blob:mock-url');
@@ -280,7 +271,6 @@ describe('useExportData', () => {
       });
 
       // Export endpoint should not be called when no entity type is set
-      // Note: clientLogger may call /api/logs, so we check specifically for export endpoint
       const exportCalls = mockFetch.mock.calls.filter(
         (call) => typeof call[0] === 'string' && call[0].includes('/api/tools/quilltap-export')
       );

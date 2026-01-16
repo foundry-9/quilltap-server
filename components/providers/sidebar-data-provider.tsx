@@ -12,7 +12,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from '@/components/providers/session-provider'
-import { clientLogger } from '@/lib/client-logger'
 
 // ============================================================================
 // TYPES
@@ -101,18 +100,14 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
    */
   const fetchCharacters = useCallback(async () => {
     try {
-      clientLogger.debug('SidebarDataProvider: Fetching characters')
       const response = await fetch('/api/v1/ui/sidebar?type=characters')
       if (!response.ok) {
         throw new Error(`Failed to fetch characters: ${response.status}`)
       }
       const data = await response.json()
       setCharacters(data.characters || [])
-      clientLogger.debug('SidebarDataProvider: Fetched characters', {
-        count: data.characters?.length || 0,
-      })
     } catch (error) {
-      clientLogger.error('SidebarDataProvider: Failed to fetch characters', {
+      console.error('SidebarDataProvider: Failed to fetch characters', {
         error: error instanceof Error ? error.message : String(error),
       })
       setCharacters([])
@@ -124,18 +119,14 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
    */
   const fetchChats = useCallback(async () => {
     try {
-      clientLogger.debug('SidebarDataProvider: Fetching chats')
       const response = await fetch('/api/v1/ui/sidebar?type=chats')
       if (!response.ok) {
         throw new Error(`Failed to fetch chats: ${response.status}`)
       }
       const data = await response.json()
       setChats(data.chats || [])
-      clientLogger.debug('SidebarDataProvider: Fetched chats', {
-        count: data.chats?.length || 0,
-      })
     } catch (error) {
-      clientLogger.error('SidebarDataProvider: Failed to fetch chats', {
+      console.error('SidebarDataProvider: Failed to fetch chats', {
         error: error instanceof Error ? error.message : String(error),
       })
       setChats([])
@@ -147,18 +138,14 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
    */
   const fetchProjects = useCallback(async () => {
     try {
-      clientLogger.debug('SidebarDataProvider: Fetching projects')
       const response = await fetch('/api/v1/ui/sidebar?type=projects')
       if (!response.ok) {
         throw new Error(`Failed to fetch projects: ${response.status}`)
       }
       const data = await response.json()
       setProjects(data.projects || [])
-      clientLogger.debug('SidebarDataProvider: Fetched projects', {
-        count: data.projects?.length || 0,
-      })
     } catch (error) {
-      clientLogger.error('SidebarDataProvider: Failed to fetch projects', {
+      console.error('SidebarDataProvider: Failed to fetch projects', {
         error: error instanceof Error ? error.message : String(error),
       })
       setProjects([])
@@ -171,8 +158,6 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
   const executePendingRefresh = useCallback(async () => {
     const pending = pendingRefreshRef.current
     pendingRefreshRef.current = { characters: false, chats: false, projects: false }
-
-    clientLogger.debug('SidebarDataProvider: Executing pending refresh', { pending })
 
     const promises: Promise<void>[] = []
     if (pending.characters) {
@@ -223,7 +208,6 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
    * Refresh all sidebar data (characters, chats, and projects)
    */
   const refreshSidebar = useCallback(async () => {
-    clientLogger.debug('SidebarDataProvider: refreshSidebar called')
     scheduleRefresh(true, true, true)
   }, [scheduleRefresh])
 
@@ -231,7 +215,6 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
    * Refresh only characters
    */
   const refreshCharactersOnly = useCallback(async () => {
-    clientLogger.debug('SidebarDataProvider: refreshCharacters called')
     scheduleRefresh(true, false, false)
   }, [scheduleRefresh])
 
@@ -239,7 +222,6 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
    * Refresh only chats
    */
   const refreshChatsOnly = useCallback(async () => {
-    clientLogger.debug('SidebarDataProvider: refreshChats called')
     scheduleRefresh(false, true, false)
   }, [scheduleRefresh])
 
@@ -247,7 +229,6 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
    * Refresh only projects
    */
   const refreshProjectsOnly = useCallback(async () => {
-    clientLogger.debug('SidebarDataProvider: refreshProjects called')
     scheduleRefresh(false, false, true)
   }, [scheduleRefresh])
 
@@ -267,10 +248,8 @@ export function SidebarDataProvider({ children }: { children: React.ReactNode })
 
     const loadInitialData = async () => {
       setLoading(true)
-      clientLogger.debug('SidebarDataProvider: Loading initial data')
       await Promise.all([fetchCharacters(), fetchChats(), fetchProjects()])
       setLoading(false)
-      clientLogger.debug('SidebarDataProvider: Initial data loaded')
     }
 
     loadInitialData()

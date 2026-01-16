@@ -15,7 +15,6 @@ import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
-import { clientLogger } from '@/lib/client-logger'
 import { FileInfo } from '../types'
 
 interface FilePreviewTextProps {
@@ -241,13 +240,10 @@ function CopyButton({ content, className = '' }: CopyButtonProps) {
     try {
       await navigator.clipboard.writeText(content)
       setCopied(true)
-      clientLogger.debug('[CopyButton] Content copied to clipboard', {
-        contentLength: content.length,
-      })
       // Reset after 2 seconds
       setTimeout(() => setCopied(false), 2000)
     } catch (error) {
-      clientLogger.error('[CopyButton] Failed to copy to clipboard', {
+      console.error('[CopyButton] Failed to copy to clipboard', {
         error: error instanceof Error ? error.message : String(error),
       })
     }
@@ -372,17 +368,7 @@ export default function FilePreviewText({
 
       const targetFile = findFileByName(files, filename)
       if (targetFile && onNavigate) {
-        clientLogger.debug('[FilePreviewText] Navigating via wikilink', {
-          from: file.originalFilename,
-          to: targetFile.originalFilename,
-          heading,
-        })
         onNavigate(targetFile, heading)
-      } else {
-        clientLogger.debug('[FilePreviewText] Wikilink target not found', {
-          target: filename,
-          availableFiles: files.map(f => f.originalFilename),
-        })
       }
       return
     }
@@ -397,16 +383,11 @@ export default function FilePreviewText({
       const heading = urlParts[1] ? decodeURIComponent(urlParts[1]) : undefined
       const targetFile = findFileByName(files, filename)
       if (targetFile && onNavigate) {
-        clientLogger.debug('[FilePreviewText] Navigating via relative link', {
-          from: file.originalFilename,
-          to: targetFile.originalFilename,
-          heading,
-        })
         onNavigate(targetFile, heading)
       }
     }
     // External links open normally
-  }, [files, file.originalFilename, onNavigate])
+  }, [files, onNavigate])
 
   // Custom link component for ReactMarkdown
   // Note: We destructure and discard node and onClick from props to prevent them
@@ -473,13 +454,7 @@ export default function FilePreviewText({
   }), [files, handleLinkClick])
 
   useEffect(() => {
-    clientLogger.debug('[FilePreviewText] Rendering text', {
-      fileId: file.id,
-      language,
-      useHighlighting,
-      contentLength: content?.length,
-      isMarkdown,
-    })
+    // Text renderer mounted
   }, [file.id, language, useHighlighting, content?.length, isMarkdown])
 
   // Scroll to heading or top when file/heading changes
@@ -498,25 +473,21 @@ export default function FilePreviewText({
         const headingElement = scrollContainerRef.current.querySelector(`#${CSS.escape(headingSlug)}`)
 
         if (headingElement) {
-          clientLogger.debug('[FilePreviewText] Scrolling to heading', { targetHeading, headingSlug })
           headingElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
         } else {
           // Fallback: try to find heading by text content
           const headings = scrollContainerRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6')
           for (const h of headings) {
             if (h.textContent?.toLowerCase().includes(targetHeading.toLowerCase())) {
-              clientLogger.debug('[FilePreviewText] Scrolling to heading by text match', { targetHeading })
               h.scrollIntoView({ behavior: 'smooth', block: 'start' })
               return
             }
           }
           // If still not found, scroll to top
-          clientLogger.debug('[FilePreviewText] Heading not found, scrolling to top', { targetHeading })
           scrollContainerRef.current.scrollTop = 0
         }
       } else {
         // No heading specified, scroll to top
-        clientLogger.debug('[FilePreviewText] Scrolling to top')
         scrollContainerRef.current.scrollTop = 0
       }
     }, 50)

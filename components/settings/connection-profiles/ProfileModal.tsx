@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { BaseModal } from '@/components/ui/BaseModal'
@@ -78,7 +77,6 @@ export function ProfileModal({
             setFetchedModels(result.data?.models || [])
             setFetchedModelsWithInfo(result.data?.modelsWithInfo || [])
             setModelsMessage(`Found ${result.data?.models?.length || 0} models`)
-            clientLogger.debug('Models auto-fetched during edit', { count: result.data?.models?.length })
           }
         } catch {
           // Silently ignore

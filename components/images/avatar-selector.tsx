@@ -6,7 +6,6 @@
  */
 
 import { useState } from 'react';
-import { clientLogger } from '@/lib/client-logger';
 import { ImageGallery, ImageData } from './image-gallery';
 import { ImageUploadDialog } from './image-upload-dialog';
 
@@ -45,7 +44,7 @@ export function AvatarSelector({
         await onSelect(selectedImageId);
         // Don't call onClose() here - let the callback handle closing the modal
       } catch (err) {
-        clientLogger.error('Error in avatar selection:', { error: err instanceof Error ? err.message : String(err) })
+        console.error('Error in avatar selection:', { error: err instanceof Error ? err.message : String(err) })
         // onSelect should handle error toasts, but let it propagate if needed
       }
     }

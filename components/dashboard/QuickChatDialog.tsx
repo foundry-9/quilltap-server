@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { useQuickChat } from './hooks'
@@ -41,7 +40,6 @@ export function QuickChatDialog({
 
   useEffect(() => {
     if (isOpen) {
-      clientLogger.debug('Quick chat dialog opened', { characterId, characterName })
       fetchData(characterId)
     }
   }, [isOpen, characterId, characterName, fetchData])
@@ -49,7 +47,6 @@ export function QuickChatDialog({
   const handleClose = () => {
     reset()
     onClose()
-    clientLogger.debug('Quick chat dialog closed', { characterId })
   }
 
   const handleCreate = async () => {

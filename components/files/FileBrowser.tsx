@@ -9,7 +9,6 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import FileBrowserGrid from './FileBrowserGrid'
@@ -105,8 +104,6 @@ export default function FileBrowser({
         ? `/api/v1/files/folders?projectId=${projectId}`
         : '/api/v1/files/folders'
 
-      clientLogger.debug('[FileBrowser] Fetching files and folders', { projectId, filesUrl, foldersUrl })
-
       // Fetch files and folders in parallel
       const [filesRes, foldersRes] = await Promise.all([
         fetch(filesUrl),
@@ -116,9 +113,6 @@ export default function FileBrowser({
       if (filesRes.ok) {
         const data = await filesRes.json()
         setFiles(data.files || [])
-        clientLogger.debug('[FileBrowser] Loaded files', {
-          count: data.files?.length || 0,
-        })
       } else {
         throw new Error('Failed to fetch files')
       }
@@ -126,16 +120,13 @@ export default function FileBrowser({
       if (foldersRes.ok) {
         const data = await foldersRes.json()
         setDbFolders(data.folders || [])
-        clientLogger.debug('[FileBrowser] Loaded folders from DB', {
-          count: data.folders?.length || 0,
-        })
       } else {
         // Non-fatal - continue with derived folders only
-        clientLogger.warn('[FileBrowser] Failed to fetch folders from DB, using derived folders')
+        console.warn('[FileBrowser] Failed to fetch folders from DB, using derived folders')
         setDbFolders([])
       }
     } catch (error) {
-      clientLogger.error('[FileBrowser] Failed to fetch files', {
+      console.error('[FileBrowser] Failed to fetch files', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast('Failed to load files')
@@ -235,11 +226,9 @@ export default function FileBrowser({
 
   const handleFolderClick = (folder: string) => {
     setCurrentFolder(folder)
-    clientLogger.debug('[FileBrowser] Changed folder', { folder })
   }
 
   const handleFileClick = (file: FileInfo) => {
-    clientLogger.debug('[FileBrowser] File clicked', { fileId: file.id, filename: file.originalFilename })
     if (onFileClick) {
       onFileClick(file)
     } else {
@@ -261,22 +250,16 @@ export default function FileBrowser({
     if (!confirmed) return
 
     try {
-      clientLogger.debug('[FileBrowser] Deleting file', { fileId })
       const res = await fetch(`/api/v1/files/${fileId}`, { method: 'DELETE' })
       const data = await res.json().catch(() => ({}))
 
       if (res.ok) {
         setFiles(files.filter(f => f.id !== fileId))
         showSuccessToast('File deleted')
-        clientLogger.debug('[FileBrowser] File deleted', { fileId })
         onFilesChange?.()
       } else if (data.details?.code === 'FILE_HAS_ASSOCIATIONS') {
         // Show enhanced confirmation with association details
         const file = files.find(f => f.id === fileId)
-        clientLogger.debug('[FileBrowser] File has associations, showing dialog', {
-          fileId,
-          associations: data.details.associations,
-        })
         setDeleteConfirmation({
           fileId,
           filename: file?.originalFilename || file?.filename || 'file',
@@ -286,7 +269,7 @@ export default function FileBrowser({
         throw new Error(data.error || 'Failed to delete file')
       }
     } catch (error) {
-      clientLogger.error('[FileBrowser] Failed to delete file', {
+      console.error('[FileBrowser] Failed to delete file', {
         fileId,
         error: error instanceof Error ? error.message : String(error),
       })
@@ -299,9 +282,6 @@ export default function FileBrowser({
 
     setIsDeleting(true)
     try {
-      clientLogger.debug('[FileBrowser] Deleting file with dissociation', {
-        fileId: deleteConfirmation.fileId,
-      })
       const res = await fetch(
         `/api/v1/files/${deleteConfirmation.fileId}?dissociate=true`,
         { method: 'DELETE' }
@@ -310,9 +290,6 @@ export default function FileBrowser({
       if (res.ok) {
         setFiles(files.filter(f => f.id !== deleteConfirmation.fileId))
         showSuccessToast('File deleted')
-        clientLogger.debug('[FileBrowser] File deleted with dissociation', {
-          fileId: deleteConfirmation.fileId,
-        })
         setDeleteConfirmation(null)
         onFilesChange?.()
       } else {
@@ -320,7 +297,7 @@ export default function FileBrowser({
         throw new Error(data.error || 'Failed to delete file')
       }
     } catch (error) {
-      clientLogger.error('[FileBrowser] Failed to delete file with dissociation', {
+      console.error('[FileBrowser] Failed to delete file with dissociation', {
         fileId: deleteConfirmation.fileId,
         error: error instanceof Error ? error.message : String(error),
       })
@@ -332,19 +309,12 @@ export default function FileBrowser({
 
   // Handle opening move modal (works for both general files and project files)
   const handleMoveToProject = useCallback((fileId: string, fileName: string) => {
-    clientLogger.debug('[FileBrowser] Opening move modal', { fileId, fileName, currentProjectId: projectId })
     setMoveModalFile({ id: fileId, name: fileName })
-  }, [projectId])
+  }, [])
 
   // Handle successful move - remove file from current list since it moved somewhere else
   const handleMoveSuccess = useCallback((targetProjectId: string | null, targetName: string) => {
     if (moveModalFile) {
-      clientLogger.info('[FileBrowser] File moved', {
-        fileId: moveModalFile.id,
-        targetProjectId,
-        targetName,
-        fromProjectId: projectId,
-      })
       // Remove from current view since file is no longer here
       setFiles(prev => prev.filter(f => f.id !== moveModalFile.id))
       setMoveModalFile(null)
@@ -354,7 +324,7 @@ export default function FileBrowser({
       }
       onFilesChange?.()
     }
-  }, [moveModalFile, selectedFile, onFilesChange, projectId])
+  }, [moveModalFile, selectedFile, onFilesChange])
 
   const displayTitle = title || (projectId ? 'Project Files' : 'General Files')
 
@@ -508,7 +478,6 @@ export default function FileBrowser({
         currentFolder={currentFolder}
         projectId={projectId}
         onSuccess={(folderPath) => {
-          clientLogger.debug('[FileBrowser] Folder created', { folderPath })
           // Refresh the file and folder list to include the new folder
           fetchFiles()
           // Navigate to the new folder

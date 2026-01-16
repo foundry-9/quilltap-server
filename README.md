@@ -7,7 +7,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.7.0--dev.98-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.7.0--dev.99-yellow.svg)](package.json)
 
 ## What is Quilltap?
 
@@ -21,7 +21,7 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 - 🔄 Bidirectional sync between Quilltap instances with API key authentication, real-time progress tracking, and conflict resolution for characters, chats, memories, and more.
 - 🧙 AI Wizard for character creation with vision support - generates descriptions, personalities, system prompts, and physical descriptions from images or text.
 - 📦 Native .qtap export/import system for selective backup of characters, chats, profiles, and templates with conflict resolution strategies.
-- 🧰 Tools workspace with backup/restore flows (local download or S3), cloud backup previews, native export/import, and a delete-all-data card; DevConsole (development builds) surfaces server logs, browser consoles, and chat traces.
+- 🧰 Tools workspace with backup/restore flows (local download or S3), cloud backup previews, native export/import, and a delete-all-data card.
 - 🎨 Theme plugin system powered by qt-* semantic utility classes so you can ship new theme packs (Ocean, Rains, Earl Grey are included) and give users an Appearance settings tab + nav toggle for quick swaps.
 - 🖼️ Integrated image generation profiles (Google Gemini/Imagen 4, Grok, OpenAI, OpenRouter) plus an asset gallery with tagging, avatar overrides, and secure per-user storage.
 - 🔐 Arctic OAuth + custom JWT sessions with Google OAuth plugin, optional no-auth mode, local username/password login, and TOTP MFA backed by AES-256-GCM encrypted API keys and per-user encryption keys.
@@ -55,7 +55,6 @@ AI-powered roleplay chat platform with a pluggable provider system, deep SillyTa
 - **Draft persistence**: Unsent message drafts are saved automatically and restored when you return to a chat.
 - Inter-character memory sharing plus auto-tagging and placeholder generation so scene descriptions stay consistent.
 - Multi-character SillyTavern import wizard with speaker mapping, character assignment, and optional memory creation for each participant.
-- Development builds expose a DevConsole so engineers can read server logs, browser consoles, and chat traces without leaving the UI.
 - Import/export entire conversations from SillyTavern and branch them inside Quilltap with swipe histories.
 
 ### Image & Avatar Management
@@ -146,7 +145,7 @@ Quilltap is built on a modern, plugin-friendly stack:
 
 The entire architecture is a single Next.js application that renders the web UI, exposes REST/Next API routes for providers, and streams chat responses over HTTP. Plugins register providers/themes/auth flows, and environment flags control which plugins are allowed to load so you can ship trimmed builds for offline environments.
 
-Your API keys are decrypted only when the authenticated user requests them, the DevConsole is disabled outside of development, and every provider call flows through the plugin registry so network endpoints are centralized and auditable.
+Your API keys are decrypted only when the authenticated user requests them, and every provider call flows through the plugin registry so network endpoints are centralized and auditable.
 
 ## Getting Started
 

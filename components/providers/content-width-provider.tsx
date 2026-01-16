@@ -10,7 +10,6 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 interface ContentWidthContextValue {
   /** Whether wide mode is enabled */
@@ -44,10 +43,9 @@ export function ContentWidthProvider({ children }: { children: React.ReactNode }
       const raw = window.localStorage.getItem(STORAGE_KEY)
       if (raw === 'true') {
         setIsWide(true)
-        clientLogger.debug('Loaded content width preference from localStorage', { isWide: true })
       }
     } catch (error) {
-      clientLogger.warn('Unable to load content width preference', {
+      console.warn('Unable to load content width preference', {
         error: error instanceof Error ? error.message : String(error)
       })
     } finally {
@@ -60,9 +58,8 @@ export function ContentWidthProvider({ children }: { children: React.ReactNode }
     if (!storageReady || typeof window === 'undefined') return
     try {
       window.localStorage.setItem(STORAGE_KEY, String(isWide))
-      clientLogger.debug('Persisted content width preference', { isWide })
     } catch (error) {
-      clientLogger.warn('Unable to persist content width preference', {
+      console.warn('Unable to persist content width preference', {
         error: error instanceof Error ? error.message : String(error)
       })
     }
@@ -74,7 +71,6 @@ export function ContentWidthProvider({ children }: { children: React.ReactNode }
     const handler = (event: StorageEvent) => {
       if (event.key !== STORAGE_KEY || event.newValue === null) return
       const newValue = event.newValue === 'true'
-      clientLogger.debug('Content width preference changed in another tab', { isWide: newValue })
       setIsWide(newValue)
     }
     window.addEventListener('storage', handler)
@@ -89,10 +85,6 @@ export function ContentWidthProvider({ children }: { children: React.ReactNode }
 
     const updateCanApply = () => {
       setCanApplyWide(mediaQuery.matches)
-      clientLogger.debug('Viewport width check', {
-        canApplyWide: mediaQuery.matches,
-        viewportWidth: window.innerWidth
-      })
     }
 
     updateCanApply()
@@ -111,30 +103,16 @@ export function ContentWidthProvider({ children }: { children: React.ReactNode }
 
     root.style.setProperty('--qt-chat-message-row-max-width', chatWidth)
     root.style.setProperty('--qt-page-max-width', pageWidth)
-    clientLogger.debug('Applied content width CSS variables', {
-      isWide,
-      canApplyWide,
-      appliedChatWidth: chatWidth,
-      appliedPageWidth: pageWidth
-    })
   }, [isWide, canApplyWide])
 
   const toggleWidth = useCallback(() => {
     setIsWide(prev => {
       const next = !prev
-      // Defer logging to avoid setState during render
-      queueMicrotask(() => {
-        clientLogger.info('Toggled content width', { from: prev, to: next })
-      })
       return next
     })
   }, [])
 
   const setWidth = useCallback((wide: boolean) => {
-    // Defer logging to avoid setState during render
-    queueMicrotask(() => {
-      clientLogger.info('Set content width', { wide })
-    })
     setIsWide(wide)
   }, [])
 

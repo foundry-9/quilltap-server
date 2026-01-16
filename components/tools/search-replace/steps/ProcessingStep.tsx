@@ -6,17 +6,11 @@
  * Step 4: Show progress during execution.
  */
 
-import { useEffect } from 'react';
-import { clientLogger } from '@/lib/client-logger';
-
 interface ProcessingStepProps {
   phase: string;
 }
 
 export function ProcessingStep({ phase }: ProcessingStepProps) {
-  useEffect(() => {
-    clientLogger.debug('[ProcessingStep] Rendered', { phase });
-  }, [phase]);
 
   return (
     <div className="space-y-6 py-8">

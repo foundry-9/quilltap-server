@@ -3,7 +3,6 @@
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
-import { clientLogger } from '@/lib/client-logger'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import ErrorAlert from '@/components/ui/ErrorAlert'
@@ -54,10 +53,6 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
   const createKey = useAsyncOperation<ApiKeyResponse>()
 
   const handleSubmit = async () => {
-    clientLogger.debug('Creating API key', {
-      provider: form.formData.provider,
-    })
-
     const result = await createKey.execute(async () => {
       const response = await fetchJson<{ apiKey: ApiKeyResponse }>('/api/v1/api-keys', {
         method: 'POST',
@@ -69,10 +64,6 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
         throw new Error(response.error || 'Failed to create API key')
       }
 
-      clientLogger.debug('API key created successfully', {
-        id: response.data?.apiKey?.id,
-        associations: response.data?.apiKey?.associations?.length || 0,
-      })
       return response.data!.apiKey
     })
 

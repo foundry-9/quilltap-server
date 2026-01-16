@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
+import { useState, useCallback } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showAlert } from '@/lib/alert'
 
@@ -57,13 +56,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
   const [isExecuting, setIsExecuting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Debug logging in useEffect to avoid setState during render
-  useEffect(() => {
-    clientLogger.debug('RenameReplaceTab rendered', { characterId, characterName })
-  }, [characterId, characterName])
-
   const addAdditionalReplacement = useCallback(() => {
-    clientLogger.debug('Adding additional replacement pair')
     setAdditionalReplacements(prev => [
       ...prev,
       { id: crypto.randomUUID(), oldValue: '', newValue: '', caseSensitive: false }
@@ -71,7 +64,6 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
   }, [])
 
   const removeAdditionalReplacement = useCallback((id: string) => {
-    clientLogger.debug('Removing additional replacement pair', { id })
     setAdditionalReplacements(prev => prev.filter(r => r.id !== id))
   }, [])
 
@@ -82,7 +74,6 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
   }, [])
 
   const handlePreview = useCallback(async () => {
-    clientLogger.debug('Starting rename preview', { characterId, newName })
     setIsLoading(true)
     setError(null)
     setPreview(null)
@@ -121,11 +112,10 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
 
       const data: RenamePreviewResponse = await res.json()
       setPreview(data)
-      clientLogger.debug('Preview completed', { summary: data.summary })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      clientLogger.error('Preview failed', { error: message })
+      console.error('Preview failed', { error: message })
     } finally {
       setIsLoading(false)
     }
@@ -134,15 +124,12 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
   const handleExecute = useCallback(async () => {
     if (!preview) return
 
-    clientLogger.debug('Starting rename execution', { characterId, newName })
-
     const result = await showAlert(
       `Are you sure you want to rename this character and update ${preview.summary.total} occurrences? This action cannot be undone.`,
       ['Execute', 'Cancel']
     )
 
     if (result !== 'Execute') {
-      clientLogger.debug('Rename execution cancelled by user')
       return
     }
 
@@ -182,7 +169,6 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
 
       const data: RenamePreviewResponse = await res.json()
       showSuccessToast(`Successfully updated ${data.summary.total} occurrences!`)
-      clientLogger.info('Rename execution completed', { summary: data.summary })
 
       // Reset form
       setNewName('')
@@ -197,7 +183,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
       showErrorToast(message)
-      clientLogger.error('Rename execution failed', { error: message })
+      console.error('Rename execution failed', { error: message })
     } finally {
       setIsExecuting(false)
     }

@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import Avatar from '@/components/ui/Avatar'
 import { QuickChatDialog } from './QuickChatDialog'
-import { clientLogger } from '@/lib/client-logger'
 
 interface FavoriteCharacter {
   id: string
@@ -33,18 +32,11 @@ export function FavoriteCharactersSection({ characters }: FavoriteCharactersProp
   )
   const [chatDialogCharacter, setChatDialogCharacter] = useState<FavoriteCharacter | null>(null)
 
-  useEffect(() => {
-    clientLogger.debug('FavoriteCharactersSection rendered', {
-      totalCharacters: characters.length,
-      visibleCharacters: visibleCharacters.length,
-    })
-  }, [characters.length, visibleCharacters.length])
 
   const handleChatClick = (e: React.MouseEvent, character: FavoriteCharacter) => {
     e.preventDefault()
     e.stopPropagation()
     setChatDialogCharacter(character)
-    clientLogger.debug('Chat button clicked for favorite character', { characterId: character.id, characterName: character.name })
   }
 
   if (visibleCharacters.length === 0) {

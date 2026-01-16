@@ -12557,7 +12557,6 @@ function parseServerConfigs(serversJson) {
 }
 
 // mcp-client.ts
-var clientLogger = logger.child({ module: "mcp-client" });
 var MCPClient = class {
   constructor(config) {
     this.client = null;
@@ -12623,17 +12622,12 @@ var MCPClient = class {
    */
   async connect() {
     if (this.state.status === "connected" || this.state.status === "ready") {
-      clientLogger.debug("Already connected", { serverId: this.config.name });
       return;
     }
     this.state.status = "connecting";
     const url2 = new URL(this.config.url);
     const headers = this.buildHeaders();
     try {
-      clientLogger.info("Connecting to MCP server", {
-        serverId: this.config.name,
-        url: this.config.url
-      });
       try {
         this.client = new Client(
           { name: "quilltap", version: "1.0.0" },
@@ -12645,14 +12639,7 @@ var MCPClient = class {
           }
         });
         await this.client.connect(this.transport);
-        clientLogger.info("Connected using Streamable HTTP transport", {
-          serverId: this.config.name
-        });
       } catch (streamableError) {
-        clientLogger.debug("Streamable HTTP failed, falling back to SSE", {
-          serverId: this.config.name,
-          error: streamableError instanceof Error ? streamableError.message : String(streamableError)
-        });
         if (this.transport) {
           try {
             await this.transport.close();
@@ -12669,20 +12656,14 @@ var MCPClient = class {
           }
         });
         await this.client.connect(this.transport);
-        clientLogger.info("Connected using SSE transport", {
-          serverId: this.config.name
-        });
       }
       this.state.status = "connected";
       this.state.lastConnected = /* @__PURE__ */ new Date();
       this.state.reconnectAttempts = 0;
-      clientLogger.info("Connected to MCP server", {
-        serverId: this.config.name
-      });
     } catch (error) {
       this.state.status = "error";
       this.state.lastError = error instanceof Error ? error.message : "Connection failed";
-      clientLogger.error("Failed to connect to MCP server", {
+      console.error("Failed to connect to MCP server", {
         serverId: this.config.name,
         error: this.state.lastError
       });
@@ -12701,7 +12682,6 @@ var MCPClient = class {
     }
     this.state.status = "discovering";
     try {
-      clientLogger.info("Discovering tools", { serverId: this.config.name });
       const result = await this.client.listTools();
       this.state.tools = (result.tools || []).map((tool) => ({
         name: tool.name,
@@ -12709,16 +12689,11 @@ var MCPClient = class {
         inputSchema: tool.inputSchema
       }));
       this.state.status = "ready";
-      clientLogger.info("Tools discovered", {
-        serverId: this.config.name,
-        toolCount: this.state.tools.length,
-        tools: this.state.tools.map((t) => t.name)
-      });
       return this.state.tools;
     } catch (error) {
       this.state.status = "error";
       this.state.lastError = error instanceof Error ? error.message : "Tool discovery failed";
-      clientLogger.error("Tool discovery failed", {
+      console.error("Tool discovery failed", {
         serverId: this.config.name,
         error: this.state.lastError
       });
@@ -12735,10 +12710,6 @@ var MCPClient = class {
     if (this.state.status !== "ready") {
       throw new Error(`Server not ready (status: ${this.state.status})`);
     }
-    clientLogger.debug("Calling MCP tool", {
-      serverId: this.config.name,
-      toolName
-    });
     const result = await this.client.callTool({
       name: toolName,
       arguments: args
@@ -12766,24 +12737,17 @@ var MCPClient = class {
       content,
       isError: result.isError === true
     };
-    clientLogger.debug("MCP tool call completed", {
-      serverId: this.config.name,
-      toolName,
-      isError: mcpResult.isError,
-      contentCount: mcpResult.content?.length
-    });
     return mcpResult;
   }
   /**
    * Disconnect from the MCP server
    */
   async disconnect() {
-    clientLogger.info("Disconnecting from MCP server", { serverId: this.config.name });
     if (this.transport) {
       try {
         await this.transport.close();
       } catch (error) {
-        clientLogger.warn("Error closing transport", {
+        console.warn("Error closing transport", {
           serverId: this.config.name,
           error: error instanceof Error ? error.message : String(error)
         });
@@ -13159,7 +13123,6 @@ var MCPConnectionManager = class {
 var connectionManager = new MCPConnectionManager();
 
 // index.ts
-var pluginLogger = logger.child({ module: "qtap-plugin-mcp" });
 function parseConfig(toolConfig) {
   return {
     servers: typeof toolConfig.servers === "string" ? toolConfig.servers : "[]",
@@ -13171,9 +13134,6 @@ function parseConfig(toolConfig) {
 function hasValidConfiguration(toolConfig) {
   const serversJson = typeof toolConfig.servers === "string" ? toolConfig.servers : "[]";
   const { servers, errors } = parseServerConfigs(serversJson);
-  if (errors.length > 0) {
-    pluginLogger.debug("Configuration validation errors", { errors });
-  }
   const enabledServers = servers.filter((s) => s.enabled);
   return enabledServers.length > 0;
 }
@@ -13186,33 +13146,19 @@ async function ensureInitialized(toolConfig) {
   const config = parseConfig(toolConfig);
   const configHash = getConfigHash(config);
   if (initialized && configHash !== lastConfigHash) {
-    pluginLogger.info("Config changed, re-initializing", {
-      oldHash: lastConfigHash.substring(0, 50),
-      newHash: configHash.substring(0, 50)
-    });
     initialized = false;
   }
   if (initialized) return true;
   if (!config.servers || config.servers === "[]") {
-    pluginLogger.debug("No servers configured, skipping initialization");
     return false;
   }
-  pluginLogger.info("Initializing MCP plugin", {
-    hasServers: config.servers !== "[]"
-  });
   try {
     await connectionManager.initialize(config);
     initialized = true;
     lastConfigHash = configHash;
-    const stats = connectionManager.getStats();
-    pluginLogger.info("MCP plugin initialized", {
-      serverCount: stats.serverCount,
-      readyCount: stats.readyCount,
-      toolCount: stats.toolCount
-    });
     return true;
   } catch (error) {
-    pluginLogger.error("Failed to initialize MCP plugin", {
+    console.error("Failed to initialize MCP plugin", {
       error: error instanceof Error ? error.message : String(error)
     });
     return false;
@@ -13238,10 +13184,6 @@ var plugin = {
   async getToolDefinitions(config) {
     await ensureInitialized(config);
     const tools = connectionManager.getAllToolDefinitions();
-    pluginLogger.debug("Getting tool definitions", {
-      toolCount: tools.length,
-      initialized
-    });
     return tools;
   },
   /**
@@ -13259,18 +13201,7 @@ var plugin = {
    */
   async executeByName(toolName, input, context) {
     await ensureInitialized(context.toolConfig);
-    pluginLogger.debug("Executing MCP tool", {
-      toolName,
-      userId: context.userId,
-      chatId: context.chatId
-    });
     const result = await connectionManager.executeTool(toolName, input);
-    pluginLogger.debug("MCP tool execution complete", {
-      toolName,
-      success: result.success,
-      serverId: result.serverId,
-      executionTimeMs: result.executionTimeMs
-    });
     return {
       success: result.success,
       result: result.content,
@@ -13335,9 +13266,6 @@ ${output}`;
    */
   isConfigured(config) {
     const isConfigured = hasValidConfiguration(config);
-    pluginLogger.debug("Checking configuration", {
-      isConfigured
-    });
     return isConfigured;
   },
   /**
@@ -13357,18 +13285,11 @@ ${output}`;
    * Reconfigures server connections when user settings change.
    */
   async onConfigurationChange(config) {
-    pluginLogger.info("Configuration changed, reconfiguring");
     const parsedConfig = parseConfig(config);
     try {
       await connectionManager.reconfigure(parsedConfig.servers || "[]");
-      const stats = connectionManager.getStats();
-      pluginLogger.info("Reconfiguration complete", {
-        serverCount: stats.serverCount,
-        readyCount: stats.readyCount,
-        toolCount: stats.toolCount
-      });
     } catch (error) {
-      pluginLogger.error("Reconfiguration failed", {
+      console.error("Reconfiguration failed", {
         error: error instanceof Error ? error.message : String(error)
       });
     }

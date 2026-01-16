@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { useDialogStateWithFileInput } from '@/hooks/useDialogState'
 import { useWizardState } from '@/hooks/useWizardState'
@@ -54,7 +53,6 @@ export function useImportKeys({
   const { state, setState, reset, fileInputRef } = useDialogStateWithFileInput({
     isOpen,
     initialState,
-    logContext: 'useImportKeys',
   })
 
   // Wizard step configuration
@@ -70,7 +68,6 @@ export function useImportKeys({
         complete: { isTerminal: true },
         error: { prev: 'preview', isTerminal: true },
       },
-      logContext: 'useImportKeys',
     },
     state.step,
     (step) => setState((prev) => ({ ...prev, step }))
@@ -81,11 +78,6 @@ export function useImportKeys({
       const file = event.target.files?.[0]
       if (!file) return
 
-      clientLogger.debug('File selected for import', {
-        context: 'useImportKeys',
-        fileName: file.name,
-        fileSize: file.size,
-      })
 
       try {
         const text = await file.text()
@@ -106,7 +98,7 @@ export function useImportKeys({
         }))
       } catch (error) {
         const message = getErrorMessage(error)
-        clientLogger.error('Failed to parse import file', {
+        console.error('Failed to parse import file', {
           context: 'useImportKeys',
           error: message,
         })
@@ -131,7 +123,6 @@ export function useImportKeys({
     setState((prev) => ({ ...prev, error: null }))
 
     try {
-      clientLogger.debug('Verifying import passphrase', { context: 'useImportKeys' })
 
       const response = await fetch('/api/v1/api-keys?action=import-preview', {
         method: 'POST',
@@ -148,12 +139,6 @@ export function useImportKeys({
         throw new Error(data.error || 'Invalid passphrase or corrupted file')
       }
 
-      clientLogger.info('Import preview successful', {
-        context: 'useImportKeys',
-        keyCount: data.keyCount,
-        duplicateCount: data.duplicateCount,
-        signatureValid: data.signatureValid,
-      })
 
       // Use wizard for step navigation
       wizard.goTo('preview')
@@ -165,7 +150,7 @@ export function useImportKeys({
       }))
     } catch (error) {
       const message = getErrorMessage(error)
-      clientLogger.error('Failed to verify import', {
+      console.error('Failed to verify import', {
         context: 'useImportKeys',
         error: message,
       })
@@ -185,10 +170,6 @@ export function useImportKeys({
     setState((prev) => ({ ...prev, importing: true, error: null }))
 
     try {
-      clientLogger.debug('Starting API key import', {
-        context: 'useImportKeys',
-        duplicateHandling: state.duplicateHandling,
-      })
 
       const response = await fetch('/api/v1/api-keys?action=import', {
         method: 'POST',
@@ -207,12 +188,6 @@ export function useImportKeys({
 
       const result: ImportResult = await response.json()
 
-      clientLogger.info('API keys imported successfully', {
-        context: 'useImportKeys',
-        imported: result.imported,
-        skipped: result.skipped,
-        replaced: result.replaced,
-      })
 
       wizard.goTo('complete')
       setState((prev) => ({
@@ -224,7 +199,7 @@ export function useImportKeys({
       onSuccess?.()
     } catch (error) {
       const message = getErrorMessage(error)
-      clientLogger.error('Failed to import API keys', {
+      console.error('Failed to import API keys', {
         context: 'useImportKeys',
         error: message,
       })

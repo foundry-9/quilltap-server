@@ -10,7 +10,6 @@
  */
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import type { SyncProgressResponse } from '../hooks/useSyncProgress'
 
 interface SyncProgressBarProps {
@@ -121,10 +120,6 @@ export function SyncProgressBar({
 
   // Log mount
   useEffect(() => {
-    clientLogger.debug('SyncProgressBar: mounted', {
-      instanceName,
-      hasProgress: !!progress,
-    })
   }, [instanceName, progress])
 
   // Handle auto-hide after completion

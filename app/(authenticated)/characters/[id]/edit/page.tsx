@@ -10,7 +10,6 @@ import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor
 import { AIWizardModal, type GeneratedCharacterData } from '@/components/characters/ai-wizard'
 import { useCharacterEdit } from './hooks'
 import { CharacterBasicInfo } from './components'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 
 /**
@@ -85,10 +84,6 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   const [showWizard, setShowWizard] = useState(false)
   const [physicalDescriptionsRefreshKey, setPhysicalDescriptionsRefreshKey] = useState(0)
 
-  // Debug logging moved to useEffect to avoid state updates during render
-  useEffect(() => {
-    clientLogger.debug('EditCharacterPage mounted', { characterId: id })
-  }, [id])
 
   // Handle applying wizard-generated data
   const handleWizardApply = async (data: GeneratedCharacterData) => {
@@ -136,18 +131,12 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           showErrorToast(errorData.error || 'Failed to create physical description')
         }
       } catch (err) {
-        clientLogger.error('Failed to create physical description', {
+        console.error('Failed to create physical description', {
           error: err instanceof Error ? err.message : String(err),
         })
         showErrorToast('Failed to create physical description')
       }
     }
-
-    clientLogger.info('AI Wizard data applied to character', {
-      characterId: id,
-      fieldsApplied: fieldsToApply.map((f) => f.name),
-      physicalDescriptionCreated: !!data.physicalDescription,
-    })
   }
 
   if (loading) {

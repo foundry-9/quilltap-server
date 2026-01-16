@@ -8,11 +8,10 @@
  * Supports quick-hide filtering.
  */
 
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import Link from 'next/link'
 import Avatar from '@/components/ui/Avatar'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
-import { clientLogger } from '@/lib/client-logger'
 import type { Project } from '../types'
 
 interface CharactersCardProps {
@@ -61,14 +60,6 @@ export function CharactersCard({ project, onRemoveCharacter, expanded, onToggle 
     })
   }, [project.characterRoster, shouldHideByIds])
 
-  useEffect(() => {
-    clientLogger.debug('CharactersCard: rendered', {
-      characterCount: project.characterRoster.length,
-      visibleCount: visibleCharacters.length,
-      expanded,
-      allowAnyCharacter: project.allowAnyCharacter,
-    })
-  }, [project.characterRoster.length, visibleCharacters.length, expanded, project.allowAnyCharacter])
 
   return (
     <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">

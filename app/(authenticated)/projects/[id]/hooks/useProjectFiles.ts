@@ -9,7 +9,6 @@
  */
 
 import { useCallback, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import type { ProjectFile } from '../types'
 
 interface UseProjectFilesReturn {
@@ -22,15 +21,13 @@ export function useProjectFiles(projectId: string): UseProjectFilesReturn {
 
   const fetchFiles = useCallback(async () => {
     try {
-      clientLogger.debug('useProjectFiles: fetching files', { projectId })
       const res = await fetch(`/api/v1/projects/${projectId}?action=list-files`)
       if (res.ok) {
         const data = await res.json()
         setFiles(data.files || [])
-        clientLogger.debug('useProjectFiles: loaded files', { projectId, count: data.files?.length || 0 })
       }
     } catch (err) {
-      clientLogger.error('useProjectFiles: fetch error', { error: err instanceof Error ? err.message : String(err), projectId })
+      console.error('useProjectFiles: fetch error', err instanceof Error ? err.message : String(err))
     }
   }, [projectId])
 

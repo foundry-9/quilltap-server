@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { HealthBadge } from './HealthBadge'
 import type { MountPoint, ConnectionTestResult, AvailableBackend } from './types'
 
@@ -40,7 +39,7 @@ export function MountPointCard({
       const result = await onTestConnection(mountPoint.id)
       setTestResult(result)
     } catch (error) {
-      clientLogger.error('Connection test failed', { error })
+      console.error('Connection test failed', { error })
       setTestResult({
         success: false,
         message: error instanceof Error ? error.message : 'Connection test failed',
@@ -55,7 +54,7 @@ export function MountPointCard({
     try {
       await onDelete(mountPoint.id)
     } catch (error) {
-      clientLogger.error('Delete failed', { error })
+      console.error('Delete failed', { error })
     } finally {
       setIsDeleting(false)
       setShowDeleteConfirm(false)
@@ -66,7 +65,7 @@ export function MountPointCard({
     try {
       await onSetDefault(mountPoint.id)
     } catch (error) {
-      clientLogger.error('Set default failed', { error })
+      console.error('Set default failed', { error })
     }
   }
 

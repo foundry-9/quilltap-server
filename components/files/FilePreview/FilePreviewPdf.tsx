@@ -9,7 +9,6 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { FilePreviewRendererProps } from './types'
 
 // PDF.js types
@@ -42,9 +41,7 @@ export default function FilePreviewPdf({
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    clientLogger.debug('[FilePreviewPdf] Rendering PDF with PDF.js', {
-      fileId: file.id,
-    })
+    // PDF.js renderer mounted
   }, [file.id])
 
   // Load PDF.js and the document
@@ -62,8 +59,6 @@ export default function FilePreviewPdf({
         // Use local worker file (copied from node_modules to public)
         pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.mjs'
 
-        clientLogger.debug('[FilePreviewPdf] Loading PDF document', { fileUrl })
-
         // Fetch PDF with credentials (for authenticated API routes)
         const response = await fetch(fileUrl, { credentials: 'include' })
         if (!response.ok) {
@@ -71,7 +66,6 @@ export default function FilePreviewPdf({
         }
 
         const arrayBuffer = await response.arrayBuffer()
-        clientLogger.debug('[FilePreviewPdf] PDF fetched', { size: arrayBuffer.byteLength })
 
         // Load the PDF document from ArrayBuffer
         const loadingTask = pdfjs.getDocument({ data: arrayBuffer })
@@ -82,15 +76,10 @@ export default function FilePreviewPdf({
         pdfDocRef.current = pdf as unknown as PDFDocumentProxy
         setNumPages(pdf.numPages)
         setCurrentPage(1)
-
-        clientLogger.debug('[FilePreviewPdf] PDF loaded', {
-          fileId: file.id,
-          numPages: pdf.numPages,
-        })
       } catch (err) {
         if (cancelled) return
         // Use warn instead of error - this is handled gracefully via error state
-        clientLogger.warn('[FilePreviewPdf] Failed to load PDF', {
+        console.warn('[FilePreviewPdf] Failed to load PDF', {
           fileId: file.id,
           error: err instanceof Error ? err.message : String(err),
           errorType: err?.constructor?.name || typeof err,
@@ -138,15 +127,9 @@ export default function FilePreviewPdf({
           canvasContext: context,
           viewport,
         }).promise
-
-        clientLogger.debug('[FilePreviewPdf] Page rendered', {
-          fileId: file.id,
-          page: currentPage,
-          scale,
-        })
       } catch (err) {
         // Use warn instead of error - page rendering failures are handled gracefully
-        clientLogger.warn('[FilePreviewPdf] Failed to render page', {
+        console.warn('[FilePreviewPdf] Failed to render page', {
           fileId: file.id,
           page: currentPage,
           error: err instanceof Error ? err.message : String(err),

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import type { AnnotationButton } from '@/lib/schemas/template.types'
 import {
   MARKDOWN_FORMATS,
@@ -44,10 +43,6 @@ export default function FormattingToolbar({
 
   // Fetch template info when roleplayTemplateId changes
   useEffect(() => {
-    clientLogger.debug('[FormattingToolbar] useEffect triggered', {
-      roleplayTemplateId: roleplayTemplateId ?? '(none)',
-    })
-
     if (!roleplayTemplateId) {
       setTemplate(null)
       return
@@ -56,27 +51,16 @@ export default function FormattingToolbar({
     const fetchTemplate = async () => {
       try {
         setLoadingTemplate(true)
-        clientLogger.debug('[FormattingToolbar] Fetching template', {
-          roleplayTemplateId,
-        })
 
         const response = await fetch(`/api/v1/roleplay-templates/${roleplayTemplateId}`)
         if (response.ok) {
           const data = await response.json()
           setTemplate(data)
-          clientLogger.debug('[FormattingToolbar] Template loaded', {
-            templateName: data.name,
-            annotationButtonCount: data.annotationButtons?.length ?? 0,
-          })
         } else {
-          clientLogger.warn('[FormattingToolbar] Failed to fetch template', {
-            roleplayTemplateId,
-            status: response.status,
-          })
           setTemplate(null)
         }
       } catch (error) {
-        clientLogger.error('[FormattingToolbar] Error fetching template', {
+        console.error('[FormattingToolbar] Error fetching template', {
           roleplayTemplateId,
           error: error instanceof Error ? error.message : String(error),
         })
@@ -95,10 +79,6 @@ export default function FormattingToolbar({
       const textarea = inputRef.current
       if (!textarea) return
 
-      clientLogger.debug('[FormattingToolbar] Inserting markdown', {
-        type: format.type,
-      })
-
       insertFormat(textarea, input, format, setInput)
     },
     [input, inputRef, setInput]
@@ -109,11 +89,6 @@ export default function FormattingToolbar({
     (button: AnnotationButton) => {
       const textarea = inputRef.current
       if (!textarea) return
-
-      clientLogger.debug('[FormattingToolbar] Inserting annotation', {
-        label: button.label,
-        abbrev: button.abbrev,
-      })
 
       insertFormat(textarea, input, button, setInput)
     },

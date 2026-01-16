@@ -8,7 +8,6 @@
  */
 
 import { useEffect, useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { fetchJson } from '@/lib/fetch-helpers'
 import type { Project, EditForm, MountPointInfo } from '../types'
 
@@ -97,7 +96,7 @@ export function SettingsCard({
         setMountPointOptions(mpOptionsRes.data.mountPoints)
       }
     } catch (error) {
-      clientLogger.error('Failed to load mount point data', { error })
+      console.error('Failed to load mount point data', error)
     }
   }, [project.id])
 
@@ -107,13 +106,6 @@ export function SettingsCard({
     }
   }, [expanded, loadMountPointData])
 
-  useEffect(() => {
-    clientLogger.debug('SettingsCard: rendered', {
-      allowAnyCharacter: project.allowAnyCharacter,
-      hasInstructions: !!editForm.instructions,
-      expanded,
-    })
-  }, [project.allowAnyCharacter, editForm.instructions, expanded])
 
   const handleMountPointChange = (newMountPointId: string) => {
     if (mountPointData && mountPointData.fileCount > 0 && newMountPointId !== selectedMountPointId) {
@@ -166,7 +158,7 @@ export function SettingsCard({
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update mount point'
       setMountPointError(message)
-      clientLogger.error('Failed to update mount point', { error })
+      console.error('Failed to update mount point', error)
     } finally {
       setIsSavingMountPoint(false)
       setPendingMountPointId(null)

@@ -15,14 +15,6 @@ import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
 
-// Mock dependencies using global Jest
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}))
 
 jest.mock('@/lib/toast', () => ({
   showErrorToast: jest.fn(),

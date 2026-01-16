@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 interface RoleplayTemplate {
   id: string
@@ -60,27 +59,16 @@ export default function RoleplayAnnotationButtons({
     const fetchTemplate = async () => {
       try {
         setLoading(true)
-        clientLogger.debug('[RoleplayAnnotationButtons] Fetching template', {
-          roleplayTemplateId,
-        })
 
         const response = await fetch(`/api/roleplay-templates/${roleplayTemplateId}`)
         if (response.ok) {
           const data = await response.json()
           setTemplate(data)
-          clientLogger.debug('[RoleplayAnnotationButtons] Template loaded', {
-            templateName: data.name,
-            isBuiltIn: data.isBuiltIn,
-          })
         } else {
-          clientLogger.warn('[RoleplayAnnotationButtons] Failed to fetch template', {
-            roleplayTemplateId,
-            status: response.status,
-          })
           setTemplate(null)
         }
       } catch (error) {
-        clientLogger.error('[RoleplayAnnotationButtons] Error fetching template', {
+        console.error('[RoleplayAnnotationButtons] Error fetching template', {
           roleplayTemplateId,
           error: error instanceof Error ? error.message : String(error),
         })
@@ -105,9 +93,6 @@ export default function RoleplayAnnotationButtons({
     }
 
     // For custom templates, default to standard annotations
-    clientLogger.debug('[RoleplayAnnotationButtons] Custom template, using Standard annotations', {
-      templateName: template.name,
-    })
     return STANDARD_ANNOTATIONS
   }, [template])
 
@@ -116,11 +101,6 @@ export default function RoleplayAnnotationButtons({
     (config: AnnotationConfig) => {
       const textarea = inputRef.current
       if (!textarea) return
-
-      clientLogger.debug('[RoleplayAnnotationButtons] Inserting annotation', {
-        type: config.type,
-        label: config.label,
-      })
 
       const start = textarea.selectionStart
       const end = textarea.selectionEnd

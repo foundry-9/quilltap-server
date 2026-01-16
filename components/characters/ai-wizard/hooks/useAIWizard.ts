@@ -7,7 +7,6 @@
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { filterProfilesBySupportedMimeType, profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type {
@@ -85,7 +84,7 @@ export function useAIWizard({
           setPrimaryProfileId(profileList[0].id)
         }
       } catch (err) {
-        clientLogger.error('Failed to fetch profiles for AI wizard', {
+        console.error('Failed to fetch profiles for AI wizard', {
           error: err instanceof Error ? err.message : String(err),
         })
         setError('Failed to load connection profiles')
@@ -97,10 +96,6 @@ export function useAIWizard({
     fetchProfiles()
   }, [])
 
-  // Log step changes
-  useEffect(() => {
-    clientLogger.debug('AI Wizard step changed', { step: currentStep })
-  }, [currentStep])
 
   // Computed: Vision-capable profiles
   const visionProfiles = useMemo(() => {
@@ -203,13 +198,11 @@ export function useAIWizard({
   const handleImageUpload = useCallback((imageId: string, imageUrl: string) => {
     setUploadedImageId(imageId)
     setUploadedImageUrl(imageUrl)
-    clientLogger.debug('AI Wizard image uploaded', { imageId })
   }, [])
 
   const handleGallerySelect = useCallback((imageId: string, imageUrl: string) => {
     setSelectedGalleryImageId(imageId)
     setSelectedGalleryImageUrl(imageUrl)
-    clientLogger.debug('AI Wizard gallery image selected', { imageId })
   }, [])
 
   const toggleField = useCallback((field: GeneratableField) => {
@@ -245,12 +238,6 @@ export function useAIWizard({
       currentField: null,
       completedFields: [],
       errors: {},
-    })
-
-    clientLogger.info('AI Wizard starting generation', {
-      characterName,
-      fieldsToGenerate: Array.from(selectedFields),
-      descriptionSource,
     })
 
     try {
@@ -292,11 +279,6 @@ export function useAIWizard({
         completedFields: Array.from(selectedFields),
         errors: result.errors || {},
       })
-
-      clientLogger.info('AI Wizard generation complete', {
-        fieldsGenerated: Object.keys(result.generated),
-        errors: result.errors,
-      })
     } catch (err) {
       let errorMessage = 'Generation failed'
       if (err instanceof Error) {
@@ -305,7 +287,7 @@ export function useAIWizard({
         errorMessage = err
       }
       setError(errorMessage)
-      clientLogger.error('AI Wizard generation failed', { error: errorMessage, rawError: String(err) })
+      console.error('AI Wizard generation failed', { error: errorMessage, rawError: String(err) })
     } finally {
       setGenerating(false)
     }
@@ -326,9 +308,6 @@ export function useAIWizard({
   // Apply generated data
   const applyGenerated = useCallback(() => {
     if (generatedData) {
-      clientLogger.info('AI Wizard applying generated data', {
-        fields: Object.keys(generatedData),
-      })
       onApply(generatedData)
       onClose()
     }

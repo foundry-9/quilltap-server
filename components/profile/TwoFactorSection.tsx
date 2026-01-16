@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { EncryptedTOTPData } from './types'
-import { clientLogger } from '@/lib/client-logger'
 
 export interface TwoFactorSectionProps {
   totpEnabled: boolean
@@ -72,9 +71,6 @@ export function TwoFactorSection({
   const [loading, setLoading] = useState(false)
   const [codesCopied, setCodesCopied] = useState(false)
 
-  useEffect(() => {
-    clientLogger.debug('TwoFactorSection mounted', { totpEnabled })
-  }, [totpEnabled])
 
   // Reset step when enabled status changes externally
   useEffect(() => {
@@ -88,7 +84,6 @@ export function TwoFactorSection({
   async function handleSetup2FA() {
     setError('')
     setLoading(true)
-    clientLogger.debug('Starting 2FA setup')
 
     try {
       const res = await fetch('/api/v1/auth/2fa/setup', {
@@ -105,11 +100,10 @@ export function TwoFactorSection({
       setSecret(data.secret)
       setEncryptedData(data.encrypted)
       setSetupStep('qr')
-      clientLogger.info('2FA setup initiated, showing QR code')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to setup 2FA'
       setError(message)
-      clientLogger.error('2FA setup failed', { error: message })
+      console.error('2FA setup failed', { error: message })
     } finally {
       setLoading(false)
     }
@@ -118,7 +112,6 @@ export function TwoFactorSection({
   async function handleVerify() {
     setError('')
     setLoading(true)
-    clientLogger.debug('Verifying 2FA code', { codeLength: verificationCode.length })
 
     try {
       const res = await fetch('/api/v1/auth/2fa/enable', {
@@ -141,11 +134,10 @@ export function TwoFactorSection({
       setBackupCodes(data.backupCodes)
       setSetupStep('complete')
       onStatusChange(true)
-      clientLogger.info('2FA enabled successfully')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to verify code'
       setError(message)
-      clientLogger.error('2FA verification failed', { error: message })
+      console.error('2FA verification failed', { error: message })
     } finally {
       setLoading(false)
     }
@@ -158,7 +150,6 @@ export function TwoFactorSection({
 
     setError('')
     setLoading(true)
-    clientLogger.debug('Disabling 2FA')
 
     try {
       const res = await fetch('/api/v1/auth/2fa/disable', {
@@ -177,11 +168,10 @@ export function TwoFactorSection({
       setEncryptedData(null)
       setBackupCodes([])
       onStatusChange(false)
-      clientLogger.info('2FA disabled successfully')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to disable 2FA'
       setError(message)
-      clientLogger.error('2FA disable failed', { error: message })
+      console.error('2FA disable failed', { error: message })
     } finally {
       setLoading(false)
     }
@@ -194,7 +184,6 @@ export function TwoFactorSection({
 
     setError('')
     setLoading(true)
-    clientLogger.debug('Regenerating backup codes')
 
     try {
       const res = await fetch('/api/v1/auth/2fa/regenerate-backup-codes', {
@@ -209,11 +198,10 @@ export function TwoFactorSection({
       const data = await res.json()
       setBackupCodes(data.backupCodes)
       setSetupStep('complete')
-      clientLogger.info('Backup codes regenerated')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to regenerate backup codes'
       setError(message)
-      clientLogger.error('Backup codes regeneration failed', { error: message })
+      console.error('Backup codes regeneration failed', { error: message })
     } finally {
       setLoading(false)
     }
@@ -223,7 +211,6 @@ export function TwoFactorSection({
     const text = backupCodes.join('\n')
     navigator.clipboard.writeText(text)
     setCodesCopied(true)
-    clientLogger.debug('Backup codes copied to clipboard')
     setTimeout(() => setCodesCopied(false), 2000)
   }
 
@@ -234,7 +221,6 @@ export function TwoFactorSection({
     setSecret('')
     setEncryptedData(null)
     setError('')
-    clientLogger.debug('2FA setup cancelled')
   }
 
   function handleDone() {

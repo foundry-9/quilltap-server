@@ -8,7 +8,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import FolderPicker from '@/components/files/FolderPicker'
@@ -51,11 +50,6 @@ export default function AttachmentPromotionMenu({
   // Fetch projects when modal opens
   useEffect(() => {
     if (isOpen) {
-      clientLogger.debug('[AttachmentPromotionMenu] Modal opened', {
-        attachmentId,
-        attachmentName,
-        currentProjectId,
-      })
       fetchProjects()
       // Reset to defaults
       setDestination(currentProjectId ? 'project' : 'general')
@@ -71,12 +65,9 @@ export default function AttachmentPromotionMenu({
       if (res.ok) {
         const data = await res.json()
         setProjects(data.projects || [])
-        clientLogger.debug('[AttachmentPromotionMenu] Fetched projects', {
-          count: data.projects?.length || 0,
-        })
       }
     } catch (error) {
-      clientLogger.error('[AttachmentPromotionMenu] Failed to fetch projects', {
+      console.error('[AttachmentPromotionMenu] Failed to fetch projects', {
         error: error instanceof Error ? error.message : String(error),
       })
     } finally {
@@ -87,12 +78,6 @@ export default function AttachmentPromotionMenu({
   const handlePromote = async () => {
     try {
       setSaving(true)
-      clientLogger.debug('[AttachmentPromotionMenu] Promoting attachment', {
-        attachmentId,
-        destination,
-        projectId: destination === 'project' ? selectedProjectId : null,
-        folderPath: selectedFolderPath,
-      })
 
       const res = await fetch(`/api/v1/files/${attachmentId}?action=promote`, {
         method: 'POST',
@@ -110,10 +95,6 @@ export default function AttachmentPromotionMenu({
 
       const result = await res.json()
 
-      clientLogger.info('[AttachmentPromotionMenu] File promoted', {
-        attachmentId,
-        result,
-      })
 
       const targetName = destination === 'project'
         ? projects.find(p => p.id === selectedProjectId)?.name || 'project'
@@ -124,7 +105,7 @@ export default function AttachmentPromotionMenu({
       onClose()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      clientLogger.error('[AttachmentPromotionMenu] Failed to promote', {
+      console.error('[AttachmentPromotionMenu] Failed to promote', {
         attachmentId,
         error: errorMessage,
       })

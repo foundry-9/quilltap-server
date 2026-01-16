@@ -7,7 +7,6 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import type { Components } from 'react-markdown'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
  * Code block with copy button component
@@ -19,12 +18,11 @@ function CodeBlockWithCopy({ code, language }: { code: string; language: string 
     try {
       await navigator.clipboard.writeText(code)
       setCopied(true)
-      clientLogger.debug('Code block copied to clipboard', { language, codeLength: code.length })
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      clientLogger.error('Failed to copy code block', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to copy code block', { error: err instanceof Error ? err.message : String(err) })
     }
-  }, [code, language])
+  }, [code])
 
   return (
     <div

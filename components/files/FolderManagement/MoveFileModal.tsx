@@ -7,7 +7,6 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FileInfo, FolderInfo } from '../types'
@@ -38,11 +37,7 @@ export default function MoveFileModal({
   }, [file.folderPath])
 
   useEffect(() => {
-    clientLogger.debug('[MoveFileModal] Opened', {
-      fileId: file.id,
-      currentFolder: file.folderPath,
-      availableFolders: folders.length,
-    })
+    // Modal opened
   }, [file.id, file.folderPath, folders.length])
 
   // Build a list of all folders including root
@@ -61,12 +56,6 @@ export default function MoveFileModal({
 
     try {
       setSaving(true)
-      clientLogger.debug('[MoveFileModal] Moving file', {
-        fileId: file.id,
-        from: currentFolder,
-        to: selectedFolder,
-      })
-
       const res = await fetch(`/api/v1/files/${file.id}?action=move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,15 +72,10 @@ export default function MoveFileModal({
       const data = await res.json()
 
       showSuccessToast('File moved')
-      clientLogger.info('[MoveFileModal] File moved', {
-        fileId: file.id,
-        newFolder: selectedFolder,
-      })
-
       onSuccess?.(data.file)
       onClose()
     } catch (error) {
-      clientLogger.error('[MoveFileModal] Failed to move file', {
+      console.error('[MoveFileModal] Failed to move file', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast(error instanceof Error ? error.message : 'Failed to move file')

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { PromptTemplate } from '../types'
@@ -25,7 +24,6 @@ export function usePrompts() {
    * Note: Empty dependency array since fetchOp.execute is stable
    */
   const fetchTemplates = useCallback(async () => {
-    clientLogger.debug('Fetching prompt templates')
     const result = await fetchOp.execute(async () => {
       const response = await fetchJson<{ templates: PromptTemplate[]; count: number }>('/api/v1/prompt-templates')
       if (!response.ok) {
@@ -35,7 +33,6 @@ export function usePrompts() {
     })
     if (result) {
       setTemplates(result)
-      clientLogger.debug('Fetched prompt templates', { count: result.length })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // fetchOp.execute is stable (empty deps in useAsyncOperation)
@@ -46,15 +43,10 @@ export function usePrompts() {
    */
   const saveTemplate = useCallback(
     async (formData: { name: string; content: string; description: string }, editingId?: string) => {
-      clientLogger.debug('Saving prompt template', {
-        isEdit: !!editingId,
-        templateName: formData.name,
-      })
 
       const result = await saveOp.execute(async () => {
         if (editingId) {
           // Update existing template
-          clientLogger.debug('Updating template', { templateId: editingId })
           const response = await fetchJson<{ template: PromptTemplate }>(
             `/api/v1/prompt-templates/${editingId}`,
             {
@@ -75,7 +67,6 @@ export function usePrompts() {
           return response.data.template
         } else {
           // Create new template
-          clientLogger.debug('Creating new template')
           const response = await fetchJson<{ template: PromptTemplate }>('/api/v1/prompt-templates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -99,12 +90,10 @@ export function usePrompts() {
           // Update existing in list
           setTemplates(prev => prev.map(t => (t.id === result.id ? result : t)))
           setSuccess('Template updated successfully')
-          clientLogger.info('Prompt template updated', { templateId: result.id })
         } else {
           // Add new to list
           setTemplates(prev => [...prev, result])
           setSuccess('Template created successfully')
-          clientLogger.info('Prompt template created', { templateId: result.id })
         }
 
         setTimeout(() => setSuccess(null), 3000)
@@ -123,7 +112,6 @@ export function usePrompts() {
    */
   const deleteTemplate = useCallback(
     async (templateId: string) => {
-      clientLogger.debug('Deleting template', { templateId })
 
       const result = await deleteOp.execute(async () => {
         const response = await fetchJson<void>(`/api/v1/prompt-templates/${templateId}`, {
@@ -139,7 +127,6 @@ export function usePrompts() {
         setTemplates(prev => prev.filter(t => t.id !== templateId))
         setSuccess('Template deleted successfully')
         setDeleteConfirm(null)
-        clientLogger.info('Prompt template deleted', { templateId })
         setTimeout(() => setSuccess(null), 3000)
       }
     },
@@ -154,10 +141,9 @@ export function usePrompts() {
     try {
       await navigator.clipboard.writeText(template.content)
       setCopiedId(template.id)
-      clientLogger.debug('Copied template to clipboard', { templateId: template.id })
       setTimeout(() => setCopiedId(null), 2000)
     } catch (err) {
-      clientLogger.error('Failed to copy to clipboard', {
+      console.error('Failed to copy to clipboard', {
         error: err instanceof Error ? err.message : 'Unknown error',
       })
     }

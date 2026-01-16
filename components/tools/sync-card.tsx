@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { SyncFormData, SyncInstanceDisplay, INITIAL_FORM_DATA } from '@/components/settings/sync/types'
 import { useSyncInstances, useSyncOperations, useSyncTrigger, useSyncApiKeys, useSyncCleanup, useSyncProgress } from '@/components/settings/sync/hooks'
 import { InstanceList, InstanceForm, SyncHistoryPanel, ApiKeyPanel, CleanupPanel, SyncProgressBar } from '@/components/settings/sync/components'
@@ -82,16 +81,6 @@ export function SyncCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Log renders
-  useEffect(() => {
-    clientLogger.debug('SyncCard: rendered', {
-      instanceCount: instances.instances.length,
-      operationCount: operations.operations.length,
-      apiKeyCount: apiKeys.keys.length,
-      isFormOpen,
-      editingInstanceId: editingInstance?.id,
-    })
-  }, [instances.instances.length, operations.operations.length, apiKeys.keys.length, isFormOpen, editingInstance])
 
   // Open create form
   const openCreateForm = useCallback(() => {
@@ -102,7 +91,6 @@ export function SyncCard() {
 
   // Open edit form
   const openEditForm = useCallback((instance: SyncInstanceDisplay) => {
-    clientLogger.debug('SyncCard: opening edit form', { instanceId: instance.id })
     setEditingInstance(instance)
     setFormData({
       name: instance.name,
@@ -128,10 +116,6 @@ export function SyncCard() {
   // Handle form submit
   const handleFormSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
-    clientLogger.debug('SyncCard: form submitted', {
-      isEditing: !!editingInstance,
-      formData: { ...formData, apiKey: formData.apiKey ? '[REDACTED]' : '' },
-    })
 
     if (editingInstance) {
       const result = await instances.updateInstance(editingInstance.id, {
@@ -158,7 +142,6 @@ export function SyncCard() {
       forceFull: boolean = false,
       direction: SyncDirection = 'BIDIRECTIONAL'
     ) => {
-      clientLogger.debug('SyncCard: triggering sync', { instanceId, forceFull, direction })
       const result = await syncTrigger.triggerSync(instanceId, forceFull, direction)
       if (result) {
         instances.fetchInstances()
@@ -170,26 +153,11 @@ export function SyncCard() {
 
   // Handle connection test
   const handleTest = useCallback(async (instanceId: string) => {
-    clientLogger.debug('SyncCard: testing connection', { instanceId })
     const result = await instances.testConnection(instanceId)
-    if (result) {
-      if (result.success) {
-        clientLogger.info('SyncCard: connection test successful', {
-          instanceId,
-          versionInfo: result.versionInfo,
-        })
-      } else {
-        clientLogger.warn('SyncCard: connection test failed', {
-          instanceId,
-          error: result.error,
-        })
-      }
-    }
   }, [instances])
 
   // Handle delete
   const handleDelete = useCallback(async (instanceId: string) => {
-    clientLogger.debug('SyncCard: deleting instance', { instanceId })
     await instances.deleteInstance(instanceId)
   }, [instances])
 

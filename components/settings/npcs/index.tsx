@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import Avatar from '@/components/ui/Avatar'
@@ -49,7 +48,6 @@ export default function NPCsTab() {
         }
         const data = await res.json()
         setNpcs(data.characters || [])
-        clientLogger.debug('NPCs fetched successfully', { count: data.characters?.length || 0 })
         lastError = null
         break
       } catch (err) {
@@ -63,7 +61,7 @@ export default function NPCsTab() {
 
     if (lastError) {
       setError(lastError)
-      clientLogger.error('Error fetching NPCs', { error: lastError })
+      console.error('Error fetching NPCs', { error: lastError })
     }
 
     setLoading(false)
@@ -74,7 +72,6 @@ export default function NPCsTab() {
   }, [fetchNPCs])
 
   const handleEdit = useCallback((npcId: string) => {
-    clientLogger.debug('Navigating to NPC view page', { npcId })
     router.push(`/characters/${npcId}/view`)
   }, [router])
 
@@ -87,7 +84,6 @@ export default function NPCsTab() {
 
     try {
       setDeletingId(npcId)
-      clientLogger.debug('Deleting NPC', { npcId, npcName })
 
       const res = await fetch(`/api/v1/characters/${npcId}`, {
         method: 'DELETE',
@@ -99,7 +95,6 @@ export default function NPCsTab() {
       }
 
       showSuccessToast(`"${npcName}" deleted successfully`)
-      clientLogger.info('NPC deleted successfully', { npcId, npcName })
 
       // Refresh the list and sidebar
       await fetchNPCs()
@@ -107,7 +102,7 @@ export default function NPCsTab() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete NPC'
       showErrorToast(errorMessage)
-      clientLogger.error('Error deleting NPC', { npcId, error: errorMessage })
+      console.error('Error deleting NPC', { npcId, error: errorMessage })
     } finally {
       setDeletingId(null)
     }
@@ -122,7 +117,6 @@ export default function NPCsTab() {
 
     try {
       setConvertingId(npcId)
-      clientLogger.debug('Converting NPC to character', { npcId, npcName })
 
       const res = await fetch(`/api/v1/characters/${npcId}`, {
         method: 'PUT',
@@ -136,7 +130,6 @@ export default function NPCsTab() {
       }
 
       showSuccessToast(`"${npcName}" converted to character`)
-      clientLogger.info('NPC converted to character successfully', { npcId, npcName })
 
       // Refresh the list and sidebar
       await fetchNPCs()
@@ -144,7 +137,7 @@ export default function NPCsTab() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to convert NPC'
       showErrorToast(errorMessage)
-      clientLogger.error('Error converting NPC', { npcId, error: errorMessage })
+      console.error('Error converting NPC', { npcId, error: errorMessage })
     } finally {
       setConvertingId(null)
     }

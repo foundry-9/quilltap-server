@@ -7,7 +7,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { showErrorToast } from '@/lib/toast';
-import { clientLogger } from '@/lib/client-logger';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { TagBadge } from '@/components/tags/tag-badge';
 
@@ -61,7 +60,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
           onTagsChange?.(data.tags || []);
         }
       } catch (error) {
-        clientLogger.error('Error loading tags:', { error: error instanceof Error ? error.message : String(error) });
+        console.error('Error loading tags:', { error: error instanceof Error ? error.message : String(error) });
       }
     };
 
@@ -80,7 +79,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
           setAllTags(data.tags || []);
         }
       } catch (error) {
-        clientLogger.error('Error loading all tags:', { error: error instanceof Error ? error.message : String(error) });
+        console.error('Error loading all tags:', { error: error instanceof Error ? error.message : String(error) });
       }
     };
 
@@ -136,7 +135,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       setShowSuggestions(false);
       setIsAddingTag(false);
     } catch (error) {
-      clientLogger.error('Error adding tag:', { error: error instanceof Error ? error.message : String(error) });
+      console.error('Error adding tag:', { error: error instanceof Error ? error.message : String(error) });
       showErrorToast('Failed to add tag. Please try again.');
     } finally {
       setLoading(false);
@@ -162,7 +161,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       setTags(newTags);
       onTagsChange?.(newTags);
     } catch (error) {
-      clientLogger.error('Error removing tag:', { error: error instanceof Error ? error.message : String(error) });
+      console.error('Error removing tag:', { error: error instanceof Error ? error.message : String(error) });
       showErrorToast('Failed to remove tag. Please try again.');
     } finally {
       setLoading(false);

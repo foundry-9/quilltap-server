@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { UserProfile } from './types'
 import { AvatarSelector } from '@/components/images/avatar-selector'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 
 export interface ProfileEditSectionProps {
@@ -70,13 +69,8 @@ export function ProfileEditSection({
   const [showAvatarSelector, setShowAvatarSelector] = useState(false)
   const [avatarRefreshKey, setAvatarRefreshKey] = useState(0)
 
-  useEffect(() => {
-    clientLogger.debug('ProfileEditSection mounted', { userId: profile.id })
-  }, [profile.id])
-
   const handleSave = async () => {
     setSaving(true)
-    clientLogger.debug('Saving profile', { name, email })
 
     try {
       const res = await fetch('/api/v1/user/profile', {
@@ -95,12 +89,11 @@ export function ProfileEditSection({
 
       const data = await res.json()
       const updatedProfile = data.profile || data
-      clientLogger.info('Profile updated successfully', { userId: profile.id })
       onProfileUpdate(updatedProfile)
       showSuccessToast('Profile updated successfully')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update profile'
-      clientLogger.error('Failed to update profile', { error: message })
+      console.error('Failed to update profile', { error: message })
       showErrorToast(message)
     } finally {
       setSaving(false)
@@ -108,8 +101,6 @@ export function ProfileEditSection({
   }
 
   const handleAvatarSelect = async (imageId: string) => {
-    clientLogger.debug('Updating profile avatar', { imageId })
-
     try {
       const res = await fetch('/api/v1/user/profile?action=set-avatar', {
         method: 'PATCH',
@@ -124,14 +115,13 @@ export function ProfileEditSection({
 
       const avatarData = await res.json()
       const updatedProfile = avatarData.profile || avatarData
-      clientLogger.info('Profile avatar updated', { userId: profile.id, imageId })
       onProfileUpdate(updatedProfile)
       setAvatarRefreshKey((k) => k + 1)
       setShowAvatarSelector(false)
       showSuccessToast('Avatar updated successfully')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update avatar'
-      clientLogger.error('Failed to update avatar', { error: message })
+      console.error('Failed to update avatar', { error: message })
       showErrorToast(message)
     }
   }

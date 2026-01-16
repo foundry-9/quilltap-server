@@ -10,8 +10,7 @@
  * @module app/(authenticated)/projects/[id]/hooks/useProjectCardState
  */
 
-import { useState, useCallback, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
+import { useState, useCallback } from 'react'
 
 interface CardState {
   files: boolean
@@ -64,20 +63,8 @@ export function useProjectCardState(projectId: string): UseProjectCardStateRetur
   const [cardState, setCardState] = useState<CardState>(state.cardState)
   const [isFirstVisit] = useState(state.isFirstVisit)
 
-  useEffect(() => {
-    clientLogger.debug('useProjectCardState: initialized', {
-      projectId,
-      isFirstVisit,
-      cardState,
-    })
-  }, [projectId, isFirstVisit, cardState])
-
   const toggleCard = useCallback((card: keyof CardState) => {
-    setCardState(prev => {
-      const newState = { ...prev, [card]: !prev[card] }
-      clientLogger.debug('useProjectCardState: toggled card', { card, expanded: newState[card] })
-      return newState
-    })
+    setCardState(prev => ({ ...prev, [card]: !prev[card] }))
   }, [])
 
   return {

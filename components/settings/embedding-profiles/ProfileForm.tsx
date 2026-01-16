@@ -1,7 +1,6 @@
 'use client'
 
 import { useFormState } from '@/hooks/useFormState'
-import { clientLogger } from '@/lib/client-logger'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -55,7 +54,6 @@ export function ProfileForm({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    clientLogger.debug('Submitting embedding profile form', { isEditing: !!profile?.id })
 
     await executeFormSubmit(async () => {
       const payload = {
@@ -87,7 +85,6 @@ export function ProfileForm({
   }
 
   const handleFormCancel = () => {
-    clientLogger.debug('Cancelling form')
     clearFormError()
     form.resetForm()
     onCancel()

@@ -5,8 +5,6 @@
  * scrolling and highlighting for memory provenance tracking.
  */
 
-import { clientLogger } from '@/lib/client-logger'
-
 const SCROLL_TO_MESSAGE_KEY = 'scrollToMessageId'
 const HIGHLIGHT_MESSAGE_KEY = 'highlightMessageId'
 
@@ -18,8 +16,6 @@ const HIGHLIGHT_MESSAGE_KEY = 'highlightMessageId'
  * @param messageId The message ID to scroll to and highlight
  */
 export function navigateToMessage(chatId: string, messageId: string): void {
-  clientLogger.debug('[MessageNavigation] Navigating to message', { chatId, messageId })
-
   // Store in sessionStorage for the chat page to pick up
   sessionStorage.setItem(SCROLL_TO_MESSAGE_KEY, messageId)
   sessionStorage.setItem(HIGHLIGHT_MESSAGE_KEY, messageId)
@@ -45,10 +41,6 @@ export function getPendingMessageNavigation(): {
   sessionStorage.removeItem(SCROLL_TO_MESSAGE_KEY)
   sessionStorage.removeItem(HIGHLIGHT_MESSAGE_KEY)
 
-  if (scrollTo || highlight) {
-    clientLogger.debug('[MessageNavigation] Retrieved pending navigation', { scrollTo, highlight })
-  }
-
   return { scrollTo, highlight }
 }
 
@@ -72,11 +64,8 @@ export function scrollToMessage(
   const messageElement = document.querySelector(`[data-message-id="${messageId}"]`)
 
   if (!messageElement) {
-    clientLogger.warn('[MessageNavigation] Message element not found', { messageId })
     return false
   }
-
-  clientLogger.debug('[MessageNavigation] Scrolling to message', { messageId, highlight })
 
   // Scroll the element into view
   messageElement.scrollIntoView({ behavior, block: 'center' })

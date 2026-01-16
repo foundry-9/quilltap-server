@@ -3,7 +3,6 @@
 import { useCallback } from 'react'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
-import { clientLogger } from '@/lib/client-logger'
 import { fetchJson } from '@/lib/fetch-helpers'
 import type { ProfileFormData, ConnectionProfile, ProviderConfig } from '../types'
 import { initialFormState } from '../types'
@@ -133,7 +132,6 @@ export function useProfileForm(providers: ProviderConfig[]) {
   const handleConnect = useCallback(
     async (onSuccess?: (data: any) => void) => {
       const result = await connectOp.execute(async () => {
-        clientLogger.debug('Testing connection', { provider: form.formData.provider })
         // Validate required fields
         if (!form.formData.provider) {
           throw new Error('Provider is required')
@@ -164,7 +162,6 @@ export function useProfileForm(providers: ProviderConfig[]) {
           throw new Error(fetchResult.error || 'Connection test failed')
         }
 
-        clientLogger.debug('Connection test successful', { provider: form.formData.provider })
         return fetchResult.data
       })
 
@@ -180,7 +177,6 @@ export function useProfileForm(providers: ProviderConfig[]) {
   const handleFetchModels = useCallback(
     async (onSuccess?: (data: any) => void) => {
       const result = await fetchModelsOp.execute(async () => {
-        clientLogger.debug('Fetching models', { provider: form.formData.provider })
         // Validate required fields based on provider
         const requirements = getProviderRequirements(form.formData.provider)
         if (requirements.requiresBaseUrl && !form.formData.baseUrl) {
@@ -201,7 +197,6 @@ export function useProfileForm(providers: ProviderConfig[]) {
           throw new Error(fetchResult.error || 'Failed to fetch models')
         }
 
-        clientLogger.debug('Models fetched successfully', { count: fetchResult.data?.models?.length })
         return fetchResult.data
       })
 
@@ -217,10 +212,6 @@ export function useProfileForm(providers: ProviderConfig[]) {
   const handleTestMessage = useCallback(
     async (onSuccess?: (data: any) => void) => {
       const result = await testMessageOp.execute(async () => {
-        clientLogger.debug('Testing message', {
-          provider: form.formData.provider,
-          model: form.formData.modelName,
-        })
         // Validate model name
         if (!form.formData.modelName) {
           throw new Error('Model name is required')
@@ -246,7 +237,6 @@ export function useProfileForm(providers: ProviderConfig[]) {
           throw new Error(fetchResult.error || 'Test message failed')
         }
 
-        clientLogger.debug('Test message sent successfully')
         return fetchResult.data
       })
 
@@ -262,7 +252,6 @@ export function useProfileForm(providers: ProviderConfig[]) {
   const handleSubmit = useCallback(
     async (editingId: string | null, onSuccess?: () => void) => {
       const result = await saveOp.execute(async () => {
-        clientLogger.debug('Saving connection profile', { editingId, profileName: form.formData.name })
         const method = editingId ? 'PUT' : 'POST'
         const url = editingId ? `/api/v1/connection-profiles/${editingId}` : '/api/v1/connection-profiles'
         const requestBody = buildRequestBody()
@@ -277,7 +266,6 @@ export function useProfileForm(providers: ProviderConfig[]) {
           throw new Error(fetchResult.error || 'Failed to save profile')
         }
 
-        clientLogger.debug('Profile saved successfully', { editingId, isNew: !editingId })
         return fetchResult.data
       })
 
@@ -287,7 +275,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
 
       return result
     },
-    [form.formData, saveOp, buildRequestBody]
+    [saveOp, buildRequestBody]
   )
 
   return {

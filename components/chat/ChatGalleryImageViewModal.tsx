@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
-import { clientLogger } from '@/lib/client-logger'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
@@ -75,7 +74,7 @@ export default function ChatGalleryImageViewModal({
           }
         }
       } catch (error) {
-        clientLogger.error('Failed to check tags:', { error: error instanceof Error ? error.message : String(error) })
+        console.error('Failed to check tags:', { error: error instanceof Error ? error.message : String(error) })
       } finally {
         setCheckingTags(false)
       }
@@ -89,7 +88,6 @@ export default function ChatGalleryImageViewModal({
     onClose,
     onPrev,
     onNext,
-    logContext: 'ChatGalleryImageViewModal',
   })
 
   const handleDownload = async () => {
@@ -105,7 +103,7 @@ export default function ChatGalleryImageViewModal({
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (error) {
-      clientLogger.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -157,7 +155,7 @@ export default function ChatGalleryImageViewModal({
         showSuccessToast(`Added to ${characterName || 'character'}'s gallery`)
       }
     } catch (error) {
-      clientLogger.error('Failed to toggle character tag:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to toggle character tag:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update tag')
     } finally {
       setIsTagging(false)
@@ -212,7 +210,7 @@ export default function ChatGalleryImageViewModal({
         showSuccessToast(`Added to ${personaName || 'persona'}'s gallery`)
       }
     } catch (error) {
-      clientLogger.error('Failed to toggle persona tag:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to toggle persona tag:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update tag')
     } finally {
       setIsTagging(false)

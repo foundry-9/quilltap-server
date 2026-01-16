@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 
@@ -174,11 +173,6 @@ function ParticipantEditor({
 
     if (isCharacter && participant.character?.systemPrompts) {
       if (selectedSystemPromptId !== (participant.selectedSystemPromptId || '')) {
-        clientLogger.debug('System prompt selection changed', {
-          participantId: participant.id,
-          oldPromptId: participant.selectedSystemPromptId,
-          newPromptId: selectedSystemPromptId || null,
-        })
         updates.selectedSystemPromptId = selectedSystemPromptId || null
       }
     }
@@ -383,10 +377,9 @@ export default function ChatSettingsModal({
       if (apiKeysRes.ok) {
         const data = await apiKeysRes.json()
         setApiKeys(data.apiKeys || [])
-        clientLogger.debug('Fetched API keys for profile validation', { count: data.length })
       }
     } catch (error) {
-      clientLogger.error('Failed to fetch profiles', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to fetch profiles', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast('Failed to load profiles')
     } finally {
       setLoading(false)
@@ -401,14 +394,13 @@ export default function ChatSettingsModal({
         setRoleplayTemplates(data)
       }
     } catch (error) {
-      clientLogger.error('Failed to fetch roleplay templates', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to fetch roleplay templates', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
   const handleRoleplayTemplateChange = async (templateId: string | null) => {
     try {
       setRoleplayTemplateSaving(true)
-      clientLogger.debug('Updating roleplay template', { chatId, templateId })
 
       const res = await fetch(`/api/v1/chats/${chatId}`, {
         method: 'PUT',
@@ -430,11 +422,10 @@ export default function ChatSettingsModal({
 
       setSelectedRoleplayTemplateId(templateId)
       showSuccessToast('Roleplay template updated')
-      clientLogger.info('Roleplay template updated for chat', { chatId, templateId })
       onSuccess?.()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      clientLogger.error('Failed to update roleplay template', {
+      console.error('Failed to update roleplay template', {
         chatId,
         templateId,
         error: errorMessage,
@@ -468,7 +459,7 @@ export default function ChatSettingsModal({
       showSuccessToast('Participant settings updated')
       onSuccess?.()
     } catch (error) {
-      clientLogger.error('Failed to update participant', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to update participant', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update participant')
     } finally {
       setLoading(false)

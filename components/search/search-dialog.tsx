@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { clientLogger } from '@/lib/client-logger'
 import { SearchResults } from './search-results'
 import type { SearchResult, SearchResponse, SearchType } from './types'
 
@@ -26,7 +25,6 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
   // Focus input when dialog opens
   useEffect(() => {
     if (isOpen) {
-      clientLogger.debug('Search dialog opened')
       setTimeout(() => inputRef.current?.focus(), 100)
     } else {
       // Reset state when closing
@@ -40,7 +38,6 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        clientLogger.debug('Search dialog closed via Escape')
         onClose()
       }
     }
@@ -58,7 +55,6 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
 
     setIsLoading(true)
     setHasSearched(true)
-    clientLogger.debug('Performing search', { query: searchQuery, types })
 
     try {
       const typesParam = types.join(',')
@@ -69,10 +65,9 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
       }
 
       const data: SearchResponse = await response.json()
-      clientLogger.debug('Search completed', { query: searchQuery, resultCount: data.results.length })
       setResults(data.results)
     } catch (error) {
-      clientLogger.error('Search error', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Search error', { error: error instanceof Error ? error.message : String(error) })
       setResults([])
     } finally {
       setIsLoading(false)
@@ -107,7 +102,6 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
     }
 
     setSelectedTypes(newTypes)
-    clientLogger.debug('Search type filter changed', { types: newTypes })
 
     // Re-search if we have a query
     if (query.length >= 2) {
@@ -117,7 +111,6 @@ export function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
 
   // Handle result click
   const handleResultClick = () => {
-    clientLogger.debug('Search result selected, closing dialog')
     onClose()
   }
 

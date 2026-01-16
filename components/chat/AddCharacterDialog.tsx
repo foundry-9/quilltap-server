@@ -13,7 +13,6 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useSidebarDataOptional } from '@/components/providers/sidebar-data-provider'
 import Avatar from '@/components/ui/Avatar'
@@ -103,10 +102,6 @@ export default function AddCharacterDialog({
       const character = characters.find(c => c.id === selectedCharacterId)
       if (character?.defaultConnectionProfileId) {
         setSelectedConnectionProfileId(character.defaultConnectionProfileId)
-        clientLogger.debug('[AddCharacterDialog] Set default connection profile from character', {
-          characterId: selectedCharacterId,
-          connectionProfileId: character.defaultConnectionProfileId,
-        })
       } else {
         // Fall back to first available profile
         if (connectionProfiles.length > 0) {
@@ -118,7 +113,6 @@ export default function AddCharacterDialog({
 
   const loadData = async () => {
     setIsLoading(true)
-    clientLogger.debug('[AddCharacterDialog] Loading characters and connection profiles')
 
     try {
       const [charactersRes, profilesRes] = await Promise.all([
@@ -138,13 +132,8 @@ export default function AddCharacterDialog({
 
       setCharacters(loadedCharacters)
       setConnectionProfiles(loadedProfiles)
-
-      clientLogger.debug('[AddCharacterDialog] Data loaded', {
-        characterCount: loadedCharacters.length,
-        profileCount: loadedProfiles.length,
-      })
     } catch (error) {
-      clientLogger.error('[AddCharacterDialog] Error loading data', {
+      console.error('[AddCharacterDialog] Error loading data', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast('Failed to load characters')
@@ -195,14 +184,6 @@ export default function AddCharacterDialog({
     const isUserImpersonation = selectedConnectionProfileId === USER_IMPERSONATION_VALUE
 
     setIsAdding(true)
-    clientLogger.debug('[AddCharacterDialog] Adding character to chat', {
-      chatId,
-      characterId: selectedCharacterId,
-      connectionProfileId: isUserImpersonation ? null : selectedConnectionProfileId,
-      controlledBy: isUserImpersonation ? 'user' : 'llm',
-      hasHistoryAccess,
-      joinScenario: joinScenario || null,
-    })
 
     try {
       // Build participant data - only include connectionProfileId for LLM-controlled characters
@@ -238,11 +219,6 @@ export default function AddCharacterDialog({
         throw new Error(errorData.error || 'Failed to add character')
       }
 
-      clientLogger.info('[AddCharacterDialog] Character added successfully', {
-        chatId,
-        characterId: selectedCharacterId,
-      })
-
       showSuccessToast(`${selectedCharacter?.name || 'Character'} has joined the chat`)
 
       // Refresh sidebar to reflect updated participants
@@ -251,7 +227,7 @@ export default function AddCharacterDialog({
       onCharacterAdded()
       onClose()
     } catch (error) {
-      clientLogger.error('[AddCharacterDialog] Error adding character', {
+      console.error('[AddCharacterDialog] Error adding character', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast(error instanceof Error ? error.message : 'Failed to add character')
@@ -261,10 +237,6 @@ export default function AddCharacterDialog({
   }
 
   const handleNPCCreated = async (characterId: string) => {
-    clientLogger.debug('[AddCharacterDialog] NPC created, refreshing list and auto-selecting', {
-      characterId,
-    })
-
     // Refresh the character list
     await loadData()
 

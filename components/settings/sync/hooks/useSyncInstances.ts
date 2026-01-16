@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { SyncInstanceDisplay, SyncFormData } from '../types'
@@ -32,12 +31,6 @@ async function fetchWithRetry<T>(
         throw lastError
       }
 
-      clientLogger.debug('Retrying fetch after transient error', {
-        attempt,
-        maxRetries,
-        error: lastError.message,
-        delayMs,
-      })
 
       await new Promise(resolve => setTimeout(resolve, delayMs))
     }
@@ -78,16 +71,9 @@ export function useSyncInstances() {
    * Note: Empty dependency array since fetchOp.execute is stable
    */
   const fetchInstances = useCallback(async () => {
-    clientLogger.debug('Fetching sync instances')
     const result = await fetchOp.execute(async () => {
       return fetchWithRetry(async () => {
         const response = await fetchJson<{ instances: SyncInstanceDisplay[] }>('/api/v1/sync/instances')
-        clientLogger.debug('Sync instances response', {
-          ok: response.ok,
-          status: response.status,
-          hasData: !!response.data,
-          error: response.error || undefined,
-        })
         if (!response.ok) {
           throw new Error(response.error || 'Failed to fetch sync instances')
         }
@@ -96,7 +82,6 @@ export function useSyncInstances() {
     })
     if (result) {
       setInstances(result)
-      clientLogger.debug('Fetched sync instances', { count: result.length })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // fetchOp.execute is stable (empty deps in useAsyncOperation)
@@ -107,9 +92,6 @@ export function useSyncInstances() {
    */
   const createInstance = useCallback(
     async (formData: SyncFormData) => {
-      clientLogger.debug('Creating sync instance', {
-        instanceName: formData.name,
-      })
 
       const result = await saveOp.execute(async () => {
         const response = await fetchJson<SyncInstanceDisplay>('/api/v1/sync/instances', {
@@ -132,7 +114,6 @@ export function useSyncInstances() {
       if (result) {
         setInstances(prev => [...prev, result])
         setSuccess('Sync instance created successfully')
-        clientLogger.info('Sync instance created', { instanceId: result.id })
         setTimeout(() => setSuccess(null), 3000)
         return result
       }
@@ -149,10 +130,6 @@ export function useSyncInstances() {
    */
   const updateInstance = useCallback(
     async (id: string, formData: Partial<Omit<SyncFormData, 'url'>>) => {
-      clientLogger.debug('Updating sync instance', {
-        instanceId: id,
-        hasApiKey: !!formData.apiKey,
-      })
 
       const result = await saveOp.execute(async () => {
         const response = await fetchJson<SyncInstanceDisplay>(`/api/v1/sync/instances/${id}`, {
@@ -175,7 +152,6 @@ export function useSyncInstances() {
       if (result) {
         setInstances(prev => prev.map(i => (i.id === result.id ? result : i)))
         setSuccess('Sync instance updated successfully')
-        clientLogger.info('Sync instance updated', { instanceId: result.id })
         setTimeout(() => setSuccess(null), 3000)
         return result
       }
@@ -192,7 +168,6 @@ export function useSyncInstances() {
    */
   const deleteInstance = useCallback(
     async (instanceId: string) => {
-      clientLogger.debug('Deleting sync instance', { instanceId })
 
       const result = await deleteOp.execute(async () => {
         const response = await fetchJson<void>(`/api/v1/sync/instances/${instanceId}`, {
@@ -208,7 +183,6 @@ export function useSyncInstances() {
         setInstances(prev => prev.filter(i => i.id !== instanceId))
         setSuccess('Sync instance deleted successfully')
         setDeleteConfirm(null)
-        clientLogger.info('Sync instance deleted', { instanceId })
         setTimeout(() => setSuccess(null), 3000)
       }
     },
@@ -222,7 +196,6 @@ export function useSyncInstances() {
    */
   const testConnection = useCallback(
     async (instanceId: string) => {
-      clientLogger.debug('Testing connection to sync instance', { instanceId })
 
       const result = await testOp.execute(async () => {
         const response = await fetchJson<ConnectionTestResult>(
@@ -244,10 +217,6 @@ export function useSyncInstances() {
       })
 
       if (result) {
-        clientLogger.info('Connection test completed', {
-          instanceId,
-          success: result.success,
-        })
 
         // Update instance with version info if successful
         if (result.success && result.versionInfo) {

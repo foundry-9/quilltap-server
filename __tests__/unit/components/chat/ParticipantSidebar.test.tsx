@@ -9,15 +9,6 @@ import { ParticipantSidebar } from '@/components/chat/ParticipantSidebar'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 
-// Mock the client logger to prevent side effects during tests
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}))
 
 // Mock the ParticipantCard component to simplify testing the sidebar
 jest.mock('@/components/chat/ParticipantCard', () => ({

@@ -11,7 +11,6 @@ import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
-import { clientLogger } from '@/lib/client-logger'
 import { processTemplate } from '@/lib/templates/processor'
 
 interface Character {
@@ -85,7 +84,6 @@ export default function CharactersPage() {
 
   const fetchCharacters = async () => {
     try {
-      clientLogger.debug('Characters page: fetching all characters')
       const res = await fetch('/api/v1/characters')
       if (!res.ok) throw new Error('Failed to fetch characters')
       const data = await res.json()
@@ -192,7 +190,7 @@ export default function CharactersPage() {
       showSuccessToast('Character imported successfully!')
     } catch (err) {
       showErrorToast('Failed to import character. Make sure it\'s a valid SillyTavern PNG or JSON file.')
-      clientLogger.error('Failed to import character', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to import character', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 

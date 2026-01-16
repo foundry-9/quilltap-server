@@ -16,7 +16,6 @@ import { useSidebarData, type SidebarProject, type SidebarChat } from '@/compone
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { SidebarSection } from './sidebar-section'
 import { ViewAllLink } from './sidebar-item'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
  * Folder icon for projects
@@ -244,10 +243,6 @@ export function ProjectsSection() {
   const handleToggleExpand = (projectId: string) => {
     const sectionId = `project-${projectId}`
     toggleSectionCollapsed(sectionId)
-    clientLogger.debug('ProjectsSection: Toggled project expansion', {
-      projectId,
-      expanded: !isProjectExpanded(projectId),
-    })
   }
 
   // Loading state

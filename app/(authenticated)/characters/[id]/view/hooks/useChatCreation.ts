@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { TimestampConfig } from '@/lib/schemas/types'
 
@@ -44,17 +43,10 @@ export function useChatCreation(): UseChatCreationReturn {
 
     if (!selectedProfileId) {
       showErrorToast('Please select a connection profile')
-      clientLogger.warn('Chat creation attempted without profile selection', { characterId })
       return
     }
 
     setCreatingChat(true)
-    clientLogger.debug('Starting chat creation', {
-      characterId,
-      profileId: selectedProfileId,
-      hasScenario: !!scenario,
-      hasTimestampConfig: !!timestampConfig,
-    })
 
     try {
       const participants: any[] = [
@@ -92,12 +84,11 @@ export function useChatCreation(): UseChatCreationReturn {
 
       const data = await res.json()
       showSuccessToast('Chat created successfully')
-      clientLogger.info('Chat created successfully', { chatId: data.chat.id, characterId })
       router.push(`/chats/${data.chat.id}`)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to start chat'
       showErrorToast(errorMsg)
-      clientLogger.error('Failed to create chat', {
+      console.error('Failed to create chat', {
         error: errorMsg,
         characterId,
       })

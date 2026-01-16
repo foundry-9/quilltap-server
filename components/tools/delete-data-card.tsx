@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -50,18 +49,16 @@ export function DeleteDataCard() {
     setLoading(true)
 
     try {
-      clientLogger.info('Loading delete preview')
       const response = await fetch('/api/v1/system/tools?action=delete-data-preview')
       if (!response.ok) {
         throw new Error('Failed to load data preview')
       }
       const data = await response.json()
       setPreview(data.summary)
-      clientLogger.info('Delete preview loaded', { summary: data.summary })
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to load preview')
       setError(errorMessage)
-      clientLogger.error('Failed to load delete preview', { error: errorMessage })
+      console.error('Failed to load delete preview', { error: errorMessage })
     } finally {
       setLoading(false)
     }
@@ -91,7 +88,6 @@ export function DeleteDataCard() {
     setError(null)
 
     try {
-      clientLogger.info('Starting complete data deletion')
       const response = await fetch('/api/v1/system/tools?action=delete-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -106,13 +102,12 @@ export function DeleteDataCard() {
       const data = await response.json()
       setDeleteSummary(data.summary)
       setStep('complete')
-      clientLogger.info('Complete data deletion finished', { summary: data.summary })
       showSuccessToast('All data has been deleted')
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to delete data')
       setError(errorMessage)
       setStep('confirm')
-      clientLogger.error('Data deletion failed', { error: errorMessage })
+      console.error('Data deletion failed', { error: errorMessage })
       showErrorToast(errorMessage)
     }
   }

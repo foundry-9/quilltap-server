@@ -1,6 +1,5 @@
 'use client'
 
-import { clientLogger } from '@/lib/client-logger'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { ImageProfileForm } from './ImageProfileForm'
 
@@ -39,13 +38,11 @@ export function ImageProfileModal({
   apiKeys,
 }: ImageProfileModalProps) {
   const handleSuccess = () => {
-    clientLogger.debug('Image profile saved via modal', { isEditing: !!profile })
     onSuccess()
     onClose()
   }
 
   const handleCancel = () => {
-    clientLogger.debug('Image profile modal cancelled')
     onClose()
   }
 

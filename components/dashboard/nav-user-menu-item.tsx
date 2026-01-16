@@ -12,7 +12,6 @@
  */
 
 import { ReactNode, useState, useRef, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
 export interface NavUserMenuItemProps {
@@ -80,10 +79,8 @@ export function NavUserMenuItem({
     if (disabled) return
 
     if (hasSubmenu) {
-      clientLogger.debug('Toggling submenu', { label, wasOpen: isSubmenuOpen })
       setIsSubmenuOpen(!isSubmenuOpen)
     } else if (onClick) {
-      clientLogger.debug('Menu item clicked', { label })
       onClick()
     }
   }

@@ -8,7 +8,6 @@
  */
 
 import { useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { getFileIcon } from './FileThumbnail'
 import {
   FileInfo,
@@ -106,12 +105,7 @@ export default function FileBrowserList({
   onMoveToProject,
 }: Readonly<FileBrowserListProps>) {
   useEffect(() => {
-    clientLogger.debug('[FileBrowserList] Rendered', {
-      fileCount: files.length,
-      folderCount: folders.length,
-      currentFolder,
-      sort,
-    })
+    // List rendered
   }, [files.length, folders.length, currentFolder, sort])
 
   const isEmpty = files.length === 0 && folders.length === 0 && currentFolder === '/'

@@ -3,7 +3,6 @@
 import { useSession } from '@/components/providers/session-provider';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { clientLogger } from '@/lib/client-logger';
 import DashboardNav from './dashboard/nav';
 import { ChatProvider } from './providers/chat-context';
 import type { Tag } from './tags/tag-editor';
@@ -48,7 +47,7 @@ export default function NavWrapper() {
           setTags(data.chat?.tags || []);
         }
       } catch (err) {
-        clientLogger.error('Error loading tags:', { error: err instanceof Error ? err.message : String(err) });
+        console.error('Error loading tags:', { error: err instanceof Error ? err.message : String(err) });
       } finally {
         setTagsLoading(false);
         setTagsFetched(true);
@@ -79,7 +78,7 @@ export default function NavWrapper() {
 
       setTags([...tags, tag]);
     } catch (err) {
-      clientLogger.error('Error adding tag:', { error: err instanceof Error ? err.message : String(err) });
+      console.error('Error adding tag:', { error: err instanceof Error ? err.message : String(err) });
     } finally {
       setTagsLoading(false);
     }
@@ -97,7 +96,7 @@ export default function NavWrapper() {
       if (!res.ok) throw new Error('Failed to remove tag');
       setTags(tags.filter((t) => t.id !== tagId));
     } catch (err) {
-      clientLogger.error('Error removing tag:', { error: err instanceof Error ? err.message : String(err) });
+      console.error('Error removing tag:', { error: err instanceof Error ? err.message : String(err) });
     } finally {
       setTagsLoading(false);
     }

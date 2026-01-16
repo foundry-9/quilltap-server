@@ -7,7 +7,6 @@
  */
 
 import { useEffect, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { FilePreviewActionsProps } from './types'
 
 export default function FilePreviewActions({
@@ -50,11 +49,7 @@ export default function FilePreviewActions({
   }, [handleKeyDown])
 
   useEffect(() => {
-    clientLogger.debug('[FilePreviewActions] Rendered', {
-      fileId: file.id,
-      currentIndex,
-      totalFiles,
-    })
+    // Actions bar rendered
   }, [file.id, currentIndex, totalFiles])
 
   return (

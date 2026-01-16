@@ -5,8 +5,6 @@ import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { clientLogger } from '@/lib/client-logger'
-
 /**
  * Configuration field schema from plugin manifest
  */
@@ -65,7 +63,6 @@ export function PluginConfigModal({
     setError(null)
 
     try {
-      clientLogger.debug('Loading plugin config', { pluginName })
 
       const response = await fetch(`/api/v1/plugins/${encodeURIComponent(pluginName)}?action=get-config`)
       const data = await response.json()
@@ -77,13 +74,9 @@ export function PluginConfigModal({
       setConfigSchema(data.configSchema || [])
       setFormData(data.config || {})
 
-      clientLogger.debug('Plugin config loaded', {
-        pluginName,
-        fieldCount: (data.configSchema || []).length,
-      })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load configuration'
-      clientLogger.error('Failed to load plugin config', { pluginName, error: message })
+      console.error('Failed to load plugin config', { pluginName, error: message })
       setError(message)
     } finally {
       setLoading(false)
@@ -108,7 +101,6 @@ export function PluginConfigModal({
     setError(null)
 
     try {
-      clientLogger.debug('Saving plugin config', { pluginName })
 
       const response = await fetch(`/api/v1/plugins/${encodeURIComponent(pluginName)}?action=set-config`, {
         method: 'POST',
@@ -122,13 +114,12 @@ export function PluginConfigModal({
         throw new Error(data.error || 'Failed to save configuration')
       }
 
-      clientLogger.debug('Plugin config saved', { pluginName })
       showSuccessToast('Configuration saved successfully')
       onSuccess?.()
       onClose()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save configuration'
-      clientLogger.error('Failed to save plugin config', { pluginName, error: message })
+      console.error('Failed to save plugin config', { pluginName, error: message })
       setError(message)
       showErrorToast(message)
     } finally {

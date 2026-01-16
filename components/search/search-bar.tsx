@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { clientLogger } from '@/lib/client-logger'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { SearchResults } from './search-results'
 import { SearchDialog } from './search-dialog'
@@ -38,7 +37,6 @@ export function SearchBar() {
 
       if (isShortcutPressed && e.key === 'k') {
         e.preventDefault()
-        clientLogger.debug('Search shortcut triggered', { isMac, metaKey: e.metaKey, ctrlKey: e.ctrlKey })
         // On desktop, focus the input
         // On mobile, open the dialog
         if (window.innerWidth >= 768) {
@@ -67,7 +65,6 @@ export function SearchBar() {
 
     setIsLoading(true)
     setHasSearched(true)
-    clientLogger.debug('Performing inline search', { query: searchQuery })
 
     try {
       const response = await fetch(`/api/v1/ui/search?q=${encodeURIComponent(searchQuery)}&limit=20`)
@@ -77,10 +74,9 @@ export function SearchBar() {
       }
 
       const data: SearchResponse = await response.json()
-      clientLogger.debug('Inline search completed', { query: searchQuery, resultCount: data.results.length })
       setResults(data.results)
     } catch (error) {
-      clientLogger.error('Inline search error', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Inline search error', { error: error instanceof Error ? error.message : String(error) })
       setResults([])
     } finally {
       setIsLoading(false)
@@ -106,7 +102,6 @@ export function SearchBar() {
 
   // Handle result click
   const handleResultClick = () => {
-    clientLogger.debug('Search result selected from inline search')
     setShowDropdown(false)
     setQuery('')
     setResults([])
@@ -202,7 +197,6 @@ export function SearchBar() {
       {/* Mobile search button - hidden on desktop */}
       <button
         onClick={() => {
-          clientLogger.debug('Mobile search button clicked')
           setIsDialogOpen(true)
         }}
         className="md:hidden p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"

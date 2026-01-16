@@ -9,7 +9,6 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { useClickOutside } from '@/hooks/useClickOutside'
@@ -66,11 +65,6 @@ export default function ReattributeMessageDialog({
   useEffect(() => {
     if (isOpen) {
       setSelectedParticipantId(null)
-      clientLogger.debug('[ReattributeMessageDialog] Dialog opened', {
-        messageId,
-        currentParticipantId,
-        participantCount: participants.length,
-      })
     }
   }, [isOpen, messageId, currentParticipantId, participants.length])
 
@@ -92,10 +86,6 @@ export default function ReattributeMessageDialog({
     }
 
     setIsSubmitting(true)
-    clientLogger.debug('[ReattributeMessageDialog] Submitting re-attribution', {
-      messageId,
-      newParticipantId: selectedParticipantId,
-    })
 
     try {
       const response = await fetch(`/api/v1/messages/${messageId}?action=reattribute`, {
@@ -115,12 +105,6 @@ export default function ReattributeMessageDialog({
 
       const result = await response.json()
 
-      clientLogger.info('[ReattributeMessageDialog] Message re-attributed successfully', {
-        messageId,
-        newParticipantId: selectedParticipantId,
-        memoriesDeleted: result.memoriesDeleted,
-      })
-
       const selectedParticipant = participants.find(p => p.id === selectedParticipantId)
       const name = selectedParticipant?.character?.name || selectedParticipant?.persona?.name || 'participant'
 
@@ -133,7 +117,7 @@ export default function ReattributeMessageDialog({
       onReattributed()
       onClose()
     } catch (error) {
-      clientLogger.error('[ReattributeMessageDialog] Error re-attributing message', {
+      console.error('[ReattributeMessageDialog] Error re-attributing message', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast(error instanceof Error ? error.message : 'Failed to re-attribute message')

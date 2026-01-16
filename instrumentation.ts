@@ -10,13 +10,6 @@
 export async function register() {
   // Only run in Node.js runtime (not Edge Runtime)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
-    // Set up stdout/stderr capture for DevConsole in development
-    // Use dynamic import to avoid Edge Runtime issues
-    if (process.env.NODE_ENV === 'development') {
-      const { setupStdoutCapture } = await import('./lib/dev/stdout-capture');
-      setupStdoutCapture();
-    }
-
     console.log('🚀 Server starting - initializing services');
 
     try {

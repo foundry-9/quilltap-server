@@ -14,7 +14,6 @@
  */
 
 import { useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import Avatar from '@/components/ui/Avatar'
 
 export interface ParticipantData {
@@ -102,7 +101,6 @@ export function ParticipantCard({
   const entity = isCharacter ? participant.character : participant.persona
 
   if (!entity) {
-    clientLogger.warn('[ParticipantCard] No entity data for participant', { participantId: participant.id })
     return null
   }
 
@@ -113,14 +111,6 @@ export function ParticipantCard({
 
   // Handle nudge/queue button click
   const handleActionClick = () => {
-    clientLogger.debug('[ParticipantCard] Action clicked', {
-      participantId: participant.id,
-      queuePosition,
-      isGenerating,
-      isCurrentTurn,
-      isCharacter,
-    })
-
     if (queuePosition > 0) {
       // Already in queue - dequeue
       onDequeue(participant.id)
@@ -141,11 +131,6 @@ export function ParticipantCard({
   const handleTalkativenessChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value)
     setLocalTalkativeness(value)
-
-    clientLogger.debug('[ParticipantCard] Talkativeness changed', {
-      participantId: participant.id,
-      value,
-    })
 
     if (onTalkativenessChange) {
       onTalkativenessChange(participant.id, value)
@@ -288,10 +273,7 @@ export function ParticipantCard({
               {queuePosition > 0 ? 'Dequeue' : 'Queue'}
             </button>
             <button
-              onClick={() => {
-                clientLogger.debug('[ParticipantCard] Skip clicked')
-                onSkip()
-              }}
+              onClick={() => onSkip()}
               disabled={isGenerating || !canSkip}
               className="flex-1 qt-button qt-button-sm qt-chat-continue-button disabled:opacity-50 disabled:cursor-not-allowed"
               title={canSkip ? 'Skip your turn and let a character respond' : "It's not your turn to skip"}
@@ -323,13 +305,7 @@ export function ParticipantCard({
             canRemove now includes the safety check that at least one user-controlled character remains */}
         {isCharacter && onRemove && canRemove && (
           <button
-            onClick={() => {
-              clientLogger.debug('[ParticipantCard] Remove clicked', {
-                participantId: participant.id,
-                characterName: name,
-              })
-              onRemove(participant.id)
-            }}
+            onClick={() => onRemove(participant.id)}
             disabled={isGenerating}
             className="qt-button qt-button-destructive qt-button-sm py-1.5 px-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title={`Remove ${name} from chat`}
@@ -345,16 +321,8 @@ export function ParticipantCard({
           <button
             onClick={() => {
               if (isImpersonating) {
-                clientLogger.debug('[ParticipantCard] Stop impersonate clicked', {
-                  participantId: participant.id,
-                  characterName: name,
-                })
                 onStopImpersonate(participant.id)
               } else {
-                clientLogger.debug('[ParticipantCard] Impersonate clicked', {
-                  participantId: participant.id,
-                  characterName: name,
-                })
                 onImpersonate(participant.id)
               }
             }}

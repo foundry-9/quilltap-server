@@ -8,7 +8,6 @@
  */
 
 import { useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { BaseModal } from '@/components/ui/BaseModal'
 
 /**
@@ -92,16 +91,10 @@ export default function FileConflictDialog({
   if (!conflict) return null
 
   const handleResolve = (resolution: ConflictResolution) => {
-    clientLogger.debug('[FileConflictDialog] Resolution selected', {
-      resolution,
-      conflictType: conflict.conflictType,
-      existingFileId: conflict.existingFile.id,
-    })
     onResolve(resolution)
   }
 
   const handleClose = () => {
-    clientLogger.debug('[FileConflictDialog] Dialog cancelled')
     setSelectedResolution(null)
     onClose()
   }

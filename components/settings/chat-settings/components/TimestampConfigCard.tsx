@@ -14,7 +14,6 @@
  */
 
 import { useEffect, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import type {
   TimestampConfig,
   TimestampMode,
@@ -52,52 +51,36 @@ export function TimestampConfigCard({
 
   // Log render in useEffect to avoid state updates during render
   useEffect(() => {
-    clientLogger.debug('TimestampConfigCard: rendered', {
-      config: currentConfig,
-      compact,
-      disabled,
-    })
   }, [currentConfig, compact, disabled])
 
   const handleModeChange = (mode: TimestampMode) => {
     if (disabled) return
     const updated = { ...currentConfig, mode }
     onChange(updated)
-    clientLogger.debug('TimestampConfigCard: mode changed', { mode })
   }
 
   const handleFormatChange = (format: TimestampFormat) => {
     if (disabled) return
     const updated = { ...currentConfig, format }
     onChange(updated)
-    clientLogger.debug('TimestampConfigCard: format changed', { format })
   }
 
   const handleCustomFormatChange = (customFormat: string) => {
     if (disabled) return
     const updated = { ...currentConfig, customFormat: customFormat || null }
     onChange(updated)
-    clientLogger.debug('TimestampConfigCard: custom format changed', {
-      customFormat,
-    })
   }
 
   const handleAutoPrependChange = (autoPrepend: boolean) => {
     if (disabled) return
     const updated = { ...currentConfig, autoPrepend }
     onChange(updated)
-    clientLogger.debug('TimestampConfigCard: autoPrepend changed', {
-      autoPrepend,
-    })
   }
 
   const handleUseFictionalTimeChange = (useFictionalTime: boolean) => {
     if (disabled) return
     const updated = { ...currentConfig, useFictionalTime }
     onChange(updated)
-    clientLogger.debug('TimestampConfigCard: useFictionalTime changed', {
-      useFictionalTime,
-    })
   }
 
   const handleFictionalBaseTimestampChange = (timestamp: string) => {
@@ -107,9 +90,6 @@ export function TimestampConfigCard({
       fictionalBaseTimestamp: timestamp || null,
     }
     onChange(updated)
-    clientLogger.debug('TimestampConfigCard: fictionalBaseTimestamp changed', {
-      timestamp,
-    })
   }
 
   const isDisabled = disabled || currentConfig.mode === 'NONE'

@@ -9,7 +9,6 @@
  * @module components/layout/app-layout
  */
 
-import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { useSession } from '@/components/providers/session-provider'
 import { SidebarProvider } from '@/components/providers/sidebar-provider'
@@ -17,8 +16,6 @@ import { PageToolbarProvider } from '@/components/providers/page-toolbar-provide
 import { LeftSidebar } from './left-sidebar'
 import { PageToolbar } from './page-toolbar'
 import FooterWrapper from '@/components/footer-wrapper'
-import { DevConsoleLayout } from '@/components/debug/DevConsole'
-import { clientLogger } from '@/lib/client-logger'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -30,10 +27,6 @@ interface AppLayoutProps {
 function AppLayoutInner({ children }: AppLayoutProps) {
   const pathname = usePathname()
   const { data: session, status } = useSession()
-
-  useEffect(() => {
-    clientLogger.debug('AppLayout mounted', { pathname, authenticated: !!session })
-  }, [pathname, session])
 
   // Don't render layout on auth pages
   const isAuthPage = pathname?.startsWith('/auth')
@@ -64,9 +57,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       <div className="qt-app-main">
         <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <PageToolbar />
-          <DevConsoleLayout>
-            {children}
-          </DevConsoleLayout>
+          {children}
         </main>
         <FooterWrapper />
       </div>

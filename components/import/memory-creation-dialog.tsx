@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 
 /**
@@ -125,15 +124,9 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
       const result = await response.json()
       showSuccessToast(`Queued ${result.jobCount || messagePairs.length} messages for memory analysis`)
 
-      clientLogger.info('Queued memory analysis', {
-        chatId: chat.id,
-        characterId: firstCharacter.id,
-        pairCount: messagePairs.length,
-      })
-
       onClose()
     } catch (err) {
-      clientLogger.error('Failed to queue memory analysis', {
+      console.error('Failed to queue memory analysis', {
         chatId: chat.id,
         error: err instanceof Error ? err.message : String(err),
       })

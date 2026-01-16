@@ -8,7 +8,6 @@
  * @module components/layout/left-sidebar
  */
 
-import { useEffect } from 'react'
 import { useSidebar } from '@/components/providers/sidebar-provider'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { SidebarHeader } from './sidebar-header'
@@ -18,7 +17,6 @@ import { ProjectsSection } from './projects-section'
 import { FilesSection } from './files-section'
 import { CharactersSection } from './characters-section'
 import { ChatsSection } from './chats-section'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
  * Folder icon (for Projects)
@@ -43,10 +41,6 @@ function FolderIcon({ className }: { className?: string }) {
 export function LeftSidebar() {
   const { isCollapsed, isMobileOpen, closeMobile, isMobile, width } = useSidebar()
   const { handleRef, isResizing, startResize } = useSidebarResize()
-
-  useEffect(() => {
-    clientLogger.debug('LeftSidebar mounted', { isCollapsed, isMobile, width })
-  }, [isCollapsed, isMobile, width])
 
   // Build sidebar classes
   const sidebarClasses = [

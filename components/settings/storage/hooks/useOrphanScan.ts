@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { fetchJson } from '@/lib/fetch-helpers'
 
 /**
@@ -76,7 +75,6 @@ export function useOrphanScan(): UseOrphanScanResult {
     setAdoptResult(null)
 
     try {
-      clientLogger.debug('Scanning for orphan files', { mountPointId })
 
       const result = await fetchJson<ScanOrphansResult>(`/api/v1/system/mount-points/${mountPointId}?action=scan-orphans`, {
         method: 'POST',
@@ -87,10 +85,6 @@ export function useOrphanScan(): UseOrphanScanResult {
       }
 
       if (result.data) {
-        clientLogger.info('Orphan scan complete', {
-          mountPointId,
-          orphanCount: result.data.orphans.length,
-        })
         setScanResult(result.data)
         return result.data
       }
@@ -98,7 +92,7 @@ export function useOrphanScan(): UseOrphanScanResult {
       return null
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to scan for orphans'
-      clientLogger.error('Failed to scan for orphans', { mountPointId, error: errorMessage })
+      console.error('Failed to scan for orphans', { mountPointId, error: errorMessage })
       setError(errorMessage)
       return null
     } finally {
@@ -116,7 +110,6 @@ export function useOrphanScan(): UseOrphanScanResult {
     setAdoptResult(null)
 
     try {
-      clientLogger.debug('Adopting orphan files', { mountPointId, fileCount: storageKeys.length })
 
       const result = await fetchJson<AdoptOrphansResult>(`/api/v1/system/mount-points/${mountPointId}?action=adopt-orphans`, {
         method: 'POST',
@@ -132,11 +125,6 @@ export function useOrphanScan(): UseOrphanScanResult {
       }
 
       if (result.data) {
-        clientLogger.info('Orphan adoption complete', {
-          mountPointId,
-          adopted: result.data.adopted,
-          failed: result.data.failed.length,
-        })
         setAdoptResult(result.data)
 
         // Update scan result to remove adopted files
@@ -155,7 +143,7 @@ export function useOrphanScan(): UseOrphanScanResult {
       return null
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to adopt orphan files'
-      clientLogger.error('Failed to adopt orphan files', { mountPointId, error: errorMessage })
+      console.error('Failed to adopt orphan files', { mountPointId, error: errorMessage })
       setError(errorMessage)
       return null
     } finally {

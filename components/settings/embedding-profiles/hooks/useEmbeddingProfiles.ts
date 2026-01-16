@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -32,10 +31,9 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
     execute: executeLoad,
   } = useAsyncOperation<void>()
 
-  const triggerAutoAssociate = useAutoAssociate('embedding-profiles')
+  const triggerAutoAssociate = useAutoAssociate()
 
   const loadData = useCallback(async () => {
-    clientLogger.debug('Loading embedding profiles tab data')
     await executeLoad(async () => {
       const [profilesRes, keysRes, modelsRes] = await Promise.all([
         fetchJson<{ profiles: EmbeddingProfile[]; count: number }>('/api/v1/embedding-profiles'),
@@ -47,12 +45,12 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
         throw new Error(profilesRes.error || 'Failed to fetch profiles')
       }
       if (!keysRes.ok) {
-        clientLogger.error('Failed to fetch API keys', { error: keysRes.error })
+        console.error('Failed to fetch API keys', { error: keysRes.error })
       } else if (keysRes.data?.apiKeys) {
         setApiKeys(keysRes.data.apiKeys)
       }
       if (!modelsRes.ok) {
-        clientLogger.error('Failed to fetch embedding models', { error: modelsRes.error })
+        console.error('Failed to fetch embedding models', { error: modelsRes.error })
       } else if (modelsRes.data) {
         setEmbeddingModels(modelsRes.data)
       }
@@ -65,7 +63,6 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
   }, []) // executeLoad is stable (empty deps in useAsyncOperation)
 
   const fetchProfiles = useCallback(async () => {
-    clientLogger.debug('Fetching embedding profiles')
     const result = await fetchJson<{ profiles: EmbeddingProfile[]; count: number }>('/api/v1/embedding-profiles')
     if (!result.ok) {
       throw new Error(result.error || 'Failed to fetch profiles')

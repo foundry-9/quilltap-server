@@ -9,7 +9,6 @@
  */
 
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { useClickOutside } from '@/hooks/useClickOutside'
@@ -92,12 +91,6 @@ export default function BulkCharacterReplaceModal({
       setSourceSelection('')
       setTargetSelection('')
       setRoleFilter('both')
-      clientLogger.debug('[BulkCharacterReplaceModal] Modal opened', {
-        chatId,
-        participantCount: participants.length,
-        messageCount: messages.length,
-        hasUnassignedMessages,
-      })
     }
   }, [isOpen, chatId, participants.length, messages.length, hasUnassignedMessages])
 
@@ -161,13 +154,6 @@ export default function BulkCharacterReplaceModal({
     }
 
     setIsSubmitting(true)
-    clientLogger.debug('[BulkCharacterReplaceModal] Submitting bulk re-attribution', {
-      chatId,
-      sourceParticipantId,
-      targetParticipantId,
-      roleFilter,
-      affectedCount,
-    })
 
     try {
       const response = await fetch(`/api/v1/chats/${chatId}?action=bulk-reattribute`, {
@@ -187,12 +173,6 @@ export default function BulkCharacterReplaceModal({
 
       const result = await response.json()
 
-      clientLogger.info('[BulkCharacterReplaceModal] Bulk re-attribution successful', {
-        chatId,
-        messagesUpdated: result.messagesUpdated,
-        memoriesDeleted: result.memoriesDeleted,
-      })
-
       const targetParticipant = participants.find((p) => p.id === targetParticipantId)
       const targetName =
         targetParticipant?.character?.name || targetParticipant?.persona?.name || 'participant'
@@ -206,7 +186,7 @@ export default function BulkCharacterReplaceModal({
       onSuccess()
       onClose()
     } catch (error) {
-      clientLogger.error('[BulkCharacterReplaceModal] Error during bulk re-attribution', {
+      console.error('[BulkCharacterReplaceModal] Error during bulk re-attribution', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast(error instanceof Error ? error.message : 'Failed to re-attribute messages')

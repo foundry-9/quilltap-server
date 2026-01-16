@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import type { Chat, ChatSettings, Message } from '../types'
 
 export interface SwipeState {
@@ -30,7 +29,7 @@ export function useChatData(chatId: string) {
       const data = await res.json()
       setChatSettings(data)
     } catch (err) {
-      clientLogger.error('Failed to fetch chat settings', {
+      console.error('Failed to fetch chat settings', {
         error: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       })
@@ -96,7 +95,7 @@ export function useChatData(chatId: string) {
         setChatPhotoCount(imageCount)
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch chat photo count:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch chat photo count:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [chatId])
 
@@ -108,7 +107,7 @@ export function useChatData(chatId: string) {
         setChatMemoryCount(data.memoryCount || 0)
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch chat memory count:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch chat memory count:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [chatId])
 
@@ -120,10 +119,10 @@ export function useChatData(chatId: string) {
         body: JSON.stringify({ lastTurnParticipantId }),
       })
       if (!res.ok) {
-        clientLogger.warn('[Chat] Failed to persist turn state', { status: res.status })
+        console.warn('[Chat] Failed to persist turn state', { status: res.status })
       }
     } catch (err) {
-      clientLogger.error('[Chat] Error persisting turn state', { error: err instanceof Error ? err.message : String(err) })
+      console.error('[Chat] Error persisting turn state', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [chatId])
 

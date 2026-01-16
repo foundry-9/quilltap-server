@@ -4,7 +4,6 @@ import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { showErrorToast } from '@/lib/toast'
-import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
@@ -93,7 +92,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     fetchUserControlledCharacters()
     fetchDefaultPartner()
     fetchImageProfiles()
-    clientLogger.debug('Character view page initialized', { characterId: id })
   }, [fetchCharacter, fetchProfiles, fetchPersonas, fetchDefaultPersona, fetchUserControlledCharacters, fetchDefaultPartner, fetchImageProfiles, id])
 
   // Handle chat dialog opening from query params
@@ -121,7 +119,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       setSelectedProfileId(character.defaultConnectionProfileId)
     } else if (profiles.length === 0) {
       showErrorToast('No connection profiles available. Please set up a profile first.')
-      clientLogger.warn('Chat start attempted without available profiles', { characterId: id })
       return
     } else {
       setSelectedProfileId(profiles[0].id)
@@ -134,7 +131,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     }
 
     setShowChatDialog(true)
-    clientLogger.debug('Chat dialog opened', { characterId: id })
   }
 
   const handleCreateChatClick = async () => {
@@ -154,7 +150,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     setSavingConnectionProfile(true)
     try {
       await handleSaveConnectionProfile(profileId)
-      clientLogger.info('Connection profile saved', { profileId })
     } finally {
       setSavingConnectionProfile(false)
     }
@@ -164,7 +159,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     setSavingUserCharacter(true)
     try {
       await handleSaveDefaultPersona(userCharacterId)
-      clientLogger.info('Default user character saved', { userCharacterId })
     } finally {
       setSavingUserCharacter(false)
     }
@@ -174,7 +168,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     setSavingPartner(true)
     try {
       await handleSaveDefaultPartner(partnerId)
-      clientLogger.info('Default partner saved', { partnerId })
     } finally {
       setSavingPartner(false)
     }

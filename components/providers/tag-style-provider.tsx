@@ -4,7 +4,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useSession } from '@/components/providers/session-provider';
 import type { TagStyleMap, TagVisualStyle } from '@/lib/schemas/types';
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles';
-import { clientLogger } from '@/lib/client-logger';
 
 interface TagStyleContextValue {
   styles: TagStyleMap;
@@ -48,7 +47,7 @@ export function TagStyleProvider({ children }: { children: React.ReactNode }) {
         setStyles(styleMap);
       }
     } catch (error) {
-      clientLogger.warn('Unable to load tag styles:', { error: error instanceof Error ? error.message : String(error) });
+      console.warn('Unable to load tag styles:', { error: error instanceof Error ? error.message : String(error) });
       setStyles({});
     } finally {
       setLoading(false);

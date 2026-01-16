@@ -8,7 +8,6 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { FileInfo } from '../../types'
 import { PreviewType, getPreviewType } from '../types'
 
@@ -84,11 +83,6 @@ export function useFilePreview({
       setTextError(null)
 
       try {
-        clientLogger.debug('[useFilePreview] Loading text content', {
-          fileId: file.id,
-          size: file.size,
-        })
-
         const response = await fetch(fileUrl)
         if (!response.ok) {
           throw new Error('Failed to load file content')
@@ -96,16 +90,11 @@ export function useFilePreview({
 
         const text = await response.text()
         setTextContent(text)
-
-        clientLogger.debug('[useFilePreview] Text content loaded', {
-          fileId: file.id,
-          contentLength: text.length,
-        })
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to load file'
         setTextError(message)
         // Use warn instead of error - this is handled gracefully via textError state
-        clientLogger.warn('[useFilePreview] Failed to load text content', {
+        console.warn('[useFilePreview] Failed to load text content', {
           fileId: file.id,
           error: message,
         })
@@ -127,15 +116,7 @@ export function useFilePreview({
     return files[currentIndex + 1]
   }, [files, currentIndex, hasNext])
 
-  // Log preview type on change
-  useEffect(() => {
-    clientLogger.debug('[useFilePreview] Preview initialized', {
-      fileId: file.id,
-      previewType,
-      currentIndex,
-      totalFiles: files.length,
-    })
-  }, [file.id, previewType, currentIndex, files.length])
+  // Preview initialized
 
   return {
     previewType,
