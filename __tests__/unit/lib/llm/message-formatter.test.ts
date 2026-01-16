@@ -80,12 +80,13 @@ describe('message formatter utilities', () => {
       const section = buildMultiCharacterContextSection(
         [
           { name: 'Iris', description: 'Navigator', type: 'CHARACTER' },
-          { name: 'Alex', description: 'Curious human', type: 'PERSONA' },
+          { name: 'User', description: 'Curious human', type: 'CHARACTER' },
         ],
         'Lyra'
       )
 
       expect(section).toContain('Iris')
+      expect(section).toContain('User')
       expect(section).toContain('(the user)')
       expect(section).toContain('You are Lyra')
     })

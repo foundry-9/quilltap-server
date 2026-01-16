@@ -39,12 +39,11 @@ export const SyncableEntityTypeEnum = z.enum([
   'FILE', // Depends on TAG (for tags[])
   'PROJECT', // No dependencies (characterRoster reconciled after CHARACTER)
   'CONNECTION_PROFILE', // Depends on TAG (for tags[]); apiKeyId stripped, _apiKeyLabel added
-  'PERSONA', // Depends on TAG
-  'CHARACTER', // Depends on TAG, FILE (for defaultImageId), PERSONA (for personaLinks)
+  'CHARACTER', // Depends on TAG, FILE (for defaultImageId)
   'ROLEPLAY_TEMPLATE', // Depends on TAG
   'PROMPT_TEMPLATE', // Depends on TAG
-  'CHAT', // Depends on CHARACTER, PERSONA, TAG, FILE, ROLEPLAY_TEMPLATE, PROJECT
-  'MEMORY', // Depends on CHARACTER, PERSONA, CHAT, TAG
+  'CHAT', // Depends on CHARACTER, TAG, FILE, ROLEPLAY_TEMPLATE, PROJECT
+  'MEMORY', // Depends on CHARACTER, CHAT, TAG
 ]);
 export type SyncableEntityType = z.infer<typeof SyncableEntityTypeEnum>;
 

@@ -12,7 +12,7 @@ interface UseChatCreationReturn {
     characterId: string
     characterName: string | undefined
     selectedProfileId: string
-    selectedPersonaId: string
+    selectedUserCharacterId: string
     selectedImageProfileId: string | null
     scenario: string
     timestampConfig?: TimestampConfig | null
@@ -27,7 +27,7 @@ export function useChatCreation(): UseChatCreationReturn {
     characterId: string
     characterName: string | undefined
     selectedProfileId: string
-    selectedPersonaId: string
+    selectedUserCharacterId: string
     selectedImageProfileId: string | null
     scenario: string
     timestampConfig?: TimestampConfig | null
@@ -36,7 +36,7 @@ export function useChatCreation(): UseChatCreationReturn {
       characterId,
       characterName,
       selectedProfileId,
-      selectedPersonaId,
+      selectedUserCharacterId,
       selectedImageProfileId,
       scenario,
       timestampConfig,
@@ -66,10 +66,11 @@ export function useChatCreation(): UseChatCreationReturn {
         },
       ]
 
-      if (selectedPersonaId) {
+      if (selectedUserCharacterId) {
         participants.push({
-          type: 'PERSONA',
-          personaId: selectedPersonaId,
+          type: 'CHARACTER',
+          characterId: selectedUserCharacterId,
+          controlledBy: 'user',
         })
       }
 

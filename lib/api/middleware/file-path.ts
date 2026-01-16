@@ -5,7 +5,7 @@
  * Consolidates the getFilePath() function that was duplicated in 14+ route files.
  */
 
-import type { FileEntry, Character, Persona } from '@/lib/schemas/types';
+import type { FileEntry, Character } from '@/lib/schemas/types';
 
 /**
  * Get the filepath for a file based on storage type

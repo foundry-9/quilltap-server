@@ -42,7 +42,7 @@ describe('Sync Version Checker', () => {
       expect(Array.isArray(versionInfo.supportedEntityTypes)).toBe(true);
       expect(versionInfo.supportedEntityTypes.length).toBeGreaterThan(0);
       expect(versionInfo.supportedEntityTypes).toContain('CHARACTER');
-      expect(versionInfo.supportedEntityTypes).toContain('PERSONA');
+      expect(versionInfo.supportedEntityTypes).toContain('TAG');
       expect(versionInfo.supportedEntityTypes).toContain('CHAT');
     });
 

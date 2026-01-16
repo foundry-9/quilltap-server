@@ -57,13 +57,9 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     }
 
     // Count usages by checking related entities
-    const [allCharacters, allPersonas] = await Promise.all([
-      repos.characters.findByUserId(user.id),
-      repos.personas.findByUserId(user.id),
-    ]);
+    const allCharacters = await repos.characters.findByUserId(user.id);
 
     const charactersUsingAsDefault = allCharacters.filter(c => c.defaultImageId === id).length;
-    const personasUsingAsDefault = allPersonas.filter(p => p.defaultImageId === id).length;
     const chatAvatarOverrides = allCharacters.reduce((count, c) => {
       return count + c.avatarOverrides.filter(o => o.imageId === id).length;
     }, 0);
@@ -75,13 +71,10 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 
     // Determine tag types
     const characterIds = new Set(allCharacters.map(c => c.id));
-    const personaIds = new Set(allPersonas.map(p => p.id));
     const tags = image.tags.map((tagId: string) => {
-      let tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME' = 'THEME';
+      let tagType: 'CHARACTER' | 'CHAT' | 'THEME' = 'THEME';
       if (characterIds.has(tagId)) {
         tagType = 'CHARACTER';
-      } else if (personaIds.has(tagId)) {
-        tagType = 'PERSONA';
       }
       return { tagId, tagType };
     });
@@ -109,7 +102,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         tags,
         _count: {
           charactersUsingAsDefault,
-          personasUsingAsDefault,
           chatAvatarOverrides,
         },
       },
@@ -163,13 +155,9 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
     }
 
     // Count usages by checking related entities
-    const [allCharacters, allPersonas] = await Promise.all([
-      repos.characters.findByUserId(user.id),
-      repos.personas.findByUserId(user.id),
-    ]);
+    const allCharacters = await repos.characters.findByUserId(user.id);
 
     const charactersUsingAsDefault = allCharacters.filter(c => c.defaultImageId === id);
-    const personasUsingAsDefault = allPersonas.filter(p => p.defaultImageId === id);
     const chatAvatarOverrides = allCharacters.reduce((acc, c) => {
       const overrides = c.avatarOverrides.filter(o => o.imageId === id);
       return overrides.length > 0 ? [...acc, { characterId: c.id, overrides }] : acc;
@@ -178,7 +166,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
     // Check if image is being used
     const isInUse =
       charactersUsingAsDefault.length > 0 ||
-      personasUsingAsDefault.length > 0 ||
       chatAvatarOverrides.length > 0;
 
     // If the file is orphaned (doesn't exist), clean up references and allow deletion
@@ -186,7 +173,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       logger.info('[Images v1] Cleaning up references to orphaned image', {
         imageId: id,
         charactersUsingAsDefault: charactersUsingAsDefault.length,
-        personasUsingAsDefault: personasUsingAsDefault.length,
         chatAvatarOverrides: chatAvatarOverrides.length,
       });
 
@@ -194,12 +180,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       for (const character of charactersUsingAsDefault) {
         await repos.characters.update(character.id, { defaultImageId: null });
         logger.debug('[Images v1] Cleared defaultImageId on character', { characterId: character.id });
-      }
-
-      // Clear defaultImageId on personas
-      for (const persona of personasUsingAsDefault) {
-        await repos.personas.update(persona.id, { defaultImageId: null });
-        logger.debug('[Images v1] Cleared defaultImageId on persona', { personaId: persona.id });
       }
 
       // Clear avatar overrides
@@ -216,7 +196,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       logger.debug('[Images v1] Image is in use, cannot delete', {
         imageId: id,
         charactersUsingAsDefault: charactersUsingAsDefault.length,
-        personasUsingAsDefault: personasUsingAsDefault.length,
         chatAvatarOverrides: chatAvatarOverrides.length,
       });
       return badRequest('Image is in use', {
@@ -224,7 +203,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
         code: 'IMAGE_IN_USE',
         associations: {
           charactersUsingAsDefault: charactersUsingAsDefault.length,
-          personasUsingAsDefault: personasUsingAsDefault.length,
           chatAvatarOverrides: chatAvatarOverrides.length,
         },
       });
@@ -421,17 +399,6 @@ async function verifyTaggedEntity(
     // Security: verify character belongs to user
     if (character.userId !== userId) {
       logger.warn('[Images v1] User tried to tag with character they do not own', { characterId: tagId, userId });
-      return forbidden();
-    }
-  } else if (tagType === 'PERSONA') {
-    const persona = await repos.personas.findById(tagId);
-    if (!persona) {
-      logger.debug('[Images v1] Persona not found', { personaId: tagId });
-      return notFound('Persona');
-    }
-    // Security: verify persona belongs to user
-    if (persona.userId !== userId) {
-      logger.warn('[Images v1] User tried to tag with persona they do not own', { personaId: tagId, userId });
       return forbidden();
     }
   } else if (tagType === 'CHAT') {

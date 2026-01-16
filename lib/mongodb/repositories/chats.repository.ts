@@ -7,8 +7,8 @@
  * - 'chat_messages': stores messages as { chatId, messages: ChatEvent[] }
  *
  * Chats use a participant-based model where each chat has an array of
- * ChatParticipant objects. Participants can be either CHARACTER (AI) or
- * PERSONA (user representation). Each CHARACTER participant has its own
+ * ChatParticipant objects. All participants are CHARACTER type (user-controlled
+ * characters have controlledBy: 'user'). Each CHARACTER participant has its own
  * connectionProfileId and optional imageProfileId.
  */
 
@@ -124,26 +124,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
     } catch (error) {
       logger.error('Failed to find chats by character ID', {
         characterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Find chats that include a specific persona as a participant
-   */
-  async findByPersonaId(personaId: string): Promise<ChatMetadata[]> {
-    try {
-      const collection = await (this as any).getCollection();
-      const chats = await collection.find({
-        'participants.type': 'PERSONA',
-        'participants.personaId': personaId,
-      }).toArray();
-      return chats.map((chat: unknown) => this.validate(chat));
-    } catch (error) {
-      logger.error('Failed to find chats by persona ID', {
-        personaId,
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
@@ -498,7 +478,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         chatId,
         type: participant.type,
         characterId: participant.characterId,
-        personaId: participant.personaId,
       });
 
       const chat = await this.findById(chatId);
@@ -643,17 +622,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
       count: chat.participants.filter(p => p.type === 'CHARACTER').length,
     });
     return chat.participants.filter(p => p.type === 'CHARACTER');
-  }
-
-  /**
-   * Get all persona participants from a chat
-   */
-  getPersonaParticipants(chat: ChatMetadata): ChatParticipantBase[] {
-    logger.debug('Getting persona participants', {
-      chatId: chat.id,
-      count: chat.participants.filter(p => p.type === 'PERSONA').length,
-    });
-    return chat.participants.filter(p => p.type === 'PERSONA');
   }
 
   /**

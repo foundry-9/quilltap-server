@@ -31,7 +31,6 @@ describe('backup restore service - delete preview', () => {
     const characters = [{ id: 'char-1' }, { id: 'char-2' }]
     const userRepos = {
       characters: { findAll: jest.fn().mockResolvedValue(characters) },
-      personas: { findAll: jest.fn().mockResolvedValue([{ id: 'persona-1' }]) },
       chats: { findAll: jest.fn().mockResolvedValue([{ id: 'chat-1' }]) },
       tags: { findAll: jest.fn().mockResolvedValue([{ id: 'tag-1' }]) },
       files: { findAll: jest.fn().mockResolvedValue([
@@ -91,7 +90,6 @@ describe('backup restore service - delete preview', () => {
     const summary = await previewDeleteAllUserData('user-1')
 
     expect(summary.characters).toBe(2)
-    expect(summary.personas).toBe(1)
     expect(summary.chats).toBe(1)
     expect(summary.files).toBe(2)  // 1 regular file + 1 backup file
     expect(summary.memories).toBe(3) // 2 for char-1, 1 for char-2

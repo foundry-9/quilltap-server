@@ -85,9 +85,8 @@ const updateParticipantSchema = z.object({
 });
 
 const addParticipantSchema = z.object({
-  type: z.enum(['CHARACTER', 'PERSONA']),
-  characterId: z.string().uuid().optional(),
-  personaId: z.string().uuid().optional(),
+  type: z.literal('CHARACTER'),
+  characterId: z.string().uuid(),
   connectionProfileId: z.string().uuid().optional(),
   imageProfileId: z.string().uuid().nullish(),
   systemPromptOverride: z.string().nullish(),
@@ -212,28 +211,6 @@ async function getEnrichedCharacter(characterId: string, repos: Repos) {
   };
 }
 
-async function getEnrichedPersona(personaId: string, repos: Repos) {
-  const personaData = await repos.personas.findById(personaId);
-  if (!personaData) return null;
-
-  let defaultImage = null;
-  if (personaData.defaultImageId) {
-    const fileEntry = await repos.files.findById(personaData.defaultImageId);
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null };
-    }
-  }
-
-  return {
-    id: personaData.id,
-    name: personaData.name,
-    title: personaData.title,
-    avatarUrl: personaData.avatarUrl,
-    defaultImageId: personaData.defaultImageId,
-    defaultImage,
-  };
-}
-
 async function getEnrichedConnectionProfile(profileId: string, repos: Repos) {
   const profile = await repos.connections.findById(profileId);
   if (!profile) return null;
@@ -256,15 +233,13 @@ async function getEnrichedConnectionProfile(profileId: string, repos: Repos) {
 }
 
 async function enrichParticipant(participant: ChatParticipantBase, repos: Repos) {
-  const character =
-    participant.type === 'CHARACTER' && participant.characterId
-      ? await getEnrichedCharacter(participant.characterId, repos)
-      : null;
+  if (participant.type !== 'CHARACTER') {
+    throw new Error('Only CHARACTER participants are supported');
+  }
 
-  const persona =
-    participant.type === 'PERSONA' && participant.personaId
-      ? await getEnrichedPersona(participant.personaId, repos)
-      : null;
+  const character = participant.characterId
+    ? await getEnrichedCharacter(participant.characterId, repos)
+    : null;
 
   const connectionProfile = participant.connectionProfileId
     ? await getEnrichedConnectionProfile(participant.connectionProfileId, repos)
@@ -273,16 +248,14 @@ async function enrichParticipant(participant: ChatParticipantBase, repos: Repos)
   return {
     id: participant.id,
     type: participant.type,
-    controlledBy: participant.controlledBy || (participant.type === 'PERSONA' ? 'user' : 'llm'),
+    controlledBy: participant.controlledBy || 'llm',
     characterId: participant.characterId,
-    personaId: participant.personaId,
     displayOrder: participant.displayOrder,
     isActive: participant.isActive,
     systemPromptOverride: participant.systemPromptOverride,
     hasHistoryAccess: participant.hasHistoryAccess,
     joinScenario: participant.joinScenario,
     character,
-    persona,
     connectionProfile,
     createdAt: participant.createdAt,
     updatedAt: participant.updatedAt,
@@ -360,53 +333,33 @@ async function handleAddParticipant(
   userId: string,
   repos: Repos
 ): Promise<{ chat: ChatMetadata } | { error: string; status: number }> {
-  if (data.type === 'CHARACTER') {
-    if (!data.characterId) {
-      return { error: 'characterId is required for CHARACTER participants', status: 400 };
-    }
-
-    const character = await repos.characters.findById(data.characterId);
-    if (!character || character.userId !== userId) {
-      return { error: 'Character not found', status: 404 };
-    }
-
-    const controlledBy = data.controlledBy || character.controlledBy || 'llm';
-    const isUserControlled = controlledBy === 'user';
-
-    if (!isUserControlled && !data.connectionProfileId) {
-      return { error: 'connectionProfileId is required for LLM-controlled CHARACTER participants', status: 400 };
-    }
-
-    if (data.connectionProfileId) {
-      const profile = await repos.connections.findById(data.connectionProfileId);
-      if (!profile || profile.userId !== userId) {
-        return { error: 'Connection profile not found', status: 404 };
-      }
-    }
+  if (!data.characterId) {
+    return { error: 'characterId is required for CHARACTER participants', status: 400 };
   }
 
-  if (data.type === 'PERSONA') {
-    if (!data.personaId) {
-      return { error: 'personaId is required for PERSONA participants', status: 400 };
-    }
-
-    const persona = await repos.personas.findById(data.personaId);
-    if (!persona || persona.userId !== userId) {
-      return { error: 'Persona not found', status: 404 };
-    }
+  const character = await repos.characters.findById(data.characterId);
+  if (!character || character.userId !== userId) {
+    return { error: 'Character not found', status: 404 };
   }
 
-  let controlledBy = data.controlledBy;
-  if (data.type === 'CHARACTER' && data.characterId && !controlledBy) {
-    const character = await repos.characters.findById(data.characterId);
-    controlledBy = character?.controlledBy || 'llm';
+  const controlledBy = data.controlledBy || character.controlledBy || 'llm';
+  const isUserControlled = controlledBy === 'user';
+
+  if (!isUserControlled && !data.connectionProfileId) {
+    return { error: 'connectionProfileId is required for LLM-controlled CHARACTER participants', status: 400 };
+  }
+
+  if (data.connectionProfileId) {
+    const profile = await repos.connections.findById(data.connectionProfileId);
+    if (!profile || profile.userId !== userId) {
+      return { error: 'Connection profile not found', status: 404 };
+    }
   }
 
   let result = await repos.chats.addParticipant(chatId, {
-    type: data.type,
-    characterId: data.characterId || null,
-    personaId: data.personaId || null,
-    controlledBy: controlledBy || (data.type === 'PERSONA' ? 'user' : 'llm'),
+    type: 'CHARACTER',
+    characterId: data.characterId,
+    controlledBy: controlledBy,
     connectionProfileId: data.connectionProfileId || null,
     imageProfileId: data.imageProfileId || null,
     systemPromptOverride: data.systemPromptOverride || null,
@@ -420,24 +373,21 @@ async function handleAddParticipant(
     return { error: 'Failed to add participant', status: 500 };
   }
 
-  if (data.type === 'CHARACTER' && data.characterId) {
-    const character = await repos.characters.findById(data.characterId);
-    if (character && character.tags && character.tags.length > 0) {
-      const existingTagIds = new Set(result.tags || []);
-      const newTags = character.tags.filter((tagId: string) => !existingTagIds.has(tagId));
+  if (character.tags && character.tags.length > 0) {
+    const existingTagIds = new Set(result.tags || []);
+    const newTags = character.tags.filter((tagId: string) => !existingTagIds.has(tagId));
 
-      if (newTags.length > 0) {
-        logger.debug('[Chats v1] Adding character tags to chat', {
-          chatId,
-          characterId: data.characterId,
-          newTagCount: newTags.length,
-        });
+    if (newTags.length > 0) {
+      logger.debug('[Chats v1] Adding character tags to chat', {
+        chatId,
+        characterId: data.characterId,
+        newTagCount: newTags.length,
+      });
 
-        const mergedTags = [...(result.tags || []), ...newTags];
-        const updatedChat = await repos.chats.update(chatId, { tags: mergedTags });
-        if (updatedChat) {
-          return { chat: updatedChat };
-        }
+      const mergedTags = [...(result.tags || []), ...newTags];
+      const updatedChat = await repos.chats.update(chatId, { tags: mergedTags });
+      if (updatedChat) {
+        return { chat: updatedChat };
       }
     }
   }
@@ -576,13 +526,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         return notFound('Character');
       }
 
-      const personaParticipant = chat.participants.find((p) => p.type === 'PERSONA' && p.personaId);
-      let persona = null;
-      if (personaParticipant?.personaId) {
-        persona = await repos.personas.findById(personaParticipant.personaId);
-      }
-
-      const userName = persona?.name || user.name || 'User';
+      const userName = user.name || 'User';
 
       const formattedMessages = messages.map((msg) => ({
         id: msg.id,
@@ -1209,7 +1153,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           action: turnAction,
           participant: {
             id: participantId,
-            name: affectedCharacter?.name ?? (participant.type === 'PERSONA' ? 'User' : 'Unknown'),
+            name: affectedCharacter?.name ?? 'Unknown',
             queuePosition: getQueuePosition(turnState, participantId),
           },
           turn: {
@@ -1258,9 +1202,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         }
 
         const newParticipant = result.chat.participants.find(
-          (p) =>
-            (validatedData.type === 'CHARACTER' && p.characterId === validatedData.characterId) ||
-            (validatedData.type === 'PERSONA' && p.personaId === validatedData.personaId)
+          (p) => p.characterId === validatedData.characterId
         );
 
         const enrichedParticipant = newParticipant ? await enrichParticipant(newParticipant, repos) : null;
@@ -1317,10 +1259,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         const participantToRemove = chat.participants.find((p) => p.id === validatedData.participantId);
         if (!participantToRemove) {
           return notFound('Participant');
-        }
-
-        if (participantToRemove.type === 'PERSONA') {
-          return badRequest('Cannot remove your persona from the chat');
         }
 
         const activeCharacters = chat.participants.filter((p) => p.type === 'CHARACTER' && p.isActive);
@@ -1725,11 +1663,8 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
             return charInfo?.characterName || 'Character';
           };
 
-          // Helper to get persona name for user messages
-          const userParticipant = chat.participants.find(p => p.type === 'PERSONA');
-          const personaName = userParticipant?.personaId
-            ? (await repos.personas.findById(userParticipant.personaId))?.name || 'User'
-            : 'User';
+          // Helper to get user name for user messages
+          const personaName = 'User';
 
           pairsWithCharacter = [];
 

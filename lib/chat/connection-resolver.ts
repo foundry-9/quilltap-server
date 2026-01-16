@@ -90,11 +90,6 @@ export function hasResolvableConnectionProfile(
   character: Character | null,
   chatDefaultProfileId?: string
 ): boolean {
-  // PERSONA participants don't need connection profiles
-  if (participant.type === 'PERSONA') {
-    return true;
-  }
-
   // CHARACTER participants need a profile somewhere in the chain
   if (participant.connectionProfileId) {
     return true;

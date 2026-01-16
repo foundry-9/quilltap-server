@@ -4,7 +4,7 @@
  * Shared interfaces for the chat message service layer.
  */
 
-import type { ChatMetadataBase, ChatParticipantBase, Character, Persona, ConnectionProfile, MessageEvent, TimestampConfig } from '@/lib/schemas/types'
+import type { ChatMetadataBase, ChatParticipantBase, Character, ConnectionProfile, MessageEvent, TimestampConfig } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
@@ -28,10 +28,8 @@ export interface MessageServiceContext {
   characterParticipant: ChatParticipantBase
   /** Character data */
   character: Character
-  /** Persona data (if available) */
+  /** Persona data (if available) - kept for backward compatibility */
   persona: { name: string; description: string } | null
-  /** Full persona data for multi-character chats */
-  personaData: Persona | null
   /** Connection profile for the LLM */
   connectionProfile: ConnectionProfile
   /** Decrypted API key (empty for providers that don't require it) */
@@ -46,8 +44,6 @@ export interface MessageServiceContext {
   allParticipants?: ChatParticipantBase[]
   /** Map of character IDs to Character data */
   participantCharacters?: Map<string, Character>
-  /** Map of persona IDs to Persona data */
-  participantPersonas?: Map<string, Persona>
   /** Timestamp configuration */
   timestampConfig?: TimestampConfig | null
   /** Chat settings */

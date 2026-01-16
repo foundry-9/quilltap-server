@@ -147,8 +147,6 @@ async function getLocalEntity(
       return repos.projects.findById(id);
     case 'CONNECTION_PROFILE':
       return repos.connections.findById(id);
-    case 'PERSONA':
-      return repos.personas.findById(id);
     case 'CHARACTER':
       return repos.characters.findById(id);
     case 'ROLEPLAY_TEMPLATE':
@@ -287,9 +285,6 @@ async function createLocalEntity(
         return result;
       }
 
-      case 'PERSONA':
-        return repos.personas.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
-
       case 'CHARACTER':
         return repos.characters.createOrUpdate(entityId, createData as any, { createdAt: entityCreatedAt });
 
@@ -416,10 +411,6 @@ async function updateLocalEntity(
         return true;
       }
 
-      case 'PERSONA':
-        await repos.personas.update(id, updateData as any);
-        return true;
-
       case 'CHARACTER':
         await repos.characters.update(id, updateData as any);
         return true;
@@ -504,9 +495,6 @@ async function deleteLocalEntity(entityType: SyncableEntityType, id: string): Pr
 
       case 'CONNECTION_PROFILE':
         return repos.connections.delete(id);
-
-      case 'PERSONA':
-        return repos.personas.delete(id);
 
       case 'CHARACTER':
         return repos.characters.delete(id);

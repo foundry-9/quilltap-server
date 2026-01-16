@@ -17,7 +17,6 @@ import type {
   ChatMetadataBase,
   ChatParticipantBase,
   Character,
-  Persona,
   ConnectionProfile,
 } from '@/lib/schemas/types'
 
@@ -51,8 +50,6 @@ export interface ParticipantResolutionResult {
 export interface AllParticipantsData {
   /** Map of character IDs to Character data */
   participantCharacters: Map<string, Character>
-  /** Map of persona IDs to Persona data */
-  participantPersonas: Map<string, Persona>
 }
 
 /**
@@ -185,15 +182,13 @@ export async function resolveRespondingParticipant(
 export async function loadAllParticipantData(
   repos: ReturnType<typeof getRepositories>,
   chat: ChatMetadataBase,
-  primaryCharacter: Character,
-  primaryPersona: Persona | null
+  primaryCharacter: Character
 ): Promise<AllParticipantsData> {
   logger.debug('Loading all participant data for multi-character chat', {
     participantCount: chat.participants.length,
   })
 
   const participantCharacters = new Map<string, Character>()
-  const participantPersonas = new Map<string, Persona>()
 
   // Load all characters
   for (const p of chat.participants) {
@@ -207,52 +202,16 @@ export async function loadAllParticipantData(
           participantCharacters.set(p.characterId, char)
         }
       }
-    } else if (p.type === 'PERSONA' && p.personaId && p.isActive) {
-      if (primaryPersona && p.personaId === primaryPersona.id) {
-        // Reuse already-loaded persona
-        participantPersonas.set(p.personaId, primaryPersona)
-      } else {
-        const pers = await repos.personas.findById(p.personaId)
-        if (pers) {
-          participantPersonas.set(p.personaId, pers)
-        }
-      }
     }
   }
 
   logger.debug('Loaded participant data', {
     characterCount: participantCharacters.size,
-    personaCount: participantPersonas.size,
   })
 
-  return { participantCharacters, participantPersonas }
+  return { participantCharacters }
 }
 
-/**
- * Get persona data for a chat
- */
-export async function getPersonaData(
-  repos: ReturnType<typeof getRepositories>,
-  chat: ChatMetadataBase
-): Promise<{ persona: { name: string; description: string } | null; personaData: Persona | null }> {
-  const personaParticipant = chat.participants.find(
-    p => p.type === 'PERSONA' && p.isActive && p.personaId
-  )
-
-  if (!personaParticipant?.personaId) {
-    return { persona: null, personaData: null }
-  }
-
-  const personaData = await repos.personas.findById(personaParticipant.personaId)
-  if (!personaData) {
-    return { persona: null, personaData: null }
-  }
-
-  return {
-    persona: { name: personaData.name, description: personaData.description },
-    personaData,
-  }
-}
 
 /**
  * Get roleplay template for a chat, with fallback to user default

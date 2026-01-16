@@ -1,7 +1,7 @@
 /**
  * Chat File API Routes (v1)
  *
- * POST /api/v1/chat-files/:id?action=tag - Tag a chat file with CHARACTER/PERSONA
+ * POST /api/v1/chat-files/:id?action=tag - Tag a chat file with CHARACTER
  * DELETE /api/v1/chat-files/:id - Delete a chat file
  *
  * Uses the repository pattern for metadata and S3 for file storage.
@@ -16,13 +16,13 @@ import { notFound, badRequest, serverError, unauthorized, validationError, succe
 import { fileStorageManager } from '@/lib/file-storage/manager';
 
 const tagSchema = z.object({
-  tagType: z.enum(['CHARACTER', 'PERSONA']),
+  tagType: z.literal('CHARACTER'),
   tagId: z.string(),
 });
 
 /**
  * Handle POST ?action=tag
- * Tag a chat file with a CHARACTER or PERSONA
+ * Tag a chat file with a CHARACTER
  */
 async function handleTag(
   request: NextRequest,
@@ -90,41 +90,22 @@ async function handleTag(
   }
 
   // Verify the tagged entity exists and belongs to user
-  if (tagType === 'CHARACTER') {
-    const character = await repos.characters.findById(tagId);
-    if (!character || character.userId !== user.id) {
-      logger.debug('POST /api/v1/chat-files/[id]?action=tag - Character not found or unauthorized', {
-        fileId: id,
-        tagId,
-        characterExists: !!character,
-        characterUserId: character?.userId,
-        sessionUserId: user.id,
-      });
-      return notFound('Character');
-    }
-    logger.debug('POST /api/v1/chat-files/[id]?action=tag - Character verified', {
+  const character = await repos.characters.findById(tagId);
+  if (!character || character.userId !== user.id) {
+    logger.debug('POST /api/v1/chat-files/[id]?action=tag - Character not found or unauthorized', {
       fileId: id,
-      characterId: tagId,
-      characterName: character.name,
+      tagId,
+      characterExists: !!character,
+      characterUserId: character?.userId,
+      sessionUserId: user.id,
     });
-  } else if (tagType === 'PERSONA') {
-    const persona = await repos.personas.findById(tagId);
-    if (!persona || persona.userId !== user.id) {
-      logger.debug('POST /api/v1/chat-files/[id]?action=tag - Persona not found or unauthorized', {
-        fileId: id,
-        tagId,
-        personaExists: !!persona,
-        personaUserId: persona?.userId,
-        sessionUserId: user.id,
-      });
-      return notFound('Persona');
-    }
-    logger.debug('POST /api/v1/chat-files/[id]?action=tag - Persona verified', {
-      fileId: id,
-      personaId: tagId,
-      personaName: persona.name,
-    });
+    return notFound('Character');
   }
+  logger.debug('POST /api/v1/chat-files/[id]?action=tag - Character verified', {
+    fileId: id,
+    characterId: tagId,
+    characterName: character.name,
+  });
 
   // Check if tag already exists on this file
   const alreadyTagged = fileEntry.tags.includes(tagId);

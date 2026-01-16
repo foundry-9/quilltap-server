@@ -30,7 +30,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   // Collect all entities in parallel
   const [
     characters,
-    personas,
     chatMetadatas,
     tags,
     connectionProfiles,
@@ -43,7 +42,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     projects,
   ] = await Promise.all([
     repos.characters.findAll(),
-    repos.personas.findAll(),
     repos.chats.findAll(),
     repos.tags.findAll(),
     repos.connections.findAll(),
@@ -62,7 +60,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   moduleLogger.debug('Collected base entities', {
     userId,
     characters: characters.length,
-    personas: personas.length,
     chats: chatMetadatas.length,
     tags: tags.length,
     connectionProfiles: connectionProfiles.length,
@@ -111,7 +108,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
 
   return {
     characters,
-    personas,
     chats,
     tags,
     connectionProfiles: sanitizedConnectionProfiles,
@@ -139,7 +135,6 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
     appVersion: APP_VERSION,
     counts: {
       characters: data.characters.length,
-      personas: data.personas.length,
       chats: data.chats.length,
       messages: totalMessages,
       tags: data.tags.length,
@@ -210,9 +205,6 @@ export async function createBackup(userId: string): Promise<{
   // Add data files
   archive.append(JSON.stringify(data.characters, null, 2), {
     name: `${folderName}/data/characters.json`,
-  });
-  archive.append(JSON.stringify(data.personas, null, 2), {
-    name: `${folderName}/data/personas.json`,
   });
   archive.append(JSON.stringify(data.chats, null, 2), {
     name: `${folderName}/data/chats.json`,

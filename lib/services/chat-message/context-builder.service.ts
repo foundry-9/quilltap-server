@@ -21,7 +21,6 @@ import type {
   ChatMetadataBase,
   ChatParticipantBase,
   Character,
-  Persona,
   ConnectionProfile,
   MessageEvent,
   TimestampConfig,
@@ -41,10 +40,8 @@ export interface BuildMessageContextOptions {
   characterParticipant: ChatParticipantBase
   connectionProfile: ConnectionProfile
   persona: { name: string; description: string } | null
-  personaData: Persona | null
   isMultiCharacter: boolean
   participantCharacters?: Map<string, Character>
-  participantPersonas?: Map<string, Persona>
   roleplayTemplate: { systemPrompt: string } | null
   chatSettings: { cheapLLMSettings?: { embeddingProfileId?: string }; defaultTimestampConfig?: TimestampConfig | null } | null
   pseudoToolInstructions?: string
@@ -269,7 +266,6 @@ export async function buildMessageContext(
     persona,
     isMultiCharacter,
     participantCharacters,
-    participantPersonas,
     roleplayTemplate,
     chatSettings,
     pseudoToolInstructions,
@@ -313,7 +309,6 @@ export async function buildMessageContext(
     respondingParticipant: isMultiCharacter ? characterParticipant : undefined,
     allParticipants: isMultiCharacter ? chat.participants : undefined,
     participantCharacters: isMultiCharacter ? participantCharacters : undefined,
-    participantPersonas: isMultiCharacter ? participantPersonas : undefined,
     messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
     // Pseudo-tool support
     pseudoToolInstructions,

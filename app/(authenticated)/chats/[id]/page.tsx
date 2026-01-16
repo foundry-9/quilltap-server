@@ -384,22 +384,27 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Multi-character chat helpers
   const participantsAsBase = useMemo((): ChatParticipantBase[] => {
     if (!chat?.participants) return []
-    return chat.participants.map(p => ({
-      id: p.id,
-      type: p.type,
-      characterId: p.characterId ?? (p.character?.id ?? null),
-      personaId: p.personaId ?? (p.persona?.id ?? null),
-      controlledBy: p.controlledBy ?? (p.type === 'PERSONA' ? 'user' : 'llm'),
-      connectionProfileId: p.connectionProfile?.id ?? null,
-      imageProfileId: p.imageProfile?.id ?? null,
-      systemPromptOverride: p.systemPromptOverride ?? null,
-      displayOrder: p.displayOrder,
-      isActive: p.isActive,
-      hasHistoryAccess: p.hasHistoryAccess ?? false,
-      joinScenario: p.joinScenario ?? null,
-      createdAt: p.createdAt ?? new Date().toISOString(),
-      updatedAt: p.updatedAt ?? new Date().toISOString(),
-    }))
+    // Filter to CHARACTER type only (personas are no longer supported) and ensure characterId is present
+    return chat.participants
+      .filter(p => p.type === 'CHARACTER' && (p.characterId || p.character?.id))
+      .map(p => {
+        const characterId = p.characterId || p.character?.id
+        return {
+          id: p.id,
+          type: 'CHARACTER' as const,
+          characterId: characterId!,
+          controlledBy: p.controlledBy ?? 'llm',
+          connectionProfileId: p.connectionProfile?.id ?? null,
+          imageProfileId: p.imageProfile?.id ?? null,
+          systemPromptOverride: p.systemPromptOverride ?? null,
+          displayOrder: p.displayOrder,
+          isActive: p.isActive,
+          hasHistoryAccess: p.hasHistoryAccess ?? false,
+          joinScenario: p.joinScenario ?? null,
+          createdAt: p.createdAt ?? new Date().toISOString(),
+          updatedAt: p.updatedAt ?? new Date().toISOString(),
+        }
+      })
   }, [chat?.participants])
 
   const userParticipantId = useMemo(() => {

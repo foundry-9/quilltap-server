@@ -112,15 +112,10 @@ export async function findExclusiveImagesForCharacter(
         (image.linkedTo.length === 1 && image.linkedTo[0] === characterId)
 
       if (isExclusive) {
-        // Use targeted queries instead of findAll() + filter
-        const [charsUsingAsDefault, personasUsingAsDefault] = await Promise.all([
-          repos.characters.findByDefaultImageId(image.id),
-          repos.personas.findByDefaultImageId(image.id),
-        ])
+        // Use targeted queries to check if used as default image elsewhere
+        const charsUsingAsDefault = await repos.characters.findByDefaultImageId(image.id)
 
-        const usedElsewhere =
-          charsUsingAsDefault.some(c => c.id !== characterId) ||
-          personasUsingAsDefault.length > 0
+        const usedElsewhere = charsUsingAsDefault.some(c => c.id !== characterId)
 
         if (!usedElsewhere) {
           exclusiveImages.push(image)
@@ -206,19 +201,17 @@ export async function findExclusiveImagesForChats(
       continue
     }
 
-    // Use targeted queries to check if used as character/persona default or override
-    const [charsUsingAsDefault, charsUsingInOverrides, personasUsingAsDefault] = await Promise.all([
+    // Use targeted queries to check if used as character default or override
+    const [charsUsingAsDefault, charsUsingInOverrides] = await Promise.all([
       repos.characters.findByDefaultImageId(image.id),
       repos.characters.findByAvatarOverrideImageId(image.id),
-      repos.personas.findByDefaultImageId(image.id),
     ])
 
-    const usedByCharOrPersona =
+    const usedByCharacter =
       charsUsingAsDefault.length > 0 ||
-      charsUsingInOverrides.length > 0 ||
-      personasUsingAsDefault.length > 0
+      charsUsingInOverrides.length > 0
 
-    if (!usedByCharOrPersona) {
+    if (!usedByCharacter) {
       exclusiveImages.push(image)
     }
   }

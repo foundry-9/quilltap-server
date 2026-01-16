@@ -36,14 +36,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [showChatDialog, setShowChatDialog] = useState(false)
   const [showSearchReplaceModal, setShowSearchReplaceModal] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
-  const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
+  const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
   const [scenario, setScenario] = useState<string>('')
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
-  const [savingPersona, setSavingPersona] = useState(false)
+  const [savingUserCharacter, setSavingUserCharacter] = useState(false)
   const [savingPartner, setSavingPartner] = useState(false)
 
   const {
@@ -109,9 +109,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         setSelectedProfileId(profiles[0].id)
       }
 
-      // Set default persona if available
+      // Set default user character if available
       if (defaultPersonaId) {
-        setSelectedPersonaId(defaultPersonaId)
+        setSelectedUserCharacterId(defaultPersonaId)
       }
     }
   }, [searchParams, character?.defaultConnectionProfileId, profiles, defaultPersonaId])
@@ -128,9 +128,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     }
 
     if (defaultPersonaId) {
-      setSelectedPersonaId(defaultPersonaId)
+      setSelectedUserCharacterId(defaultPersonaId)
     } else {
-      setSelectedPersonaId('')
+      setSelectedUserCharacterId('')
     }
 
     setShowChatDialog(true)
@@ -142,7 +142,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       characterId: id,
       characterName: character?.name,
       selectedProfileId,
-      selectedPersonaId,
+      selectedUserCharacterId,
       selectedImageProfileId,
       scenario,
       timestampConfig,
@@ -160,13 +160,13 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     }
   }
 
-  const handlePersonaSave = async (personaId: string) => {
-    setSavingPersona(true)
+  const handleUserCharacterSave = async (userCharacterId: string) => {
+    setSavingUserCharacter(true)
     try {
-      await handleSaveDefaultPersona(personaId)
-      clientLogger.info('Default persona saved', { personaId })
+      await handleSaveDefaultPersona(userCharacterId)
+      clientLogger.info('Default user character saved', { userCharacterId })
     } finally {
-      setSavingPersona(false)
+      setSavingUserCharacter(false)
     }
   }
 
@@ -326,14 +326,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           profiles={profiles}
           personas={personas}
           selectedProfileId={selectedProfileId}
-          selectedPersonaId={selectedPersonaId}
+          selectedUserCharacterId={selectedUserCharacterId}
           selectedImageProfileId={selectedImageProfileId}
           scenario={scenario}
           timestampConfig={timestampConfig}
           creatingChat={creatingChat}
           openedFromQuery={openedFromQuery}
           onProfileChange={setSelectedProfileId}
-          onPersonaChange={setSelectedPersonaId}
+          onUserCharacterChange={setSelectedUserCharacterId}
           onImageProfileChange={setSelectedImageProfileId}
           onScenarioChange={setScenario}
           onTimestampConfigChange={setTimestampConfig}

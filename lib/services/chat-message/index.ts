@@ -28,7 +28,6 @@ export {
 export {
   resolveRespondingParticipant,
   loadAllParticipantData,
-  getPersonaData,
   getRoleplayTemplate,
   getActiveCharacterParticipants,
   type ParticipantResolutionResult,

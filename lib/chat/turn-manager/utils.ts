@@ -60,9 +60,9 @@ export function getSelectionExplanation(result: TurnSelectionResult): string {
 export function findUserParticipant(
   participants: ChatParticipantBase[]
 ): ChatParticipantBase | null {
-  // Check for controlledBy first (new model), fallback to type for backwards compatibility
+  // Check for controlledBy='user'
   return participants.find(p =>
-    p.isActive && (p.controlledBy === 'user' || (p.controlledBy === undefined && p.type === 'PERSONA'))
+    p.isActive && p.controlledBy === 'user'
   ) ?? null;
 }
 
@@ -73,7 +73,7 @@ export function findUserControlledParticipants(
   participants: ChatParticipantBase[]
 ): ChatParticipantBase[] {
   return participants.filter(p =>
-    p.isActive && (p.controlledBy === 'user' || (p.controlledBy === undefined && p.type === 'PERSONA'))
+    p.isActive && p.controlledBy === 'user'
   );
 }
 
@@ -87,7 +87,7 @@ export function getActiveLLMParticipants(
   return participants.filter(p =>
     p.isActive &&
     p.characterId &&
-    (p.controlledBy === 'llm' || (p.controlledBy === undefined && p.type === 'CHARACTER'))
+    p.controlledBy === 'llm'
   );
 }
 

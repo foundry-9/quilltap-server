@@ -113,18 +113,15 @@ export type ChatEvent = z.infer<typeof ChatEventSchema>;
 // CHAT PARTICIPANTS
 // ============================================================================
 
-export const ParticipantTypeEnum = z.enum(['CHARACTER', 'PERSONA']);
+export const ParticipantTypeEnum = z.enum(['CHARACTER']);
 export type ParticipantType = z.infer<typeof ParticipantTypeEnum>;
 
 export const ChatParticipantSchema = z.object({
   id: UUIDSchema,
 
   // Participant type and identity
-  // NOTE: 'type' is kept for backwards compatibility during migration.
-  // Going forward, all participants are effectively CHARACTER type with controlledBy determining behavior.
   type: ParticipantTypeEnum,
-  characterId: UUIDSchema.nullable().optional(),  // Set when type is CHARACTER (required after migration)
-  personaId: UUIDSchema.nullable().optional(),    // @deprecated - Set when type is PERSONA (will be removed after migration)
+  characterId: UUIDSchema,  // Required for all participants
 
   // Control mode - who controls this participant in this chat
   // 'llm' = AI-controlled, 'user' = player-controlled (impersonating)
@@ -151,18 +148,8 @@ export const ChatParticipantSchema = z.object({
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
-  (data) => {
-    // Must have characterId if type is CHARACTER
-    if (data.type === 'CHARACTER') {
-      return data.characterId != null;
-    }
-    // Must have personaId if type is PERSONA (for backwards compatibility during migration)
-    if (data.type === 'PERSONA') {
-      return data.personaId != null;
-    }
-    return false;
-  },
-  { message: 'CHARACTER participants must have characterId, PERSONA participants must have personaId' }
+  (data) => data.characterId != null,
+  { message: 'Participants must have characterId' }
 );
 
 export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
@@ -171,8 +158,7 @@ export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
 export const ChatParticipantBaseSchema = z.object({
   id: UUIDSchema,
   type: ParticipantTypeEnum,
-  characterId: UUIDSchema.nullable().optional(),
-  personaId: UUIDSchema.nullable().optional(),  // @deprecated - will be removed after migration
+  characterId: UUIDSchema,
   controlledBy: ControlledByEnum.optional().default('llm'),  // Who controls: 'llm' or 'user'
   connectionProfileId: UUIDSchema.nullable().optional(),
   imageProfileId: UUIDSchema.nullable().optional(),

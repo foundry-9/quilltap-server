@@ -211,7 +211,7 @@ export function formatMessagesForProvider(
  * @returns String to append to system prompt
  */
 export function buildMultiCharacterContextSection(
-  otherParticipants: Array<{ name: string; description?: string; type: 'CHARACTER' | 'PERSONA' }>,
+  otherParticipants: Array<{ name: string; description?: string; type: 'CHARACTER' }>,
   respondingCharacterName: string
 ): string {
   if (otherParticipants.length === 0) {
@@ -225,7 +225,7 @@ export function buildMultiCharacterContextSection(
   ]
 
   for (const participant of otherParticipants) {
-    const typeLabel = participant.type === 'PERSONA' ? '(the user)' : ''
+    const typeLabel = participant.type === 'CHARACTER' && participant.name.includes('User') ? '(the user)' : ''
     const description = participant.description ? ` - ${participant.description}` : ''
     lines.push(`- **${participant.name}** ${typeLabel}${description}`)
   }

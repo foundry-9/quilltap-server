@@ -7,7 +7,7 @@ import { showConfirmation } from '@/lib/alert'
 import { showErrorToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
 import { TagDisplay } from '@/components/tags/tag-display'
-import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
+import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
@@ -94,7 +94,7 @@ export default function ChatsPage() {
   const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([])
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
-  const { formatPersonaName } = usePersonaDisplayName()
+  const { formatCharacterName } = useUserCharacterDisplayName()
   const { shouldHideByIds } = useQuickHide()
   const { refreshSidebar } = useSidebarData()
 
@@ -352,7 +352,7 @@ export default function ChatsPage() {
                       </div>
                       <p className="qt-text-small">
                         {characterNames}
-                        {persona && ` with ${formatPersonaName(persona)}`}
+                        {persona && ` with ${formatCharacterName(persona)}`}
                         {' \u2022 '}
                         {new Date(chat.updatedAt).toLocaleDateString()}
                       </p>

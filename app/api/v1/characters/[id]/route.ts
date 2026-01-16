@@ -10,7 +10,6 @@
  * - chats - List recent chats with this character
  * - cascade-preview - Get cascade delete preview
  * - default-partner - Get default partner
- * - personas - List linked personas
  * - get-tags - Get character tags
  *
  * POST Actions:
@@ -20,8 +19,6 @@
  * - remove-tag - Remove tag
  * - toggle-controlled-by - Toggle user/LLM control
  * - set-default-partner - Set default partner
- * - link-persona - Link a persona
- * - unlink-persona - Unlink a persona
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -77,15 +74,6 @@ const removeTagSchema = z.object({
 
 const setDefaultPartnerSchema = z.object({
   partnerId: z.string().uuid().nullable(),
-});
-
-const linkPersonaSchema = z.object({
-  personaId: z.string().uuid(),
-  isDefault: z.boolean().optional().default(false),
-});
-
-const unlinkPersonaSchema = z.object({
-  personaId: z.string().uuid(),
 });
 
 // ============================================================================
@@ -181,20 +169,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         // Enrich chats with related data
         const enrichedChats = await Promise.all(
           paginatedChats.map(async ({ chat, messages }) => {
-            // Get persona participant if present
-            const personaParticipant = chat.participants.find(p => p.type === 'PERSONA' && p.personaId);
-            let persona = null;
-            if (personaParticipant?.personaId) {
-              const personaData = await repos.personas.findById(personaParticipant.personaId);
-              if (personaData) {
-                persona = {
-                  id: personaData.id,
-                  name: personaData.name,
-                  title: personaData.title,
-                };
-              }
-            }
-
             // Get tags
             const tagData = await Promise.all(
               (chat.tags || []).map(async (tagId) => {
@@ -228,7 +202,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
                 id: character.id,
                 name: character.name,
               },
-              persona,
               messages: recentMessages,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
               _count: {
@@ -287,34 +260,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
       } catch (error) {
         logger.error('[Characters v1] Error fetching default partner', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to fetch default partner');
-      }
-    }
-
-    // List linked personas
-    case 'personas': {
-      try {
-        // Get persona details for each linked persona
-        const personaLinks = await Promise.all(
-          character.personaLinks.map(async (link) => {
-            const persona = await repos.personas.findById(link.personaId);
-            return persona
-              ? {
-                  personaId: link.personaId,
-                  isDefault: link.isDefault,
-                  persona,
-                }
-              : null;
-          })
-        );
-
-        // Filter out null values (personas that no longer exist)
-        const validLinks = personaLinks.filter(Boolean);
-
-        logger.debug('[Characters v1] Fetched character personas', { characterId: id, count: validLinks.length });
-        return NextResponse.json({ personas: validLinks });
-      } catch (error) {
-        logger.error('[Characters v1] Error fetching character personas', { characterId: id }, error instanceof Error ? error : undefined);
-        return serverError('Failed to fetch character personas');
       }
     }
 
@@ -657,81 +602,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       }
     }
 
-    case 'link-persona': {
-      try {
-        const body = await req.json();
-        const { personaId, isDefault } = linkPersonaSchema.parse(body);
-
-        // Verify persona belongs to user
-        const persona = await repos.personas.findById(personaId);
-
-        if (!persona || persona.userId !== user.id) {
-          return notFound('Persona');
-        }
-
-        // If setting as default, unset any existing default
-        if (isDefault) {
-          const updatedLinks = character.personaLinks.map((link) => ({
-            ...link,
-            isDefault: false,
-          }));
-          await repos.characters.update(id, { personaLinks: updatedLinks });
-        }
-
-        // Add persona link using repository method
-        await repos.characters.addPersona(id, personaId, isDefault);
-
-        // Get updated character to return the link
-        const updatedCharacter = await repos.characters.findById(id);
-        const link = updatedCharacter?.personaLinks.find((l) => l.personaId === personaId);
-
-        logger.info('[Characters v1] Persona linked', {
-          characterId: id,
-          personaId,
-          isDefault,
-        });
-
-        return NextResponse.json(
-          {
-            personaId,
-            isDefault: link?.isDefault || false,
-            persona,
-          },
-          { status: 201 }
-        );
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return validationError(error);
-        }
-        logger.error('[Characters v1] Error linking persona', { characterId: id }, error instanceof Error ? error : undefined);
-        return serverError('Failed to link persona to character');
-      }
-    }
-
-    case 'unlink-persona': {
-      try {
-        const body = await req.json();
-        const { personaId } = unlinkPersonaSchema.parse(body);
-
-        // Remove the persona link
-        await repos.characters.removePersona(id, personaId);
-
-        logger.info('[Characters v1] Persona unlinked', {
-          characterId: id,
-          personaId,
-        });
-
-        return NextResponse.json({ success: true });
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return validationError(error);
-        }
-        logger.error('[Characters v1] Error unlinking persona', { characterId: id }, error instanceof Error ? error : undefined);
-        return serverError('Failed to unlink persona from character');
-      }
-    }
-
     default:
-      return badRequest(`Unknown action: ${action}. Available actions: favorite, avatar, add-tag, remove-tag, toggle-controlled-by, set-default-partner, link-persona, unlink-persona`);
+      return badRequest(`Unknown action: ${action}. Available actions: favorite, avatar, add-tag, remove-tag, toggle-controlled-by, set-default-partner`);
   }
 });

@@ -332,7 +332,6 @@ List all LLM connection profiles.
 
 **Query Parameters**:
 - `sortByCharacter` - Sort profiles by matching tags with character
-- `sortByPersona` - Sort profiles by matching tags with persona
 - `imageCapable=true` - Filter to image-capable providers only
 
 **Response**: `200 OK`

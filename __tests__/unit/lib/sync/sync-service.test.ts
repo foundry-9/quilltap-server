@@ -198,35 +198,6 @@ describe('Sync Service', () => {
         );
       });
 
-      it('should preserve remote ID and createdAt when creating entity', async () => {
-        const originalCreatedAt = '2025-01-01T00:00:00.000Z';
-        const delta: SyncEntityDelta = {
-          entityType: 'PERSONA',
-          id: 'persona-original-id',
-          createdAt: originalCreatedAt,
-          updatedAt: now.toISOString(),
-          isDeleted: false,
-          data: {
-            name: 'Test Persona',
-          },
-        };
-
-        mockRepos.personas.findById.mockResolvedValue(null);
-        mockRepos.personas.createOrUpdate.mockResolvedValue({
-          id: 'persona-original-id',
-          updatedAt: now.toISOString(),
-        });
-
-        const result = await applyRemoteDelta(userId, instanceId, delta);
-
-        expect(result.success).toBe(true);
-        expect(mockRepos.personas.createOrUpdate).toHaveBeenCalledWith(
-          'persona-original-id',
-          expect.any(Object),
-          { createdAt: originalCreatedAt }
-        );
-      });
-
       it('should create TAG entity successfully', async () => {
         const delta: SyncEntityDelta = {
           entityType: 'TAG',
@@ -421,24 +392,6 @@ describe('Sync Service', () => {
         expect(mockRepos.files.delete).toHaveBeenCalledWith('file-to-delete');
       });
 
-      it('should delete PERSONA entity successfully', async () => {
-        const delta: SyncEntityDelta = {
-          entityType: 'PERSONA',
-          id: 'persona-1',
-          createdAt: earlier.toISOString(),
-          updatedAt: now.toISOString(),
-          isDeleted: true,
-          data: null,
-        };
-
-        mockRepos.personas.delete.mockResolvedValue(true);
-
-        const result = await applyRemoteDelta(userId, instanceId, delta);
-
-        expect(result.success).toBe(true);
-        expect(mockRepos.personas.delete).toHaveBeenCalledWith('persona-1');
-      });
-
       it('should delete CHAT entity successfully', async () => {
         const delta: SyncEntityDelta = {
           entityType: 'CHAT',
@@ -545,24 +498,24 @@ describe('Sync Service', () => {
 
       it('should use timestamps for conflict resolution', async () => {
         const delta: SyncEntityDelta = {
-          entityType: 'PERSONA',
-          id: 'persona-1',
+          entityType: 'CHARACTER',
+          id: 'char-1',
           createdAt: earlier.toISOString(),
           updatedAt: later.toISOString(),
           isDeleted: false,
-          data: { name: 'Remote Persona' },
+          data: { name: 'Remote Character' },
         };
 
-        const localEntity = { id: 'persona-1', updatedAt: now.toISOString() };
-        mockRepos.personas.findById.mockResolvedValue(localEntity);
-        mockRepos.personas.update.mockResolvedValue(true);
+        const localEntity = { id: 'char-1', updatedAt: now.toISOString() };
+        mockRepos.characters.findById.mockResolvedValue(localEntity);
+        mockRepos.characters.update.mockResolvedValue(true);
 
         mockedResolveConflictWithRecord.mockReturnValue({
           resolution: 'REMOTE_WINS',
           conflict: {
-            entityType: 'PERSONA',
-            localId: 'persona-1',
-            remoteId: 'persona-1',
+            entityType: 'CHARACTER',
+            localId: 'char-1',
+            remoteId: 'char-1',
             resolution: 'REMOTE_WINS',
             localUpdatedAt: now.toISOString(),
             remoteUpdatedAt: later.toISOString(),
@@ -572,9 +525,9 @@ describe('Sync Service', () => {
         await applyRemoteDelta(userId, instanceId, delta);
 
         expect(mockedResolveConflictWithRecord).toHaveBeenCalledWith(
-          'PERSONA',
-          { id: 'persona-1', updatedAt: now.toISOString() },
-          'persona-1',
+          'CHARACTER',
+          { id: 'char-1', updatedAt: now.toISOString() },
+          'char-1',
           later.toISOString()
         );
       });
@@ -824,19 +777,19 @@ describe('Sync Service', () => {
           data: { name: 'Character 1' },
         },
         {
-          entityType: 'PERSONA',
-          id: 'persona-1',
+          entityType: 'TAG',
+          id: 'tag-1',
           createdAt: earlier.toISOString(),
           updatedAt: now.toISOString(),
           isDeleted: false,
-          data: { name: 'Persona 1' },
+          data: { name: 'Tag 1' },
         },
       ];
 
       mockRepos.characters.findById.mockResolvedValue(null);
       mockRepos.characters.createOrUpdate.mockResolvedValue({ id: 'char-1', updatedAt: now.toISOString() });
-      mockRepos.personas.findById.mockResolvedValue(null);
-      mockRepos.personas.createOrUpdate.mockResolvedValue({ id: 'persona-1', updatedAt: now.toISOString() });
+      mockRepos.tags.findById.mockResolvedValue(null);
+      mockRepos.tags.createOrUpdate.mockResolvedValue({ id: 'tag-1', updatedAt: now.toISOString() });
 
       const result = await processRemoteDeltas(userId, instanceId, deltas);
 
@@ -1421,12 +1374,12 @@ describe('Sync Service', () => {
           data: { name: 'Tag 1' },
         },
         {
-          entityType: 'PERSONA',
-          id: 'persona-1',
+          entityType: 'FILE',
+          id: 'file-1',
           createdAt: earlier.toISOString(),
           updatedAt: now.toISOString(),
           isDeleted: false,
-          data: { name: 'Persona 1' },
+          data: { name: 'File 1' },
         },
         {
           entityType: 'CHARACTER',
@@ -1448,8 +1401,8 @@ describe('Sync Service', () => {
 
       mockRepos.tags.findById.mockResolvedValue(null);
       mockRepos.tags.createOrUpdate.mockResolvedValue({ id: 'tag-1', updatedAt: now.toISOString() });
-      mockRepos.personas.findById.mockResolvedValue(null);
-      mockRepos.personas.createOrUpdate.mockResolvedValue({ id: 'persona-1', updatedAt: now.toISOString() });
+      mockRepos.files.findById.mockResolvedValue(null);
+      mockRepos.files.createOrUpdate.mockResolvedValue({ id: 'file-1', updatedAt: now.toISOString() });
       mockRepos.characters.findById.mockResolvedValue(null);
       mockRepos.characters.createOrUpdate.mockResolvedValue({ id: 'char-1', updatedAt: now.toISOString() });
       mockRepos.chats.findById.mockResolvedValue(null);

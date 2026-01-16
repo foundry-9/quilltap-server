@@ -70,24 +70,6 @@ async function getEntityDeltas(
         break;
       }
 
-      case 'PERSONA': {
-        const personas = await repos.personas.findByUserId(userId);
-        for (const persona of personas) {
-          if (!sinceTimestamp || persona.updatedAt > sinceTimestamp) {
-            deltas.push({
-              entityType: 'PERSONA',
-              id: persona.id,
-              createdAt: persona.createdAt,
-              updatedAt: persona.updatedAt,
-              isDeleted: false,
-              data: persona as unknown as Record<string, unknown>,
-            });
-          }
-          if (deltas.length >= limit) break;
-        }
-        break;
-      }
-
       case 'CHAT': {
         const chats = await repos.chats.findByUserId(userId);
         for (const chat of chats) {
@@ -343,7 +325,7 @@ export async function detectDeltas(options: DeltaDetectionOptions): Promise<Delt
   const {
     userId,
     // Enforced sync order - entities with dependencies come after their dependencies
-    entityTypes = ['TAG', 'FILE', 'PROJECT', 'CONNECTION_PROFILE', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
+    entityTypes = ['TAG', 'FILE', 'PROJECT', 'CONNECTION_PROFILE', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
     sinceTimestamp = null,
     limit = 100,
   } = options;
@@ -420,7 +402,7 @@ export async function countDeltas(options: DeltaDetectionOptions): Promise<Recor
   const {
     userId,
     // Enforced sync order - entities with dependencies come after their dependencies
-    entityTypes = ['TAG', 'FILE', 'PROJECT', 'CONNECTION_PROFILE', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
+    entityTypes = ['TAG', 'FILE', 'PROJECT', 'CONNECTION_PROFILE', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
     sinceTimestamp = null,
   } = options;
 
@@ -471,9 +453,6 @@ export async function getMostRecentUpdate(userId: string): Promise<string | null
 
     const characters = await repos.characters.findByUserId(userId);
     characters.forEach((c) => checkTimestamp(c.updatedAt));
-
-    const personas = await repos.personas.findByUserId(userId);
-    personas.forEach((p) => checkTimestamp(p.updatedAt));
 
     const chats = await repos.chats.findByUserId(userId);
     chats.forEach((c) => checkTimestamp(c.updatedAt));

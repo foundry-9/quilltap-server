@@ -40,11 +40,9 @@ type Repos = RepositoryContainer;
 // ============================================================================
 
 // Participant schema for chat creation
-// Note: PERSONA type is deprecated - use CHARACTER with controlledBy='user' instead
 const createParticipantSchema = z.object({
-  type: z.enum(['CHARACTER', 'PERSONA']), // PERSONA kept for backwards compatibility
-  characterId: z.string().uuid().optional(),
-  personaId: z.string().uuid().optional(), // @deprecated - use characterId with controlledBy='user'
+  type: z.literal('CHARACTER'),
+  characterId: z.string().uuid(),
   connectionProfileId: z.string().uuid().optional(),
   imageProfileId: z.string().uuid().optional(),
   systemPromptOverride: z.string().optional(),
@@ -122,7 +120,6 @@ async function buildCharacterParticipant(
     participant: {
       type: 'CHARACTER',
       characterId: data.characterId,
-      personaId: null,
       controlledBy,
       connectionProfileId: isUserControlled ? null : data.connectionProfileId || null,
       imageProfileId: data.imageProfileId || null,
@@ -134,44 +131,6 @@ async function buildCharacterParticipant(
   };
 }
 
-/**
- * @deprecated Use CHARACTER with controlledBy='user' instead
- */
-async function buildPersonaParticipant(
-  data: z.infer<typeof createParticipantSchema>,
-  displayOrder: number,
-  userId: string,
-  repos: Repos
-): Promise<ParticipantBuildResult> {
-  if (!data.personaId) {
-    return { error: 'personaId is required for PERSONA participants' };
-  }
-
-  const persona = await repos.personas.findById(data.personaId);
-  if (persona?.userId !== userId) {
-    return { error: 'Persona not found' };
-  }
-
-  logger.warn('PERSONA participant type is deprecated - use CHARACTER with controlledBy=user instead', {
-    context: 'buildPersonaParticipant',
-    personaId: data.personaId,
-  });
-
-  return {
-    participant: {
-      type: 'PERSONA',
-      characterId: null,
-      personaId: data.personaId,
-      controlledBy: 'user',
-      connectionProfileId: null,
-      imageProfileId: null,
-      systemPromptOverride: data.systemPromptOverride || null,
-      displayOrder,
-      isActive: true,
-    },
-    tags: persona.tags || [],
-  };
-}
 
 async function buildAllParticipants(
   participantsData: z.infer<typeof createParticipantSchema>[],
@@ -185,10 +144,8 @@ async function buildAllParticipants(
 
   for (let i = 0; i < participantsData.length; i++) {
     const participantData = participantsData[i];
-    const builder =
-      participantData.type === 'CHARACTER' ? buildCharacterParticipant : buildPersonaParticipant;
 
-    const result = await builder(participantData, i, userId, repos);
+    const result = await buildCharacterParticipant(participantData, i, userId, repos);
     if ('error' in result) {
       return result;
     }
@@ -199,19 +156,12 @@ async function buildAllParticipants(
     }
 
     const isUserControlled = result.participant.controlledBy === 'user';
-    if (participantData.type === 'CHARACTER' && !isUserControlled && !firstLLMCharacter && participantData.characterId) {
+    if (!isUserControlled && !firstLLMCharacter && participantData.characterId) {
       firstLLMCharacter = { characterId: participantData.characterId };
     }
 
-    if (participantData.type === 'CHARACTER' && isUserControlled && !firstUserCharacterId && participantData.characterId) {
+    if (isUserControlled && !firstUserCharacterId && participantData.characterId) {
       firstUserCharacterId = participantData.characterId;
-    }
-
-    if (participantData.type === 'PERSONA' && !firstUserCharacterId && participantData.personaId) {
-      logger.debug('Legacy PERSONA participant - persona data will be used directly', {
-        context: 'buildAllParticipants',
-        personaId: participantData.personaId,
-      });
     }
   }
 
@@ -610,7 +560,6 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
         chatData: body.chatData,
         characterId: body.characterId,
         connectionProfileId: body.connectionProfileId,
-        personaId: body.personaId,
         title: body.title,
       };
 
@@ -618,13 +567,11 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
         const result = await importLegacyChat(user.id, options, repos);
 
         const character = result.chat.participants.find((p) => p.type === 'CHARACTER')?.character;
-        const persona = result.chat.participants.find((p) => p.type === 'PERSONA')?.persona;
 
         return NextResponse.json(
           {
             ...result.chat,
             character,
-            persona,
             connectionProfile: { id: body.connectionProfileId },
           },
           { status: 201 }

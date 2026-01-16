@@ -25,7 +25,6 @@ import type { MemoryChatSettings } from './memory-trigger.service'
 import {
   resolveRespondingParticipant,
   loadAllParticipantData,
-  getPersonaData,
   getRoleplayTemplate,
 } from './participant-resolver.service'
 import {
@@ -170,8 +169,9 @@ async function processMessage(
     apiKey = rawApiKey
   }
 
-  // Get persona data
-  const { persona, personaData } = await getPersonaData(repos, chat)
+  // Get persona data (kept for backward compatibility with legacy participant types)
+  let persona: { name: string; description: string } | null = null
+  let personaData: { name: string; description: string } | null = null
 
   // Get user-controlled character ID (for memory aboutCharacterId)
   // This is the character that the user is "playing as" in this chat
@@ -252,17 +252,14 @@ async function processMessage(
 
   // Load participant data for multi-character chats
   let participantCharacters = new Map()
-  let participantPersonas = new Map()
 
   if (isMultiCharacter) {
     const participantData = await loadAllParticipantData(
       repos,
       chat,
-      character,
-      personaData
+      character
     )
     participantCharacters = participantData.participantCharacters
-    participantPersonas = participantData.participantPersonas
   }
 
   // Get existing messages
@@ -395,10 +392,8 @@ async function processMessage(
       characterParticipant,
       connectionProfile,
       persona,
-      personaData,
       isMultiCharacter,
       participantCharacters,
-      participantPersonas,
       roleplayTemplate,
       chatSettings: contextChatSettings,
       pseudoToolInstructions,
@@ -809,10 +804,11 @@ async function processMessage(
         cheapLLMSettings: chatSettings.cheapLLMSettings,
       }
 
+      // Note: personaName is undefined since we only support CHARACTER type participants now
       await triggerMemoryExtraction(repos, {
         characterId: character.id,
         characterName: character.name,
-        personaName: personaData?.name,
+        personaName: undefined,
         userCharacterId,
         allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
         chatId,
@@ -934,7 +930,7 @@ async function processMessage(
           selection: cheapLLMSelection,
           userId,
           characterName: character.name,
-          userName: personaData?.name || 'User',
+          userName: 'User',
         },
       })
     }

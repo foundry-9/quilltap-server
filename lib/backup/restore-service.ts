@@ -22,7 +22,6 @@ import type {
 } from './types';
 import type {
   Character,
-  Persona,
   Tag,
   ConnectionProfile,
   ImageProfile,
@@ -88,7 +87,6 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
   // Read all data files
   const manifest = readJson<BackupManifest>('manifest.json');
   const characters = readJson<Character[]>('data/characters.json');
-  const personas = readJson<Persona[]>('data/personas.json');
   const chats = readJson<ChatWithMessages[]>('data/chats.json');
   const tags = readJson<Tag[]>('data/tags.json');
   const connectionProfiles = readJson<ConnectionProfile[]>('data/connection-profiles.json');
@@ -113,7 +111,6 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
   return {
     manifest,
     characters,
-    personas,
     chats,
     tags,
     connectionProfiles,
@@ -169,7 +166,6 @@ export function previewRestore(zipBuffer: Buffer): RestoreSummary {
 
   return {
     characters: data.characters.length,
-    personas: data.personas.length,
     chats: data.chats.length,
     messages: totalMessages,
     tags: data.tags.length,
@@ -201,10 +197,9 @@ async function deleteUserData(userId: string): Promise<void> {
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects] =
     await Promise.all([
       repos.characters.findAll(),
-      repos.personas.findAll(),
       repos.chats.findAll(),
       repos.tags.findAll(),
       repos.files.findAll(),
@@ -227,7 +222,6 @@ async function deleteUserData(userId: string): Promise<void> {
   // Delete all entities (including user-created templates and projects)
   await Promise.all([
     ...characters.map((c) => repos.characters.delete(c.id)),
-    ...personas.map((p) => repos.personas.delete(p.id)),
     ...chats.map((c) => repos.chats.delete(c.id)),
     ...tags.map((t) => repos.tags.delete(t.id)),
     ...connectionProfiles.map((cp) => repos.connections.delete(cp.id)),
@@ -257,7 +251,6 @@ async function deleteUserData(userId: string): Promise<void> {
     userId,
     deletedCounts: {
       characters: characters.length,
-      personas: personas.length,
       chats: chats.length,
       tags: tags.length,
       files: files.length,
@@ -276,7 +269,6 @@ async function deleteUserData(userId: string): Promise<void> {
  */
 export interface DeleteSummary {
   characters: number;
-  personas: number;
   chats: number;
   tags: number;
   files: number;
@@ -312,10 +304,9 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
   const globalRepos = getRepositories();
 
   // First, count everything before deletion
-  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys, projects] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys, projects] =
     await Promise.all([
       repos.characters.findAll(),
-      repos.personas.findAll(),
       repos.chats.findAll(),
       repos.tags.findAll(),
       repos.files.findAll(),
@@ -413,7 +404,6 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
 
   const summary: DeleteSummary = {
     characters: characters.length,
-    personas: personas.length,
     chats: chats.length,
     tags: tags.length,
     files: files.length,
@@ -454,10 +444,9 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
 
-  const [characters, personas, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys, projects] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys, projects] =
     await Promise.all([
       repos.characters.findAll(),
-      repos.personas.findAll(),
       repos.chats.findAll(),
       repos.tags.findAll(),
       repos.files.findAll(),
@@ -494,7 +483,6 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
 
   return {
     characters: characters.length,
-    personas: personas.length,
     chats: chats.length,
     tags: tags.length,
     files: files.length,
@@ -576,22 +564,6 @@ function remapBackupData(
     return remapped as Character;
   });
 
-  // Remap personas
-  const remappedPersonas = data.personas.map((persona) => {
-    const remapped = {
-      ...remapper.remapFields(persona, ['id', 'defaultImageId']),
-      ...remapper.remapArrayFields(persona, ['tags', 'characterLinks']),
-      userId: targetUserId,
-    };
-    // Handle physicalDescriptions
-    if (remapped.physicalDescriptions) {
-      remapped.physicalDescriptions = remapped.physicalDescriptions.map((desc: PhysicalDescription) => ({
-        ...desc,
-        id: remapper.remap(desc.id),
-      }));
-    }
-    return remapped as Persona;
-  });
 
   // Remap connection profiles
   const remappedConnectionProfiles = data.connectionProfiles.map((profile) => ({
@@ -627,7 +599,6 @@ function remapBackupData(
       ...remapper.remapFields(participant, [
         'id',
         'characterId',
-        'personaId',
         'connectionProfileId',
         'imageProfileId',
       ]),
@@ -642,9 +613,9 @@ function remapBackupData(
     return remappedChat as ChatWithMessages;
   });
 
-  // Remap memories (including aboutCharacterId for Characters Not Personas)
+  // Remap memories
   const remappedMemories = data.memories.map((memory) => ({
-    ...remapper.remapFields(memory, ['id', 'characterId', 'personaId', 'aboutCharacterId', 'chatId', 'sourceMessageId']),
+    ...remapper.remapFields(memory, ['id', 'characterId', 'aboutCharacterId', 'chatId', 'sourceMessageId']),
     ...remapper.remapArrayFields(memory, ['tags']),
   })) as Memory[];
 
@@ -675,7 +646,6 @@ function remapBackupData(
   return {
     manifest: data.manifest,
     characters: remappedCharacters,
-    personas: remappedPersonas,
     chats: remappedChats,
     tags: remappedTags as Tag[],
     connectionProfiles: remappedConnectionProfiles,
@@ -728,7 +698,6 @@ export async function restore(
   const embeddingProfileIdMap = new Map<string, string>();
   const fileIdMap = new Map<string, string>();
   const characterIdMap = new Map<string, string>();
-  const personaIdMap = new Map<string, string>();
   const chatIdMap = new Map<string, string>();
   const projectIdMap = new Map<string, string>();
 
@@ -840,22 +809,7 @@ export async function restore(
     }
   }
 
-  // 7. Personas
-  moduleLogger.debug('Restoring personas', { count: data.personas.length });
-  for (const persona of data.personas) {
-    try {
-      const { id: backupId, userId, createdAt, updatedAt, ...personaData } = persona;
-      const createdPersona = await repos.personas.create(personaData);
-      // Track the mapping from backup ID to newly created ID
-      personaIdMap.set(backupId, createdPersona.id);
-      moduleLogger.debug('Persona ID mapping created', { backupId, newId: createdPersona.id });
-    } catch (error) {
-      warnings.push(`Failed to restore persona "${persona.name}": ${error instanceof Error ? error.message : String(error)}`);
-      moduleLogger.warn('Failed to restore persona', { personaId: persona.id, error });
-    }
-  }
-
-  // 8. Chats (with messages)
+  // 7. Chats (with messages)
   moduleLogger.debug('Restoring chats', { count: data.chats.length });
   let messagesRestored = 0;
   for (const chat of data.chats) {
@@ -898,23 +852,13 @@ export async function restore(
         continue;
       }
 
-      // Remap personaId if present (legacy backups)
-      let newPersonaId = memoryData.personaId;
-      if (memoryData.personaId) {
-        newPersonaId = personaIdMap.get(memoryData.personaId) || null;
-        if (!newPersonaId) {
-          moduleLogger.debug('Memory personaId not found in restored personas, setting to null', {
-            memoryId: memory.id,
-            backupPersonaId: memoryData.personaId,
-          });
-        }
-      }
+      // Personas are no longer supported; clear personaId for backwards compatibility
+      const newPersonaId = null;
 
       // Remap aboutCharacterId if present (new backups with Characters Not Personas)
       let newAboutCharacterId = memoryData.aboutCharacterId;
       if (memoryData.aboutCharacterId) {
-        newAboutCharacterId = characterIdMap.get(memoryData.aboutCharacterId) ||
-                              personaIdMap.get(memoryData.aboutCharacterId) || null;
+        newAboutCharacterId = characterIdMap.get(memoryData.aboutCharacterId) || null;
         if (!newAboutCharacterId) {
           moduleLogger.debug('Memory aboutCharacterId not found in restored entities, setting to null', {
             memoryId: memory.id,
@@ -1013,7 +957,6 @@ export async function restore(
       connectionProfiles: connectionProfileIdMap.size,
       imageProfiles: imageProfileIdMap.size,
       characters: characterIdMap.size,
-      personas: personaIdMap.size,
       chats: chatIdMap.size,
       projects: projectIdMap.size,
     },
@@ -1069,17 +1012,9 @@ export async function restore(
         }
       }
 
-      // Remap personaLinks
+      // Personas are no longer supported; clear personaLinks for backwards compatibility
       if (originalChar.personaLinks && originalChar.personaLinks.length > 0) {
-        updates.personaLinks = originalChar.personaLinks
-          .map((link) => {
-            const newPersonaId = remapId(link.personaId, personaIdMap);
-            if (newPersonaId) {
-              return { ...link, personaId: newPersonaId };
-            }
-            return null;
-          })
-          .filter((link) => link !== null) as { personaId: string; isDefault: boolean }[];
+        updates.personaLinks = [];
         hasUpdates = true;
       }
 
@@ -1117,54 +1052,7 @@ export async function restore(
     }
   }
 
-  // 14. Update personas with correct relationship IDs
-  moduleLogger.debug('Reconciling persona relationships');
-  for (const [backupId, newId] of personaIdMap) {
-    try {
-      const originalPersona = data.personas.find((p) => p.id === backupId);
-      if (!originalPersona) continue;
-
-      const updates: Partial<Persona> = {};
-      let hasUpdates = false;
-
-      // Remap defaultImageId
-      if (originalPersona.defaultImageId) {
-        const newImageId = remapId(originalPersona.defaultImageId, fileIdMap);
-        if (newImageId) {
-          updates.defaultImageId = newImageId;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap characterLinks
-      if (originalPersona.characterLinks && originalPersona.characterLinks.length > 0) {
-        const remappedCharLinks = remapIdArray(originalPersona.characterLinks, characterIdMap);
-        if (remappedCharLinks.length > 0) {
-          updates.characterLinks = remappedCharLinks;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap tags
-      if (originalPersona.tags && originalPersona.tags.length > 0) {
-        const remappedTags = remapIdArray(originalPersona.tags, tagIdMap);
-        if (remappedTags.length > 0) {
-          updates.tags = remappedTags;
-          hasUpdates = true;
-        }
-      }
-
-      if (hasUpdates) {
-        await repos.personas.update(newId, updates);
-        moduleLogger.debug('Updated persona relationships', { personaId: newId, updates: Object.keys(updates) });
-      }
-    } catch (error) {
-      warnings.push(`Failed to reconcile persona relationships: ${error instanceof Error ? error.message : String(error)}`);
-      moduleLogger.warn('Failed to reconcile persona relationships', { personaId: newId, error });
-    }
-  }
-
-  // 15. Update chats with correct participant IDs
+  // 14. Update chats with correct participant IDs
   moduleLogger.debug('Reconciling chat relationships');
   for (const [backupId, newId] of chatIdMap) {
     try {
@@ -1182,11 +1070,6 @@ export async function restore(
           if (participant.characterId) {
             const newCharId = remapId(participant.characterId, characterIdMap);
             if (newCharId) remapped.characterId = newCharId;
-          }
-
-          if (participant.personaId) {
-            const newPersonaId = remapId(participant.personaId, personaIdMap);
-            if (newPersonaId) remapped.personaId = newPersonaId;
           }
 
           if (participant.connectionProfileId) {
@@ -1232,7 +1115,7 @@ export async function restore(
     }
   }
 
-  // 16. Update projects with correct characterRoster IDs
+  // 15. Update projects with correct characterRoster IDs
   moduleLogger.debug('Reconciling project relationships');
   for (const [backupId, newId] of projectIdMap) {
     try {
@@ -1265,7 +1148,6 @@ export async function restore(
 
   const summary: RestoreSummary = {
     characters: data.characters.length,
-    personas: data.personas.length,
     chats: data.chats.length,
     messages: messagesRestored,
     tags: data.tags.length,

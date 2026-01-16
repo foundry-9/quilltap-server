@@ -54,7 +54,6 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
     const { searchParams } = new URL(req.url);
     const sortByCharacter = searchParams.get('sortByCharacter');
-    const sortByPersona = searchParams.get('sortByPersona');
     const imageCapable = searchParams.get('imageCapable') === 'true';
 
     logger.debug('[Connection Profiles v1] GET list', {
@@ -119,13 +118,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
       const character = await repos.characters.findById(sortByCharacter);
       const characterTagIds = new Set(character?.tags || []);
 
-      let personaTagIds = new Set<string>();
-      if (sortByPersona) {
-        const persona = await repos.personas.findById(sortByPersona);
-        personaTagIds = new Set(persona?.tags || []);
-      }
-
-      const allTagIds = new Set([...characterTagIds, ...personaTagIds]);
+      const allTagIds = characterTagIds;
 
       enrichedProfiles.sort((a, b) => {
         const aMatchingTags = a.tags.filter((t) => t && allTagIds.has(t.tagId)).length;

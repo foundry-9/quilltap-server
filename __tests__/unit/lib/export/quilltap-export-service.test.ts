@@ -78,10 +78,10 @@ describe('quilltap-export-service', () => {
 
     it('should generate different filenames for different types', () => {
       const charFilename = generateExportFilename('characters');
-      const personaFilename = generateExportFilename('personas');
+      const tagFilename = generateExportFilename('tags');
 
       expect(charFilename).toContain('characters');
-      expect(personaFilename).toContain('personas');
+      expect(tagFilename).toContain('tags');
     });
 
     it('should use .qtap extension', () => {
@@ -175,27 +175,6 @@ describe('quilltap-export-service', () => {
       expect(exportedChar._tagNames).toEqual(['Important']);
     });
 
-    it('should resolve linked persona names', async () => {
-      const persona = createMockPersona({ userId: testUserId, name: 'Test Persona' });
-      const character = createMockCharacter({
-        userId: testUserId,
-        personaLinks: [{ personaId: persona.id, isDefault: true }],
-      });
-
-      configureFindById(mockUserRepos.characters.findById, [character]);
-      configureFindById(mockUserRepos.personas.findById, [persona]);
-
-      const result = await createExport(testUserId, {
-        type: 'characters',
-        scope: 'selected',
-        selectedIds: [character.id],
-        includeMemories: false,
-      });
-
-      const exportedChar = (result.data as any).characters[0];
-      expect(exportedChar._linkedPersonaNames).toEqual(['Test Persona']);
-    });
-
     it('should skip characters that do not exist', async () => {
       const character = createMockCharacter({ userId: testUserId });
       configureFindById(mockUserRepos.characters.findById, [character]);
@@ -220,48 +199,6 @@ describe('quilltap-export-service', () => {
 
       expect(result.manifest.counts.characters).toBe(0);
       expect((result.data as any).characters).toHaveLength(0);
-    });
-  });
-
-  // ============================================================================
-  // createExport() - Persona Tests
-  // ============================================================================
-
-  describe('createExport() - personas', () => {
-    it('should export selected personas', async () => {
-      const persona = createMockPersona({ userId: testUserId });
-      configureFindById(mockUserRepos.personas.findById, [persona]);
-
-      const result = await createExport(testUserId, {
-        type: 'personas',
-        scope: 'selected',
-        selectedIds: [persona.id],
-        includeMemories: false,
-      });
-
-      expect(result.manifest.exportType).toBe('personas');
-      expect(result.manifest.counts.personas).toBe(1);
-    });
-
-    it('should resolve linked character names for personas', async () => {
-      const character = createMockCharacter({ userId: testUserId, name: 'Linked Character' });
-      const persona = createMockPersona({
-        userId: testUserId,
-        characterLinks: [character.id],
-      });
-
-      configureFindById(mockUserRepos.personas.findById, [persona]);
-      configureFindById(mockUserRepos.characters.findById, [character]);
-
-      const result = await createExport(testUserId, {
-        type: 'personas',
-        scope: 'selected',
-        selectedIds: [persona.id],
-        includeMemories: false,
-      });
-
-      const exportedPersona = (result.data as any).personas[0];
-      expect(exportedPersona._linkedCharacterNames).toEqual(['Linked Character']);
     });
   });
 

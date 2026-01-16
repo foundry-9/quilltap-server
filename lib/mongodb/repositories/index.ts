@@ -13,7 +13,6 @@ export { MongoBaseRepository, type CreateOptions } from './base.repository';
 
 // Export all repository classes
 export { CharactersRepository } from './characters.repository';
-export { PersonasRepository } from './personas.repository';
 export { MongoChatsRepository } from './chats.repository';
 export { MongoTagsRepository } from './tags.repository';
 export { UsersRepository } from './users.repository';
@@ -40,7 +39,6 @@ export { FoldersRepository } from './folders.repository';
 // Import all repository classes
 import { MongoBaseRepository } from './base.repository';
 import { CharactersRepository } from './characters.repository';
-import { PersonasRepository } from './personas.repository';
 import { MongoChatsRepository } from './chats.repository';
 import { MongoTagsRepository } from './tags.repository';
 import { UsersRepository } from './users.repository';
@@ -70,7 +68,6 @@ import { FoldersRepository } from './folders.repository';
  */
 export interface RepositoryContainer {
   characters: CharactersRepository;
-  personas: PersonasRepository;
   chats: MongoChatsRepository;
   tags: MongoTagsRepository;
   users: UsersRepository;
@@ -120,7 +117,6 @@ export function createRepositories(): RepositoryContainer {
   try {
     const repositories: RepositoryContainer = {
       characters: new CharactersRepository(),
-      personas: new PersonasRepository(),
       chats: new MongoChatsRepository(),
       tags: new MongoTagsRepository(),
       users: new UsersRepository(),

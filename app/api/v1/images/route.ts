@@ -78,24 +78,15 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
     images.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     // Transform to match expected API response format
-    const [allCharacters, allPersonas] = await Promise.all([
-      repos.characters.findByUserId(user.id),
-      repos.personas.findByUserId(user.id),
-    ]);
+    const allCharacters = await repos.characters.findByUserId(user.id);
 
     // Build tag type lookup maps
     const characterIds = new Set(allCharacters.map(c => c.id));
-    const personaIds = new Set(allPersonas.map(p => p.id));
 
     const data = images.map(img => {
       // Count characters using this image as default
       const charactersUsingAsDefault = allCharacters.filter(
         c => c.defaultImageId === img.id
-      ).length;
-
-      // Count personas using this image as default
-      const personasUsingAsDefault = allPersonas.filter(
-        p => p.defaultImageId === img.id
       ).length;
 
       // Count chat avatar overrides
@@ -110,11 +101,9 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
 
       // Determine tag type for each tag ID
       const tags = img.tags.map(tagId => {
-        let tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME' = 'THEME';
+        let tagType: 'CHARACTER' | 'CHAT' | 'THEME' = 'THEME';
         if (characterIds.has(tagId)) {
           tagType = 'CHARACTER';
-        } else if (personaIds.has(tagId)) {
-          tagType = 'PERSONA';
         }
         return { tagId, tagType };
       });
@@ -145,7 +134,6 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
         tags,
         _count: {
           charactersUsingAsDefault,
-          personasUsingAsDefault,
           chatAvatarOverrides,
         },
       };

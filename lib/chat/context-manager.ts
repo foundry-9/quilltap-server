@@ -13,7 +13,7 @@
  * - Includes other participants in system prompt for context
  */
 
-import { Provider, Character, Persona, ChatParticipantBase, ChatMetadataBase, TimestampConfig } from '@/lib/schemas/types'
+import { Provider, Character, ChatParticipantBase, ChatMetadataBase, TimestampConfig } from '@/lib/schemas/types'
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
@@ -203,8 +203,6 @@ export interface BuildContextOptions {
   allParticipants?: ChatParticipantBase[]
   /** Map of participant ID -> Character data (for characters) */
   participantCharacters?: Map<string, Character>
-  /** Map of participant ID -> Persona data (for personas) */
-  participantPersonas?: Map<string, Persona>
   /** Extended messages with participantId for attribution */
   messagesWithParticipants?: MessageWithParticipant[]
 
@@ -289,7 +287,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     respondingParticipant,
     allParticipants,
     participantCharacters,
-    participantPersonas,
     messagesWithParticipants,
     // Pseudo-tool support
     pseudoToolInstructions,
@@ -306,7 +303,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     allParticipants &&
     allParticipants.length > 1 &&
     participantCharacters &&
-    participantPersonas &&
     messagesWithParticipants
   )
 
@@ -319,12 +315,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
   // 1. Build system prompt (with multi-character info if applicable)
   let otherParticipantsInfo: OtherParticipantInfo[] | undefined
-  if (isMultiCharacter && respondingParticipant && allParticipants && participantCharacters && participantPersonas) {
+  if (isMultiCharacter && respondingParticipant && allParticipants && participantCharacters) {
     otherParticipantsInfo = buildOtherParticipantsInfo(
       respondingParticipant.id,
       allParticipants,
-      participantCharacters,
-      participantPersonas
+      participantCharacters
     )
   }
 
@@ -609,7 +604,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // 5. Prepare messages based on single vs multi-character mode
   let messagesToProcess: SelectableMessage[]
 
-  if (isMultiCharacter && respondingParticipant && allParticipants && participantCharacters && participantPersonas && messagesWithParticipants) {
+  if (isMultiCharacter && respondingParticipant && allParticipants && participantCharacters && messagesWithParticipants) {
     // Multi-character mode: filter by history access, then attribute messages
 
     // 5a. Filter messages by history access
@@ -630,7 +625,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       filteredMessages,
       respondingParticipant.id,
       participantCharacters,
-      participantPersonas,
       allParticipants
     )
 
@@ -728,11 +722,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   }
 
   // Add new user message (only if provided - not in continue mode)
-  // In multi-character mode, include the user's character name (or legacy persona name)
+  // In multi-character mode, include the user's character name
   if (newUserMessage) {
     let newUserMsgName: string | undefined
-    if (isMultiCharacter && allParticipants && participantCharacters && participantPersonas) {
-      newUserMsgName = findUserParticipantName(allParticipants, participantCharacters, participantPersonas)
+    if (isMultiCharacter && allParticipants && participantCharacters) {
+      newUserMsgName = findUserParticipantName(allParticipants, participantCharacters)
     }
 
     contextMessages.push({

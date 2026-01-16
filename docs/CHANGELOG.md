@@ -4,6 +4,34 @@
 
 ### 2.7-dev
 
+- fix: Fix capabilities report generation 500 error (2026-01-15)
+  - Fixed sha256 hash computation using string input instead of Buffer to resolve TypeScript type mismatch
+  - Report files now properly save with valid SHA256 hash
+- feat: Complete removal of personas from codebase (2026-01-15)
+  - Removed all `/api/personas/*` API endpoints
+  - Removed persona database repository and collection references
+  - Removed PERSONA participant type; chats now use CHARACTER type with `controlledBy: 'user'`
+  - Removed persona TypeScript type definitions and schema
+  - Removed all persona-related unit and integration tests
+  - Updated backup/restore system to gracefully handle legacy persona data
+  - All user personas automatically migrated to user-controlled characters (permanent, one-way migration)
+  - Preserved all persona IDs during migration to maintain references in chats and memories
+  - Updated API documentation to remove persona references (`sortByPersona` parameter removed)
+  - User-controlled characters now fully replace the legacy persona system
+- fix: Update remaining failing tests after persona removal (2026-01-15)
+  - Updated backup restore test to remove expectations for `summary.personas` field
+  - Updated message-formatter test to use CHARACTER type with "User" name instead of PERSONA type
+  - Removed import service test for persona previews (personas no longer supported)
+  - Removed all export service tests for personas (replaced with character-based tests where applicable)
+  - All four test files now pass with complete persona removal
+- fix: Update backup and restore services to remove persona support (2026-01-15)
+  - Removed `personas` collection from backup data collection and manifest counts
+  - Removed `personas.json` file from backup archives
+  - Added backwards compatibility: old backups with personas.json are now skipped (personas.json is optional)
+  - Memory restoration now clears `personaId` fields for backwards compatibility with old backups
+  - Character restoration now clears `personaLinks` arrays since personas are no longer supported
+  - Participant restoration in chats now clears `personaId` for old data
+  - Updated `BackupData`, `BackupManifest`, `RestoreSummary`, and `DeleteSummary` types to remove persona fields
 - feat: Migrate themes, search-replace, sample-prompts, and chat-files to v1 API (2026-01-15)
   - Created new v1 routes:
     - `/api/v1/themes` (GET) - List available themes

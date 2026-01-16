@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
-import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
+import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 
 interface Message {
   id: string
@@ -49,7 +49,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
   const { shouldHideByIds } = useQuickHide()
-  const { formatPersonaName } = usePersonaDisplayName()
+  const { formatCharacterName } = useUserCharacterDisplayName()
   const visibleChats = useMemo(
     () => chats.filter(chat => !shouldHideByIds((chat.tags || []).map(ct => ct.tag.id))),
     [chats, shouldHideByIds]
@@ -72,7 +72,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
 
     try {
       const url = new URL(`/api/v1/characters/${characterId}`, window.location.origin)
-      url.searchParams.set('action', 'get-chats')
+      url.searchParams.set('action', 'chats')
       url.searchParams.set('limit', String(CHATS_PER_PAGE))
       url.searchParams.set('offset', String(pageNum * CHATS_PER_PAGE))
       if (search) {
@@ -293,7 +293,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                 <p className="qt-text-small">
                   {chat.persona && (
                     <>
-                      with {formatPersonaName(chat.persona)}
+                      with {formatCharacterName(chat.persona)}
                       {' \u2022 '}
                     </>
                   )}

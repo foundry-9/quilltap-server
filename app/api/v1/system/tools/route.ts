@@ -18,6 +18,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError } from '@/lib/api/responses';
@@ -345,27 +346,6 @@ async function handleExportEntities(req: NextRequest, context: any) {
             id: char.id,
             name: char.name,
             memoryCount: charMemoryCount,
-          });
-        }
-        break;
-      }
-
-      case 'personas': {
-        const personas = await repos.personas.findAll();
-        const characters = await repos.characters.findAll();
-        const allMemoriesArrays = await Promise.all(
-          characters.map((char) => repos.memories.findByCharacterId(char.id))
-        );
-        const allMemories = allMemoriesArrays.flat();
-
-        for (const persona of personas) {
-          const personaMemories = allMemories.filter((m) => m.personaId === persona.id);
-          const personaMemoryCount = personaMemories.length;
-          totalMemoryCount += personaMemoryCount;
-          entities.push({
-            id: persona.id,
-            name: persona.name,
-            memoryCount: personaMemoryCount,
           });
         }
         break;
@@ -727,14 +707,16 @@ async function handleCapabilitiesReportGenerate(req: NextRequest, context: any) 
     const result = await generateAndSaveReport(user.id);
 
     // Create a file entry in the database for the report
+    const contentBuffer = Buffer.from(result.content, 'utf-8');
+    const sha256Hash = createHash('sha256').update(result.content, 'utf-8').digest('hex');
     const fileEntry = await repos.files.create({
       userId: user.id,
       originalFilename: result.filename,
       mimeType: 'text/markdown',
-      size: Buffer.byteLength(result.content, 'utf-8'),
+      size: contentBuffer.length,
       storageKey: result.s3Key,
       category: 'DOCUMENT',
-      sha256: '',
+      sha256: sha256Hash,
       folderPath: '/reports',
       source: 'SYSTEM',
       projectId: null,

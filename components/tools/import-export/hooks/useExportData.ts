@@ -42,7 +42,7 @@ const initialState: ExportState = {
 
 // Helper to check if entity type supports memories
 const supportsMemories = (type: ExportEntityType | null): boolean =>
-  type === 'characters' || type === 'personas' || type === 'chats'
+  type === 'characters' || type === 'chats'
 
 export function useExportData({
   isOpen,
@@ -55,7 +55,7 @@ export function useExportData({
   })
 
   // Wizard step configuration
-  // Note: transitions vary based on entityType (characters/personas/chats go through 'options')
+  // Note: transitions vary based on entityType (characters/chats go through 'options')
   const wizard = useWizardState<ExportStep>(
     {
       initialStep: 'type',
@@ -76,7 +76,7 @@ export function useExportData({
   // Calculate memory count based on scope and selection
   useEffect(() => {
     // Only calculate for entity types that support memories
-    if (!state.entityType || !['characters', 'personas', 'chats'].includes(state.entityType)) {
+    if (!state.entityType || !['characters', 'chats'].includes(state.entityType)) {
       return
     }
 

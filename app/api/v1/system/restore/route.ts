@@ -196,7 +196,6 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
       mode,
       restoreCounts: {
         characters: summary.characters,
-        personas: summary.personas,
         chats: summary.chats,
         messages: summary.messages,
         tags: summary.tags,

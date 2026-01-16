@@ -11,7 +11,6 @@ import { getUserRepositories } from '@/lib/repositories/factory';
 import { getRepositories } from '@/lib/repositories/factory';
 import type {
   Character,
-  Persona,
   ChatMetadata,
   Tag,
   ConnectionProfile,
@@ -30,7 +29,6 @@ import type {
   ConflictStrategy,
   ImportOptions as ExportImportOptions,
   ExportedCharacter,
-  ExportedPersona,
   ExportedChat,
   ExportedRoleplayTemplate,
   ExportedProject,
@@ -47,7 +45,6 @@ const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
  */
 interface AnyExportData {
   characters?: ExportedCharacter[];
-  personas?: ExportedPersona[];
   chats?: ExportedChat[];
   tags?: Tag[];
   connectionProfiles?: SanitizedConnectionProfile[];
@@ -83,7 +80,6 @@ export interface ImportPreview {
   manifest: QuilltapExportManifest;
   entities: {
     characters?: ImportPreviewEntity[];
-    personas?: ImportPreviewEntity[];
     chats?: ImportPreviewEntity[];
     roleplayTemplates?: ImportPreviewEntity[];
     connectionProfiles?: ImportPreviewEntity[];
@@ -111,7 +107,6 @@ export interface ImportResult {
 interface IdMappingState {
   tags: Map<string, string>;
   characters: Map<string, string>;
-  personas: Map<string, string>;
   chats: Map<string, string>;
   connectionProfiles: Map<string, string>;
   imageProfiles: Map<string, string>;
@@ -236,17 +231,12 @@ export async function previewImport(
   const data = getExportData(exportData);
 
   // Preview all entity types
-  const [characters, personas, chats, tags, connectionProfiles, imageProfiles, embeddingProfiles, roleplayTemplates, projects] =
+  const [characters, chats, tags, connectionProfiles, imageProfiles, embeddingProfiles, roleplayTemplates, projects] =
     await Promise.all([
       checkExists(
         data.characters,
         (id) => repos.characters.findById(id),
         'characters'
-      ),
-      checkExists(
-        data.personas,
-        (id) => repos.personas.findById(id),
-        'personas'
       ),
       checkExists(
         data.chats,
@@ -292,7 +282,6 @@ export async function previewImport(
     manifest: exportData.manifest,
     entities: {
       ...(characters.length > 0 && { characters }),
-      ...(personas.length > 0 && { personas }),
       ...(chats.length > 0 && { chats }),
       ...(tags.length > 0 && { tags }),
       ...(connectionProfiles.length > 0 && { connectionProfiles }),
@@ -341,7 +330,6 @@ export async function executeImport(
   const idMaps: IdMappingState = {
     tags: new Map(),
     characters: new Map(),
-    personas: new Map(),
     chats: new Map(),
     connectionProfiles: new Map(),
     imageProfiles: new Map(),
@@ -353,7 +341,6 @@ export async function executeImport(
   // Initialize counts
   const imported: QuilltapExportCounts = {
     characters: 0,
-    personas: 0,
     chats: 0,
     messages: 0,
     roleplayTemplates: 0,
@@ -367,7 +354,6 @@ export async function executeImport(
 
   const skipped: QuilltapExportCounts = {
     characters: 0,
-    personas: 0,
     chats: 0,
     messages: 0,
     roleplayTemplates: 0,
@@ -476,21 +462,7 @@ export async function executeImport(
       skipped.characters = counts.skipped;
     }
 
-    // 7. Personas
-    if (data.personas && data.personas.length > 0) {
-      const counts = await importPersonas(
-        userId,
-        data.personas,
-        options,
-        idMaps,
-        repos,
-        warnings
-      );
-      imported.personas = counts.imported;
-      skipped.personas = counts.skipped;
-    }
-
-    // 8. Chats
+    // 7. Chats
     if (data.chats && data.chats.length > 0) {
       const counts = await importChats(
         userId,
@@ -505,7 +477,7 @@ export async function executeImport(
       skipped.chats = counts.skipped;
     }
 
-    // 9. Memories (if includeMemories option is enabled)
+    // 8. Memories (if includeMemories option is enabled)
     if (options.includeMemories && data.memories && data.memories.length > 0) {
       const counts = await importMemories(
         userId,
@@ -970,66 +942,6 @@ async function importCharacters(
   return { imported, skipped };
 }
 
-async function importPersonas(
-  userId: string,
-  personas: Persona[],
-  options: ImportOptions,
-  idMaps: IdMappingState,
-  repos: ReturnType<typeof getUserRepositories>,
-  warnings: string[]
-): Promise<ImportCounts> {
-  moduleLogger.debug('Importing personas', { count: personas.length });
-  let imported = 0;
-  let skipped = 0;
-
-  for (const persona of personas) {
-    try {
-      const existing = await repos.personas.findById(persona.id);
-
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          idMaps.personas.set(persona.id, persona.id);
-          continue;
-        }
-
-        if (options.conflictStrategy === 'overwrite') {
-          await repos.personas.delete(persona.id);
-        }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const newId = randomUUID();
-          idMaps.personas.set(persona.id, newId);
-          const { id: _, userId: __, createdAt, updatedAt, ...personaData } = persona;
-          const newPersona = await repos.personas.create({
-            ...personaData,
-            name: `${personaData.name} (imported)`,
-          });
-          imported++;
-          continue;
-        }
-      }
-
-      const { id: _, userId: __, createdAt, updatedAt, ...personaData } = persona;
-      const newPersona = await repos.personas.create(personaData);
-      idMaps.personas.set(persona.id, newPersona.id);
-      imported++;
-    } catch (error) {
-      warnings.push(
-        `Failed to import persona "${persona.name}": ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to import persona', {
-        personaId: persona.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  return { imported, skipped };
-}
-
 async function importChats(
   userId: string,
   chats: (ChatMetadata & { messages: MessageEvent[] })[],
@@ -1144,18 +1056,11 @@ async function importMemories(
         continue;
       }
 
-      // Remap persona ID if present (legacy, for backwards compatibility)
-      let newPersonaId = memory.personaId;
-      if (memory.personaId) {
-        newPersonaId = idMaps.personas.get(memory.personaId) || null;
-      }
-
       // Remap aboutCharacterId if present (Characters Not Personas: who the memory is about)
       let newAboutCharacterId = memory.aboutCharacterId;
       if (memory.aboutCharacterId) {
-        // Try to map as a character first, then as a persona (for migrated data)
-        newAboutCharacterId = idMaps.characters.get(memory.aboutCharacterId) ||
-                              idMaps.personas.get(memory.aboutCharacterId) || null;
+        // Try to map as a character first
+        newAboutCharacterId = idMaps.characters.get(memory.aboutCharacterId) || null;
       }
 
       // Remap chat ID if present
@@ -1168,7 +1073,7 @@ async function importMemories(
       await repos.memories.create({
         ...memoryData,
         characterId: newCharacterId,
-        personaId: newPersonaId,
+        personaId: null,
         aboutCharacterId: newAboutCharacterId,
         chatId: newChatId,
       });
@@ -1244,20 +1149,6 @@ async function reconcileRelationships(
         }
       }
 
-      // Remap personaLinks
-      if (character.personaLinks && character.personaLinks.length > 0) {
-        updates.personaLinks = character.personaLinks
-          .map((link) => {
-            const newPersonaId = remapId(link.personaId, idMaps.personas);
-            if (newPersonaId) {
-              return { ...link, personaId: newPersonaId };
-            }
-            return null;
-          })
-          .filter((link) => link !== null) as { personaId: string; isDefault: boolean }[];
-        hasUpdates = true;
-      }
-
       if (hasUpdates) {
         await repos.characters.update(newId, updates);
         moduleLogger.debug('Reconciled character relationships', {
@@ -1272,52 +1163,6 @@ async function reconcileRelationships(
       );
       moduleLogger.warn('Failed to reconcile character', {
         characterId: newId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  // Reconcile personas
-  for (const [backupId, newId] of idMaps.personas) {
-    try {
-      const persona = await repos.personas.findById(newId);
-      if (!persona) continue;
-
-      const updates: Partial<Persona> = {};
-      let hasUpdates = false;
-
-      // Remap tags
-      if (persona.tags && persona.tags.length > 0) {
-        const remappedTags = remapIdArray(persona.tags, idMaps.tags);
-        if (remappedTags.length > 0) {
-          updates.tags = remappedTags;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap characterLinks
-      if (persona.characterLinks && persona.characterLinks.length > 0) {
-        const remappedCharLinks = remapIdArray(persona.characterLinks, idMaps.characters);
-        if (remappedCharLinks.length > 0) {
-          updates.characterLinks = remappedCharLinks;
-          hasUpdates = true;
-        }
-      }
-
-      if (hasUpdates) {
-        await repos.personas.update(newId, updates);
-        moduleLogger.debug('Reconciled persona relationships', {
-          personaId: newId,
-        });
-      }
-    } catch (error) {
-      warnings.push(
-        `Failed to reconcile persona relationships: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to reconcile persona', {
-        personaId: newId,
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -1341,11 +1186,6 @@ async function reconcileRelationships(
             if (participant.characterId) {
               const newCharId = remapId(participant.characterId, idMaps.characters);
               if (newCharId) remapped.characterId = newCharId;
-            }
-
-            if (participant.personaId) {
-              const newPersonaId = remapId(participant.personaId, idMaps.personas);
-              if (newPersonaId) remapped.personaId = newPersonaId;
             }
 
             if (participant.connectionProfileId) {

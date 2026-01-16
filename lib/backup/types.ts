@@ -7,7 +7,6 @@
 
 import type {
   Character,
-  Persona,
   ChatMetadata,
   Tag,
   ConnectionProfile,
@@ -50,8 +49,6 @@ export interface BackupManifest {
   counts: {
     /** Number of Character entities */
     characters: number;
-    /** Number of Persona entities */
-    personas: number;
     /** Number of Chat entities */
     chats: number;
     /** Total number of messages across all chats */
@@ -96,9 +93,6 @@ export interface BackupData {
 
   /** Array of Character entities */
   characters: Character[];
-
-  /** Array of Persona entities */
-  personas: Persona[];
 
   /** Array of Chat entities with all messages included */
   chats: ChatWithMessages[];
@@ -185,9 +179,6 @@ export interface RestoreOptions {
 export interface RestoreSummary {
   /** Number of Character entities restored */
   characters: number;
-
-  /** Number of Persona entities restored */
-  personas: number;
 
   /** Number of Chat entities restored */
   chats: number;
