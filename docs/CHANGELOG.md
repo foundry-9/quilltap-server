@@ -4,6 +4,14 @@
 
 ### 2.7-dev
 
+- feat: Cache OAuth profile pictures locally to prevent expiration (2026-01-16)
+  - OAuth providers (like Google) return profile picture URLs that expire in 1-2 hours
+  - User sessions last 7 days, causing broken images after URL expiration
+  - Now downloads and stores OAuth profile images using local file storage system
+  - Stores `oauthImageUrl` and `oauthImageHash` on Account document for change detection
+  - On subsequent logins, compares image hash to avoid unnecessary re-downloads
+  - Cleans up old cached images when user changes their OAuth profile picture
+  - Falls back to external URL if image caching fails (login never blocked)
 - feat: Collapsible ParticipantSidebar for multi-character chats (2026-01-16)
   - Sidebar now defaults to collapsed state showing mini avatars
   - Collapsed view displays: toggle chevron, icon-only pause button, vertical avatar stack
