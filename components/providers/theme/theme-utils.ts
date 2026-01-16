@@ -95,7 +95,7 @@ export async function fetchThemeTokens(
   cssOverrides: string | undefined;
 } | null> {
   try {
-    const response = await fetch(`/api/themes/${themeId}/tokens`);
+    const response = await fetch(`/api/v1/themes/${themeId}?action=tokens`);
     if (response.ok) {
       const data: ThemeTokensResponse = await response.json();
       return {
@@ -121,7 +121,7 @@ export async function fetchThemeTokens(
  */
 export async function fetchAvailableThemes(): Promise<ThemeSummary[]> {
   try {
-    const response = await fetch('/api/themes');
+    const response = await fetch('/api/v1/themes');
     if (response.ok) {
       const data: ThemesListResponse = await response.json();
       // Filter out the default theme since it's handled separately in the UI

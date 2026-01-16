@@ -73,7 +73,7 @@ export default function ImageModal({
 
     setIsTagging(true)
     try {
-      const res = await fetch(`/api/chat-files/${fileId}`, {
+      const res = await fetch(`/api/v1/chat-files/${fileId}?action=tag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -101,7 +101,7 @@ export default function ImageModal({
 
     setIsTagging(true)
     try {
-      const res = await fetch(`/api/chat-files/${fileId}`, {
+      const res = await fetch(`/api/v1/chat-files/${fileId}?action=tag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -133,7 +133,7 @@ export default function ImageModal({
 
     setIsDeleting(true)
     try {
-      const res = await fetch(`/api/chat-files/${fileId}`, {
+      const res = await fetch(`/api/v1/chat-files/${fileId}`, {
         method: 'DELETE',
       })
 

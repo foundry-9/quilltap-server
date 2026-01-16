@@ -181,7 +181,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
 
   const handleDeleteChatFile = async (fileId: string) => {
     try {
-      const response = await fetch(`/api/chat-files/${fileId}`, {
+      const response = await fetch(`/api/v1/chat-files/${fileId}`, {
         method: 'DELETE',
       })
 

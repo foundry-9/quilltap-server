@@ -105,7 +105,7 @@ export function useSystemPrompts(
       setLoadingTemplates(true)
       const [templatesRes, samplesRes] = await Promise.all([
         fetch('/api/v1/prompt-templates'),
-        fetch('/api/sample-prompts'),
+        fetch('/api/v1/sample-prompts'),
       ])
 
       if (templatesRes.ok) {

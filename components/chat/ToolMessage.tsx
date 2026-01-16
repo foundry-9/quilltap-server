@@ -317,7 +317,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                             filename={attachment.filename}
                             onCleanup={async () => {
                               try {
-                                const response = await fetch(`/api/chat-files/${attachment.id}`, {
+                                const response = await fetch(`/api/v1/chat-files/${attachment.id}`, {
                                   method: 'DELETE',
                                 })
 

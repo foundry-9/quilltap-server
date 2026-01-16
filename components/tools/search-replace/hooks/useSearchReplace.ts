@@ -64,7 +64,7 @@ export function useSearchReplace(
     setPreviewError(null);
 
     try {
-      const response = await fetch('/api/search-replace/preview', {
+      const response = await fetch('/api/v1/search-replace?action=preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -128,7 +128,7 @@ export function useSearchReplace(
         replaceTextLength: replaceText.length,
       });
 
-      const response = await fetch('/api/search-replace', {
+      const response = await fetch('/api/v1/search-replace?action=execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

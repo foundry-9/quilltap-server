@@ -4,6 +4,26 @@
 
 ### 2.7-dev
 
+- feat: Migrate themes, search-replace, sample-prompts, and chat-files to v1 API (2026-01-15)
+  - Created new v1 routes:
+    - `/api/v1/themes` (GET) - List available themes
+    - `/api/v1/themes/[themeId]?action=tokens` (GET) - Get theme tokens and fonts
+    - `/api/v1/search-replace?action=execute|preview` (POST) - Search and replace operations
+    - `/api/v1/chat-files/[id]?action=tag` (POST) - Tag chat files
+    - `/api/v1/chat-files/[id]` (DELETE) - Delete chat files
+  - Converted legacy routes to `movedToV1()`:
+    - `/api/themes` → `/api/v1/themes`
+    - `/api/themes/[themeId]/tokens` → `/api/v1/themes/[themeId]?action=tokens`
+    - `/api/search-replace` → `/api/v1/search-replace?action=execute`
+    - `/api/search-replace/preview` → `/api/v1/search-replace?action=preview`
+    - `/api/sample-prompts` → `/api/v1/sample-prompts`
+    - `/api/chat-files/[id]` → `/api/v1/chat-files/[id]`
+  - Updated frontend components to use v1 endpoints:
+    - theme-utils.ts theme list and token fetching
+    - useSearchReplace.ts preview and execute calls
+    - useSystemPrompts.ts sample prompts fetching
+    - PhotoGalleryModal, ChatGalleryImageViewModal, ImageModal, ToolMessage chat file operations
+  - Note: Theme asset/font serving routes remain at /api/themes/assets and /api/themes/fonts (static file serving)
 - feat: Image generation and user profile routes migrated to v1 API (2026-01-15)
   - Added `?action=generate` to `/api/v1/image-profiles/[id]` for image generation with placeholder support
   - Added user profile actions to `/api/v1/user/profile`:

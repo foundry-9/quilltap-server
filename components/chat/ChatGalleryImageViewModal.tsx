@@ -140,7 +140,7 @@ export default function ChatGalleryImageViewModal({
       } else {
         // Add tag - both generated images and chat files use the same endpoint
         // Both need to be copied to gallery first if not already there
-        const res = await fetch(`/api/chat-files/${file.id}`, {
+        const res = await fetch(`/api/v1/chat-files/${file.id}?action=tag`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -194,7 +194,7 @@ export default function ChatGalleryImageViewModal({
       } else {
         // Add tag - both generated images and chat files use the same endpoint
         // Both need to be copied to gallery first if not already there
-        const res = await fetch(`/api/chat-files/${file.id}`, {
+        const res = await fetch(`/api/v1/chat-files/${file.id}?action=tag`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
