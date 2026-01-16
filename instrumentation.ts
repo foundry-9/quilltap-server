@@ -14,10 +14,20 @@ export async function register() {
 
     try {
       // Dynamically import everything to avoid Edge Runtime issues
+      const { initializeMongoDBIfNeeded } = await import('./lib/startup');
       const { initializePlugins } = await import('./lib/startup/plugin-initialization');
       const { fileStorageManager } = await import('./lib/file-storage/manager');
 
-      // Initialize plugins first (includes file storage backend plugins)
+      // Initialize MongoDB FIRST - this ensures the database is ready
+      // before plugin initialization runs migrations
+      const mongoResult = await initializeMongoDBIfNeeded();
+      if (mongoResult.initialized) {
+        console.log('✅ MongoDB initialized successfully');
+      } else {
+        console.log('ℹ️ MongoDB not enabled or not configured:', mongoResult.message);
+      }
+
+      // Initialize plugins (includes running migrations which now have MongoDB ready)
       const result = await initializePlugins();
 
       if (result.success) {

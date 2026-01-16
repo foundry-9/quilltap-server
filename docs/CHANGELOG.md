@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- fix: Ensure MongoDB is initialized before migrations run on container startup (2026-01-16)
+  - Migrations were being skipped on hosted deployments because MongoDB wasn't ready when `shouldRun()` checked
+  - The `initialized` flag prevented re-attempts, leaving data in pre-migration state
+  - Now `instrumentation.ts` explicitly initializes MongoDB before calling `initializePlugins()`
+  - Ensures migrations like `migrate-personas-to-characters` run reliably on new container deployments
 - feat: Cache OAuth profile pictures locally to prevent expiration (2026-01-16)
   - OAuth providers (like Google) return profile picture URLs that expire in 1-2 hours
   - User sessions last 7 days, causing broken images after URL expiration
