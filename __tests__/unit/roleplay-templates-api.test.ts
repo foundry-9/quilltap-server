@@ -11,7 +11,7 @@ import {
   DELETE as deleteRoleplayTemplate,
 } from '@/app/api/v1/roleplay-templates/[id]/route'
 import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { getRepositories, getRepositoriesSafe } from '@/lib/repositories/factory'
 import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
 
 // Create mock repos before jest.mock
@@ -19,6 +19,7 @@ const mockRepos = createMockRepositoryContainer()
 
 const mockGetServerSession = jest.mocked(getServerSession)
 const mockGetRepositories = jest.mocked(getRepositories)
+const mockGetRepositoriesSafe = jest.mocked(getRepositoriesSafe)
 
 type RoleplayTemplateRepo = {
   findAllForUser: jest.Mock
@@ -83,8 +84,9 @@ beforeEach(() => {
     delete: jest.fn(),
   }
 
-  // Setup getRepositories to return mockRepos
+  // Setup getRepositories and getRepositoriesSafe to return mockRepos
   mockGetRepositories.mockReturnValue(mockRepos)
+  mockGetRepositoriesSafe.mockResolvedValue(mockRepos)
 
   // Setup auth mocks
   setupAuthMocks(mockGetServerSession as jest.Mock, mockRepos)

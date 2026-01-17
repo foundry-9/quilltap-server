@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- fix: API middleware now waits for migrations before serving requests (2026-01-17)
+  - Root cause of previous iteration failures: auth middleware used `getRepositories()` instead of `getRepositoriesSafe()`
+  - Requests were arriving before PERSONA→CHARACTER migration completed, causing Zod validation failures
+  - Updated all auth middleware functions to use `await getRepositoriesSafe()` which waits for migrations
+  - This completes the migration gating system: startup waits for MongoDB, migrations run, then requests are served
 - fix: Make upgrade plugin self-contained to fix container startup migration failures (2026-01-17)
   - Root cause: Plugin imported from `@/lib/*` paths which pulled in `next/server` dependency
   - When plugin ran during container startup, Next.js wasn't initialized so `next/server` failed to load

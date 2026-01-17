@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession, type ExtendedSession } from '@/lib/auth/session';
-import { getRepositories, type RepositoryContainer } from '@/lib/repositories/factory';
+import { getRepositoriesSafe, type RepositoryContainer } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import type { User } from '@/lib/schemas/types';
 
@@ -61,7 +61,7 @@ export type AuthenticatedParamsHandler<P = Record<string, string>, T = NextRespo
  *   if (!session?.user?.id) {
  *     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
  *   }
- *   const repos = getRepositories();
+ *   const repos = await getRepositoriesSafe();
  *   const user = await repos.users.findById(session.user.id);
  *   if (!user) {
  *     return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -87,7 +87,7 @@ export async function withAuth<T>(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const repos = getRepositories();
+  const repos = await getRepositoriesSafe();
   const user = await repos.users.findById(session.user.id);
 
   if (!user) {
@@ -132,7 +132,7 @@ export async function withAuthParams<P extends Record<string, string>, T>(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const repos = getRepositories();
+  const repos = await getRepositoriesSafe();
   const user = await repos.users.findById(session.user.id);
 
   if (!user) {
@@ -172,7 +172,7 @@ export function createAuthenticatedHandler(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const repos = getRepositories();
+    const repos = await getRepositoriesSafe();
     const user = await repos.users.findById(session.user.id);
 
     if (!user) {
@@ -223,7 +223,7 @@ export function createAuthenticatedParamsHandler<P extends Record<string, string
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const repos = getRepositories();
+    const repos = await getRepositoriesSafe();
     const user = await repos.users.findById(session.user.id);
 
     if (!user) {

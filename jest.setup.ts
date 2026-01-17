@@ -225,6 +225,7 @@ jest.mock('@/lib/files/tag-inheritance', () => ({
 // Mock Repositories
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
+  getRepositoriesSafe: jest.fn(),
   getUserRepositories: jest.fn(),
   resetRepositories: jest.fn(),
   clearUserRepositoryCache: jest.fn(),

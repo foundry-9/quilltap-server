@@ -12,6 +12,7 @@ import { NextRequest } from 'next/server'
 // Mock dependencies before imports
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
+  getRepositoriesSafe: jest.fn(),
 }))
 
 jest.mock('@/lib/auth/session', () => ({
@@ -32,6 +33,7 @@ jest.mock('@/lib/logger', () => {
 // Get mocked modules using requireMock
 const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as {
   getRepositories: jest.Mock
+  getRepositoriesSafe: jest.Mock
 }
 const sessionMock = jest.requireMock('@/lib/auth/session') as {
   getServerSession: jest.Mock
@@ -46,6 +48,7 @@ const loggerMock = jest.requireMock('@/lib/logger') as {
 }
 
 const mockGetRepositories = repositoriesMock.getRepositories
+const mockGetRepositoriesSafe = repositoriesMock.getRepositoriesSafe
 const mockGetServerSession = sessionMock.getServerSession
 const mockLogger = loggerMock.logger
 
@@ -187,12 +190,14 @@ describe('Sidebar Characters API Route (v1)', () => {
       }),
     }
 
-    mockGetRepositories.mockReturnValue({
+    const mockRepos = {
       characters: mockCharactersRepo,
       chats: mockChatsRepo,
       files: mockFilesRepo,
       users: mockUsersRepo,
-    } as any)
+    } as any
+    mockGetRepositories.mockReturnValue(mockRepos)
+    mockGetRepositoriesSafe.mockResolvedValue(mockRepos)
 
     // Default session mock
     mockGetServerSession.mockResolvedValue(mockSession)

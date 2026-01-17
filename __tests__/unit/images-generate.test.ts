@@ -7,7 +7,7 @@ import { POST } from '@/app/api/v1/images/route'
 import { getServerSession } from '@/lib/auth/session'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
-import { getRepositories } from '@/lib/repositories/factory'
+import { getRepositories, getRepositoriesSafe } from '@/lib/repositories/factory'
 import { fileStorageManager } from '@/lib/file-storage/manager'
 import { getInheritedTags } from '@/lib/files/tag-inheritance'
 import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
@@ -23,6 +23,7 @@ const mockGetServerSession = jest.mocked(getServerSession)
 const mockDecryptApiKey = jest.mocked(decryptApiKey)
 const mockCreateLLMProvider = jest.mocked(createLLMProvider)
 const mockGetRepositories = jest.mocked(getRepositories)
+const mockGetRepositoriesSafe = jest.mocked(getRepositoriesSafe)
 const mockFileStorageManager = jest.mocked(fileStorageManager)
 const mockGetInheritedTags = jest.mocked(getInheritedTags)
 
@@ -48,8 +49,9 @@ describe('POST /api/v1/images?action=generate', () => {
     jest.clearAllMocks()
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
 
-    // Setup getRepositories to return mockRepos
+    // Setup getRepositories and getRepositoriesSafe to return mockRepos
     mockGetRepositories.mockReturnValue(mockRepos)
+    mockGetRepositoriesSafe.mockResolvedValue(mockRepos)
 
     // Setup auth mocks with the user ID used by these tests
     setupAuthMocks(mockGetServerSession as jest.Mock, mockRepos, {
