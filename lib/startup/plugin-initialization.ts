@@ -20,6 +20,7 @@ import type { ToolPlugin } from '@/lib/plugins/interfaces/tool-plugin';
 import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugins/plugin-logger-bridge';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import type { FileStorageProviderPlugin } from '@/lib/file-storage/interfaces';
+import { startupState } from './startup-state';
 import packageJson from '@/package.json';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
@@ -64,12 +65,52 @@ let initializationPromise: Promise<PluginInitializationResult> | null = null;
 let initialized = false;
 
 /**
+ * Wait for MongoDB to be accessible with retries
+ * This ensures migrations can run even if MongoDB takes a moment to be ready
+ */
+async function waitForMongoDBReady(maxRetries: number = 5, retryDelayMs: number = 1000): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Dynamic import to avoid issues if MongoDB isn't configured
+      const { getMongoDatabase } = await import('@/lib/mongodb/client');
+      const db = await getMongoDatabase();
+      await db.command({ ping: 1 });
+
+      logger.debug('MongoDB is ready for migrations', {
+        context: 'plugin-initialization.waitForMongoDBReady',
+        attempt,
+      });
+      return true;
+    } catch (error) {
+      logger.debug('MongoDB not ready yet, retrying', {
+        context: 'plugin-initialization.waitForMongoDBReady',
+        attempt,
+        maxRetries,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      }
+    }
+  }
+
+  logger.warn('MongoDB not accessible after retries', {
+    context: 'plugin-initialization.waitForMongoDBReady',
+    maxRetries,
+  });
+  return false;
+}
+
+/**
  * Run upgrade migrations from the upgrade plugin
  *
  * This function:
- * 1. Force-enables the upgrade plugin (it should always run)
- * 2. Loads and runs all pending migrations
- * 3. Disables the upgrade plugin after migrations complete
+ * 1. Waits for MongoDB to be accessible (with retries)
+ * 2. Force-enables the upgrade plugin (it should always run)
+ * 3. Loads and runs all pending migrations
+ * 4. Marks migrations as complete in startup state
+ * 5. Disables the upgrade plugin after migrations complete
  *
  * This happens early in initialization, before provider plugins are loaded,
  * so that data migrations can enable provider plugins as needed.
@@ -77,14 +118,40 @@ let initialized = false;
 async function runUpgradeMigrations(): Promise<void> {
   const upgradePlugin = pluginRegistry.get(UPGRADE_PLUGIN_NAME);
   if (!upgradePlugin) {
-    logger.debug('Upgrade plugin not found, skipping migrations');
+    logger.debug('Upgrade plugin not found, skipping migrations', {
+      context: 'plugin-initialization.runUpgradeMigrations',
+    });
+    // No migrations to run, mark as complete
+    startupState.markMigrationsComplete();
     return;
+  }
+
+  // Check if MongoDB is configured
+  const dataBackend = process.env.DATA_BACKEND?.toLowerCase() || 'sqlite';
+  const isMongoDBEnabled = dataBackend === 'mongodb' || dataBackend === 'dual';
+
+  if (isMongoDBEnabled) {
+    // Wait for MongoDB to be ready before running migrations
+    logger.info('Waiting for MongoDB to be ready for migrations', {
+      context: 'plugin-initialization.runUpgradeMigrations',
+    });
+
+    const mongoReady = await waitForMongoDBReady();
+    if (!mongoReady) {
+      logger.error('Cannot run migrations: MongoDB not accessible', {
+        context: 'plugin-initialization.runUpgradeMigrations',
+      });
+      // Don't mark migrations as complete - they need to run later
+      return;
+    }
   }
 
   // Force-enable the upgrade plugin regardless of its manifest setting
   if (!upgradePlugin.enabled) {
     pluginRegistry.enable(UPGRADE_PLUGIN_NAME);
-    logger.debug('Force-enabled upgrade plugin for migrations');
+    logger.debug('Force-enabled upgrade plugin for migrations', {
+      context: 'plugin-initialization.runUpgradeMigrations',
+    });
   }
 
   try {
@@ -93,6 +160,7 @@ async function runUpgradeMigrations(): Promise<void> {
     const modulePath = resolve(process.cwd(), upgradePlugin.pluginPath, mainFile);
 
     logger.info('Loading upgrade plugin for migrations', {
+      context: 'plugin-initialization.runUpgradeMigrations',
       plugin: UPGRADE_PLUGIN_NAME,
       path: modulePath,
     });
@@ -103,9 +171,12 @@ async function runUpgradeMigrations(): Promise<void> {
 
     if (!plugin || typeof plugin.runMigrations !== 'function') {
       logger.warn('Upgrade plugin does not export runMigrations function', {
+        context: 'plugin-initialization.runUpgradeMigrations',
         plugin: UPGRADE_PLUGIN_NAME,
         exports: Object.keys(pluginModule),
       });
+      // Mark as complete since there's nothing to run
+      startupState.markMigrationsComplete();
       return;
     }
 
@@ -113,26 +184,36 @@ async function runUpgradeMigrations(): Promise<void> {
     const result = await plugin.runMigrations();
 
     if (result.success) {
-      logger.info('Upgrade migrations completed', {
+      logger.info('Upgrade migrations completed successfully', {
+        context: 'plugin-initialization.runUpgradeMigrations',
         migrationsRun: result.migrationsRun,
         migrationsSkipped: result.migrationsSkipped,
         totalDurationMs: result.totalDurationMs,
       });
     } else {
-      logger.error('Upgrade migrations failed', {
+      logger.error('Upgrade migrations completed with errors', {
+        context: 'plugin-initialization.runUpgradeMigrations',
         results: result.results,
       });
     }
 
+    // Mark migrations as complete (even if some failed - they won't be retried this startup)
+    startupState.markMigrationsComplete();
+
     // Disable the upgrade plugin after migrations are done
     // It doesn't need to run again until the next startup
     pluginRegistry.disable(UPGRADE_PLUGIN_NAME);
-    logger.debug('Disabled upgrade plugin after migrations');
+    logger.debug('Disabled upgrade plugin after migrations', {
+      context: 'plugin-initialization.runUpgradeMigrations',
+    });
 
   } catch (error) {
     logger.error('Failed to run upgrade migrations', {
+      context: 'plugin-initialization.runUpgradeMigrations',
       error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
+    // Don't mark as complete - migrations failed
   }
 }
 

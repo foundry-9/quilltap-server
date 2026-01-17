@@ -12,7 +12,6 @@
 
 import { logger } from '@/lib/logger';
 import {
-  getRepositories,
   RepositoryContainer,
   CharactersRepository,
   MongoChatsRepository,
@@ -25,6 +24,7 @@ import {
   ProjectsRepository,
   type CreateOptions,
 } from '@/lib/mongodb/repositories';
+import { getRepositories, getRepositoriesSafe } from './factory';
 import type {
   Character,
   ChatMetadata,
@@ -533,4 +533,34 @@ export function clearUserRepositoryCache(userId?: string): void {
     userRepoCache.clear();
     logger.debug('Cleared all user repository caches');
   }
+}
+
+/**
+ * Get a user-scoped repository container with migration safety check.
+ * All operations through this container are automatically filtered to the specified user.
+ * This function ensures migrations have completed before returning repositories.
+ *
+ * Use this in API routes and request handlers to ensure data integrity.
+ *
+ * @param userId The user ID to scope all operations to
+ * @returns Promise<UserScopedRepositoryContainer> with all repositories scoped to the user
+ *
+ * @example
+ * ```typescript
+ * const repos = await getUserRepositoriesSafe(session.user.id);
+ *
+ * // All operations are automatically scoped to the user
+ * const characters = await repos.characters.findAll();
+ * ```
+ */
+export async function getUserRepositoriesSafe(userId: string): Promise<UserScopedRepositoryContainer> {
+  if (!userId) {
+    throw new Error('userId is required for getUserRepositoriesSafe');
+  }
+
+  // Ensure migrations are complete before proceeding
+  await getRepositoriesSafe();
+
+  // Now return the regular user repositories
+  return getUserRepositories(userId);
 }

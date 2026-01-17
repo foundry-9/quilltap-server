@@ -18,6 +18,7 @@ import {
   clearUserRepositoryCache,
   type UserScopedRepositoryContainer,
 } from './user-scoped';
+import { startupState } from '@/lib/startup/startup-state';
 
 /**
  * Type alias for repository container
@@ -29,6 +30,11 @@ export type RepositoryContainer = MongoRepositoryContainer;
  * Lazy-loaded repository cache
  */
 let cachedRepositories: RepositoryContainer | null = null;
+
+/**
+ * Track if we've already waited for migrations
+ */
+let migrationWaitComplete = false;
 
 /**
  * Get the configured data backend
@@ -51,6 +57,49 @@ export function isMongoDBEnabled(): boolean {
 }
 
 /**
+ * Ensure migrations have completed before serving data
+ * This is a safety net in case instrumentation.ts timing is off
+ */
+async function ensureMigrationsComplete(): Promise<void> {
+  // Only wait once
+  if (migrationWaitComplete) {
+    return;
+  }
+
+  // Check if migrations are already complete
+  if (startupState.areMigrationsComplete()) {
+    migrationWaitComplete = true;
+    return;
+  }
+
+  // Check if startup is still in progress
+  const phase = startupState.getPhase();
+  if (phase === 'pending' || phase === 'mongodb' || phase === 'plugins') {
+    logger.info('Waiting for migrations to complete before serving data', {
+      context: 'repository-factory.ensureMigrationsComplete',
+      currentPhase: phase,
+    });
+
+    // Wait for migrations (with 30 second timeout)
+    const migrationsComplete = await startupState.waitForMigrations(30000);
+
+    if (migrationsComplete) {
+      logger.info('Migrations complete, proceeding with data access', {
+        context: 'repository-factory.ensureMigrationsComplete',
+      });
+    } else {
+      logger.warn('Migrations may not have completed, proceeding with data access anyway', {
+        context: 'repository-factory.ensureMigrationsComplete',
+        currentPhase: startupState.getPhase(),
+        migrationsComplete: startupState.areMigrationsComplete(),
+      });
+    }
+  }
+
+  migrationWaitComplete = true;
+}
+
+/**
  * Get the repository container (MongoDB)
  *
  * @returns RepositoryContainer for MongoDB backend
@@ -64,6 +113,22 @@ export function getRepositories(): RepositoryContainer {
   logger.info('Initializing MongoDB backend repositories');
   cachedRepositories = getMongoRepos();
   return cachedRepositories;
+}
+
+/**
+ * Get the repository container with migration safety check
+ * This ensures migrations have completed before serving data
+ *
+ * Use this for API routes and other request handlers that need
+ * to ensure data integrity.
+ *
+ * @returns Promise<RepositoryContainer> for MongoDB backend
+ */
+export async function getRepositoriesSafe(): Promise<RepositoryContainer> {
+  // Ensure migrations are complete before returning repositories
+  await ensureMigrationsComplete();
+
+  return getRepositories();
 }
 
 /**

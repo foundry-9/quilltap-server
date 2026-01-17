@@ -20,6 +20,9 @@ export {
   type PluginInitializationResult,
 } from './plugin-initialization';
 
+// Startup state tracking
+export { startupState, type StartupPhase } from './startup-state';
+
 /**
  * Result of service initialization attempt
  */

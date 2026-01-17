@@ -4,6 +4,15 @@
 
 ### 2.7-dev
 
+- fix: Robust startup migration system with retry and gating (2026-01-16)
+  - Previous fix (MongoDB init before migrations) was insufficient for timing issues
+  - Replaced console.log with structured logger in instrumentation.ts for visibility
+  - Added startup state tracking module (`lib/startup/startup-state.ts`)
+  - Added MongoDB readiness check with retries before running migrations (5 attempts, 1s delay)
+  - Added migration gate in repository factory that waits for migrations before serving data
+  - Added `getRepositoriesSafe()` and `getUserRepositoriesSafe()` that wait for migrations
+  - Migrations are explicitly marked complete in startup state
+  - This ensures PERSONA→CHARACTER migration runs before any requests read chat data
 - feat: Display chat title in toolbar header (2026-01-16)
   - Shows chat name between project name (if any) and search bar
   - Updates automatically when chat is renamed (auto or manual)

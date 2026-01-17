@@ -10,7 +10,15 @@
 export async function register() {
   // Only run in Node.js runtime (not Edge Runtime)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
-    console.log('🚀 Server starting - initializing services');
+    // Use dynamic import for logger to avoid Edge Runtime issues
+    const { logger } = await import('./lib/logger');
+    const { startupState } = await import('./lib/startup/startup-state');
+
+    logger.info('Server starting - initializing services', {
+      context: 'instrumentation.register',
+      runtime: process.env.NEXT_RUNTIME,
+      nodeVersion: process.version,
+    });
 
     try {
       // Dynamically import everything to avoid Edge Runtime issues
@@ -18,40 +26,72 @@ export async function register() {
       const { initializePlugins } = await import('./lib/startup/plugin-initialization');
       const { fileStorageManager } = await import('./lib/file-storage/manager');
 
+      // Mark startup as in progress
+      startupState.setPhase('mongodb');
+
       // Initialize MongoDB FIRST - this ensures the database is ready
       // before plugin initialization runs migrations
       const mongoResult = await initializeMongoDBIfNeeded();
       if (mongoResult.initialized) {
-        console.log('✅ MongoDB initialized successfully');
+        logger.info('MongoDB initialized successfully', {
+          context: 'instrumentation.register',
+          latencyMs: mongoResult.latencyMs,
+        });
       } else {
-        console.log('ℹ️ MongoDB not enabled or not configured:', mongoResult.message);
+        logger.info('MongoDB not enabled or not configured', {
+          context: 'instrumentation.register',
+          message: mongoResult.message,
+        });
       }
 
       // Initialize plugins (includes running migrations which now have MongoDB ready)
+      startupState.setPhase('plugins');
       const result = await initializePlugins();
 
       if (result.success) {
-        console.log('✅ Plugin system initialized successfully', {
+        logger.info('Plugin system initialized successfully', {
+          context: 'instrumentation.register',
           total: result.stats.total,
           enabled: result.stats.enabled,
           disabled: result.stats.disabled,
           errors: result.stats.errors,
         });
       } else {
-        console.error('❌ Plugin system initialization failed', {
+        logger.error('Plugin system initialization failed', {
+          context: 'instrumentation.register',
           stats: result.stats,
           errors: result.errors,
         });
       }
 
       // Ensure file storage manager is initialized (may already be done by plugin init)
+      startupState.setPhase('file-storage');
       if (!fileStorageManager.isInitialized()) {
-        console.log('📁 Initializing file storage manager...');
+        logger.info('Initializing file storage manager', {
+          context: 'instrumentation.register',
+        });
         await fileStorageManager.initialize();
-        console.log('✅ File storage manager initialized');
+        logger.info('File storage manager initialized', {
+          context: 'instrumentation.register',
+        });
       }
+
+      // Mark startup as complete
+      startupState.setPhase('complete');
+      startupState.markReady();
+
+      logger.info('All services initialized successfully', {
+        context: 'instrumentation.register',
+        migrationsComplete: startupState.areMigrationsComplete(),
+      });
     } catch (error) {
-      console.error('❌ Fatal error initializing services:', error);
+      logger.error('Fatal error initializing services', {
+        context: 'instrumentation.register',
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      // Mark startup as failed but allow server to start
+      startupState.setPhase('failed');
       // Don't throw - allow server to start even if initialization fails
     }
   }
