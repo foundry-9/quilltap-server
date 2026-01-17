@@ -1,8 +1,12 @@
 /**
- * esbuild configuration for qtap-plugin-anthropic
+ * esbuild configuration for qtap-plugin-upgrade
  *
- * Bundles the plugin with its SDK dependency into a single CommonJS file.
- * External packages (react, zod, etc.) are provided by the main app at runtime.
+ * Bundles the plugin with its dependencies into a single CommonJS file.
+ * External packages (react, zod, next, etc.) are provided by the main app at runtime.
+ *
+ * IMPORTANT: This plugin runs during container startup BEFORE Next.js is fully
+ * initialized, so it must NOT bundle any Next.js dependencies. We externalize
+ * all @/lib/* paths to be resolved at runtime via dynamic imports.
  */
 
 import * as esbuild from 'esbuild';
@@ -21,9 +25,14 @@ const EXTERNAL_PACKAGES = [
   'react-dom',
   'react/jsx-runtime',
   'react/jsx-dev-runtime',
-  // Next.js (provided by main app)
+  // Next.js (provided by main app) - externalize ALL next/* subpaths
   'next',
+  'next/*',
+  'next/server',
+  'next/headers',
+  'next/navigation',
   'next-auth',
+  'next-auth/*',
   // Other main app dependencies
   'zod',
   // Node.js built-ins
@@ -63,6 +72,9 @@ const EXTERNAL_PACKAGES = [
   // AWS SDK packages - these are provided by the main app and have internal package.json refs
   '@aws-sdk/*',
   '@smithy/*',
+  // App library paths - resolved at runtime via dynamic imports
+  // This prevents bundling app code that may depend on Next.js internals
+  '@/lib/*',
 ];
 
 async function build() {

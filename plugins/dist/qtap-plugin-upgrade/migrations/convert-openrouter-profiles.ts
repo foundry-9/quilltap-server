@@ -7,7 +7,7 @@
 
 import { JsonStore } from '../lib/json-store/core/json-store';
 import { ConnectionProfilesRepository } from '../lib/json-store/repositories/connection-profiles.repository';
-import { logger } from '@/lib/logger';
+import { logger } from '../lib/plugin-logger';
 import type { Migration, MigrationResult } from '../migration-types';
 
 /**

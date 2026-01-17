@@ -12,9 +12,10 @@
  */
 
 import type { Migration, MigrationResult } from '../migration-types';
-import { logger } from '@/lib/logger';
+import { logger } from '../lib/plugin-logger';
 import { randomUUID } from 'crypto';
-import { encryptSecrets } from '@/lib/file-storage/secrets';
+import { encryptSecrets } from '../lib/secrets';
+import { getMongoDatabase } from '../lib/mongodb-utils';
 
 /**
  * Check if MongoDB backend is enabled
@@ -24,13 +25,6 @@ function isMongoDBBackendEnabled(): boolean {
   return backend === 'mongodb' || backend === 'dual';
 }
 
-/**
- * Get MongoDB database instance
- */
-async function getMongoDatabase() {
-  const { getMongoDatabase: getDb } = await import('@/lib/mongodb/client');
-  return getDb();
-}
 
 /**
  * Check if MongoDB is accessible

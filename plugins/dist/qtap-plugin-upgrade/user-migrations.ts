@@ -10,6 +10,7 @@
  */
 
 import { createPluginLogger } from '@quilltap/plugin-utils';
+import { getMongoDatabase } from './lib/mongodb-utils';
 
 const logger = createPluginLogger('qtap-plugin-upgrade');
 
@@ -19,14 +20,6 @@ const logger = createPluginLogger('qtap-plugin-upgrade');
 function isMongoDBBackendEnabled(): boolean {
   const backend = process.env.DATA_BACKEND || '';
   return backend === 'mongodb' || backend === 'dual';
-}
-
-/**
- * Get MongoDB database instance
- */
-async function getMongoDatabase() {
-  const { getMongoDatabase: getDb } = await import('@/lib/mongodb/client');
-  return getDb();
 }
 
 /**

@@ -4,6 +4,17 @@
 
 ### 2.7-dev
 
+- fix: Make upgrade plugin self-contained to fix container startup migration failures (2026-01-17)
+  - Root cause: Plugin imported from `@/lib/*` paths which pulled in `next/server` dependency
+  - When plugin ran during container startup, Next.js wasn't initialized so `next/server` failed to load
+  - Created self-contained utilities in the plugin:
+    - `lib/plugin-logger.ts` - Uses `createPluginLogger` from `@quilltap/plugin-utils`
+    - `lib/mongodb-utils.ts` - Self-contained MongoDB config validation and database access
+    - `lib/secrets.ts` - Self-contained AES-256-GCM encryption for mount point secrets
+  - Updated all 20+ migration files to use local utilities instead of `@/lib/*` imports
+  - Updated `migration-runner.ts` to store state directly in MongoDB instead of using app repository
+  - Updated esbuild config to externalize `next/*` and `@/lib/*` paths
+  - Bumped plugin version to 1.0.24
 - fix: Robust startup migration system with retry and gating (2026-01-16)
   - Previous fix (MongoDB init before migrations) was insufficient for timing issues
   - Replaced console.log with structured logger in instrumentation.ts for visibility

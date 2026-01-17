@@ -12,25 +12,10 @@
  */
 
 import type { Migration, MigrationResult } from '../migration-types';
-import { logger } from '@/lib/logger';
+import { logger } from '../lib/plugin-logger';
+import { getMongoDatabase, isMongoDBBackend } from '../lib/mongodb-utils';
 
 const MIGRATION_CONTEXT = 'migration.populate-memory-about-character-ids';
-
-/**
- * Check if MongoDB backend is enabled
- */
-function isMongoDBBackendEnabled(): boolean {
-  const backend = process.env.DATA_BACKEND || '';
-  return backend === 'mongodb' || backend === 'dual';
-}
-
-/**
- * Get MongoDB database instance
- */
-async function getMongoDatabase() {
-  const { getMongoDatabase: getDb } = await import('@/lib/mongodb/client');
-  return getDb();
-}
 
 /**
  * Check if MongoDB is accessible
@@ -81,7 +66,7 @@ export const populateMemoryAboutCharacterIdsMigration: Migration = {
 
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
-    if (!isMongoDBBackendEnabled()) {
+    if (!isMongoDBBackend()) {
       logger.debug('MongoDB not enabled, skipping populate-memory-about-character-ids migration', {
         context: MIGRATION_CONTEXT,
       });

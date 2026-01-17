@@ -15,7 +15,7 @@
  */
 
 import { validateS3Config, testS3Connection } from '../lib/s3-utils';
-import { logger } from '@/lib/logger';
+import { logger } from '../lib/plugin-logger';
 import type { Migration, MigrationResult } from '../migration-types';
 
 /**

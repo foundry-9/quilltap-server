@@ -14,23 +14,19 @@
  */
 
 import type { Migration, MigrationResult } from '../migration-types';
-import { logger } from '@/lib/logger';
-import type { TagVisualStyle } from '@/lib/schemas/types';
+import { logger } from '../lib/plugin-logger';
+import { getMongoDatabase, isMongoDBBackend } from '../lib/mongodb-utils';
 
 /**
- * Check if MongoDB backend is enabled
+ * Local type definition for TagVisualStyle
+ * Matches the schema in lib/schemas/common.types.ts
  */
-function isMongoDBBackendEnabled(): boolean {
-  const backend = process.env.DATA_BACKEND || '';
-  return backend === 'mongodb' || backend === 'dual';
-}
-
-/**
- * Get MongoDB database instance
- */
-async function getMongoDatabase() {
-  const { getMongoDatabase: getDb } = await import('@/lib/mongodb/client');
-  return getDb();
+interface TagVisualStyle {
+  emoji?: string | null;
+  foregroundColor?: string;
+  backgroundColor?: string;
+  emojiOnly?: boolean;
+  bold?: boolean;
 }
 
 /**
@@ -119,7 +115,7 @@ export const migrateTagStylesToTagsMigration: Migration = {
 
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
-    if (!isMongoDBBackendEnabled()) {
+    if (!isMongoDBBackend()) {
       logger.debug('MongoDB not enabled, skipping tag styles migration', {
         context: 'migration.migrate-tag-styles-to-tags',
       });

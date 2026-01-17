@@ -10,24 +10,9 @@
  */
 
 import type { Migration, MigrationResult } from '../migration-types';
-import { logger } from '@/lib/logger';
+import { logger } from '../lib/plugin-logger';
+import { getMongoDatabase, isMongoDBBackend } from '../lib/mongodb-utils';
 import { randomUUID } from 'crypto';
-
-/**
- * Check if MongoDB backend is enabled
- */
-function isMongoDBBackendEnabled(): boolean {
-  const backend = process.env.DATA_BACKEND || '';
-  return backend === 'mongodb' || backend === 'dual';
-}
-
-/**
- * Get MongoDB database instance
- */
-async function getMongoDatabase() {
-  const { getMongoDatabase: getDb } = await import('@/lib/mongodb/client');
-  return getDb();
-}
 
 /**
  * Check if MongoDB is accessible
@@ -133,7 +118,7 @@ export const createFolderEntitiesMigration: Migration = {
 
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
-    if (!isMongoDBBackendEnabled()) {
+    if (!isMongoDBBackend()) {
       logger.debug('MongoDB not enabled, skipping folder entities migration', {
         context: 'migration.create-folder-entities',
       });

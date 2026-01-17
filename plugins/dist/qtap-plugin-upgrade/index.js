@@ -25946,10 +25946,10 @@ var require_connection_string = __commonJS({
         return super.delete(k.toLowerCase());
       }
     };
-    function parseOptions(uri, mongoClient2 = void 0, options = {}) {
-      if (mongoClient2 != null && !(mongoClient2 instanceof mongo_client_1.MongoClient)) {
-        options = mongoClient2;
-        mongoClient2 = void 0;
+    function parseOptions(uri, mongoClient = void 0, options = {}) {
+      if (mongoClient != null && !(mongoClient instanceof mongo_client_1.MongoClient)) {
+        options = mongoClient;
+        mongoClient = void 0;
       }
       if (options.useBigInt64 && typeof options.promoteLongs === "boolean" && !options.promoteLongs) {
         throw new error_1.MongoAPIError("Must request either bigint or Long for int64 deserialization");
@@ -26076,9 +26076,9 @@ var require_connection_string = __commonJS({
         mongoOptions.dbName = "test";
       }
       validateLoadBalancedOptions(hosts, mongoOptions, isSRV);
-      if (mongoClient2 && mongoOptions.autoEncryption) {
+      if (mongoClient && mongoOptions.autoEncryption) {
         encrypter_1.Encrypter.checkForMongoCrypt();
-        mongoOptions.encrypter = new encrypter_1.Encrypter(mongoClient2, uri, options);
+        mongoOptions.encrypter = new encrypter_1.Encrypter(mongoClient, uri, options);
         mongoOptions.autoEncrypter = mongoOptions.encrypter.autoEncrypter;
       }
       mongoOptions.userSpecifiedAuthSource = objectOptions.has("authSource") || urlOptions.has("authSource");
@@ -29694,7 +29694,7 @@ var require_mongo_client = __commonJS({
     exports2.ServerApiVersion = Object.freeze({
       v1: "1"
     });
-    var MongoClient3 = class extends mongo_types_1.TypedEventEmitter {
+    var MongoClient2 = class extends mongo_types_1.TypedEventEmitter {
       constructor(url, options) {
         super();
         this.driverInfoList = [];
@@ -30157,7 +30157,7 @@ var require_mongo_client = __commonJS({
         return new change_stream_1.ChangeStream(this, pipeline, (0, utils_1.resolveOptions)(this, options));
       }
     };
-    exports2.MongoClient = MongoClient3;
+    exports2.MongoClient = MongoClient2;
   }
 });
 
@@ -31996,16 +31996,6 @@ var init_transports = __esm({
 });
 
 // ../../../lib/env.ts
-var env_exports = {};
-__export(env_exports, {
-  checkIsUserManaged: () => checkIsUserManaged,
-  env: () => env,
-  isDevelopment: () => isDevelopment,
-  isProduction: () => isProduction,
-  isTest: () => isTest,
-  isUserManaged: () => isUserManaged,
-  validateEnv: () => validateEnv
-});
 function validateEnv() {
   if (isBuildPhase) {
     return {
@@ -32030,7 +32020,7 @@ function validateEnv() {
     const env2 = envSchema.parse(process.env);
     return env2;
   } catch (error) {
-    if (error instanceof import_zod.z.ZodError) {
+    if (error instanceof import_zod2.z.ZodError) {
       const missingVars = error.errors.map((err) => {
         return `  - ${err.path.join(".")}: ${err.message}`;
       });
@@ -32079,72 +32069,72 @@ function checkIsUserManaged() {
   }
   return false;
 }
-var import_zod, envSchema, isBuildPhase, env, isProduction, isDevelopment, isTest, isUserManaged;
+var import_zod2, envSchema, isBuildPhase, env, isProduction, isDevelopment, isTest, isUserManaged;
 var init_env = __esm({
   "../../../lib/env.ts"() {
     "use strict";
-    import_zod = require("zod");
-    envSchema = import_zod.z.object({
+    import_zod2 = require("zod");
+    envSchema = import_zod2.z.object({
       // Node environment
-      NODE_ENV: import_zod.z.enum(["development", "production", "test"]).default("development"),
+      NODE_ENV: import_zod2.z.enum(["development", "production", "test"]).default("development"),
       // Database (legacy - no longer used, MongoDB is required)
-      DATABASE_URL: import_zod.z.string().url().optional(),
+      DATABASE_URL: import_zod2.z.string().url().optional(),
       // Base URL for the application (used for OAuth callbacks, etc.)
-      BASE_URL: import_zod.z.string().url().optional().default("http://localhost:3000"),
+      BASE_URL: import_zod2.z.string().url().optional().default("http://localhost:3000"),
       // OAuth Providers (all optional - configured via auth plugins)
-      GOOGLE_CLIENT_ID: import_zod.z.string().optional(),
-      GOOGLE_CLIENT_SECRET: import_zod.z.string().optional(),
-      APPLE_ID: import_zod.z.string().optional(),
-      APPLE_SECRET: import_zod.z.string().optional(),
-      GITHUB_ID: import_zod.z.string().optional(),
-      GITHUB_SECRET: import_zod.z.string().optional(),
+      GOOGLE_CLIENT_ID: import_zod2.z.string().optional(),
+      GOOGLE_CLIENT_SECRET: import_zod2.z.string().optional(),
+      APPLE_ID: import_zod2.z.string().optional(),
+      APPLE_SECRET: import_zod2.z.string().optional(),
+      GITHUB_ID: import_zod2.z.string().optional(),
+      GITHUB_SECRET: import_zod2.z.string().optional(),
       // Encryption
-      ENCRYPTION_MASTER_PEPPER: import_zod.z.string().min(32, "ENCRYPTION_MASTER_PEPPER must be at least 32 characters"),
+      ENCRYPTION_MASTER_PEPPER: import_zod2.z.string().min(32, "ENCRYPTION_MASTER_PEPPER must be at least 32 characters"),
       // Rate Limiting (optional)
-      RATE_LIMIT_API_MAX: import_zod.z.string().regex(/^\d+$/).optional(),
-      RATE_LIMIT_API_WINDOW: import_zod.z.string().regex(/^\d+$/).optional(),
-      RATE_LIMIT_AUTH_MAX: import_zod.z.string().regex(/^\d+$/).optional(),
-      RATE_LIMIT_AUTH_WINDOW: import_zod.z.string().regex(/^\d+$/).optional(),
-      RATE_LIMIT_CHAT_MAX: import_zod.z.string().regex(/^\d+$/).optional(),
-      RATE_LIMIT_CHAT_WINDOW: import_zod.z.string().regex(/^\d+$/).optional(),
-      RATE_LIMIT_GENERAL_MAX: import_zod.z.string().regex(/^\d+$/).optional(),
-      RATE_LIMIT_GENERAL_WINDOW: import_zod.z.string().regex(/^\d+$/).optional(),
+      RATE_LIMIT_API_MAX: import_zod2.z.string().regex(/^\d+$/).optional(),
+      RATE_LIMIT_API_WINDOW: import_zod2.z.string().regex(/^\d+$/).optional(),
+      RATE_LIMIT_AUTH_MAX: import_zod2.z.string().regex(/^\d+$/).optional(),
+      RATE_LIMIT_AUTH_WINDOW: import_zod2.z.string().regex(/^\d+$/).optional(),
+      RATE_LIMIT_CHAT_MAX: import_zod2.z.string().regex(/^\d+$/).optional(),
+      RATE_LIMIT_CHAT_WINDOW: import_zod2.z.string().regex(/^\d+$/).optional(),
+      RATE_LIMIT_GENERAL_MAX: import_zod2.z.string().regex(/^\d+$/).optional(),
+      RATE_LIMIT_GENERAL_WINDOW: import_zod2.z.string().regex(/^\d+$/).optional(),
       // Logging (optional)
-      LOG_LEVEL: import_zod.z.enum(["error", "warn", "info", "debug"]).optional().default("info"),
-      LOG_OUTPUT: import_zod.z.enum(["console", "file", "both"]).optional().default("console"),
-      LOG_FILE_PATH: import_zod.z.string().optional().default("./logs"),
-      LOG_FILE_MAX_SIZE: import_zod.z.string().regex(/^\d+$/).optional(),
-      LOG_FILE_MAX_FILES: import_zod.z.string().regex(/^\d+$/).optional(),
+      LOG_LEVEL: import_zod2.z.enum(["error", "warn", "info", "debug"]).optional().default("info"),
+      LOG_OUTPUT: import_zod2.z.enum(["console", "file", "both"]).optional().default("console"),
+      LOG_FILE_PATH: import_zod2.z.string().optional().default("./logs"),
+      LOG_FILE_MAX_SIZE: import_zod2.z.string().regex(/^\d+$/).optional(),
+      LOG_FILE_MAX_FILES: import_zod2.z.string().regex(/^\d+$/).optional(),
       // Production SSL (optional)
-      DOMAIN: import_zod.z.string().optional(),
-      SSL_EMAIL: import_zod.z.string().email().optional(),
+      DOMAIN: import_zod2.z.string().optional(),
+      SSL_EMAIL: import_zod2.z.string().email().optional(),
       // Data Backend Configuration
       // NOTE: 'json' option is deprecated and will be removed in a future version.
       // Use the migration plugin (qtap-plugin-upgrade) to migrate JSON data to MongoDB.
-      DATA_BACKEND: import_zod.z.enum(["json", "mongodb"]).optional().default("mongodb"),
+      DATA_BACKEND: import_zod2.z.enum(["json", "mongodb"]).optional().default("mongodb"),
       // MongoDB Configuration (required - MongoDB is the default data backend)
-      MONGODB_URI: import_zod.z.string().min(1, "MONGODB_URI is required for MongoDB backend"),
-      MONGODB_DATABASE: import_zod.z.string().optional().default("quilltap"),
-      MONGODB_MODE: import_zod.z.enum(["external", "embedded"]).optional().default("external"),
-      MONGODB_DATA_DIR: import_zod.z.string().optional().default("/data/mongodb"),
-      MONGODB_CONNECTION_TIMEOUT_MS: import_zod.z.string().regex(/^\d+$/).optional(),
-      MONGODB_MAX_POOL_SIZE: import_zod.z.string().regex(/^\d+$/).optional(),
+      MONGODB_URI: import_zod2.z.string().min(1, "MONGODB_URI is required for MongoDB backend"),
+      MONGODB_DATABASE: import_zod2.z.string().optional().default("quilltap"),
+      MONGODB_MODE: import_zod2.z.enum(["external", "embedded"]).optional().default("external"),
+      MONGODB_DATA_DIR: import_zod2.z.string().optional().default("/data/mongodb"),
+      MONGODB_CONNECTION_TIMEOUT_MS: import_zod2.z.string().regex(/^\d+$/).optional(),
+      MONGODB_MAX_POOL_SIZE: import_zod2.z.string().regex(/^\d+$/).optional(),
       // File Storage Configuration
       // Path for local filesystem storage (built-in backend)
-      QUILLTAP_FILE_STORAGE_PATH: import_zod.z.string().optional().default("./data/files"),
+      QUILLTAP_FILE_STORAGE_PATH: import_zod2.z.string().optional().default("./data/files"),
       // Encryption key for mount point secrets (auto-generated if not set, falls back to ENCRYPTION_MASTER_PEPPER)
-      QUILLTAP_ENCRYPTION_KEY: import_zod.z.string().min(32).optional(),
+      QUILLTAP_ENCRYPTION_KEY: import_zod2.z.string().min(32).optional(),
       // S3 Configuration (optional - S3 is now a plugin, local filesystem is the default)
       // These env vars are used to auto-create an S3 mount point during migration
-      S3_MODE: import_zod.z.enum(["embedded", "external", "disabled"]).optional().default("disabled"),
-      S3_ENDPOINT: import_zod.z.string().url().optional(),
-      S3_REGION: import_zod.z.string().optional().default("us-east-1"),
-      S3_ACCESS_KEY: import_zod.z.string().optional(),
-      S3_SECRET_KEY: import_zod.z.string().optional(),
-      S3_BUCKET: import_zod.z.string().optional().default("quilltap-files"),
-      S3_PATH_PREFIX: import_zod.z.string().optional(),
-      S3_PUBLIC_URL: import_zod.z.string().url().optional(),
-      S3_FORCE_PATH_STYLE: import_zod.z.enum(["true", "false"]).optional()
+      S3_MODE: import_zod2.z.enum(["embedded", "external", "disabled"]).optional().default("disabled"),
+      S3_ENDPOINT: import_zod2.z.string().url().optional(),
+      S3_REGION: import_zod2.z.string().optional().default("us-east-1"),
+      S3_ACCESS_KEY: import_zod2.z.string().optional(),
+      S3_SECRET_KEY: import_zod2.z.string().optional(),
+      S3_BUCKET: import_zod2.z.string().optional().default("quilltap-files"),
+      S3_PATH_PREFIX: import_zod2.z.string().optional(),
+      S3_PUBLIC_URL: import_zod2.z.string().url().optional(),
+      S3_FORCE_PATH_STYLE: import_zod2.z.enum(["true", "false"]).optional()
     }).refine(
       (data) => {
         if (data.DATA_BACKEND === "mongodb" && !data.MONGODB_URI) {
@@ -32197,7 +32187,7 @@ function initializeTransports() {
   }
   return transports;
 }
-var LOG_LEVELS, CURRENT_LEVEL, Logger, logger;
+var LOG_LEVELS, CURRENT_LEVEL, Logger, logger3;
 var init_logger = __esm({
   "../../../lib/logger.ts"() {
     "use strict";
@@ -32329,515 +32319,255 @@ var init_logger = __esm({
         });
       }
     };
-    logger = new Logger({
+    logger3 = new Logger({
       service: "quilltap",
       environment: process.env.NODE_ENV || "development"
     });
   }
 });
 
-// ../../../lib/error-utils.ts
-function getErrorMessage(error, fallback = "Unknown error") {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === "string") {
-    return error;
-  }
-  if (error !== null && error !== void 0) {
-    const stringified = String(error);
-    if (stringified !== "[object Object]") {
-      return stringified;
-    }
-  }
-  return fallback;
-}
-var init_error_utils = __esm({
-  "../../../lib/error-utils.ts"() {
-    "use strict";
-  }
+// ../../../lib/plugins/registry.ts
+var registry_exports = {};
+__export(registry_exports, {
+  getAllPlugins: () => getAllPlugins,
+  getEnabledPlugins: () => getEnabledPlugins,
+  getEnabledPluginsByCapability: () => getEnabledPluginsByCapability,
+  getPlugin: () => getPlugin,
+  getPluginStats: () => getPluginStats,
+  getPluginsByCapability: () => getPluginsByCapability,
+  hasPlugin: () => hasPlugin,
+  pluginRegistry: () => pluginRegistry
 });
-
-// ../../../lib/errors.ts
-var import_server;
-var init_errors = __esm({
-  "../../../lib/errors.ts"() {
+function getAllPlugins() {
+  return pluginRegistry.getAll();
+}
+function getEnabledPlugins() {
+  return pluginRegistry.getEnabled();
+}
+function getPlugin(name) {
+  return pluginRegistry.get(name);
+}
+function getPluginsByCapability(capability) {
+  return pluginRegistry.getByCapability(capability);
+}
+function getEnabledPluginsByCapability(capability) {
+  return pluginRegistry.getEnabledByCapability(capability);
+}
+function hasPlugin(name) {
+  return pluginRegistry.has(name);
+}
+function getPluginStats() {
+  return pluginRegistry.getStats();
+}
+var import_path34, PluginRegistry, pluginRegistry;
+var init_registry = __esm({
+  "../../../lib/plugins/registry.ts"() {
     "use strict";
-    import_server = require("next/server");
+    import_path34 = __toESM(require("path"));
     init_logger();
-    init_error_utils();
-  }
-});
-
-// ../../../lib/mongodb/config.ts
-function sanitizeURI(uri) {
-  try {
-    return uri.replace(/(:\/\/[^:]+:)[^@]+(@)/, "$1****$2");
-  } catch {
-    return uri.replace(/(:\/\/[^:]+:)[^@]+(@)/, "$1****$2");
-  }
-}
-function getMongoDBConfigFromEnv() {
-  const dataBackend = process.env.DATA_BACKEND || "json";
-  const uri = process.env.MONGODB_URI || "mongodb://localhost:27017";
-  const database = process.env.MONGODB_DATABASE || "quilltap";
-  const mode = process.env.MONGODB_MODE || "external";
-  const dataDir = process.env.MONGODB_DATA_DIR || "/data/mongodb";
-  const connectionTimeoutMs = process.env.MONGODB_CONNECTION_TIMEOUT_MS ? Number.parseInt(process.env.MONGODB_CONNECTION_TIMEOUT_MS) : 1e4;
-  const maxPoolSize = process.env.MONGODB_MAX_POOL_SIZE ? Number.parseInt(process.env.MONGODB_MAX_POOL_SIZE) : 10;
-  return {
-    uri,
-    database,
-    mode,
-    dataDir,
-    connectionTimeoutMs,
-    maxPoolSize
-  };
-}
-function validateMongoDBConfig() {
-  logger.debug("Validating MongoDB configuration", {
-    dataBackend: process.env.DATA_BACKEND,
-    mode: process.env.MONGODB_MODE
-  });
-  const config = getMongoDBConfigFromEnv();
-  const errors = [];
-  let isConfigured = false;
-  try {
-    const validated = mongoDBConfigSchema.parse(config);
-    logger.debug("MongoDB configuration validated successfully", {
-      database: validated.database,
-      mode: validated.mode,
-      uri: sanitizeURI(validated.uri),
-      connectionTimeoutMs: validated.connectionTimeoutMs,
-      maxPoolSize: validated.maxPoolSize
-    });
-    isConfigured = true;
-    return {
-      ...validated,
-      isConfigured,
-      errors
-    };
-  } catch (error) {
-    if (error instanceof import_zod2.z.ZodError) {
-      const validationErrors = error.errors.map((err) => {
-        const path6 = err.path.join(".");
-        return `${path6}: ${err.message}`;
-      });
-      errors.push(...validationErrors);
-      logger.warn("MongoDB configuration validation failed", {
-        errors: validationErrors
-      });
-    } else {
-      const errorMessage = getErrorMessage(error);
-      errors.push(errorMessage);
-      logger.error("MongoDB configuration validation error", {
-        error: errorMessage
-      });
-    }
-    return {
-      uri: config.uri || "",
-      database: config.database || "",
-      mode: config.mode || "external",
-      dataDir: config.dataDir,
-      connectionTimeoutMs: config.connectionTimeoutMs || 1e4,
-      maxPoolSize: config.maxPoolSize || 10,
-      isConfigured,
-      errors
-    };
-  }
-}
-async function testMongoDBConnection() {
-  if (process.env.DATA_BACKEND === "json") {
-    logger.debug("Data backend is JSON, skipping MongoDB connection test");
-    return {
-      success: true,
-      message: "JSON backend is configured, MongoDB not required"
-    };
-  }
-  const config = validateMongoDBConfig();
-  if (!config.isConfigured) {
-    const errorMessage = `MongoDB configuration invalid: ${config.errors.join(", ")}`;
-    logger.error("Cannot test MongoDB connection - configuration invalid", {
-      errors: config.errors
-    });
-    return {
-      success: false,
-      message: errorMessage
-    };
-  }
-  let client = null;
-  const startTime = Date.now();
-  try {
-    logger.debug("Attempting MongoDB connection", {
-      uri: sanitizeURI(config.uri),
-      timeout: config.connectionTimeoutMs
-    });
-    client = new import_mongodb.MongoClient(config.uri, {
-      serverSelectionTimeoutMS: config.connectionTimeoutMs,
-      connectTimeoutMS: config.connectionTimeoutMs,
-      maxPoolSize: config.maxPoolSize
-    });
-    await client.connect();
-    const admin = client.db("admin");
-    await admin.command({ ping: 1 });
-    const latencyMs = Date.now() - startTime;
-    logger.info("MongoDB connection test successful", {
-      uri: sanitizeURI(config.uri),
-      database: config.database,
-      latencyMs
-    });
-    return {
-      success: true,
-      message: `Successfully connected to MongoDB (${latencyMs}ms)`,
-      latencyMs
-    };
-  } catch (error) {
-    const latencyMs = Date.now() - startTime;
-    const errorMessage = getErrorMessage(error);
-    logger.error("MongoDB connection test failed", {
-      uri: sanitizeURI(config.uri),
-      error: errorMessage,
-      latencyMs
-    });
-    return {
-      success: false,
-      message: `MongoDB connection failed: ${errorMessage}`,
-      latencyMs
-    };
-  } finally {
-    if (client) {
-      try {
-        await client.close();
-        logger.debug("MongoDB client connection closed");
-      } catch (error) {
-        const closeError = getErrorMessage(error);
-        logger.warn("Error closing MongoDB connection", {
-          error: closeError
-        });
-      }
-    }
-  }
-}
-var import_zod2, import_mongodb, mongoDBConfigSchema;
-var init_config = __esm({
-  "../../../lib/mongodb/config.ts"() {
-    "use strict";
-    import_zod2 = require("zod");
-    import_mongodb = __toESM(require_lib3());
-    init_logger();
-    init_errors();
-    mongoDBConfigSchema = import_zod2.z.object({
-      uri: import_zod2.z.string().min(1, "MongoDB URI is required"),
-      database: import_zod2.z.string().min(1, "Database name is required"),
-      mode: import_zod2.z.enum(["external", "embedded"]).default("external"),
-      dataDir: import_zod2.z.string().optional(),
-      connectionTimeoutMs: import_zod2.z.number().int().positive().default(1e4),
-      maxPoolSize: import_zod2.z.number().int().positive().default(10)
-    });
-  }
-});
-
-// ../../../lib/mongodb/client.ts
-var client_exports = {};
-__export(client_exports, {
-  closeMongoConnection: () => closeMongoConnection,
-  getMongoClient: () => getMongoClient,
-  getMongoDatabase: () => getMongoDatabase,
-  isMongoConnected: () => isMongoConnected,
-  setupMongoDBShutdownHandlers: () => setupMongoDBShutdownHandlers
-});
-async function isClientConnected(client) {
-  if (!client) return false;
-  try {
-    const config = validateMongoDBConfig();
-    await client.db(config.database).command({ ping: 1 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-async function getMongoClient() {
-  if (await isClientConnected(mongoClient)) {
-    return mongoClient;
-  }
-  if (mongoClientPromise) {
-    return mongoClientPromise;
-  }
-  let connectingClient = null;
-  mongoClientPromise = (async () => {
-    const config = validateMongoDBConfig();
-    const clientOptions = {
-      maxPoolSize: config.maxPoolSize,
-      minPoolSize: 1,
-      maxIdleTimeMS: 6e4,
-      retryWrites: true,
-      retryReads: true,
-      socketTimeoutMS: 45e3,
-      serverSelectionTimeoutMS: 5e3,
-      connectTimeoutMS: 1e4
-    };
-    connectingClient = new import_mongodb2.MongoClient(config.uri, clientOptions);
-    await connectingClient.connect();
-    logger.info("Successfully connected to MongoDB", {
-      uri: config.uri.replace(/mongodb\+srv:\/\/.*@/, "mongodb+srv://***@"),
-      database: config.database
-    });
-    await connectingClient.db(config.database).command({ ping: 1 });
-    connectingClient.on("error", (error) => {
-      logger.error("MongoDB client error", { error: error.message });
-    });
-    mongoClient = connectingClient;
-    return mongoClient;
-  })();
-  try {
-    return await mongoClientPromise;
-  } catch (error) {
-    logger.error("Failed to connect to MongoDB", {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    const clientToClose = connectingClient;
-    if (clientToClose) {
-      try {
-        await clientToClose.close();
-      } catch {
-      }
-    }
-    mongoClient = null;
-    throw error;
-  } finally {
-    mongoClientPromise = null;
-  }
-}
-async function getMongoDatabase() {
-  if (mongoDatabase && await isClientConnected(mongoClient)) {
-    return mongoDatabase;
-  }
-  mongoDatabase = null;
-  try {
-    const client = await getMongoClient();
-    const config = validateMongoDBConfig();
-    mongoDatabase = client.db(config.database);
-    return mongoDatabase;
-  } catch (error) {
-    logger.error("Failed to get MongoDB database", {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    throw error;
-  }
-}
-async function isMongoConnected() {
-  if (!mongoClient) {
-    return false;
-  }
-  try {
-    const config = validateMongoDBConfig();
-    await mongoClient.db(config.database).command({ ping: 1 });
-    return true;
-  } catch {
-    mongoClient = null;
-    return false;
-  }
-}
-async function closeMongoConnection() {
-  try {
-    if (mongoClient) {
-      await mongoClient.close();
-    }
-    mongoClient = null;
-    mongoDatabase = null;
-    mongoClientPromise = null;
-  } catch (error) {
-    logger.error("Error closing MongoDB connection", {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    throw error;
-  }
-}
-function setupMongoDBShutdownHandlers() {
-  const handleShutdown = async () => {
-    await closeMongoConnection();
-  };
-  process.on("SIGTERM", handleShutdown);
-  process.on("SIGINT", handleShutdown);
-  process.on("uncaughtException", async (error) => {
-    logger.error("Uncaught exception, closing MongoDB connection", {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    await closeMongoConnection();
-    process.exit(1);
-  });
-}
-var import_mongodb2, mongoClient, mongoDatabase, mongoClientPromise;
-var init_client = __esm({
-  "../../../lib/mongodb/client.ts"() {
-    "use strict";
-    import_mongodb2 = __toESM(require_lib3());
-    init_logger();
-    init_config();
-    mongoClient = null;
-    mongoDatabase = null;
-    mongoClientPromise = null;
-  }
-});
-
-// ../../../lib/mongodb/repositories/migrations.repository.ts
-var migrations_repository_exports = {};
-__export(migrations_repository_exports, {
-  MongoMigrationsRepository: () => MongoMigrationsRepository,
-  getMongoMigrationsRepository: () => getMongoMigrationsRepository
-});
-function getMongoMigrationsRepository() {
-  if (!instance) {
-    instance = new MongoMigrationsRepository();
-  }
-  return instance;
-}
-var import_zod3, MigrationRecordSchema, MigrationStateSchema, MongoMigrationsRepository, instance;
-var init_migrations_repository = __esm({
-  "../../../lib/mongodb/repositories/migrations.repository.ts"() {
-    "use strict";
-    import_zod3 = require("zod");
-    init_client();
-    init_logger();
-    MigrationRecordSchema = import_zod3.z.object({
-      id: import_zod3.z.string(),
-      completedAt: import_zod3.z.string(),
-      quilltapVersion: import_zod3.z.string(),
-      itemsAffected: import_zod3.z.number(),
-      message: import_zod3.z.string()
-    });
-    MigrationStateSchema = import_zod3.z.object({
-      _id: import_zod3.z.literal("migration_state").optional(),
-      completedMigrations: import_zod3.z.array(MigrationRecordSchema),
-      lastChecked: import_zod3.z.string(),
-      quilltapVersion: import_zod3.z.string()
-    });
-    MongoMigrationsRepository = class {
+    PluginRegistry = class {
       constructor() {
-        this.collectionName = "migrations_state";
-        this.documentId = "migration_state";
-      }
-      /**
-       * Get the MongoDB collection
-       */
-      async getCollection() {
-        const db = await getMongoDatabase();
-        logger.debug("Retrieved MongoDB migrations_state collection", {
-          context: "MongoMigrationsRepository"
-        });
-        return db.collection(this.collectionName);
-      }
-      /**
-       * Load the current migration state
-       */
-      async loadState() {
-        try {
-          logger.debug("Loading migration state from MongoDB", {
-            context: "MongoMigrationsRepository.loadState"
-          });
-          const collection = await this.getCollection();
-          const doc = await collection.findOne({ _id: this.documentId });
-          if (!doc) {
-            logger.debug("No migration state found in MongoDB, returning empty state", {
-              context: "MongoMigrationsRepository.loadState"
-            });
-            const packageJson = await import("/Users/csebold/local_source/F9-Quilltap/package.json");
-            return {
-              completedMigrations: [],
-              lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
-              quilltapVersion: packageJson.version
-            };
-          }
-          const { _id, ...state } = doc;
-          const validated = MigrationStateSchema.omit({ _id: true }).parse(state);
-          logger.debug("Migration state loaded from MongoDB", {
-            context: "MongoMigrationsRepository.loadState",
-            completedCount: validated.completedMigrations.length
-          });
-          return validated;
-        } catch (error) {
-          logger.error("Error loading migration state from MongoDB", {
-            context: "MongoMigrationsRepository.loadState",
-            error: error instanceof Error ? error.message : String(error)
-          });
-          const packageJson = await import("/Users/csebold/local_source/F9-Quilltap/package.json");
-          return {
-            completedMigrations: [],
-            lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
-            quilltapVersion: packageJson.version
-          };
-        }
-      }
-      /**
-       * Save migration state to MongoDB
-       */
-      async saveState(state) {
-        try {
-          logger.debug("Saving migration state to MongoDB", {
-            context: "MongoMigrationsRepository.saveState",
-            completedCount: state.completedMigrations.length
-          });
-          const collection = await this.getCollection();
-          await collection.updateOne(
-            { _id: this.documentId },
-            {
-              $set: {
-                completedMigrations: state.completedMigrations,
-                lastChecked: state.lastChecked,
-                quilltapVersion: state.quilltapVersion
-              }
-            },
-            { upsert: true }
-          );
-          logger.debug("Migration state saved to MongoDB", {
-            context: "MongoMigrationsRepository.saveState"
-          });
-        } catch (error) {
-          logger.error("Error saving migration state to MongoDB", {
-            context: "MongoMigrationsRepository.saveState",
-            error: error instanceof Error ? error.message : String(error)
-          });
-          throw error;
-        }
-      }
-      /**
-       * Check if a migration has been completed
-       */
-      async isMigrationCompleted(migrationId) {
-        const state = await this.loadState();
-        return state.completedMigrations.some((m) => m.id === migrationId);
-      }
-      /**
-       * Record a completed migration
-       */
-      async recordCompletedMigration(record) {
-        const state = await this.loadState();
-        if (state.completedMigrations.some((m) => m.id === record.id)) {
-          logger.warn("Migration already recorded, skipping", {
-            context: "MongoMigrationsRepository.recordCompletedMigration",
-            migrationId: record.id
-          });
-          return state;
-        }
-        const packageJson = await import("/Users/csebold/local_source/F9-Quilltap/package.json");
-        const updatedState = {
-          ...state,
-          completedMigrations: [...state.completedMigrations, record],
-          lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
-          quilltapVersion: packageJson.version
+        this.state = {
+          initialized: false,
+          plugins: /* @__PURE__ */ new Map(),
+          errors: /* @__PURE__ */ new Map(),
+          capabilities: /* @__PURE__ */ new Map(),
+          lastScanTime: null
         };
-        await this.saveState(updatedState);
-        return updatedState;
       }
       /**
-       * Get list of completed migration IDs
+       * Initialize the registry with scanned plugins
        */
-      async getCompletedMigrationIds() {
-        const state = await this.loadState();
-        return state.completedMigrations.map((m) => m.id);
+      async initialize(scanResult) {
+        logger3.info("Initializing plugin registry", {
+          pluginCount: scanResult.plugins.length,
+          errorCount: scanResult.errors.length
+        });
+        this.state.plugins.clear();
+        this.state.errors.clear();
+        this.state.capabilities.clear();
+        for (const plugin2 of scanResult.plugins) {
+          this.registerPlugin(plugin2);
+        }
+        for (const error of scanResult.errors) {
+          this.state.errors.set(error.pluginName, error.error);
+        }
+        this.state.initialized = true;
+        this.state.lastScanTime = /* @__PURE__ */ new Date();
+        logger3.info("Plugin registry initialized", {
+          registered: this.state.plugins.size,
+          errors: this.state.errors.size
+        });
+      }
+      /**
+       * Register a single plugin
+       */
+      registerPlugin(plugin2) {
+        const pluginName = plugin2.manifest.name;
+        this.state.plugins.set(pluginName, plugin2);
+        for (const capability of plugin2.capabilities) {
+          if (!this.state.capabilities.has(capability)) {
+            this.state.capabilities.set(capability, []);
+          }
+          this.state.capabilities.get(capability).push(pluginName);
+        }
+        logger3.debug("Plugin registered", {
+          name: pluginName,
+          version: plugin2.manifest.version,
+          capabilities: plugin2.capabilities
+        });
+      }
+      /**
+       * Get all registered plugins
+       */
+      getAll() {
+        return Array.from(this.state.plugins.values());
+      }
+      /**
+       * Get enabled plugins only
+       */
+      getEnabled() {
+        return this.getAll().filter((p) => p.enabled);
+      }
+      /**
+       * Get a specific plugin by name
+       */
+      get(name) {
+        return this.state.plugins.get(name) || null;
+      }
+      /**
+       * Get plugins by capability
+       */
+      getByCapability(capability) {
+        const names = this.state.capabilities.get(capability) || [];
+        return names.map((name) => this.state.plugins.get(name)).filter((p) => p !== void 0);
+      }
+      /**
+       * Get enabled plugins by capability
+       */
+      getEnabledByCapability(capability) {
+        return this.getByCapability(capability).filter((p) => p.enabled);
+      }
+      /**
+       * Check if a plugin is registered
+       */
+      has(name) {
+        return this.state.plugins.has(name);
+      }
+      /**
+       * Enable a plugin
+       */
+      enable(name) {
+        const plugin2 = this.state.plugins.get(name);
+        if (!plugin2) {
+          logger3.warn("Cannot enable plugin: not found", { name });
+          return false;
+        }
+        plugin2.enabled = true;
+        logger3.info("Plugin enabled", { name });
+        return true;
+      }
+      /**
+       * Disable a plugin
+       */
+      disable(name) {
+        const plugin2 = this.state.plugins.get(name);
+        if (!plugin2) {
+          logger3.warn("Cannot disable plugin: not found", { name });
+          return false;
+        }
+        plugin2.enabled = false;
+        logger3.info("Plugin disabled", { name });
+        return true;
+      }
+      /**
+       * Get all available capabilities
+       */
+      getCapabilities() {
+        return Array.from(this.state.capabilities.keys());
+      }
+      /**
+       * Get registry statistics
+       */
+      getStats() {
+        const all = this.getAll();
+        const enabled = this.getEnabled();
+        return {
+          total: all.length,
+          enabled: enabled.length,
+          disabled: all.length - enabled.length,
+          errors: this.state.errors.size,
+          capabilities: this.state.capabilities.size,
+          initialized: this.state.initialized,
+          lastScan: this.state.lastScanTime?.toISOString() || null
+        };
+      }
+      /**
+       * Get all errors
+       */
+      getErrors() {
+        return Array.from(this.state.errors.entries()).map(([plugin2, error]) => ({
+          plugin: plugin2,
+          error
+        }));
+      }
+      /**
+       * Check if registry is initialized
+       */
+      isInitialized() {
+        return this.state.initialized;
+      }
+      /**
+       * Reset the registry (for testing)
+       */
+      reset() {
+        this.state.initialized = false;
+        this.state.plugins.clear();
+        this.state.errors.clear();
+        this.state.capabilities.clear();
+        this.state.lastScanTime = null;
+        logger3.debug("Plugin registry reset");
+      }
+      /**
+       * Export registry state (for debugging/admin UI)
+       */
+      exportState() {
+        return {
+          initialized: this.state.initialized,
+          lastScanTime: this.state.lastScanTime?.toISOString() || null,
+          plugins: Array.from(this.state.plugins.entries()).map(([name, plugin2]) => {
+            let scope;
+            if (plugin2.pluginPath.includes(import_path34.default.join("plugins", "site"))) {
+              scope = "site";
+            } else if (plugin2.pluginPath.includes(import_path34.default.join("plugins", "users"))) {
+              scope = "user";
+            }
+            return {
+              name,
+              title: plugin2.manifest.title,
+              version: plugin2.packageVersion ?? plugin2.manifest.version,
+              enabled: plugin2.enabled,
+              capabilities: plugin2.capabilities,
+              path: plugin2.pluginPath,
+              source: plugin2.source,
+              scope,
+              packageName: plugin2.packageName,
+              hasConfigSchema: Array.isArray(plugin2.manifest.configSchema) && plugin2.manifest.configSchema.length > 0
+            };
+          }),
+          errors: Array.from(this.state.errors.entries()).map(([name, error]) => ({
+            name,
+            error
+          })),
+          capabilities: Array.from(this.state.capabilities.entries()).map(([cap, plugins]) => ({
+            capability: cap,
+            plugins
+          })),
+          stats: this.getStats()
+        };
       }
     };
-    instance = null;
+    pluginRegistry = new PluginRegistry();
   }
 });
 
@@ -39724,8 +39454,195 @@ function createPluginLogger(pluginName, minLevel = "debug") {
 var import_promises = __toESM(require("node:fs/promises"));
 var import_node_fs = __toESM(require("node:fs"));
 var import_node_path = __toESM(require("node:path"));
+
+// lib/mongodb-utils.ts
+var import_mongodb = __toESM(require_lib3());
+
+// lib/plugin-logger.ts
+var logger = createPluginLogger("qtap-plugin-upgrade");
+
+// lib/mongodb-utils.ts
+function sanitizeURI(uri) {
+  try {
+    return uri.replace(/(:\/\/[^:]+:)[^@]+(@)/, "$1****$2");
+  } catch {
+    return uri.replace(/(:\/\/[^:]+:)[^@]+(@)/, "$1****$2");
+  }
+}
+function getMongoDBConfigFromEnv() {
+  const uri = process.env.MONGODB_URI || "mongodb://localhost:27017";
+  const database = process.env.MONGODB_DATABASE || "quilltap";
+  const mode = process.env.MONGODB_MODE || "external";
+  const dataDir = process.env.MONGODB_DATA_DIR || "/data/mongodb";
+  const connectionTimeoutMs = process.env.MONGODB_CONNECTION_TIMEOUT_MS ? Number.parseInt(process.env.MONGODB_CONNECTION_TIMEOUT_MS) : 1e4;
+  const maxPoolSize = process.env.MONGODB_MAX_POOL_SIZE ? Number.parseInt(process.env.MONGODB_MAX_POOL_SIZE) : 10;
+  return {
+    uri,
+    database,
+    mode,
+    dataDir,
+    connectionTimeoutMs,
+    maxPoolSize
+  };
+}
+function validateMongoDBConfig() {
+  logger.debug("Validating MongoDB configuration", {
+    dataBackend: process.env.DATA_BACKEND,
+    mode: process.env.MONGODB_MODE
+  });
+  const config = getMongoDBConfigFromEnv();
+  const errors = [];
+  let isConfigured = false;
+  if (!config.uri || config.uri.length === 0) {
+    errors.push("MongoDB URI is required");
+  }
+  if (!config.database || config.database.length === 0) {
+    errors.push("Database name is required");
+  }
+  if (config.mode !== "external" && config.mode !== "embedded") {
+    errors.push('Mode must be either "external" or "embedded"');
+  }
+  if (config.connectionTimeoutMs !== void 0 && (typeof config.connectionTimeoutMs !== "number" || config.connectionTimeoutMs <= 0 || !Number.isInteger(config.connectionTimeoutMs))) {
+    errors.push("Connection timeout must be a positive integer");
+  }
+  if (config.maxPoolSize !== void 0 && (typeof config.maxPoolSize !== "number" || config.maxPoolSize <= 0 || !Number.isInteger(config.maxPoolSize))) {
+    errors.push("Max pool size must be a positive integer");
+  }
+  if (errors.length === 0) {
+    isConfigured = true;
+    logger.debug("MongoDB configuration validated successfully", {
+      database: config.database,
+      mode: config.mode,
+      uri: sanitizeURI(config.uri),
+      connectionTimeoutMs: config.connectionTimeoutMs,
+      maxPoolSize: config.maxPoolSize
+    });
+  } else {
+    logger.warn("MongoDB configuration validation failed", {
+      errors
+    });
+  }
+  return {
+    uri: config.uri || "",
+    database: config.database || "",
+    mode: config.mode || "external",
+    dataDir: config.dataDir,
+    connectionTimeoutMs: config.connectionTimeoutMs || 1e4,
+    maxPoolSize: config.maxPoolSize || 10,
+    isConfigured,
+    errors
+  };
+}
+async function testMongoDBConnection() {
+  if (process.env.DATA_BACKEND === "json") {
+    logger.debug("Data backend is JSON, skipping MongoDB connection test");
+    return {
+      success: true,
+      message: "JSON backend is configured, MongoDB not required"
+    };
+  }
+  const config = validateMongoDBConfig();
+  if (!config.isConfigured) {
+    const errorMessage = `MongoDB configuration invalid: ${config.errors.join(", ")}`;
+    logger.error("Cannot test MongoDB connection - configuration invalid", {
+      errors: config.errors
+    });
+    return {
+      success: false,
+      message: errorMessage
+    };
+  }
+  let client = null;
+  const startTime = Date.now();
+  try {
+    logger.debug("Attempting MongoDB connection", {
+      uri: sanitizeURI(config.uri),
+      timeout: config.connectionTimeoutMs
+    });
+    client = new import_mongodb.MongoClient(config.uri, {
+      serverSelectionTimeoutMS: config.connectionTimeoutMs,
+      connectTimeoutMS: config.connectionTimeoutMs,
+      maxPoolSize: config.maxPoolSize
+    });
+    await client.connect();
+    const admin = client.db("admin");
+    await admin.command({ ping: 1 });
+    const latencyMs = Date.now() - startTime;
+    logger.info("MongoDB connection test successful", {
+      uri: sanitizeURI(config.uri),
+      database: config.database,
+      latencyMs
+    });
+    return {
+      success: true,
+      message: `Successfully connected to MongoDB (${latencyMs}ms)`,
+      latencyMs
+    };
+  } catch (error) {
+    const latencyMs = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error("MongoDB connection test failed", {
+      uri: sanitizeURI(config.uri),
+      error: errorMessage,
+      latencyMs
+    });
+    return {
+      success: false,
+      message: `MongoDB connection failed: ${errorMessage}`,
+      latencyMs
+    };
+  } finally {
+    if (client) {
+      try {
+        await client.close();
+        logger.debug("MongoDB client connection closed");
+      } catch (error) {
+        const closeError = error instanceof Error ? error.message : String(error);
+        logger.warn("Error closing MongoDB connection", {
+          error: closeError
+        });
+      }
+    }
+  }
+}
+var cachedClient = null;
+var cachedDb = null;
+async function getMongoDatabase() {
+  const config = validateMongoDBConfig();
+  if (!config.isConfigured) {
+    throw new Error(`MongoDB not configured: ${config.errors.join(", ")}`);
+  }
+  if (cachedDb && cachedClient) {
+    try {
+      await cachedClient.db("admin").command({ ping: 1 });
+      return cachedDb;
+    } catch {
+      cachedClient = null;
+      cachedDb = null;
+    }
+  }
+  cachedClient = new import_mongodb.MongoClient(config.uri, {
+    serverSelectionTimeoutMS: config.connectionTimeoutMs,
+    connectTimeoutMS: config.connectionTimeoutMs,
+    maxPoolSize: config.maxPoolSize
+  });
+  await cachedClient.connect();
+  cachedDb = cachedClient.db(config.database);
+  logger.debug("Created new MongoDB connection for migrations", {
+    database: config.database
+  });
+  return cachedDb;
+}
+function isMongoDBBackend() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+
+// migration-runner.ts
 var logger2 = createPluginLogger("qtap-plugin-upgrade");
 var MIGRATIONS_STATE_FILE = import_node_path.default.join(process.cwd(), "data", "settings", "migrations.json");
+var MIGRATIONS_COLLECTION = "migrations_state";
+var MIGRATIONS_DOCUMENT_ID = "migration_state";
 function getQuilltapVersion() {
   try {
     const pkgPath = import_node_path.default.join(process.cwd(), "package.json");
@@ -39735,19 +39652,73 @@ function getQuilltapVersion() {
     return "unknown";
   }
 }
-function isMongoDBBackend() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
+async function loadMigrationStateFromMongo() {
+  try {
+    const db = await getMongoDatabase();
+    const collection = db.collection(MIGRATIONS_COLLECTION);
+    const doc = await collection.findOne({ _id: MIGRATIONS_DOCUMENT_ID });
+    if (!doc) {
+      logger2.debug("No migration state found in MongoDB", {
+        context: "migration-runner.loadMigrationStateFromMongo"
+      });
+      return null;
+    }
+    logger2.debug("Migration state loaded from MongoDB", {
+      context: "migration-runner.loadMigrationStateFromMongo",
+      completedCount: doc.completedMigrations?.length || 0
+    });
+    return {
+      completedMigrations: doc.completedMigrations || [],
+      lastChecked: doc.lastChecked || (/* @__PURE__ */ new Date()).toISOString(),
+      quilltapVersion: doc.quilltapVersion || getQuilltapVersion()
+    };
+  } catch (error) {
+    logger2.error("Error loading migration state from MongoDB", {
+      context: "migration-runner.loadMigrationStateFromMongo",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
 }
-async function getMongoMigrationsRepo() {
-  const { getMongoMigrationsRepository: getMongoMigrationsRepository2 } = await Promise.resolve().then(() => (init_migrations_repository(), migrations_repository_exports));
-  return getMongoMigrationsRepository2();
+async function saveMigrationStateToMongo(state) {
+  try {
+    const db = await getMongoDatabase();
+    const collection = db.collection(MIGRATIONS_COLLECTION);
+    await collection.updateOne(
+      { _id: MIGRATIONS_DOCUMENT_ID },
+      {
+        $set: {
+          completedMigrations: state.completedMigrations,
+          lastChecked: state.lastChecked,
+          quilltapVersion: state.quilltapVersion
+        }
+      },
+      { upsert: true }
+    );
+    logger2.debug("Migration state saved to MongoDB", {
+      context: "migration-runner.saveMigrationStateToMongo",
+      completedCount: state.completedMigrations.length
+    });
+  } catch (error) {
+    logger2.error("Error saving migration state to MongoDB", {
+      context: "migration-runner.saveMigrationStateToMongo",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
 }
 async function loadMigrationState() {
   if (isMongoDBBackend()) {
     try {
-      const repo = await getMongoMigrationsRepo();
-      return await repo.loadState();
+      const state = await loadMigrationStateFromMongo();
+      if (state) {
+        return state;
+      }
+      return {
+        completedMigrations: [],
+        lastChecked: (/* @__PURE__ */ new Date()).toISOString(),
+        quilltapVersion: getQuilltapVersion()
+      };
     } catch (error) {
       logger2.warn("Failed to load migration state from MongoDB, falling back to file", {
         context: "migration-runner.loadMigrationState",
@@ -39769,11 +39740,7 @@ async function loadMigrationState() {
 async function saveMigrationState(state) {
   if (isMongoDBBackend()) {
     try {
-      const repo = await getMongoMigrationsRepo();
-      await repo.saveState(state);
-      logger2.debug("Migration state saved to MongoDB", {
-        context: "migration-runner.saveMigrationState"
-      });
+      await saveMigrationStateToMongo(state);
       return;
     } catch (error) {
       logger2.warn("Failed to save migration state to MongoDB, falling back to file", {
@@ -39942,18 +39909,18 @@ async function getPendingMigrations(migrations2) {
 }
 
 // lib/json-store/core/json-store.ts
-var fs3 = __toESM(require("fs"));
+var fs2 = __toESM(require("fs"));
 var path3 = __toESM(require("path"));
 var import_util = require("util");
 var crypto2 = __toESM(require("crypto"));
-var mkdir2 = (0, import_util.promisify)(fs3.mkdir);
-var readFile2 = (0, import_util.promisify)(fs3.readFile);
-var writeFile2 = (0, import_util.promisify)(fs3.writeFile);
-var appendFile2 = (0, import_util.promisify)(fs3.appendFile);
-var rename2 = (0, import_util.promisify)(fs3.rename);
-var unlink2 = (0, import_util.promisify)(fs3.unlink);
-var readdir2 = (0, import_util.promisify)(fs3.readdir);
-var stat2 = (0, import_util.promisify)(fs3.stat);
+var mkdir2 = (0, import_util.promisify)(fs2.mkdir);
+var readFile2 = (0, import_util.promisify)(fs2.readFile);
+var writeFile2 = (0, import_util.promisify)(fs2.writeFile);
+var appendFile2 = (0, import_util.promisify)(fs2.appendFile);
+var rename2 = (0, import_util.promisify)(fs2.rename);
+var unlink2 = (0, import_util.promisify)(fs2.unlink);
+var readdir2 = (0, import_util.promisify)(fs2.readdir);
+var stat2 = (0, import_util.promisify)(fs2.stat);
 var JsonStore = class {
   constructor(config = {}) {
     this.locks = /* @__PURE__ */ new Map();
@@ -39962,8 +39929,8 @@ var JsonStore = class {
     this.enableCache = config.enableCache ?? true;
     this.lockTimeout = config.lockTimeout ?? 5e3;
     this.fsyncInterval = config.fsyncInterval ?? 10;
-    if (!fs3.existsSync(this.dataDir)) {
-      fs3.mkdirSync(this.dataDir, { recursive: true });
+    if (!fs2.existsSync(this.dataDir)) {
+      fs2.mkdirSync(this.dataDir, { recursive: true });
     }
   }
   /**
@@ -39994,8 +39961,8 @@ var JsonStore = class {
     await this.ensureDir(lockDir);
     while (true) {
       try {
-        const fd = fs3.openSync(lockPath, fs3.constants.O_CREAT | fs3.constants.O_EXCL | fs3.constants.O_WRONLY);
-        fs3.closeSync(fd);
+        const fd = fs2.openSync(lockPath, fs2.constants.O_CREAT | fs2.constants.O_EXCL | fs2.constants.O_WRONLY);
+        fs2.closeSync(fd);
         return;
       } catch (error) {
         if (error.code !== "EEXIST") {
@@ -40125,7 +40092,7 @@ var JsonStore = class {
     await this.acquireLock(fullPath);
     try {
       const lines = items.map((item) => JSON.stringify(item)).join("\n") + "\n";
-      if (fs3.existsSync(fullPath)) {
+      if (fs2.existsSync(fullPath)) {
         await appendFile2(fullPath, lines, "utf-8");
       } else {
         await writeFile2(fullPath, lines, "utf-8");
@@ -40157,7 +40124,7 @@ var JsonStore = class {
    */
   exists(filePath) {
     const fullPath = this.resolvePath(filePath);
-    return fs3.existsSync(fullPath);
+    return fs2.existsSync(fullPath);
   }
   /**
    * List files in a directory
@@ -40205,12 +40172,12 @@ var JsonStore = class {
     };
   }
 };
-var instance2 = null;
+var instance = null;
 function getJsonStore(config) {
-  if (!instance2) {
-    instance2 = new JsonStore(config);
+  if (!instance) {
+    instance = new JsonStore(config);
   }
-  return instance2;
+  return instance;
 }
 
 // lib/json-store/repositories/base.repository.ts
@@ -40255,42 +40222,42 @@ var BaseRepository = class {
 };
 
 // lib/json-store/schemas/types.ts
-var import_zod4 = require("zod");
-var ProviderEnum = import_zod4.z.string().min(1, "Provider is required");
-var ImageProviderEnum = import_zod4.z.string().min(1, "Image provider is required");
-var EmbeddingProfileProviderEnum = import_zod4.z.enum(["OPENAI", "OLLAMA"]);
-var RoleEnum = import_zod4.z.enum(["SYSTEM", "USER", "ASSISTANT", "TOOL"]);
-var ImageTagTypeEnum = import_zod4.z.enum(["CHARACTER", "PERSONA", "CHAT", "THEME"]);
-var AvatarDisplayModeEnum = import_zod4.z.enum(["ALWAYS", "GROUP_ONLY", "NEVER"]);
-var UUIDSchema = import_zod4.z.string().uuid();
-var TimestampSchema = import_zod4.z.string().datetime().or(import_zod4.z.date()).transform((d) => {
+var import_zod = require("zod");
+var ProviderEnum = import_zod.z.string().min(1, "Provider is required");
+var ImageProviderEnum = import_zod.z.string().min(1, "Image provider is required");
+var EmbeddingProfileProviderEnum = import_zod.z.enum(["OPENAI", "OLLAMA"]);
+var RoleEnum = import_zod.z.enum(["SYSTEM", "USER", "ASSISTANT", "TOOL"]);
+var ImageTagTypeEnum = import_zod.z.enum(["CHARACTER", "PERSONA", "CHAT", "THEME"]);
+var AvatarDisplayModeEnum = import_zod.z.enum(["ALWAYS", "GROUP_ONLY", "NEVER"]);
+var UUIDSchema = import_zod.z.string().uuid();
+var TimestampSchema = import_zod.z.string().datetime().or(import_zod.z.date()).transform((d) => {
   if (d instanceof Date) return d.toISOString();
   return d;
 });
-var JsonSchema = import_zod4.z.record(import_zod4.z.string(), import_zod4.z.unknown());
-var EncryptedFieldSchema = import_zod4.z.object({
-  ciphertext: import_zod4.z.string(),
-  iv: import_zod4.z.string(),
-  authTag: import_zod4.z.string()
+var JsonSchema = import_zod.z.record(import_zod.z.string(), import_zod.z.unknown());
+var EncryptedFieldSchema = import_zod.z.object({
+  ciphertext: import_zod.z.string(),
+  iv: import_zod.z.string(),
+  authTag: import_zod.z.string()
 });
 var TOTPSecretSchema = EncryptedFieldSchema.extend({
-  enabled: import_zod4.z.boolean().default(false),
+  enabled: import_zod.z.boolean().default(false),
   verifiedAt: TimestampSchema.nullable().optional()
 });
-var BackupCodesSchema = import_zod4.z.object({
-  ciphertext: import_zod4.z.string(),
-  iv: import_zod4.z.string(),
-  authTag: import_zod4.z.string(),
+var BackupCodesSchema = import_zod.z.object({
+  ciphertext: import_zod.z.string(),
+  iv: import_zod.z.string(),
+  authTag: import_zod.z.string(),
   createdAt: TimestampSchema
 });
-var UserSchema = import_zod4.z.object({
+var UserSchema = import_zod.z.object({
   id: UUIDSchema,
-  email: import_zod4.z.string().email(),
-  name: import_zod4.z.string().nullable().optional(),
-  image: import_zod4.z.string().nullable().optional(),
+  email: import_zod.z.string().email(),
+  name: import_zod.z.string().nullable().optional(),
+  image: import_zod.z.string().nullable().optional(),
   emailVerified: TimestampSchema.nullable().optional(),
   // Password authentication
-  passwordHash: import_zod4.z.string().nullable().optional(),
+  passwordHash: import_zod.z.string().nullable().optional(),
   // TOTP 2FA
   totp: TOTPSecretSchema.optional(),
   backupCodes: BackupCodesSchema.optional(),
@@ -40298,20 +40265,20 @@ var UserSchema = import_zod4.z.object({
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var HexColorSchema = import_zod4.z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
-var TagVisualStyleSchema = import_zod4.z.object({
-  emoji: import_zod4.z.string().max(8).optional().nullable(),
+var HexColorSchema = import_zod.z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/);
+var TagVisualStyleSchema = import_zod.z.object({
+  emoji: import_zod.z.string().max(8).optional().nullable(),
   foregroundColor: HexColorSchema.default("#1f2937"),
   backgroundColor: HexColorSchema.default("#e5e7eb"),
-  emojiOnly: import_zod4.z.boolean().default(false),
-  bold: import_zod4.z.boolean().default(false),
-  italic: import_zod4.z.boolean().default(false),
-  strikethrough: import_zod4.z.boolean().default(false)
+  emojiOnly: import_zod.z.boolean().default(false),
+  bold: import_zod.z.boolean().default(false),
+  italic: import_zod.z.boolean().default(false),
+  strikethrough: import_zod.z.boolean().default(false)
 });
-var TagStyleMapSchema = import_zod4.z.record(import_zod4.z.string(), TagVisualStyleSchema).default({});
-var CheapLLMStrategyEnum = import_zod4.z.enum(["USER_DEFINED", "PROVIDER_CHEAPEST", "LOCAL_FIRST"]);
-var EmbeddingProviderEnum = import_zod4.z.enum(["SAME_PROVIDER", "OPENAI", "LOCAL"]);
-var CheapLLMSettingsSchema = import_zod4.z.object({
+var TagStyleMapSchema = import_zod.z.record(import_zod.z.string(), TagVisualStyleSchema).default({});
+var CheapLLMStrategyEnum = import_zod.z.enum(["USER_DEFINED", "PROVIDER_CHEAPEST", "LOCAL_FIRST"]);
+var EmbeddingProviderEnum = import_zod.z.enum(["SAME_PROVIDER", "OPENAI", "LOCAL"]);
+var CheapLLMSettingsSchema = import_zod.z.object({
   /** Strategy for selecting the cheap LLM provider */
   strategy: CheapLLMStrategyEnum.default("PROVIDER_CHEAPEST"),
   /** If USER_DEFINED, which connection profile to use */
@@ -40319,17 +40286,17 @@ var CheapLLMSettingsSchema = import_zod4.z.object({
   /** Global default cheap LLM profile - always use this if set */
   defaultCheapProfileId: UUIDSchema.nullable().optional(),
   /** Whether to fall back to local models if available */
-  fallbackToLocal: import_zod4.z.boolean().default(true),
+  fallbackToLocal: import_zod.z.boolean().default(true),
   /** Provider for generating embeddings */
   embeddingProvider: EmbeddingProviderEnum.default("OPENAI"),
   /** Embedding profile ID to use for text embeddings */
   embeddingProfileId: UUIDSchema.nullable().optional()
 });
-var ChatSettingsSchema = import_zod4.z.object({
+var ChatSettingsSchema = import_zod.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   avatarDisplayMode: AvatarDisplayModeEnum.default("ALWAYS"),
-  avatarDisplayStyle: import_zod4.z.string().default("CIRCULAR"),
+  avatarDisplayStyle: import_zod.z.string().default("CIRCULAR"),
   tagStyles: TagStyleMapSchema,
   /** Cheap LLM settings for memory extraction and summarization */
   cheapLLMSettings: CheapLLMSettingsSchema.default({
@@ -40342,149 +40309,149 @@ var ChatSettingsSchema = import_zod4.z.object({
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var AccountSchema = import_zod4.z.object({
+var AccountSchema = import_zod.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  type: import_zod4.z.string(),
-  provider: import_zod4.z.string(),
-  providerAccountId: import_zod4.z.string(),
-  refresh_token: import_zod4.z.string().nullable().optional(),
-  access_token: import_zod4.z.string().nullable().optional(),
-  expires_at: import_zod4.z.number().nullable().optional(),
-  token_type: import_zod4.z.string().nullable().optional(),
-  scope: import_zod4.z.string().nullable().optional(),
-  id_token: import_zod4.z.string().nullable().optional(),
-  session_state: import_zod4.z.string().nullable().optional()
+  type: import_zod.z.string(),
+  provider: import_zod.z.string(),
+  providerAccountId: import_zod.z.string(),
+  refresh_token: import_zod.z.string().nullable().optional(),
+  access_token: import_zod.z.string().nullable().optional(),
+  expires_at: import_zod.z.number().nullable().optional(),
+  token_type: import_zod.z.string().nullable().optional(),
+  scope: import_zod.z.string().nullable().optional(),
+  id_token: import_zod.z.string().nullable().optional(),
+  session_state: import_zod.z.string().nullable().optional()
 });
-var SessionSchema = import_zod4.z.object({
+var SessionSchema = import_zod.z.object({
   id: UUIDSchema,
-  sessionToken: import_zod4.z.string(),
+  sessionToken: import_zod.z.string(),
   userId: UUIDSchema,
   expires: TimestampSchema
 });
-var VerificationTokenSchema = import_zod4.z.object({
-  identifier: import_zod4.z.string(),
-  token: import_zod4.z.string(),
+var VerificationTokenSchema = import_zod.z.object({
+  identifier: import_zod.z.string(),
+  token: import_zod.z.string(),
   expires: TimestampSchema
 });
-var ApiKeySchema = import_zod4.z.object({
+var ApiKeySchema = import_zod.z.object({
   id: UUIDSchema,
-  label: import_zod4.z.string(),
+  label: import_zod.z.string(),
   provider: ProviderEnum,
-  ciphertext: import_zod4.z.string(),
-  iv: import_zod4.z.string(),
-  authTag: import_zod4.z.string(),
-  isActive: import_zod4.z.boolean().default(true),
+  ciphertext: import_zod.z.string(),
+  iv: import_zod.z.string(),
+  authTag: import_zod.z.string(),
+  isActive: import_zod.z.boolean().default(true),
   lastUsed: TimestampSchema.nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var ConnectionProfileSchema = import_zod4.z.object({
+var ConnectionProfileSchema = import_zod.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod4.z.string(),
+  name: import_zod.z.string(),
   provider: ProviderEnum,
   apiKeyId: UUIDSchema.nullable().optional(),
-  baseUrl: import_zod4.z.string().nullable().optional(),
-  modelName: import_zod4.z.string(),
+  baseUrl: import_zod.z.string().nullable().optional(),
+  modelName: import_zod.z.string(),
   parameters: JsonSchema.default({}),
-  isDefault: import_zod4.z.boolean().default(false),
+  isDefault: import_zod.z.boolean().default(false),
   /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
-  isCheap: import_zod4.z.boolean().default(false),
+  isCheap: import_zod.z.boolean().default(false),
   /** Whether the search_web tool is enabled for this profile */
-  allowWebSearch: import_zod4.z.boolean().default(false),
+  allowWebSearch: import_zod.z.boolean().default(false),
   /** Whether to use the provider's native web search integration (if supported) */
-  useNativeWebSearch: import_zod4.z.boolean().default(false),
-  tags: import_zod4.z.array(UUIDSchema).default([]),
+  useNativeWebSearch: import_zod.z.boolean().default(false),
+  tags: import_zod.z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var PhysicalDescriptionSchema = import_zod4.z.object({
+var PhysicalDescriptionSchema = import_zod.z.object({
   id: UUIDSchema,
-  name: import_zod4.z.string().min(1),
-  shortPrompt: import_zod4.z.string().max(350).nullable().optional(),
-  mediumPrompt: import_zod4.z.string().max(500).nullable().optional(),
-  longPrompt: import_zod4.z.string().max(750).nullable().optional(),
-  completePrompt: import_zod4.z.string().max(1e3).nullable().optional(),
-  fullDescription: import_zod4.z.string().nullable().optional(),
+  name: import_zod.z.string().min(1),
+  shortPrompt: import_zod.z.string().max(350).nullable().optional(),
+  mediumPrompt: import_zod.z.string().max(500).nullable().optional(),
+  longPrompt: import_zod.z.string().max(750).nullable().optional(),
+  completePrompt: import_zod.z.string().max(1e3).nullable().optional(),
+  fullDescription: import_zod.z.string().nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var CharacterSchema = import_zod4.z.object({
+var CharacterSchema = import_zod.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod4.z.string(),
-  title: import_zod4.z.string().nullable().optional(),
-  description: import_zod4.z.string().nullable().optional(),
-  personality: import_zod4.z.string().nullable().optional(),
-  scenario: import_zod4.z.string().nullable().optional(),
-  firstMessage: import_zod4.z.string().nullable().optional(),
-  exampleDialogues: import_zod4.z.string().nullable().optional(),
-  systemPrompt: import_zod4.z.string().nullable().optional(),
-  avatarUrl: import_zod4.z.string().nullable().optional(),
+  name: import_zod.z.string(),
+  title: import_zod.z.string().nullable().optional(),
+  description: import_zod.z.string().nullable().optional(),
+  personality: import_zod.z.string().nullable().optional(),
+  scenario: import_zod.z.string().nullable().optional(),
+  firstMessage: import_zod.z.string().nullable().optional(),
+  exampleDialogues: import_zod.z.string().nullable().optional(),
+  systemPrompt: import_zod.z.string().nullable().optional(),
+  avatarUrl: import_zod.z.string().nullable().optional(),
   defaultImageId: UUIDSchema.nullable().optional(),
   defaultConnectionProfileId: UUIDSchema.nullable().optional(),
   sillyTavernData: JsonSchema.nullable().optional(),
-  isFavorite: import_zod4.z.boolean().default(false),
+  isFavorite: import_zod.z.boolean().default(false),
   // Relationships
-  personaLinks: import_zod4.z.array(import_zod4.z.object({
+  personaLinks: import_zod.z.array(import_zod.z.object({
     personaId: UUIDSchema,
-    isDefault: import_zod4.z.boolean()
+    isDefault: import_zod.z.boolean()
   })).default([]),
-  tags: import_zod4.z.array(UUIDSchema).default([]),
-  avatarOverrides: import_zod4.z.array(import_zod4.z.object({
+  tags: import_zod.z.array(UUIDSchema).default([]),
+  avatarOverrides: import_zod.z.array(import_zod.z.object({
     chatId: UUIDSchema,
     imageId: UUIDSchema
   })).default([]),
-  physicalDescriptions: import_zod4.z.array(PhysicalDescriptionSchema).default([]),
+  physicalDescriptions: import_zod.z.array(PhysicalDescriptionSchema).default([]),
   // Timestamps
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var PersonaSchema = import_zod4.z.object({
+var PersonaSchema = import_zod.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod4.z.string(),
-  title: import_zod4.z.string().nullable().optional(),
-  description: import_zod4.z.string(),
-  personalityTraits: import_zod4.z.string().nullable().optional(),
-  avatarUrl: import_zod4.z.string().nullable().optional(),
+  name: import_zod.z.string(),
+  title: import_zod.z.string().nullable().optional(),
+  description: import_zod.z.string(),
+  personalityTraits: import_zod.z.string().nullable().optional(),
+  avatarUrl: import_zod.z.string().nullable().optional(),
   defaultImageId: UUIDSchema.nullable().optional(),
   sillyTavernData: JsonSchema.nullable().optional(),
   // Relationships
-  characterLinks: import_zod4.z.array(UUIDSchema).default([]),
-  tags: import_zod4.z.array(UUIDSchema).default([]),
-  physicalDescriptions: import_zod4.z.array(PhysicalDescriptionSchema).default([]),
+  characterLinks: import_zod.z.array(UUIDSchema).default([]),
+  tags: import_zod.z.array(UUIDSchema).default([]),
+  physicalDescriptions: import_zod.z.array(PhysicalDescriptionSchema).default([]),
   // Timestamps
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var MessageEventSchema = import_zod4.z.object({
-  type: import_zod4.z.literal("message"),
+var MessageEventSchema = import_zod.z.object({
+  type: import_zod.z.literal("message"),
   id: UUIDSchema,
   role: RoleEnum,
-  content: import_zod4.z.string(),
+  content: import_zod.z.string(),
   rawResponse: JsonSchema.nullable().optional(),
-  tokenCount: import_zod4.z.number().nullable().optional(),
-  swipeGroupId: import_zod4.z.string().nullable().optional(),
-  swipeIndex: import_zod4.z.number().nullable().optional(),
-  attachments: import_zod4.z.array(UUIDSchema).default([]),
+  tokenCount: import_zod.z.number().nullable().optional(),
+  swipeGroupId: import_zod.z.string().nullable().optional(),
+  swipeIndex: import_zod.z.number().nullable().optional(),
+  attachments: import_zod.z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   // Debug: Memory extraction logs (Sprint 6)
-  debugMemoryLogs: import_zod4.z.array(import_zod4.z.string()).optional()
+  debugMemoryLogs: import_zod.z.array(import_zod.z.string()).optional()
 });
-var ContextSummaryEventSchema = import_zod4.z.object({
-  type: import_zod4.z.literal("context-summary"),
+var ContextSummaryEventSchema = import_zod.z.object({
+  type: import_zod.z.literal("context-summary"),
   id: UUIDSchema,
-  context: import_zod4.z.string(),
+  context: import_zod.z.string(),
   createdAt: TimestampSchema
 });
-var ChatEventSchema = import_zod4.z.union([
+var ChatEventSchema = import_zod.z.union([
   MessageEventSchema,
   ContextSummaryEventSchema
 ]);
-var ParticipantTypeEnum = import_zod4.z.enum(["CHARACTER", "PERSONA"]);
-var ChatParticipantSchema = import_zod4.z.object({
+var ParticipantTypeEnum = import_zod.z.enum(["CHARACTER", "PERSONA"]);
+var ChatParticipantSchema = import_zod.z.object({
   id: UUIDSchema,
   // Participant type and identity
   type: ParticipantTypeEnum,
@@ -40498,12 +40465,12 @@ var ChatParticipantSchema = import_zod4.z.object({
   imageProfileId: UUIDSchema.nullable().optional(),
   // Image generation profile
   // Per-chat customization
-  systemPromptOverride: import_zod4.z.string().nullable().optional(),
+  systemPromptOverride: import_zod.z.string().nullable().optional(),
   // Custom scenario/context for this chat
   // Display and state
-  displayOrder: import_zod4.z.number().default(0),
+  displayOrder: import_zod.z.number().default(0),
   // For ordering in UI
-  isActive: import_zod4.z.boolean().default(true),
+  isActive: import_zod.z.boolean().default(true),
   // Temporarily disable without removing
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
@@ -40527,111 +40494,111 @@ var ChatParticipantSchema = import_zod4.z.object({
   },
   { message: "CHARACTER participants must have a connectionProfileId" }
 );
-var ChatParticipantBaseSchema = import_zod4.z.object({
+var ChatParticipantBaseSchema = import_zod.z.object({
   id: UUIDSchema,
   type: ParticipantTypeEnum,
   characterId: UUIDSchema.nullable().optional(),
   personaId: UUIDSchema.nullable().optional(),
   connectionProfileId: UUIDSchema.nullable().optional(),
   imageProfileId: UUIDSchema.nullable().optional(),
-  systemPromptOverride: import_zod4.z.string().nullable().optional(),
-  displayOrder: import_zod4.z.number().default(0),
-  isActive: import_zod4.z.boolean().default(true),
+  systemPromptOverride: import_zod.z.string().nullable().optional(),
+  displayOrder: import_zod.z.number().default(0),
+  isActive: import_zod.z.boolean().default(true),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var ChatMetadataSchema = import_zod4.z.object({
+var ChatMetadataSchema = import_zod.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   // Participants array (replaces characterId, personaId, connectionProfileId, imageProfileId)
-  participants: import_zod4.z.array(ChatParticipantBaseSchema).default([]),
-  title: import_zod4.z.string(),
-  contextSummary: import_zod4.z.string().nullable().optional(),
+  participants: import_zod.z.array(ChatParticipantBaseSchema).default([]),
+  title: import_zod.z.string(),
+  contextSummary: import_zod.z.string().nullable().optional(),
   sillyTavernMetadata: JsonSchema.nullable().optional(),
-  tags: import_zod4.z.array(UUIDSchema).default([]),
-  messageCount: import_zod4.z.number().default(0),
+  tags: import_zod.z.array(UUIDSchema).default([]),
+  messageCount: import_zod.z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
-  lastRenameCheckInterchange: import_zod4.z.number().default(0),
+  lastRenameCheckInterchange: import_zod.z.number().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 }).refine(
   (data) => data.participants.length > 0,
   { message: "Chat must have at least one participant" }
 );
-var ChatMetadataBaseSchema = import_zod4.z.object({
+var ChatMetadataBaseSchema = import_zod.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  participants: import_zod4.z.array(ChatParticipantBaseSchema).default([]),
-  title: import_zod4.z.string(),
-  contextSummary: import_zod4.z.string().nullable().optional(),
+  participants: import_zod.z.array(ChatParticipantBaseSchema).default([]),
+  title: import_zod.z.string(),
+  contextSummary: import_zod.z.string().nullable().optional(),
   sillyTavernMetadata: JsonSchema.nullable().optional(),
-  tags: import_zod4.z.array(UUIDSchema).default([]),
-  messageCount: import_zod4.z.number().default(0),
+  tags: import_zod.z.array(UUIDSchema).default([]),
+  messageCount: import_zod.z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
-  lastRenameCheckInterchange: import_zod4.z.number().default(0),
+  lastRenameCheckInterchange: import_zod.z.number().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var ChatMetadataLegacySchema = import_zod4.z.object({
+var ChatMetadataLegacySchema = import_zod.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   characterId: UUIDSchema,
   personaId: UUIDSchema.nullable().optional(),
   connectionProfileId: UUIDSchema,
   imageProfileId: UUIDSchema.nullable().optional(),
-  title: import_zod4.z.string(),
-  contextSummary: import_zod4.z.string().nullable().optional(),
+  title: import_zod.z.string(),
+  contextSummary: import_zod.z.string().nullable().optional(),
   sillyTavernMetadata: JsonSchema.nullable().optional(),
-  tags: import_zod4.z.array(UUIDSchema).default([]),
-  messageCount: import_zod4.z.number().default(0),
+  tags: import_zod.z.array(UUIDSchema).default([]),
+  messageCount: import_zod.z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
-  lastRenameCheckInterchange: import_zod4.z.number().default(0),
+  lastRenameCheckInterchange: import_zod.z.number().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var BinaryIndexEntrySchema = import_zod4.z.object({
+var BinaryIndexEntrySchema = import_zod.z.object({
   id: UUIDSchema,
-  sha256: import_zod4.z.string().length(64),
-  type: import_zod4.z.enum(["image", "chat_file", "avatar"]),
+  sha256: import_zod.z.string().length(64),
+  type: import_zod.z.enum(["image", "chat_file", "avatar"]),
   userId: UUIDSchema,
-  filename: import_zod4.z.string(),
-  relativePath: import_zod4.z.string(),
-  mimeType: import_zod4.z.string(),
-  size: import_zod4.z.number(),
-  width: import_zod4.z.number().nullable().optional(),
-  height: import_zod4.z.number().nullable().optional(),
-  source: import_zod4.z.enum(["upload", "import", "generated"]).default("upload"),
-  generationPrompt: import_zod4.z.string().nullable().optional(),
-  generationModel: import_zod4.z.string().nullable().optional(),
+  filename: import_zod.z.string(),
+  relativePath: import_zod.z.string(),
+  mimeType: import_zod.z.string(),
+  size: import_zod.z.number(),
+  width: import_zod.z.number().nullable().optional(),
+  height: import_zod.z.number().nullable().optional(),
+  source: import_zod.z.enum(["upload", "import", "generated"]).default("upload"),
+  generationPrompt: import_zod.z.string().nullable().optional(),
+  generationModel: import_zod.z.string().nullable().optional(),
   chatId: UUIDSchema.nullable().optional(),
   characterId: UUIDSchema.nullable().optional(),
   // For avatar overrides
   messageId: UUIDSchema.nullable().optional(),
-  tags: import_zod4.z.array(UUIDSchema).default([]),
+  tags: import_zod.z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var FileSourceEnum = import_zod4.z.enum(["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"]);
-var FileCategoryEnum = import_zod4.z.enum(["IMAGE", "DOCUMENT", "AVATAR", "ATTACHMENT", "EXPORT"]);
-var FileEntrySchema = import_zod4.z.object({
+var FileSourceEnum = import_zod.z.enum(["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"]);
+var FileCategoryEnum = import_zod.z.enum(["IMAGE", "DOCUMENT", "AVATAR", "ATTACHMENT", "EXPORT"]);
+var FileEntrySchema = import_zod.z.object({
   // Identity & Storage
   id: UUIDSchema,
   // File UUID (also the base filename in storage)
   userId: UUIDSchema,
   // Owner of the file
-  sha256: import_zod4.z.string().length(64),
+  sha256: import_zod.z.string().length(64),
   // Content hash for deduplication
-  originalFilename: import_zod4.z.string(),
+  originalFilename: import_zod.z.string(),
   // Original filename from upload/generation
-  mimeType: import_zod4.z.string(),
+  mimeType: import_zod.z.string(),
   // Specific MIME type
-  size: import_zod4.z.number(),
+  size: import_zod.z.number(),
   // File size in bytes
   // Image metadata (if applicable)
-  width: import_zod4.z.number().nullable().optional(),
-  height: import_zod4.z.number().nullable().optional(),
+  width: import_zod.z.number().nullable().optional(),
+  height: import_zod.z.number().nullable().optional(),
   // Linking - array of IDs this file is associated with
-  linkedTo: import_zod4.z.array(UUIDSchema).default([]),
+  linkedTo: import_zod.z.array(UUIDSchema).default([]),
   // messageId, chatId, characterId, personaId, etc.
   // Classification
   source: FileSourceEnum,
@@ -40639,102 +40606,102 @@ var FileEntrySchema = import_zod4.z.object({
   category: FileCategoryEnum,
   // What type of file it is
   // Generation metadata (for AI-generated files)
-  generationPrompt: import_zod4.z.string().nullable().optional(),
-  generationModel: import_zod4.z.string().nullable().optional(),
-  generationRevisedPrompt: import_zod4.z.string().nullable().optional(),
-  description: import_zod4.z.string().nullable().optional(),
+  generationPrompt: import_zod.z.string().nullable().optional(),
+  generationModel: import_zod.z.string().nullable().optional(),
+  generationRevisedPrompt: import_zod.z.string().nullable().optional(),
+  description: import_zod.z.string().nullable().optional(),
   // AI description or user-provided description
   // Tags
-  tags: import_zod4.z.array(UUIDSchema).default([]),
+  tags: import_zod.z.array(UUIDSchema).default([]),
   // Project and folder organization
   projectId: UUIDSchema.nullable().optional(),
   // Project ID if file is project-scoped
-  folderPath: import_zod4.z.string().default("/"),
+  folderPath: import_zod.z.string().default("/"),
   // Folder path within project or general files
   // S3 storage reference (Phase 3: MongoDB + S3 migration)
-  s3Key: import_zod4.z.string().nullable().optional(),
+  s3Key: import_zod.z.string().nullable().optional(),
   // Full S3 object key
-  s3Bucket: import_zod4.z.string().nullable().optional(),
+  s3Bucket: import_zod.z.string().nullable().optional(),
   // S3 bucket name
   // Timestamps
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var TagSchema = import_zod4.z.object({
+var TagSchema = import_zod.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod4.z.string(),
-  nameLower: import_zod4.z.string(),
-  quickHide: import_zod4.z.boolean().default(false),
+  name: import_zod.z.string(),
+  nameLower: import_zod.z.string(),
+  quickHide: import_zod.z.boolean().default(false),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var TagsFileSchema = import_zod4.z.object({
-  version: import_zod4.z.number().default(1),
-  tags: import_zod4.z.array(TagSchema).default([]),
+var TagsFileSchema = import_zod.z.object({
+  version: import_zod.z.number().default(1),
+  tags: import_zod.z.array(TagSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var ImageProfileSchema = import_zod4.z.object({
+var ImageProfileSchema = import_zod.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod4.z.string(),
+  name: import_zod.z.string(),
   provider: ImageProviderEnum,
   apiKeyId: UUIDSchema.nullable().optional(),
-  baseUrl: import_zod4.z.string().nullable().optional(),
-  modelName: import_zod4.z.string(),
+  baseUrl: import_zod.z.string().nullable().optional(),
+  modelName: import_zod.z.string(),
   parameters: JsonSchema.default({}),
-  isDefault: import_zod4.z.boolean().default(false),
-  tags: import_zod4.z.array(UUIDSchema).default([]),
+  isDefault: import_zod.z.boolean().default(false),
+  tags: import_zod.z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var ImageProfilesFileSchema = import_zod4.z.object({
-  version: import_zod4.z.number().default(1),
-  profiles: import_zod4.z.array(ImageProfileSchema).default([]),
+var ImageProfilesFileSchema = import_zod.z.object({
+  version: import_zod.z.number().default(1),
+  profiles: import_zod.z.array(ImageProfileSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var EmbeddingProfileSchema = import_zod4.z.object({
+var EmbeddingProfileSchema = import_zod.z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
-  name: import_zod4.z.string(),
+  name: import_zod.z.string(),
   provider: EmbeddingProfileProviderEnum,
   apiKeyId: UUIDSchema.nullable().optional(),
-  baseUrl: import_zod4.z.string().nullable().optional(),
-  modelName: import_zod4.z.string(),
+  baseUrl: import_zod.z.string().nullable().optional(),
+  modelName: import_zod.z.string(),
   /** Embedding dimension size (provider-specific) */
-  dimensions: import_zod4.z.number().nullable().optional(),
-  isDefault: import_zod4.z.boolean().default(false),
-  tags: import_zod4.z.array(UUIDSchema).default([]),
+  dimensions: import_zod.z.number().nullable().optional(),
+  isDefault: import_zod.z.boolean().default(false),
+  tags: import_zod.z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var EmbeddingProfilesFileSchema = import_zod4.z.object({
-  version: import_zod4.z.number().default(1),
-  profiles: import_zod4.z.array(EmbeddingProfileSchema).default([]),
+var EmbeddingProfilesFileSchema = import_zod.z.object({
+  version: import_zod.z.number().default(1),
+  profiles: import_zod.z.array(EmbeddingProfileSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var MemorySourceEnum = import_zod4.z.enum(["AUTO", "MANUAL"]);
-var MemorySchema = import_zod4.z.object({
+var MemorySourceEnum = import_zod.z.enum(["AUTO", "MANUAL"]);
+var MemorySchema = import_zod.z.object({
   id: UUIDSchema,
   characterId: UUIDSchema,
   personaId: UUIDSchema.nullable().optional(),
   // Optional: specific persona interaction
   chatId: UUIDSchema.nullable().optional(),
   // Optional: source chat reference
-  content: import_zod4.z.string(),
+  content: import_zod.z.string(),
   // The actual memory content
-  summary: import_zod4.z.string(),
+  summary: import_zod.z.string(),
   // Distilled version for context injection
-  keywords: import_zod4.z.array(import_zod4.z.string()).default([]),
+  keywords: import_zod.z.array(import_zod.z.string()).default([]),
   // For text-based search
-  tags: import_zod4.z.array(UUIDSchema).default([]),
+  tags: import_zod.z.array(UUIDSchema).default([]),
   // Derived from character/persona/chat tags
-  importance: import_zod4.z.number().min(0).max(1).default(0.5),
+  importance: import_zod.z.number().min(0).max(1).default(0.5),
   // 0-1 scale for prioritization
-  embedding: import_zod4.z.array(import_zod4.z.number()).nullable().optional(),
+  embedding: import_zod.z.array(import_zod.z.number()).nullable().optional(),
   // Vector embedding for semantic search
   source: MemorySourceEnum.default("MANUAL"),
   // How it was created
@@ -40745,29 +40712,29 @@ var MemorySchema = import_zod4.z.object({
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var MemoriesFileSchema = import_zod4.z.object({
-  version: import_zod4.z.number().default(1),
-  memories: import_zod4.z.array(MemorySchema).default([]),
+var MemoriesFileSchema = import_zod.z.object({
+  version: import_zod.z.number().default(1),
+  memories: import_zod.z.array(MemorySchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var GeneralSettingsSchema = import_zod4.z.object({
-  version: import_zod4.z.number().default(1),
+var GeneralSettingsSchema = import_zod.z.object({
+  version: import_zod.z.number().default(1),
   user: UserSchema,
   chatSettings: ChatSettingsSchema,
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var ConnectionProfilesFileSchema = import_zod4.z.object({
-  version: import_zod4.z.number().default(1),
-  apiKeys: import_zod4.z.array(ApiKeySchema).default([]),
-  llmProfiles: import_zod4.z.array(ConnectionProfileSchema).default([]),
+var ConnectionProfilesFileSchema = import_zod.z.object({
+  version: import_zod.z.number().default(1),
+  apiKeys: import_zod.z.array(ApiKeySchema).default([]),
+  llmProfiles: import_zod.z.array(ConnectionProfileSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
-var AuthAccountsSchema = import_zod4.z.object({
-  version: import_zod4.z.number().default(1),
-  accounts: import_zod4.z.array(AccountSchema).default([]),
+var AuthAccountsSchema = import_zod.z.object({
+  version: import_zod.z.number().default(1),
+  accounts: import_zod.z.array(AccountSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema
 });
@@ -41017,7 +40984,6 @@ var ConnectionProfilesRepository = class extends BaseRepository {
 };
 
 // migrations/convert-openrouter-profiles.ts
-init_logger();
 function isOpenRouterEndpoint(baseUrl) {
   if (!baseUrl) return false;
   try {
@@ -41491,215 +41457,11 @@ var EmbeddingProfilesRepository = class extends BaseRepository {
   }
 };
 
-// ../../../lib/plugins/registry.ts
-var import_path34 = __toESM(require("path"));
-init_logger();
-var PluginRegistry = class {
-  constructor() {
-    this.state = {
-      initialized: false,
-      plugins: /* @__PURE__ */ new Map(),
-      errors: /* @__PURE__ */ new Map(),
-      capabilities: /* @__PURE__ */ new Map(),
-      lastScanTime: null
-    };
-  }
-  /**
-   * Initialize the registry with scanned plugins
-   */
-  async initialize(scanResult) {
-    logger.info("Initializing plugin registry", {
-      pluginCount: scanResult.plugins.length,
-      errorCount: scanResult.errors.length
-    });
-    this.state.plugins.clear();
-    this.state.errors.clear();
-    this.state.capabilities.clear();
-    for (const plugin2 of scanResult.plugins) {
-      this.registerPlugin(plugin2);
-    }
-    for (const error of scanResult.errors) {
-      this.state.errors.set(error.pluginName, error.error);
-    }
-    this.state.initialized = true;
-    this.state.lastScanTime = /* @__PURE__ */ new Date();
-    logger.info("Plugin registry initialized", {
-      registered: this.state.plugins.size,
-      errors: this.state.errors.size
-    });
-  }
-  /**
-   * Register a single plugin
-   */
-  registerPlugin(plugin2) {
-    const pluginName = plugin2.manifest.name;
-    this.state.plugins.set(pluginName, plugin2);
-    for (const capability of plugin2.capabilities) {
-      if (!this.state.capabilities.has(capability)) {
-        this.state.capabilities.set(capability, []);
-      }
-      this.state.capabilities.get(capability).push(pluginName);
-    }
-    logger.debug("Plugin registered", {
-      name: pluginName,
-      version: plugin2.manifest.version,
-      capabilities: plugin2.capabilities
-    });
-  }
-  /**
-   * Get all registered plugins
-   */
-  getAll() {
-    return Array.from(this.state.plugins.values());
-  }
-  /**
-   * Get enabled plugins only
-   */
-  getEnabled() {
-    return this.getAll().filter((p) => p.enabled);
-  }
-  /**
-   * Get a specific plugin by name
-   */
-  get(name) {
-    return this.state.plugins.get(name) || null;
-  }
-  /**
-   * Get plugins by capability
-   */
-  getByCapability(capability) {
-    const names = this.state.capabilities.get(capability) || [];
-    return names.map((name) => this.state.plugins.get(name)).filter((p) => p !== void 0);
-  }
-  /**
-   * Get enabled plugins by capability
-   */
-  getEnabledByCapability(capability) {
-    return this.getByCapability(capability).filter((p) => p.enabled);
-  }
-  /**
-   * Check if a plugin is registered
-   */
-  has(name) {
-    return this.state.plugins.has(name);
-  }
-  /**
-   * Enable a plugin
-   */
-  enable(name) {
-    const plugin2 = this.state.plugins.get(name);
-    if (!plugin2) {
-      logger.warn("Cannot enable plugin: not found", { name });
-      return false;
-    }
-    plugin2.enabled = true;
-    logger.info("Plugin enabled", { name });
-    return true;
-  }
-  /**
-   * Disable a plugin
-   */
-  disable(name) {
-    const plugin2 = this.state.plugins.get(name);
-    if (!plugin2) {
-      logger.warn("Cannot disable plugin: not found", { name });
-      return false;
-    }
-    plugin2.enabled = false;
-    logger.info("Plugin disabled", { name });
-    return true;
-  }
-  /**
-   * Get all available capabilities
-   */
-  getCapabilities() {
-    return Array.from(this.state.capabilities.keys());
-  }
-  /**
-   * Get registry statistics
-   */
-  getStats() {
-    const all = this.getAll();
-    const enabled = this.getEnabled();
-    return {
-      total: all.length,
-      enabled: enabled.length,
-      disabled: all.length - enabled.length,
-      errors: this.state.errors.size,
-      capabilities: this.state.capabilities.size,
-      initialized: this.state.initialized,
-      lastScan: this.state.lastScanTime?.toISOString() || null
-    };
-  }
-  /**
-   * Get all errors
-   */
-  getErrors() {
-    return Array.from(this.state.errors.entries()).map(([plugin2, error]) => ({
-      plugin: plugin2,
-      error
-    }));
-  }
-  /**
-   * Check if registry is initialized
-   */
-  isInitialized() {
-    return this.state.initialized;
-  }
-  /**
-   * Reset the registry (for testing)
-   */
-  reset() {
-    this.state.initialized = false;
-    this.state.plugins.clear();
-    this.state.errors.clear();
-    this.state.capabilities.clear();
-    this.state.lastScanTime = null;
-    logger.debug("Plugin registry reset");
-  }
-  /**
-   * Export registry state (for debugging/admin UI)
-   */
-  exportState() {
-    return {
-      initialized: this.state.initialized,
-      lastScanTime: this.state.lastScanTime?.toISOString() || null,
-      plugins: Array.from(this.state.plugins.entries()).map(([name, plugin2]) => {
-        let scope;
-        if (plugin2.pluginPath.includes(import_path34.default.join("plugins", "site"))) {
-          scope = "site";
-        } else if (plugin2.pluginPath.includes(import_path34.default.join("plugins", "users"))) {
-          scope = "user";
-        }
-        return {
-          name,
-          title: plugin2.manifest.title,
-          version: plugin2.packageVersion ?? plugin2.manifest.version,
-          enabled: plugin2.enabled,
-          capabilities: plugin2.capabilities,
-          path: plugin2.pluginPath,
-          source: plugin2.source,
-          scope,
-          packageName: plugin2.packageName,
-          hasConfigSchema: Array.isArray(plugin2.manifest.configSchema) && plugin2.manifest.configSchema.length > 0
-        };
-      }),
-      errors: Array.from(this.state.errors.entries()).map(([name, error]) => ({
-        name,
-        error
-      })),
-      capabilities: Array.from(this.state.capabilities.entries()).map(([cap, plugins]) => ({
-        capability: cap,
-        plugins
-      })),
-      stats: this.getStats()
-    };
-  }
-};
-var pluginRegistry = new PluginRegistry();
-
 // migrations/enable-provider-plugins.ts
-init_logger();
+async function getPluginRegistry() {
+  const { pluginRegistry: pluginRegistry2 } = await Promise.resolve().then(() => (init_registry(), registry_exports));
+  return pluginRegistry2;
+}
 var PROVIDER_TO_PLUGIN = {
   "OPENAI": "qtap-plugin-openai",
   "ANTHROPIC": "qtap-plugin-anthropic",
@@ -41749,6 +41511,7 @@ async function checkProvidersNeedEnabling() {
   const providersInUse = await getProvidersInUse();
   const needsEnabling = [];
   const alreadyEnabled = [];
+  const pluginRegistry2 = await getPluginRegistry();
   for (const provider of providersInUse) {
     const pluginName = PROVIDER_TO_PLUGIN[provider];
     if (!pluginName) {
@@ -41758,7 +41521,7 @@ async function checkProvidersNeedEnabling() {
       });
       continue;
     }
-    const plugin2 = pluginRegistry.get(pluginName);
+    const plugin2 = pluginRegistry2.get(pluginName);
     if (!plugin2) {
       logger.warn("Provider plugin not found", {
         context: "migration.enable-provider-plugins",
@@ -41782,7 +41545,8 @@ var enableProviderPluginsMigration = {
   dependsOn: ["convert-openrouter-profiles-v1"],
   // Run after OpenRouter conversion
   async shouldRun() {
-    if (!pluginRegistry.isInitialized()) {
+    const pluginRegistry2 = await getPluginRegistry();
+    if (!pluginRegistry2.isInitialized()) {
       logger.debug("Plugin registry not initialized yet, deferring migration", {
         context: "migration.enable-provider-plugins"
       });
@@ -41804,9 +41568,10 @@ var enableProviderPluginsMigration = {
       needsEnabling: needsEnabling.length,
       alreadyEnabled: alreadyEnabled.length
     });
+    const pluginRegistry2 = await getPluginRegistry();
     for (const pluginName of needsEnabling) {
       try {
-        const success2 = pluginRegistry.enable(pluginName);
+        const success2 = pluginRegistry2.enable(pluginName);
         if (success2) {
           enabledPlugins.push(pluginName);
           logger.info("Enabled provider plugin", {
@@ -41847,8 +41612,6 @@ var enableProviderPluginsMigration = {
 };
 
 // migrations/validate-mongodb-config.ts
-init_logger();
-init_config();
 var validateMongoDBConfigMigration = {
   id: "validate-mongodb-config-v1",
   description: "Validate MongoDB configuration and connectivity before data migration",
@@ -41962,18 +41725,18 @@ var validateMongoDBConfigMigration = {
 };
 
 // lib/s3-utils.ts
-var import_zod5 = require("zod");
+var import_zod3 = require("zod");
 var import_client_s3 = require("@aws-sdk/client-s3");
-var s3ConfigSchema = import_zod5.z.object({
-  mode: import_zod5.z.enum(["embedded", "external", "disabled"]),
-  endpoint: import_zod5.z.string().url().optional(),
-  region: import_zod5.z.string().min(1, "S3 region is required"),
-  accessKey: import_zod5.z.string().optional(),
-  secretKey: import_zod5.z.string().optional(),
-  bucket: import_zod5.z.string().min(1, "S3 bucket name is required"),
-  pathPrefix: import_zod5.z.string().optional(),
-  publicUrl: import_zod5.z.string().url().optional(),
-  forcePathStyle: import_zod5.z.boolean()
+var s3ConfigSchema = import_zod3.z.object({
+  mode: import_zod3.z.enum(["embedded", "external", "disabled"]),
+  endpoint: import_zod3.z.string().url().optional(),
+  region: import_zod3.z.string().min(1, "S3 region is required"),
+  accessKey: import_zod3.z.string().optional(),
+  secretKey: import_zod3.z.string().optional(),
+  bucket: import_zod3.z.string().min(1, "S3 bucket name is required"),
+  pathPrefix: import_zod3.z.string().optional(),
+  publicUrl: import_zod3.z.string().url().optional(),
+  forcePathStyle: import_zod3.z.boolean()
 });
 var s3Client = null;
 function validateS3Config() {
@@ -42042,7 +41805,7 @@ function validateS3Config() {
       errors: []
     };
   } catch (error) {
-    if (error instanceof import_zod5.z.ZodError) {
+    if (error instanceof import_zod3.z.ZodError) {
       errors.push(...error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`));
     } else {
       errors.push(error instanceof Error ? error.message : "Unknown validation error");
@@ -42240,7 +42003,6 @@ async function fileExists(key) {
 }
 
 // migrations/validate-s3-config.ts
-init_logger();
 var validateS3ConfigMigration = {
   id: "validate-s3-config-v1",
   description: "Validate S3 configuration and bucket access before file migration",
@@ -44016,10 +43778,6 @@ function getRepositories(config) {
 }
 
 // migrations/migrate-json-to-mongodb.ts
-function isMongoDBBackendEnabled() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
 async function getJsonRepos() {
   try {
     return getRepositories();
@@ -44028,13 +43786,9 @@ async function getJsonRepos() {
     throw error;
   }
 }
-async function getMongoDatabase2() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible() {
   try {
-    const db = await getMongoDatabase2();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -44060,7 +43814,7 @@ async function getNextAuthUserId() {
 async function hasDataToMigrate() {
   try {
     const jsonRepos = await getJsonRepos();
-    const db = await getMongoDatabase2();
+    const db = await getMongoDatabase();
     const hasJsonData = (await jsonRepos.tags.findAll()).length > 0 || (await jsonRepos.users.findAll()).length > 0 || (await jsonRepos.connections.findAll()).length > 0 || (await jsonRepos.imageProfiles.findAll()).length > 0 || (await jsonRepos.embeddingProfiles.findAll()).length > 0 || (await jsonRepos.personas.findAll()).length > 0 || (await jsonRepos.characters.findAll()).length > 0 || (await jsonRepos.memories.findAll()).length > 0 || (await jsonRepos.chats.findAll()).length > 0;
     if (!hasJsonData) {
       console.log("[migration.migrate-json-to-mongodb] No data found in JSON store to migrate");
@@ -44103,7 +43857,7 @@ var migrateJsonToMongoDBMigration = {
   dependsOn: ["validate-mongodb-config-v1"],
   async shouldRun() {
     console.log("[migration.migrate-json-to-mongodb] Checking if JSON to MongoDB migration should run");
-    if (!isMongoDBBackendEnabled()) {
+    if (!isMongoDBBackend()) {
       console.log("[migration.migrate-json-to-mongodb] MongoDB backend not enabled, skipping migration", {
         dataBackend: process.env.DATA_BACKEND
       });
@@ -44123,7 +43877,7 @@ var migrateJsonToMongoDBMigration = {
     console.log("[migration.migrate-json-to-mongodb] Starting JSON to MongoDB migration");
     try {
       const jsonRepos = await getJsonRepos();
-      const db = await getMongoDatabase2();
+      const db = await getMongoDatabase();
       const nextAuthUserId = await getNextAuthUserId();
       const jsonUsers = await jsonRepos.users.findAll();
       const jsonUserId = jsonUsers.length > 0 ? jsonUsers[0].id : null;
@@ -44736,18 +44490,9 @@ var migrateFilesToS3Migration = {
 };
 
 // migrations/ensure-user-usernames.ts
-init_logger();
-function isMongoDBBackendEnabled2() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase3() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible2() {
   try {
-    const db = await getMongoDatabase3();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -44772,7 +44517,7 @@ function generateFallbackUsername(userId) {
 }
 async function getUsersWithoutUsernames() {
   try {
-    const db = await getMongoDatabase3();
+    const db = await getMongoDatabase();
     const usersCollection = db.collection("users");
     const users = await usersCollection.find({
       $or: [
@@ -44795,7 +44540,7 @@ async function getUsersWithoutUsernames() {
 }
 async function isUsernameTaken(username) {
   try {
-    const db = await getMongoDatabase3();
+    const db = await getMongoDatabase();
     const usersCollection = db.collection("users");
     const existing = await usersCollection.findOne({ username });
     return existing !== null;
@@ -44827,7 +44572,7 @@ var ensureUserUsernamesMigration = {
   dependsOn: ["migrate-json-to-mongodb-v1"],
   // Run after data migration to MongoDB
   async shouldRun() {
-    if (!isMongoDBBackendEnabled2()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping username migration", {
         context: "migration.ensure-user-usernames"
       });
@@ -44854,7 +44599,7 @@ var ensureUserUsernamesMigration = {
       context: "migration.ensure-user-usernames"
     });
     try {
-      const db = await getMongoDatabase3();
+      const db = await getMongoDatabase();
       const usersCollection = db.collection("users");
       const usersWithoutUsernames = await getUsersWithoutUsernames();
       logger.info("Found users without usernames", {
@@ -44931,18 +44676,9 @@ var ensureUserUsernamesMigration = {
 };
 
 // migrations/inherit-file-tags.ts
-init_logger();
-function isMongoDBBackendEnabled3() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase4() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible3() {
   try {
-    const db = await getMongoDatabase4();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -44955,7 +44691,7 @@ async function isMongoDBAccessible3() {
 }
 async function getFilesWithLinks() {
   try {
-    const db = await getMongoDatabase4();
+    const db = await getMongoDatabase();
     const filesCollection = db.collection("files");
     const files = await filesCollection.find({
       linkedTo: { $exists: true, $ne: [], $type: "array" }
@@ -44976,7 +44712,7 @@ async function getFilesWithLinks() {
 }
 async function getEntityTags(entityId, userId) {
   try {
-    const db = await getMongoDatabase4();
+    const db = await getMongoDatabase();
     const character = await db.collection("characters").findOne({ id: entityId, userId });
     if (character && Array.isArray(character.tags)) {
       return character.tags;
@@ -45031,7 +44767,7 @@ var inheritFileTagsMigration = {
   dependsOn: ["migrate-json-to-mongodb-v1"],
   // Run after data migration to MongoDB
   async shouldRun() {
-    if (!isMongoDBBackendEnabled3()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping file tags migration", {
         context: "migration.inherit-file-tags"
       });
@@ -45059,7 +44795,7 @@ var inheritFileTagsMigration = {
       context: "migration.inherit-file-tags"
     });
     try {
-      const db = await getMongoDatabase4();
+      const db = await getMongoDatabase();
       const filesCollection = db.collection("files");
       const filesWithLinks = await getFilesWithLinks();
       logger.info("Found files with linked entities", {
@@ -45146,18 +44882,9 @@ var inheritFileTagsMigration = {
 };
 
 // migrations/migrate-character-system-prompts.ts
-init_logger();
-function isMongoDBBackendEnabled4() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase5() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible4() {
   try {
-    const db = await getMongoDatabase5();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -45170,7 +44897,7 @@ async function isMongoDBAccessible4() {
 }
 async function getCharactersNeedingMigration() {
   try {
-    const db = await getMongoDatabase5();
+    const db = await getMongoDatabase();
     const charactersCollection = db.collection("characters");
     const characters = await charactersCollection.find({
       systemPrompt: { $exists: true, $nin: [null, ""] },
@@ -45200,7 +44927,7 @@ var migrateCharacterSystemPromptsMigration = {
   dependsOn: ["migrate-json-to-mongodb-v1"],
   // Run after data migration to MongoDB
   async shouldRun() {
-    if (!isMongoDBBackendEnabled4()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping character system prompts migration", {
         context: "migration.migrate-character-system-prompts"
       });
@@ -45227,7 +44954,7 @@ var migrateCharacterSystemPromptsMigration = {
       context: "migration.migrate-character-system-prompts"
     });
     try {
-      const db = await getMongoDatabase5();
+      const db = await getMongoDatabase();
       const charactersCollection = db.collection("characters");
       const charactersNeedingMigration = await getCharactersNeedingMigration();
       logger.info("Found characters needing system prompt migration", {
@@ -45313,18 +45040,9 @@ var migrateCharacterSystemPromptsMigration = {
 };
 
 // migrations/migrate-tag-styles-to-tags.ts
-init_logger();
-function isMongoDBBackendEnabled5() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase6() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible5() {
   try {
-    const db = await getMongoDatabase6();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -45337,7 +45055,7 @@ async function isMongoDBAccessible5() {
 }
 async function getChatSettingsWithTagStyles() {
   try {
-    const db = await getMongoDatabase6();
+    const db = await getMongoDatabase();
     const chatSettingsCollection = db.collection("chat_settings");
     const settings = await chatSettingsCollection.find({
       tagStyles: { $exists: true, $ne: {} }
@@ -45362,7 +45080,7 @@ var migrateTagStylesToTagsMigration = {
   dependsOn: ["migrate-json-to-mongodb-v1"],
   // Run after data migration to MongoDB
   async shouldRun() {
-    if (!isMongoDBBackendEnabled5()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping tag styles migration", {
         context: "migration.migrate-tag-styles-to-tags"
       });
@@ -45390,7 +45108,7 @@ var migrateTagStylesToTagsMigration = {
       context: "migration.migrate-tag-styles-to-tags"
     });
     try {
-      const db = await getMongoDatabase6();
+      const db = await getMongoDatabase();
       const tagsCollection = db.collection("tags");
       const chatSettingsCollection = db.collection("chat_settings");
       const settingsWithStyles = await getChatSettingsWithTagStyles();
@@ -45511,18 +45229,9 @@ var migrateTagStylesToTagsMigration = {
 };
 
 // migrations/remove-quilltap-rp-builtin.ts
-init_logger();
-function isMongoDBBackendEnabled6() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase7() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible6() {
   try {
-    const db = await getMongoDatabase7();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -45535,7 +45244,7 @@ async function isMongoDBAccessible6() {
 }
 async function getOldQuilltapRPTemplate() {
   try {
-    const db = await getMongoDatabase7();
+    const db = await getMongoDatabase();
     const templatesCollection = db.collection("roleplay_templates");
     const template = await templatesCollection.findOne({
       name: "Quilltap RP",
@@ -45560,7 +45269,7 @@ var removeQuilltapRPBuiltinMigration = {
   dependsOn: ["migrate-json-to-mongodb-v1"],
   // Run after data migration to MongoDB
   async shouldRun() {
-    if (!isMongoDBBackendEnabled6()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping Quilltap RP removal migration", {
         context: "migration.remove-quilltap-rp-builtin"
       });
@@ -45585,7 +45294,7 @@ var removeQuilltapRPBuiltinMigration = {
       context: "migration.remove-quilltap-rp-builtin"
     });
     try {
-      const db = await getMongoDatabase7();
+      const db = await getMongoDatabase();
       const templatesCollection = db.collection("roleplay_templates");
       const result = await templatesCollection.deleteOne({
         name: "Quilltap RP",
@@ -45639,18 +45348,9 @@ var removeQuilltapRPBuiltinMigration = {
 };
 
 // migrations/migrate-personas-to-characters.ts
-init_logger();
-function isMongoDBBackendEnabled7() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase8() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible7() {
   try {
-    const db = await getMongoDatabase8();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -45663,7 +45363,7 @@ async function isMongoDBAccessible7() {
 }
 async function getPersonasNeedingMigration() {
   try {
-    const db = await getMongoDatabase8();
+    const db = await getMongoDatabase();
     const personasCollection = db.collection("personas");
     const personas = await personasCollection.find({
       _migratedToCharacter: { $ne: true }
@@ -45694,7 +45394,7 @@ async function getPersonasNeedingMigration() {
 }
 async function getChatParticipantsNeedingMigration() {
   try {
-    const db = await getMongoDatabase8();
+    const db = await getMongoDatabase();
     const chatsCollection = db.collection("chats");
     const count = await chatsCollection.countDocuments({
       "participants.type": "PERSONA"
@@ -45710,7 +45410,7 @@ async function getChatParticipantsNeedingMigration() {
 }
 async function getMemoriesNeedingMigration() {
   try {
-    const db = await getMongoDatabase8();
+    const db = await getMongoDatabase();
     const memoriesCollection = db.collection("memories");
     const count = await memoriesCollection.countDocuments({
       personaId: { $exists: true, $ne: null }
@@ -45770,7 +45470,7 @@ var migratePersonasToCharactersMigration = {
   dependsOn: ["migrate-json-to-mongodb-v1"],
   // Run after data migration to MongoDB
   async shouldRun() {
-    if (!isMongoDBBackendEnabled7()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping personas-to-characters migration", {
         context: "migration.migrate-personas-to-characters"
       });
@@ -45805,7 +45505,7 @@ var migratePersonasToCharactersMigration = {
       context: "migration.migrate-personas-to-characters"
     });
     try {
-      const db = await getMongoDatabase8();
+      const db = await getMongoDatabase();
       const personasCollection = db.collection("personas");
       const charactersCollection = db.collection("characters");
       const chatsCollection = db.collection("chats");
@@ -46005,18 +45705,9 @@ var migratePersonasToCharactersMigration = {
 };
 
 // migrations/add-multi-character-fields.ts
-init_logger();
-function isMongoDBBackendEnabled8() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase9() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible8() {
   try {
-    const db = await getMongoDatabase9();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -46029,7 +45720,7 @@ async function isMongoDBAccessible8() {
 }
 async function hasCharactersNeedingMigration() {
   try {
-    const db = await getMongoDatabase9();
+    const db = await getMongoDatabase();
     const charactersCollection = db.collection("characters");
     const count = await charactersCollection.countDocuments({
       talkativeness: { $exists: false }
@@ -46045,7 +45736,7 @@ async function hasCharactersNeedingMigration() {
 }
 async function hasChatsNeedingMigration() {
   try {
-    const db = await getMongoDatabase9();
+    const db = await getMongoDatabase();
     const chatsCollection = db.collection("chats");
     const count = await chatsCollection.countDocuments({
       "participants.hasHistoryAccess": { $exists: false }
@@ -46066,7 +45757,7 @@ var addMultiCharacterFieldsMigration = {
   dependsOn: ["migrate-json-to-mongodb-v1"],
   // Run after data migration to MongoDB
   async shouldRun() {
-    if (!isMongoDBBackendEnabled8()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping multi-character fields migration", {
         context: "migration.add-multi-character-fields"
       });
@@ -46102,7 +45793,7 @@ var addMultiCharacterFieldsMigration = {
       context: "migration.add-multi-character-fields"
     });
     try {
-      const db = await getMongoDatabase9();
+      const db = await getMongoDatabase();
       logger.debug("Step 1: Adding talkativeness to characters without it", {
         context: "migration.add-multi-character-fields"
       });
@@ -46228,18 +45919,9 @@ var addMultiCharacterFieldsMigration = {
 };
 
 // migrations/add-inter-character-memory-fields.ts
-init_logger();
-function isMongoDBBackendEnabled9() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase10() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible9() {
   try {
-    const db = await getMongoDatabase10();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -46252,7 +45934,7 @@ async function isMongoDBAccessible9() {
 }
 async function hasMemoriesNeedingMigration() {
   try {
-    const db = await getMongoDatabase10();
+    const db = await getMongoDatabase();
     const memoriesCollection = db.collection("memories");
     const count = await memoriesCollection.countDocuments({
       aboutCharacterId: { $exists: false }
@@ -46273,7 +45955,7 @@ var addInterCharacterMemoryFieldsMigration = {
   dependsOn: ["migrate-json-to-mongodb-v1", "add-multi-character-fields-v1"],
   // Run after multi-character fields
   async shouldRun() {
-    if (!isMongoDBBackendEnabled9()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping inter-character memory fields migration", {
         context: "migration.add-inter-character-memory-fields"
       });
@@ -46299,7 +45981,7 @@ var addInterCharacterMemoryFieldsMigration = {
       context: "migration.add-inter-character-memory-fields"
     });
     try {
-      const db = await getMongoDatabase10();
+      const db = await getMongoDatabase();
       logger.debug("Adding aboutCharacterId field to existing memories", {
         context: "migration.add-inter-character-memory-fields"
       });
@@ -46347,18 +46029,9 @@ var addInterCharacterMemoryFieldsMigration = {
 };
 
 // migrations/add-token-tracking-fields.ts
-init_logger();
-function isMongoDBBackendEnabled10() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase11() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible10() {
   try {
-    const db = await getMongoDatabase11();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -46371,7 +46044,7 @@ async function isMongoDBAccessible10() {
 }
 async function hasProfilesNeedingMigration() {
   try {
-    const db = await getMongoDatabase11();
+    const db = await getMongoDatabase();
     const profilesCollection = db.collection("connection_profiles");
     const count = await profilesCollection.countDocuments({
       totalTokens: { $exists: false }
@@ -46387,7 +46060,7 @@ async function hasProfilesNeedingMigration() {
 }
 async function hasChatsNeedingMigration2() {
   try {
-    const db = await getMongoDatabase11();
+    const db = await getMongoDatabase();
     const chatsCollection = db.collection("chats");
     const count = await chatsCollection.countDocuments({
       totalPromptTokens: { $exists: false }
@@ -46407,7 +46080,7 @@ var addTokenTrackingFieldsMigration = {
   introducedInVersion: "2.6.0",
   dependsOn: ["migrate-json-to-mongodb-v1"],
   async shouldRun() {
-    if (!isMongoDBBackendEnabled10()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping token tracking fields migration", {
         context: "migration.add-token-tracking-fields"
       });
@@ -46438,7 +46111,7 @@ var addTokenTrackingFieldsMigration = {
       context: "migration.add-token-tracking-fields"
     });
     try {
-      const db = await getMongoDatabase11();
+      const db = await getMongoDatabase();
       logger.debug("Adding token tracking fields to connection_profiles", {
         context: "migration.add-token-tracking-fields"
       });
@@ -46515,18 +46188,9 @@ var addTokenTrackingFieldsMigration = {
 };
 
 // migrations/add-use-native-web-search-field.ts
-init_logger();
-function isMongoDBBackendEnabled11() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase12() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible11() {
   try {
-    const db = await getMongoDatabase12();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -46539,7 +46203,7 @@ async function isMongoDBAccessible11() {
 }
 async function hasProfilesNeedingMigration2() {
   try {
-    const db = await getMongoDatabase12();
+    const db = await getMongoDatabase();
     const profilesCollection = db.collection("connection_profiles");
     const count = await profilesCollection.countDocuments({
       useNativeWebSearch: { $exists: false }
@@ -46559,7 +46223,7 @@ var addUseNativeWebSearchFieldMigration = {
   introducedInVersion: "2.7.0",
   dependsOn: ["migrate-json-to-mongodb-v1"],
   async shouldRun() {
-    if (!isMongoDBBackendEnabled11()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping useNativeWebSearch field migration", {
         context: "migration.add-use-native-web-search-field"
       });
@@ -46585,7 +46249,7 @@ var addUseNativeWebSearchFieldMigration = {
       context: "migration.add-use-native-web-search-field"
     });
     try {
-      const db = await getMongoDatabase12();
+      const db = await getMongoDatabase();
       logger.debug("Adding useNativeWebSearch field to connection_profiles", {
         context: "migration.add-use-native-web-search-field"
       });
@@ -46827,19 +46491,10 @@ var restructureS3KeysMigration = {
 };
 
 // migrations/populate-memory-about-character-ids.ts
-init_logger();
 var MIGRATION_CONTEXT = "migration.populate-memory-about-character-ids";
-function isMongoDBBackendEnabled12() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase13() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible12() {
   try {
-    const db = await getMongoDatabase13();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -46852,7 +46507,7 @@ async function isMongoDBAccessible12() {
 }
 async function hasMemoriesNeedingMigration2() {
   try {
-    const db = await getMongoDatabase13();
+    const db = await getMongoDatabase();
     const memoriesCollection = db.collection("memories");
     const count = await memoriesCollection.countDocuments({
       aboutCharacterId: null,
@@ -46874,7 +46529,7 @@ var populateMemoryAboutCharacterIdsMigration = {
   dependsOn: ["add-inter-character-memory-fields-v1"],
   // Run after the field exists
   async shouldRun() {
-    if (!isMongoDBBackendEnabled12()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping populate-memory-about-character-ids migration", {
         context: MIGRATION_CONTEXT
       });
@@ -46903,7 +46558,7 @@ var populateMemoryAboutCharacterIdsMigration = {
       context: MIGRATION_CONTEXT
     });
     try {
-      const db = await getMongoDatabase13();
+      const db = await getMongoDatabase();
       const memoriesCollection = db.collection("memories");
       const chatsCollection = db.collection("chats");
       const memoriesNeedingMigration = await memoriesCollection.find({
@@ -47003,20 +46658,10 @@ var populateMemoryAboutCharacterIdsMigration = {
 };
 
 // migrations/create-mount-points.ts
-init_logger();
 var import_crypto2 = require("crypto");
 
-// ../../../lib/file-storage/secrets.ts
+// lib/secrets.ts
 var import_crypto = require("crypto");
-
-// ../../../lib/logging/create-logger.ts
-init_logger();
-function createLogger(module2) {
-  return logger.child({ module: module2 });
-}
-
-// ../../../lib/file-storage/secrets.ts
-var logger3 = createLogger("file-storage:secrets");
 var ALGORITHM = "aes-256-gcm";
 var KEY_LENGTH = 32;
 var IV_LENGTH = 16;
@@ -47024,39 +46669,6 @@ var PBKDF2_ITERATIONS = 1e5;
 var PBKDF2_DIGEST = "sha256";
 var SALT_LENGTH = 32;
 var cachedKey = null;
-function getEncryptionKey() {
-  if (cachedKey) {
-    return cachedKey;
-  }
-  const explicitKey = process.env.QUILLTAP_ENCRYPTION_KEY;
-  if (explicitKey) {
-    logger3.debug("Using QUILLTAP_ENCRYPTION_KEY for mount point secrets", {
-      keyLength: explicitKey.length
-    });
-    cachedKey = deriveKey(explicitKey);
-    return cachedKey;
-  }
-  try {
-    const { env: env2 } = (init_env(), __toCommonJS(env_exports));
-    const pepper = env2.ENCRYPTION_MASTER_PEPPER;
-    if (!pepper) {
-      throw new Error("No encryption key configured");
-    }
-    logger3.debug("Using ENCRYPTION_MASTER_PEPPER for mount point secrets", {
-      pepperLength: pepper.length
-    });
-    cachedKey = deriveKey(pepper);
-    return cachedKey;
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : "Failed to load encryption master pepper";
-    logger3.error("Failed to get encryption key", {
-      error: errorMsg
-    });
-    throw new Error(
-      "Failed to get encryption key. Ensure ENCRYPTION_MASTER_PEPPER is configured."
-    );
-  }
-}
 function deriveKey(secret) {
   const salt = (0, import_crypto.createHash)("sha256").update("quilltap-mount-secrets" + secret).digest().slice(0, SALT_LENGTH);
   return (0, import_crypto.pbkdf2Sync)(
@@ -47065,6 +46677,30 @@ function deriveKey(secret) {
     PBKDF2_ITERATIONS,
     KEY_LENGTH,
     PBKDF2_DIGEST
+  );
+}
+function getEncryptionKey() {
+  if (cachedKey) {
+    return cachedKey;
+  }
+  const explicitKey = process.env.QUILLTAP_ENCRYPTION_KEY;
+  if (explicitKey) {
+    logger.debug("Using QUILLTAP_ENCRYPTION_KEY for mount point secrets", {
+      keyLength: explicitKey.length
+    });
+    cachedKey = deriveKey(explicitKey);
+    return cachedKey;
+  }
+  const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
+  if (pepper) {
+    logger.debug("Using ENCRYPTION_MASTER_PEPPER for mount point secrets", {
+      pepperLength: pepper.length
+    });
+    cachedKey = deriveKey(pepper);
+    return cachedKey;
+  }
+  throw new Error(
+    "No encryption key configured. Set QUILLTAP_ENCRYPTION_KEY or ENCRYPTION_MASTER_PEPPER environment variable."
   );
 }
 function encryptSecrets(secrets) {
@@ -47085,14 +46721,14 @@ function encryptSecrets(secrets) {
     const authTag = cipher.getAuthTag();
     const combined = iv.toString("hex") + authTag.toString("hex") + encrypted;
     const encoded = Buffer.from(combined, "hex").toString("base64");
-    logger3.debug("Encrypted mount point secrets", {
+    logger.debug("Encrypted mount point secrets", {
       secretsCount: Object.keys(secrets).length,
       encryptedLength: encoded.length
     });
     return encoded;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : "Unknown encryption error";
-    logger3.error("Failed to encrypt secrets", {
+    logger.error("Failed to encrypt secrets", {
       error: errorMsg
     });
     throw new Error(`Failed to encrypt secrets: ${errorMsg}`);
@@ -47100,17 +46736,13 @@ function encryptSecrets(secrets) {
 }
 
 // migrations/create-mount-points.ts
-function isMongoDBBackendEnabled13() {
+function isMongoDBBackendEnabled() {
   const backend = process.env.DATA_BACKEND || "";
   return backend === "mongodb" || backend === "dual";
 }
-async function getMongoDatabase14() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible13() {
   try {
-    const db = await getMongoDatabase14();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -47131,7 +46763,7 @@ function isS3Configured() {
 }
 async function needsSetup() {
   try {
-    const db = await getMongoDatabase14();
+    const db = await getMongoDatabase();
     const collection = db.collection("mount_points");
     const defaultMountPoint = await collection.findOne({ isDefault: true });
     return !defaultMountPoint;
@@ -47145,7 +46777,7 @@ async function needsSetup() {
 }
 async function hasFilesNeedingMigration() {
   try {
-    const db = await getMongoDatabase14();
+    const db = await getMongoDatabase();
     const filesCollection = db.collection("files");
     const count = await filesCollection.countDocuments({
       mountPointId: { $exists: false }
@@ -47165,7 +46797,7 @@ var createMountPointsMigration = {
   introducedInVersion: "2.7.0",
   dependsOn: ["migrate-json-to-mongodb-v1"],
   async shouldRun() {
-    if (!isMongoDBBackendEnabled13()) {
+    if (!isMongoDBBackendEnabled()) {
       logger.debug("MongoDB not enabled, skipping mount points migration", {
         context: "migration.create-mount-points"
       });
@@ -47200,7 +46832,7 @@ var createMountPointsMigration = {
       context: "migration.create-mount-points"
     });
     try {
-      const db = await getMongoDatabase14();
+      const db = await getMongoDatabase();
       const mountPointsCollection = db.collection("mount_points");
       const filesCollection = db.collection("files");
       logger.debug("Step 1: Creating indexes on mount_points collection", {
@@ -47377,18 +47009,9 @@ var createMountPointsMigration = {
 };
 
 // migrations/per-project-mount-points.ts
-init_logger();
-function isMongoDBBackendEnabled14() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase15() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible14() {
   try {
-    const db = await getMongoDatabase15();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -47401,7 +47024,7 @@ async function isMongoDBAccessible14() {
 }
 async function needsMigration() {
   try {
-    const db = await getMongoDatabase15();
+    const db = await getMongoDatabase();
     const mountPointsCollection = db.collection("mount_points");
     const hasIsProjectDefault = await mountPointsCollection.findOne({
       isProjectDefault: { $exists: true }
@@ -47421,7 +47044,7 @@ var perProjectMountPointsMigration = {
   introducedInVersion: "2.8.0",
   dependsOn: ["create-mount-points-v1"],
   async shouldRun() {
-    if (!isMongoDBBackendEnabled14()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping per-project mount points migration", {
         context: "migration.per-project-mount-points"
       });
@@ -47444,7 +47067,7 @@ var perProjectMountPointsMigration = {
       context: "migration.per-project-mount-points"
     });
     try {
-      const db = await getMongoDatabase15();
+      const db = await getMongoDatabase();
       const mountPointsCollection = db.collection("mount_points");
       const projectsCollection = db.collection("projects");
       logger.debug("Step 1: Removing isProjectDefault field from mount points", {
@@ -47529,19 +47152,10 @@ var perProjectMountPointsMigration = {
 };
 
 // migrations/create-folder-entities.ts
-init_logger();
 var import_crypto3 = require("crypto");
-function isMongoDBBackendEnabled15() {
-  const backend = process.env.DATA_BACKEND || "";
-  return backend === "mongodb" || backend === "dual";
-}
-async function getMongoDatabase16() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function isMongoDBAccessible15() {
   try {
-    const db = await getMongoDatabase16();
+    const db = await getMongoDatabase();
     await db.command({ ping: 1 });
     return true;
   } catch (error) {
@@ -47554,7 +47168,7 @@ async function isMongoDBAccessible15() {
 }
 async function needsMigration2() {
   try {
-    const db = await getMongoDatabase16();
+    const db = await getMongoDatabase();
     const filesCollection = db.collection("files");
     const foldersCollection = db.collection("folders");
     const filesWithFolders = await filesCollection.countDocuments({
@@ -47597,7 +47211,7 @@ var createFolderEntitiesMigration = {
   introducedInVersion: "2.9.0",
   dependsOn: ["per-project-mount-points-v1"],
   async shouldRun() {
-    if (!isMongoDBBackendEnabled15()) {
+    if (!isMongoDBBackend()) {
       logger.debug("MongoDB not enabled, skipping folder entities migration", {
         context: "migration.create-folder-entities"
       });
@@ -47620,7 +47234,7 @@ var createFolderEntitiesMigration = {
       context: "migration.create-folder-entities"
     });
     try {
-      const db = await getMongoDatabase16();
+      const db = await getMongoDatabase();
       const filesCollection = db.collection("files");
       const foldersCollection = db.collection("folders");
       logger.debug("Creating indexes on folders collection", {
@@ -47787,16 +47401,12 @@ var migrations = [
 
 // user-migrations.ts
 var logger4 = createPluginLogger("qtap-plugin-upgrade");
-function isMongoDBBackendEnabled16() {
+function isMongoDBBackendEnabled2() {
   const backend = process.env.DATA_BACKEND || "";
   return backend === "mongodb" || backend === "dual";
 }
-async function getMongoDatabase17() {
-  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
-  return getDb();
-}
 async function migrateUserCharacterSystemPrompts(userId) {
-  if (!isMongoDBBackendEnabled16()) {
+  if (!isMongoDBBackendEnabled2()) {
     logger4.debug("MongoDB not enabled, skipping character system prompts migration", {
       context: "user-migrations.migrateUserCharacterSystemPrompts",
       userId
@@ -47805,7 +47415,7 @@ async function migrateUserCharacterSystemPrompts(userId) {
   }
   const startTime = Date.now();
   try {
-    const db = await getMongoDatabase17();
+    const db = await getMongoDatabase();
     const charactersCollection = db.collection("characters");
     const needsMigration3 = await charactersCollection.find({
       userId,

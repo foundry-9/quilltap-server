@@ -6,8 +6,8 @@
  * and that a connection can be established before attempting any data migration.
  */
 
-import { logger } from '@/lib/logger';
-import { validateMongoDBConfig, testMongoDBConnection } from '@/lib/mongodb/config';
+import { logger } from '../lib/plugin-logger';
+import { validateMongoDBConfig, testMongoDBConnection } from '../lib/mongodb-utils';
 import type { Migration, MigrationResult } from '../migration-types';
 
 /**

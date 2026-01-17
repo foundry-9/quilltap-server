@@ -20,9 +20,14 @@ import { JsonStore } from '../lib/json-store/core/json-store';
 import { ConnectionProfilesRepository } from '../lib/json-store/repositories/connection-profiles.repository';
 import { ImageProfilesRepository } from '../lib/json-store/repositories/image-profiles.repository';
 import { EmbeddingProfilesRepository } from '../lib/json-store/repositories/embedding-profiles.repository';
-import { pluginRegistry } from '@/lib/plugins/registry';
-import { logger } from '@/lib/logger';
+import { logger } from '../lib/plugin-logger';
 import type { Migration, MigrationResult } from '../migration-types';
+
+// Lazy-load plugin registry to avoid bundling issues
+async function getPluginRegistry() {
+  const { pluginRegistry } = await import('@/lib/plugins/registry');
+  return pluginRegistry;
+}
 
 /**
  * Mapping from provider enum values to plugin names
@@ -90,6 +95,7 @@ async function checkProvidersNeedEnabling(): Promise<{ needsEnabling: string[]; 
   const providersInUse = await getProvidersInUse();
   const needsEnabling: string[] = [];
   const alreadyEnabled: string[] = [];
+  const pluginRegistry = await getPluginRegistry();
 
   for (const provider of providersInUse) {
     const pluginName = PROVIDER_TO_PLUGIN[provider];
@@ -132,6 +138,7 @@ export const enableProviderPluginsMigration: Migration = {
 
   async shouldRun(): Promise<boolean> {
     // Check if plugin registry is initialized
+    const pluginRegistry = await getPluginRegistry();
     if (!pluginRegistry.isInitialized()) {
       logger.debug('Plugin registry not initialized yet, deferring migration', {
         context: 'migration.enable-provider-plugins',
@@ -159,6 +166,8 @@ export const enableProviderPluginsMigration: Migration = {
       needsEnabling: needsEnabling.length,
       alreadyEnabled: alreadyEnabled.length,
     });
+
+    const pluginRegistry = await getPluginRegistry();
 
     for (const pluginName of needsEnabling) {
       try {

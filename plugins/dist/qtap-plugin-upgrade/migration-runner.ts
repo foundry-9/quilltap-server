@@ -9,6 +9,7 @@ import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import path from 'node:path';
 import { createPluginLogger } from '@quilltap/plugin-utils';
+import { getMongoDatabase, isMongoDBBackend } from './lib/mongodb-utils';
 import type {
   Migration,
   MigrationResult,
@@ -21,6 +22,10 @@ const logger = createPluginLogger('qtap-plugin-upgrade');
 
 // Path to store migration state (file-based)
 const MIGRATIONS_STATE_FILE = path.join(process.cwd(), 'data', 'settings', 'migrations.json');
+
+// MongoDB collection and document constants
+const MIGRATIONS_COLLECTION = 'migrations_state';
+const MIGRATIONS_DOCUMENT_ID = 'migration_state';
 
 /**
  * Get the Quilltap version at runtime from package.json
@@ -38,19 +43,73 @@ function getQuilltapVersion(): string {
 }
 
 /**
- * Check if MongoDB backend is enabled
+ * Load migration state from MongoDB directly
  */
-function isMongoDBBackend(): boolean {
-  const backend = process.env.DATA_BACKEND || '';
-  return backend === 'mongodb' || backend === 'dual';
+async function loadMigrationStateFromMongo(): Promise<MigrationState | null> {
+  try {
+    const db = await getMongoDatabase();
+    const collection = db.collection(MIGRATIONS_COLLECTION);
+    // Use `as any` to bypass TypeScript's strict ObjectId typing for _id
+    // MongoDB accepts string IDs and they work fine for our use case
+    const doc = await collection.findOne({ _id: MIGRATIONS_DOCUMENT_ID as any });
+
+    if (!doc) {
+      logger.debug('No migration state found in MongoDB', {
+        context: 'migration-runner.loadMigrationStateFromMongo',
+      });
+      return null;
+    }
+
+    logger.debug('Migration state loaded from MongoDB', {
+      context: 'migration-runner.loadMigrationStateFromMongo',
+      completedCount: doc.completedMigrations?.length || 0,
+    });
+
+    return {
+      completedMigrations: doc.completedMigrations || [],
+      lastChecked: doc.lastChecked || new Date().toISOString(),
+      quilltapVersion: doc.quilltapVersion || getQuilltapVersion(),
+    };
+  } catch (error) {
+    logger.error('Error loading migration state from MongoDB', {
+      context: 'migration-runner.loadMigrationStateFromMongo',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 /**
- * Get MongoDB migrations repository (lazy load to avoid circular deps)
+ * Save migration state to MongoDB directly
  */
-async function getMongoMigrationsRepo() {
-  const { getMongoMigrationsRepository } = await import('@/lib/mongodb/repositories/migrations.repository');
-  return getMongoMigrationsRepository();
+async function saveMigrationStateToMongo(state: MigrationState): Promise<void> {
+  try {
+    const db = await getMongoDatabase();
+    const collection = db.collection(MIGRATIONS_COLLECTION);
+
+    await collection.updateOne(
+      { _id: MIGRATIONS_DOCUMENT_ID as any },
+      {
+        $set: {
+          completedMigrations: state.completedMigrations,
+          lastChecked: state.lastChecked,
+          quilltapVersion: state.quilltapVersion,
+        },
+      },
+      { upsert: true }
+    );
+
+    logger.debug('Migration state saved to MongoDB', {
+      context: 'migration-runner.saveMigrationStateToMongo',
+      completedCount: state.completedMigrations.length,
+    });
+  } catch (error) {
+    logger.error('Error saving migration state to MongoDB', {
+      context: 'migration-runner.saveMigrationStateToMongo',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 /**
@@ -60,8 +119,16 @@ export async function loadMigrationState(): Promise<MigrationState> {
   // Use MongoDB if configured
   if (isMongoDBBackend()) {
     try {
-      const repo = await getMongoMigrationsRepo();
-      return await repo.loadState();
+      const state = await loadMigrationStateFromMongo();
+      if (state) {
+        return state;
+      }
+      // No state found, return empty state
+      return {
+        completedMigrations: [],
+        lastChecked: new Date().toISOString(),
+        quilltapVersion: getQuilltapVersion(),
+      };
     } catch (error) {
       logger.warn('Failed to load migration state from MongoDB, falling back to file', {
         context: 'migration-runner.loadMigrationState',
@@ -92,11 +159,7 @@ export async function saveMigrationState(state: MigrationState): Promise<void> {
   // Save to MongoDB if configured
   if (isMongoDBBackend()) {
     try {
-      const repo = await getMongoMigrationsRepo();
-      await repo.saveState(state);
-      logger.debug('Migration state saved to MongoDB', {
-        context: 'migration-runner.saveMigrationState',
-      });
+      await saveMigrationStateToMongo(state);
       return;
     } catch (error) {
       logger.warn('Failed to save migration state to MongoDB, falling back to file', {

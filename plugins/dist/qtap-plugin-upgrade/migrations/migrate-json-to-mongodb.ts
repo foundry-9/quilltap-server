@@ -29,14 +29,7 @@ import type { Migration, MigrationResult } from '../migration-types';
 // Use local json-store copy for migration (self-contained, no dependency on main codebase)
 import { getJsonStore } from '../lib/json-store/core/json-store';
 import { getRepositories as getLocalJsonRepos } from '../lib/json-store/repositories';
-
-/**
- * Check if MongoDB backend is enabled
- */
-function isMongoDBBackendEnabled(): boolean {
-  const backend = process.env.DATA_BACKEND || '';
-  return backend === 'mongodb' || backend === 'dual';
-}
+import { getMongoDatabase, isMongoDBBackend } from '../lib/mongodb-utils';
 
 /**
  * Get JSON repositories (using local self-contained copy)
@@ -48,14 +41,6 @@ async function getJsonRepos() {
     console.error('[migration.migrate-json-to-mongodb] Failed to get JSON repositories:', error);
     throw error;
   }
-}
-
-/**
- * Get MongoDB database instance for direct inserts
- */
-async function getMongoDatabase() {
-  const { getMongoDatabase: getDb } = await import('@/lib/mongodb/client');
-  return getDb();
 }
 
 /**
@@ -173,7 +158,7 @@ export const migrateJsonToMongoDBMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     console.log('[migration.migrate-json-to-mongodb] Checking if JSON to MongoDB migration should run');
 
-    if (!isMongoDBBackendEnabled()) {
+    if (!isMongoDBBackend()) {
       console.log('[migration.migrate-json-to-mongodb] MongoDB backend not enabled, skipping migration', {
         dataBackend: process.env.DATA_BACKEND,
       });

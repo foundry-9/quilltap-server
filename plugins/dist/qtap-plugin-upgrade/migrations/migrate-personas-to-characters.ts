@@ -16,23 +16,8 @@
  */
 
 import type { Migration, MigrationResult } from '../migration-types';
-import { logger } from '@/lib/logger';
-
-/**
- * Check if MongoDB backend is enabled
- */
-function isMongoDBBackendEnabled(): boolean {
-  const backend = process.env.DATA_BACKEND || '';
-  return backend === 'mongodb' || backend === 'dual';
-}
-
-/**
- * Get MongoDB database instance
- */
-async function getMongoDatabase() {
-  const { getMongoDatabase: getDb } = await import('@/lib/mongodb/client');
-  return getDb();
-}
+import { logger } from '../lib/plugin-logger';
+import { getMongoDatabase, isMongoDBBackend } from '../lib/mongodb-utils';
 
 /**
  * Check if MongoDB is accessible
@@ -208,7 +193,7 @@ export const migratePersonasToCharactersMigration: Migration = {
 
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
-    if (!isMongoDBBackendEnabled()) {
+    if (!isMongoDBBackend()) {
       logger.debug('MongoDB not enabled, skipping personas-to-characters migration', {
         context: 'migration.migrate-personas-to-characters',
       });
