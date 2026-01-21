@@ -2,7 +2,13 @@
  * Next.js Instrumentation
  *
  * This file is automatically run by Next.js on server startup.
- * We use it to initialize the plugin system before handling any requests.
+ * We use it to:
+ * 1. Run migrations FIRST - before any requests can be served
+ * 2. Initialize the plugin system
+ * 3. Initialize file storage
+ *
+ * CRITICAL: Migrations MUST complete successfully before the server accepts requests.
+ * If migrations fail, the process exits with code 1 to prevent serving stale data.
  *
  * @see https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
  */
@@ -21,16 +27,52 @@ export async function register() {
     });
 
     try {
-      // Dynamically import everything to avoid Edge Runtime issues
-      const { initializeMongoDBIfNeeded } = await import('./lib/startup');
-      const { initializePlugins } = await import('./lib/startup/plugin-initialization');
-      const { fileStorageManager } = await import('./lib/file-storage/manager');
+      // ================================================================
+      // PHASE 1: Run Migrations FIRST - before anything else
+      // ================================================================
+      // This ensures data compatibility before any API requests
+      startupState.setPhase('migrations');
 
-      // Mark startup as in progress
+      const { MigrationRunner } = await import('./migrations');
+      const migrationRunner = new MigrationRunner();
+
+      logger.info('Running startup migrations', {
+        context: 'instrumentation.register',
+      });
+
+      const migrationResult = await migrationRunner.runMigrations();
+
+      if (!migrationResult.success) {
+        logger.error('Migrations failed - cannot start server', {
+          context: 'instrumentation.register',
+          failedMigrations: migrationResult.failed,
+          error: migrationResult.error,
+          migrationsRun: migrationResult.migrationsRun,
+          migrationsSkipped: migrationResult.migrationsSkipped,
+        });
+        // Exit with code 1 to prevent container from starting with incompatible data
+        process.exit(1);
+      }
+
+      logger.info('Migrations completed successfully', {
+        context: 'instrumentation.register',
+        migrationsRun: migrationResult.migrationsRun,
+        migrationsSkipped: migrationResult.migrationsSkipped,
+        totalDurationMs: migrationResult.totalDurationMs,
+      });
+
+      // Mark migrations as complete
+      startupState.markMigrationsComplete();
+
+      // Clean up migration runner's database connection
+      await migrationRunner.cleanup();
+
+      // ================================================================
+      // PHASE 2: Initialize MongoDB (for app use)
+      // ================================================================
+      const { initializeMongoDBIfNeeded } = await import('./lib/startup');
       startupState.setPhase('mongodb');
 
-      // Initialize MongoDB FIRST - this ensures the database is ready
-      // before plugin initialization runs migrations
       const mongoResult = await initializeMongoDBIfNeeded();
       if (mongoResult.initialized) {
         logger.info('MongoDB initialized successfully', {
@@ -44,7 +86,10 @@ export async function register() {
         });
       }
 
-      // Initialize plugins (includes running migrations which now have MongoDB ready)
+      // ================================================================
+      // PHASE 3: Initialize Plugins
+      // ================================================================
+      const { initializePlugins } = await import('./lib/startup/plugin-initialization');
       startupState.setPhase('plugins');
       const result = await initializePlugins();
 
@@ -64,7 +109,10 @@ export async function register() {
         });
       }
 
-      // Ensure file storage manager is initialized (may already be done by plugin init)
+      // ================================================================
+      // PHASE 4: Initialize File Storage
+      // ================================================================
+      const { fileStorageManager } = await import('./lib/file-storage/manager');
       startupState.setPhase('file-storage');
       if (!fileStorageManager.isInitialized()) {
         logger.info('Initializing file storage manager', {
@@ -76,7 +124,9 @@ export async function register() {
         });
       }
 
-      // Mark startup as complete
+      // ================================================================
+      // PHASE 5: Mark startup complete
+      // ================================================================
       startupState.setPhase('complete');
       startupState.markReady();
 

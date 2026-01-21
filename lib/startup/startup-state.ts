@@ -6,17 +6,19 @@
  *
  * The startup sequence is:
  * 1. 'pending' - Server just started
- * 2. 'mongodb' - MongoDB initialization in progress
- * 3. 'plugins' - Plugin initialization (includes migrations) in progress
- * 4. 'file-storage' - File storage initialization in progress
- * 5. 'complete' - All initialization complete
- * 6. 'failed' - Initialization failed (server still runs but may have issues)
+ * 2. 'migrations' - Running startup migrations (CRITICAL - must complete)
+ * 3. 'mongodb' - MongoDB initialization in progress
+ * 4. 'plugins' - Plugin initialization in progress
+ * 5. 'file-storage' - File storage initialization in progress
+ * 6. 'complete' - All initialization complete
+ * 7. 'failed' - Initialization failed (server still runs but may have issues)
  */
 
 import { logger } from '@/lib/logger';
 
 export type StartupPhase =
   | 'pending'
+  | 'migrations'
   | 'mongodb'
   | 'plugins'
   | 'file-storage'
@@ -174,6 +176,10 @@ export const startupState = {
    * Wait for migrations to complete
    * If startup hasn't completed migrations yet, this will wait
    * Returns true if migrations are complete, false if timed out
+   *
+   * Note: With the new migration system, migrations run in instrumentation.ts
+   * before the server starts accepting requests. This wait is now primarily
+   * a safety check for edge cases.
    */
   async waitForMigrations(maxWaitMs: number = 30000): Promise<boolean> {
     // Already complete

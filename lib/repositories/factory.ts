@@ -4,8 +4,12 @@
  * Provides access to MongoDB data repositories.
  *
  * Note: JSON file storage has been deprecated. For migration from JSON to MongoDB,
- * use the qtap-plugin-upgrade migration plugin which has its own copy of the
- * JSON-store code for reading legacy data.
+ * the migrations module (migrations/) has its own copy of the JSON-store code
+ * for reading legacy data.
+ *
+ * With the new migration system, migrations run in instrumentation.ts BEFORE
+ * the server starts accepting requests, so data is always guaranteed to be
+ * in the correct format.
  */
 
 import { logger } from '@/lib/logger';
@@ -32,7 +36,7 @@ export type RepositoryContainer = MongoRepositoryContainer;
 let cachedRepositories: RepositoryContainer | null = null;
 
 /**
- * Track if we've already waited for migrations
+ * Track if we've already waited for migrations (safety check only)
  */
 let migrationWaitComplete = false;
 
@@ -58,7 +62,13 @@ export function isMongoDBEnabled(): boolean {
 
 /**
  * Ensure migrations have completed before serving data
- * This is a safety net in case instrumentation.ts timing is off
+ *
+ * With the new migration system, migrations run in instrumentation.ts
+ * BEFORE the server starts accepting any requests. If migrations fail,
+ * the process exits immediately.
+ *
+ * This function is now just a safety check for edge cases where a request
+ * might somehow arrive during the very early startup phase.
  */
 async function ensureMigrationsComplete(): Promise<void> {
   // Only wait once
@@ -66,7 +76,7 @@ async function ensureMigrationsComplete(): Promise<void> {
     return;
   }
 
-  // Check if migrations are already complete
+  // Check if migrations are already complete (should always be true now)
   if (startupState.areMigrationsComplete()) {
     migrationWaitComplete = true;
     return;
@@ -74,7 +84,7 @@ async function ensureMigrationsComplete(): Promise<void> {
 
   // Check if startup is still in progress
   const phase = startupState.getPhase();
-  if (phase === 'pending' || phase === 'mongodb' || phase === 'plugins') {
+  if (phase === 'pending' || phase === 'migrations' || phase === 'mongodb' || phase === 'plugins') {
     logger.info('Waiting for migrations to complete before serving data', {
       context: 'repository-factory.ensureMigrationsComplete',
       currentPhase: phase,
@@ -117,15 +127,17 @@ export function getRepositories(): RepositoryContainer {
 
 /**
  * Get the repository container with migration safety check
- * This ensures migrations have completed before serving data
  *
- * Use this for API routes and other request handlers that need
- * to ensure data integrity.
+ * With the new migration system, migrations run before the server accepts
+ * any requests, so this is now just a safety check. The await call is kept
+ * for backwards compatibility with existing code patterns.
+ *
+ * Use this for API routes and other request handlers.
  *
  * @returns Promise<RepositoryContainer> for MongoDB backend
  */
 export async function getRepositoriesSafe(): Promise<RepositoryContainer> {
-  // Ensure migrations are complete before returning repositories
+  // Safety check - migrations should already be complete
   await ensureMigrationsComplete();
 
   return getRepositories();

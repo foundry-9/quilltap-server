@@ -4,6 +4,17 @@
 
 ### 2.7-dev
 
+- refactor: Migration system overhaul - moved from plugin to core (2026-01-21)
+  - Migrations now run in `instrumentation.ts` BEFORE the server accepts any requests
+  - Eliminates race conditions where API requests arrived before migrations completed
+  - If migrations fail, the process exits with code 1 (container won't start with incompatible data)
+  - Removed `qtap-plugin-upgrade` plugin - migrations now in `migrations/` directory
+  - MigrationRunner class handles dependency sorting, state tracking, and execution
+  - Migration state stored in MongoDB `migrations_state` collection
+  - Added `@aws-sdk/client-s3` as core dependency (was only in plugin before)
+  - Simplified startup-state.ts and repository-factory.ts - migration wait is now just a safety check
+  - Removed migration-related code from plugin-initialization.ts
+  - Added comprehensive documentation in `migrations/README.md`
 - fix: Eliminate JSON parse errors during streaming tool calls (2026-01-21)
   - Updated `@quilltap/plugin-utils` to v1.2.4
   - `parseOpenAIToolCalls()` now gracefully handles incomplete JSON arguments during streaming

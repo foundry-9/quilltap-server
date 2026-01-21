@@ -128,6 +128,7 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
   - [packages/create-quilltap-theme/README.md](packages/create-quilltap-theme/README.md) — Documentation for the create-quilltap-theme scaffolding CLI: usage, options, what gets created, and next steps after scaffolding — Grade: A (package documentation) — Last updated: 2025-12-31
   - [packages/create-quilltap-theme/CHANGELOG.md](packages/create-quilltap-theme/CHANGELOG.md) — Changelog for the create-quilltap-theme package — Grade: A (package changelog) — Last updated: 2025-12-31
   - [plugins/dist/qtap-plugin-mcp/README.md](plugins/dist/qtap-plugin-mcp/README.md) — Documentation for the MCP Server Connector plugin: configuration, authentication, tool naming, security, and troubleshooting — Grade: A (plugin documentation) — Last updated: 2026-01-13
+  - [migrations/README.md](migrations/README.md) — Documentation for the migration system: architecture, adding new migrations, running migrations, and troubleshooting — Grade: A (migration system docs) — Last updated: 2026-01-21
 
 ## Claude-specific instructions
 
@@ -149,8 +150,8 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
 - When committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
 - Themes and styling should depend primarily on the qt-* utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes.
 - Keep the documentation above up to date, and update this file if you add more documentation, in the same format.
-- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports, backups, and/or migration/upgrade plugin.
-- Any files that exist in the app source code only because they are necessary for migrations should move to the migration/upgrade plugin.
+- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports, backups, and/or the migrations/ directory.
+- Any files that exist in the app source code only because they are necessary for migrations should move to the `migrations/` directory.
 - If we make changes to anything in the `packages/` directory, we need to pause make sure we update package.json numbers and pause to allow `npm publish` to push those packages into npmjs. We do *not* just copy things down into the appropriate directories! We wait to publish the new npm package first. You can stop everything, ask me to publish the new version, then install the new one. If that doesn't work, lets fix the NPM problem we're having, **NOT** work around it.
 - Commits take a long time because there is a precommit script in `.githooks/pre-commit` that kills the dev server, runs lint, runs the unit tests, does a test compile with `npx tsc`, builds the plugins, and then does a full Next.js build of the app, to ensure that we're committing something that basically works.
 
