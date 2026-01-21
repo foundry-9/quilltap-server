@@ -33,8 +33,8 @@ export function BrandLogo({ size = "md", className = "" }: BrandLogoProps) {
         height={config.quill}
         className={`${config.overlap} relative z-10`}
         style={{
-          height: `${config.quill}px`,
           width: "auto",
+          height: "auto",
           marginBottom: `${config.quill * 0.15}px`
         }}
         aria-hidden="true"

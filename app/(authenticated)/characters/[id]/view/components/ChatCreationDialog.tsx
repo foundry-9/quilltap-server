@@ -2,7 +2,7 @@
 
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
-import { ConnectionProfile, Persona } from '../types'
+import { ConnectionProfile, UserControlledCharacter } from '../types'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
 
@@ -10,7 +10,7 @@ interface ChatCreationDialogProps {
   characterId: string
   characterName: string | undefined
   profiles: ConnectionProfile[]
-  personas: Persona[]
+  userControlledCharacters: UserControlledCharacter[]
   selectedProfileId: string
   selectedUserCharacterId: string
   selectedImageProfileId: string | null
@@ -31,7 +31,7 @@ export function ChatCreationDialog({
   characterId,
   characterName,
   profiles,
-  personas,
+  userControlledCharacters,
   selectedProfileId,
   selectedUserCharacterId,
   selectedImageProfileId,
@@ -81,7 +81,7 @@ export function ChatCreationDialog({
               </div>
 
               {/* User Character Selection */}
-              {personas.length > 0 && (
+              {userControlledCharacters.length > 0 && (
                 <div>
                   <label htmlFor="userCharacter" className="mb-2 block text-sm qt-text-primary">
                     Play As (Optional)
@@ -92,10 +92,10 @@ export function ChatCreationDialog({
                     onChange={(e) => onUserCharacterChange(e.target.value)}
                     className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
-                    <option value="">Use character defaults</option>
-                    {personas.map((persona) => (
-                      <option key={persona.id} value={persona.id}>
-                        {formatCharacterName(persona)}
+                    <option value="">Chat as yourself</option>
+                    {userControlledCharacters.map((char) => (
+                      <option key={char.id} value={char.id}>
+                        {formatCharacterName(char)}
                       </option>
                     ))}
                   </select>

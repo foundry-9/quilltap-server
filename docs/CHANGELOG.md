@@ -4,6 +4,35 @@
 
 ### 2.7-dev
 
+- fix: Eliminate JSON parse errors during streaming tool calls (2026-01-21)
+  - Updated `@quilltap/plugin-utils` to v1.2.4
+  - `parseOpenAIToolCalls()` now gracefully handles incomplete JSON arguments during streaming
+  - Tool calls with incomplete arguments are skipped (they'll be complete in the final response)
+  - Eliminates noisy "Unterminated string in JSON" console errors
+- fix: Built-in tools now work when plugin tools are enabled (2026-01-21)
+  - Tools like `search_memories`, `generate_image`, `search_web`, etc. were incorrectly being routed to the plugin registry when multi-tool plugins (like MCP) were enabled
+  - Added explicit `BUILT_IN_TOOLS` set to `tool-executor.ts` to identify built-in tools
+  - Built-in tools are now checked BEFORE routing to plugin registry, ensuring they work regardless of which plugins are enabled
+- fix: Resolve Next.js development warnings (2026-01-21)
+  - Fixed Image component sizing warning for quill.svg:
+    - `components/ui/brand-logo.tsx` - added inline style `width/height: auto`
+    - `components/layout/left-sidebar/sidebar-header.tsx` - added inline style `width/height: auto`
+    - `components/chat/QuillAnimation.tsx` - removed conflicting CSS size classes from Image
+  - RootLayout: Added `data-scroll-behavior="smooth"` to HTML element to prevent scroll-behavior warning during route transitions
+  - Fixed TanStack Virtual smooth scroll warning in chat by using instant scrolling for virtualizer's scrollToIndex (smooth scrolling is not supported with dynamic-sized items)
+- fix: Update roleplay template API calls to use v1 endpoints (2026-01-21)
+  - Chat page was calling deprecated `/api/roleplay-templates/{id}` route which returns 410 Gone
+  - Updated `page.tsx` and `RoleplayAnnotationButtons.tsx` to use `/api/v1/roleplay-templates/{id}`
+- fix: Complete removal of legacy personas system from character view (2026-01-21)
+  - Removed `fetchPersonas()` and `fetchDefaultPersona()` calls that were hitting non-existent `/api/v1/personas` API
+  - Updated `useCharacterView` hook to remove all persona-related state and functions
+  - Updated `ChatCreationDialog` to use `userControlledCharacters` instead of deprecated `personas` prop
+  - Updated page.tsx to use `defaultPartnerId` instead of `defaultPersonaId`
+  - Removed unused `Persona` interface from types.ts
+- fix: Quick chat dialog now correctly loads default partner for characters (2026-01-21)
+  - useQuickChat hook was calling non-existent `/api/v1/characters/{id}/default-partner` route
+  - Fixed to use correct v1 action dispatch URL: `/api/v1/characters/{id}?action=default-partner`
+  - Characters with a `defaultPartnerId` configured will now have the "Play As" field pre-populated
 - fix: API middleware now waits for migrations before serving requests (2026-01-17)
   - Root cause of previous iteration failures: auth middleware used `getRepositories()` instead of `getRepositoriesSafe()`
   - Requests were arriving before PERSONA→CHARACTER migration completed, causing Zod validation failures

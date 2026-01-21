@@ -2,6 +2,16 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [1.2.4] - 2026-01-21
+
+### Fixed
+
+- **Graceful Handling of Incomplete Tool Call Arguments During Streaming**
+  - `parseOpenAIToolCalls()` now checks if JSON arguments look complete before parsing
+  - Skips tool calls with incomplete JSON (common during streaming) instead of throwing errors
+  - Eliminates noisy "Unterminated string in JSON" errors during streaming tool calls
+  - Tool calls are correctly parsed when the final complete response is received
+
 ## [1.2.2] - 2026-01-09
 
 ### Fixed

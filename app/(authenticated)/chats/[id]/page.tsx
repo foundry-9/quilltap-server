@@ -1367,7 +1367,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
 
       try {
-        const res = await fetch(`/api/roleplay-templates/${chat.roleplayTemplateId}`)
+        const res = await fetch(`/api/v1/roleplay-templates/${chat.roleplayTemplateId}`)
         if (res.ok) {
           const template = await res.json()
           setRoleplayTemplateName(template.name)

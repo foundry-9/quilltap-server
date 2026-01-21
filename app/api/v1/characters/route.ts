@@ -400,7 +400,13 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     // Filter by controlledBy
     const controlledByFilter = searchParams.get('controlledBy');
     if (controlledByFilter === 'user') {
+      const beforeCount = characters.length;
       characters = characters.filter((c) => c.controlledBy === 'user');
+      logger.debug('[Characters v1] Filtered by controlledBy=user', {
+        beforeCount,
+        afterCount: characters.length,
+        userId: user.id,
+      });
     } else if (controlledByFilter === 'llm') {
       characters = characters.filter((c) => c.controlledBy === 'llm' || c.controlledBy === undefined);
     }

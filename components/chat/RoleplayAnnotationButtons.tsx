@@ -60,7 +60,7 @@ export default function RoleplayAnnotationButtons({
       try {
         setLoading(true)
 
-        const response = await fetch(`/api/roleplay-templates/${roleplayTemplateId}`)
+        const response = await fetch(`/api/v1/roleplay-templates/${roleplayTemplateId}`)
         if (response.ok) {
           const data = await response.json()
           setTemplate(data)

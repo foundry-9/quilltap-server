@@ -42,7 +42,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
-  const [savingUserCharacter, setSavingUserCharacter] = useState(false)
   const [savingPartner, setSavingPartner] = useState(false)
 
   const {
@@ -50,8 +49,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     error,
     character,
     profiles,
-    personas,
-    defaultPersonaId,
     userControlledCharacters,
     defaultPartnerId,
     defaultPartnerName,
@@ -60,16 +57,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     replacingTemplate,
     fetchCharacter,
     fetchProfiles,
-    fetchPersonas,
-    fetchDefaultPersona,
     fetchUserControlledCharacters,
     fetchDefaultPartner,
     fetchImageProfiles,
     setCharacter,
-    setDefaultPersonaId,
     handleTemplateReplace,
     handleSaveConnectionProfile,
-    handleSaveDefaultPersona,
     handleSaveDefaultPartner,
     handleToggleNpc,
     handleToggleFavorite,
@@ -87,12 +80,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     fetchCharacter()
     fetchProfiles()
-    fetchPersonas()
-    fetchDefaultPersona()
     fetchUserControlledCharacters()
     fetchDefaultPartner()
     fetchImageProfiles()
-  }, [fetchCharacter, fetchProfiles, fetchPersonas, fetchDefaultPersona, fetchUserControlledCharacters, fetchDefaultPartner, fetchImageProfiles, id])
+  }, [fetchCharacter, fetchProfiles, fetchUserControlledCharacters, fetchDefaultPartner, fetchImageProfiles, id])
 
   // Handle chat dialog opening from query params
   useEffect(() => {
@@ -108,11 +99,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       }
 
       // Set default user character if available
-      if (defaultPersonaId) {
-        setSelectedUserCharacterId(defaultPersonaId)
+      if (defaultPartnerId) {
+        setSelectedUserCharacterId(defaultPartnerId)
       }
     }
-  }, [searchParams, character?.defaultConnectionProfileId, profiles, defaultPersonaId])
+  }, [searchParams, character?.defaultConnectionProfileId, profiles, defaultPartnerId])
 
   const handleStartChat = () => {
     if (character?.defaultConnectionProfileId) {
@@ -124,8 +115,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       setSelectedProfileId(profiles[0].id)
     }
 
-    if (defaultPersonaId) {
-      setSelectedUserCharacterId(defaultPersonaId)
+    if (defaultPartnerId) {
+      setSelectedUserCharacterId(defaultPartnerId)
     } else {
       setSelectedUserCharacterId('')
     }
@@ -152,15 +143,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       await handleSaveConnectionProfile(profileId)
     } finally {
       setSavingConnectionProfile(false)
-    }
-  }
-
-  const handleUserCharacterSave = async (userCharacterId: string) => {
-    setSavingUserCharacter(true)
-    try {
-      await handleSaveDefaultPersona(userCharacterId)
-    } finally {
-      setSavingUserCharacter(false)
     }
   }
 
@@ -317,7 +299,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           characterId={id}
           characterName={character?.name}
           profiles={profiles}
-          personas={personas}
+          userControlledCharacters={userControlledCharacters}
           selectedProfileId={selectedProfileId}
           selectedUserCharacterId={selectedUserCharacterId}
           selectedImageProfileId={selectedImageProfileId}

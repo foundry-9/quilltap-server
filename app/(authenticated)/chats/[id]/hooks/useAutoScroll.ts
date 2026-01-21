@@ -105,8 +105,10 @@ export function useAutoScroll({
     const container = containerRef.current
 
     // Strategy 1: Tell virtualizer to scroll to last message
+    // Note: Always use 'auto' for virtualizer because smooth scrolling is not fully
+    // supported with dynamic-sized items (causes console warnings from tanstack-virtual)
     if (messageCount > 0) {
-      virtualizer.scrollToIndex(messageCount - 1, { align: 'end', behavior })
+      virtualizer.scrollToIndex(messageCount - 1, { align: 'end', behavior: 'auto' })
     }
 
     // Strategy 2: Direct container scroll to max position (after brief delay for virtualizer)

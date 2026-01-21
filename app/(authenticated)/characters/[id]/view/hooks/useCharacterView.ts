@@ -8,7 +8,6 @@ import {
   Character,
   Tag,
   ConnectionProfile,
-  Persona,
   UserControlledCharacter,
   ImageProfile,
   TemplateCounts,
@@ -21,8 +20,6 @@ interface UseCharacterViewReturn {
   character: Character | null
   tags: Tag[]
   profiles: ConnectionProfile[]
-  personas: Persona[]
-  defaultPersonaId: string
   userControlledCharacters: UserControlledCharacter[]
   defaultPartnerId: string
   defaultPartnerName: string | null
@@ -36,19 +33,15 @@ interface UseCharacterViewReturn {
   fetchCharacter: () => Promise<void>
   fetchTags: () => Promise<void>
   fetchProfiles: () => Promise<void>
-  fetchPersonas: () => Promise<void>
-  fetchDefaultPersona: () => Promise<void>
   fetchUserControlledCharacters: () => Promise<void>
   fetchDefaultPartner: () => Promise<void>
   fetchImageProfiles: () => Promise<void>
   setCharacter: (char: Character | null) => void
-  setDefaultPersonaId: (id: string) => void
   setDefaultPartnerId: (id: string) => void
   setAvatarRefreshKey: (key: number) => void
   setImageProfiles: (profiles: ImageProfile[]) => void
   handleTemplateReplace: (type: 'char' | 'user') => Promise<void>
   handleSaveConnectionProfile: (profileId: string) => Promise<void>
-  handleSaveDefaultPersona: (personaId: string) => Promise<void>
   handleSaveDefaultPartner: (partnerId: string) => Promise<void>
   handleToggleNpc: () => Promise<void>
   handleToggleFavorite: () => Promise<void>
@@ -61,15 +54,12 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [character, setCharacter] = useState<Character | null>(null)
   const [tags, setTags] = useState<Tag[]>([])
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
-  const [personas, setPersonas] = useState<Persona[]>([])
-  const [defaultPersonaId, setDefaultPersonaId] = useState<string>('')
   const [userControlledCharacters, setUserControlledCharacters] = useState<UserControlledCharacter[]>([])
   const [defaultPartnerId, setDefaultPartnerId] = useState<string>('')
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
   const [avatarRefreshKey, setAvatarRefreshKey] = useState(0)
   const [replacingTemplate, setReplacingTemplate] = useState<'char' | 'user' | null>(null)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
-  const [savingPersona, setSavingPersona] = useState(false)
   const [savingPartner, setSavingPartner] = useState(false)
   const [togglingNpc, setTogglingNpc] = useState(false)
   const [togglingFavorite, setTogglingFavorite] = useState(false)
@@ -146,34 +136,6 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
       console.error('Failed to fetch profiles:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [])
-
-  const fetchPersonas = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/personas')
-      if (res.ok) {
-        const data = await res.json()
-        setPersonas(data.map((p: any) => ({ id: p.id, name: p.name, title: p.title })))
-      }
-    } catch (err) {
-      console.error('Failed to fetch personas:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [])
-
-  const fetchDefaultPersona = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/v1/characters/${characterId}?action=personas`)
-      if (res.ok) {
-        const data = await res.json()
-        const personasList = data.personas || []
-        const defaultPersona = personasList.find((cp: any) => cp.isDefault)
-        if (defaultPersona) {
-          setDefaultPersonaId(defaultPersona.personaId)
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch default persona:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [characterId])
 
   const fetchImageProfiles = useCallback(async () => {
     try {
@@ -311,42 +273,6 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
-  const handleSaveDefaultPersona = async (personaId: string) => {
-    setSavingPersona(true)
-    try {
-      // First, remove the current default if there is one
-      if (defaultPersonaId) {
-        await fetch(`/api/v1/characters/${characterId}?action=unlink-persona`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ personaId: defaultPersonaId }),
-        })
-      }
-
-      // If a new persona is selected, link it as default
-      if (personaId) {
-        const res = await fetch(`/api/v1/characters/${characterId}?action=link-persona`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            personaId,
-            isDefault: true,
-          }),
-        })
-        if (!res.ok) throw new Error('Failed to link persona')
-      }
-
-      setDefaultPersonaId(personaId)
-      showSuccessToast(personaId ? 'Default persona updated' : 'Default persona removed')
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to update persona')
-      console.error('Failed to save default persona', { error: err instanceof Error ? err.message : String(err) })
-      await fetchDefaultPersona() // Revert to server state
-    } finally {
-      setSavingPersona(false)
-    }
-  }
-
   const handleSaveDefaultPartner = async (partnerId: string) => {
     setSavingPartner(true)
     try {
@@ -437,8 +363,6 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     character,
     tags,
     profiles,
-    personas,
-    defaultPersonaId,
     userControlledCharacters,
     defaultPartnerId,
     defaultPartnerName,
@@ -452,19 +376,15 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     fetchCharacter,
     fetchTags,
     fetchProfiles,
-    fetchPersonas,
-    fetchDefaultPersona,
     fetchUserControlledCharacters,
     fetchDefaultPartner,
     fetchImageProfiles,
     setCharacter,
-    setDefaultPersonaId,
     setDefaultPartnerId,
     setAvatarRefreshKey,
     setImageProfiles,
     handleTemplateReplace,
     handleSaveConnectionProfile,
-    handleSaveDefaultPersona,
     handleSaveDefaultPartner,
     handleToggleNpc,
     handleToggleFavorite,

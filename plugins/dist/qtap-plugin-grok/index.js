@@ -6858,10 +6858,19 @@ function parseOpenAIToolCalls(response) {
       for (const toolCall of toolCallsArray) {
         const tc = toolCall;
         if (tc.type === "function" && tc.function) {
-          toolCalls.push({
-            name: tc.function.name,
-            arguments: JSON.parse(tc.function.arguments || "{}")
-          });
+          const argsStr = tc.function.arguments || "{}";
+          const trimmed = argsStr.trim();
+          if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+            continue;
+          }
+          try {
+            toolCalls.push({
+              name: tc.function.name,
+              arguments: JSON.parse(argsStr)
+            });
+          } catch {
+            continue;
+          }
         }
       }
     }

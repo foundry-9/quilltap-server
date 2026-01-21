@@ -65,7 +65,7 @@ export function useQuickChat(): UseQuickChatReturn {
         fetch('/api/v1/connection-profiles'),
         fetch('/api/v1/characters?controlledBy=user'),
         fetch(`/api/v1/characters/${characterId}`),
-        fetch(`/api/v1/characters/${characterId}/default-partner`),
+        fetch(`/api/v1/characters/${characterId}?action=default-partner`),
       ])
 
       let fetchedProfiles: ConnectionProfile[] = []
@@ -78,11 +78,20 @@ export function useQuickChat(): UseQuickChatReturn {
       if (userCharsRes.ok) {
         const data = await userCharsRes.json()
         const characters = data.characters || []
+        console.debug('[useQuickChat] User-controlled characters fetched', {
+          count: characters.length,
+          characters: characters.map((c: any) => ({ id: c.id, name: c.name })),
+        })
         setUserControlledCharacters(characters.map((c: any) => ({
           id: c.id,
           name: c.name,
           title: c.title || null,
         })))
+      } else {
+        console.warn('[useQuickChat] Failed to fetch user-controlled characters', {
+          status: userCharsRes.status,
+          statusText: userCharsRes.statusText,
+        })
       }
 
       // Set default profile from character or first available

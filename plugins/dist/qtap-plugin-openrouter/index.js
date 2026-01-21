@@ -727,8 +727,20 @@ function buildResolvedRequest(entries) {
 }
 async function resolveAsyncFunctions(input, context) {
   const resolvedEntries = [];
+  const clientOnlyFields = /* @__PURE__ */ new Set([
+    "stopWhen",
+    // Handled separately in ModelResult
+    "state",
+    // Client-side state management
+    "requireApproval",
+    // Client-side approval check function
+    "approveToolCalls",
+    // Client-side approval decisions
+    "rejectToolCalls"
+    // Client-side rejection decisions
+  ]);
   for (const [key, value] of Object.entries(input)) {
-    if (key === "stopWhen") {
+    if (clientOnlyFields.has(key)) {
       continue;
     }
     if (isParameterFunction(value)) {
@@ -787,9 +799,9 @@ function serverURLFromOptions(options) {
 var SDK_METADATA = {
   language: "typescript",
   openapiDocVersion: "1.0.0",
-  sdkVersion: "0.3.14",
+  sdkVersion: "0.3.15",
   genVersion: "2.788.4",
-  userAgent: "speakeasy-sdk/typescript 0.3.14 2.788.4 1.0.0 @openrouter/sdk"
+  userAgent: "speakeasy-sdk/typescript 0.3.15 2.788.4 1.0.0 @openrouter/sdk"
 };
 
 // node_modules/@openrouter/sdk/esm/lib/http.js
@@ -1033,6 +1045,9 @@ function applyNextTurnParamsToRequest(request, computedParams) {
 }
 
 // node_modules/@openrouter/sdk/esm/lib/stop-conditions.js
+function stepCountIs(stepCount) {
+  return ({ steps }) => steps.length >= stepCount;
+}
 async function isStopConditionMet(options) {
   const { stopConditions, steps } = options;
   const results = await Promise.all(stopConditions.map((condition) => Promise.resolve(condition({
@@ -1083,7 +1098,7 @@ var ActivityItem$inboundSchema = z11.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/assistantmessage.js
-var z19 = __toESM(require("zod/v4"), 1);
+var z20 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/chatmessagecontentitem.js
 var z17 = __toESM(require("zod/v4"), 1);
@@ -1124,17 +1139,17 @@ var ChatMessageContentItemImageDetail = {
 };
 var ChatMessageContentItemImageDetail$inboundSchema = inboundSchema(ChatMessageContentItemImageDetail);
 var ChatMessageContentItemImageDetail$outboundSchema = outboundSchema(ChatMessageContentItemImageDetail);
-var ImageUrl$inboundSchema = z13.object({
+var ChatMessageContentItemImageImageUrl$inboundSchema = z13.object({
   url: z13.string(),
   detail: ChatMessageContentItemImageDetail$inboundSchema.optional()
 });
-var ImageUrl$outboundSchema = z13.object({
+var ChatMessageContentItemImageImageUrl$outboundSchema = z13.object({
   url: z13.string(),
   detail: ChatMessageContentItemImageDetail$outboundSchema.optional()
 });
 var ChatMessageContentItemImage$inboundSchema = z13.object({
   type: z13.literal("image_url"),
-  image_url: z13.lazy(() => ImageUrl$inboundSchema)
+  image_url: z13.lazy(() => ChatMessageContentItemImageImageUrl$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "image_url": "imageUrl"
@@ -1142,7 +1157,7 @@ var ChatMessageContentItemImage$inboundSchema = z13.object({
 });
 var ChatMessageContentItemImage$outboundSchema = z13.object({
   type: z13.literal("image_url"),
-  imageUrl: z13.lazy(() => ImageUrl$outboundSchema)
+  imageUrl: z13.lazy(() => ChatMessageContentItemImageImageUrl$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     imageUrl: "image_url"
@@ -1281,48 +1296,141 @@ var ChatMessageToolCall$outboundSchema = z18.object({
   function: z18.lazy(() => ChatMessageToolCallFunction$outboundSchema)
 });
 
+// node_modules/@openrouter/sdk/esm/models/schema2.js
+var z19 = __toESM(require("zod/v4"), 1);
+var Schema4 = {
+  Unknown: "unknown",
+  OpenaiResponsesV1: "openai-responses-v1",
+  AzureOpenaiResponsesV1: "azure-openai-responses-v1",
+  XaiResponsesV1: "xai-responses-v1",
+  AnthropicClaudeV1: "anthropic-claude-v1",
+  GoogleGeminiV1: "google-gemini-v1"
+};
+var Schema4$inboundSchema = inboundSchema(Schema4);
+var Schema4$outboundSchema = outboundSchema(Schema4);
+var Schema2ReasoningText$inboundSchema = z19.object({
+  type: z19.literal("reasoning.text"),
+  text: z19.nullable(z19.string()).optional(),
+  signature: z19.nullable(z19.string()).optional(),
+  id: z19.nullable(z19.string()).optional(),
+  format: z19.nullable(Schema4$inboundSchema).optional(),
+  index: z19.number().optional()
+});
+var Schema2ReasoningText$outboundSchema = z19.object({
+  type: z19.literal("reasoning.text"),
+  text: z19.nullable(z19.string()).optional(),
+  signature: z19.nullable(z19.string()).optional(),
+  id: z19.nullable(z19.string()).optional(),
+  format: z19.nullable(Schema4$outboundSchema).optional(),
+  index: z19.number().optional()
+});
+var Schema2ReasoningEncrypted$inboundSchema = z19.object({
+  type: z19.literal("reasoning.encrypted"),
+  data: z19.string(),
+  id: z19.nullable(z19.string()).optional(),
+  format: z19.nullable(Schema4$inboundSchema).optional(),
+  index: z19.number().optional()
+});
+var Schema2ReasoningEncrypted$outboundSchema = z19.object({
+  type: z19.literal("reasoning.encrypted"),
+  data: z19.string(),
+  id: z19.nullable(z19.string()).optional(),
+  format: z19.nullable(Schema4$outboundSchema).optional(),
+  index: z19.number().optional()
+});
+var Schema2ReasoningSummary$inboundSchema = z19.object({
+  type: z19.literal("reasoning.summary"),
+  summary: z19.string(),
+  id: z19.nullable(z19.string()).optional(),
+  format: z19.nullable(Schema4$inboundSchema).optional(),
+  index: z19.number().optional()
+});
+var Schema2ReasoningSummary$outboundSchema = z19.object({
+  type: z19.literal("reasoning.summary"),
+  summary: z19.string(),
+  id: z19.nullable(z19.string()).optional(),
+  format: z19.nullable(Schema4$outboundSchema).optional(),
+  index: z19.number().optional()
+});
+var Schema2$inboundSchema = z19.union([
+  z19.lazy(() => Schema2ReasoningSummary$inboundSchema),
+  z19.lazy(() => Schema2ReasoningEncrypted$inboundSchema),
+  z19.lazy(() => Schema2ReasoningText$inboundSchema)
+]);
+var Schema2$outboundSchema = z19.union([
+  z19.lazy(() => Schema2ReasoningSummary$outboundSchema),
+  z19.lazy(() => Schema2ReasoningEncrypted$outboundSchema),
+  z19.lazy(() => Schema2ReasoningText$outboundSchema)
+]);
+
 // node_modules/@openrouter/sdk/esm/models/assistantmessage.js
-var AssistantMessageContent$inboundSchema = z19.union([z19.string(), z19.array(ChatMessageContentItem$inboundSchema)]);
-var AssistantMessageContent$outboundSchema = z19.union([z19.string(), z19.array(ChatMessageContentItem$outboundSchema)]);
-var AssistantMessage$inboundSchema = z19.object({
-  role: z19.literal("assistant"),
-  content: z19.nullable(z19.union([z19.string(), z19.array(ChatMessageContentItem$inboundSchema)])).optional(),
-  name: z19.string().optional(),
-  tool_calls: z19.array(ChatMessageToolCall$inboundSchema).optional(),
-  refusal: z19.nullable(z19.string()).optional(),
-  reasoning: z19.nullable(z19.string()).optional()
+var AssistantMessageContent$inboundSchema = z20.union([z20.string(), z20.array(ChatMessageContentItem$inboundSchema)]);
+var AssistantMessageContent$outboundSchema = z20.union([z20.string(), z20.array(ChatMessageContentItem$outboundSchema)]);
+var AssistantMessageImageUrl$inboundSchema = z20.object({
+  url: z20.string()
+});
+var AssistantMessageImageUrl$outboundSchema = z20.object({
+  url: z20.string()
+});
+var Image$inboundSchema = z20.object({
+  image_url: z20.lazy(() => AssistantMessageImageUrl$inboundSchema)
 }).transform((v) => {
   return remap(v, {
-    "tool_calls": "toolCalls"
+    "image_url": "imageUrl"
   });
 });
-var AssistantMessage$outboundSchema = z19.object({
-  role: z19.literal("assistant"),
-  content: z19.nullable(z19.union([z19.string(), z19.array(ChatMessageContentItem$outboundSchema)])).optional(),
-  name: z19.string().optional(),
-  toolCalls: z19.array(ChatMessageToolCall$outboundSchema).optional(),
-  refusal: z19.nullable(z19.string()).optional(),
-  reasoning: z19.nullable(z19.string()).optional()
+var Image$outboundSchema = z20.object({
+  imageUrl: z20.lazy(() => AssistantMessageImageUrl$outboundSchema)
 }).transform((v) => {
   return remap(v, {
-    toolCalls: "tool_calls"
+    imageUrl: "image_url"
+  });
+});
+var AssistantMessage$inboundSchema = z20.object({
+  role: z20.literal("assistant"),
+  content: z20.nullable(z20.union([z20.string(), z20.array(ChatMessageContentItem$inboundSchema)])).optional(),
+  name: z20.string().optional(),
+  tool_calls: z20.array(ChatMessageToolCall$inboundSchema).optional(),
+  refusal: z20.nullable(z20.string()).optional(),
+  reasoning: z20.nullable(z20.string()).optional(),
+  reasoning_details: z20.array(Schema2$inboundSchema).optional(),
+  images: z20.array(z20.lazy(() => Image$inboundSchema)).optional()
+}).transform((v) => {
+  return remap(v, {
+    "tool_calls": "toolCalls",
+    "reasoning_details": "reasoningDetails"
+  });
+});
+var AssistantMessage$outboundSchema = z20.object({
+  role: z20.literal("assistant"),
+  content: z20.nullable(z20.union([z20.string(), z20.array(ChatMessageContentItem$outboundSchema)])).optional(),
+  name: z20.string().optional(),
+  toolCalls: z20.array(ChatMessageToolCall$outboundSchema).optional(),
+  refusal: z20.nullable(z20.string()).optional(),
+  reasoning: z20.nullable(z20.string()).optional(),
+  reasoningDetails: z20.array(Schema2$outboundSchema).optional(),
+  images: z20.array(z20.lazy(() => Image$outboundSchema)).optional()
+}).transform((v) => {
+  return remap(v, {
+    toolCalls: "tool_calls",
+    reasoningDetails: "reasoning_details"
   });
 });
 
 // node_modules/@openrouter/sdk/esm/models/badgatewayresponseerrordata.js
-var z20 = __toESM(require("zod/v4"), 1);
-var BadGatewayResponseErrorData$inboundSchema = z20.object({
-  code: z20.int(),
-  message: z20.string(),
-  metadata: z20.nullable(z20.record(z20.string(), z20.nullable(z20.any()))).optional()
-});
-
-// node_modules/@openrouter/sdk/esm/models/badrequestresponseerrordata.js
 var z21 = __toESM(require("zod/v4"), 1);
-var BadRequestResponseErrorData$inboundSchema = z21.object({
+var BadGatewayResponseErrorData$inboundSchema = z21.object({
   code: z21.int(),
   message: z21.string(),
   metadata: z21.nullable(z21.record(z21.string(), z21.nullable(z21.any()))).optional()
+});
+
+// node_modules/@openrouter/sdk/esm/models/badrequestresponseerrordata.js
+var z22 = __toESM(require("zod/v4"), 1);
+var BadRequestResponseErrorData$inboundSchema = z22.object({
+  code: z22.int(),
+  message: z22.string(),
+  metadata: z22.nullable(z22.record(z22.string(), z22.nullable(z22.any()))).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/chatcompletionfinishreason.js
@@ -1336,25 +1444,25 @@ var ChatCompletionFinishReason = {
 var ChatCompletionFinishReason$inboundSchema = inboundSchema(ChatCompletionFinishReason);
 
 // node_modules/@openrouter/sdk/esm/models/chaterror.js
-var z22 = __toESM(require("zod/v4"), 1);
-var Code$inboundSchema = z22.union([
-  z22.string(),
-  z22.number()
+var z23 = __toESM(require("zod/v4"), 1);
+var Code$inboundSchema = z23.union([
+  z23.string(),
+  z23.number()
 ]);
-var ChatErrorError$inboundSchema = z22.object({
-  code: z22.nullable(z22.union([z22.string(), z22.number()])),
-  message: z22.string(),
-  param: z22.nullable(z22.string()).optional(),
-  type: z22.nullable(z22.string()).optional()
+var ChatErrorError$inboundSchema = z23.object({
+  code: z23.nullable(z23.union([z23.string(), z23.number()])),
+  message: z23.string(),
+  param: z23.nullable(z23.string()).optional(),
+  type: z23.nullable(z23.string()).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/chatgenerationparams.js
-var z35 = __toESM(require("zod/v4"), 1);
+var z36 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/chatstreamoptions.js
-var z23 = __toESM(require("zod/v4"), 1);
-var ChatStreamOptions$outboundSchema = z23.object({
-  includeUsage: z23.boolean().optional()
+var z24 = __toESM(require("zod/v4"), 1);
+var ChatStreamOptions$outboundSchema = z24.object({
+  includeUsage: z24.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     includeUsage: "include_usage"
@@ -1362,30 +1470,30 @@ var ChatStreamOptions$outboundSchema = z23.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/message.js
-var z27 = __toESM(require("zod/v4"), 1);
+var z28 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/systemmessage.js
-var z24 = __toESM(require("zod/v4"), 1);
-var SystemMessageContent$outboundSchema = z24.union([z24.string(), z24.array(ChatMessageContentItemText$outboundSchema)]);
-var SystemMessage$outboundSchema = z24.object({
-  role: z24.literal("system"),
-  content: z24.union([
-    z24.string(),
-    z24.array(ChatMessageContentItemText$outboundSchema)
+var z25 = __toESM(require("zod/v4"), 1);
+var SystemMessageContent$outboundSchema = z25.union([z25.string(), z25.array(ChatMessageContentItemText$outboundSchema)]);
+var SystemMessage$outboundSchema = z25.object({
+  role: z25.literal("system"),
+  content: z25.union([
+    z25.string(),
+    z25.array(ChatMessageContentItemText$outboundSchema)
   ]),
-  name: z24.string().optional()
+  name: z25.string().optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/toolresponsemessage.js
-var z25 = __toESM(require("zod/v4"), 1);
-var ToolResponseMessageContent$outboundSchema = z25.union([z25.string(), z25.array(ChatMessageContentItem$outboundSchema)]);
-var ToolResponseMessage$outboundSchema = z25.object({
-  role: z25.literal("tool"),
-  content: z25.union([
-    z25.string(),
-    z25.array(ChatMessageContentItem$outboundSchema)
+var z26 = __toESM(require("zod/v4"), 1);
+var ToolResponseMessageContent$outboundSchema = z26.union([z26.string(), z26.array(ChatMessageContentItem$outboundSchema)]);
+var ToolResponseMessage$outboundSchema = z26.object({
+  role: z26.literal("tool"),
+  content: z26.union([
+    z26.string(),
+    z26.array(ChatMessageContentItem$outboundSchema)
   ]),
-  toolCallId: z25.string()
+  toolCallId: z26.string()
 }).transform((v) => {
   return remap(v, {
     toolCallId: "tool_call_id"
@@ -1393,37 +1501,37 @@ var ToolResponseMessage$outboundSchema = z25.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/usermessage.js
-var z26 = __toESM(require("zod/v4"), 1);
-var UserMessageContent$outboundSchema = z26.union([z26.string(), z26.array(ChatMessageContentItem$outboundSchema)]);
-var UserMessage$outboundSchema = z26.object({
-  role: z26.literal("user"),
-  content: z26.union([
-    z26.string(),
-    z26.array(ChatMessageContentItem$outboundSchema)
-  ]),
-  name: z26.string().optional()
-});
-
-// node_modules/@openrouter/sdk/esm/models/message.js
-var MessageContent$outboundSchema = z27.union([z27.string(), z27.array(ChatMessageContentItemText$outboundSchema)]);
-var MessageDeveloper$outboundSchema = z27.object({
-  role: z27.literal("developer"),
+var z27 = __toESM(require("zod/v4"), 1);
+var UserMessageContent$outboundSchema = z27.union([z27.string(), z27.array(ChatMessageContentItem$outboundSchema)]);
+var UserMessage$outboundSchema = z27.object({
+  role: z27.literal("user"),
   content: z27.union([
     z27.string(),
-    z27.array(ChatMessageContentItemText$outboundSchema)
+    z27.array(ChatMessageContentItem$outboundSchema)
   ]),
   name: z27.string().optional()
 });
-var Message$outboundSchema = z27.union([
+
+// node_modules/@openrouter/sdk/esm/models/message.js
+var MessageContent$outboundSchema = z28.union([z28.string(), z28.array(ChatMessageContentItemText$outboundSchema)]);
+var MessageDeveloper$outboundSchema = z28.object({
+  role: z28.literal("developer"),
+  content: z28.union([
+    z28.string(),
+    z28.array(ChatMessageContentItemText$outboundSchema)
+  ]),
+  name: z28.string().optional()
+});
+var Message$outboundSchema = z28.union([
   SystemMessage$outboundSchema,
   UserMessage$outboundSchema,
-  z27.lazy(() => MessageDeveloper$outboundSchema),
+  z28.lazy(() => MessageDeveloper$outboundSchema),
   AssistantMessage$outboundSchema,
   ToolResponseMessage$outboundSchema
 ]);
 
 // node_modules/@openrouter/sdk/esm/models/providersortunion.js
-var z29 = __toESM(require("zod/v4"), 1);
+var z30 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/providersort.js
 var ProviderSort = {
@@ -1434,19 +1542,19 @@ var ProviderSort = {
 var ProviderSort$outboundSchema = outboundSchema(ProviderSort);
 
 // node_modules/@openrouter/sdk/esm/models/providersortconfig.js
-var z28 = __toESM(require("zod/v4"), 1);
+var z29 = __toESM(require("zod/v4"), 1);
 var Partition = {
   Model: "model",
   None: "none"
 };
 var Partition$outboundSchema = outboundSchema(Partition);
-var ProviderSortConfig$outboundSchema = z28.object({
-  by: z28.nullable(ProviderSort$outboundSchema).optional(),
-  partition: z28.nullable(Partition$outboundSchema).optional()
+var ProviderSortConfig$outboundSchema = z29.object({
+  by: z29.nullable(ProviderSort$outboundSchema).optional(),
+  partition: z29.nullable(Partition$outboundSchema).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/providersortunion.js
-var ProviderSortUnion$outboundSchema = z29.union([ProviderSort$outboundSchema, ProviderSortConfig$outboundSchema]);
+var ProviderSortUnion$outboundSchema = z30.union([ProviderSort$outboundSchema, ProviderSortConfig$outboundSchema]);
 
 // node_modules/@openrouter/sdk/esm/models/reasoningsummaryverbosity.js
 var ReasoningSummaryVerbosity = {
@@ -1458,20 +1566,20 @@ var ReasoningSummaryVerbosity$inboundSchema = inboundSchema(ReasoningSummaryVerb
 var ReasoningSummaryVerbosity$outboundSchema = outboundSchema(ReasoningSummaryVerbosity);
 
 // node_modules/@openrouter/sdk/esm/models/responseformatjsonschema.js
-var z31 = __toESM(require("zod/v4"), 1);
+var z32 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/jsonschemaconfig.js
-var z30 = __toESM(require("zod/v4"), 1);
-var JSONSchemaConfig$outboundSchema = z30.object({
-  name: z30.string(),
-  description: z30.string().optional(),
-  schema: z30.record(z30.string(), z30.any()).optional(),
-  strict: z30.nullable(z30.boolean()).optional()
+var z31 = __toESM(require("zod/v4"), 1);
+var JSONSchemaConfig$outboundSchema = z31.object({
+  name: z31.string(),
+  description: z31.string().optional(),
+  schema: z31.record(z31.string(), z31.any()).optional(),
+  strict: z31.nullable(z31.boolean()).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/responseformatjsonschema.js
-var ResponseFormatJSONSchema$outboundSchema = z31.object({
-  type: z31.literal("json_schema"),
+var ResponseFormatJSONSchema$outboundSchema = z32.object({
+  type: z32.literal("json_schema"),
   jsonSchema: JSONSchemaConfig$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -1480,14 +1588,14 @@ var ResponseFormatJSONSchema$outboundSchema = z31.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/responseformattextgrammar.js
-var z32 = __toESM(require("zod/v4"), 1);
-var ResponseFormatTextGrammar$outboundSchema = z32.object({
-  type: z32.literal("grammar"),
-  grammar: z32.string()
+var z33 = __toESM(require("zod/v4"), 1);
+var ResponseFormatTextGrammar$outboundSchema = z33.object({
+  type: z33.literal("grammar"),
+  grammar: z33.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/schema0.js
-var z33 = __toESM(require("zod/v4"), 1);
+var z34 = __toESM(require("zod/v4"), 1);
 var Schema0Enum = {
   Ai21: "AI21",
   AionLabs: "AionLabs",
@@ -1561,19 +1669,19 @@ var Schema0Enum = {
   FakeProvider: "FakeProvider"
 };
 var Schema0Enum$outboundSchema = outboundSchema(Schema0Enum);
-var Schema0$outboundSchema = z33.union([Schema0Enum$outboundSchema, z33.string()]);
+var Schema0$outboundSchema = z34.union([Schema0Enum$outboundSchema, z34.string()]);
 
 // node_modules/@openrouter/sdk/esm/models/tooldefinitionjson.js
-var z34 = __toESM(require("zod/v4"), 1);
-var ToolDefinitionJsonFunction$outboundSchema = z34.object({
-  name: z34.string(),
-  description: z34.string().optional(),
-  parameters: z34.record(z34.string(), z34.any()).optional(),
-  strict: z34.nullable(z34.boolean()).optional()
+var z35 = __toESM(require("zod/v4"), 1);
+var ToolDefinitionJsonFunction$outboundSchema = z35.object({
+  name: z35.string(),
+  description: z35.string().optional(),
+  parameters: z35.record(z35.string(), z35.any()).optional(),
+  strict: z35.nullable(z35.boolean()).optional()
 });
-var ToolDefinitionJson$outboundSchema = z34.object({
-  type: z34.literal("function"),
-  function: z34.lazy(() => ToolDefinitionJsonFunction$outboundSchema)
+var ToolDefinitionJson$outboundSchema = z35.object({
+  type: z35.literal("function"),
+  function: z35.lazy(() => ToolDefinitionJsonFunction$outboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/chatgenerationparams.js
@@ -1619,52 +1727,52 @@ var Modality = {
 };
 var ChatGenerationParamsDataCollection$outboundSchema = outboundSchema(ChatGenerationParamsDataCollection);
 var Quantizations$outboundSchema = outboundSchema(Quantizations);
-var ChatGenerationParamsMaxPrice$outboundSchema = z35.object({
-  prompt: z35.any().optional(),
-  completion: z35.any().optional(),
-  image: z35.any().optional(),
-  audio: z35.any().optional(),
-  request: z35.any().optional()
+var ChatGenerationParamsMaxPrice$outboundSchema = z36.object({
+  prompt: z36.any().optional(),
+  completion: z36.any().optional(),
+  image: z36.any().optional(),
+  audio: z36.any().optional(),
+  request: z36.any().optional()
 });
-var ChatGenerationParamsPreferredMinThroughput$outboundSchema = z35.object({
-  p50: z35.nullable(z35.number()).optional(),
-  p75: z35.nullable(z35.number()).optional(),
-  p90: z35.nullable(z35.number()).optional(),
-  p99: z35.nullable(z35.number()).optional()
+var ChatGenerationParamsPreferredMinThroughput$outboundSchema = z36.object({
+  p50: z36.nullable(z36.number()).optional(),
+  p75: z36.nullable(z36.number()).optional(),
+  p90: z36.nullable(z36.number()).optional(),
+  p99: z36.nullable(z36.number()).optional()
 });
-var ChatGenerationParamsPreferredMinThroughputUnion$outboundSchema = z35.union([
-  z35.number(),
-  z35.lazy(() => ChatGenerationParamsPreferredMinThroughput$outboundSchema)
+var ChatGenerationParamsPreferredMinThroughputUnion$outboundSchema = z36.union([
+  z36.number(),
+  z36.lazy(() => ChatGenerationParamsPreferredMinThroughput$outboundSchema)
 ]);
-var ChatGenerationParamsPreferredMaxLatency$outboundSchema = z35.object({
-  p50: z35.nullable(z35.number()).optional(),
-  p75: z35.nullable(z35.number()).optional(),
-  p90: z35.nullable(z35.number()).optional(),
-  p99: z35.nullable(z35.number()).optional()
+var ChatGenerationParamsPreferredMaxLatency$outboundSchema = z36.object({
+  p50: z36.nullable(z36.number()).optional(),
+  p75: z36.nullable(z36.number()).optional(),
+  p90: z36.nullable(z36.number()).optional(),
+  p99: z36.nullable(z36.number()).optional()
 });
-var ChatGenerationParamsPreferredMaxLatencyUnion$outboundSchema = z35.union([
-  z35.number(),
-  z35.lazy(() => ChatGenerationParamsPreferredMaxLatency$outboundSchema)
+var ChatGenerationParamsPreferredMaxLatencyUnion$outboundSchema = z36.union([
+  z36.number(),
+  z36.lazy(() => ChatGenerationParamsPreferredMaxLatency$outboundSchema)
 ]);
-var ChatGenerationParamsProvider$outboundSchema = z35.object({
-  allowFallbacks: z35.nullable(z35.boolean()).optional(),
-  requireParameters: z35.nullable(z35.boolean()).optional(),
-  dataCollection: z35.nullable(ChatGenerationParamsDataCollection$outboundSchema).optional(),
-  zdr: z35.nullable(z35.boolean()).optional(),
-  enforceDistillableText: z35.nullable(z35.boolean()).optional(),
-  order: z35.nullable(z35.array(Schema0$outboundSchema)).optional(),
-  only: z35.nullable(z35.array(Schema0$outboundSchema)).optional(),
-  ignore: z35.nullable(z35.array(Schema0$outboundSchema)).optional(),
-  quantizations: z35.nullable(z35.array(Quantizations$outboundSchema)).optional(),
-  sort: z35.nullable(ProviderSortUnion$outboundSchema).optional(),
-  maxPrice: z35.lazy(() => ChatGenerationParamsMaxPrice$outboundSchema).optional(),
-  preferredMinThroughput: z35.nullable(z35.union([
-    z35.number(),
-    z35.lazy(() => ChatGenerationParamsPreferredMinThroughput$outboundSchema)
+var ChatGenerationParamsProvider$outboundSchema = z36.object({
+  allowFallbacks: z36.nullable(z36.boolean()).optional(),
+  requireParameters: z36.nullable(z36.boolean()).optional(),
+  dataCollection: z36.nullable(ChatGenerationParamsDataCollection$outboundSchema).optional(),
+  zdr: z36.nullable(z36.boolean()).optional(),
+  enforceDistillableText: z36.nullable(z36.boolean()).optional(),
+  order: z36.nullable(z36.array(Schema0$outboundSchema)).optional(),
+  only: z36.nullable(z36.array(Schema0$outboundSchema)).optional(),
+  ignore: z36.nullable(z36.array(Schema0$outboundSchema)).optional(),
+  quantizations: z36.nullable(z36.array(Quantizations$outboundSchema)).optional(),
+  sort: z36.nullable(ProviderSortUnion$outboundSchema).optional(),
+  maxPrice: z36.lazy(() => ChatGenerationParamsMaxPrice$outboundSchema).optional(),
+  preferredMinThroughput: z36.nullable(z36.union([
+    z36.number(),
+    z36.lazy(() => ChatGenerationParamsPreferredMinThroughput$outboundSchema)
   ])).optional(),
-  preferredMaxLatency: z35.nullable(z35.union([
-    z35.number(),
-    z35.lazy(() => ChatGenerationParamsPreferredMaxLatency$outboundSchema)
+  preferredMaxLatency: z36.nullable(z36.union([
+    z36.number(),
+    z36.lazy(() => ChatGenerationParamsPreferredMaxLatency$outboundSchema)
   ])).optional()
 }).transform((v) => {
   return remap(v, {
@@ -1677,25 +1785,25 @@ var ChatGenerationParamsProvider$outboundSchema = z35.object({
     preferredMaxLatency: "preferred_max_latency"
   });
 });
-var ChatGenerationParamsPluginResponseHealing$outboundSchema = z35.object({
-  id: z35.literal("response-healing"),
-  enabled: z35.boolean().optional()
+var ChatGenerationParamsPluginResponseHealing$outboundSchema = z36.object({
+  id: z36.literal("response-healing"),
+  enabled: z36.boolean().optional()
 });
 var PdfEngine$outboundSchema = outboundSchema(PdfEngine);
-var Pdf$outboundSchema = z35.object({
+var Pdf$outboundSchema = z36.object({
   engine: PdfEngine$outboundSchema.optional()
 });
-var ChatGenerationParamsPluginFileParser$outboundSchema = z35.object({
-  id: z35.literal("file-parser"),
-  enabled: z35.boolean().optional(),
-  pdf: z35.lazy(() => Pdf$outboundSchema).optional()
+var ChatGenerationParamsPluginFileParser$outboundSchema = z36.object({
+  id: z36.literal("file-parser"),
+  enabled: z36.boolean().optional(),
+  pdf: z36.lazy(() => Pdf$outboundSchema).optional()
 });
 var Engine$outboundSchema = outboundSchema(Engine);
-var ChatGenerationParamsPluginWeb$outboundSchema = z35.object({
-  id: z35.literal("web"),
-  enabled: z35.boolean().optional(),
-  maxResults: z35.number().optional(),
-  searchPrompt: z35.string().optional(),
+var ChatGenerationParamsPluginWeb$outboundSchema = z36.object({
+  id: z36.literal("web"),
+  enabled: z36.boolean().optional(),
+  maxResults: z36.number().optional(),
+  searchPrompt: z36.string().optional(),
   engine: Engine$outboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -1703,99 +1811,99 @@ var ChatGenerationParamsPluginWeb$outboundSchema = z35.object({
     searchPrompt: "search_prompt"
   });
 });
-var ChatGenerationParamsPluginModeration$outboundSchema = z35.object({
-  id: z35.literal("moderation")
+var ChatGenerationParamsPluginModeration$outboundSchema = z36.object({
+  id: z36.literal("moderation")
 });
-var ChatGenerationParamsPluginAutoRouter$outboundSchema = z35.object({
-  id: z35.literal("auto-router"),
-  enabled: z35.boolean().optional(),
-  allowedModels: z35.array(z35.string()).optional()
+var ChatGenerationParamsPluginAutoRouter$outboundSchema = z36.object({
+  id: z36.literal("auto-router"),
+  enabled: z36.boolean().optional(),
+  allowedModels: z36.array(z36.string()).optional()
 }).transform((v) => {
   return remap(v, {
     allowedModels: "allowed_models"
   });
 });
-var ChatGenerationParamsPluginUnion$outboundSchema = z35.union([
-  z35.lazy(() => ChatGenerationParamsPluginAutoRouter$outboundSchema),
-  z35.lazy(() => ChatGenerationParamsPluginModeration$outboundSchema),
-  z35.lazy(() => ChatGenerationParamsPluginWeb$outboundSchema),
-  z35.lazy(() => ChatGenerationParamsPluginFileParser$outboundSchema),
-  z35.lazy(() => ChatGenerationParamsPluginResponseHealing$outboundSchema)
+var ChatGenerationParamsPluginUnion$outboundSchema = z36.union([
+  z36.lazy(() => ChatGenerationParamsPluginAutoRouter$outboundSchema),
+  z36.lazy(() => ChatGenerationParamsPluginModeration$outboundSchema),
+  z36.lazy(() => ChatGenerationParamsPluginWeb$outboundSchema),
+  z36.lazy(() => ChatGenerationParamsPluginFileParser$outboundSchema),
+  z36.lazy(() => ChatGenerationParamsPluginResponseHealing$outboundSchema)
 ]);
 var Route$outboundSchema = outboundSchema(Route);
 var Effort$outboundSchema = outboundSchema(Effort);
-var Reasoning$outboundSchema = z35.object({
-  effort: z35.nullable(Effort$outboundSchema).optional(),
-  summary: z35.nullable(ReasoningSummaryVerbosity$outboundSchema).optional()
+var Reasoning$outboundSchema = z36.object({
+  effort: z36.nullable(Effort$outboundSchema).optional(),
+  summary: z36.nullable(ReasoningSummaryVerbosity$outboundSchema).optional()
 });
-var ChatGenerationParamsResponseFormatPython$outboundSchema = z35.object({
-  type: z35.literal("python")
+var ChatGenerationParamsResponseFormatPython$outboundSchema = z36.object({
+  type: z36.literal("python")
 });
-var ChatGenerationParamsResponseFormatJSONObject$outboundSchema = z35.object({
-  type: z35.literal("json_object")
+var ChatGenerationParamsResponseFormatJSONObject$outboundSchema = z36.object({
+  type: z36.literal("json_object")
 });
-var ChatGenerationParamsResponseFormatText$outboundSchema = z35.object({
-  type: z35.literal("text")
+var ChatGenerationParamsResponseFormatText$outboundSchema = z36.object({
+  type: z36.literal("text")
 });
-var ChatGenerationParamsResponseFormatUnion$outboundSchema = z35.union([
-  z35.lazy(() => ChatGenerationParamsResponseFormatText$outboundSchema),
-  z35.lazy(() => ChatGenerationParamsResponseFormatJSONObject$outboundSchema),
+var ChatGenerationParamsResponseFormatUnion$outboundSchema = z36.union([
+  z36.lazy(() => ChatGenerationParamsResponseFormatText$outboundSchema),
+  z36.lazy(() => ChatGenerationParamsResponseFormatJSONObject$outboundSchema),
   ResponseFormatJSONSchema$outboundSchema,
   ResponseFormatTextGrammar$outboundSchema,
-  z35.lazy(() => ChatGenerationParamsResponseFormatPython$outboundSchema)
+  z36.lazy(() => ChatGenerationParamsResponseFormatPython$outboundSchema)
 ]);
-var ChatGenerationParamsStop$outboundSchema = z35.union([z35.string(), z35.array(z35.string())]);
-var Debug$outboundSchema = z35.object({
-  echoUpstreamBody: z35.boolean().optional()
+var ChatGenerationParamsStop$outboundSchema = z36.union([z36.string(), z36.array(z36.string())]);
+var Debug$outboundSchema = z36.object({
+  echoUpstreamBody: z36.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     echoUpstreamBody: "echo_upstream_body"
   });
 });
-var ChatGenerationParamsImageConfig$outboundSchema = z35.union([z35.string(), z35.number()]);
+var ChatGenerationParamsImageConfig$outboundSchema = z36.union([z36.string(), z36.number()]);
 var Modality$outboundSchema = outboundSchema(Modality);
-var ChatGenerationParams$outboundSchema = z35.object({
-  provider: z35.nullable(z35.lazy(() => ChatGenerationParamsProvider$outboundSchema)).optional(),
-  plugins: z35.array(z35.union([
-    z35.lazy(() => ChatGenerationParamsPluginAutoRouter$outboundSchema),
-    z35.lazy(() => ChatGenerationParamsPluginModeration$outboundSchema),
-    z35.lazy(() => ChatGenerationParamsPluginWeb$outboundSchema),
-    z35.lazy(() => ChatGenerationParamsPluginFileParser$outboundSchema),
-    z35.lazy(() => ChatGenerationParamsPluginResponseHealing$outboundSchema)
+var ChatGenerationParams$outboundSchema = z36.object({
+  provider: z36.nullable(z36.lazy(() => ChatGenerationParamsProvider$outboundSchema)).optional(),
+  plugins: z36.array(z36.union([
+    z36.lazy(() => ChatGenerationParamsPluginAutoRouter$outboundSchema),
+    z36.lazy(() => ChatGenerationParamsPluginModeration$outboundSchema),
+    z36.lazy(() => ChatGenerationParamsPluginWeb$outboundSchema),
+    z36.lazy(() => ChatGenerationParamsPluginFileParser$outboundSchema),
+    z36.lazy(() => ChatGenerationParamsPluginResponseHealing$outboundSchema)
   ])).optional(),
-  route: z35.nullable(Route$outboundSchema).optional(),
-  user: z35.string().optional(),
-  sessionId: z35.string().optional(),
-  messages: z35.array(Message$outboundSchema),
-  model: z35.string().optional(),
-  models: z35.array(z35.string()).optional(),
-  frequencyPenalty: z35.nullable(z35.number()).optional(),
-  logitBias: z35.nullable(z35.record(z35.string(), z35.number())).optional(),
-  logprobs: z35.nullable(z35.boolean()).optional(),
-  topLogprobs: z35.nullable(z35.number()).optional(),
-  maxCompletionTokens: z35.nullable(z35.number()).optional(),
-  maxTokens: z35.nullable(z35.number()).optional(),
-  metadata: z35.record(z35.string(), z35.string()).optional(),
-  presencePenalty: z35.nullable(z35.number()).optional(),
-  reasoning: z35.lazy(() => Reasoning$outboundSchema).optional(),
-  responseFormat: z35.union([
-    z35.lazy(() => ChatGenerationParamsResponseFormatText$outboundSchema),
-    z35.lazy(() => ChatGenerationParamsResponseFormatJSONObject$outboundSchema),
+  route: z36.nullable(Route$outboundSchema).optional(),
+  user: z36.string().optional(),
+  sessionId: z36.string().optional(),
+  messages: z36.array(Message$outboundSchema),
+  model: z36.string().optional(),
+  models: z36.array(z36.string()).optional(),
+  frequencyPenalty: z36.nullable(z36.number()).optional(),
+  logitBias: z36.nullable(z36.record(z36.string(), z36.number())).optional(),
+  logprobs: z36.nullable(z36.boolean()).optional(),
+  topLogprobs: z36.nullable(z36.number()).optional(),
+  maxCompletionTokens: z36.nullable(z36.number()).optional(),
+  maxTokens: z36.nullable(z36.number()).optional(),
+  metadata: z36.record(z36.string(), z36.string()).optional(),
+  presencePenalty: z36.nullable(z36.number()).optional(),
+  reasoning: z36.lazy(() => Reasoning$outboundSchema).optional(),
+  responseFormat: z36.union([
+    z36.lazy(() => ChatGenerationParamsResponseFormatText$outboundSchema),
+    z36.lazy(() => ChatGenerationParamsResponseFormatJSONObject$outboundSchema),
     ResponseFormatJSONSchema$outboundSchema,
     ResponseFormatTextGrammar$outboundSchema,
-    z35.lazy(() => ChatGenerationParamsResponseFormatPython$outboundSchema)
+    z36.lazy(() => ChatGenerationParamsResponseFormatPython$outboundSchema)
   ]).optional(),
-  seed: z35.nullable(z35.int()).optional(),
-  stop: z35.nullable(z35.union([z35.string(), z35.array(z35.string())])).optional(),
-  stream: z35.boolean().default(false),
-  streamOptions: z35.nullable(ChatStreamOptions$outboundSchema).optional(),
-  temperature: z35.nullable(z35.number()).optional(),
-  toolChoice: z35.any().optional(),
-  tools: z35.array(ToolDefinitionJson$outboundSchema).optional(),
-  topP: z35.nullable(z35.number()).optional(),
-  debug: z35.lazy(() => Debug$outboundSchema).optional(),
-  imageConfig: z35.record(z35.string(), z35.union([z35.string(), z35.number()])).optional(),
-  modalities: z35.array(Modality$outboundSchema).optional()
+  seed: z36.nullable(z36.int()).optional(),
+  stop: z36.nullable(z36.union([z36.string(), z36.array(z36.string())])).optional(),
+  stream: z36.boolean().default(false),
+  streamOptions: z36.nullable(ChatStreamOptions$outboundSchema).optional(),
+  temperature: z36.nullable(z36.number()).optional(),
+  toolChoice: z36.any().optional(),
+  tools: z36.array(ToolDefinitionJson$outboundSchema).optional(),
+  topP: z36.nullable(z36.number()).optional(),
+  debug: z36.lazy(() => Debug$outboundSchema).optional(),
+  imageConfig: z36.record(z36.string(), z36.union([z36.string(), z36.number()])).optional(),
+  modalities: z36.array(Modality$outboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     sessionId: "session_id",
@@ -1814,12 +1922,12 @@ var ChatGenerationParams$outboundSchema = z35.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/chatgenerationtokenusage.js
-var z36 = __toESM(require("zod/v4"), 1);
-var CompletionTokensDetails$inboundSchema = z36.object({
-  reasoning_tokens: z36.nullable(z36.number()).optional(),
-  audio_tokens: z36.nullable(z36.number()).optional(),
-  accepted_prediction_tokens: z36.nullable(z36.number()).optional(),
-  rejected_prediction_tokens: z36.nullable(z36.number()).optional()
+var z37 = __toESM(require("zod/v4"), 1);
+var CompletionTokensDetails$inboundSchema = z37.object({
+  reasoning_tokens: z37.nullable(z37.number()).optional(),
+  audio_tokens: z37.nullable(z37.number()).optional(),
+  accepted_prediction_tokens: z37.nullable(z37.number()).optional(),
+  rejected_prediction_tokens: z37.nullable(z37.number()).optional()
 }).transform((v) => {
   return remap(v, {
     "reasoning_tokens": "reasoningTokens",
@@ -1828,11 +1936,11 @@ var CompletionTokensDetails$inboundSchema = z36.object({
     "rejected_prediction_tokens": "rejectedPredictionTokens"
   });
 });
-var PromptTokensDetails$inboundSchema = z36.object({
-  cached_tokens: z36.number().optional(),
-  cache_write_tokens: z36.number().optional(),
-  audio_tokens: z36.number().optional(),
-  video_tokens: z36.number().optional()
+var PromptTokensDetails$inboundSchema = z37.object({
+  cached_tokens: z37.number().optional(),
+  cache_write_tokens: z37.number().optional(),
+  audio_tokens: z37.number().optional(),
+  video_tokens: z37.number().optional()
 }).transform((v) => {
   return remap(v, {
     "cached_tokens": "cachedTokens",
@@ -1841,12 +1949,12 @@ var PromptTokensDetails$inboundSchema = z36.object({
     "video_tokens": "videoTokens"
   });
 });
-var ChatGenerationTokenUsage$inboundSchema = z36.object({
-  completion_tokens: z36.number(),
-  prompt_tokens: z36.number(),
-  total_tokens: z36.number(),
-  completion_tokens_details: z36.nullable(z36.lazy(() => CompletionTokensDetails$inboundSchema)).optional(),
-  prompt_tokens_details: z36.nullable(z36.lazy(() => PromptTokensDetails$inboundSchema)).optional()
+var ChatGenerationTokenUsage$inboundSchema = z37.object({
+  completion_tokens: z37.number(),
+  prompt_tokens: z37.number(),
+  total_tokens: z37.number(),
+  completion_tokens_details: z37.nullable(z37.lazy(() => CompletionTokensDetails$inboundSchema)).optional(),
+  prompt_tokens_details: z37.nullable(z37.lazy(() => PromptTokensDetails$inboundSchema)).optional()
 }).transform((v) => {
   return remap(v, {
     "completion_tokens": "completionTokens",
@@ -1858,17 +1966,17 @@ var ChatGenerationTokenUsage$inboundSchema = z36.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/chatmessagetokenlogprob.js
-var z37 = __toESM(require("zod/v4"), 1);
-var ChatMessageTokenLogprobTopLogprob$inboundSchema = z37.object({
-  token: z37.string(),
-  logprob: z37.number(),
-  bytes: z37.nullable(z37.array(z37.number()))
+var z38 = __toESM(require("zod/v4"), 1);
+var ChatMessageTokenLogprobTopLogprob$inboundSchema = z38.object({
+  token: z38.string(),
+  logprob: z38.number(),
+  bytes: z38.nullable(z38.array(z38.number()))
 });
-var ChatMessageTokenLogprob$inboundSchema = z37.object({
-  token: z37.string(),
-  logprob: z37.number(),
-  bytes: z37.nullable(z37.array(z37.number())),
-  top_logprobs: z37.array(z37.lazy(() => ChatMessageTokenLogprobTopLogprob$inboundSchema))
+var ChatMessageTokenLogprob$inboundSchema = z38.object({
+  token: z38.string(),
+  logprob: z38.number(),
+  bytes: z38.nullable(z38.array(z38.number())),
+  top_logprobs: z38.array(z38.lazy(() => ChatMessageTokenLogprobTopLogprob$inboundSchema))
 }).transform((v) => {
   return remap(v, {
     "top_logprobs": "topLogprobs"
@@ -1876,10 +1984,10 @@ var ChatMessageTokenLogprob$inboundSchema = z37.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/chatmessagetokenlogprobs.js
-var z38 = __toESM(require("zod/v4"), 1);
-var ChatMessageTokenLogprobs$inboundSchema = z38.object({
-  content: z38.nullable(z38.array(ChatMessageTokenLogprob$inboundSchema)),
-  refusal: z38.nullable(z38.array(ChatMessageTokenLogprob$inboundSchema))
+var z39 = __toESM(require("zod/v4"), 1);
+var ChatMessageTokenLogprobs$inboundSchema = z39.object({
+  content: z39.nullable(z39.array(ChatMessageTokenLogprob$inboundSchema)),
+  refusal: z39.nullable(z39.array(ChatMessageTokenLogprob$inboundSchema))
 });
 
 // node_modules/@openrouter/sdk/esm/models/chatresponse.js
@@ -1887,57 +1995,14 @@ var z41 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/chatresponsechoice.js
 var z40 = __toESM(require("zod/v4"), 1);
-
-// node_modules/@openrouter/sdk/esm/models/schema3.js
-var z39 = __toESM(require("zod/v4"), 1);
-var Schema5 = {
-  Unknown: "unknown",
-  OpenaiResponsesV1: "openai-responses-v1",
-  AzureOpenaiResponsesV1: "azure-openai-responses-v1",
-  XaiResponsesV1: "xai-responses-v1",
-  AnthropicClaudeV1: "anthropic-claude-v1",
-  GoogleGeminiV1: "google-gemini-v1"
-};
-var Schema5$inboundSchema = inboundSchema(Schema5);
-var Schema3ReasoningText$inboundSchema = z39.object({
-  type: z39.literal("reasoning.text"),
-  text: z39.nullable(z39.string()).optional(),
-  signature: z39.nullable(z39.string()).optional(),
-  id: z39.nullable(z39.string()).optional(),
-  format: z39.nullable(Schema5$inboundSchema).optional(),
-  index: z39.number().optional()
-});
-var Schema3ReasoningEncrypted$inboundSchema = z39.object({
-  type: z39.literal("reasoning.encrypted"),
-  data: z39.string(),
-  id: z39.nullable(z39.string()).optional(),
-  format: z39.nullable(Schema5$inboundSchema).optional(),
-  index: z39.number().optional()
-});
-var Schema3ReasoningSummary$inboundSchema = z39.object({
-  type: z39.literal("reasoning.summary"),
-  summary: z39.string(),
-  id: z39.nullable(z39.string()).optional(),
-  format: z39.nullable(Schema5$inboundSchema).optional(),
-  index: z39.number().optional()
-});
-var Schema3$inboundSchema = z39.union([
-  z39.lazy(() => Schema3ReasoningSummary$inboundSchema),
-  z39.lazy(() => Schema3ReasoningEncrypted$inboundSchema),
-  z39.lazy(() => Schema3ReasoningText$inboundSchema)
-]);
-
-// node_modules/@openrouter/sdk/esm/models/chatresponsechoice.js
 var ChatResponseChoice$inboundSchema = z40.object({
   finish_reason: z40.nullable(ChatCompletionFinishReason$inboundSchema),
   index: z40.number(),
   message: AssistantMessage$inboundSchema,
-  reasoning_details: z40.array(Schema3$inboundSchema).optional(),
   logprobs: z40.nullable(ChatMessageTokenLogprobs$inboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
-    "finish_reason": "finishReason",
-    "reasoning_details": "reasoningDetails"
+    "finish_reason": "finishReason"
   });
 });
 
@@ -1986,7 +2051,7 @@ var ChatStreamingMessageChunk$inboundSchema = z43.object({
   reasoning: z43.nullable(z43.string()).optional(),
   refusal: z43.nullable(z43.string()).optional(),
   tool_calls: z43.array(ChatStreamingMessageToolCall$inboundSchema).optional(),
-  reasoning_details: z43.array(Schema3$inboundSchema).optional()
+  reasoning_details: z43.array(Schema2$inboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     "tool_calls": "toolCalls",
@@ -2735,7 +2800,8 @@ var Model$inboundSchema = z65.object({
   top_provider: TopProviderInfo$inboundSchema,
   per_request_limits: z65.nullable(PerRequestLimits$inboundSchema),
   supported_parameters: z65.array(Parameter$inboundSchema),
-  default_parameters: z65.nullable(DefaultParameters$inboundSchema)
+  default_parameters: z65.nullable(DefaultParameters$inboundSchema),
+  expiration_date: z65.nullable(z65.string()).optional()
 }).transform((v) => {
   return remap(v, {
     "canonical_slug": "canonicalSlug",
@@ -2744,7 +2810,8 @@ var Model$inboundSchema = z65.object({
     "top_provider": "topProvider",
     "per_request_limits": "perRequestLimits",
     "supported_parameters": "supportedParameters",
-    "default_parameters": "defaultParameters"
+    "default_parameters": "defaultParameters",
+    "expiration_date": "expirationDate"
   });
 });
 
@@ -5025,6 +5092,122 @@ var UnprocessableEntityResponseErrorData$inboundSchema = z136.object({
   metadata: z136.nullable(z136.record(z136.string(), z136.nullable(z136.any()))).optional()
 });
 
+// node_modules/@openrouter/sdk/esm/lib/turn-context.js
+function normalizeInputToArray(input) {
+  if (typeof input === "string") {
+    const message = {
+      role: OpenResponsesEasyInputMessageRoleUser.User,
+      content: input
+    };
+    return [message];
+  }
+  return input;
+}
+
+// node_modules/@openrouter/sdk/esm/lib/conversation-state.js
+function isValidUnsentToolResult(obj) {
+  if (typeof obj !== "object" || obj === null)
+    return false;
+  const candidate = obj;
+  return typeof candidate["callId"] === "string" && typeof candidate["name"] === "string" && "output" in candidate;
+}
+function generateConversationId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return `conv_${crypto.randomUUID()}`;
+  }
+  return `conv_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+function createInitialState(id) {
+  const now = Date.now();
+  return {
+    id: id ?? generateConversationId(),
+    messages: [],
+    status: "in_progress",
+    createdAt: now,
+    updatedAt: now
+  };
+}
+function updateState(state, updates) {
+  return {
+    ...state,
+    ...updates,
+    updatedAt: Date.now()
+  };
+}
+function appendToMessages(current, newItems) {
+  const currentArray = normalizeInputToArray(current);
+  return [...currentArray, ...newItems];
+}
+async function toolRequiresApproval(toolCall, tools, context, callLevelCheck) {
+  if (callLevelCheck) {
+    return callLevelCheck(toolCall, context);
+  }
+  const tool = tools.find((t) => t.function.name === toolCall.name);
+  if (!tool)
+    return false;
+  const requireApproval = tool.function.requireApproval;
+  if (typeof requireApproval === "function") {
+    return requireApproval(toolCall.arguments, context);
+  }
+  return requireApproval ?? false;
+}
+async function partitionToolCalls(toolCalls, tools, context, callLevelCheck) {
+  const requiresApproval = [];
+  const autoExecute = [];
+  for (const tc of toolCalls) {
+    if (await toolRequiresApproval(tc, tools, context, callLevelCheck)) {
+      requiresApproval.push(tc);
+    } else {
+      autoExecute.push(tc);
+    }
+  }
+  return { requiresApproval, autoExecute };
+}
+function createUnsentResult(callId, name, output) {
+  const result = { callId, name, output };
+  if (!isValidUnsentToolResult(result)) {
+    throw new Error("Invalid UnsentToolResult structure");
+  }
+  return result;
+}
+function createRejectedResult(callId, name, reason) {
+  const result = {
+    callId,
+    name,
+    output: null,
+    error: reason ?? "Tool call rejected by user"
+  };
+  if (!isValidUnsentToolResult(result)) {
+    throw new Error("Invalid UnsentToolResult structure");
+  }
+  return result;
+}
+function unsentResultsToAPIFormat(results) {
+  return results.map((r) => ({
+    type: "function_call_output",
+    id: `output_${r.callId}`,
+    callId: r.callId,
+    output: r.error ? JSON.stringify({ error: r.error }) : JSON.stringify(r.output)
+  }));
+}
+function extractTextFromResponse2(response) {
+  if (!response.output) {
+    return "";
+  }
+  const outputs = Array.isArray(response.output) ? response.output : [response.output];
+  const textParts = [];
+  for (const item of outputs) {
+    if (item.type === "message" && item.content) {
+      for (const content of item.content) {
+        if (content.type === "output_text" && content.text) {
+          textParts.push(content.text);
+        }
+      }
+    }
+  }
+  return textParts.join("");
+}
+
 // node_modules/@openrouter/sdk/esm/lib/tool-event-broadcaster.js
 var ToolEventBroadcaster = class {
   constructor() {
@@ -6729,19 +6912,119 @@ var UnprocessableEntityResponseError$inboundSchema = z154.object({
   });
 });
 
-// node_modules/@openrouter/sdk/esm/models/operations/createauthkeyscode.js
+// node_modules/@openrouter/sdk/esm/models/operations/bulkassignkeystoguardrail.js
 var z155 = __toESM(require("zod/v4"), 1);
+var BulkAssignKeysToGuardrailRequestBody$outboundSchema = z155.object({
+  keyHashes: z155.array(z155.string())
+}).transform((v) => {
+  return remap(v, {
+    keyHashes: "key_hashes"
+  });
+});
+var BulkAssignKeysToGuardrailRequest$outboundSchema = z155.object({
+  id: z155.string(),
+  requestBody: z155.lazy(() => BulkAssignKeysToGuardrailRequestBody$outboundSchema)
+}).transform((v) => {
+  return remap(v, {
+    requestBody: "RequestBody"
+  });
+});
+var BulkAssignKeysToGuardrailResponse$inboundSchema = z155.object({
+  assigned_count: z155.number()
+}).transform((v) => {
+  return remap(v, {
+    "assigned_count": "assignedCount"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/bulkassignmemberstoguardrail.js
+var z156 = __toESM(require("zod/v4"), 1);
+var BulkAssignMembersToGuardrailRequestBody$outboundSchema = z156.object({
+  memberUserIds: z156.array(z156.string())
+}).transform((v) => {
+  return remap(v, {
+    memberUserIds: "member_user_ids"
+  });
+});
+var BulkAssignMembersToGuardrailRequest$outboundSchema = z156.object({
+  id: z156.string(),
+  requestBody: z156.lazy(() => BulkAssignMembersToGuardrailRequestBody$outboundSchema)
+}).transform((v) => {
+  return remap(v, {
+    requestBody: "RequestBody"
+  });
+});
+var BulkAssignMembersToGuardrailResponse$inboundSchema = z156.object({
+  assigned_count: z156.number()
+}).transform((v) => {
+  return remap(v, {
+    "assigned_count": "assignedCount"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/bulkunassignkeysfromguardrail.js
+var z157 = __toESM(require("zod/v4"), 1);
+var BulkUnassignKeysFromGuardrailRequestBody$outboundSchema = z157.object({
+  keyHashes: z157.array(z157.string())
+}).transform((v) => {
+  return remap(v, {
+    keyHashes: "key_hashes"
+  });
+});
+var BulkUnassignKeysFromGuardrailRequest$outboundSchema = z157.object({
+  id: z157.string(),
+  requestBody: z157.lazy(() => BulkUnassignKeysFromGuardrailRequestBody$outboundSchema)
+}).transform((v) => {
+  return remap(v, {
+    requestBody: "RequestBody"
+  });
+});
+var BulkUnassignKeysFromGuardrailResponse$inboundSchema = z157.object({
+  unassigned_count: z157.number()
+}).transform((v) => {
+  return remap(v, {
+    "unassigned_count": "unassignedCount"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/bulkunassignmembersfromguardrail.js
+var z158 = __toESM(require("zod/v4"), 1);
+var BulkUnassignMembersFromGuardrailRequestBody$outboundSchema = z158.object({
+  memberUserIds: z158.array(z158.string())
+}).transform((v) => {
+  return remap(v, {
+    memberUserIds: "member_user_ids"
+  });
+});
+var BulkUnassignMembersFromGuardrailRequest$outboundSchema = z158.object({
+  id: z158.string(),
+  requestBody: z158.lazy(() => BulkUnassignMembersFromGuardrailRequestBody$outboundSchema)
+}).transform((v) => {
+  return remap(v, {
+    requestBody: "RequestBody"
+  });
+});
+var BulkUnassignMembersFromGuardrailResponse$inboundSchema = z158.object({
+  unassigned_count: z158.number()
+}).transform((v) => {
+  return remap(v, {
+    "unassigned_count": "unassignedCount"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/createauthkeyscode.js
+var z159 = __toESM(require("zod/v4"), 1);
 var CreateAuthKeysCodeCodeChallengeMethod = {
   S256: "S256",
   Plain: "plain"
 };
 var CreateAuthKeysCodeCodeChallengeMethod$outboundSchema = outboundSchema(CreateAuthKeysCodeCodeChallengeMethod);
-var CreateAuthKeysCodeRequest$outboundSchema = z155.object({
-  callbackUrl: z155.string(),
-  codeChallenge: z155.string().optional(),
+var CreateAuthKeysCodeRequest$outboundSchema = z159.object({
+  callbackUrl: z159.string(),
+  codeChallenge: z159.string().optional(),
   codeChallengeMethod: CreateAuthKeysCodeCodeChallengeMethod$outboundSchema.optional(),
-  limit: z155.number().optional(),
-  expiresAt: z155.nullable(z155.date().transform((v) => v.toISOString())).optional()
+  limit: z159.number().optional(),
+  expiresAt: z159.nullable(z159.date().transform((v) => v.toISOString())).optional()
 }).transform((v) => {
   return remap(v, {
     callbackUrl: "callback_url",
@@ -6750,36 +7033,36 @@ var CreateAuthKeysCodeRequest$outboundSchema = z155.object({
     expiresAt: "expires_at"
   });
 });
-var CreateAuthKeysCodeData$inboundSchema = z155.object({
-  id: z155.string(),
-  app_id: z155.number(),
-  created_at: z155.string()
+var CreateAuthKeysCodeData$inboundSchema = z159.object({
+  id: z159.string(),
+  app_id: z159.number(),
+  created_at: z159.string()
 }).transform((v) => {
   return remap(v, {
     "app_id": "appId",
     "created_at": "createdAt"
   });
 });
-var CreateAuthKeysCodeResponse$inboundSchema = z155.object({
-  data: z155.lazy(() => CreateAuthKeysCodeData$inboundSchema)
+var CreateAuthKeysCodeResponse$inboundSchema = z159.object({
+  data: z159.lazy(() => CreateAuthKeysCodeData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createcoinbasecharge.js
-var z156 = __toESM(require("zod/v4"), 1);
-var CreateCoinbaseChargeSecurity$outboundSchema = z156.object({
-  bearer: z156.string()
+var z160 = __toESM(require("zod/v4"), 1);
+var CreateCoinbaseChargeSecurity$outboundSchema = z160.object({
+  bearer: z160.string()
 });
-var CallData$inboundSchema = z156.object({
-  deadline: z156.string(),
-  fee_amount: z156.string(),
-  id: z156.string(),
-  operator: z156.string(),
-  prefix: z156.string(),
-  recipient: z156.string(),
-  recipient_amount: z156.string(),
-  recipient_currency: z156.string(),
-  refund_destination: z156.string(),
-  signature: z156.string()
+var CallData$inboundSchema = z160.object({
+  deadline: z160.string(),
+  fee_amount: z160.string(),
+  id: z160.string(),
+  operator: z160.string(),
+  prefix: z160.string(),
+  recipient: z160.string(),
+  recipient_amount: z160.string(),
+  recipient_currency: z160.string(),
+  refund_destination: z160.string(),
+  signature: z160.string()
 }).transform((v) => {
   return remap(v, {
     "fee_amount": "feeAmount",
@@ -6788,36 +7071,36 @@ var CallData$inboundSchema = z156.object({
     "refund_destination": "refundDestination"
   });
 });
-var Metadata$inboundSchema = z156.object({
-  chain_id: z156.number(),
-  contract_address: z156.string(),
-  sender: z156.string()
+var Metadata$inboundSchema = z160.object({
+  chain_id: z160.number(),
+  contract_address: z160.string(),
+  sender: z160.string()
 }).transform((v) => {
   return remap(v, {
     "chain_id": "chainId",
     "contract_address": "contractAddress"
   });
 });
-var TransferIntent$inboundSchema = z156.object({
-  call_data: z156.lazy(() => CallData$inboundSchema),
-  metadata: z156.lazy(() => Metadata$inboundSchema)
+var TransferIntent$inboundSchema = z160.object({
+  call_data: z160.lazy(() => CallData$inboundSchema),
+  metadata: z160.lazy(() => Metadata$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "call_data": "callData"
   });
 });
-var Web3Data$inboundSchema = z156.object({
-  transfer_intent: z156.lazy(() => TransferIntent$inboundSchema)
+var Web3Data$inboundSchema = z160.object({
+  transfer_intent: z160.lazy(() => TransferIntent$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "transfer_intent": "transferIntent"
   });
 });
-var CreateCoinbaseChargeData$inboundSchema = z156.object({
-  id: z156.string(),
-  created_at: z156.string(),
-  expires_at: z156.string(),
-  web3_data: z156.lazy(() => Web3Data$inboundSchema)
+var CreateCoinbaseChargeData$inboundSchema = z160.object({
+  id: z160.string(),
+  created_at: z160.string(),
+  expires_at: z160.string(),
+  web3_data: z160.lazy(() => Web3Data$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -6825,12 +7108,12 @@ var CreateCoinbaseChargeData$inboundSchema = z156.object({
     "web3_data": "web3Data"
   });
 });
-var CreateCoinbaseChargeResponse$inboundSchema = z156.object({
-  data: z156.lazy(() => CreateCoinbaseChargeData$inboundSchema)
+var CreateCoinbaseChargeResponse$inboundSchema = z160.object({
+  data: z160.lazy(() => CreateCoinbaseChargeData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createembeddings.js
-var z157 = __toESM(require("zod/v4"), 1);
+var z161 = __toESM(require("zod/v4"), 1);
 var EncodingFormat = {
   Float: "float",
   Base64: "base64"
@@ -6841,106 +7124,163 @@ var ObjectT2 = {
 var ObjectEmbedding = {
   Embedding: "embedding"
 };
-var ImageUrl$outboundSchema2 = z157.object({
-  url: z157.string()
+var ImageUrl$outboundSchema = z161.object({
+  url: z161.string()
 });
-var ContentImageURL$outboundSchema = z157.object({
-  type: z157.literal("image_url"),
-  imageUrl: z157.lazy(() => ImageUrl$outboundSchema2)
+var ContentImageURL$outboundSchema = z161.object({
+  type: z161.literal("image_url"),
+  imageUrl: z161.lazy(() => ImageUrl$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     imageUrl: "image_url"
   });
 });
-var ContentText$outboundSchema = z157.object({
-  type: z157.literal("text"),
-  text: z157.string()
+var ContentText$outboundSchema = z161.object({
+  type: z161.literal("text"),
+  text: z161.string()
 });
-var Content$outboundSchema = z157.union([
-  z157.lazy(() => ContentText$outboundSchema),
-  z157.lazy(() => ContentImageURL$outboundSchema)
+var Content$outboundSchema = z161.union([
+  z161.lazy(() => ContentText$outboundSchema),
+  z161.lazy(() => ContentImageURL$outboundSchema)
 ]);
-var Input$outboundSchema = z157.object({
-  content: z157.array(z157.union([
-    z157.lazy(() => ContentText$outboundSchema),
-    z157.lazy(() => ContentImageURL$outboundSchema)
+var Input$outboundSchema = z161.object({
+  content: z161.array(z161.union([
+    z161.lazy(() => ContentText$outboundSchema),
+    z161.lazy(() => ContentImageURL$outboundSchema)
   ]))
 });
-var InputUnion$outboundSchema = z157.union([
-  z157.string(),
-  z157.array(z157.string()),
-  z157.array(z157.number()),
-  z157.array(z157.array(z157.number())),
-  z157.array(z157.lazy(() => Input$outboundSchema))
+var InputUnion$outboundSchema = z161.union([
+  z161.string(),
+  z161.array(z161.string()),
+  z161.array(z161.number()),
+  z161.array(z161.array(z161.number())),
+  z161.array(z161.lazy(() => Input$outboundSchema))
 ]);
 var EncodingFormat$outboundSchema = outboundSchema(EncodingFormat);
-var CreateEmbeddingsRequest$outboundSchema = z157.object({
-  input: z157.union([
-    z157.string(),
-    z157.array(z157.string()),
-    z157.array(z157.number()),
-    z157.array(z157.array(z157.number())),
-    z157.array(z157.lazy(() => Input$outboundSchema))
+var CreateEmbeddingsRequest$outboundSchema = z161.object({
+  input: z161.union([
+    z161.string(),
+    z161.array(z161.string()),
+    z161.array(z161.number()),
+    z161.array(z161.array(z161.number())),
+    z161.array(z161.lazy(() => Input$outboundSchema))
   ]),
-  model: z157.string(),
+  model: z161.string(),
   encodingFormat: EncodingFormat$outboundSchema.optional(),
-  dimensions: z157.int().optional(),
-  user: z157.string().optional(),
+  dimensions: z161.int().optional(),
+  user: z161.string().optional(),
   provider: ProviderPreferences$outboundSchema.optional(),
-  inputType: z157.string().optional()
+  inputType: z161.string().optional()
 }).transform((v) => {
   return remap(v, {
     encodingFormat: "encoding_format",
     inputType: "input_type"
   });
 });
-var ObjectT$inboundSchema2 = z157.enum(ObjectT2);
-var ObjectEmbedding$inboundSchema = z157.enum(ObjectEmbedding);
-var Embedding$inboundSchema = z157.union([
-  z157.array(z157.number()),
-  z157.string()
+var ObjectT$inboundSchema2 = z161.enum(ObjectT2);
+var ObjectEmbedding$inboundSchema = z161.enum(ObjectEmbedding);
+var Embedding$inboundSchema = z161.union([
+  z161.array(z161.number()),
+  z161.string()
 ]);
-var CreateEmbeddingsData$inboundSchema = z157.object({
+var CreateEmbeddingsData$inboundSchema = z161.object({
   object: ObjectEmbedding$inboundSchema,
-  embedding: z157.union([z157.array(z157.number()), z157.string()]),
-  index: z157.number().optional()
+  embedding: z161.union([z161.array(z161.number()), z161.string()]),
+  index: z161.number().optional()
 });
-var Usage$inboundSchema = z157.object({
-  prompt_tokens: z157.number(),
-  total_tokens: z157.number(),
-  cost: z157.number().optional()
+var Usage$inboundSchema = z161.object({
+  prompt_tokens: z161.number(),
+  total_tokens: z161.number(),
+  cost: z161.number().optional()
 }).transform((v) => {
   return remap(v, {
     "prompt_tokens": "promptTokens",
     "total_tokens": "totalTokens"
   });
 });
-var CreateEmbeddingsResponseBody$inboundSchema = z157.object({
-  id: z157.string().optional(),
+var CreateEmbeddingsResponseBody$inboundSchema = z161.object({
+  id: z161.string().optional(),
   object: ObjectT$inboundSchema2,
-  data: z157.array(z157.lazy(() => CreateEmbeddingsData$inboundSchema)),
-  model: z157.string(),
-  usage: z157.lazy(() => Usage$inboundSchema).optional()
+  data: z161.array(z161.lazy(() => CreateEmbeddingsData$inboundSchema)),
+  model: z161.string(),
+  usage: z161.lazy(() => Usage$inboundSchema).optional()
 });
-var CreateEmbeddingsResponse$inboundSchema = z157.union([
-  z157.lazy(() => CreateEmbeddingsResponseBody$inboundSchema),
-  z157.string()
+var CreateEmbeddingsResponse$inboundSchema = z161.union([
+  z161.lazy(() => CreateEmbeddingsResponseBody$inboundSchema),
+  z161.string()
 ]);
 
+// node_modules/@openrouter/sdk/esm/models/operations/createguardrail.js
+var z162 = __toESM(require("zod/v4"), 1);
+var CreateGuardrailResetIntervalRequest = {
+  Daily: "daily",
+  Weekly: "weekly",
+  Monthly: "monthly"
+};
+var CreateGuardrailResetIntervalResponse = {
+  Daily: "daily",
+  Weekly: "weekly",
+  Monthly: "monthly"
+};
+var CreateGuardrailResetIntervalRequest$outboundSchema = outboundSchema(CreateGuardrailResetIntervalRequest);
+var CreateGuardrailRequest$outboundSchema = z162.object({
+  name: z162.string(),
+  description: z162.nullable(z162.string()).optional(),
+  limitUsd: z162.nullable(z162.number()).optional(),
+  resetInterval: z162.nullable(CreateGuardrailResetIntervalRequest$outboundSchema).optional(),
+  allowedProviders: z162.nullable(z162.array(z162.string())).optional(),
+  allowedModels: z162.nullable(z162.array(z162.string())).optional(),
+  enforceZdr: z162.nullable(z162.boolean()).optional()
+}).transform((v) => {
+  return remap(v, {
+    limitUsd: "limit_usd",
+    resetInterval: "reset_interval",
+    allowedProviders: "allowed_providers",
+    allowedModels: "allowed_models",
+    enforceZdr: "enforce_zdr"
+  });
+});
+var CreateGuardrailResetIntervalResponse$inboundSchema = inboundSchema(CreateGuardrailResetIntervalResponse);
+var CreateGuardrailData$inboundSchema = z162.object({
+  id: z162.string(),
+  name: z162.string(),
+  description: z162.nullable(z162.string()).optional(),
+  limit_usd: z162.nullable(z162.number()).optional(),
+  reset_interval: z162.nullable(CreateGuardrailResetIntervalResponse$inboundSchema).optional(),
+  allowed_providers: z162.nullable(z162.array(z162.string())).optional(),
+  allowed_models: z162.nullable(z162.array(z162.string())).optional(),
+  enforce_zdr: z162.nullable(z162.boolean()).optional(),
+  created_at: z162.string(),
+  updated_at: z162.nullable(z162.string()).optional()
+}).transform((v) => {
+  return remap(v, {
+    "limit_usd": "limitUsd",
+    "reset_interval": "resetInterval",
+    "allowed_providers": "allowedProviders",
+    "allowed_models": "allowedModels",
+    "enforce_zdr": "enforceZdr",
+    "created_at": "createdAt",
+    "updated_at": "updatedAt"
+  });
+});
+var CreateGuardrailResponse$inboundSchema = z162.object({
+  data: z162.lazy(() => CreateGuardrailData$inboundSchema)
+});
+
 // node_modules/@openrouter/sdk/esm/models/operations/createkeys.js
-var z158 = __toESM(require("zod/v4"), 1);
+var z163 = __toESM(require("zod/v4"), 1);
 var CreateKeysLimitReset = {
   Daily: "daily",
   Weekly: "weekly",
   Monthly: "monthly"
 };
 var CreateKeysLimitReset$outboundSchema = outboundSchema(CreateKeysLimitReset);
-var CreateKeysRequest$outboundSchema = z158.object({
-  name: z158.string(),
-  limit: z158.nullable(z158.number()).optional(),
-  limitReset: z158.nullable(CreateKeysLimitReset$outboundSchema).optional(),
-  includeByokInLimit: z158.boolean().optional(),
-  expiresAt: z158.nullable(z158.date().transform((v) => v.toISOString())).optional()
+var CreateKeysRequest$outboundSchema = z163.object({
+  name: z163.string(),
+  limit: z163.nullable(z163.number()).optional(),
+  limitReset: z163.nullable(CreateKeysLimitReset$outboundSchema).optional(),
+  includeByokInLimit: z163.boolean().optional(),
+  expiresAt: z163.nullable(z163.date().transform((v) => v.toISOString())).optional()
 }).transform((v) => {
   return remap(v, {
     limitReset: "limit_reset",
@@ -6948,26 +7288,26 @@ var CreateKeysRequest$outboundSchema = z158.object({
     expiresAt: "expires_at"
   });
 });
-var CreateKeysData$inboundSchema = z158.object({
-  hash: z158.string(),
-  name: z158.string(),
-  label: z158.string(),
-  disabled: z158.boolean(),
-  limit: z158.nullable(z158.number()),
-  limit_remaining: z158.nullable(z158.number()),
-  limit_reset: z158.nullable(z158.string()),
-  include_byok_in_limit: z158.boolean(),
-  usage: z158.number(),
-  usage_daily: z158.number(),
-  usage_weekly: z158.number(),
-  usage_monthly: z158.number(),
-  byok_usage: z158.number(),
-  byok_usage_daily: z158.number(),
-  byok_usage_weekly: z158.number(),
-  byok_usage_monthly: z158.number(),
-  created_at: z158.string(),
-  updated_at: z158.nullable(z158.string()),
-  expires_at: z158.nullable(z158.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional()
+var CreateKeysData$inboundSchema = z163.object({
+  hash: z163.string(),
+  name: z163.string(),
+  label: z163.string(),
+  disabled: z163.boolean(),
+  limit: z163.nullable(z163.number()),
+  limit_remaining: z163.nullable(z163.number()),
+  limit_reset: z163.nullable(z163.string()),
+  include_byok_in_limit: z163.boolean(),
+  usage: z163.number(),
+  usage_daily: z163.number(),
+  usage_weekly: z163.number(),
+  usage_monthly: z163.number(),
+  byok_usage: z163.number(),
+  byok_usage_daily: z163.number(),
+  byok_usage_weekly: z163.number(),
+  byok_usage_monthly: z163.number(),
+  created_at: z163.string(),
+  updated_at: z163.nullable(z163.string()),
+  expires_at: z163.nullable(z163.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional()
 }).transform((v) => {
   return remap(v, {
     "limit_remaining": "limitRemaining",
@@ -6985,13 +7325,13 @@ var CreateKeysData$inboundSchema = z158.object({
     "expires_at": "expiresAt"
   });
 });
-var CreateKeysResponse$inboundSchema = z158.object({
-  data: z158.lazy(() => CreateKeysData$inboundSchema),
-  key: z158.string()
+var CreateKeysResponse$inboundSchema = z163.object({
+  data: z163.lazy(() => CreateKeysData$inboundSchema),
+  key: z163.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createresponses.js
-var z159 = __toESM(require("zod/v4"), 1);
+var z164 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/lib/event-streams.js
 var EventStream = class extends ReadableStream {
@@ -7113,8 +7453,8 @@ function parseMessage(chunk, parse2) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/createresponses.js
-var CreateResponsesResponseBody$inboundSchema = z159.object({
-  data: z159.string().transform((v, ctx) => {
+var CreateResponsesResponseBody$inboundSchema = z164.object({
+  data: z164.string().transform((v, ctx) => {
     try {
       return JSON.parse(v);
     } catch (err) {
@@ -7123,52 +7463,61 @@ var CreateResponsesResponseBody$inboundSchema = z159.object({
         code: "custom",
         message: `malformed json: ${err}`
       });
-      return z159.NEVER;
+      return z164.NEVER;
     }
   }).pipe(OpenResponsesStreamEvent$inboundSchema)
 });
-var CreateResponsesResponse$inboundSchema = z159.union([
+var CreateResponsesResponse$inboundSchema = z164.union([
   OpenResponsesNonStreamingResponse$inboundSchema,
-  z159.custom((x) => x instanceof ReadableStream).transform((stream) => {
+  z164.custom((x) => x instanceof ReadableStream).transform((stream) => {
     return new EventStream(stream, (rawEvent) => {
       if (rawEvent.data === "[DONE]")
         return { done: true };
       return {
-        value: z159.lazy(() => CreateResponsesResponseBody$inboundSchema).parse(rawEvent)?.data
+        value: z164.lazy(() => CreateResponsesResponseBody$inboundSchema).parse(rawEvent)?.data
       };
     });
   })
 ]);
 
-// node_modules/@openrouter/sdk/esm/models/operations/deletekeys.js
-var z160 = __toESM(require("zod/v4"), 1);
-var DeleteKeysRequest$outboundSchema = z160.object({
-  hash: z160.string()
+// node_modules/@openrouter/sdk/esm/models/operations/deleteguardrail.js
+var z165 = __toESM(require("zod/v4"), 1);
+var DeleteGuardrailRequest$outboundSchema = z165.object({
+  id: z165.string()
 });
-var DeleteKeysResponse$inboundSchema = z160.object({
-  deleted: z160.literal(true)
+var DeleteGuardrailResponse$inboundSchema = z165.object({
+  deleted: z165.literal(true)
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/deletekeys.js
+var z166 = __toESM(require("zod/v4"), 1);
+var DeleteKeysRequest$outboundSchema = z166.object({
+  hash: z166.string()
+});
+var DeleteKeysResponse$inboundSchema = z166.object({
+  deleted: z166.literal(true)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/exchangeauthcodeforapikey.js
-var z161 = __toESM(require("zod/v4"), 1);
+var z167 = __toESM(require("zod/v4"), 1);
 var ExchangeAuthCodeForAPIKeyCodeChallengeMethod = {
   S256: "S256",
   Plain: "plain"
 };
 var ExchangeAuthCodeForAPIKeyCodeChallengeMethod$outboundSchema = outboundSchema(ExchangeAuthCodeForAPIKeyCodeChallengeMethod);
-var ExchangeAuthCodeForAPIKeyRequest$outboundSchema = z161.object({
-  code: z161.string(),
-  codeVerifier: z161.string().optional(),
-  codeChallengeMethod: z161.nullable(ExchangeAuthCodeForAPIKeyCodeChallengeMethod$outboundSchema).optional()
+var ExchangeAuthCodeForAPIKeyRequest$outboundSchema = z167.object({
+  code: z167.string(),
+  codeVerifier: z167.string().optional(),
+  codeChallengeMethod: z167.nullable(ExchangeAuthCodeForAPIKeyCodeChallengeMethod$outboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     codeVerifier: "code_verifier",
     codeChallengeMethod: "code_challenge_method"
   });
 });
-var ExchangeAuthCodeForAPIKeyResponse$inboundSchema = z161.object({
-  key: z161.string(),
-  user_id: z161.nullable(z161.string())
+var ExchangeAuthCodeForAPIKeyResponse$inboundSchema = z167.object({
+  key: z167.string(),
+  user_id: z167.nullable(z167.string())
 }).transform((v) => {
   return remap(v, {
     "user_id": "userId"
@@ -7176,45 +7525,45 @@ var ExchangeAuthCodeForAPIKeyResponse$inboundSchema = z161.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getcredits.js
-var z162 = __toESM(require("zod/v4"), 1);
-var GetCreditsData$inboundSchema = z162.object({
-  total_credits: z162.number(),
-  total_usage: z162.number()
+var z168 = __toESM(require("zod/v4"), 1);
+var GetCreditsData$inboundSchema = z168.object({
+  total_credits: z168.number(),
+  total_usage: z168.number()
 }).transform((v) => {
   return remap(v, {
     "total_credits": "totalCredits",
     "total_usage": "totalUsage"
   });
 });
-var GetCreditsResponse$inboundSchema = z162.object({
-  data: z162.lazy(() => GetCreditsData$inboundSchema)
+var GetCreditsResponse$inboundSchema = z168.object({
+  data: z168.lazy(() => GetCreditsData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getcurrentkey.js
-var z163 = __toESM(require("zod/v4"), 1);
-var RateLimit$inboundSchema = z163.object({
-  requests: z163.number(),
-  interval: z163.string(),
-  note: z163.string()
+var z169 = __toESM(require("zod/v4"), 1);
+var RateLimit$inboundSchema = z169.object({
+  requests: z169.number(),
+  interval: z169.string(),
+  note: z169.string()
 });
-var GetCurrentKeyData$inboundSchema = z163.object({
-  label: z163.string(),
-  limit: z163.nullable(z163.number()),
-  usage: z163.number(),
-  usage_daily: z163.number(),
-  usage_weekly: z163.number(),
-  usage_monthly: z163.number(),
-  byok_usage: z163.number(),
-  byok_usage_daily: z163.number(),
-  byok_usage_weekly: z163.number(),
-  byok_usage_monthly: z163.number(),
-  is_free_tier: z163.boolean(),
-  is_provisioning_key: z163.boolean(),
-  limit_remaining: z163.nullable(z163.number()),
-  limit_reset: z163.nullable(z163.string()),
-  include_byok_in_limit: z163.boolean(),
-  expires_at: z163.nullable(z163.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
-  rate_limit: z163.lazy(() => RateLimit$inboundSchema)
+var GetCurrentKeyData$inboundSchema = z169.object({
+  label: z169.string(),
+  limit: z169.nullable(z169.number()),
+  usage: z169.number(),
+  usage_daily: z169.number(),
+  usage_weekly: z169.number(),
+  usage_monthly: z169.number(),
+  byok_usage: z169.number(),
+  byok_usage_daily: z169.number(),
+  byok_usage_weekly: z169.number(),
+  byok_usage_monthly: z169.number(),
+  is_free_tier: z169.boolean(),
+  is_provisioning_key: z169.boolean(),
+  limit_remaining: z169.nullable(z169.number()),
+  limit_reset: z169.nullable(z169.string()),
+  include_byok_in_limit: z169.boolean(),
+  expires_at: z169.nullable(z169.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional(),
+  rate_limit: z169.lazy(() => RateLimit$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "usage_daily": "usageDaily",
@@ -7233,54 +7582,54 @@ var GetCurrentKeyData$inboundSchema = z163.object({
     "rate_limit": "rateLimit"
   });
 });
-var GetCurrentKeyResponse$inboundSchema = z163.object({
-  data: z163.lazy(() => GetCurrentKeyData$inboundSchema)
+var GetCurrentKeyResponse$inboundSchema = z169.object({
+  data: z169.lazy(() => GetCurrentKeyData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getgeneration.js
-var z164 = __toESM(require("zod/v4"), 1);
+var z170 = __toESM(require("zod/v4"), 1);
 var ApiType = {
   Completions: "completions",
   Embeddings: "embeddings"
 };
-var GetGenerationRequest$outboundSchema = z164.object({
-  id: z164.string()
+var GetGenerationRequest$outboundSchema = z170.object({
+  id: z170.string()
 });
 var ApiType$inboundSchema = inboundSchema(ApiType);
-var GetGenerationData$inboundSchema = z164.object({
-  id: z164.string(),
-  upstream_id: z164.nullable(z164.string()),
-  total_cost: z164.number(),
-  cache_discount: z164.nullable(z164.number()),
-  upstream_inference_cost: z164.nullable(z164.number()),
-  created_at: z164.string(),
-  model: z164.string(),
-  app_id: z164.nullable(z164.number()),
-  streamed: z164.nullable(z164.boolean()),
-  cancelled: z164.nullable(z164.boolean()),
-  provider_name: z164.nullable(z164.string()),
-  latency: z164.nullable(z164.number()),
-  moderation_latency: z164.nullable(z164.number()),
-  generation_time: z164.nullable(z164.number()),
-  finish_reason: z164.nullable(z164.string()),
-  tokens_prompt: z164.nullable(z164.number()),
-  tokens_completion: z164.nullable(z164.number()),
-  native_tokens_prompt: z164.nullable(z164.number()),
-  native_tokens_completion: z164.nullable(z164.number()),
-  native_tokens_completion_images: z164.nullable(z164.number()),
-  native_tokens_reasoning: z164.nullable(z164.number()),
-  native_tokens_cached: z164.nullable(z164.number()),
-  num_media_prompt: z164.nullable(z164.number()),
-  num_input_audio_prompt: z164.nullable(z164.number()),
-  num_media_completion: z164.nullable(z164.number()),
-  num_search_results: z164.nullable(z164.number()),
-  origin: z164.string(),
-  usage: z164.number(),
-  is_byok: z164.boolean(),
-  native_finish_reason: z164.nullable(z164.string()),
-  external_user: z164.nullable(z164.string()),
-  api_type: z164.nullable(ApiType$inboundSchema),
-  router: z164.nullable(z164.string())
+var GetGenerationData$inboundSchema = z170.object({
+  id: z170.string(),
+  upstream_id: z170.nullable(z170.string()),
+  total_cost: z170.number(),
+  cache_discount: z170.nullable(z170.number()),
+  upstream_inference_cost: z170.nullable(z170.number()),
+  created_at: z170.string(),
+  model: z170.string(),
+  app_id: z170.nullable(z170.number()),
+  streamed: z170.nullable(z170.boolean()),
+  cancelled: z170.nullable(z170.boolean()),
+  provider_name: z170.nullable(z170.string()),
+  latency: z170.nullable(z170.number()),
+  moderation_latency: z170.nullable(z170.number()),
+  generation_time: z170.nullable(z170.number()),
+  finish_reason: z170.nullable(z170.string()),
+  tokens_prompt: z170.nullable(z170.number()),
+  tokens_completion: z170.nullable(z170.number()),
+  native_tokens_prompt: z170.nullable(z170.number()),
+  native_tokens_completion: z170.nullable(z170.number()),
+  native_tokens_completion_images: z170.nullable(z170.number()),
+  native_tokens_reasoning: z170.nullable(z170.number()),
+  native_tokens_cached: z170.nullable(z170.number()),
+  num_media_prompt: z170.nullable(z170.number()),
+  num_input_audio_prompt: z170.nullable(z170.number()),
+  num_media_completion: z170.nullable(z170.number()),
+  num_search_results: z170.nullable(z170.number()),
+  origin: z170.string(),
+  usage: z170.number(),
+  is_byok: z170.boolean(),
+  native_finish_reason: z170.nullable(z170.string()),
+  external_user: z170.nullable(z170.string()),
+  api_type: z170.nullable(ApiType$inboundSchema),
+  router: z170.nullable(z170.string())
 }).transform((v) => {
   return remap(v, {
     "upstream_id": "upstreamId",
@@ -7310,35 +7659,72 @@ var GetGenerationData$inboundSchema = z164.object({
     "api_type": "apiType"
   });
 });
-var GetGenerationResponse$inboundSchema = z164.object({
-  data: z164.lazy(() => GetGenerationData$inboundSchema)
+var GetGenerationResponse$inboundSchema = z170.object({
+  data: z170.lazy(() => GetGenerationData$inboundSchema)
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/getguardrail.js
+var z171 = __toESM(require("zod/v4"), 1);
+var GetGuardrailResetInterval = {
+  Daily: "daily",
+  Weekly: "weekly",
+  Monthly: "monthly"
+};
+var GetGuardrailRequest$outboundSchema = z171.object({
+  id: z171.string()
+});
+var GetGuardrailResetInterval$inboundSchema = inboundSchema(GetGuardrailResetInterval);
+var GetGuardrailData$inboundSchema = z171.object({
+  id: z171.string(),
+  name: z171.string(),
+  description: z171.nullable(z171.string()).optional(),
+  limit_usd: z171.nullable(z171.number()).optional(),
+  reset_interval: z171.nullable(GetGuardrailResetInterval$inboundSchema).optional(),
+  allowed_providers: z171.nullable(z171.array(z171.string())).optional(),
+  allowed_models: z171.nullable(z171.array(z171.string())).optional(),
+  enforce_zdr: z171.nullable(z171.boolean()).optional(),
+  created_at: z171.string(),
+  updated_at: z171.nullable(z171.string()).optional()
+}).transform((v) => {
+  return remap(v, {
+    "limit_usd": "limitUsd",
+    "reset_interval": "resetInterval",
+    "allowed_providers": "allowedProviders",
+    "allowed_models": "allowedModels",
+    "enforce_zdr": "enforceZdr",
+    "created_at": "createdAt",
+    "updated_at": "updatedAt"
+  });
+});
+var GetGuardrailResponse$inboundSchema = z171.object({
+  data: z171.lazy(() => GetGuardrailData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getkey.js
-var z165 = __toESM(require("zod/v4"), 1);
-var GetKeyRequest$outboundSchema = z165.object({
-  hash: z165.string()
+var z172 = __toESM(require("zod/v4"), 1);
+var GetKeyRequest$outboundSchema = z172.object({
+  hash: z172.string()
 });
-var GetKeyData$inboundSchema = z165.object({
-  hash: z165.string(),
-  name: z165.string(),
-  label: z165.string(),
-  disabled: z165.boolean(),
-  limit: z165.nullable(z165.number()),
-  limit_remaining: z165.nullable(z165.number()),
-  limit_reset: z165.nullable(z165.string()),
-  include_byok_in_limit: z165.boolean(),
-  usage: z165.number(),
-  usage_daily: z165.number(),
-  usage_weekly: z165.number(),
-  usage_monthly: z165.number(),
-  byok_usage: z165.number(),
-  byok_usage_daily: z165.number(),
-  byok_usage_weekly: z165.number(),
-  byok_usage_monthly: z165.number(),
-  created_at: z165.string(),
-  updated_at: z165.nullable(z165.string()),
-  expires_at: z165.nullable(z165.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional()
+var GetKeyData$inboundSchema = z172.object({
+  hash: z172.string(),
+  name: z172.string(),
+  label: z172.string(),
+  disabled: z172.boolean(),
+  limit: z172.nullable(z172.number()),
+  limit_remaining: z172.nullable(z172.number()),
+  limit_reset: z172.nullable(z172.string()),
+  include_byok_in_limit: z172.boolean(),
+  usage: z172.number(),
+  usage_daily: z172.number(),
+  usage_weekly: z172.number(),
+  usage_monthly: z172.number(),
+  byok_usage: z172.number(),
+  byok_usage_daily: z172.number(),
+  byok_usage_weekly: z172.number(),
+  byok_usage_monthly: z172.number(),
+  created_at: z172.string(),
+  updated_at: z172.nullable(z172.string()),
+  expires_at: z172.nullable(z172.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional()
 }).transform((v) => {
   return remap(v, {
     "limit_remaining": "limitRemaining",
@@ -7356,109 +7742,75 @@ var GetKeyData$inboundSchema = z165.object({
     "expires_at": "expiresAt"
   });
 });
-var GetKeyResponse$inboundSchema = z165.object({
-  data: z165.lazy(() => GetKeyData$inboundSchema)
+var GetKeyResponse$inboundSchema = z172.object({
+  data: z172.lazy(() => GetKeyData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getmodels.js
-var z166 = __toESM(require("zod/v4"), 1);
-var GetModelsRequest$outboundSchema = z166.object({
-  category: z166.string().optional(),
-  supportedParameters: z166.string().optional()
+var z173 = __toESM(require("zod/v4"), 1);
+var Category = {
+  Programming: "programming",
+  Roleplay: "roleplay",
+  Marketing: "marketing",
+  MarketingSeo: "marketing/seo",
+  Technology: "technology",
+  Science: "science",
+  Translation: "translation",
+  Legal: "legal",
+  Finance: "finance",
+  Health: "health",
+  Trivia: "trivia",
+  Academia: "academia"
+};
+var Category$outboundSchema = outboundSchema(Category);
+var GetModelsRequest$outboundSchema = z173.object({
+  category: Category$outboundSchema.optional(),
+  supportedParameters: z173.string().optional()
 }).transform((v) => {
   return remap(v, {
     supportedParameters: "supported_parameters"
   });
 });
 
-// node_modules/@openrouter/sdk/esm/models/operations/getparameters.js
-var z167 = __toESM(require("zod/v4"), 1);
-var SupportedParameter = {
-  Temperature: "temperature",
-  TopP: "top_p",
-  TopK: "top_k",
-  MinP: "min_p",
-  TopA: "top_a",
-  FrequencyPenalty: "frequency_penalty",
-  PresencePenalty: "presence_penalty",
-  RepetitionPenalty: "repetition_penalty",
-  MaxTokens: "max_tokens",
-  LogitBias: "logit_bias",
-  Logprobs: "logprobs",
-  TopLogprobs: "top_logprobs",
-  Seed: "seed",
-  ResponseFormat: "response_format",
-  StructuredOutputs: "structured_outputs",
-  Stop: "stop",
-  Tools: "tools",
-  ToolChoice: "tool_choice",
-  ParallelToolCalls: "parallel_tool_calls",
-  IncludeReasoning: "include_reasoning",
-  Reasoning: "reasoning",
-  ReasoningEffort: "reasoning_effort",
-  WebSearchOptions: "web_search_options",
-  Verbosity: "verbosity"
-};
-var GetParametersSecurity$outboundSchema = z167.object({
-  bearer: z167.string()
-});
-var GetParametersRequest$outboundSchema = z167.object({
-  author: z167.string(),
-  slug: z167.string(),
-  provider: ProviderName$outboundSchema.optional()
-});
-var SupportedParameter$inboundSchema = inboundSchema(SupportedParameter);
-var GetParametersData$inboundSchema = z167.object({
-  model: z167.string(),
-  supported_parameters: z167.array(SupportedParameter$inboundSchema)
-}).transform((v) => {
-  return remap(v, {
-    "supported_parameters": "supportedParameters"
-  });
-});
-var GetParametersResponse$inboundSchema = z167.object({
-  data: z167.lazy(() => GetParametersData$inboundSchema)
-});
-
 // node_modules/@openrouter/sdk/esm/models/operations/getuseractivity.js
-var z168 = __toESM(require("zod/v4"), 1);
-var GetUserActivityRequest$outboundSchema = z168.object({
-  date: z168.string().optional()
+var z174 = __toESM(require("zod/v4"), 1);
+var GetUserActivityRequest$outboundSchema = z174.object({
+  date: z174.string().optional()
 });
-var GetUserActivityResponse$inboundSchema = z168.object({
-  data: z168.array(ActivityItem$inboundSchema)
+var GetUserActivityResponse$inboundSchema = z174.object({
+  data: z174.array(ActivityItem$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/list.js
-var z169 = __toESM(require("zod/v4"), 1);
-var ListRequest$outboundSchema = z169.object({
-  includeDisabled: z169.string().optional(),
-  offset: z169.string().optional()
+var z175 = __toESM(require("zod/v4"), 1);
+var ListRequest$outboundSchema = z175.object({
+  includeDisabled: z175.string().optional(),
+  offset: z175.string().optional()
 }).transform((v) => {
   return remap(v, {
     includeDisabled: "include_disabled"
   });
 });
-var ListData$inboundSchema = z169.object({
-  hash: z169.string(),
-  name: z169.string(),
-  label: z169.string(),
-  disabled: z169.boolean(),
-  limit: z169.nullable(z169.number()),
-  limit_remaining: z169.nullable(z169.number()),
-  limit_reset: z169.nullable(z169.string()),
-  include_byok_in_limit: z169.boolean(),
-  usage: z169.number(),
-  usage_daily: z169.number(),
-  usage_weekly: z169.number(),
-  usage_monthly: z169.number(),
-  byok_usage: z169.number(),
-  byok_usage_daily: z169.number(),
-  byok_usage_weekly: z169.number(),
-  byok_usage_monthly: z169.number(),
-  created_at: z169.string(),
-  updated_at: z169.nullable(z169.string()),
-  expires_at: z169.nullable(z169.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional()
+var ListData$inboundSchema = z175.object({
+  hash: z175.string(),
+  name: z175.string(),
+  label: z175.string(),
+  disabled: z175.boolean(),
+  limit: z175.nullable(z175.number()),
+  limit_remaining: z175.nullable(z175.number()),
+  limit_reset: z175.nullable(z175.string()),
+  include_byok_in_limit: z175.boolean(),
+  usage: z175.number(),
+  usage_daily: z175.number(),
+  usage_weekly: z175.number(),
+  usage_monthly: z175.number(),
+  byok_usage: z175.number(),
+  byok_usage_daily: z175.number(),
+  byok_usage_weekly: z175.number(),
+  byok_usage_monthly: z175.number(),
+  created_at: z175.string(),
+  updated_at: z175.nullable(z175.string()),
+  expires_at: z175.nullable(z175.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional()
 }).transform((v) => {
   return remap(v, {
     "limit_remaining": "limitRemaining",
@@ -7476,34 +7828,207 @@ var ListData$inboundSchema = z169.object({
     "expires_at": "expiresAt"
   });
 });
-var ListResponse$inboundSchema = z169.object({
-  data: z169.array(z169.lazy(() => ListData$inboundSchema))
+var ListResponse$inboundSchema = z175.object({
+  data: z175.array(z175.lazy(() => ListData$inboundSchema))
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listendpoints.js
-var z170 = __toESM(require("zod/v4"), 1);
-var ListEndpointsRequest$outboundSchema = z170.object({
-  author: z170.string(),
-  slug: z170.string()
+var z176 = __toESM(require("zod/v4"), 1);
+var ListEndpointsRequest$outboundSchema = z176.object({
+  author: z176.string(),
+  slug: z176.string()
 });
-var ListEndpointsResponse$inboundSchema2 = z170.object({
+var ListEndpointsResponse$inboundSchema2 = z176.object({
   data: ListEndpointsResponse$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listendpointszdr.js
-var z171 = __toESM(require("zod/v4"), 1);
-var ListEndpointsZdrResponse$inboundSchema = z171.object({
-  data: z171.array(PublicEndpoint$inboundSchema)
+var z177 = __toESM(require("zod/v4"), 1);
+var ListEndpointsZdrResponse$inboundSchema = z177.object({
+  data: z177.array(PublicEndpoint$inboundSchema)
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/listguardrailkeyassignments.js
+var z178 = __toESM(require("zod/v4"), 1);
+var ListGuardrailKeyAssignmentsRequest$outboundSchema = z178.object({
+  id: z178.string(),
+  offset: z178.string().optional(),
+  limit: z178.string().optional()
+});
+var ListGuardrailKeyAssignmentsData$inboundSchema = z178.object({
+  id: z178.string(),
+  key_hash: z178.string(),
+  guardrail_id: z178.string(),
+  key_name: z178.string(),
+  key_label: z178.string(),
+  assigned_by: z178.nullable(z178.string()),
+  created_at: z178.string()
+}).transform((v) => {
+  return remap(v, {
+    "key_hash": "keyHash",
+    "guardrail_id": "guardrailId",
+    "key_name": "keyName",
+    "key_label": "keyLabel",
+    "assigned_by": "assignedBy",
+    "created_at": "createdAt"
+  });
+});
+var ListGuardrailKeyAssignmentsResponse$inboundSchema = z178.object({
+  data: z178.array(z178.lazy(() => ListGuardrailKeyAssignmentsData$inboundSchema)),
+  total_count: z178.number()
+}).transform((v) => {
+  return remap(v, {
+    "total_count": "totalCount"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/listguardrailmemberassignments.js
+var z179 = __toESM(require("zod/v4"), 1);
+var ListGuardrailMemberAssignmentsRequest$outboundSchema = z179.object({
+  id: z179.string(),
+  offset: z179.string().optional(),
+  limit: z179.string().optional()
+});
+var ListGuardrailMemberAssignmentsData$inboundSchema = z179.object({
+  id: z179.string(),
+  user_id: z179.string(),
+  organization_id: z179.string(),
+  guardrail_id: z179.string(),
+  assigned_by: z179.nullable(z179.string()),
+  created_at: z179.string()
+}).transform((v) => {
+  return remap(v, {
+    "user_id": "userId",
+    "organization_id": "organizationId",
+    "guardrail_id": "guardrailId",
+    "assigned_by": "assignedBy",
+    "created_at": "createdAt"
+  });
+});
+var ListGuardrailMemberAssignmentsResponse$inboundSchema = z179.object({
+  data: z179.array(z179.lazy(() => ListGuardrailMemberAssignmentsData$inboundSchema)),
+  total_count: z179.number()
+}).transform((v) => {
+  return remap(v, {
+    "total_count": "totalCount"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/listguardrails.js
+var z180 = __toESM(require("zod/v4"), 1);
+var ListGuardrailsResetInterval = {
+  Daily: "daily",
+  Weekly: "weekly",
+  Monthly: "monthly"
+};
+var ListGuardrailsRequest$outboundSchema = z180.object({
+  offset: z180.string().optional(),
+  limit: z180.string().optional()
+});
+var ListGuardrailsResetInterval$inboundSchema = inboundSchema(ListGuardrailsResetInterval);
+var ListGuardrailsData$inboundSchema = z180.object({
+  id: z180.string(),
+  name: z180.string(),
+  description: z180.nullable(z180.string()).optional(),
+  limit_usd: z180.nullable(z180.number()).optional(),
+  reset_interval: z180.nullable(ListGuardrailsResetInterval$inboundSchema).optional(),
+  allowed_providers: z180.nullable(z180.array(z180.string())).optional(),
+  allowed_models: z180.nullable(z180.array(z180.string())).optional(),
+  enforce_zdr: z180.nullable(z180.boolean()).optional(),
+  created_at: z180.string(),
+  updated_at: z180.nullable(z180.string()).optional()
+}).transform((v) => {
+  return remap(v, {
+    "limit_usd": "limitUsd",
+    "reset_interval": "resetInterval",
+    "allowed_providers": "allowedProviders",
+    "allowed_models": "allowedModels",
+    "enforce_zdr": "enforceZdr",
+    "created_at": "createdAt",
+    "updated_at": "updatedAt"
+  });
+});
+var ListGuardrailsResponse$inboundSchema = z180.object({
+  data: z180.array(z180.lazy(() => ListGuardrailsData$inboundSchema)),
+  total_count: z180.number()
+}).transform((v) => {
+  return remap(v, {
+    "total_count": "totalCount"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/listkeyassignments.js
+var z181 = __toESM(require("zod/v4"), 1);
+var ListKeyAssignmentsRequest$outboundSchema = z181.object({
+  offset: z181.string().optional(),
+  limit: z181.string().optional()
+});
+var ListKeyAssignmentsData$inboundSchema = z181.object({
+  id: z181.string(),
+  key_hash: z181.string(),
+  guardrail_id: z181.string(),
+  key_name: z181.string(),
+  key_label: z181.string(),
+  assigned_by: z181.nullable(z181.string()),
+  created_at: z181.string()
+}).transform((v) => {
+  return remap(v, {
+    "key_hash": "keyHash",
+    "guardrail_id": "guardrailId",
+    "key_name": "keyName",
+    "key_label": "keyLabel",
+    "assigned_by": "assignedBy",
+    "created_at": "createdAt"
+  });
+});
+var ListKeyAssignmentsResponse$inboundSchema = z181.object({
+  data: z181.array(z181.lazy(() => ListKeyAssignmentsData$inboundSchema)),
+  total_count: z181.number()
+}).transform((v) => {
+  return remap(v, {
+    "total_count": "totalCount"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/operations/listmemberassignments.js
+var z182 = __toESM(require("zod/v4"), 1);
+var ListMemberAssignmentsRequest$outboundSchema = z182.object({
+  offset: z182.string().optional(),
+  limit: z182.string().optional()
+});
+var ListMemberAssignmentsData$inboundSchema = z182.object({
+  id: z182.string(),
+  user_id: z182.string(),
+  organization_id: z182.string(),
+  guardrail_id: z182.string(),
+  assigned_by: z182.nullable(z182.string()),
+  created_at: z182.string()
+}).transform((v) => {
+  return remap(v, {
+    "user_id": "userId",
+    "organization_id": "organizationId",
+    "guardrail_id": "guardrailId",
+    "assigned_by": "assignedBy",
+    "created_at": "createdAt"
+  });
+});
+var ListMemberAssignmentsResponse$inboundSchema = z182.object({
+  data: z182.array(z182.lazy(() => ListMemberAssignmentsData$inboundSchema)),
+  total_count: z182.number()
+}).transform((v) => {
+  return remap(v, {
+    "total_count": "totalCount"
+  });
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listproviders.js
-var z172 = __toESM(require("zod/v4"), 1);
-var ListProvidersData$inboundSchema = z172.object({
-  name: z172.string(),
-  slug: z172.string(),
-  privacy_policy_url: z172.nullable(z172.string()),
-  terms_of_service_url: z172.nullable(z172.string()).optional(),
-  status_page_url: z172.nullable(z172.string()).optional()
+var z183 = __toESM(require("zod/v4"), 1);
+var ListProvidersData$inboundSchema = z183.object({
+  name: z183.string(),
+  slug: z183.string(),
+  privacy_policy_url: z183.nullable(z183.string()),
+  terms_of_service_url: z183.nullable(z183.string()).optional(),
+  status_page_url: z183.nullable(z183.string()).optional()
 }).transform((v) => {
   return remap(v, {
     "privacy_policy_url": "privacyPolicyUrl",
@@ -7511,15 +8036,15 @@ var ListProvidersData$inboundSchema = z172.object({
     "status_page_url": "statusPageUrl"
   });
 });
-var ListProvidersResponse$inboundSchema = z172.object({
-  data: z172.array(z172.lazy(() => ListProvidersData$inboundSchema))
+var ListProvidersResponse$inboundSchema = z183.object({
+  data: z183.array(z183.lazy(() => ListProvidersData$inboundSchema))
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/sendchatcompletionrequest.js
-var z173 = __toESM(require("zod/v4"), 1);
-var SendChatCompletionRequestResponse$inboundSchema = z173.union([
+var z184 = __toESM(require("zod/v4"), 1);
+var SendChatCompletionRequestResponse$inboundSchema = z184.union([
   ChatResponse$inboundSchema,
-  z173.custom((x) => x instanceof ReadableStream).transform((stream) => {
+  z184.custom((x) => x instanceof ReadableStream).transform((stream) => {
     return new EventStream(stream, (rawEvent) => {
       if (rawEvent.data === "[DONE]")
         return { done: true };
@@ -7530,54 +8055,119 @@ var SendChatCompletionRequestResponse$inboundSchema = z173.union([
   })
 ]);
 
+// node_modules/@openrouter/sdk/esm/models/operations/updateguardrail.js
+var z185 = __toESM(require("zod/v4"), 1);
+var UpdateGuardrailResetIntervalRequest = {
+  Daily: "daily",
+  Weekly: "weekly",
+  Monthly: "monthly"
+};
+var UpdateGuardrailResetIntervalResponse = {
+  Daily: "daily",
+  Weekly: "weekly",
+  Monthly: "monthly"
+};
+var UpdateGuardrailResetIntervalRequest$outboundSchema = outboundSchema(UpdateGuardrailResetIntervalRequest);
+var UpdateGuardrailRequestBody$outboundSchema = z185.object({
+  name: z185.string().optional(),
+  description: z185.nullable(z185.string()).optional(),
+  limitUsd: z185.nullable(z185.number()).optional(),
+  resetInterval: z185.nullable(UpdateGuardrailResetIntervalRequest$outboundSchema).optional(),
+  allowedProviders: z185.nullable(z185.array(z185.string())).optional(),
+  allowedModels: z185.nullable(z185.array(z185.string())).optional(),
+  enforceZdr: z185.nullable(z185.boolean()).optional()
+}).transform((v) => {
+  return remap(v, {
+    limitUsd: "limit_usd",
+    resetInterval: "reset_interval",
+    allowedProviders: "allowed_providers",
+    allowedModels: "allowed_models",
+    enforceZdr: "enforce_zdr"
+  });
+});
+var UpdateGuardrailRequest$outboundSchema = z185.object({
+  id: z185.string(),
+  requestBody: z185.lazy(() => UpdateGuardrailRequestBody$outboundSchema)
+}).transform((v) => {
+  return remap(v, {
+    requestBody: "RequestBody"
+  });
+});
+var UpdateGuardrailResetIntervalResponse$inboundSchema = inboundSchema(UpdateGuardrailResetIntervalResponse);
+var UpdateGuardrailData$inboundSchema = z185.object({
+  id: z185.string(),
+  name: z185.string(),
+  description: z185.nullable(z185.string()).optional(),
+  limit_usd: z185.nullable(z185.number()).optional(),
+  reset_interval: z185.nullable(UpdateGuardrailResetIntervalResponse$inboundSchema).optional(),
+  allowed_providers: z185.nullable(z185.array(z185.string())).optional(),
+  allowed_models: z185.nullable(z185.array(z185.string())).optional(),
+  enforce_zdr: z185.nullable(z185.boolean()).optional(),
+  created_at: z185.string(),
+  updated_at: z185.nullable(z185.string()).optional()
+}).transform((v) => {
+  return remap(v, {
+    "limit_usd": "limitUsd",
+    "reset_interval": "resetInterval",
+    "allowed_providers": "allowedProviders",
+    "allowed_models": "allowedModels",
+    "enforce_zdr": "enforceZdr",
+    "created_at": "createdAt",
+    "updated_at": "updatedAt"
+  });
+});
+var UpdateGuardrailResponse$inboundSchema = z185.object({
+  data: z185.lazy(() => UpdateGuardrailData$inboundSchema)
+});
+
 // node_modules/@openrouter/sdk/esm/models/operations/updatekeys.js
-var z174 = __toESM(require("zod/v4"), 1);
+var z186 = __toESM(require("zod/v4"), 1);
 var UpdateKeysLimitReset = {
   Daily: "daily",
   Weekly: "weekly",
   Monthly: "monthly"
 };
 var UpdateKeysLimitReset$outboundSchema = outboundSchema(UpdateKeysLimitReset);
-var UpdateKeysRequestBody$outboundSchema = z174.object({
-  name: z174.string().optional(),
-  disabled: z174.boolean().optional(),
-  limit: z174.nullable(z174.number()).optional(),
-  limitReset: z174.nullable(UpdateKeysLimitReset$outboundSchema).optional(),
-  includeByokInLimit: z174.boolean().optional()
+var UpdateKeysRequestBody$outboundSchema = z186.object({
+  name: z186.string().optional(),
+  disabled: z186.boolean().optional(),
+  limit: z186.nullable(z186.number()).optional(),
+  limitReset: z186.nullable(UpdateKeysLimitReset$outboundSchema).optional(),
+  includeByokInLimit: z186.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     limitReset: "limit_reset",
     includeByokInLimit: "include_byok_in_limit"
   });
 });
-var UpdateKeysRequest$outboundSchema = z174.object({
-  hash: z174.string(),
-  requestBody: z174.lazy(() => UpdateKeysRequestBody$outboundSchema)
+var UpdateKeysRequest$outboundSchema = z186.object({
+  hash: z186.string(),
+  requestBody: z186.lazy(() => UpdateKeysRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     requestBody: "RequestBody"
   });
 });
-var UpdateKeysData$inboundSchema = z174.object({
-  hash: z174.string(),
-  name: z174.string(),
-  label: z174.string(),
-  disabled: z174.boolean(),
-  limit: z174.nullable(z174.number()),
-  limit_remaining: z174.nullable(z174.number()),
-  limit_reset: z174.nullable(z174.string()),
-  include_byok_in_limit: z174.boolean(),
-  usage: z174.number(),
-  usage_daily: z174.number(),
-  usage_weekly: z174.number(),
-  usage_monthly: z174.number(),
-  byok_usage: z174.number(),
-  byok_usage_daily: z174.number(),
-  byok_usage_weekly: z174.number(),
-  byok_usage_monthly: z174.number(),
-  created_at: z174.string(),
-  updated_at: z174.nullable(z174.string()),
-  expires_at: z174.nullable(z174.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional()
+var UpdateKeysData$inboundSchema = z186.object({
+  hash: z186.string(),
+  name: z186.string(),
+  label: z186.string(),
+  disabled: z186.boolean(),
+  limit: z186.nullable(z186.number()),
+  limit_remaining: z186.nullable(z186.number()),
+  limit_reset: z186.nullable(z186.string()),
+  include_byok_in_limit: z186.boolean(),
+  usage: z186.number(),
+  usage_daily: z186.number(),
+  usage_weekly: z186.number(),
+  usage_monthly: z186.number(),
+  byok_usage: z186.number(),
+  byok_usage_daily: z186.number(),
+  byok_usage_weekly: z186.number(),
+  byok_usage_monthly: z186.number(),
+  created_at: z186.string(),
+  updated_at: z186.nullable(z186.string()),
+  expires_at: z186.nullable(z186.iso.datetime({ offset: true }).transform((v) => new Date(v))).optional()
 }).transform((v) => {
   return remap(v, {
     "limit_remaining": "limitRemaining",
@@ -7595,8 +8185,8 @@ var UpdateKeysData$inboundSchema = z174.object({
     "expires_at": "expiresAt"
   });
 });
-var UpdateKeysResponse$inboundSchema = z174.object({
-  data: z174.lazy(() => UpdateKeysData$inboundSchema)
+var UpdateKeysResponse$inboundSchema = z186.object({
+  data: z186.lazy(() => UpdateKeysData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/types/async.js
@@ -7709,7 +8299,7 @@ var Analytics = class extends ClientSDK {
    * Get user activity grouped by endpoint
    *
    * @remarks
-   * Returns user activity data grouped by endpoint for the last 30 (completed) UTC days
+   * Returns user activity data grouped by endpoint for the last 30 (completed) UTC days. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
    */
   async getUserActivity(request, options) {
     return unwrapAsync(analyticsGetUserActivity(this, request, options));
@@ -8110,30 +8700,45 @@ async function $do7(client, request, options) {
 var APIKeys = class extends ClientSDK {
   /**
    * List API keys
+   *
+   * @remarks
+   * List all API keys for the authenticated user. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
    */
   async list(request, options) {
     return unwrapAsync(apiKeysList(this, request, options));
   }
   /**
    * Create a new API key
+   *
+   * @remarks
+   * Create a new API key for the authenticated user. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
    */
   async create(request, options) {
     return unwrapAsync(apiKeysCreate(this, request, options));
   }
   /**
    * Update an API key
+   *
+   * @remarks
+   * Update an existing API key. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
    */
   async update(request, options) {
     return unwrapAsync(apiKeysUpdate(this, request, options));
   }
   /**
    * Delete an API key
+   *
+   * @remarks
+   * Delete an existing API key. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
    */
   async delete(request, options) {
     return unwrapAsync(apiKeysDelete(this, request, options));
   }
   /**
    * Get a single API key
+   *
+   * @remarks
+   * Get a single API key by hash. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
    */
   async get(request, options) {
     return unwrapAsync(apiKeysGet(this, request, options));
@@ -8516,7 +9121,7 @@ var Credits = class extends ClientSDK {
    * Get remaining credits
    *
    * @remarks
-   * Get total credits purchased and used for the authenticated user
+   * Get total credits purchased and used for the authenticated user. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
    */
   async getCredits(options) {
     return unwrapAsync(creditsGetCredits(this, options));
@@ -8917,11 +9522,1023 @@ var Generations = class extends ClientSDK {
   }
 };
 
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsBulkAssignKeys.js
+function guardrailsBulkAssignKeys(client, request, options) {
+  return new APIPromise($do18(client, request, options));
+}
+async function $do18(client, request, options) {
+  const parsed = safeParse(request, (value) => BulkAssignKeysToGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = encodeJSON("body", payload.RequestBody, { explode: true });
+  const pathParams = {
+    id: encodeSimple("id", payload.id, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/guardrails/{id}/assignments/keys")(pathParams);
+  const headers = new Headers(compactMap({
+    "Content-Type": "application/json",
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "bulkAssignKeysToGuardrail",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "POST",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["400", "401", "404", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, BulkAssignKeysToGuardrailResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsBulkAssignMembers.js
+function guardrailsBulkAssignMembers(client, request, options) {
+  return new APIPromise($do19(client, request, options));
+}
+async function $do19(client, request, options) {
+  const parsed = safeParse(request, (value) => BulkAssignMembersToGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = encodeJSON("body", payload.RequestBody, { explode: true });
+  const pathParams = {
+    id: encodeSimple("id", payload.id, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/guardrails/{id}/assignments/members")(pathParams);
+  const headers = new Headers(compactMap({
+    "Content-Type": "application/json",
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "bulkAssignMembersToGuardrail",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "POST",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["400", "401", "404", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, BulkAssignMembersToGuardrailResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsBulkUnassignKeys.js
+function guardrailsBulkUnassignKeys(client, request, options) {
+  return new APIPromise($do20(client, request, options));
+}
+async function $do20(client, request, options) {
+  const parsed = safeParse(request, (value) => BulkUnassignKeysFromGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = encodeJSON("body", payload.RequestBody, { explode: true });
+  const pathParams = {
+    id: encodeSimple("id", payload.id, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/guardrails/{id}/assignments/keys/remove")(pathParams);
+  const headers = new Headers(compactMap({
+    "Content-Type": "application/json",
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "bulkUnassignKeysFromGuardrail",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "POST",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["400", "401", "404", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, BulkUnassignKeysFromGuardrailResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsBulkUnassignMembers.js
+function guardrailsBulkUnassignMembers(client, request, options) {
+  return new APIPromise($do21(client, request, options));
+}
+async function $do21(client, request, options) {
+  const parsed = safeParse(request, (value) => BulkUnassignMembersFromGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = encodeJSON("body", payload.RequestBody, { explode: true });
+  const pathParams = {
+    id: encodeSimple("id", payload.id, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/guardrails/{id}/assignments/members/remove")(pathParams);
+  const headers = new Headers(compactMap({
+    "Content-Type": "application/json",
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "bulkUnassignMembersFromGuardrail",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "POST",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["400", "401", "404", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, BulkUnassignMembersFromGuardrailResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsCreate.js
+function guardrailsCreate(client, request, options) {
+  return new APIPromise($do22(client, request, options));
+}
+async function $do22(client, request, options) {
+  const parsed = safeParse(request, (value) => CreateGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = encodeJSON("body", payload, { explode: true });
+  const path2 = pathToFunc("/guardrails")();
+  const headers = new Headers(compactMap({
+    "Content-Type": "application/json",
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "createGuardrail",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "POST",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["400", "401", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(201, CreateGuardrailResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsDelete.js
+function guardrailsDelete(client, request, options) {
+  return new APIPromise($do23(client, request, options));
+}
+async function $do23(client, request, options) {
+  const parsed = safeParse(request, (value) => DeleteGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = null;
+  const pathParams = {
+    id: encodeSimple("id", payload.id, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/guardrails/{id}")(pathParams);
+  const headers = new Headers(compactMap({
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "deleteGuardrail",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "DELETE",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["401", "404", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, DeleteGuardrailResponse$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsGet.js
+function guardrailsGet(client, request, options) {
+  return new APIPromise($do24(client, request, options));
+}
+async function $do24(client, request, options) {
+  const parsed = safeParse(request, (value) => GetGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = null;
+  const pathParams = {
+    id: encodeSimple("id", payload.id, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/guardrails/{id}")(pathParams);
+  const headers = new Headers(compactMap({
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "getGuardrail",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "GET",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["401", "404", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, GetGuardrailResponse$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsList.js
+function guardrailsList(client, request, options) {
+  return new APIPromise($do25(client, request, options));
+}
+async function $do25(client, request, options) {
+  const parsed = safeParse(request, (value) => ListGuardrailsRequest$outboundSchema.optional().parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = null;
+  const path2 = pathToFunc("/guardrails")();
+  const query = encodeFormQuery({
+    "limit": payload?.limit,
+    "offset": payload?.offset
+  });
+  const headers = new Headers(compactMap({
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "listGuardrails",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "GET",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    query,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["401", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, ListGuardrailsResponse$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsListGuardrailKeyAssignments.js
+function guardrailsListGuardrailKeyAssignments(client, request, options) {
+  return new APIPromise($do26(client, request, options));
+}
+async function $do26(client, request, options) {
+  const parsed = safeParse(request, (value) => ListGuardrailKeyAssignmentsRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = null;
+  const pathParams = {
+    id: encodeSimple("id", payload.id, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/guardrails/{id}/assignments/keys")(pathParams);
+  const query = encodeFormQuery({
+    "limit": payload.limit,
+    "offset": payload.offset
+  });
+  const headers = new Headers(compactMap({
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "listGuardrailKeyAssignments",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "GET",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    query,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["401", "404", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, ListGuardrailKeyAssignmentsResponse$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsListGuardrailMemberAssignments.js
+function guardrailsListGuardrailMemberAssignments(client, request, options) {
+  return new APIPromise($do27(client, request, options));
+}
+async function $do27(client, request, options) {
+  const parsed = safeParse(request, (value) => ListGuardrailMemberAssignmentsRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = null;
+  const pathParams = {
+    id: encodeSimple("id", payload.id, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/guardrails/{id}/assignments/members")(pathParams);
+  const query = encodeFormQuery({
+    "limit": payload.limit,
+    "offset": payload.offset
+  });
+  const headers = new Headers(compactMap({
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "listGuardrailMemberAssignments",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "GET",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    query,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["401", "404", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, ListGuardrailMemberAssignmentsResponse$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsListKeyAssignments.js
+function guardrailsListKeyAssignments(client, request, options) {
+  return new APIPromise($do28(client, request, options));
+}
+async function $do28(client, request, options) {
+  const parsed = safeParse(request, (value) => ListKeyAssignmentsRequest$outboundSchema.optional().parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = null;
+  const path2 = pathToFunc("/guardrails/assignments/keys")();
+  const query = encodeFormQuery({
+    "limit": payload?.limit,
+    "offset": payload?.offset
+  });
+  const headers = new Headers(compactMap({
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "listKeyAssignments",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "GET",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    query,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["401", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, ListKeyAssignmentsResponse$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsListMemberAssignments.js
+function guardrailsListMemberAssignments(client, request, options) {
+  return new APIPromise($do29(client, request, options));
+}
+async function $do29(client, request, options) {
+  const parsed = safeParse(request, (value) => ListMemberAssignmentsRequest$outboundSchema.optional().parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = null;
+  const path2 = pathToFunc("/guardrails/assignments/members")();
+  const query = encodeFormQuery({
+    "limit": payload?.limit,
+    "offset": payload?.offset
+  });
+  const headers = new Headers(compactMap({
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "listMemberAssignments",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "GET",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    query,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["401", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, ListMemberAssignmentsResponse$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/funcs/guardrailsUpdate.js
+function guardrailsUpdate(client, request, options) {
+  return new APIPromise($do30(client, request, options));
+}
+async function $do30(client, request, options) {
+  const parsed = safeParse(request, (value) => UpdateGuardrailRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = encodeJSON("body", payload.RequestBody, { explode: true });
+  const pathParams = {
+    id: encodeSimple("id", payload.id, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/guardrails/{id}")(pathParams);
+  const headers = new Headers(compactMap({
+    "Content-Type": "application/json",
+    Accept: "application/json"
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "updateGuardrail",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
+    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "PATCH",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    errorCodes: ["400", "401", "404", "4XX", "500", "5XX"],
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, UpdateGuardrailResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/sdk/guardrails.js
+var Guardrails = class extends ClientSDK {
+  /**
+   * List guardrails
+   *
+   * @remarks
+   * List all guardrails for the authenticated user. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async list(request, options) {
+    return unwrapAsync(guardrailsList(this, request, options));
+  }
+  /**
+   * Create a guardrail
+   *
+   * @remarks
+   * Create a new guardrail for the authenticated user. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async create(request, options) {
+    return unwrapAsync(guardrailsCreate(this, request, options));
+  }
+  /**
+   * Get a guardrail
+   *
+   * @remarks
+   * Get a single guardrail by ID. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async get(request, options) {
+    return unwrapAsync(guardrailsGet(this, request, options));
+  }
+  /**
+   * Update a guardrail
+   *
+   * @remarks
+   * Update an existing guardrail. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async update(request, options) {
+    return unwrapAsync(guardrailsUpdate(this, request, options));
+  }
+  /**
+   * Delete a guardrail
+   *
+   * @remarks
+   * Delete an existing guardrail. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async delete(request, options) {
+    return unwrapAsync(guardrailsDelete(this, request, options));
+  }
+  /**
+   * List all key assignments
+   *
+   * @remarks
+   * List all API key guardrail assignments for the authenticated user. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async listKeyAssignments(request, options) {
+    return unwrapAsync(guardrailsListKeyAssignments(this, request, options));
+  }
+  /**
+   * List all member assignments
+   *
+   * @remarks
+   * List all organization member guardrail assignments for the authenticated user. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async listMemberAssignments(request, options) {
+    return unwrapAsync(guardrailsListMemberAssignments(this, request, options));
+  }
+  /**
+   * List key assignments for a guardrail
+   *
+   * @remarks
+   * List all API key assignments for a specific guardrail. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async listGuardrailKeyAssignments(request, options) {
+    return unwrapAsync(guardrailsListGuardrailKeyAssignments(this, request, options));
+  }
+  /**
+   * Bulk assign keys to a guardrail
+   *
+   * @remarks
+   * Assign multiple API keys to a specific guardrail. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async bulkAssignKeys(request, options) {
+    return unwrapAsync(guardrailsBulkAssignKeys(this, request, options));
+  }
+  /**
+   * List member assignments for a guardrail
+   *
+   * @remarks
+   * List all organization member assignments for a specific guardrail. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async listGuardrailMemberAssignments(request, options) {
+    return unwrapAsync(guardrailsListGuardrailMemberAssignments(this, request, options));
+  }
+  /**
+   * Bulk assign members to a guardrail
+   *
+   * @remarks
+   * Assign multiple organization members to a specific guardrail. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async bulkAssignMembers(request, options) {
+    return unwrapAsync(guardrailsBulkAssignMembers(this, request, options));
+  }
+  /**
+   * Bulk unassign keys from a guardrail
+   *
+   * @remarks
+   * Unassign multiple API keys from a specific guardrail. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async bulkUnassignKeys(request, options) {
+    return unwrapAsync(guardrailsBulkUnassignKeys(this, request, options));
+  }
+  /**
+   * Bulk unassign members from a guardrail
+   *
+   * @remarks
+   * Unassign multiple organization members from a specific guardrail. [Provisioning key](/docs/guides/overview/auth/provisioning-api-keys) required.
+   */
+  async bulkUnassignMembers(request, options) {
+    return unwrapAsync(guardrailsBulkUnassignMembers(this, request, options));
+  }
+};
+
 // node_modules/@openrouter/sdk/esm/funcs/modelsCount.js
 function modelsCount(client, options) {
-  return new APIPromise($do18(client, options));
+  return new APIPromise($do31(client, options));
 }
-async function $do18(client, options) {
+async function $do31(client, options) {
   const path2 = pathToFunc("/models/count")();
   const headers = new Headers(compactMap({
     Accept: "application/json"
@@ -8974,9 +10591,9 @@ async function $do18(client, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/modelsList.js
 function modelsList(client, request, options) {
-  return new APIPromise($do19(client, request, options));
+  return new APIPromise($do32(client, request, options));
 }
-async function $do19(client, request, options) {
+async function $do32(client, request, options) {
   const parsed = safeParse(request, (value) => GetModelsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -9041,9 +10658,9 @@ async function $do19(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/modelsListForUser.js
 function modelsListForUser(client, security, options) {
-  return new APIPromise($do20(client, security, options));
+  return new APIPromise($do33(client, security, options));
 }
-async function $do20(client, security, options) {
+async function $do33(client, security, options) {
   const path2 = pathToFunc("/models/user")();
   const headers = new Headers(compactMap({
     Accept: "application/json"
@@ -9122,9 +10739,9 @@ var Models = class extends ClientSDK {
 
 // node_modules/@openrouter/sdk/esm/funcs/oAuthCreateAuthCode.js
 function oAuthCreateAuthCode(client, request, options) {
-  return new APIPromise($do21(client, request, options));
+  return new APIPromise($do34(client, request, options));
 }
-async function $do21(client, request, options) {
+async function $do34(client, request, options) {
   const parsed = safeParse(request, (value) => CreateAuthKeysCodeRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -9185,9 +10802,9 @@ async function $do21(client, request, options) {
 
 // node_modules/@openrouter/sdk/esm/funcs/oAuthExchangeAuthCodeForAPIKey.js
 function oAuthExchangeAuthCodeForAPIKey(client, request, options) {
-  return new APIPromise($do22(client, request, options));
+  return new APIPromise($do35(client, request, options));
 }
-async function $do22(client, request, options) {
+async function $do35(client, request, options) {
   const parsed = safeParse(request, (value) => ExchangeAuthCodeForAPIKeyRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -9396,101 +11013,11 @@ var OAuth = class extends ClientSDK {
   }
 };
 
-// node_modules/@openrouter/sdk/esm/funcs/parametersGetParameters.js
-function parametersGetParameters(client, security, request, options) {
-  return new APIPromise($do23(client, security, request, options));
-}
-async function $do23(client, security, request, options) {
-  const parsed = safeParse(request, (value) => GetParametersRequest$outboundSchema.parse(value), "Input validation failed");
-  if (!parsed.ok) {
-    return [parsed, { status: "invalid" }];
-  }
-  const payload = parsed.value;
-  const body = null;
-  const pathParams = {
-    author: encodeSimple("author", payload.author, {
-      explode: false,
-      charEncoding: "percent"
-    }),
-    slug: encodeSimple("slug", payload.slug, {
-      explode: false,
-      charEncoding: "percent"
-    })
-  };
-  const path2 = pathToFunc("/parameters/{author}/{slug}")(pathParams);
-  const query = encodeFormQuery({
-    "provider": payload.provider
-  });
-  const headers = new Headers(compactMap({
-    Accept: "application/json"
-  }));
-  const requestSecurity = resolveSecurity([
-    {
-      fieldName: "Authorization",
-      type: "http:bearer",
-      value: security?.bearer
-    }
-  ]);
-  const context = {
-    options: client._options,
-    baseURL: options?.serverURL ?? client._baseURL ?? "",
-    operationID: "getParameters",
-    oAuth2Scopes: null,
-    resolvedSecurity: requestSecurity,
-    securitySource: security,
-    retryConfig: options?.retries || client._options.retryConfig || { strategy: "none" },
-    retryCodes: options?.retryCodes || ["429", "500", "502", "503", "504"]
-  };
-  const requestRes = client._createRequest(context, {
-    security: requestSecurity,
-    method: "GET",
-    baseURL: options?.serverURL,
-    path: path2,
-    headers,
-    query,
-    body,
-    userAgent: client._options.userAgent,
-    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
-  }, options);
-  if (!requestRes.ok) {
-    return [requestRes, { status: "invalid" }];
-  }
-  const req = requestRes.value;
-  const doResult = await client._do(req, {
-    context,
-    errorCodes: ["401", "404", "4XX", "500", "5XX"],
-    retryConfig: context.retryConfig,
-    retryCodes: context.retryCodes
-  });
-  if (!doResult.ok) {
-    return [doResult, { status: "request-error", request: req }];
-  }
-  const response = doResult.value;
-  const responseFields = {
-    HttpMeta: { Response: response, Request: req }
-  };
-  const [result] = await match(json(200, GetParametersResponse$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
-  if (!result.ok) {
-    return [result, { status: "complete", request: req, response }];
-  }
-  return [result, { status: "complete", request: req, response }];
-}
-
-// node_modules/@openrouter/sdk/esm/sdk/parameters.js
-var ParametersT = class extends ClientSDK {
-  /**
-   * Get a model's supported parameters and data about which are most popular
-   */
-  async getParameters(security, request, options) {
-    return unwrapAsync(parametersGetParameters(this, security, request, options));
-  }
-};
-
 // node_modules/@openrouter/sdk/esm/funcs/providersList.js
 function providersList(client, options) {
-  return new APIPromise($do24(client, options));
+  return new APIPromise($do36(client, options));
 }
-async function $do24(client, options) {
+async function $do36(client, options) {
   const path2 = pathToFunc("/providers")();
   const headers = new Headers(compactMap({
     Accept: "application/json"
@@ -9848,8 +11375,17 @@ async function executeTool(tool, toolCall, context, onPreliminaryResult) {
 }
 
 // node_modules/@openrouter/sdk/esm/lib/model-result.js
+var DEFAULT_MAX_STEPS = 5;
 function isEventStream(value) {
-  return value !== null && typeof value === "object" && "toReadableStream" in value && typeof value.toReadableStream === "function";
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  const constructorName = Object.getPrototypeOf(value)?.constructor?.name;
+  if (constructorName === "EventStream") {
+    return true;
+  }
+  const maybeStream = value;
+  return typeof maybeStream.toReadableStream === "function";
 }
 function hasTypeProperty(item) {
   return typeof item === "object" && item !== null && "type" in item && typeof item.type === "string";
@@ -9857,7 +11393,6 @@ function hasTypeProperty(item) {
 var ModelResult = class {
   constructor(options) {
     this.reusableStream = null;
-    this.streamPromise = null;
     this.textPromise = null;
     this.initPromise = null;
     this.toolExecutionPromise = null;
@@ -9865,7 +11400,21 @@ var ModelResult = class {
     this.toolEventBroadcaster = null;
     this.allToolExecutionRounds = [];
     this.resolvedRequest = null;
+    this.stateAccessor = null;
+    this.currentState = null;
+    this.requireApprovalFn = null;
+    this.approvedToolCalls = [];
+    this.rejectedToolCalls = [];
+    this.isResumingFromApproval = false;
     this.options = options;
+    const hasApprovalDecisions = options.approveToolCalls && options.approveToolCalls.length > 0 || options.rejectToolCalls && options.rejectToolCalls.length > 0;
+    if (hasApprovalDecisions && !options.state) {
+      throw new Error('approveToolCalls and rejectToolCalls require a state accessor. Provide a StateAccessor via the "state" parameter to persist approval decisions.');
+    }
+    this.stateAccessor = options.state ?? null;
+    this.requireApprovalFn = options.requireApproval ?? null;
+    this.approvedToolCalls = options.approveToolCalls ?? [];
+    this.rejectedToolCalls = options.rejectToolCalls ?? [];
   }
   /**
    * Get or create the tool event broadcaster (lazy initialization).
@@ -9879,10 +11428,345 @@ var ModelResult = class {
   }
   /**
    * Type guard to check if a value is a non-streaming response
+   * Only requires 'output' field and absence of 'toReadableStream' method
    */
   isNonStreamingResponse(value) {
-    return value !== null && typeof value === "object" && "id" in value && "object" in value && "output" in value && !("toReadableStream" in value);
+    return value !== null && typeof value === "object" && "output" in value && !("toReadableStream" in value);
   }
+  // =========================================================================
+  // Extracted Helper Methods for executeToolsIfNeeded
+  // =========================================================================
+  /**
+   * Get initial response from stream or cached final response.
+   * Consumes the stream to completion if needed to extract the response.
+   *
+   * @returns The complete non-streaming response
+   * @throws Error if neither stream nor response has been initialized
+   */
+  async getInitialResponse() {
+    if (this.finalResponse) {
+      return this.finalResponse;
+    }
+    if (this.reusableStream) {
+      return consumeStreamForCompletion(this.reusableStream);
+    }
+    throw new Error("Neither stream nor response initialized");
+  }
+  /**
+   * Save response output to state.
+   * Appends the response output to the message history and records the response ID.
+   *
+   * @param response - The API response to save
+   */
+  async saveResponseToState(response) {
+    if (!this.stateAccessor || !this.currentState)
+      return;
+    const outputItems = Array.isArray(response.output) ? response.output : [response.output];
+    await this.saveStateSafely({
+      messages: appendToMessages(this.currentState.messages, outputItems),
+      previousResponseId: response.id
+    });
+  }
+  /**
+   * Mark state as complete.
+   * Sets the conversation status to 'complete' indicating no further tool execution is needed.
+   */
+  async markStateComplete() {
+    await this.saveStateSafely({ status: "complete" });
+  }
+  /**
+   * Save tool results to state.
+   * Appends tool execution results to the message history for multi-turn context.
+   *
+   * @param toolResults - The tool execution results to save
+   */
+  async saveToolResultsToState(toolResults) {
+    if (!this.currentState)
+      return;
+    await this.saveStateSafely({
+      messages: appendToMessages(this.currentState.messages, toolResults)
+    });
+  }
+  /**
+   * Check if execution should be interrupted by external signal.
+   * Polls the state accessor for interruption flags set by external processes.
+   *
+   * @param currentResponse - The current response to save as partial state
+   * @returns True if interrupted and caller should exit, false to continue
+   */
+  async checkForInterruption(currentResponse) {
+    if (!this.stateAccessor)
+      return false;
+    const freshState = await this.stateAccessor.load();
+    if (!freshState?.interruptedBy)
+      return false;
+    if (this.currentState) {
+      const currentToolCalls = extractToolCallsFromResponse(currentResponse);
+      await this.saveStateSafely({
+        status: "interrupted",
+        partialResponse: {
+          text: extractTextFromResponse2(currentResponse),
+          toolCalls: currentToolCalls
+        }
+      });
+    }
+    this.finalResponse = currentResponse;
+    return true;
+  }
+  /**
+   * Check if stop conditions are met.
+   * Returns true if execution should stop.
+   *
+   * @remarks
+   * Default: stepCountIs(DEFAULT_MAX_STEPS) if no stopWhen is specified.
+   * This evaluates stop conditions against the complete step history.
+   */
+  async shouldStopExecution() {
+    const stopWhen = this.options.stopWhen ?? stepCountIs(DEFAULT_MAX_STEPS);
+    const stopConditions = Array.isArray(stopWhen) ? stopWhen : [stopWhen];
+    return isStopConditionMet({
+      stopConditions,
+      steps: this.allToolExecutionRounds.map((round) => ({
+        stepType: "continue",
+        text: extractTextFromResponse(round.response),
+        toolCalls: round.toolCalls,
+        toolResults: round.toolResults.map((tr) => ({
+          toolCallId: tr.callId,
+          toolName: round.toolCalls.find((tc) => tc.id === tr.callId)?.name ?? "",
+          result: JSON.parse(tr.output)
+        })),
+        response: round.response,
+        usage: round.response.usage,
+        finishReason: void 0
+      }))
+    });
+  }
+  /**
+   * Check if any tool calls have execute functions.
+   * Used to determine if automatic tool execution should be attempted.
+   *
+   * @param toolCalls - The tool calls to check
+   * @returns True if at least one tool call has an executable function
+   */
+  hasExecutableToolCalls(toolCalls) {
+    return toolCalls.some((toolCall) => {
+      const tool = this.options.tools?.find((t) => t.function.name === toolCall.name);
+      return tool && hasExecuteFunction(tool);
+    });
+  }
+  /**
+   * Execute tools that can auto-execute (don't require approval).
+   * Processes tool calls that are approved for automatic execution.
+   *
+   * @param toolCalls - The tool calls to execute
+   * @param turnContext - The current turn context
+   * @returns Array of unsent tool results for later submission
+   */
+  async executeAutoApproveTools(toolCalls, turnContext) {
+    const results = [];
+    for (const tc of toolCalls) {
+      const tool = this.options.tools?.find((t) => t.function.name === tc.name);
+      if (!tool || !hasExecuteFunction(tool))
+        continue;
+      const result = await executeTool(tool, tc, turnContext);
+      if (result.error) {
+        results.push(createRejectedResult(tc.id, String(tc.name), result.error.message));
+      } else {
+        results.push(createUnsentResult(tc.id, String(tc.name), result.result));
+      }
+    }
+    return results;
+  }
+  /**
+   * Check for tools requiring approval and handle accordingly.
+   * Partitions tool calls into those needing approval and those that can auto-execute.
+   *
+   * @param toolCalls - The tool calls to check
+   * @param currentRound - The current execution round (1-indexed)
+   * @param currentResponse - The current response to save if pausing
+   * @returns True if execution should pause for approval, false to continue
+   * @throws Error if approval is required but no state accessor is configured
+   */
+  async handleApprovalCheck(toolCalls, currentRound, currentResponse) {
+    if (!this.options.tools)
+      return false;
+    const turnContext = { numberOfTurns: currentRound };
+    const { requiresApproval: needsApproval, autoExecute } = await partitionToolCalls(toolCalls, this.options.tools, turnContext, this.requireApprovalFn ?? void 0);
+    if (needsApproval.length === 0)
+      return false;
+    if (!this.stateAccessor) {
+      const toolNames = needsApproval.map((tc) => tc.name).join(", ");
+      throw new Error(`Tool(s) require approval but no state accessor is configured: ${toolNames}. Provide a StateAccessor via the "state" parameter to enable approval workflows.`);
+    }
+    const unsentResults = await this.executeAutoApproveTools(autoExecute, turnContext);
+    const stateUpdates = {
+      pendingToolCalls: needsApproval,
+      status: "awaiting_approval"
+    };
+    if (unsentResults.length > 0) {
+      stateUpdates.unsentToolResults = unsentResults;
+    }
+    await this.saveStateSafely(stateUpdates);
+    this.finalResponse = currentResponse;
+    return true;
+  }
+  /**
+   * Execute all tools in a single round.
+   * Runs each tool call sequentially and collects results for API submission.
+   *
+   * @param toolCalls - The tool calls to execute
+   * @param turnContext - The current turn context
+   * @returns Array of function call outputs formatted for the API
+   */
+  async executeToolRound(toolCalls, turnContext) {
+    const toolResults = [];
+    for (const toolCall of toolCalls) {
+      const tool = this.options.tools?.find((t) => t.function.name === toolCall.name);
+      if (!tool || !hasExecuteFunction(tool))
+        continue;
+      const onPreliminaryResult = this.toolEventBroadcaster ? (callId, resultValue) => {
+        this.toolEventBroadcaster?.push({
+          type: "preliminary_result",
+          toolCallId: callId,
+          result: resultValue
+        });
+      } : void 0;
+      const result = await executeTool(tool, toolCall, turnContext, onPreliminaryResult);
+      toolResults.push({
+        type: "function_call_output",
+        id: `output_${toolCall.id}`,
+        callId: toolCall.id,
+        output: result.error ? JSON.stringify({ error: result.error.message }) : JSON.stringify(result.result)
+      });
+    }
+    return toolResults;
+  }
+  /**
+   * Resolve async functions for the current turn.
+   * Updates the resolved request with turn-specific parameter values.
+   *
+   * @param turnContext - The turn context for parameter resolution
+   */
+  async resolveAsyncFunctionsForTurn(turnContext) {
+    if (hasAsyncFunctions(this.options.request)) {
+      const resolved = await resolveAsyncFunctions(this.options.request, turnContext);
+      this.resolvedRequest = { ...resolved, stream: false };
+    }
+  }
+  /**
+   * Apply nextTurnParams from executed tools.
+   * Allows tools to modify request parameters for subsequent turns.
+   *
+   * @param toolCalls - The tool calls that were just executed
+   */
+  async applyNextTurnParams(toolCalls) {
+    if (!this.options.tools || toolCalls.length === 0 || !this.resolvedRequest) {
+      return;
+    }
+    const computedParams = await executeNextTurnParamsFunctions(toolCalls, this.options.tools, this.resolvedRequest);
+    if (Object.keys(computedParams).length > 0) {
+      this.resolvedRequest = applyNextTurnParamsToRequest(this.resolvedRequest, computedParams);
+    }
+  }
+  /**
+   * Make a follow-up API request with tool results.
+   * Continues the conversation after tool execution.
+   *
+   * @param currentResponse - The response that contained tool calls
+   * @param toolResults - The results from executing those tools
+   * @returns The new response from the API
+   */
+  async makeFollowupRequest(currentResponse, toolResults) {
+    const newInput = [
+      ...Array.isArray(currentResponse.output) ? currentResponse.output : [currentResponse.output],
+      ...toolResults
+    ];
+    if (!this.resolvedRequest) {
+      throw new Error("Request not initialized");
+    }
+    const newRequest = {
+      ...this.resolvedRequest,
+      input: newInput,
+      stream: false
+    };
+    const newResult = await betaResponsesSend(this.options.client, newRequest, this.options.options);
+    if (!newResult.ok) {
+      throw newResult.error;
+    }
+    const value = newResult.value;
+    if (isEventStream(value)) {
+      const stream = new ReusableReadableStream(value);
+      return consumeStreamForCompletion(stream);
+    } else if (this.isNonStreamingResponse(value)) {
+      return value;
+    } else {
+      throw new Error("Unexpected response type from API");
+    }
+  }
+  /**
+   * Validate the final response has required fields.
+   *
+   * @param response - The response to validate
+   * @throws Error if response is missing required fields or has invalid output
+   */
+  validateFinalResponse(response) {
+    if (!response?.id || !response?.output) {
+      throw new Error("Invalid final response: missing required fields");
+    }
+    if (!Array.isArray(response.output) || response.output.length === 0) {
+      throw new Error("Invalid final response: empty or invalid output");
+    }
+  }
+  /**
+   * Resolve async functions in the request for a given turn context.
+   * Extracts non-function fields and resolves any async parameter functions.
+   *
+   * @param context - The turn context for parameter resolution
+   * @returns The resolved request without async functions
+   */
+  async resolveRequestForContext(context) {
+    if (hasAsyncFunctions(this.options.request)) {
+      return resolveAsyncFunctions(this.options.request, context);
+    }
+    const { stopWhen: _, state: _s, requireApproval: _r, approveToolCalls: _a4, rejectToolCalls: _rj, ...rest } = this.options.request;
+    return rest;
+  }
+  /**
+   * Safely persist state with error handling.
+   * Wraps state save operations to ensure failures are properly reported.
+   *
+   * @param updates - Optional partial state updates to apply before saving
+   * @throws Error if state persistence fails
+   */
+  async saveStateSafely(updates) {
+    if (!this.stateAccessor || !this.currentState)
+      return;
+    if (updates) {
+      this.currentState = updateState(this.currentState, updates);
+    }
+    try {
+      await this.stateAccessor.save(this.currentState);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to persist conversation state: ${message}`);
+    }
+  }
+  /**
+   * Remove optional properties from state when they should be cleared.
+   * Uses delete to properly remove optional properties rather than setting undefined.
+   *
+   * @param props - Array of property names to remove from current state
+   */
+  clearOptionalStateProperties(props) {
+    if (!this.currentState)
+      return;
+    for (const prop of props) {
+      delete this.currentState[prop];
+    }
+  }
+  // =========================================================================
+  // Core Methods
+  // =========================================================================
   /**
    * Initialize the stream if not already started
    * This is idempotent - multiple calls will return the same promise
@@ -9892,31 +11776,161 @@ var ModelResult = class {
       return this.initPromise;
     }
     this.initPromise = (async () => {
+      if (this.stateAccessor) {
+        const loadedState = await this.stateAccessor.load();
+        if (loadedState) {
+          this.currentState = loadedState;
+          if (loadedState.status === "awaiting_approval" && (this.approvedToolCalls.length > 0 || this.rejectedToolCalls.length > 0)) {
+            this.isResumingFromApproval = true;
+            await this.processApprovalDecisions();
+            return;
+          }
+          if (loadedState.interruptedBy) {
+            this.currentState = updateState(loadedState, { status: "in_progress" });
+            this.clearOptionalStateProperties(["interruptedBy"]);
+            await this.saveStateSafely();
+          }
+        } else {
+          this.currentState = createInitialState();
+        }
+        await this.saveStateSafely({ status: "in_progress" });
+      }
       const initialContext = {
         numberOfTurns: 0
       };
-      let baseRequest;
-      if (hasAsyncFunctions(this.options.request)) {
-        baseRequest = await resolveAsyncFunctions(this.options.request, initialContext);
-      } else {
-        const { stopWhen: _, ...rest } = this.options.request;
-        baseRequest = rest;
+      let baseRequest = await this.resolveRequestForContext(initialContext);
+      if (this.currentState && this.currentState.messages && Array.isArray(this.currentState.messages) && this.currentState.messages.length > 0) {
+        const newInput = baseRequest.input;
+        if (newInput) {
+          const inputArray = Array.isArray(newInput) ? newInput : [newInput];
+          baseRequest = {
+            ...baseRequest,
+            input: appendToMessages(this.currentState.messages, inputArray)
+          };
+        } else {
+          baseRequest = {
+            ...baseRequest,
+            input: this.currentState.messages
+          };
+        }
       }
       this.resolvedRequest = {
         ...baseRequest,
         stream: true
       };
       const request = this.resolvedRequest;
-      this.streamPromise = betaResponsesSend(this.options.client, request, this.options.options).then((result) => {
-        if (!result.ok) {
-          throw result.error;
-        }
-        return result.value;
-      });
-      const eventStream = await this.streamPromise;
-      this.reusableStream = new ReusableReadableStream(eventStream);
+      const apiResult = await betaResponsesSend(this.options.client, request, this.options.options);
+      if (!apiResult.ok) {
+        throw apiResult.error;
+      }
+      if (isEventStream(apiResult.value)) {
+        this.reusableStream = new ReusableReadableStream(apiResult.value);
+      } else if (this.isNonStreamingResponse(apiResult.value)) {
+        this.finalResponse = apiResult.value;
+      } else {
+        throw new Error("Unexpected response type from API");
+      }
     })();
     return this.initPromise;
+  }
+  /**
+   * Process approval/rejection decisions and resume execution
+   */
+  async processApprovalDecisions() {
+    if (!this.currentState || !this.stateAccessor) {
+      throw new Error("Cannot process approval decisions without state");
+    }
+    const pendingCalls = this.currentState.pendingToolCalls ?? [];
+    const unsentResults = [...this.currentState.unsentToolResults ?? []];
+    const turnContext = {
+      numberOfTurns: this.allToolExecutionRounds.length + 1
+    };
+    for (const callId of this.approvedToolCalls) {
+      const toolCall = pendingCalls.find((tc) => tc.id === callId);
+      if (!toolCall)
+        continue;
+      const tool = this.options.tools?.find((t) => t.function.name === toolCall.name);
+      if (!tool || !hasExecuteFunction(tool)) {
+        unsentResults.push(createRejectedResult(callId, String(toolCall.name), "Tool not found or not executable"));
+        continue;
+      }
+      const result = await executeTool(tool, toolCall, turnContext);
+      if (result.error) {
+        unsentResults.push(createRejectedResult(callId, String(toolCall.name), result.error.message));
+      } else {
+        unsentResults.push(createUnsentResult(callId, String(toolCall.name), result.result));
+      }
+    }
+    for (const callId of this.rejectedToolCalls) {
+      const toolCall = pendingCalls.find((tc) => tc.id === callId);
+      if (!toolCall)
+        continue;
+      unsentResults.push(createRejectedResult(callId, String(toolCall.name), "Rejected by user"));
+    }
+    const processedIds = /* @__PURE__ */ new Set([...this.approvedToolCalls, ...this.rejectedToolCalls]);
+    const remainingPending = pendingCalls.filter((tc) => !processedIds.has(tc.id));
+    const stateUpdates = {
+      status: remainingPending.length > 0 ? "awaiting_approval" : "in_progress"
+    };
+    if (remainingPending.length > 0) {
+      stateUpdates.pendingToolCalls = remainingPending;
+    }
+    if (unsentResults.length > 0) {
+      stateUpdates.unsentToolResults = unsentResults;
+    }
+    await this.saveStateSafely(stateUpdates);
+    const propsToClear = [];
+    if (remainingPending.length === 0)
+      propsToClear.push("pendingToolCalls");
+    if (unsentResults.length === 0)
+      propsToClear.push("unsentToolResults");
+    if (propsToClear.length > 0) {
+      this.clearOptionalStateProperties(propsToClear);
+      await this.saveStateSafely();
+    }
+    if (remainingPending.length > 0) {
+      return;
+    }
+    await this.continueWithUnsentResults();
+  }
+  /**
+   * Continue execution with unsent tool results
+   */
+  async continueWithUnsentResults() {
+    if (!this.currentState || !this.stateAccessor)
+      return;
+    const unsentResults = this.currentState.unsentToolResults ?? [];
+    if (unsentResults.length === 0)
+      return;
+    const toolOutputs = unsentResultsToAPIFormat(unsentResults);
+    const currentMessages = this.currentState.messages;
+    const newInput = appendToMessages(currentMessages, toolOutputs);
+    this.currentState = updateState(this.currentState, {
+      messages: newInput
+    });
+    this.clearOptionalStateProperties(["unsentToolResults"]);
+    await this.saveStateSafely();
+    const turnContext = {
+      numberOfTurns: this.allToolExecutionRounds.length + 1
+    };
+    const baseRequest = await this.resolveRequestForContext(turnContext);
+    const request = {
+      ...baseRequest,
+      input: newInput,
+      stream: true
+    };
+    this.resolvedRequest = request;
+    const apiResult = await betaResponsesSend(this.options.client, request, this.options.options);
+    if (!apiResult.ok) {
+      throw apiResult.error;
+    }
+    if (isEventStream(apiResult.value)) {
+      this.reusableStream = new ReusableReadableStream(apiResult.value);
+    } else if (this.isNonStreamingResponse(apiResult.value)) {
+      this.finalResponse = apiResult.value;
+    } else {
+      throw new Error("Unexpected response type from API");
+    }
   }
   /**
    * Execute tools automatically if they are provided and have execute functions
@@ -9928,147 +11942,62 @@ var ModelResult = class {
     }
     this.toolExecutionPromise = (async () => {
       await this.initStream();
-      if (!this.reusableStream) {
-        throw new Error("Stream not initialized");
-      }
-      const initialResponse = await consumeStreamForCompletion(this.reusableStream);
-      const shouldAutoExecute = this.options.tools && this.options.tools.length > 0 && initialResponse.output.some((item) => hasTypeProperty(item) && item.type === "function_call");
-      if (!shouldAutoExecute) {
-        this.finalResponse = initialResponse;
+      if (this.isResumingFromApproval && this.currentState?.status === "awaiting_approval") {
         return;
       }
-      const toolCalls = extractToolCallsFromResponse(initialResponse);
-      const executableTools = toolCalls.filter((toolCall) => {
-        const tool = this.options.tools?.find((t) => t.function.name === toolCall.name);
-        return tool && hasExecuteFunction(tool);
-      });
-      if (executableTools.length === 0) {
-        this.finalResponse = initialResponse;
+      let currentResponse = await this.getInitialResponse();
+      await this.saveResponseToState(currentResponse);
+      const hasToolCalls = currentResponse.output.some((item) => hasTypeProperty(item) && item.type === "function_call");
+      if (!this.options.tools?.length || !hasToolCalls) {
+        this.finalResponse = currentResponse;
+        await this.markStateComplete();
         return;
       }
-      let currentResponse = initialResponse;
+      const toolCalls = extractToolCallsFromResponse(currentResponse);
+      if (await this.handleApprovalCheck(toolCalls, 0, currentResponse)) {
+        return;
+      }
+      if (!this.hasExecutableToolCalls(toolCalls)) {
+        this.finalResponse = currentResponse;
+        await this.markStateComplete();
+        return;
+      }
       let currentRound = 0;
       while (true) {
-        if (this.options.stopWhen) {
-          const stopConditions = Array.isArray(this.options.stopWhen) ? this.options.stopWhen : [this.options.stopWhen];
-          const shouldStop = await isStopConditionMet({
-            stopConditions,
-            steps: this.allToolExecutionRounds.map((round) => ({
-              stepType: "continue",
-              text: extractTextFromResponse(round.response),
-              toolCalls: round.toolCalls,
-              toolResults: round.toolResults.map((tr) => ({
-                toolCallId: tr.callId,
-                toolName: round.toolCalls.find((tc) => tc.id === tr.callId)?.name ?? "",
-                result: JSON.parse(tr.output)
-              })),
-              response: round.response,
-              usage: round.response.usage,
-              finishReason: void 0
-              // OpenResponsesNonStreamingResponse doesn't have finishReason
-            }))
-          });
-          if (shouldStop) {
-            break;
-          }
+        if (await this.checkForInterruption(currentResponse)) {
+          return;
+        }
+        if (await this.shouldStopExecution()) {
+          break;
         }
         const currentToolCalls = extractToolCallsFromResponse(currentResponse);
         if (currentToolCalls.length === 0) {
           break;
         }
-        const hasExecutable = currentToolCalls.some((toolCall) => {
-          const tool = this.options.tools?.find((t) => t.function.name === toolCall.name);
-          return tool && hasExecuteFunction(tool);
-        });
-        if (!hasExecutable) {
+        if (await this.handleApprovalCheck(currentToolCalls, currentRound + 1, currentResponse)) {
+          return;
+        }
+        if (!this.hasExecutableToolCalls(currentToolCalls)) {
           break;
         }
-        const turnContext = {
-          numberOfTurns: currentRound + 1
-          // 1-indexed
-        };
-        if (hasAsyncFunctions(this.options.request)) {
-          const resolved = await resolveAsyncFunctions(this.options.request, turnContext);
-          this.resolvedRequest = {
-            ...resolved,
-            stream: false
-            // Tool execution turns don't need streaming
-          };
-        }
-        const toolResults = [];
-        for (const toolCall of currentToolCalls) {
-          const tool = this.options.tools?.find((t) => t.function.name === toolCall.name);
-          if (!tool || !hasExecuteFunction(tool)) {
-            continue;
-          }
-          const onPreliminaryResult = this.toolEventBroadcaster ? (callId, resultValue) => {
-            this.toolEventBroadcaster?.push({
-              type: "preliminary_result",
-              toolCallId: callId,
-              result: resultValue
-            });
-          } : void 0;
-          const result = await executeTool(tool, toolCall, turnContext, onPreliminaryResult);
-          toolResults.push({
-            type: "function_call_output",
-            id: `output_${toolCall.id}`,
-            callId: toolCall.id,
-            output: result.error ? JSON.stringify({
-              error: result.error.message
-            }) : JSON.stringify(result.result)
-          });
-        }
+        const turnContext = { numberOfTurns: currentRound + 1 };
+        await this.resolveAsyncFunctionsForTurn(turnContext);
+        const toolResults = await this.executeToolRound(currentToolCalls, turnContext);
         this.allToolExecutionRounds.push({
           round: currentRound,
           toolCalls: currentToolCalls,
           response: currentResponse,
           toolResults
         });
-        if (this.options.tools && currentToolCalls.length > 0) {
-          if (!this.resolvedRequest) {
-            throw new Error("Request not initialized");
-          }
-          const computedParams = await executeNextTurnParamsFunctions(currentToolCalls, this.options.tools, this.resolvedRequest);
-          if (Object.keys(computedParams).length > 0) {
-            this.resolvedRequest = applyNextTurnParamsToRequest(this.resolvedRequest, computedParams);
-          }
-        }
-        const newInput = [
-          ...Array.isArray(currentResponse.output) ? currentResponse.output : [
-            currentResponse.output
-          ],
-          ...toolResults
-        ];
-        if (!this.resolvedRequest) {
-          throw new Error("Request not initialized");
-        }
-        const newRequest = {
-          ...this.resolvedRequest,
-          input: newInput,
-          stream: false
-        };
-        const newResult = await betaResponsesSend(this.options.client, newRequest, this.options.options);
-        if (!newResult.ok) {
-          throw newResult.error;
-        }
-        const value = newResult.value;
-        if (isEventStream(value)) {
-          const stream = new ReusableReadableStream(value);
-          currentResponse = await consumeStreamForCompletion(stream);
-        } else if (this.isNonStreamingResponse(value)) {
-          currentResponse = value;
-        } else {
-          throw new Error("Unexpected response type from API");
-        }
+        await this.saveToolResultsToState(toolResults);
+        await this.applyNextTurnParams(currentToolCalls);
+        currentResponse = await this.makeFollowupRequest(currentResponse, toolResults);
+        await this.saveResponseToState(currentResponse);
         currentRound++;
       }
-      if (!currentResponse || !currentResponse.id || !currentResponse.output) {
-        throw new Error("Invalid final response: missing required fields");
-      }
-      if (!Array.isArray(currentResponse.output) || currentResponse.output.length === 0) {
-        throw new Error("Invalid final response: empty or invalid output");
-      }
+      this.validateFinalResponse(currentResponse);
       this.finalResponse = currentResponse;
+      await this.markStateComplete();
     })();
     return this.toolExecutionPromise;
   }
@@ -10226,6 +12155,9 @@ var ModelResult = class {
    */
   async getToolCalls() {
     await this.initStream();
+    if (this.finalResponse) {
+      return extractToolCallsFromResponse(this.finalResponse);
+    }
     if (!this.reusableStream) {
       throw new Error("Stream not initialized");
     }
@@ -10253,11 +12185,52 @@ var ModelResult = class {
       await this.reusableStream.cancel();
     }
   }
+  // =========================================================================
+  // Multi-Turn Conversation State Methods
+  // =========================================================================
+  /**
+   * Check if the conversation requires human approval to continue.
+   * Returns true if there are pending tool calls awaiting approval.
+   */
+  async requiresApproval() {
+    await this.initStream();
+    if (this.currentState?.status === "awaiting_approval") {
+      return true;
+    }
+    return (this.currentState?.pendingToolCalls?.length ?? 0) > 0;
+  }
+  /**
+   * Get the pending tool calls that require approval.
+   * Returns empty array if no approvals needed.
+   */
+  async getPendingToolCalls() {
+    await this.initStream();
+    if (!this.isResumingFromApproval) {
+      await this.executeToolsIfNeeded();
+    }
+    return this.currentState?.pendingToolCalls ?? [];
+  }
+  /**
+   * Get the current conversation state.
+   * Useful for inspection, debugging, or custom persistence.
+   * Note: This returns the raw ConversationState for inspection only.
+   * To resume a conversation, use the StateAccessor pattern.
+   */
+  async getState() {
+    await this.initStream();
+    if (!this.isResumingFromApproval) {
+      await this.executeToolsIfNeeded();
+    }
+    if (!this.currentState) {
+      throw new Error("State not initialized. Make sure a StateAccessor was provided to callModel.");
+    }
+    return this.currentState;
+  }
 };
 
 // node_modules/@openrouter/sdk/esm/funcs/call-model.js
 function callModel(client, request, options) {
-  const { tools, stopWhen, ...apiRequest } = request;
+  const { tools, stopWhen, state, requireApproval, approveToolCalls, rejectToolCalls, ...apiRequest } = request;
   const apiTools = tools ? convertToolsToAPIFormat(tools) : void 0;
   const finalRequest = {
     ...apiRequest
@@ -10269,11 +12242,13 @@ function callModel(client, request, options) {
     client,
     request: finalRequest,
     options: options ?? {},
-    // Preserve the exact TTools type instead of widening to Tool[]
     tools,
-    ...stopWhen !== void 0 && {
-      stopWhen
-    }
+    ...stopWhen !== void 0 && { stopWhen },
+    // Pass state management options
+    ...state !== void 0 && { state },
+    ...requireApproval !== void 0 && { requireApproval },
+    ...approveToolCalls !== void 0 && { approveToolCalls },
+    ...rejectToolCalls !== void 0 && { rejectToolCalls }
   });
 }
 
@@ -10300,14 +12275,14 @@ var OpenRouter = class extends ClientSDK {
   get endpoints() {
     return this._endpoints ?? (this._endpoints = new Endpoints(this._options));
   }
-  get parameters() {
-    return this._parameters ?? (this._parameters = new ParametersT(this._options));
-  }
   get providers() {
     return this._providers ?? (this._providers = new Providers(this._options));
   }
   get apiKeys() {
     return this._apiKeys ?? (this._apiKeys = new APIKeys(this._options));
+  }
+  get guardrails() {
+    return this._guardrails ?? (this._guardrails = new Guardrails(this._options));
   }
   get oAuth() {
     return this._oAuth ?? (this._oAuth = new OAuth(this._options));
@@ -10771,31 +12746,31 @@ var RFC1738 = "RFC1738";
 // ../../../node_modules/openai/internal/qs/utils.mjs
 var has = (obj, key) => (has = Object.hasOwn ?? Function.prototype.call.bind(Object.prototype.hasOwnProperty), has(obj, key));
 var hex_table = /* @__PURE__ */ (() => {
-  const array44 = [];
+  const array54 = [];
   for (let i = 0; i < 256; ++i) {
-    array44.push("%" + ((i < 16 ? "0" : "") + i.toString(16)).toUpperCase());
+    array54.push("%" + ((i < 16 ? "0" : "") + i.toString(16)).toUpperCase());
   }
-  return array44;
+  return array54;
 })();
 var limit = 1024;
 var encode = (str2, _defaultEncoder, charset, _kind, format) => {
   if (str2.length === 0) {
     return str2;
   }
-  let string134 = str2;
+  let string146 = str2;
   if (typeof str2 === "symbol") {
-    string134 = Symbol.prototype.toString.call(str2);
+    string146 = Symbol.prototype.toString.call(str2);
   } else if (typeof str2 !== "string") {
-    string134 = String(str2);
+    string146 = String(str2);
   }
   if (charset === "iso-8859-1") {
-    return escape(string134).replace(/%u[0-9a-f]{4}/gi, function($0) {
+    return escape(string146).replace(/%u[0-9a-f]{4}/gi, function($0) {
       return "%26%23" + parseInt($0.slice(2), 16) + "%3B";
     });
   }
   let out = "";
-  for (let j = 0; j < string134.length; j += limit) {
-    const segment = string134.length >= limit ? string134.slice(j, j + limit) : string134;
+  for (let j = 0; j < string146.length; j += limit) {
+    const segment = string146.length >= limit ? string146.slice(j, j + limit) : string146;
     const arr = [];
     for (let i = 0; i < segment.length; ++i) {
       let c = segment.charCodeAt(i);
@@ -10890,13 +12865,13 @@ function is_non_nullish_primitive(v) {
   return typeof v === "string" || typeof v === "number" || typeof v === "boolean" || typeof v === "symbol" || typeof v === "bigint";
 }
 var sentinel = {};
-function inner_stringify(object162, prefix, generateArrayPrefix, commaRoundTrip, allowEmptyArrays, strictNullHandling, skipNulls, encodeDotInKeys, encoder, filter, sort, allowDots, serializeDate, format, formatter, encodeValuesOnly, charset, sideChannel) {
-  let obj = object162;
+function inner_stringify(object174, prefix, generateArrayPrefix, commaRoundTrip, allowEmptyArrays, strictNullHandling, skipNulls, encodeDotInKeys, encoder, filter, sort, allowDots, serializeDate, format, formatter, encodeValuesOnly, charset, sideChannel) {
+  let obj = object174;
   let tmp_sc = sideChannel;
   let step = 0;
   let find_flag = false;
   while ((tmp_sc = tmp_sc.get(sentinel)) !== void 0 && !find_flag) {
-    const pos = tmp_sc.get(object162);
+    const pos = tmp_sc.get(object174);
     step += 1;
     if (typeof pos !== "undefined") {
       if (pos === step) {
@@ -10972,7 +12947,7 @@ function inner_stringify(object162, prefix, generateArrayPrefix, commaRoundTrip,
     }
     const encoded_key = allowDots && encodeDotInKeys ? key.replace(/\./g, "%2E") : key;
     const key_prefix = isArray(obj) ? typeof generateArrayPrefix === "function" ? generateArrayPrefix(adjusted_prefix, encoded_key) : adjusted_prefix : adjusted_prefix + (allowDots ? "." + encoded_key : "[" + encoded_key + "]");
-    sideChannel.set(object162, step);
+    sideChannel.set(object174, step);
     const valueSideChannel = /* @__PURE__ */ new WeakMap();
     valueSideChannel.set(sentinel, sideChannel);
     push_to_array(values, inner_stringify(
@@ -11061,8 +13036,8 @@ function normalize_stringify_options(opts = defaults) {
     strictNullHandling: typeof opts.strictNullHandling === "boolean" ? opts.strictNullHandling : defaults.strictNullHandling
   };
 }
-function stringify(object162, opts = {}) {
-  let obj = object162;
+function stringify(object174, opts = {}) {
+  let obj = object174;
   const options = normalize_stringify_options(opts);
   let obj_keys;
   let filter;
@@ -17157,10 +19132,19 @@ function parseOpenAIToolCalls(response) {
       for (const toolCall of toolCallsArray) {
         const tc = toolCall;
         if (tc.type === "function" && tc.function) {
-          toolCalls.push({
-            name: tc.function.name,
-            arguments: JSON.parse(tc.function.arguments || "{}")
-          });
+          const argsStr = tc.function.arguments || "{}";
+          const trimmed = argsStr.trim();
+          if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+            continue;
+          }
+          try {
+            toolCalls.push({
+              name: tc.function.name,
+              arguments: JSON.parse(argsStr)
+            });
+          } catch {
+            continue;
+          }
         }
       }
     }

@@ -134,6 +134,17 @@ export async function executeToolCall(
 /**
  * Execute a tool call with full context
  */
+// Built-in tool names that are handled directly by this module
+// These should NOT be routed to the plugin registry
+const BUILT_IN_TOOLS = new Set([
+  'generate_image',
+  'search_memories',
+  'search_web',
+  'project_info',
+  'file_management',
+  'request_full_context',
+]);
+
 export async function executeToolCallWithContext(
   toolCall: ToolCallRequest,
   context: ToolExecutionContext
@@ -141,10 +152,14 @@ export async function executeToolCallWithContext(
   const { chatId, userId, imageProfileId, characterId, embeddingProfileId } = context;
 
   try {
+    // Check if this is a built-in tool - these are handled later in this function
+    const isBuiltInTool = BUILT_IN_TOOLS.has(toolCall.name);
+
     // Check tool registry for plugin-provided tools (static or multi-tool)
-    // hasTool checks static registry, hasMultiToolPlugin checks multi-tool plugins
-    const isStaticTool = toolRegistry.hasTool(toolCall.name);
-    const isMultiToolPluginTool = !isStaticTool && toolRegistry.hasMultiToolPlugins();
+    // Only route to plugins if this is NOT a built-in tool
+    // hasTool checks if plugin with that name exists, hasMultiToolPlugins checks if any plugins exist
+    const isStaticTool = !isBuiltInTool && toolRegistry.hasTool(toolCall.name);
+    const isMultiToolPluginTool = !isBuiltInTool && !isStaticTool && toolRegistry.hasMultiToolPlugins();
 
     if (isStaticTool || isMultiToolPluginTool) {
       logger.debug('Executing plugin tool', {

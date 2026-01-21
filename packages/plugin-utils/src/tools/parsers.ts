@@ -74,15 +74,32 @@ export function parseOpenAIToolCalls(response: unknown): ToolCallRequest[] {
         };
 
         if (tc.type === 'function' && tc.function) {
-          toolCalls.push({
-            name: tc.function.name,
-            arguments: JSON.parse(tc.function.arguments || '{}'),
-          });
+          const argsStr = tc.function.arguments || '{}';
+
+          // During streaming, arguments may be incomplete JSON.
+          // Check if the string looks like complete JSON before parsing.
+          // Skip incomplete tool calls - they'll be complete in the final response.
+          const trimmed = argsStr.trim();
+          if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+            // Incomplete JSON - skip this tool call for now
+            continue;
+          }
+
+          try {
+            toolCalls.push({
+              name: tc.function.name,
+              arguments: JSON.parse(argsStr),
+            });
+          } catch {
+            // JSON parse failed (e.g., incomplete JSON during streaming)
+            // This is expected during streaming - skip silently
+            continue;
+          }
         }
       }
     }
   } catch (error) {
-    // Log error but don't throw - return empty array
+    // Log error for unexpected parsing failures (not JSON parse errors)
     console.error('[plugin-utils] Error parsing OpenAI tool calls:', error);
   }
 
