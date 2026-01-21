@@ -68,9 +68,15 @@ async function handleDownloadFile(request: NextRequest, repos: any, fileId: stri
       return notFound('File');
     }
 
+    // Fallback to s3Key if storageKey is missing (pre-mount-points files)
+    if (!fileEntry.storageKey && fileEntry.s3Key) {
+      logger.debug('[Files v1] Using s3Key fallback for storageKey', { fileId, s3Key: fileEntry.s3Key });
+      fileEntry.storageKey = fileEntry.s3Key;
+    }
+
     if (!fileEntry.storageKey) {
       logger.error('[Files v1] File has no storage key - may need migration', { fileId });
-      return serverError('File not available - migration required');
+      return serverError('File not available - storage key missing');
     }
 
     logger.debug('[Files v1] Serving file from storage', { fileId, storageKey: fileEntry.storageKey });

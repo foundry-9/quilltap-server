@@ -19,7 +19,7 @@ export const validateMongoDBConfigMigration: Migration = {
   introducedInVersion: '2.0.0',
 
   async shouldRun(): Promise<boolean> {
-    const dataBackend = process.env.DATA_BACKEND || 'json';
+    const dataBackend = process.env.DATA_BACKEND || 'mongodb';
 
     logger.debug('Checking if MongoDB config validation should run', {
       context: 'migration.validate-mongodb-config',

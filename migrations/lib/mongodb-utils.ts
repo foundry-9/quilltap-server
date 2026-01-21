@@ -307,8 +307,11 @@ export async function closeMongoDB(): Promise<void> {
 
 /**
  * Check if MongoDB backend is enabled
+ *
+ * MongoDB is the default and only supported backend. The 'json' backend
+ * is deprecated. If DATA_BACKEND is not set, it defaults to 'mongodb'.
  */
 export function isMongoDBBackend(): boolean {
-  const backend = process.env.DATA_BACKEND || '';
+  const backend = process.env.DATA_BACKEND || 'mongodb';
   return backend === 'mongodb' || backend === 'dual';
 }

@@ -203,7 +203,7 @@ export async function GET() {
     const timestamp = new Date().toISOString();
     const uptime = process.uptime();
     const environment = process.env.NODE_ENV;
-    const dataBackend = process.env.DATA_BACKEND || 'json';
+    const dataBackend = process.env.DATA_BACKEND || 'mongodb';
     const s3Mode = process.env.S3_MODE || 'disabled';
 
     const services: HealthResponse['services'] = {};

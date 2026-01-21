@@ -4,6 +4,33 @@
 
 ### 2.7-dev
 
+- fix: Add migration to fix orphan PERSONA participants in production (2026-01-21)
+  - Production had chats with `participants.type: 'PERSONA'` and `characterId: null` causing ZodErrors
+  - Original PERSONA→CHARACTER migration set `characterId: participant.personaId`, but personaId was null in some cases
+  - New migration `fix-orphan-persona-participants-v1`:
+    - Converts remaining PERSONA participants to CHARACTER if personaId exists
+    - Removes invalid participants (null characterId) from chats
+    - Deletes chats that have no valid participants remaining
+    - Cleans up sync_operations with `entityType: 'PERSONA'` in conflicts array
+  - Migration is idempotent and depends on the original `migrate-personas-to-characters-v1`
+- fix: Add s3Key fallback for files missing storageKey (2026-01-21)
+  - Root cause: Production had `DATA_BACKEND=undefined` so MongoDB migrations were skipped
+  - The `create-mount-points` migration (which copies `s3Key` → `storageKey`) never ran
+  - Added `getEffectiveStorageKey()` helper to file storage manager that falls back to `s3Key`
+  - Updated `downloadFile`, `deleteFile`, `getFileUrl`, `fileExists` to use the helper
+  - Added fallback in `/api/v1/files/[id]` route as additional safety
+  - New migration `fix-missing-storage-keys-v1` to permanently fix files with `s3Key` but no `storageKey`
+- fix: Default DATA_BACKEND to 'mongodb' instead of legacy values (2026-01-21)
+  - Root cause of production issues: `DATA_BACKEND` was undefined, causing migrations to skip
+  - Multiple files defaulted to 'json' or 'sqlite' when `DATA_BACKEND` was not set
+  - Since MongoDB is now the only supported backend (JSON deprecated), default should be 'mongodb'
+  - Fixed defaults in:
+    - `migrations/lib/mongodb-utils.ts` - `isMongoDBBackend()` now defaults to mongodb
+    - `migrations/scripts/create-mount-points.ts` - local `isMongoDBBackendEnabled()`
+    - `migrations/scripts/validate-mongodb-config.ts` - shouldRun check
+    - `lib/mongodb/config.ts` - getMongoDBConfigFromEnv
+    - `lib/startup/index.ts` - initializeMongoDBIfNeeded (was incorrectly 'sqlite')
+    - `app/api/health/route.ts` - health check endpoint
 - refactor: Migration system overhaul - moved from plugin to core (2026-01-21)
   - Migrations now run in `instrumentation.ts` BEFORE the server accepts any requests
   - Eliminates race conditions where API requests arrived before migrations completed

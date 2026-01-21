@@ -145,6 +145,30 @@ class FileStorageManager {
   private initialized: boolean = false;
 
   /**
+   * Get effective storage key for a file
+   *
+   * Returns storageKey if present, falls back to s3Key for pre-mount-points files,
+   * or returns null if neither is available.
+   *
+   * @param file - The file entry
+   * @returns The effective storage key or null
+   */
+  private getEffectiveStorageKey(file: FileEntry): string | null {
+    if (file.storageKey) {
+      return file.storageKey;
+    }
+    // Fallback to s3Key for files created before mount points migration
+    if (file.s3Key) {
+      logger.debug('Using s3Key fallback for storageKey', {
+        fileId: file.id,
+        s3Key: file.s3Key,
+      });
+      return file.s3Key;
+    }
+    return null;
+  }
+
+  /**
    * Initialize the file storage manager
    *
    * Loads mount points from the database, instantiates backends,
@@ -675,21 +699,23 @@ class FileStorageManager {
    * @throws {Error} If download fails
    */
   async downloadFile(file: FileEntry): Promise<Buffer> {
+    const effectiveStorageKey = this.getEffectiveStorageKey(file);
+
     logger.debug('Downloading file', {
       fileId: file.id,
       userId: file.userId,
-      storageKey: file.storageKey,
+      storageKey: effectiveStorageKey,
       mountPointId: file.mountPointId,
     });
 
     try {
-      if (!file.storageKey) {
+      if (!effectiveStorageKey) {
         throw new Error('File has no storage key. Cannot download.');
       }
 
       const backend = await this.getBackendForFile(file);
 
-      const content = await backend.download(file.storageKey);
+      const content = await backend.download(effectiveStorageKey);
 
       logger.info('File downloaded successfully', {
         fileId: file.id,
@@ -723,15 +749,17 @@ class FileStorageManager {
    * @throws {Error} If deletion fails
    */
   async deleteFile(file: FileEntry): Promise<void> {
+    const effectiveStorageKey = this.getEffectiveStorageKey(file);
+
     logger.debug('Deleting file', {
       fileId: file.id,
       userId: file.userId,
-      storageKey: file.storageKey,
+      storageKey: effectiveStorageKey,
       mountPointId: file.mountPointId,
     });
 
     try {
-      if (!file.storageKey) {
+      if (!effectiveStorageKey) {
         logger.warn('File has no storage key. Skipping deletion.', {
           fileId: file.id,
         });
@@ -740,7 +768,7 @@ class FileStorageManager {
 
       const backend = await this.getBackendForFile(file);
 
-      await backend.delete(file.storageKey);
+      await backend.delete(effectiveStorageKey);
 
       logger.info('File deleted successfully', {
         fileId: file.id,
@@ -776,15 +804,18 @@ class FileStorageManager {
     file: FileEntry,
     options?: { presigned?: boolean; expiresIn?: number }
   ): Promise<string> {
+    const effectiveStorageKey = this.getEffectiveStorageKey(file);
+
     logger.debug('Getting file URL', {
       fileId: file.id,
       userId: file.userId,
+      storageKey: effectiveStorageKey,
       presigned: options?.presigned,
       expiresIn: options?.expiresIn,
     });
 
     try {
-      if (!file.storageKey) {
+      if (!effectiveStorageKey) {
         throw new Error('File has no storage key. Cannot generate URL.');
       }
 
@@ -798,7 +829,7 @@ class FileStorageManager {
         }
 
         const url = await backend.getPresignedUrl(
-          file.storageKey,
+          effectiveStorageKey,
           options.expiresIn || 3600
         );
 
@@ -811,7 +842,7 @@ class FileStorageManager {
       }
 
       // Fall back to proxy URL
-      const proxyUrl = backend.getProxyUrl(file.storageKey);
+      const proxyUrl = backend.getProxyUrl(effectiveStorageKey);
 
       logger.debug('Generated proxy URL', {
         fileId: file.id,
@@ -840,14 +871,16 @@ class FileStorageManager {
    * @throws {Error} If check fails
    */
   async fileExists(file: FileEntry): Promise<boolean> {
+    const effectiveStorageKey = this.getEffectiveStorageKey(file);
+
     logger.debug('Checking if file exists', {
       fileId: file.id,
       userId: file.userId,
-      storageKey: file.storageKey,
+      storageKey: effectiveStorageKey,
     });
 
     try {
-      if (!file.storageKey) {
+      if (!effectiveStorageKey) {
         logger.warn('File has no storage key. Assuming does not exist.', {
           fileId: file.id,
         });
@@ -855,7 +888,7 @@ class FileStorageManager {
       }
 
       const backend = await this.getBackendForFile(file);
-      const exists = await backend.exists(file.storageKey);
+      const exists = await backend.exists(effectiveStorageKey);
 
       logger.debug('File existence check complete', {
         fileId: file.id,

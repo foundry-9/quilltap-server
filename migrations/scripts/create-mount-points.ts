@@ -19,9 +19,12 @@ import { getMongoDatabase } from '../lib/mongodb-utils';
 
 /**
  * Check if MongoDB backend is enabled
+ *
+ * MongoDB is the default and only supported backend.
+ * If DATA_BACKEND is not set, it defaults to 'mongodb'.
  */
 function isMongoDBBackendEnabled(): boolean {
-  const backend = process.env.DATA_BACKEND || '';
+  const backend = process.env.DATA_BACKEND || 'mongodb';
   return backend === 'mongodb' || backend === 'dual';
 }
 

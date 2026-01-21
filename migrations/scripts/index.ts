@@ -42,6 +42,10 @@ import { createMountPointsMigration } from './create-mount-points';
 import { perProjectMountPointsMigration } from './per-project-mount-points';
 // Folder entities migration
 import { createFolderEntitiesMigration } from './create-folder-entities';
+// Fix orphan PERSONA participants
+import { fixOrphanPersonaParticipantsMigration } from './fix-orphan-persona-participants';
+// Fix missing storage keys
+import { fixMissingStorageKeysMigration } from './fix-missing-storage-keys';
 
 /**
  * All available migrations.
@@ -81,6 +85,10 @@ export const migrations: Migration[] = [
   perProjectMountPointsMigration,
   // Folder entities migration
   createFolderEntitiesMigration,
+  // Fix orphan PERSONA participants
+  fixOrphanPersonaParticipantsMigration,
+  // Fix missing storage keys
+  fixMissingStorageKeysMigration,
 ];
 
 export {
@@ -117,4 +125,8 @@ export {
   perProjectMountPointsMigration,
   // Folder entities migration
   createFolderEntitiesMigration,
+  // Fix orphan PERSONA participants
+  fixOrphanPersonaParticipantsMigration,
+  // Fix missing storage keys
+  fixMissingStorageKeysMigration,
 };

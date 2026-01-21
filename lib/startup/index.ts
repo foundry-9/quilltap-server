@@ -42,7 +42,7 @@ export interface ServiceInitializationResult {
  */
 export async function initializeMongoDBIfNeeded(): Promise<ServiceInitializationResult> {
   const startTime = Date.now();
-  const dataBackend = process.env.DATA_BACKEND?.toLowerCase() || 'sqlite';
+  const dataBackend = process.env.DATA_BACKEND?.toLowerCase() || 'mongodb';
 
   logger.debug('Checking MongoDB initialization requirement', { dataBackend });
 
