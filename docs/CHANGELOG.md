@@ -4,6 +4,23 @@
 
 ### 2.7-dev
 
+- fix: Sync API keys now properly persist to database (2026-01-22)
+  - `/api/v1/sync/api-keys` route was returning TODO stubs that never saved to database
+  - Updated GET handler to use `repos.userSyncApiKeys.findByUserId()` to fetch keys
+  - Updated POST handler to use `repos.userSyncApiKeys.createApiKey()` to create keys
+  - Fixed response format to match frontend hook expectations (`{ keys: [...] }` for GET, `{ key: ..., plaintextKey: ... }` for POST)
+- fix: Add defensive filtering for undefined chat participants in sidebar (2026-01-22)
+  - Chat participants array could contain undefined entries, causing "Cannot read properties of undefined (reading 'name')" errors
+  - Updated `getChatDisplayName()` in `chats-section.tsx` and `projects-section.tsx` to filter out invalid participants
+- fix: Add migration to cleanup orphan file records (2026-01-22)
+  - Files with neither `storageKey` nor `s3Key` are orphaned database records from failed uploads
+  - New migration `cleanup-orphan-file-records-v1` deletes these records
+  - Depends on `fix-missing-storage-keys-v1` migration
+- fix: Resolve migration wait timeout warnings in multi-worker deployments (2026-01-22)
+  - The in-memory `startupState` isn't shared across worker processes
+  - Request handlers in different workers couldn't see that migrations completed
+  - Updated `ensureMigrationsComplete()` to check MongoDB migration state directly
+  - This eliminates "Timed out waiting for migrations" warnings in production
 - fix: Add migration to fix orphan PERSONA participants in production (2026-01-21)
   - Production had chats with `participants.type: 'PERSONA'` and `characterId: null` causing ZodErrors
   - Original PERSONA→CHARACTER migration set `characterId: participant.personaId`, but personaId was null in some cases

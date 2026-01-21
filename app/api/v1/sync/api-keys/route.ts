@@ -5,18 +5,16 @@
  * POST /api/v1/sync/api-keys - Create a new sync API key
  */
 
-import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import {
-  badRequest,
   serverError,
   validationError,
   successResponse,
   created,
 } from '@/lib/api/responses';
-import { randomBytes } from 'crypto';
+import { getRepositories } from '@/lib/mongodb/repositories';
 
 // ============================================================================
 // Schemas
@@ -24,7 +22,6 @@ import { randomBytes } from 'crypto';
 
 const createApiKeySchema = z.object({
   name: z.string().min(1).max(200),
-  expiresAt: z.string().datetime().optional(),
 });
 
 // ============================================================================
@@ -35,16 +32,27 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
     logger.debug('[Sync API Keys v1] GET list', { userId: context.user.id });
 
-    // TODO: Implement actual API key retrieval from database
-    const apiKeys: any[] = [];
+    const repos = await getRepositories();
+    const apiKeys = await repos.userSyncApiKeys.findByUserId(context.user.id);
+
+    // Map to display format (without sensitive keyHash)
+    const displayKeys = apiKeys.map((key) => ({
+      id: key.id,
+      name: key.name,
+      keyPrefix: key.keyPrefix,
+      isActive: key.isActive,
+      lastUsedAt: key.lastUsedAt,
+      createdAt: key.createdAt,
+      updatedAt: key.updatedAt,
+    }));
 
     logger.info('[Sync API Keys v1] Listed API keys', {
-      count: apiKeys.length,
+      count: displayKeys.length,
     });
 
+    // Return in format expected by useSyncApiKeys hook: { keys: [...] }
     return successResponse({
-      apiKeys,
-      count: apiKeys.length,
+      keys: displayKeys,
     });
   } catch (error) {
     logger.error(
@@ -69,27 +77,29 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
       name: validatedData.name,
     });
 
-    const { user } = context;
-
-    // Generate random API key
-    const key = randomBytes(32).toString('hex');
-
-    // TODO: Store API key in database
-    const apiKeyId = randomBytes(16).toString('hex');
+    const repos = await getRepositories();
+    const result = await repos.userSyncApiKeys.createApiKey(
+      context.user.id,
+      validatedData.name
+    );
 
     logger.info('[Sync API Keys v1] API key created', {
-      keyId: apiKeyId,
+      keyId: result.key.id,
       name: validatedData.name,
     });
 
+    // Return in format expected by useSyncApiKeys hook: { key: SyncApiKeyDisplay, plaintextKey: string }
     return created({
-      apiKey: {
-        id: apiKeyId,
-        name: validatedData.name,
-        key, // Return full key only on creation
-        createdAt: new Date().toISOString(),
-        expiresAt: validatedData.expiresAt,
+      key: {
+        id: result.key.id,
+        name: result.key.name,
+        keyPrefix: result.key.keyPrefix,
+        isActive: result.key.isActive,
+        lastUsedAt: result.key.lastUsedAt,
+        createdAt: result.key.createdAt,
+        updatedAt: result.key.updatedAt,
       },
+      plaintextKey: result.plaintextKey,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

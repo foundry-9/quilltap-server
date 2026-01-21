@@ -128,7 +128,7 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
   - [packages/create-quilltap-theme/README.md](packages/create-quilltap-theme/README.md) — Documentation for the create-quilltap-theme scaffolding CLI: usage, options, what gets created, and next steps after scaffolding — Grade: A (package documentation) — Last updated: 2025-12-31
   - [packages/create-quilltap-theme/CHANGELOG.md](packages/create-quilltap-theme/CHANGELOG.md) — Changelog for the create-quilltap-theme package — Grade: A (package changelog) — Last updated: 2025-12-31
   - [plugins/dist/qtap-plugin-mcp/README.md](plugins/dist/qtap-plugin-mcp/README.md) — Documentation for the MCP Server Connector plugin: configuration, authentication, tool naming, security, and troubleshooting — Grade: A (plugin documentation) — Last updated: 2026-01-13
-  - [migrations/README.md](migrations/README.md) — Documentation for the migration system: architecture, adding new migrations, running migrations, and troubleshooting — Grade: A (migration system docs) — Last updated: 2026-01-21
+  - [migrations/README.md](migrations/README.md) — Documentation for the migration system: architecture, adding new migrations, running migrations, and troubleshooting — Grade: A (migration system docs) — Last updated: 2026-01-22
 
 ## Claude-specific instructions
 

@@ -67,22 +67,46 @@ export function isMongoDBEnabled(): boolean {
  * BEFORE the server starts accepting any requests. If migrations fail,
  * the process exits immediately.
  *
- * This function is now just a safety check for edge cases where a request
- * might somehow arrive during the very early startup phase.
+ * This function checks the MongoDB migration state directly because the
+ * in-memory startupState isn't shared across worker processes.
  */
 async function ensureMigrationsComplete(): Promise<void> {
-  // Only wait once
+  // Only check once per process
   if (migrationWaitComplete) {
     return;
   }
 
-  // Check if migrations are already complete (should always be true now)
+  // Check in-memory state first (fastest check)
   if (startupState.areMigrationsComplete()) {
     migrationWaitComplete = true;
     return;
   }
 
-  // Check if startup is still in progress
+  // In multi-worker setups, the instrumentation.ts runs in a different process
+  // than the request handlers. Check MongoDB migration state directly.
+  try {
+    const { loadMigrationState } = await import('../../migrations/state');
+    const mongoState = await loadMigrationState();
+
+    // If we have completed migrations recorded in MongoDB, we're good
+    if (mongoState.completedMigrations && mongoState.completedMigrations.length > 0) {
+      logger.debug('Migrations verified complete via MongoDB state', {
+        context: 'repository-factory.ensureMigrationsComplete',
+        completedCount: mongoState.completedMigrations.length,
+        lastMigration: mongoState.completedMigrations[mongoState.completedMigrations.length - 1]?.id,
+      });
+      migrationWaitComplete = true;
+      return;
+    }
+  } catch (error) {
+    // If we can't check MongoDB state, fall back to in-memory check
+    logger.debug('Could not check MongoDB migration state, using in-memory state', {
+      context: 'repository-factory.ensureMigrationsComplete',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // Fall back to the in-memory wait for edge cases
   const phase = startupState.getPhase();
   if (phase === 'pending' || phase === 'migrations' || phase === 'mongodb' || phase === 'plugins') {
     logger.info('Waiting for migrations to complete before serving data', {
@@ -98,10 +122,10 @@ async function ensureMigrationsComplete(): Promise<void> {
         context: 'repository-factory.ensureMigrationsComplete',
       });
     } else {
-      logger.warn('Migrations may not have completed, proceeding with data access anyway', {
+      // Final fallback - proceed anyway since migrations likely completed in another process
+      logger.warn('In-memory migration wait timed out, proceeding (migrations likely completed in instrumentation)', {
         context: 'repository-factory.ensureMigrationsComplete',
         currentPhase: startupState.getPhase(),
-        migrationsComplete: startupState.areMigrationsComplete(),
       });
     }
   }

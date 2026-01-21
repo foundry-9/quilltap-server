@@ -46,6 +46,8 @@ import { createFolderEntitiesMigration } from './create-folder-entities';
 import { fixOrphanPersonaParticipantsMigration } from './fix-orphan-persona-participants';
 // Fix missing storage keys
 import { fixMissingStorageKeysMigration } from './fix-missing-storage-keys';
+// Cleanup orphan file records
+import { cleanupOrphanFileRecordsMigration } from './cleanup-orphan-file-records';
 
 /**
  * All available migrations.
@@ -89,6 +91,8 @@ export const migrations: Migration[] = [
   fixOrphanPersonaParticipantsMigration,
   // Fix missing storage keys
   fixMissingStorageKeysMigration,
+  // Cleanup orphan file records
+  cleanupOrphanFileRecordsMigration,
 ];
 
 export {
@@ -129,4 +133,6 @@ export {
   fixOrphanPersonaParticipantsMigration,
   // Fix missing storage keys
   fixMissingStorageKeysMigration,
+  // Cleanup orphan file records
+  cleanupOrphanFileRecordsMigration,
 };

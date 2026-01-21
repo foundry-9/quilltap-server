@@ -37,8 +37,10 @@ function MessageIcon({ className }: { className?: string }) {
 
 function getChatDisplayName(chat: SidebarChat): string {
   if (chat.title) return chat.title
-  if (chat.participants.length > 0) {
-    const names = chat.participants.map(p => p.name)
+  // Filter out undefined participants and those without names
+  const validParticipants = chat.participants.filter(p => p && p.name)
+  if (validParticipants.length > 0) {
+    const names = validParticipants.map(p => p.name)
     if (names.length <= 2) return names.join(' & ')
     return `${names[0]} +${names.length - 1}`
   }
