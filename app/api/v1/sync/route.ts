@@ -34,13 +34,18 @@ import type { SyncableEntityType } from '@/lib/sync/types';
 // Schemas
 // ============================================================================
 
+// Handshake request - matches SyncHandshakeRequestSchema from types.ts
 const handshakeSchema = z.object({
-  localInstanceId: z.string().uuid(),
-  appVersion: z.string(),
-  schemaVersion: z.string(),
-  syncProtocolVersion: z.string(),
-  remoteUserId: z.string().uuid(),
-  apiKey: z.string().min(1),
+  versionInfo: z.object({
+    appVersion: z.string(),
+    schemaVersion: z.string(),
+    syncProtocolVersion: z.string(),
+    supportedEntityTypes: z.array(z.string()),
+  }),
+  // Optional authentication fields
+  email: z.string().email().optional(),
+  password: z.string().optional(),
+  apiKey: z.string().optional(),
 });
 
 const deltaRequestSchema = z.object({
@@ -96,52 +101,43 @@ async function handleHandshake(
     const request = handshakeSchema.parse(body);
 
     logger.info('[Sync v1] Handshake initiated', {
-      remoteInstanceId: request.localInstanceId,
-      remoteUserId: request.remoteUserId,
+      remoteAppVersion: request.versionInfo.appVersion,
       authMethod: context.authMethod,
       localUserId: context.user.id,
     });
 
-    // Check version compatibility
+    // Check version compatibility using the versionInfo object
     const compatibility = checkVersionCompatibility({
-      appVersion: request.appVersion,
-      schemaVersion: request.schemaVersion,
-      syncProtocolVersion: request.syncProtocolVersion,
-      supportedEntityTypes: [
-        'CHARACTER',
-        'CHAT',
-        'MEMORY',
-        'TAG',
-        'ROLEPLAY_TEMPLATE',
-        'PROMPT_TEMPLATE',
-      ],
+      appVersion: request.versionInfo.appVersion,
+      schemaVersion: request.versionInfo.schemaVersion,
+      syncProtocolVersion: request.versionInfo.syncProtocolVersion,
+      supportedEntityTypes: request.versionInfo.supportedEntityTypes as any[],
     });
 
     if (!compatibility.compatible) {
       logger.warn('[Sync v1] Version incompatibility detected', {
         reason: compatibility.reason,
-        remoteVersion: request.appVersion,
+        remoteVersion: request.versionInfo.appVersion,
       });
       return badRequest(`Version incompatible: ${compatibility.reason}`);
     }
 
     logger.info('[Sync v1] Handshake successful', {
-      remoteInstanceId: request.localInstanceId,
-      remoteUserId: request.remoteUserId,
+      remoteAppVersion: request.versionInfo.appVersion,
       authMethod: context.authMethod,
     });
 
     const localVersion = getLocalVersionInfo();
 
+    // Return response matching SyncHandshakeResponseSchema
     return successResponse({
-      success: true,
-      localInstanceId: 'local-instance-id',
-      appVersion: localVersion.appVersion,
-      schemaVersion: localVersion.schemaVersion,
-      syncProtocolVersion: localVersion.syncProtocolVersion,
+      compatible: true,
+      versionInfo: localVersion,
+      remoteUserId: context.user.id,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      logger.debug('[Sync v1] Handshake validation error', { errors: error.errors });
       return validationError(error);
     }
 

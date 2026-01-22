@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- fix: Fix sync handshake validation error due to schema mismatch (2026-01-22)
+  - Server's handshake schema expected flat fields (`localInstanceId`, `appVersion`, etc.)
+  - Client sends `{ versionInfo: {...} }` as per `SyncHandshakeRequestSchema` in types.ts
+  - Updated `/api/v1/sync/route.ts` handshake schema to match the type definition
+  - Fixed response format to return `compatible`, `versionInfo`, `remoteUserId` per `SyncHandshakeResponseSchema`
+  - Added debug logging for validation errors to aid future troubleshooting
 - feat: Add home button to collapsed sidebar navigation (2026-01-22)
   - When sidebar is collapsed, the Quilltap quill icon now appears above the nav icons
   - Clicking it navigates to the home page
