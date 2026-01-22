@@ -29,6 +29,7 @@ import {
   successResponse,
 } from '@/lib/api/responses';
 import type { SyncableEntityType } from '@/lib/sync/types';
+import { SyncDeltaRequestSchema } from '@/lib/sync/types';
 
 // ============================================================================
 // Schemas
@@ -48,19 +49,7 @@ const handshakeSchema = z.object({
   apiKey: z.string().optional(),
 });
 
-const deltaRequestSchema = z.object({
-  entityTypes: z.array(
-    z.enum([
-      'CHARACTER',
-      'CHAT',
-      'MEMORY',
-      'TAG',
-      'ROLEPLAY_TEMPLATE',
-      'PROMPT_TEMPLATE',
-    ])
-  ),
-  since: z.string().datetime(),
-});
+// Using SyncDeltaRequestSchema from types.ts for consistency
 
 const pushDataSchema = z.object({
   mappings: z.record(z.string().uuid(), z.string().uuid()),
@@ -156,11 +145,12 @@ async function handleDelta(
 ) {
   try {
     const body = await req.json();
-    const request = deltaRequestSchema.parse(body);
+    const request = SyncDeltaRequestSchema.parse(body);
 
     logger.debug('[Sync v1] Delta request', {
       entityTypes: request.entityTypes,
-      since: request.since,
+      sinceTimestamp: request.sinceTimestamp,
+      limit: request.limit,
     });
 
     const { repos, user } = context;
@@ -176,10 +166,12 @@ async function handleDelta(
 
     return successResponse({
       deltas,
+      hasMore: false,
       detectedAt: new Date().toISOString(),
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      logger.debug('[Sync v1] Delta validation error', { errors: error.errors });
       return validationError(error);
     }
 

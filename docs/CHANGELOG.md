@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- fix: Fix sync delta validation error due to schema mismatch (2026-01-22)
+  - Server's delta schema in route.ts defined its own `deltaRequestSchema` with wrong field names
+  - Used `since` instead of `sinceTimestamp`, and `entityTypes` was required instead of optional
+  - Updated `/api/v1/sync/route.ts` to import and use `SyncDeltaRequestSchema` from types.ts
+  - Added `hasMore` field to response and debug logging for validation errors
 - fix: Fix sync handshake validation error due to schema mismatch (2026-01-22)
   - Server's handshake schema expected flat fields (`localInstanceId`, `appVersion`, etc.)
   - Client sends `{ versionInfo: {...} }` as per `SyncHandshakeRequestSchema` in types.ts
