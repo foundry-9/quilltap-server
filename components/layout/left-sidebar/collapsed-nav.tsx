@@ -9,6 +9,8 @@
  * @module components/layout/left-sidebar/collapsed-nav
  */
 
+import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useSidebar } from '@/components/providers/sidebar-provider'
 
@@ -124,6 +126,21 @@ export function CollapsedNav() {
 
   return (
     <nav className="qt-collapsed-nav" aria-label="Quick navigation">
+      {/* Home button with Quilltap quill icon */}
+      <Link
+        href="/"
+        className="qt-collapsed-nav-button"
+        title="Home"
+        aria-label="Home"
+      >
+        <Image
+          src="/quill.svg"
+          alt="Home"
+          width={28}
+          height={28}
+          className="w-7 h-7"
+        />
+      </Link>
       {navItems.map((item) => {
         const Icon = item.icon
         return (

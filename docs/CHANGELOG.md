@@ -4,6 +4,9 @@
 
 ### 2.7-dev
 
+- feat: Add home button to collapsed sidebar navigation (2026-01-22)
+  - When sidebar is collapsed, the Quilltap quill icon now appears above the nav icons
+  - Clicking it navigates to the home page
 - fix: Enable API key authentication for sync routes (2026-01-22)
   - Sync routes were using `createAuthenticatedHandler` which only supports session cookies
   - Remote instances authenticate via Bearer token (API key), not session cookies
