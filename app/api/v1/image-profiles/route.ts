@@ -5,6 +5,7 @@
  * POST /api/v1/image-profiles - Create a new image profile
  * POST /api/v1/image-profiles?action=validate-key - Validate an API key
  * GET /api/v1/image-profiles?action=list-models - List available image models
+ * GET /api/v1/image-profiles?action=list-providers - List available image providers
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,6 +25,11 @@ import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 export const GET = createAuthenticatedHandler(async (req, context) => {
   const { user, repos } = context;
   const action = getActionParam(req);
+
+  // Handle list-providers action
+  if (action === 'list-providers') {
+    return handleListProviders(req, context);
+  }
 
   // Handle list-models action
   if (action === 'list-models') {
@@ -232,6 +238,86 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
   } catch (error) {
     logger.error('[Image Profiles v1] Error in list-models', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to fetch models');
+  }
+}
+
+/**
+ * Handle list-providers action
+ * Returns all available image providers from the registry
+ */
+async function handleListProviders(req: NextRequest, context: AuthenticatedContext) {
+  try {
+    logger.debug('[Image Profiles v1] list-providers');
+
+    // Ensure plugin system is initialized
+    const pluginSystemInitialized = isPluginSystemInitialized();
+    const providerRegistryInitialized = providerRegistry.isInitialized();
+    const providerCount = providerRegistry.getAllProviders().length;
+
+    logger.debug('[Image Profiles v1] Checking plugin system for list-providers', {
+      pluginSystemInitialized,
+      providerRegistryInitialized,
+      providerCount,
+    });
+
+    // Re-initialize if providers are empty (module reload in dev mode)
+    if (!pluginSystemInitialized || !providerRegistryInitialized || providerCount === 0) {
+      logger.warn('[Image Profiles v1] Provider registry empty or not initialized, re-initializing');
+      const initResult = await initializePlugins();
+      logger.info('[Image Profiles v1] Plugin system initialization result', {
+        success: initResult.success,
+        stats: initResult.stats,
+      });
+      if (!initResult.success) {
+        return serverError('Plugin system initialization failed');
+      }
+    }
+
+    // Get all providers with image generation capability
+    const allProviders = providerRegistry.getAllProviders();
+    const imageProviders = allProviders
+      .filter(p => p.capabilities.imageGeneration)
+      .map(p => {
+        // Get default models from getImageGenerationModels if available
+        let defaultModels: string[] = [];
+        if (p.getImageGenerationModels) {
+          defaultModels = p.getImageGenerationModels().map(m => m.id);
+        } else if (p.createImageProvider) {
+          // Try to get supportedModels from the image provider instance
+          try {
+            const imageProvider = p.createImageProvider();
+            if (imageProvider.supportedModels && Array.isArray(imageProvider.supportedModels)) {
+              defaultModels = imageProvider.supportedModels;
+            }
+          } catch (err) {
+            logger.debug('[Image Profiles v1] Could not get default models from image provider', {
+              provider: p.metadata.providerName,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+
+        return {
+          value: p.metadata.providerName,
+          label: p.metadata.displayName || p.metadata.providerName,
+          defaultModels,
+          // Use the provider name as the API key provider (API keys are registered under provider names)
+          apiKeyProvider: p.metadata.providerName,
+        };
+      });
+
+    logger.debug('[Image Profiles v1] Returning image providers', {
+      count: imageProviders.length,
+      providers: imageProviders.map(p => p.value),
+    });
+
+    return successResponse({
+      providers: imageProviders,
+      count: imageProviders.length,
+    });
+  } catch (error) {
+    logger.error('[Image Profiles v1] Error in list-providers', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to fetch providers');
   }
 }
 

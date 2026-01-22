@@ -4,6 +4,18 @@
 
 ### 2.7-dev
 
+- feat: Dynamic image provider list from plugin registry (2026-01-22)
+  - Image profile form now fetches providers from `/api/v1/image-profiles?action=list-providers` instead of using hardcoded list
+  - External image provider plugins (like Eternal AI) now appear in the provider dropdown after installation
+  - Added `list-providers` action to image-profiles API endpoint
+  - Updated API documentation for image profiles endpoints
+- fix: Fix `refreshProfiles` returning wrong data shape after profile create/edit (2026-01-22)
+  - `refreshProfiles()` in ImageProfilesTab expected array but API returns `{ profiles: [...], count: N }`
+  - Caused "profiles.slice is not a function" error after successfully creating a profile
+- refactor: Update ImageProfile interfaces to accept dynamic provider strings (2026-01-22)
+  - Changed hardcoded `'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN'` union to `string`
+  - Updated ProviderIcon to render generic icons for unknown providers
+  - Added ETERNAL_AI, OPENROUTER to known provider badges
 - feat: Add provider plugin development guide (2026-01-22)
   - New `docs/PROVIDER_PLUGIN_DEVELOPMENT.md` with complete guide for building LLM provider plugins
   - Covers LLMProviderPlugin interface, manifest structure, chat/image providers, tool formatting

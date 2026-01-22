@@ -469,11 +469,11 @@ Get available embedding models for a provider.
 
 ### Image Profiles
 
-#### `GET /api/image-profiles`
+#### `GET /api/v1/image-profiles`
 
 List image generation profiles.
 
-#### `POST /api/image-profiles`
+#### `POST /api/v1/image-profiles`
 
 Create an image profile.
 
@@ -484,33 +484,93 @@ Create an image profile.
   "name": "DALL-E Profile",
   "provider": "OPENAI",
   "apiKeyId": "key-uuid",
-  "model": "gpt-image-1.5",
-  "settings": {
+  "modelName": "gpt-image-1",
+  "parameters": {
     "size": "1024x1024",
-    "quality": "high"
-  }
+    "quality": "hd"
+  },
+  "isDefault": false
 }
 ```
 
-#### `GET /api/image-profiles/[id]`
+#### `GET /api/v1/image-profiles?action=list-providers`
+
+List available image generation providers from the plugin registry.
+
+**Response**:
+
+```json
+{
+  "providers": [
+    {
+      "value": "OPENAI",
+      "label": "OpenAI (DALL-E / GPT Image)",
+      "defaultModels": ["gpt-image-1", "dall-e-3", "dall-e-2"],
+      "apiKeyProvider": "OPENAI"
+    },
+    {
+      "value": "ETERNAL_AI",
+      "label": "Eternal AI",
+      "defaultModels": ["black-forest-labs/FLUX.1-dev", "black-forest-labs/FLUX.1-schnell"],
+      "apiKeyProvider": "ETERNAL_AI"
+    }
+  ],
+  "count": 2
+}
+```
+
+#### `GET /api/v1/image-profiles?action=list-models`
+
+Get available image generation models for a provider.
+
+**Query Parameters**:
+- `provider` (required) - Provider name (e.g., "OPENAI", "ETERNAL_AI")
+- `apiKeyId` - API key ID to fetch models dynamically (optional)
+
+**Response**:
+
+```json
+{
+  "provider": "OPENAI",
+  "models": ["gpt-image-1", "dall-e-3", "dall-e-2"],
+  "supportedModels": ["gpt-image-1", "dall-e-3", "dall-e-2"]
+}
+```
+
+#### `POST /api/v1/image-profiles?action=validate-key`
+
+Validate an API key for image generation.
+
+**Request Body**:
+
+```json
+{
+  "provider": "OPENAI",
+  "apiKeyId": "key-uuid"
+}
+```
+
+**Response**:
+
+```json
+{
+  "valid": true,
+  "message": "API key is valid",
+  "modelCount": 3
+}
+```
+
+#### `GET /api/v1/image-profiles/[id]`
 
 Get a specific image profile.
 
-#### `PUT /api/image-profiles/[id]`
+#### `PUT /api/v1/image-profiles/[id]`
 
 Update an image profile.
 
-#### `DELETE /api/image-profiles/[id]`
+#### `DELETE /api/v1/image-profiles/[id]`
 
 Delete an image profile.
-
-#### `POST /api/image-profiles/[id]/generate`
-
-Generate an image using a profile.
-
-#### `GET /api/image-profiles/models`
-
-Get available image generation models for a provider.
 
 ---
 

@@ -27,6 +27,7 @@ Provider plugins extend Quilltap by integrating external AI services. They can p
 - **Web search**: Grounded responses with web results
 
 Common use cases:
+
 - Integrating a new LLM provider (e.g., a custom API)
 - Adding image generation services (e.g., Stable Diffusion, DALL-E alternatives)
 - Supporting local/self-hosted models
@@ -677,6 +678,7 @@ npm run build
 ```
 
 Verify the output:
+
 - `dist/index.js` should exist and contain `module.exports` or `exports`
 - `dist/manifest.json` should be copied
 
@@ -687,6 +689,7 @@ head -5 dist/index.js
 ```
 
 Good output:
+
 ```javascript
 "use strict";
 var __defProp = Object.defineProperty;
@@ -695,6 +698,7 @@ module.exports = ...
 ```
 
 Bad output (IIFE - will not work):
+
 ```javascript
 "use strict";
 (() => {
@@ -709,6 +713,7 @@ Bad output (IIFE - will not work):
 ### Local Testing
 
 1. Copy your built plugin to Quilltap's plugin directory:
+
    ```bash
    cp -r dist /path/to/quilltap/plugins/site/qtap-plugin-myai
    ```
@@ -726,11 +731,13 @@ Bad output (IIFE - will not work):
 ### Verify Provider Registration
 
 Check the logs for:
+
 ```
 Provider registered { name: 'MYAI', displayName: 'MyAI' }
 ```
 
 If you see:
+
 ```
 Provider plugin module does not export a valid plugin object { exports: [] }
 ```
@@ -759,6 +766,7 @@ npm publish
 ```
 
 For scoped packages:
+
 ```bash
 npm publish --access public
 ```
@@ -766,6 +774,7 @@ npm publish --access public
 ### After Publishing
 
 Users can install your plugin via Quilltap's UI:
+
 1. Go to Settings > Plugins
 2. Search for your plugin name
 3. Click Install
@@ -777,11 +786,13 @@ Users can install your plugin via Quilltap's UI:
 See these plugins as reference implementations:
 
 **Built-in plugins:**
+
 - **OpenAI** (`plugins/dist/qtap-plugin-openai`): Full-featured with chat, images, tools
 - **Anthropic** (`plugins/dist/qtap-plugin-anthropic`): Custom tool format, PDF support
 - **Ollama** (`plugins/dist/qtap-plugin-ollama`): Self-hosted, requires base URL
 
 **Third-party example:**
+
 - **Gab AI** (`@quilltap/qtap-plugin-gab-ai` on npm): Community-published provider plugin
 
 ---

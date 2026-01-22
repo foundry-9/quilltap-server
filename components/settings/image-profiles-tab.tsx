@@ -23,7 +23,7 @@ interface ApiKey {
 interface ImageProfile {
   id: string
   name: string
-  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN'
+  provider: string
   apiKeyId?: string
   baseUrl?: string
   modelName: string
@@ -93,9 +93,9 @@ export default function ImageProfilesTab() {
   }, [])
 
   const refreshProfiles = async () => {
-    const response = await fetchJson<ImageProfile[]>('/api/v1/image-profiles')
-    if (response.ok && response.data) {
-      setProfiles(response.data)
+    const response = await fetchJson<{ profiles: ImageProfile[], count: number }>('/api/v1/image-profiles')
+    if (response.ok && response.data?.profiles) {
+      setProfiles(response.data.profiles)
     } else {
       console.error('Failed to refresh profiles', { error: response.error })
     }

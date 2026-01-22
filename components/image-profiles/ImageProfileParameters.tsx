@@ -1,7 +1,7 @@
 'use client'
 
 interface ImageProfileParametersProps {
-  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN' | 'GOOGLE'
+  provider: string
   parameters: Record<string, any>
   onChange: (params: Record<string, any>) => void
 }

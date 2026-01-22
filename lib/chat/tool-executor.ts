@@ -46,6 +46,8 @@ export interface ToolResult {
   success: boolean;
   result: unknown;
   error?: string;
+  /** Human-readable error message with more details than the error code */
+  message?: string;
   /** For file_management: indicates permission is required for this write */
   requiresPermission?: boolean;
   /** Pending write details when requiresPermission is true */
@@ -89,7 +91,7 @@ export function formatToolResult(
 ): { role: string; content: string } {
   const resultText = toolResult.success
     ? JSON.stringify(toolResult.result, null, 2)
-    : `Error: ${toolResult.error || 'Unknown error'}`;
+    : `Error: ${toolResult.error || 'Unknown error'}${toolResult.message ? ` - ${toolResult.message}` : ''}`;
 
   // Different providers may want different formatting
   switch (provider) {
@@ -287,6 +289,7 @@ export async function executeToolCallWithContext(
         success: result.success,
         result: result.success ? result.images : null,
         error: result.success ? undefined : result.error,
+        message: result.success ? undefined : result.message,
         metadata: {
           provider: result.provider,
           model: result.model,

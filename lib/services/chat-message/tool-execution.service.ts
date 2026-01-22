@@ -111,7 +111,7 @@ export async function processToolCalls(
 
     let resultText: string
     if (!toolResult.success) {
-      resultText = `Error: ${toolResult.error || 'Unknown error'}`
+      resultText = `Error: ${toolResult.error || 'Unknown error'}${toolResult.message ? ` - ${toolResult.message}` : ''}`
     } else if (toolResult.toolName === 'generate_image') {
       resultText = `Generated ${(toolResult.result as unknown[])?.length || 1} image(s)`
     } else {
