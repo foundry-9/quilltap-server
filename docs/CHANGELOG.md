@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- fix: Restore sync functionality that was lost during v1 API migration (2026-01-22)
+  - The `handleSync` and `handleTest` functions in `/api/v1/sync/instances/[id]` were TODO stubs
+  - Restored full sync implementation from pre-migration code:
+    - `handleTest`: Performs actual remote handshake to verify connection and compatibility
+    - `handleSync`: Full bidirectional sync algorithm with pull/push phases, file content fetching, progress tracking
+  - Supports `forceFull` and `direction` query parameters for sync control
 - fix: Sync API keys now properly persist to database (2026-01-22)
   - `/api/v1/sync/api-keys` route was returning TODO stubs that never saved to database
   - Updated GET handler to use `repos.userSyncApiKeys.findByUserId()` to fetch keys
