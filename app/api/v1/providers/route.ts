@@ -15,7 +15,8 @@ import {
   initializePlugins,
   isPluginSystemInitialized,
 } from '@/lib/startup';
-import { providerRegistry } from '@/lib/plugins/provider-registry';
+import { providerRegistry, hotLoadProviderPlugin } from '@/lib/plugins/provider-registry';
+import { scanPlugins } from '@/lib/plugins/manifest-loader';
 
 // ============================================================================
 // GET Handler
@@ -32,6 +33,29 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
         logger.warn('[Providers v1] Plugin initialization failed');
         return serverError('Plugin system not ready');
       }
+    }
+
+    // Lazy-load user's LLM provider plugins (not loaded at startup)
+    try {
+      const userPlugins = await scanPlugins(undefined, context.user.id);
+      for (const plugin of userPlugins.plugins) {
+        if (plugin.manifest.capabilities.includes('LLM_PROVIDER')) {
+          // Try to hot-load if not already registered
+          if (!providerRegistry.hasProvider(plugin.manifest.providerConfig?.providerName || '')) {
+            logger.debug('[Providers v1] Lazy-loading user LLM provider plugin', {
+              userId: context.user.id,
+              plugin: plugin.manifest.name,
+            });
+            hotLoadProviderPlugin(plugin.pluginPath, plugin.manifest);
+          }
+        }
+      }
+    } catch (error) {
+      logger.warn('[Providers v1] Failed to scan user plugins for lazy-loading', {
+        userId: context.user.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Continue anyway - user plugins are optional
     }
 
     // Get all registered providers

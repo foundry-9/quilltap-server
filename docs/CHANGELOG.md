@@ -4,6 +4,26 @@
 
 ### 2.7-dev
 
+- feat: Add provider plugin development guide (2026-01-22)
+  - New `docs/PROVIDER_PLUGIN_DEVELOPMENT.md` with complete guide for building LLM provider plugins
+  - Covers LLMProviderPlugin interface, manifest structure, chat/image providers, tool formatting
+  - References `@quilltap/qtap-plugin-gab-ai` as third-party example
+- fix: Fix plugin manifest validation rejecting scoped npm packages (2026-01-22)
+  - Manifest name regex only allowed `qtap-plugin-*` format
+  - Now accepts scoped packages like `@org/qtap-plugin-*`
+- feat: Hot-load LLM provider plugins after installation (2026-01-22)
+  - New `hotLoadProviderPlugin()` method in provider registry
+  - Provider plugins are now available immediately after npm install without server restart
+  - Lazy-loads user-scoped provider plugins when `/api/v1/providers` is called
+- fix: Fix plugin source detection showing npm packages as "git" (2026-01-22)
+  - `determinePluginSource()` checked for git repository before npm classification
+  - npm packages with repository fields were incorrectly classified as "git" source
+  - Now checks for `node_modules` path first, correctly identifying npm-installed plugins
+  - Fixes plugins showing as non-uninstallable in the UI
+- docs: Add critical warning about esbuild format in plugin development guides (2026-01-22)
+  - All plugin dev guides now warn that `format: 'cjs'` is required, NOT `'iife'`
+  - IIFE-bundled plugins export empty objects and fail to load
+  - Updated TOOL_PLUGIN_DEVELOPMENT.md, THEME_PLUGIN_DEVELOPMENT.md, TEMPLATE_PLUGIN_DEVELOPMENT.md
 - fix: Fix character avatar setting from gallery failing with HTTP method mismatch (2026-01-22)
   - Frontend `useImageActions.ts` was using `PATCH` method to call `/api/v1/characters/[id]?action=avatar`
   - Backend route only has `POST` handler for actions, no `PATCH` export

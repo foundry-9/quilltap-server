@@ -135,7 +135,14 @@ async function determinePluginSource(pluginPath: string): Promise<PluginSource> 
     return 'included';
   }
 
-  // Check for package.json to determine npm vs manual
+  // Check if plugin is in a node_modules directory (npm-installed)
+  // This takes precedence over git repository detection since npm packages
+  // often have repository fields in their package.json
+  if (pluginPath.includes('node_modules')) {
+    return 'npm';
+  }
+
+  // Check for package.json to determine source
   try {
     const packageJsonPath = path.join(pluginPath, 'package.json');
     await fs.access(packageJsonPath);
@@ -143,7 +150,12 @@ async function determinePluginSource(pluginPath: string): Promise<PluginSource> 
     // Read package.json to check for repository info
     const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
 
-    // If it has a git repository, it's from git
+    // If it has a valid plugin name and version, likely from npm
+    if (packageJson.name && isQuilltapPlugin(packageJson.name) && packageJson.version) {
+      return 'npm';
+    }
+
+    // If it has a git repository, it's from git (cloned directly)
     if (packageJson.repository) {
       const repoUrl = typeof packageJson.repository === 'string'
         ? packageJson.repository
@@ -152,11 +164,6 @@ async function determinePluginSource(pluginPath: string): Promise<PluginSource> 
       if (repoUrl && (repoUrl.includes('git') || repoUrl.includes('github') || repoUrl.includes('gitlab'))) {
         return 'git';
       }
-    }
-
-    // If it has a valid plugin name and version, likely from npm
-    if (packageJson.name && isQuilltapPlugin(packageJson.name) && packageJson.version) {
-      return 'npm';
     }
 
     return 'manual';

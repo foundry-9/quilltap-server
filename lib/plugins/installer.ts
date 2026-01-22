@@ -12,6 +12,7 @@ import fs from 'fs/promises';
 import { logger } from '@/lib/logger';
 import { safeValidatePluginManifest, pluginRequiresRestart, type PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { isPluginCompatible } from './manifest-loader';
+import { hotLoadProviderPlugin } from './provider-registry';
 
 const execAsync = promisify(exec);
 
@@ -305,7 +306,24 @@ export async function installPluginFromNpm(
       scope,
     });
 
-    const requiresRestart = pluginRequiresRestart(manifest);
+    // Attempt to hot-load LLM provider plugins so they're available immediately
+    let hotLoaded = false;
+    if (manifest.capabilities.includes('LLM_PROVIDER')) {
+      logger.debug('Attempting to hot-load LLM provider plugin', {
+        context: 'PluginInstaller.installPluginFromNpm',
+        packageName,
+      });
+      hotLoaded = hotLoadProviderPlugin(installedPath, manifest);
+      if (hotLoaded) {
+        logger.info('LLM provider plugin hot-loaded successfully', {
+          context: 'PluginInstaller.installPluginFromNpm',
+          packageName,
+        });
+      }
+    }
+
+    // If we hot-loaded the provider, no restart is needed for LLM_PROVIDER capability
+    const requiresRestart = hotLoaded ? false : pluginRequiresRestart(manifest);
 
     logger.info('Plugin installed successfully', {
       context: 'PluginInstaller.installPluginFromNpm',
@@ -313,6 +331,7 @@ export async function installPluginFromNpm(
       version: installedVersion,
       scope,
       requiresRestart,
+      hotLoaded,
     });
 
     return { success: true, manifest, version: installedVersion, requiresRestart };

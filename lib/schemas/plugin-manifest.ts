@@ -573,8 +573,8 @@ export const PluginManifestSchema = z.object({
   $schema: z.string().optional(),
 
   // ===== BASIC METADATA =====
-  /** Plugin package name (must start with 'qtap-plugin-') */
-  name: z.string().regex(/^qtap-plugin-[a-z0-9-]+$/),
+  /** Plugin package name (must start with 'qtap-plugin-' or '@scope/qtap-plugin-') */
+  name: z.string().regex(/^(@[a-z0-9-]+\/)?qtap-plugin-[a-z0-9-]+$/),
 
   /** Display title */
   title: z.string().min(1).max(100),
@@ -789,6 +789,8 @@ export function functionalityToCapabilities(functionality?: Functionality): Plug
 /**
  * Capabilities that require a server restart to activate.
  * These capabilities affect core infrastructure that is initialized at startup.
+ * Note: LLM_PROVIDER and IMAGE_PROVIDER are hot-loaded after installation,
+ * so they don't require a restart (handled in installer.ts).
  */
 const RESTART_REQUIRED_CAPABILITIES: PluginCapability[] = [
   'AUTH_METHODS',
