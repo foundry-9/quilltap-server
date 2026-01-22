@@ -9,8 +9,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, AuthenticatedContext } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
+import {
+  createSyncAuthenticatedHandler,
+  SyncAuthenticatedContext,
+} from '@/lib/sync/api-key-auth';
 import {
   checkVersionCompatibility,
   getLocalVersionInfo,
@@ -86,7 +89,7 @@ const mappingsExchangeSchema = z.object({
 
 async function handleHandshake(
   req: NextRequest,
-  context: AuthenticatedContext
+  context: SyncAuthenticatedContext
 ) {
   try {
     const body = await req.json();
@@ -95,6 +98,8 @@ async function handleHandshake(
     logger.info('[Sync v1] Handshake initiated', {
       remoteInstanceId: request.localInstanceId,
       remoteUserId: request.remoteUserId,
+      authMethod: context.authMethod,
+      localUserId: context.user.id,
     });
 
     // Check version compatibility
@@ -123,6 +128,7 @@ async function handleHandshake(
     logger.info('[Sync v1] Handshake successful', {
       remoteInstanceId: request.localInstanceId,
       remoteUserId: request.remoteUserId,
+      authMethod: context.authMethod,
     });
 
     const localVersion = getLocalVersionInfo();
@@ -150,7 +156,7 @@ async function handleHandshake(
 
 async function handleDelta(
   req: NextRequest,
-  context: AuthenticatedContext
+  context: SyncAuthenticatedContext
 ) {
   try {
     const body = await req.json();
@@ -192,7 +198,7 @@ async function handleDelta(
 
 async function handlePush(
   req: NextRequest,
-  context: AuthenticatedContext
+  context: SyncAuthenticatedContext
 ) {
   try {
     const body = await req.json();
@@ -289,7 +295,7 @@ async function handlePush(
 
 async function handleMappings(
   req: NextRequest,
-  context: AuthenticatedContext
+  context: SyncAuthenticatedContext
 ) {
   if (req.method === 'GET') {
     try {
@@ -350,7 +356,7 @@ async function handleMappings(
 
 async function handleCleanup(
   req: NextRequest,
-  context: AuthenticatedContext
+  context: SyncAuthenticatedContext
 ) {
   try {
     logger.info('[Sync v1] Cleanup initiated');
@@ -380,7 +386,7 @@ async function handleCleanup(
 // Main Handler
 // ============================================================================
 
-export const POST = createAuthenticatedHandler(async (req, context) => {
+export const POST = createSyncAuthenticatedHandler(async (req, context) => {
   const action = getActionParam(req);
 
   switch (action) {
@@ -401,7 +407,7 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
   }
 });
 
-export const GET = createAuthenticatedHandler(async (req, context) => {
+export const GET = createSyncAuthenticatedHandler(async (req, context) => {
   const action = getActionParam(req);
 
   if (action === 'mappings') {

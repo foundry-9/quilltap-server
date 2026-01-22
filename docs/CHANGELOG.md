@@ -4,6 +4,14 @@
 
 ### 2.7-dev
 
+- fix: Enable API key authentication for sync routes (2026-01-22)
+  - Sync routes were using `createAuthenticatedHandler` which only supports session cookies
+  - Remote instances authenticate via Bearer token (API key), not session cookies
+  - Created `createSyncAuthenticatedHandler` in `lib/sync/api-key-auth.ts` that supports hybrid auth:
+    - First tries session authentication (for local users)
+    - Falls back to API key authentication (for remote instances)
+  - Updated `/api/v1/sync/route.ts` to use the new handler
+  - This fixes "401 Unauthorized" errors when syncing between instances
 - fix: Restore sync functionality that was lost during v1 API migration (2026-01-22)
   - The `handleSync` and `handleTest` functions in `/api/v1/sync/instances/[id]` were TODO stubs
   - Restored full sync implementation from pre-migration code:

@@ -5,10 +5,13 @@
  * Supports Bearer token authentication for cross-instance sync.
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
+import { getRepositoriesSafe, type RepositoryContainer } from '@/lib/repositories/factory';
+import { getServerSession, type ExtendedSession } from '@/lib/auth/session';
 import { API_KEY_PREFIX } from './user-api-keys';
+import type { User } from '@/lib/schemas/types';
 
 /**
  * Result of API key authentication
@@ -215,5 +218,99 @@ export async function getAuthenticatedUserForSync(
   return {
     userId: null,
     authMethod: null,
+  };
+}
+
+// ============================================================================
+// Sync Route Authentication Handler
+// ============================================================================
+
+/**
+ * Context provided to sync-authenticated route handlers
+ */
+export interface SyncAuthenticatedContext {
+  /** The authenticated user entity from the database */
+  user: User;
+  /** Repository container for data access */
+  repos: RepositoryContainer;
+  /** The session object (only present for session auth) */
+  session: ExtendedSession | null;
+  /** How the request was authenticated */
+  authMethod: 'session' | 'api_key';
+  /** The API key ID if authenticated via API key */
+  apiKeyId?: string;
+}
+
+/**
+ * Higher-order function to create a sync-authenticated route handler
+ *
+ * This handler supports BOTH session-based authentication (for local users)
+ * AND Bearer token API key authentication (for remote instances).
+ *
+ * @example
+ * ```ts
+ * export const POST = createSyncAuthenticatedHandler(async (req, { user, repos, authMethod }) => {
+ *   logger.info('Sync request', { userId: user.id, authMethod });
+ *   // ... handle sync request
+ * });
+ * ```
+ */
+export function createSyncAuthenticatedHandler(
+  handler: (
+    request: NextRequest,
+    context: SyncAuthenticatedContext
+  ) => Promise<NextResponse>
+): (request: NextRequest) => Promise<NextResponse> {
+  return async (request: NextRequest) => {
+    const repos = await getRepositoriesSafe();
+
+    // Try session auth first
+    const session = await getServerSession();
+
+    if (session?.user?.id) {
+      const user = await repos.users.findById(session.user.id);
+
+      if (user) {
+        logger.debug('Sync request authenticated via session', {
+          context: 'sync:api-key-auth',
+          userId: user.id,
+        });
+        return handler(request, { user, repos, session, authMethod: 'session' });
+      }
+    }
+
+    // Fall back to API key auth
+    const apiKeyResult = await authenticateSyncRequest(request);
+
+    if (apiKeyResult.authenticated && apiKeyResult.userId) {
+      const user = await repos.users.findById(apiKeyResult.userId);
+
+      if (user) {
+        logger.debug('Sync request authenticated via API key', {
+          context: 'sync:api-key-auth',
+          userId: user.id,
+          keyId: apiKeyResult.keyId,
+        });
+        return handler(request, {
+          user,
+          repos,
+          session: null,
+          authMethod: 'api_key',
+          apiKeyId: apiKeyResult.keyId,
+        });
+      } else {
+        logger.warn('API key valid but user not found', {
+          context: 'sync:api-key-auth',
+          userId: apiKeyResult.userId,
+          keyId: apiKeyResult.keyId,
+        });
+      }
+    }
+
+    // No valid authentication
+    logger.debug('Sync request unauthorized - no valid session or API key', {
+      context: 'sync:api-key-auth',
+    });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   };
 }
