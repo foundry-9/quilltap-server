@@ -192,8 +192,20 @@ async function handlePush(
     const { user, repos } = context;
     const results = {
       applied: 0,
-      conflicts: 0,
-      errors: 0,
+      conflicts: [] as Array<{
+        entityType: string;
+        localId: string;
+        remoteId: string;
+        localUpdatedAt: string;
+        remoteUpdatedAt: string;
+        resolution: string;
+      }>,
+      errors: [] as string[],
+      mappingUpdates: [] as Array<{
+        localId: string;
+        remoteId: string;
+        entityType: string;
+      }>,
       details: [] as any[],
     };
 
@@ -220,15 +232,12 @@ async function handlePush(
             status: 'applied',
             isNew: result.isNewEntity,
           });
-        } else if (result.conflict) {
-          results.conflicts++;
-          results.details.push({
-            entityId: delta.id,
-            status: 'conflict',
-            resolution: result.conflict.resolution,
-          });
-        } else {
-          results.errors++;
+          // Capture conflict even on success (conflict was resolved)
+          if (result.conflict) {
+            results.conflicts.push(result.conflict);
+          }
+        } else if (result.error) {
+          results.errors.push(`${delta.entityType}:${delta.id}: ${result.error}`);
           results.details.push({
             entityId: delta.id,
             status: 'error',
@@ -236,11 +245,12 @@ async function handlePush(
           });
         }
       } catch (error) {
-        results.errors++;
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        results.errors.push(`${delta.entityType}:${delta.id}: ${errorMsg}`);
         results.details.push({
           entityId: delta.id,
           status: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errorMsg,
         });
         logger.error('[Sync v1] Error applying delta', {
           entityId: delta.id,
@@ -251,13 +261,17 @@ async function handlePush(
 
     logger.info('[Sync v1] Push completed', {
       applied: results.applied,
-      conflicts: results.conflicts,
-      errors: results.errors,
+      conflicts: results.conflicts.length,
+      errors: results.errors.length,
     });
 
     return successResponse({
-      success: true,
-      ...results,
+      success: results.errors.length === 0,
+      mappingUpdates: results.mappingUpdates,
+      conflicts: results.conflicts,
+      errors: results.errors,
+      applied: results.applied,
+      details: results.details,
       processedAt: new Date().toISOString(),
     });
   } catch (error) {

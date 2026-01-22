@@ -9,6 +9,11 @@
   - External plugins that declare `requiresApiKey: true` now appear in the provider dropdown
   - Added loading state while fetching providers
   - Added unit tests for dynamic provider loading
+- fix: Fix sync push response format to return arrays instead of numbers (2026-01-22)
+  - `handlePush` handler was returning `conflicts` and `errors` as numeric counters
+  - Client expected arrays per `SyncPushResponseSchema` and tried to spread them
+  - Caused "Spread syntax requires iterable" error during sync push
+  - Updated response to include proper `conflicts` array, `errors` string array, and `mappingUpdates` array
 - fix: Fix sync push validation error due to schema mismatch (2026-01-22)
   - Server's push schema in `/api/v1/sync/route.ts` expected `{ mappings, entities }`
   - Client sends `{ deltas }` as per `SyncPushRequestSchema` in types.ts
