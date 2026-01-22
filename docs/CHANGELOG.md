@@ -4,6 +4,10 @@
 
 ### 2.7-dev
 
+- fix: Fix character avatar setting from gallery failing with HTTP method mismatch (2026-01-22)
+  - Frontend `useImageActions.ts` was using `PATCH` method to call `/api/v1/characters/[id]?action=avatar`
+  - Backend route only has `POST` handler for actions, no `PATCH` export
+  - Changed frontend to use `POST` method, which matches the backend action dispatch pattern
 - fix: Remove 1000 item hard limit on sync push delta detection (2026-01-22)
   - `prepareLocalDeltasForPush` had a hard limit of 1000 deltas, causing sync to stop after exactly 1000 items
   - Now uses pagination to fetch all deltas with a batch size of 50,000 per iteration

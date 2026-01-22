@@ -109,7 +109,7 @@ export function useImageActions(
         const endpoint = `/api/v1/characters/${entityId}?action=avatar`
 
         const response = await fetch(endpoint, {
-          method: 'PATCH',
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageId: image.id }),
         })
