@@ -944,7 +944,7 @@ describe('Sync Service', () => {
       expect(mockedDetectDeltas).toHaveBeenCalledWith({
         userId,
         sinceTimestamp: earlier.toISOString(),
-        limit: 1000,
+        limit: 50000,
       });
       expect(result.deltas).toEqual(mockDeltas);
     });
@@ -996,8 +996,92 @@ describe('Sync Service', () => {
       expect(mockedDetectDeltas).toHaveBeenCalledWith({
         userId,
         sinceTimestamp: null,
-        limit: 1000,
+        limit: 50000,
       });
+    });
+
+    it('should paginate when hasMore is true', async () => {
+      const batch1Deltas: SyncEntityDelta[] = [
+        {
+          entityType: 'CHARACTER',
+          id: 'char-1',
+          createdAt: earlier.toISOString(),
+          updatedAt: earlier.toISOString(),
+          isDeleted: false,
+          data: { name: 'Character 1' },
+        },
+      ];
+      const batch2Deltas: SyncEntityDelta[] = [
+        {
+          entityType: 'CHARACTER',
+          id: 'char-2',
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+          isDeleted: false,
+          data: { name: 'Character 2' },
+        },
+      ];
+
+      mockedDetectDeltas
+        .mockResolvedValueOnce({
+          deltas: batch1Deltas,
+          hasMore: true,
+          oldestTimestamp: earlier.toISOString(),
+          newestTimestamp: earlier.toISOString(),
+        })
+        .mockResolvedValueOnce({
+          deltas: batch2Deltas,
+          hasMore: false,
+          oldestTimestamp: now.toISOString(),
+          newestTimestamp: now.toISOString(),
+        });
+
+      const result = await prepareLocalDeltasForPush(userId, instanceId, null);
+
+      expect(mockedDetectDeltas).toHaveBeenCalledTimes(2);
+      expect(mockedDetectDeltas).toHaveBeenNthCalledWith(1, {
+        userId,
+        sinceTimestamp: null,
+        limit: 50000,
+      });
+      expect(mockedDetectDeltas).toHaveBeenNthCalledWith(2, {
+        userId,
+        sinceTimestamp: earlier.toISOString(),
+        limit: 50000,
+      });
+      expect(result.deltas).toHaveLength(2);
+      expect(result.deltas[0].id).toBe('char-1');
+      expect(result.deltas[1].id).toBe('char-2');
+    });
+
+    it('should deduplicate deltas across pagination boundaries', async () => {
+      const duplicateDelta: SyncEntityDelta = {
+        entityType: 'CHARACTER',
+        id: 'char-1',
+        createdAt: earlier.toISOString(),
+        updatedAt: earlier.toISOString(),
+        isDeleted: false,
+        data: { name: 'Character 1' },
+      };
+
+      mockedDetectDeltas
+        .mockResolvedValueOnce({
+          deltas: [duplicateDelta],
+          hasMore: true,
+          oldestTimestamp: earlier.toISOString(),
+          newestTimestamp: earlier.toISOString(),
+        })
+        .mockResolvedValueOnce({
+          deltas: [duplicateDelta], // Same delta returned again
+          hasMore: false,
+          oldestTimestamp: earlier.toISOString(),
+          newestTimestamp: earlier.toISOString(),
+        });
+
+      const result = await prepareLocalDeltasForPush(userId, instanceId, null);
+
+      expect(result.deltas).toHaveLength(1); // Deduplicated
+      expect(result.deltas[0].id).toBe('char-1');
     });
   });
 

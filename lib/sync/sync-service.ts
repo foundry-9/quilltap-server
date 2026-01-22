@@ -631,22 +631,75 @@ export async function prepareLocalDeltasForPush(
     sinceTimestamp,
   });
 
-  // Detect local changes
-  const detectionResult = await detectDeltas({
-    userId,
-    sinceTimestamp,
-    limit: 1000, // Reasonable batch size
-  });
+  // Collect all deltas using pagination
+  // Use a large batch size to minimize pagination boundaries.
+  // The delta-detector uses strict '>' comparison on timestamps, so items at
+  // pagination boundaries with identical timestamps could be missed.
+  // Large batches reduce this risk while still preventing memory issues.
+  const allDeltas: SyncEntityDelta[] = [];
+  const seenIds = new Set<string>();
+  const BATCH_SIZE = 50000;
+  let currentTimestamp = sinceTimestamp;
+  let hasMore = true;
+  let iteration = 0;
+  const MAX_ITERATIONS = 100; // Safety limit to prevent infinite loops
+
+  while (hasMore && iteration < MAX_ITERATIONS) {
+    iteration++;
+
+    const detectionResult = await detectDeltas({
+      userId,
+      sinceTimestamp: currentTimestamp,
+      limit: BATCH_SIZE,
+    });
+
+    logger.debug('Fetched delta batch', {
+      context: 'sync:sync-service',
+      userId,
+      instanceId,
+      iteration,
+      batchSize: detectionResult.deltas.length,
+      hasMore: detectionResult.hasMore,
+      newestTimestamp: detectionResult.newestTimestamp,
+    });
+
+    // Deduplicate by ID to handle edge cases at pagination boundaries
+    for (const delta of detectionResult.deltas) {
+      const key = `${delta.entityType}:${delta.id}`;
+      if (!seenIds.has(key)) {
+        seenIds.add(key);
+        allDeltas.push(delta);
+      }
+    }
+
+    hasMore = detectionResult.hasMore;
+
+    // Move cursor forward using the newest timestamp from this batch
+    if (hasMore && detectionResult.newestTimestamp) {
+      currentTimestamp = detectionResult.newestTimestamp;
+    }
+  }
+
+  if (iteration >= MAX_ITERATIONS) {
+    logger.warn('Delta collection reached maximum iterations', {
+      context: 'sync:sync-service',
+      userId,
+      instanceId,
+      iterations: iteration,
+      deltasCollected: allDeltas.length,
+    });
+  }
 
   logger.info('Prepared local deltas for push', {
     context: 'sync:sync-service',
     userId,
     instanceId,
-    deltaCount: detectionResult.deltas.length,
+    deltaCount: allDeltas.length,
+    iterations: iteration,
   });
 
   return {
-    deltas: detectionResult.deltas,
+    deltas: allDeltas,
   };
 }
 

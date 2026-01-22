@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- fix: Remove 1000 item hard limit on sync push delta detection (2026-01-22)
+  - `prepareLocalDeltasForPush` had a hard limit of 1000 deltas, causing sync to stop after exactly 1000 items
+  - Now uses pagination to fetch all deltas with a batch size of 50,000 per iteration
+  - Added deduplication by entity ID to handle edge cases at pagination boundaries
+  - Added safety limit of 100 iterations (5 million items max) to prevent infinite loops
+  - Added unit tests for pagination and deduplication behavior
 - feat: Dynamic API key provider list from registry (2026-01-22)
   - API key modal now fetches providers from `/api/v1/providers` instead of using hardcoded list
   - External plugins that declare `requiresApiKey: true` now appear in the provider dropdown
