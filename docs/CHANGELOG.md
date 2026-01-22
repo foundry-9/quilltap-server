@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- feat: Dynamic API key provider list from registry (2026-01-22)
+  - API key modal now fetches providers from `/api/v1/providers` instead of using hardcoded list
+  - External plugins that declare `requiresApiKey: true` now appear in the provider dropdown
+  - Added loading state while fetching providers
+  - Added unit tests for dynamic provider loading
 - fix: Fix sync push validation error due to schema mismatch (2026-01-22)
   - Server's push schema in `/api/v1/sync/route.ts` expected `{ mappings, entities }`
   - Client sends `{ deltas }` as per `SyncPushRequestSchema` in types.ts

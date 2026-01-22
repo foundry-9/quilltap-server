@@ -333,6 +333,8 @@ const metadata = {
   abbreviation: 'MYP',
 } as const;
 
+// Setting requiresApiKey: true adds this provider to the API Keys dropdown
+// in Settings > API Keys, allowing users to store API keys for your provider
 const config = {
   requiresApiKey: true,
   requiresBaseUrl: false,
@@ -767,9 +769,10 @@ Study these existing plugins for patterns:
 1. Place plugin in `plugins/dist/`
 2. Restart Quilltap
 3. Check console for: `Provider MY_PROVIDER registered`
-4. Go to Settings > API Keys, add your key
-5. Go to Settings > Connection Profiles, create a profile
-6. Test with a chat
+4. Go to Settings > API Keys - your provider should appear in the dropdown (if `requiresApiKey: true`)
+5. Add your API key for the provider
+6. Go to Settings > Connection Profiles, create a profile using your provider
+7. Test with a chat
 
 ### Debugging
 
