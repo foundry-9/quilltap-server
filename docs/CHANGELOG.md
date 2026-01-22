@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- fix: Fix sync push validation error due to schema mismatch (2026-01-22)
+  - Server's push schema in `/api/v1/sync/route.ts` expected `{ mappings, entities }`
+  - Client sends `{ deltas }` as per `SyncPushRequestSchema` in types.ts
+  - Updated push schema to accept `deltas` array with all entity types from `SyncableEntityTypeEnum`
+  - Made `mappings` optional (ID preservation eliminates the need for mappings)
+  - Fixed `SyncProgress.currentItemName` schema to accept `null` (was failing validation when MongoDB stored `undefined` as `null`)
 - fix: Fix sync delta validation error due to schema mismatch (2026-01-22)
   - Server's delta schema in route.ts defined its own `deltaRequestSchema` with wrong field names
   - Used `since` instead of `sinceTimestamp`, and `entityTypes` was required instead of optional

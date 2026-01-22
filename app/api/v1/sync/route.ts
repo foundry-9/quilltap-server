@@ -29,7 +29,7 @@ import {
   successResponse,
 } from '@/lib/api/responses';
 import type { SyncableEntityType } from '@/lib/sync/types';
-import { SyncDeltaRequestSchema } from '@/lib/sync/types';
+import { SyncDeltaRequestSchema, SyncEntityDeltaSchema, SyncableEntityTypeEnum } from '@/lib/sync/types';
 
 // ============================================================================
 // Schemas
@@ -51,25 +51,18 @@ const handshakeSchema = z.object({
 
 // Using SyncDeltaRequestSchema from types.ts for consistency
 
+// Push schema - accepts deltas from the client
+// With ID preservation, mappings are optional (entities keep their original IDs)
 const pushDataSchema = z.object({
-  mappings: z.record(z.string().uuid(), z.string().uuid()),
-  entities: z.array(
+  deltas: z.array(SyncEntityDeltaSchema),
+  // Legacy support for mappings if provided
+  mappings: z.array(
     z.object({
-      id: z.string().uuid(),
-      entityType: z.enum([
-        'CHARACTER',
-        'CHAT',
-        'MEMORY',
-        'TAG',
-        'ROLEPLAY_TEMPLATE',
-        'PROMPT_TEMPLATE',
-      ]),
-      data: z.record(z.any()),
-      createdAt: z.string().datetime(),
-      updatedAt: z.string().datetime(),
-      isDeleted: z.boolean().optional(),
+      localId: z.string().uuid(),
+      remoteId: z.string().uuid().optional(),
+      entityType: SyncableEntityTypeEnum,
     })
-  ),
+  ).optional(),
 });
 
 const mappingsExchangeSchema = z.object({
@@ -193,7 +186,7 @@ async function handlePush(
     const request = pushDataSchema.parse(body);
 
     logger.info('[Sync v1] Push received', {
-      entityCount: request.entities.length,
+      deltaCount: request.deltas.length,
     });
 
     const { user, repos } = context;
@@ -204,40 +197,40 @@ async function handlePush(
       details: [] as any[],
     };
 
-    // Apply each entity
-    for (const entity of request.entities) {
+    // Apply each delta
+    for (const delta of request.deltas) {
       try {
         const result = await applyRemoteDelta(
           user.id,
           'remote-instance-id',
           {
-            id: entity.id,
-            entityType: entity.entityType as SyncableEntityType,
-            data: entity.data,
-            createdAt: entity.createdAt,
-            updatedAt: entity.updatedAt,
-            isDeleted: entity.isDeleted || false,
+            id: delta.id,
+            entityType: delta.entityType as SyncableEntityType,
+            data: delta.data as Record<string, unknown> | null,
+            createdAt: delta.createdAt,
+            updatedAt: delta.updatedAt,
+            isDeleted: delta.isDeleted || false,
           }
         );
 
         if (result.success) {
           results.applied++;
           results.details.push({
-            entityId: entity.id,
+            entityId: delta.id,
             status: 'applied',
             isNew: result.isNewEntity,
           });
         } else if (result.conflict) {
           results.conflicts++;
           results.details.push({
-            entityId: entity.id,
+            entityId: delta.id,
             status: 'conflict',
             resolution: result.conflict.resolution,
           });
         } else {
           results.errors++;
           results.details.push({
-            entityId: entity.id,
+            entityId: delta.id,
             status: 'error',
             error: result.error,
           });
@@ -245,13 +238,13 @@ async function handlePush(
       } catch (error) {
         results.errors++;
         results.details.push({
-          entityId: entity.id,
+          entityId: delta.id,
           status: 'error',
           error: error instanceof Error ? error.message : 'Unknown error',
         });
-        logger.error('[Sync v1] Error applying entity', {
-          entityId: entity.id,
-          entityType: entity.entityType,
+        logger.error('[Sync v1] Error applying delta', {
+          entityId: delta.id,
+          entityType: delta.entityType,
         });
       }
     }

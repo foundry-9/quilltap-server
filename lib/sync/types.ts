@@ -175,7 +175,7 @@ export type SyncPhase = z.infer<typeof SyncPhaseEnum>;
 export const SyncProgressSchema = z.object({
   phase: SyncPhaseEnum,
   currentEntity: SyncableEntityTypeEnum.optional(), // Entity type being synced
-  currentItemName: z.string().optional(), // Name/title of current item
+  currentItemName: z.string().nullish(), // Name/title of current item (can be null/undefined)
   pulled: z.number().default(0),
   pushed: z.number().default(0),
   filesFetched: z.number().default(0),
