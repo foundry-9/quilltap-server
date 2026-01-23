@@ -4,6 +4,14 @@
 
 ### 2.7-dev
 
+- docs: Major README overhaul and roadmap extraction (2026-01-23)
+  - Repositioned Quilltap as a general-purpose AI chat platform (not just roleplay)
+  - Streamlined feature descriptions with better organization
+  - Removed internal implementation details (MongoDB collections, etc.)
+  - Added new features: Projects, Files, MCP, Tools, Context compression, Sync
+  - Updated open source acknowledgments with all current dependencies
+  - Moved roadmap to `features/ROADMAP.md` for better organization
+  - Updated CLAUDE.md documentation references
 - refactor: Convert Tailwind color classes to qt-* semantic classes (2026-01-23)
   - `RenameReplaceTab.tsx`: Converted error alert to `qt-alert-error`, info box to `qt-alert-info`
   - `plugins-tab.tsx`: Converted plugin source badges to `qt-badge-source-*` classes
