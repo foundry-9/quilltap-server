@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- fix: Startup state now persists across Next.js module reloads (2026-01-23)
+  - Moved startup state storage from module-local variables to `global` namespace
+  - Fixes issue where API routes would wait 30s on first request after server restart
+  - State set in `instrumentation.ts` now correctly visible to API route handlers
+  - Eliminates "Server startup not complete after 30s" warnings during normal operation
 - feat: Capabilities report now shows Image Prompt LLM override in Cost Configuration (2026-01-23)
   - When a separate LLM is configured for image prompt expansion, it appears in the report
   - Added `ImagePromptLLMInfo` interface and `collectImagePromptLLMInfo` function

@@ -12,6 +12,10 @@
  * 5. 'file-storage' - File storage initialization in progress
  * 6. 'complete' - All initialization complete
  * 7. 'failed' - Initialization failed (server still runs but may have issues)
+ *
+ * NOTE: State is stored in `global` to persist across Next.js module reloads.
+ * This is critical because instrumentation.ts runs in a separate context from
+ * API routes, and module-local state would not be shared between them.
  */
 
 import { logger } from '@/lib/logger';
@@ -34,23 +38,61 @@ interface StartupStateData {
   error: string | null;
 }
 
-/**
- * Promise that resolves when startup is complete
- */
-let readyPromise: Promise<void> | null = null;
-let readyResolve: (() => void) | null = null;
+// Extend globalThis type for our startup state
+declare global {
+  // eslint-disable-next-line no-var
+  var __quilltapStartupState: StartupStateData | undefined;
+  // eslint-disable-next-line no-var
+  var __quilltapStartupReadyPromise: Promise<void> | undefined;
+  // eslint-disable-next-line no-var
+  var __quilltapStartupReadyResolve: (() => void) | undefined;
+}
 
 /**
- * Internal state
+ * Get or create the global startup state
+ * Using global ensures state persists across Next.js module reloads
  */
-const state: StartupStateData = {
-  phase: 'pending',
-  migrationsComplete: false,
-  isReady: false,
-  startTime: Date.now(),
-  readyTime: null,
-  error: null,
-};
+function getGlobalState(): StartupStateData {
+  if (!global.__quilltapStartupState) {
+    global.__quilltapStartupState = {
+      phase: 'pending',
+      migrationsComplete: false,
+      isReady: false,
+      startTime: Date.now(),
+      readyTime: null,
+      error: null,
+    };
+  }
+  return global.__quilltapStartupState;
+}
+
+/**
+ * Get the ready promise resolver
+ */
+function getReadyResolve(): (() => void) | undefined {
+  return global.__quilltapStartupReadyResolve;
+}
+
+/**
+ * Set the ready promise resolver
+ */
+function setReadyResolve(resolve: (() => void) | undefined): void {
+  global.__quilltapStartupReadyResolve = resolve;
+}
+
+/**
+ * Get the ready promise
+ */
+function getReadyPromise(): Promise<void> | undefined {
+  return global.__quilltapStartupReadyPromise;
+}
+
+/**
+ * Set the ready promise
+ */
+function setReadyPromise(promise: Promise<void> | undefined): void {
+  global.__quilltapStartupReadyPromise = promise;
+}
 
 /**
  * Startup state management singleton
@@ -60,13 +102,14 @@ export const startupState = {
    * Get the current startup phase
    */
   getPhase(): StartupPhase {
-    return state.phase;
+    return getGlobalState().phase;
   },
 
   /**
    * Set the current startup phase
    */
   setPhase(phase: StartupPhase): void {
+    const state = getGlobalState();
     const previousPhase = state.phase;
     state.phase = phase;
 
@@ -80,6 +123,7 @@ export const startupState = {
     if (phase === 'failed') {
       // If startup failed, resolve the ready promise anyway
       // so waiting code doesn't hang forever
+      const readyResolve = getReadyResolve();
       if (readyResolve) {
         readyResolve();
       }
@@ -90,6 +134,7 @@ export const startupState = {
    * Mark migrations as complete
    */
   markMigrationsComplete(): void {
+    const state = getGlobalState();
     state.migrationsComplete = true;
     logger.debug('Migrations marked complete', {
       context: 'startup-state.markMigrationsComplete',
@@ -101,13 +146,14 @@ export const startupState = {
    * Check if migrations are complete
    */
   areMigrationsComplete(): boolean {
-    return state.migrationsComplete;
+    return getGlobalState().migrationsComplete;
   },
 
   /**
    * Mark the server as ready
    */
   markReady(): void {
+    const state = getGlobalState();
     state.isReady = true;
     state.readyTime = Date.now();
 
@@ -118,6 +164,7 @@ export const startupState = {
     });
 
     // Resolve the ready promise
+    const readyResolve = getReadyResolve();
     if (readyResolve) {
       readyResolve();
     }
@@ -127,21 +174,21 @@ export const startupState = {
    * Check if the server is ready
    */
   isReady(): boolean {
-    return state.isReady;
+    return getGlobalState().isReady;
   },
 
   /**
    * Set an error message
    */
   setError(error: string): void {
-    state.error = error;
+    getGlobalState().error = error;
   },
 
   /**
    * Get startup stats
    */
   getStats(): StartupStateData {
-    return { ...state };
+    return { ...getGlobalState() };
   },
 
   /**
@@ -150,16 +197,20 @@ export const startupState = {
    * Times out after maxWaitMs (default 30 seconds)
    */
   async waitForReady(maxWaitMs: number = 30000): Promise<boolean> {
+    const state = getGlobalState();
+
     // Already ready
     if (state.isReady) {
       return true;
     }
 
     // Create the ready promise if it doesn't exist
+    let readyPromise = getReadyPromise();
     if (!readyPromise) {
       readyPromise = new Promise<void>((resolve) => {
-        readyResolve = resolve;
+        setReadyResolve(resolve);
       });
+      setReadyPromise(readyPromise);
     }
 
     // Wait with timeout
@@ -169,7 +220,7 @@ export const startupState = {
 
     await Promise.race([readyPromise, timeoutPromise]);
 
-    return state.isReady;
+    return getGlobalState().isReady;
   },
 
   /**
@@ -182,6 +233,8 @@ export const startupState = {
    * a safety check for edge cases.
    */
   async waitForMigrations(maxWaitMs: number = 30000): Promise<boolean> {
+    const state = getGlobalState();
+
     // Already complete
     if (state.migrationsComplete) {
       return true;
@@ -192,33 +245,37 @@ export const startupState = {
     const pollInterval = 100;
 
     while (Date.now() - startWait < maxWaitMs) {
-      if (state.migrationsComplete || state.phase === 'complete' || state.phase === 'failed') {
-        return state.migrationsComplete;
+      const currentState = getGlobalState();
+      if (currentState.migrationsComplete || currentState.phase === 'complete' || currentState.phase === 'failed') {
+        return currentState.migrationsComplete;
       }
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
     }
 
+    const currentState = getGlobalState();
     logger.warn('Timed out waiting for migrations', {
       context: 'startup-state.waitForMigrations',
       maxWaitMs,
-      currentPhase: state.phase,
-      migrationsComplete: state.migrationsComplete,
+      currentPhase: currentState.phase,
+      migrationsComplete: currentState.migrationsComplete,
     });
 
-    return state.migrationsComplete;
+    return currentState.migrationsComplete;
   },
 
   /**
    * Reset state (for testing)
    */
   reset(): void {
-    state.phase = 'pending';
-    state.migrationsComplete = false;
-    state.isReady = false;
-    state.startTime = Date.now();
-    state.readyTime = null;
-    state.error = null;
-    readyPromise = null;
-    readyResolve = null;
+    global.__quilltapStartupState = {
+      phase: 'pending',
+      migrationsComplete: false,
+      isReady: false,
+      startTime: Date.now(),
+      readyTime: null,
+      error: null,
+    };
+    setReadyPromise(undefined);
+    setReadyResolve(undefined);
   },
 };
