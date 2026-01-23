@@ -9,14 +9,14 @@
  */
 
 import Link from 'next/link'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback } from 'react'
+import { useEffect } from 'react'
 import { useSidebar } from '@/components/providers/sidebar-provider'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useTheme } from '@/components/providers/theme-provider'
 import { ProfileMenu } from './profile-menu'
 import { NavUserMenuThemeContent } from '@/components/dashboard/nav-user-menu-theme'
 import { NavUserMenuQuickHideContent, QuickHideIcon } from '@/components/dashboard/nav-user-menu-quick-hide'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
  * Settings icon (cog)
@@ -125,17 +125,14 @@ export function SidebarFooter() {
 
   const handleThemeClick = useCallback(() => {
     setOpenPopout(prev => prev === 'themes' ? null : 'themes')
-    clientLogger.debug('Themes popout toggled')
   }, [])
 
   const handleQuickHideClick = useCallback(() => {
     setOpenPopout(prev => prev === 'quickHide' ? null : 'quickHide')
-    clientLogger.debug('Quick Hide popout toggled')
   }, [])
 
   const handleThemeSelected = useCallback(() => {
     setOpenPopout(null)
-    clientLogger.debug('Theme selected, closing popout')
   }, [])
 
   return (
@@ -145,6 +142,7 @@ export function SidebarFooter() {
           href="/settings"
           className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
           onClick={handleItemClick}
+          title={isCollapsed ? 'Settings' : undefined}
         >
           <SettingsIcon className="qt-left-sidebar-item-icon w-5 h-5" />
           {!isCollapsed && <span className="qt-left-sidebar-item-label">Settings</span>}
@@ -154,6 +152,7 @@ export function SidebarFooter() {
           href="/tools"
           className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
           onClick={handleItemClick}
+          title={isCollapsed ? 'Tools' : undefined}
         >
           <ToolsIcon className="qt-left-sidebar-item-icon w-5 h-5" />
           {!isCollapsed && <span className="qt-left-sidebar-item-label">Tools</span>}

@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
  * Configuration for a wizard step
@@ -25,8 +24,6 @@ export interface UseWizardStateOptions<TStep extends string> {
   steps: Record<TStep, WizardStepConfig<TStep>>
   /** Callback when step changes */
   onStepChange?: (from: TStep, to: TStep) => void
-  /** Context string for logging */
-  logContext?: string
 }
 
 /**
@@ -88,7 +85,6 @@ export interface UseWizardStateResult<TStep extends string> {
  *       complete: { isTerminal: true },
  *       error: { prev: 'options', isTerminal: true },
  *     },
- *     logContext: 'useExportData',
  *   },
  *   state.step,
  *   (step) => setState((prev) => ({ ...prev, step }))
@@ -104,7 +100,7 @@ export function useWizardState<TStep extends string>(
   currentStep: TStep,
   setStep: (step: TStep) => void
 ): UseWizardStateResult<TStep> {
-  const { initialStep, steps, onStepChange, logContext } = options
+  const { initialStep, steps, onStepChange } = options
 
   const stepConfig = steps[currentStep]
 
@@ -115,37 +111,22 @@ export function useWizardState<TStep extends string>(
   const goTo = useCallback(
     (step: TStep) => {
       const prevStep = currentStep
-      clientLogger.debug('Wizard step change', {
-        context: logContext || 'useWizardState',
-        from: prevStep,
-        to: step,
-      })
       setStep(step)
       onStepChange?.(prevStep, step)
     },
-    [currentStep, setStep, onStepChange, logContext]
+    [currentStep, setStep, onStepChange]
   )
 
   const goNext = useCallback(
     (targetStep?: TStep) => {
       const nextSteps = stepConfig?.next
       if (!nextSteps || nextSteps.length === 0) {
-        clientLogger.warn('Cannot go next: no next steps defined', {
-          context: logContext || 'useWizardState',
-          currentStep,
-        })
         return
       }
 
       // If target specified, validate it's in the allowed next steps
       if (targetStep) {
         if (!nextSteps.includes(targetStep)) {
-          clientLogger.warn('Cannot go to target step: not in allowed next steps', {
-            context: logContext || 'useWizardState',
-            currentStep,
-            targetStep,
-            allowedNext: nextSteps,
-          })
           return
         }
         goTo(targetStep)
@@ -154,28 +135,20 @@ export function useWizardState<TStep extends string>(
         goTo(nextSteps[0])
       }
     },
-    [currentStep, stepConfig, goTo, logContext]
+    [stepConfig, goTo]
   )
 
   const goBack = useCallback(() => {
     const prevStep = stepConfig?.prev
     if (!prevStep) {
-      clientLogger.warn('Cannot go back: no previous step defined', {
-        context: logContext || 'useWizardState',
-        currentStep,
-      })
       return
     }
     goTo(prevStep)
-  }, [currentStep, stepConfig, goTo, logContext])
+  }, [stepConfig, goTo])
 
   const resetStep = useCallback(() => {
-    clientLogger.debug('Resetting wizard to initial step', {
-      context: logContext || 'useWizardState',
-      initialStep,
-    })
     setStep(initialStep)
-  }, [initialStep, setStep, logContext])
+  }, [initialStep, setStep])
 
   const getPrevStep = useCallback(
     (step: TStep): TStep | undefined => {

@@ -8,7 +8,9 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types';
-import { logger } from '../../../lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-openai');
 
 // OpenAI supports images in vision-capable models
 const OPENAI_SUPPORTED_MIME_TYPES = [
@@ -131,7 +133,20 @@ export class OpenAIProvider implements LLMProvider {
         requestParams.temperature = params.temperature;
       }
     } else {
-      logger.debug('Skipping sampling parameters for reasoning model', { context: 'OpenAIProvider.sendMessage', model: params.model });
+      // Reasoning models use internal reasoning tokens before generating output.
+      // To ensure sufficient tokens for actual output, we increase the limit.
+      // GPT-5 nano/mini need extra tokens because they default to medium reasoning effort.
+      // See: https://platform.openai.com/docs/guides/reasoning
+      const minTokensForReasoning = 4096;
+      if ((params.maxTokens ?? 0) < minTokensForReasoning) {
+        requestParams.max_completion_tokens = minTokensForReasoning;
+        logger.debug('Increased max_completion_tokens for reasoning model', {
+          context: 'OpenAIProvider.sendMessage',
+          model: params.model,
+          original: params.maxTokens,
+          adjusted: minTokensForReasoning
+        });
+      }
     }
 
     // Add tools if provided
@@ -202,7 +217,18 @@ export class OpenAIProvider implements LLMProvider {
         requestParams.temperature = params.temperature;
       }
     } else {
-      logger.debug('Skipping sampling parameters for reasoning model', { context: 'OpenAIProvider.streamMessage', model: params.model });
+      // Reasoning models use internal reasoning tokens before generating output.
+      // To ensure sufficient tokens for actual output, we increase the limit.
+      const minTokensForReasoning = 4096;
+      if ((params.maxTokens ?? 0) < minTokensForReasoning) {
+        requestParams.max_completion_tokens = minTokensForReasoning;
+        logger.debug('Increased max_completion_tokens for reasoning model', {
+          context: 'OpenAIProvider.streamMessage',
+          model: params.model,
+          original: params.maxTokens,
+          adjusted: minTokensForReasoning
+        });
+      }
     }
 
     // Add tools if provided

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -35,9 +34,8 @@ export function ProfileList({
   } = useAsyncOperation<void>()
 
   const handleDelete = async (id: string) => {
-    clientLogger.debug('Deleting embedding profile', { profileId: id })
     await executeDelete(async () => {
-      const result = await fetchJson('/api/embedding-profiles/' + id, { method: 'DELETE' })
+      const result = await fetchJson('/api/v1/embedding-profiles/' + id, { method: 'DELETE' })
       if (!result.ok) {
         throw new Error(result.error || 'Failed to delete profile')
       }
@@ -54,7 +52,6 @@ export function ProfileList({
         action={{
           label: 'Create First Profile',
           onClick: () => {
-            clientLogger.debug('Creating first profile')
             onEdit({} as EmbeddingProfile)
           },
         }}
@@ -71,7 +68,7 @@ export function ProfileList({
         />
       )}
 
-      {profiles.toSorted((a, b) => a.name.localeCompare(b.name)).map(profile => {
+      {profiles.slice().sort((a, b) => a.name.localeCompare(b.name)).map(profile => {
         // Build badges array
         const badges: ProfileCardBadge[] = []
         if (profile.isDefault) {

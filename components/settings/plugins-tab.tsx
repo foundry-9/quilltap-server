@@ -1,12 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { BrandName } from '@/components/ui/brand-name'
-import { clientLogger } from '@/lib/client-logger'
+import { PluginConfigModal } from './plugins/PluginConfigModal'
 
 type PluginSource = 'included' | 'npm' | 'git' | 'manual' | 'bundled' | 'site' | 'user'
 type ActiveTab = 'installed' | 'browse'
+
+interface DeploymentInfo {
+  isUserManaged: boolean
+  isHosted: boolean
+}
 
 interface Plugin {
   name: string
@@ -16,6 +21,9 @@ interface Plugin {
   capabilities: string[]
   path: string
   source: PluginSource
+  scope?: 'site' | 'user'
+  packageName?: string
+  hasConfigSchema?: boolean
 }
 
 interface InstalledPlugin {
@@ -53,37 +61,37 @@ const getSourceBadge = (source: PluginSource) => {
     case 'bundled':
       return {
         label: 'Bundled',
-        className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+        className: 'qt-badge-source-included',
       }
     case 'npm':
       return {
         label: 'NPM',
-        className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+        className: 'qt-badge-source-npm',
       }
     case 'site':
       return {
         label: 'Site',
-        className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+        className: 'qt-badge-source-npm', // Using npm style for site plugins
       }
     case 'user':
       return {
         label: 'Personal',
-        className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+        className: 'qt-badge-source-manual', // Using manual style for user plugins
       }
     case 'git':
       return {
         label: 'Git',
-        className: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+        className: 'qt-badge-source-git',
       }
     case 'manual':
       return {
         label: 'Manual',
-        className: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
+        className: 'qt-badge-source-manual',
       }
     default:
       return {
         label: 'Unknown',
-        className: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
+        className: 'qt-badge-source-manual',
       }
   }
 }
@@ -95,6 +103,7 @@ export default function PluginsTab() {
   const [stats, setStats] = useState<PluginStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState<Set<string>>(new Set())
+  const [deploymentInfo, setDeploymentInfo] = useState<DeploymentInfo | null>(null)
 
   // Browse state
   const [searchQuery, setSearchQuery] = useState('')
@@ -102,9 +111,12 @@ export default function PluginsTab() {
   const [searching, setSearching] = useState(false)
   const [actionInProgress, setActionInProgress] = useState<string | null>(null)
 
+  // Config modal state
+  const [configModalPlugin, setConfigModalPlugin] = useState<{ name: string; title: string } | null>(null)
+
   const fetchPlugins = useCallback(async () => {
     try {
-      const res = await fetch('/api/plugins')
+      const res = await fetch('/api/v1/plugins')
       if (!res.ok) throw new Error('Failed to fetch plugins')
       const data = await res.json()
       setPlugins(data.plugins || [])
@@ -116,29 +128,40 @@ export default function PluginsTab() {
 
   const fetchInstalledPlugins = useCallback(async () => {
     try {
-      const res = await fetch('/api/plugins/installed')
+      const res = await fetch('/api/v1/plugins?filter=installed')
       if (!res.ok) throw new Error('Failed to fetch installed plugins')
       const data = await res.json()
       setInstalledPlugins(data.plugins || [])
     } catch (err) {
       // Silently fail for installed plugins list, use main plugins list as fallback
-      clientLogger.debug('Failed to fetch installed plugins', { error: err })
+    }
+  }, [])
+
+  const fetchDeploymentInfo = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/system/deployment')
+      if (!res.ok) throw new Error('Failed to fetch deployment info')
+      const data: DeploymentInfo = await res.json()
+      setDeploymentInfo(data)
+    } catch (err) {
+      // Silently fail, assume user-managed by default
+      setDeploymentInfo({ isUserManaged: true, isHosted: false })
     }
   }, [])
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
-      await Promise.all([fetchPlugins(), fetchInstalledPlugins()])
+      await Promise.all([fetchPlugins(), fetchInstalledPlugins(), fetchDeploymentInfo()])
       setLoading(false)
     }
     loadData()
-  }, [fetchPlugins, fetchInstalledPlugins])
+  }, [fetchPlugins, fetchInstalledPlugins, fetchDeploymentInfo])
 
   const handleTogglePlugin = async (pluginName: string, currentEnabled: boolean) => {
     setToggling(prev => new Set(prev).add(pluginName))
     try {
-      const res = await fetch(`/api/plugins/${encodeURIComponent(pluginName)}`, {
+      const res = await fetch(`/api/v1/plugins/${encodeURIComponent(pluginName)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !currentEnabled }),
@@ -182,19 +205,22 @@ export default function PluginsTab() {
 
     setSearching(true)
     try {
-      const params = new URLSearchParams()
-      if (searchQuery.trim()) {
-        params.set('q', searchQuery.trim())
-      }
-
-      const res = await fetch(`/api/plugins/search?${params.toString()}`)
+      const res = await fetch('/api/v1/plugins?action=search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: searchQuery.trim() || 'quilltap',
+          type: 'all',
+        }),
+      })
+      
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Search failed')
       }
 
       const data = await res.json()
-      setSearchResults(data.plugins || [])
+      setSearchResults(data.results || [])
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to search plugins')
       setSearchResults([])
@@ -206,7 +232,7 @@ export default function PluginsTab() {
   const installPlugin = async (packageName: string, scope: 'site' | 'user' = 'user') => {
     setActionInProgress(packageName)
     try {
-      const res = await fetch('/api/plugins/install', {
+      const res = await fetch('/api/v1/plugins?action=install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ packageName, scope }),
@@ -215,13 +241,28 @@ export default function PluginsTab() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'Installation failed')
+        // Check if the error is due to restart requirement on hosted deployment
+        if (data.requiresRestart && data.suggestedScope === 'site') {
+          showWarningToast(data.error || 'This plugin requires site-wide installation on hosted deployments.')
+        } else {
+          showErrorToast(data.error || 'Installation failed')
+        }
+        return
       }
 
-      showSuccessToast(data.message || 'Plugin installed successfully!')
+      // Check if server is restarting after installation
+      if (data.serverRestarting) {
+        showSuccessToast(data.message || 'Plugin installed! Server is restarting...')
+        // The page will need to be refreshed after server comes back
+        showWarningToast('Please wait for the server to restart and refresh this page.')
+      } else {
+        showSuccessToast(data.message || 'Plugin installed successfully!')
+      }
 
-      // Refresh installed plugins list
+      // Refresh installed plugins list and switch to installed tab
       await fetchInstalledPlugins()
+      await fetchPlugins()
+      setActiveTab('installed')
 
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Installation failed')
@@ -230,20 +271,21 @@ export default function PluginsTab() {
     }
   }
 
-  const uninstallPlugin = async (packageName: string, source: string) => {
+  const uninstallPlugin = async (packageName: string, source: string, scope?: 'site' | 'user') => {
     if (source === 'bundled' || source === 'included') {
       showErrorToast('Cannot uninstall bundled plugins')
       return
     }
 
-    const scope = source === 'site' ? 'site' : 'user'
+    // Use provided scope, or derive from source for backward compatibility
+    const pluginScope = scope || (source === 'site' ? 'site' : 'user')
 
     setActionInProgress(packageName)
     try {
-      const res = await fetch('/api/plugins/uninstall', {
+      const res = await fetch('/api/v1/plugins?action=uninstall', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packageName, scope }),
+        body: JSON.stringify({ packageName, scope: pluginScope }),
       })
 
       const data = await res.json()
@@ -254,9 +296,10 @@ export default function PluginsTab() {
 
       showSuccessToast(data.message || 'Plugin uninstalled successfully!')
 
-      // Refresh installed plugins list
+      // Refresh installed plugins list and switch to installed tab
       await fetchInstalledPlugins()
       await fetchPlugins()
+      setActiveTab('installed')
 
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Uninstall failed')
@@ -434,10 +477,39 @@ export default function PluginsTab() {
                       </div>
 
                       <div className="flex items-center gap-3 flex-shrink-0">
+                        {/* Settings Button (for plugins with configSchema) */}
+                        {plugin.hasConfigSchema && (
+                          <button
+                            onClick={() => setConfigModalPlugin({ name: plugin.name, title: plugin.title })}
+                            className="px-3 py-1 text-sm text-foreground hover:bg-accent rounded transition-colors flex items-center gap-1"
+                          >
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                              />
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                              />
+                            </svg>
+                            Settings
+                          </button>
+                        )}
+
                         {/* Uninstall Button (for non-bundled plugins) */}
                         {canUninstall(plugin.source) && (
                           <button
-                            onClick={() => uninstallPlugin(plugin.name, plugin.source)}
+                            onClick={() => uninstallPlugin(plugin.packageName || plugin.name, plugin.source, plugin.scope)}
                             disabled={isUninstalling}
                             className="px-3 py-1 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
                           >
@@ -657,9 +729,29 @@ export default function PluginsTab() {
               Enabling or disabling existing plugins takes effect immediately,
               but some features may require a page refresh.
             </p>
+            {deploymentInfo?.isHosted && (
+              <p className="qt-text-small text-amber-700 dark:text-amber-300 mt-2">
+                <strong>Hosted deployment:</strong> Some plugins (such as authentication or database backends)
+                require site-wide installation and will trigger an automatic server restart.
+              </p>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Plugin Configuration Modal */}
+      {configModalPlugin && (
+        <PluginConfigModal
+          isOpen={true}
+          onClose={() => setConfigModalPlugin(null)}
+          pluginName={configModalPlugin.name}
+          pluginTitle={configModalPlugin.title}
+          onSuccess={() => {
+            // Refresh plugins list to update any status changes
+            fetchPlugins()
+          }}
+        />
+      )}
     </div>
   )
 }

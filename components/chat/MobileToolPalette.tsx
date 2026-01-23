@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
+import { useEffect, useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface MobileToolPaletteProps {
@@ -27,49 +26,20 @@ interface MobileToolPaletteProps {
   onSettingsClick: () => void
   // Rename
   onRenameClick?: () => void
+  // Project assignment
+  onProjectClick?: () => void
+  projectName?: string | null
   // Export
   chatId: string
   // Memory management
   onDeleteChatMemoriesClick?: () => void
   onReextractMemoriesClick?: () => void
   chatMemoryCount?: number
-  // Roleplay template info for RP buttons
-  roleplayTemplateId?: string | null
-  inputRef: React.RefObject<HTMLTextAreaElement | null>
-  input: string
-  setInput: (value: string) => void
+  // Bulk character replace
+  onBulkCharacterReplaceClick?: () => void
   // Disabled state
   disabled?: boolean
 }
-
-type AnnotationType = 'narration' | 'internal' | 'ooc'
-
-interface AnnotationConfig {
-  label: string
-  type: AnnotationType
-  prefix: string
-  suffix: string
-}
-
-interface RoleplayTemplate {
-  id: string
-  name: string
-  description: string | null
-  isBuiltIn: boolean
-}
-
-// Standard template annotations
-const STANDARD_ANNOTATIONS: AnnotationConfig[] = [
-  { label: 'Narration', type: 'narration', prefix: '*', suffix: '*' },
-  { label: 'OOC', type: 'ooc', prefix: '((', suffix: '))' },
-]
-
-// Quilltap RP template annotations
-const QUILLTAP_RP_ANNOTATIONS: AnnotationConfig[] = [
-  { label: 'Narration', type: 'narration', prefix: '[', suffix: ']' },
-  { label: 'Internal', type: 'internal', prefix: '{', suffix: '}' },
-  { label: 'OOC', type: 'ooc', prefix: '// ', suffix: '' },
-]
 
 export default function MobileToolPalette({
   isOpen,
@@ -87,111 +57,16 @@ export default function MobileToolPalette({
   showAddCharacter = false,
   onSettingsClick,
   onRenameClick,
+  onProjectClick,
+  projectName,
   chatId,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
   chatMemoryCount = 0,
-  roleplayTemplateId,
-  inputRef,
-  input,
-  setInput,
+  onBulkCharacterReplaceClick,
   disabled = false,
 }: MobileToolPaletteProps) {
   const paletteRef = useRef<HTMLDivElement>(null)
-  const [template, setTemplate] = useState<RoleplayTemplate | null>(null)
-  const [loadingTemplate, setLoadingTemplate] = useState(false)
-
-  // Fetch template info when roleplayTemplateId changes
-  useEffect(() => {
-    if (!roleplayTemplateId) {
-      setTemplate(null)
-      return
-    }
-
-    const fetchTemplate = async () => {
-      try {
-        setLoadingTemplate(true)
-        clientLogger.debug('[MobileToolPalette] Fetching template', {
-          roleplayTemplateId,
-        })
-
-        const response = await fetch(`/api/roleplay-templates/${roleplayTemplateId}`)
-        if (response.ok) {
-          const data = await response.json()
-          setTemplate(data)
-          clientLogger.debug('[MobileToolPalette] Template loaded', {
-            templateName: data.name,
-            isBuiltIn: data.isBuiltIn,
-          })
-        } else {
-          clientLogger.warn('[MobileToolPalette] Failed to fetch template', {
-            roleplayTemplateId,
-            status: response.status,
-          })
-          setTemplate(null)
-        }
-      } catch (error) {
-        clientLogger.error('[MobileToolPalette] Error fetching template', {
-          roleplayTemplateId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        setTemplate(null)
-      } finally {
-        setLoadingTemplate(false)
-      }
-    }
-
-    fetchTemplate()
-  }, [roleplayTemplateId])
-
-  // Get annotations based on template type
-  const getAnnotations = useCallback((): AnnotationConfig[] => {
-    if (!template) return []
-
-    if (template.name === 'Standard') {
-      return STANDARD_ANNOTATIONS
-    } else if (template.name === 'Quilltap RP') {
-      return QUILLTAP_RP_ANNOTATIONS
-    }
-
-    return STANDARD_ANNOTATIONS
-  }, [template])
-
-  // Insert annotation at cursor position
-  const insertAnnotation = useCallback(
-    (config: AnnotationConfig) => {
-      const textarea = inputRef.current
-      if (!textarea) return
-
-      clientLogger.debug('[MobileToolPalette] Inserting annotation', {
-        type: config.type,
-        label: config.label,
-      })
-
-      const start = textarea.selectionStart
-      const end = textarea.selectionEnd
-      const selectedText = input.substring(start, end)
-
-      const before = input.substring(0, start)
-      const after = input.substring(end)
-      const wrapped = config.prefix + selectedText + config.suffix
-      const newValue = before + wrapped + after
-
-      setInput(newValue)
-
-      const newCursorPos = selectedText
-        ? start + wrapped.length
-        : start + config.prefix.length
-
-      setTimeout(() => {
-        textarea.focus()
-        textarea.setSelectionRange(newCursorPos, newCursorPos)
-      }, 0)
-
-      onClose()
-    },
-    [input, inputRef, setInput, onClose]
-  )
 
   // Close on outside click
   useClickOutside(paletteRef, onClose, {
@@ -200,20 +75,6 @@ export default function MobileToolPalette({
     onEscape: onClose,
   })
 
-  // Debug logging when palette opens
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('[MobileToolPalette] Opened', {
-        showAddCharacter,
-        hasImageProfile,
-        chatPhotoCount,
-        chatId,
-        chatMemoryCount,
-        roleplayTemplateId,
-        hasRenameCallback: !!onRenameClick,
-      })
-    }
-  }, [isOpen, showAddCharacter, hasImageProfile, chatPhotoCount, chatId, chatMemoryCount, roleplayTemplateId, onRenameClick])
 
   // Handlers that close palette after action
   const handleAttachFileClick = () => {
@@ -237,7 +98,6 @@ export default function MobileToolPalette({
   }
 
   const handleAddCharacterClick = () => {
-    clientLogger.debug('[MobileToolPalette] Add Character clicked')
     onAddCharacterClick?.()
     onClose()
   }
@@ -248,31 +108,34 @@ export default function MobileToolPalette({
   }
 
   const handleRenameClick = () => {
-    clientLogger.debug('[MobileToolPalette] Rename clicked')
     onRenameClick?.()
     onClose()
   }
 
+  const handleProjectClick = () => {
+    onProjectClick?.()
+    onClose()
+  }
+
   const handleExportClick = () => {
-    clientLogger.debug('[MobileToolPalette] Export Chat clicked', { chatId })
-    window.location.href = `/api/chats/${chatId}/export`
+    window.location.href = `/api/v1/chats/${chatId}?action=export`
     onClose()
   }
 
   const handleDeleteChatMemoriesClick = () => {
-    clientLogger.debug('[MobileToolPalette] Delete Chat Memories clicked', { chatId, chatMemoryCount })
     onDeleteChatMemoriesClick?.()
     onClose()
   }
 
   const handleReextractMemoriesClick = () => {
-    clientLogger.debug('[MobileToolPalette] Re-extract Memories clicked', { chatId })
     onReextractMemoriesClick?.()
     onClose()
   }
 
-  const annotations = getAnnotations()
-  const hasRpButtons = roleplayTemplateId && template && annotations.length > 0 && !loadingTemplate
+  const handleBulkCharacterReplaceClick = () => {
+    onBulkCharacterReplaceClick?.()
+    onClose()
+  }
 
   return (
     <div
@@ -363,6 +226,20 @@ export default function MobileToolPalette({
             </button>
           )}
 
+          {/* Bulk Character Replace */}
+          {onBulkCharacterReplaceClick && (
+            <button
+              type="button"
+              onClick={handleBulkCharacterReplaceClick}
+              className="qt-mobile-tool-palette-button"
+            >
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              <span className="qt-mobile-tool-palette-button-label">Bulk Replace</span>
+            </button>
+          )}
+
           {/* Chat Settings */}
           <button
             type="button"
@@ -390,6 +267,20 @@ export default function MobileToolPalette({
             </button>
           )}
 
+          {/* Project Assignment */}
+          {onProjectClick && (
+            <button
+              type="button"
+              onClick={handleProjectClick}
+              className="qt-mobile-tool-palette-button"
+            >
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+              <span className="qt-mobile-tool-palette-button-label">{projectName ? projectName : 'Project'}</span>
+            </button>
+          )}
+
           {/* Export Chat */}
           <button
             type="button"
@@ -404,76 +295,50 @@ export default function MobileToolPalette({
         </div>
       </div>
 
-      {/* Bottom Section: Quick Actions (left) | Roleplay (right) */}
+      {/* Quick Actions Section */}
       <div className="qt-mobile-tool-palette-section">
-        <div className="qt-mobile-tool-palette-split">
-          {/* Quick Actions - Left Column */}
-          <div className="qt-mobile-tool-palette-split-column">
-            <div className="qt-mobile-tool-palette-section-header">Quick Actions</div>
-            <div className="flex flex-col gap-1.5">
-              {/* Attach File */}
-              <button
-                type="button"
-                onClick={handleAttachFileClick}
-                disabled={disabled || uploadingFile}
-                className="qt-mobile-tool-palette-button"
-              >
-                {uploadingFile ? (
-                  <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                ) : (
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                  </svg>
-                )}
-                <span className="qt-mobile-tool-palette-button-label">Attach File</span>
-              </button>
+        <div className="qt-mobile-tool-palette-section-header">Quick Actions</div>
+        <div className="qt-mobile-tool-palette-grid">
+          {/* Attach File */}
+          <button
+            type="button"
+            onClick={handleAttachFileClick}
+            disabled={disabled || uploadingFile}
+            className="qt-mobile-tool-palette-button"
+          >
+            {uploadingFile ? (
+              <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            ) : (
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+            )}
+            <span className="qt-mobile-tool-palette-button-label">Attach File</span>
+          </button>
 
-              {/* Toggle Preview */}
-              <button
-                type="button"
-                onClick={handleTogglePreview}
-                disabled={disabled}
-                className="qt-mobile-tool-palette-button"
-              >
-                {showPreview ? (
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                ) : (
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                )}
-                <span className="qt-mobile-tool-palette-button-label">
-                  {showPreview ? 'Edit Mode' : 'Preview'}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Roleplay - Right Column */}
-          {hasRpButtons && (
-            <div className="qt-mobile-tool-palette-split-column">
-              <div className="qt-mobile-tool-palette-section-header">Roleplay</div>
-              <div className="qt-mobile-tool-palette-rp-buttons">
-                {annotations.map((config) => (
-                  <button
-                    key={config.type}
-                    type="button"
-                    onClick={() => insertAnnotation(config)}
-                    disabled={disabled}
-                    className={`qt-rp-annotation-button qt-rp-annotation-button-${config.type}`}
-                    title={`Insert ${config.label.toLowerCase()} notation (${config.prefix}...${config.suffix || 'end of line'})`}
-                  >
-                    {config.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Toggle Preview */}
+          <button
+            type="button"
+            onClick={handleTogglePreview}
+            disabled={disabled}
+            className="qt-mobile-tool-palette-button"
+          >
+            {showPreview ? (
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            ) : (
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            )}
+            <span className="qt-mobile-tool-palette-button-label">
+              {showPreview ? 'Edit Mode' : 'Preview'}
+            </span>
+          </button>
         </div>
       </div>
     </div>

@@ -7,24 +7,6 @@
 
 import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals'
 
-// Mock the client logger
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}))
-
-// Get mocked logger
-const loggerMock = jest.requireMock('@/lib/client-logger') as {
-  clientLogger: {
-    debug: jest.Mock
-    warn: jest.Mock
-    error: jest.Mock
-  }
-}
-const mockClientLogger = loggerMock.clientLogger
 
 describe('Message Navigation Utilities', () => {
   // Import functions after mocks are set up
@@ -111,23 +93,18 @@ describe('Message Navigation Utilities', () => {
       expect(result.highlight).toBeNull()
     })
 
-    it('should log debug info when navigation is pending', () => {
+    it('should handle navigation data when navigation is pending', () => {
       sessionStorage.setItem('scrollToMessageId', 'msg-123')
 
-      getPendingMessageNavigation()
+      const result = getPendingMessageNavigation()
 
-      expect(mockClientLogger.debug).toHaveBeenCalledWith(
-        '[MessageNavigation] Retrieved pending navigation',
-        expect.objectContaining({ scrollTo: 'msg-123' })
-      )
+      expect(result.scrollTo).toBe('msg-123')
     })
 
-    it('should not log when no navigation is pending', () => {
-      mockClientLogger.debug.mockClear()
+    it('should return null values when no navigation is pending', () => {
+      const result = getPendingMessageNavigation()
 
-      getPendingMessageNavigation()
-
-      expect(mockClientLogger.debug).not.toHaveBeenCalled()
+      expect(result.scrollTo).toBeNull()
     })
   })
 
@@ -193,19 +170,12 @@ describe('Message Navigation Utilities', () => {
       const result = scrollToMessage('nonexistent')
 
       expect(result).toBe(false)
-      expect(mockClientLogger.warn).toHaveBeenCalledWith(
-        '[MessageNavigation] Message element not found',
-        { messageId: 'nonexistent' }
-      )
     })
 
-    it('should log debug info on scroll', () => {
-      scrollToMessage('msg-123')
+    it('should scroll to message successfully', () => {
+      const result = scrollToMessage('msg-123')
 
-      expect(mockClientLogger.debug).toHaveBeenCalledWith(
-        '[MessageNavigation] Scrolling to message',
-        expect.objectContaining({ messageId: 'msg-123' })
-      )
+      expect(result).toBe(true)
     })
 
     it('should use default highlight duration of 3000ms', () => {

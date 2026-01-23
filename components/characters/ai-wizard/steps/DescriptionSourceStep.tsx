@@ -63,7 +63,7 @@ export function DescriptionSourceStep({
         formData.append('tags', JSON.stringify([{ tagType: 'CHARACTER', tagId: characterId }]))
       }
 
-      const response = await fetch('/api/images', {
+      const response = await fetch('/api/v1/images', {
         method: 'POST',
         body: formData,
       })
@@ -74,7 +74,7 @@ export function DescriptionSourceStep({
         throw new Error(data.error || 'Failed to upload image')
       }
 
-      onImageUpload(data.data.id, data.data.url || `/api/images/${data.data.id}/file`)
+      onImageUpload(data.data.id, data.data.url || `/api/files/${data.data.id}`)
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Failed to upload image')
     } finally {
@@ -87,7 +87,7 @@ export function DescriptionSourceStep({
   }
 
   const handleGalleryImageSelect = (image: ImageData) => {
-    onGallerySelect(image.id, image.url || `/api/images/${image.id}/file`)
+    onGallerySelect(image.id, image.url || `/api/files/${image.id}`)
     setShowGallery(false)
   }
 

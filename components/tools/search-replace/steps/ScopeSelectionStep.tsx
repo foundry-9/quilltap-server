@@ -7,7 +7,6 @@
  */
 
 import { useEffect, useState } from 'react';
-import { clientLogger } from '@/lib/client-logger';
 import type { SearchReplaceScope } from '../types';
 
 interface ScopeSelectionStepProps {
@@ -49,16 +48,14 @@ export function ScopeSelectionStep({
     const fetchData = async () => {
       setLoading(true);
       try {
-        const charsRes = await fetch('/api/characters');
+        const charsRes = await fetch('/api/v1/characters');
 
         if (charsRes.ok) {
           const data = await charsRes.json();
           setCharacters(data.characters || data || []);
         }
-
-        clientLogger.debug('[ScopeSelectionStep] Fetched characters');
       } catch (error) {
-        clientLogger.error('[ScopeSelectionStep] Error fetching data', { error });
+        console.error('[ScopeSelectionStep] Error fetching data', { error });
       } finally {
         setLoading(false);
       }
@@ -78,7 +75,6 @@ export function ScopeSelectionStep({
 
   const handleScopeTypeChange = (type: ScopeType) => {
     setScopeType(type);
-    clientLogger.debug('[ScopeSelectionStep] Scope type changed', { type });
   };
 
   // Separate characters by controlledBy for display

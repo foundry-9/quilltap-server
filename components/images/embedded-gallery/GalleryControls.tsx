@@ -1,7 +1,5 @@
 'use client'
 
-import { clientLogger } from '@/lib/client-logger'
-
 interface GalleryControlsProps {
   taggedCount: number
   totalCount: number
@@ -47,7 +45,6 @@ export function GalleryControls({
             type="checkbox"
             checked={showOnlyTagged}
             onChange={(e) => {
-              clientLogger.debug('Gallery filter toggled', { showOnlyTagged: e.target.checked })
               onFilterToggle(e.target.checked)
             }}
             className="rounded border-input text-primary focus:ring-ring"
@@ -60,7 +57,6 @@ export function GalleryControls({
         {/* Upload Button */}
         <button
           onClick={() => {
-            clientLogger.debug('Upload dialog opened')
             onUploadClick()
           }}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
@@ -75,7 +71,6 @@ export function GalleryControls({
         {hasAvatarSet && (
           <button
             onClick={() => {
-              clientLogger.debug('Clear avatar button clicked')
               onClearAvatarClick()
             }}
             className="px-3 py-1 qt-text-label-xs text-destructive hover:bg-destructive/10 rounded-md transition-colors"
@@ -87,7 +82,6 @@ export function GalleryControls({
         {/* Zoom Controls */}
         <button
           onClick={() => {
-            clientLogger.debug('Thumbnail size decreased', { size: thumbnailSize })
             onZoomOut()
           }}
           disabled={thumbnailSizeIndex === 0}
@@ -103,7 +97,6 @@ export function GalleryControls({
         </span>
         <button
           onClick={() => {
-            clientLogger.debug('Thumbnail size increased', { size: thumbnailSize })
             onZoomIn()
           }}
           disabled={thumbnailSizeIndex === maxThumbnailIndex}

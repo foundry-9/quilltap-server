@@ -7,7 +7,6 @@ import ErrorAlert from '@/components/ui/ErrorAlert'
 import { useImportKeys } from './hooks'
 import { ImportKeysPreview } from './ImportKeysPreview'
 import { showSuccessToast } from '@/lib/toast'
-import { clientLogger } from '@/lib/client-logger'
 import type { DuplicateHandling, ProfileAssociation } from './types'
 
 interface ImportKeysDialogProps {
@@ -59,10 +58,6 @@ export function ImportKeysDialog({
   // Auto-close and show toasts when import is complete
   useEffect(() => {
     if (state.step === 'complete' && state.importResult) {
-      clientLogger.debug('Import complete, showing toasts for associations', {
-        context: 'ImportKeysDialog',
-        associations: state.importResult.associations?.length || 0,
-      })
 
       // Show toasts for auto-associations
       if (state.importResult.associations && state.importResult.associations.length > 0) {

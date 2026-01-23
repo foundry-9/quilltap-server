@@ -1,62 +1,61 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
-interface PersonaBasic {
+interface UserCharacterBasic {
   id: string
   name: string
   title?: string | null
 }
 
-interface UsePersonaDisplayNameResult {
+interface UseUserCharacterDisplayNameResult {
   /**
-   * Format a persona's display name, including title only if disambiguation is needed
-   * @param persona - The persona to format (needs id, name, and optionally title)
+   * Format a character's display name, including title only if disambiguation is needed
+   * @param character - The character to format (needs id, name, and optionally title)
    * @returns Formatted display name
    */
-  formatPersonaName: (persona: PersonaBasic | null | undefined) => string
+  formatCharacterName: (character: UserCharacterBasic | null | undefined) => string
 
   /**
-   * Check if a persona name needs disambiguation (has duplicates)
-   * @param name - The persona name to check
-   * @returns true if there are multiple personas with this name
+   * Check if a character name needs disambiguation (has duplicates)
+   * @param name - The character name to check
+   * @returns true if there are multiple user-controlled characters with this name
    */
   needsDisambiguation: (name: string) => boolean
 
   /**
-   * Whether the persona list has loaded
+   * Whether the character list has loaded
    */
   loading: boolean
 }
 
 /**
- * Hook to format persona display names, showing titles only when needed for disambiguation.
- * Fetches the user's personas and tracks which names have duplicates.
+ * Hook to format user-controlled character display names, showing titles only when needed for disambiguation.
+ * Fetches the user's characters (controlledBy=user) and tracks which names have duplicates.
  */
-export function usePersonaDisplayName(): UsePersonaDisplayNameResult {
+export function useUserCharacterDisplayName(): UseUserCharacterDisplayNameResult {
   const [duplicateNames, setDuplicateNames] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchPersonas = async () => {
+    const fetchCharacters = async () => {
       try {
-        const res = await fetch('/api/personas')
+        // Fetch only user-controlled characters
+        const res = await fetch('/api/v1/characters?controlledBy=user')
         if (!res.ok) {
           if (res.status === 401) {
-            clientLogger.debug('Not authenticated, cannot check persona names')
             return
           }
-          throw new Error(`Failed to fetch personas: ${res.status}`)
+          throw new Error(`Failed to fetch characters: ${res.status}`)
         }
 
         const data = await res.json()
-        // API returns array directly, not wrapped in { personas: [] }
-        const personas: PersonaBasic[] = Array.isArray(data) ? data : (data.personas || [])
+        // API returns array directly, not wrapped in { characters: [] }
+        const characters: UserCharacterBasic[] = Array.isArray(data) ? data : (data.characters || [])
 
         // Count occurrences of each name
         const nameCounts = new Map<string, number>()
-        for (const persona of personas) {
-          const count = nameCounts.get(persona.name) || 0
-          nameCounts.set(persona.name, count + 1)
+        for (const character of characters) {
+          const count = nameCounts.get(character.name) || 0
+          nameCounts.set(character.name, count + 1)
         }
 
         // Find names that appear more than once
@@ -68,12 +67,8 @@ export function usePersonaDisplayName(): UsePersonaDisplayNameResult {
         }
 
         setDuplicateNames(duplicates)
-        clientLogger.debug('Persona name disambiguation loaded', {
-          totalPersonas: personas.length,
-          duplicateNames: duplicates.size,
-        })
       } catch (err) {
-        clientLogger.warn('Error fetching personas for display name disambiguation', {
+        console.warn('Error fetching characters for display name disambiguation', {
           error: err instanceof Error ? err.message : String(err),
         })
       } finally {
@@ -81,7 +76,7 @@ export function usePersonaDisplayName(): UsePersonaDisplayNameResult {
       }
     }
 
-    fetchPersonas()
+    fetchCharacters()
   }, [])
 
   const needsDisambiguation = useCallback(
@@ -89,22 +84,22 @@ export function usePersonaDisplayName(): UsePersonaDisplayNameResult {
     [duplicateNames]
   )
 
-  const formatPersonaName = useCallback(
-    (persona: PersonaBasic | null | undefined): string => {
-      if (!persona) return ''
+  const formatCharacterName = useCallback(
+    (character: UserCharacterBasic | null | undefined): string => {
+      if (!character) return ''
 
-      // Show title only if this name has duplicates and the persona has a title
-      if (persona.title && duplicateNames.has(persona.name)) {
-        return `${persona.name} (${persona.title})`
+      // Show title only if this name has duplicates and the character has a title
+      if (character.title && duplicateNames.has(character.name)) {
+        return `${character.name} (${character.title})`
       }
 
-      return persona.name
+      return character.name
     },
     [duplicateNames]
   )
 
   return useMemo(
-    () => ({ formatPersonaName, needsDisambiguation, loading }),
-    [formatPersonaName, needsDisambiguation, loading]
+    () => ({ formatCharacterName, needsDisambiguation, loading }),
+    [formatCharacterName, needsDisambiguation, loading]
   )
 }

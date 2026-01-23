@@ -9,8 +9,7 @@
  * Allows switching which character the user is currently typing as.
  */
 
-import { useState, useRef, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
+import { useState, useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import Avatar from '@/components/ui/Avatar'
 
@@ -52,14 +51,6 @@ export function SpeakerSelector({
     enabled: isOpen,
   })
 
-  // Log when component mounts or characters change
-  useEffect(() => {
-    clientLogger.debug('[SpeakerSelector] Rendered', {
-      characterCount: characters.length,
-      activeParticipantId,
-    })
-  }, [characters.length, activeParticipantId])
-
   // Don't render if fewer than 2 characters
   if (characters.length < 2) {
     return null
@@ -72,12 +63,6 @@ export function SpeakerSelector({
       setIsOpen(false)
       return
     }
-
-    const character = characters.find(c => c.participantId === participantId)
-    clientLogger.debug('[SpeakerSelector] Character selected', {
-      participantId,
-      characterName: character?.name,
-    })
 
     onSelect(participantId)
     setIsOpen(false)

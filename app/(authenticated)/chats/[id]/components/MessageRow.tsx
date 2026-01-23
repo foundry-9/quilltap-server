@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { memo } from 'react'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
-import MessageContent from '@/components/chat/MessageContent'
+import LazyMessageContent from '@/components/chat/LazyMessageContent'
 import { formatMessageTime } from '@/lib/format-time'
 import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
-import { clientLogger } from '@/lib/client-logger'
-import type { Message, Participant } from '../types'
+import { TokenBadge } from '@/components/chat/TokenBadge'
+import type { Message, Participant, TokenDisplaySettings } from '../types'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
+import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
 interface MessageAvatarInfo {
   name: string
@@ -28,7 +29,12 @@ interface MessageRowProps {
   showResendButton: boolean
   shouldShowAvatars: boolean
   messageAvatar: MessageAvatarInfo | null
-  roleplayTemplateName: string | null
+  /** Patterns for styling roleplay text in message content */
+  renderingPatterns?: RenderingPattern[]
+  /** Optional dialogue detection for paragraph-level styling */
+  dialogueDetection?: DialogueDetection | null
+  /** Force immediate render (skip lazy loading) - use for last few messages */
+  forceRender?: boolean
   isMultiChar: boolean
   participantData: ParticipantData[]
   turnState: TurnState
@@ -39,6 +45,8 @@ interface MessageRowProps {
   userParticipantId: string | null
   isPaused?: boolean
   onTogglePause?: () => void
+  /** Token display settings */
+  tokenDisplaySettings?: TokenDisplaySettings
 
   // Callbacks
   onEditStart: (message: Message) => void
@@ -66,7 +74,7 @@ function getImageAttachments(message: Message) {
   return (message.attachments || []).filter(a => a.mimeType.startsWith('image/'))
 }
 
-export function MessageRow({
+function MessageRowInner({
   message,
   messageIndex,
   isEditing,
@@ -76,7 +84,9 @@ export function MessageRow({
   showResendButton,
   shouldShowAvatars,
   messageAvatar,
-  roleplayTemplateName,
+  renderingPatterns,
+  dialogueDetection,
+  forceRender = false,
   isMultiChar,
   participantData,
   turnState,
@@ -87,6 +97,7 @@ export function MessageRow({
   userParticipantId,
   isPaused = false,
   onTogglePause,
+  tokenDisplaySettings,
   onEditStart,
   onEditSave,
   onEditCancel,
@@ -332,7 +343,7 @@ export function MessageRow({
                   {message.content}
                 </div>
               ) : (
-                <MessageContent content={message.content} roleplayTemplateName={roleplayTemplateName} />
+                <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} />
               )}
               {/* Image attachment thumbnails */}
               {getImageAttachments(message).length > 0 && (
@@ -483,14 +494,32 @@ export function MessageRow({
                     </>
                   )}
                 </div>
-                <span className="qt-chat-message-action-timestamp">
-                  {formatMessageTime(message.createdAt)}
-                </span>
+                <div className="qt-chat-message-action-timestamp flex items-center gap-2">
+                  <span>{formatMessageTime(message.createdAt)}</span>
+                  {tokenDisplaySettings?.showPerMessageTokens && (message.promptTokens || message.completionTokens) && (
+                    <TokenBadge
+                      promptTokens={message.promptTokens}
+                      completionTokens={message.completionTokens}
+                      totalTokens={message.tokenCount}
+                      showTokens={tokenDisplaySettings.showPerMessageTokens}
+                      showCost={tokenDisplaySettings.showPerMessageCost}
+                    />
+                  )}
+                </div>
               </div>
 
-              {/* Desktop timestamp - hidden on mobile */}
-              <div className="qt-text-xs mt-2 qt-chat-desktop-timestamp">
-                {formatMessageTime(message.createdAt)}
+              {/* Desktop timestamp and token info - hidden on mobile */}
+              <div className="qt-text-xs mt-2 qt-chat-desktop-timestamp flex items-center gap-2">
+                <span>{formatMessageTime(message.createdAt)}</span>
+                {tokenDisplaySettings?.showPerMessageTokens && (message.promptTokens || message.completionTokens) && (
+                  <TokenBadge
+                    promptTokens={message.promptTokens}
+                    completionTokens={message.completionTokens}
+                    totalTokens={message.tokenCount}
+                    showTokens={tokenDisplaySettings.showPerMessageTokens}
+                    showCost={tokenDisplaySettings.showPerMessageCost}
+                  />
+                )}
               </div>
             </>
           )}
@@ -631,3 +660,71 @@ export function MessageRow({
     </div>
   )
 }
+
+/**
+ * Memoized MessageRow component to prevent unnecessary re-renders.
+ * Only re-renders when message content, edit state, or relevant UI state changes.
+ */
+export const MessageRow = memo(MessageRowInner, (prev, next) => {
+  // Return true if props are equal (skip re-render)
+
+  // Core message identity and content
+  if (prev.message.id !== next.message.id) return false
+  if (prev.message.content !== next.message.content) return false
+  if (prev.message.role !== next.message.role) return false
+  if (prev.messageIndex !== next.messageIndex) return false
+
+  // Edit state
+  if (prev.isEditing !== next.isEditing) return false
+  if (prev.isEditing && prev.editContent !== next.editContent) return false
+
+  // View source toggle (compare Set membership for this message)
+  if (prev.viewSourceMessageIds.has(prev.message.id) !== next.viewSourceMessageIds.has(next.message.id)) return false
+
+  // Swipe state
+  if (prev.swipeState?.current !== next.swipeState?.current) return false
+  if (prev.swipeState?.total !== next.swipeState?.total) return false
+
+  // Display toggles
+  if (prev.showResendButton !== next.showResendButton) return false
+  if (prev.shouldShowAvatars !== next.shouldShowAvatars) return false
+
+  // Streaming/generation state
+  if (prev.streaming !== next.streaming) return false
+  if (prev.waitingForResponse !== next.waitingForResponse) return false
+  if (prev.isPaused !== next.isPaused) return false
+
+  // Multi-char specific state
+  if (prev.isMultiChar !== next.isMultiChar) return false
+  if (prev.mobileParticipantDropdownId !== next.mobileParticipantDropdownId) return false
+  if (prev.turnState.currentTurnParticipantId !== next.turnState.currentTurnParticipantId) return false
+
+  // Avatar info (compare by value since it's an object)
+  if (prev.messageAvatar?.name !== next.messageAvatar?.name) return false
+  if (prev.messageAvatar?.avatarUrl !== next.messageAvatar?.avatarUrl) return false
+
+  // Rendering patterns (reference equality is fine - they're stable)
+  if (prev.renderingPatterns !== next.renderingPatterns) return false
+  if (prev.dialogueDetection !== next.dialogueDetection) return false
+
+  // Force render flag (for last few messages to avoid lazy loading)
+  if (prev.forceRender !== next.forceRender) return false
+
+  // Attachments (check if array changed)
+  const prevAttachments = prev.message.attachments || []
+  const nextAttachments = next.message.attachments || []
+  if (prevAttachments.length !== nextAttachments.length) return false
+
+  // Token display settings
+  if (prev.tokenDisplaySettings?.showPerMessageTokens !== next.tokenDisplaySettings?.showPerMessageTokens) return false
+  if (prev.tokenDisplaySettings?.showPerMessageCost !== next.tokenDisplaySettings?.showPerMessageCost) return false
+
+  // Token data (if display is enabled)
+  if (prev.tokenDisplaySettings?.showPerMessageTokens || next.tokenDisplaySettings?.showPerMessageTokens) {
+    if (prev.message.promptTokens !== next.message.promptTokens) return false
+    if (prev.message.completionTokens !== next.message.completionTokens) return false
+  }
+
+  // Props are equal, skip re-render
+  return true
+})

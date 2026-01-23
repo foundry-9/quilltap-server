@@ -199,11 +199,10 @@ describe('useMessageStreaming', () => {
       expect(mockSetStreamingContent).toHaveBeenCalledWith('');
     });
 
-    it('should not throw when stopping streaming (logs debug internally)', () => {
+    it('should not throw when stopping streaming', () => {
       const params = createMockParams();
       const { result } = renderHook(() => useMessageStreaming(params));
 
-      // The hook internally calls clientLogger.debug - we verify it doesn't throw
       expect(() => {
         act(() => {
           result.current.abortControllerRef.current = new AbortController();
@@ -271,18 +270,16 @@ describe('useMessageStreaming', () => {
       expect(result.current.userStoppedStreamRef.current).toBe(false);
     });
 
-    it('should not throw when setting userStoppedStreamRef in multi-char mode (logs debug internally)', () => {
+    it('should set userStoppedStreamRef in multi-char mode without throwing', () => {
       const params = createMockParams({ isMultiChar: true });
       const { result } = renderHook(() => useMessageStreaming(params));
 
-      // The hook internally calls clientLogger.debug - we verify it doesn't throw
       expect(() => {
         act(() => {
           result.current.stopStreaming();
         });
       }).not.toThrow();
 
-      // Verify the ref was set correctly
       expect(result.current.userStoppedStreamRef.current).toBe(true);
     });
   });
@@ -467,11 +464,10 @@ describe('useMessageStreaming', () => {
       ).resolves.not.toThrow();
     });
 
-    it('should not throw when called with participantId (logs debug internally)', async () => {
+    it('should not throw when called with participantId', async () => {
       const params = createMockParams();
       const { result } = renderHook(() => useMessageStreaming(params));
 
-      // The hook internally calls clientLogger.debug - we verify it doesn't throw
       await expect(
         act(async () => {
           await result.current.triggerContinueMode('test-participant-id');

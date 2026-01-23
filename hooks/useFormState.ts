@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { clientLogger } from '@/lib/client-logger';
 
 /**
  * Hook for managing form state with automatic type handling
@@ -54,11 +53,6 @@ export function useFormState<T extends Record<string, any>>(initialState: T) {
   ) => {
     const { name, type, value } = e.target;
 
-    clientLogger.debug('Form input changed', {
-      fieldName: name,
-      inputType: type,
-    });
-
     setFormData((prevState) => {
       let newValue: any = value;
 
@@ -66,28 +60,16 @@ export function useFormState<T extends Record<string, any>>(initialState: T) {
         // Convert to boolean for checkbox inputs
         const checkboxElement = e.target as HTMLInputElement;
         newValue = checkboxElement.checked;
-        clientLogger.debug('Checkbox value converted', {
-          fieldName: name,
-          checked: newValue,
-        });
       } else if (type === 'number' || type === 'range') {
         // Convert to number if the initial value was a number
         const initialValue = prevState[name as keyof T];
         if (typeof initialValue === 'number') {
           newValue = value === '' ? 0 : Number(value);
-          clientLogger.debug('Number value converted', {
-            fieldName: name,
-            numValue: newValue,
-          });
         }
       } else if (type === 'select-multiple') {
         // Handle multi-select
         const selectElement = e.target as HTMLSelectElement;
         newValue = Array.from(selectElement.selectedOptions).map((opt) => opt.value);
-        clientLogger.debug('Multi-select value converted', {
-          fieldName: name,
-          values: newValue,
-        });
       }
 
       return {
@@ -101,9 +83,6 @@ export function useFormState<T extends Record<string, any>>(initialState: T) {
    * Resets the form to its initial state
    */
   const resetForm = () => {
-    clientLogger.debug('Form reset', {
-      fieldsCount: Object.keys(initialState).length,
-    });
     setFormData(initialState);
   };
 
@@ -119,11 +98,6 @@ export function useFormState<T extends Record<string, any>>(initialState: T) {
    * setField('acceptTerms', true)
    */
   const setField = (name: keyof T, value: T[keyof T]) => {
-    clientLogger.debug('Form field set', {
-      fieldName: String(name),
-      valueType: typeof value,
-    });
-
     setFormData((prevState) => ({
       ...prevState,
       [name]: value,

@@ -63,10 +63,15 @@ const envSchema = z
     MONGODB_CONNECTION_TIMEOUT_MS: z.string().regex(/^\d+$/).optional(),
     MONGODB_MAX_POOL_SIZE: z.string().regex(/^\d+$/).optional(),
 
-    // S3 Configuration (required - S3 is the only supported file storage backend)
-    // NOTE: 'disabled' option is deprecated and will be removed in a future version.
-    // Use the migration plugin (qtap-plugin-upgrade) to migrate local files to S3.
-    S3_MODE: z.enum(['embedded', 'external', 'disabled']).optional().default('embedded'),
+    // File Storage Configuration
+    // Path for local filesystem storage (built-in backend)
+    QUILLTAP_FILE_STORAGE_PATH: z.string().optional().default('./data/files'),
+    // Encryption key for mount point secrets (auto-generated if not set, falls back to ENCRYPTION_MASTER_PEPPER)
+    QUILLTAP_ENCRYPTION_KEY: z.string().min(32).optional(),
+
+    // S3 Configuration (optional - S3 is now a plugin, local filesystem is the default)
+    // These env vars are used to auto-create an S3 mount point during migration
+    S3_MODE: z.enum(['embedded', 'external', 'disabled']).optional().default('disabled'),
     S3_ENDPOINT: z.string().url().optional(),
     S3_REGION: z.string().optional().default('us-east-1'),
     S3_ACCESS_KEY: z.string().optional(),
@@ -140,7 +145,8 @@ export function validateEnv(): Env {
       MONGODB_MODE: 'external',
       MONGODB_DATA_DIR: '/data/mongodb',
       DATA_BACKEND: 'mongodb',
-      S3_MODE: 'embedded',
+      QUILLTAP_FILE_STORAGE_PATH: './data/files',
+      S3_MODE: 'disabled',
       S3_REGION: 'us-east-1',
       S3_BUCKET: 'quilltap-files',
       LOG_LEVEL: 'info',
@@ -193,3 +199,75 @@ export const isDevelopment = env.NODE_ENV === 'development';
  * Check if we're in test mode
  */
 export const isTest = env.NODE_ENV === 'test';
+
+/**
+ * Check if a hostname is considered "local"
+ * @param hostname - The hostname to check
+ * @returns true if the hostname is localhost or 127.0.0.1
+ */
+function isLocalHostname(hostname: string): boolean {
+  const lowerHostname = hostname.toLowerCase();
+  return lowerHostname === 'localhost' || lowerHostname === '127.0.0.1';
+}
+
+/**
+ * Extract hostname from a URL string
+ * @param urlString - The URL to parse
+ * @returns The hostname or null if parsing fails
+ */
+function extractHostname(urlString: string | undefined): string | null {
+  if (!urlString) return null;
+  try {
+    const url = new URL(urlString);
+    return url.hostname;
+  } catch {
+    // For MongoDB URIs, try a simple extraction
+    // mongodb://hostname:port or mongodb+srv://hostname
+    const match = urlString.match(/mongodb(?:\+srv)?:\/\/(?:[^:@]+(?::[^@]+)?@)?([^:/?]+)/);
+    return match ? match[1] : null;
+  }
+}
+
+/**
+ * Check if the deployment is user-managed (locally hosted)
+ *
+ * A deployment is considered "user-managed" if either:
+ * - The MongoDB URI points to localhost/127.0.0.1 or is in embedded mode
+ * - The S3 endpoint points to localhost/127.0.0.1 or is in embedded mode
+ *
+ * This is useful for determining whether to show development/admin features,
+ * enable certain debugging capabilities, or adjust behavior for self-hosted deployments.
+ *
+ * @returns true if the deployment appears to be locally/self-managed
+ */
+export function checkIsUserManaged(): boolean {
+  // Check MongoDB - embedded mode or localhost URI means user-managed
+  const mongodbMode = env.MONGODB_MODE;
+  if (mongodbMode === 'embedded') {
+    return true;
+  }
+
+  const mongoHostname = extractHostname(env.MONGODB_URI);
+  if (mongoHostname && isLocalHostname(mongoHostname)) {
+    return true;
+  }
+
+  // Check S3 - embedded mode or localhost endpoint means user-managed
+  const s3Mode = env.S3_MODE;
+  if (s3Mode === 'embedded') {
+    return true;
+  }
+
+  const s3Hostname = extractHostname(env.S3_ENDPOINT);
+  if (s3Hostname && isLocalHostname(s3Hostname)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Whether the deployment is user-managed (locally hosted)
+ * True if either database or file storage is running locally
+ */
+export const isUserManaged = checkIsUserManaged();

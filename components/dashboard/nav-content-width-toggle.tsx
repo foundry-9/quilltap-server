@@ -10,7 +10,6 @@
  */
 
 import { useContentWidthOptional } from '@/components/providers/content-width-provider'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
  * Expand icon - outward-pointing arrows (used when in narrow mode, click to expand)
@@ -71,7 +70,6 @@ export function NavContentWidthToggle() {
   const { isWide, toggleWidth } = contentWidth
 
   const handleClick = () => {
-    clientLogger.info('Content width toggle clicked', { currentlyWide: isWide })
     toggleWidth()
   }
 

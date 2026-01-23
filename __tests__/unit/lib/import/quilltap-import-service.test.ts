@@ -201,17 +201,6 @@ describe('quilltap-import-service', () => {
       expect(preview.conflictCounts.characters).toBe(1);
     });
 
-    it('should preview persona import', async () => {
-      const persona = createMockExportedPersona({ name: 'Test Persona' });
-      const exportData = createMockPersonasExport({ personas: [persona] });
-
-      const preview = await previewImport(testUserId, exportData);
-
-      expect(preview.entities.personas).toHaveLength(1);
-      expect(preview.entities.personas![0].name).toBe('Test Persona');
-      expect(preview.entities.personas![0].exists).toBe(false);
-    });
-
     it('should preview chat import', async () => {
       const chat = createMockExportedChat({ title: 'Adventure Chat' });
       const exportData = createMockChatsExport({ chats: [chat] });

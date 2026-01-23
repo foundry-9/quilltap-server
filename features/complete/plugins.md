@@ -28,14 +28,6 @@ All LLM providers have been migrated to the plugin architecture:
 | `qtap-plugin-openrouter` | OpenRouter | Chat (100+ models), pricing sync |
 | `qtap-plugin-openai-compatible` | Generic | Chat (any OpenAI-format API) |
 
-### Upgrade Plugin (Complete)
-
-The `qtap-plugin-upgrade` plugin provides database migration capabilities:
-
-- OpenRouter profile conversion (legacy format migration)
-- Provider plugin enablement migrations
-- Extensible migration runner system
-
 ### Plugin Infrastructure (Complete)
 
 - [x] Plugin manifest schema with 19 capability types

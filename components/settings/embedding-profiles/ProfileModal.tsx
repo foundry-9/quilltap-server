@@ -3,7 +3,6 @@
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
-import { clientLogger } from '@/lib/client-logger'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -54,7 +53,6 @@ export function ProfileModal({
   }
 
   const handleSubmit = async () => {
-    clientLogger.debug('Submitting embedding profile form', { isEditing: !!profile?.id })
 
     await executeFormSubmit(async () => {
       const payload = {
@@ -67,7 +65,7 @@ export function ProfileModal({
         isDefault: form.formData.isDefault,
       }
 
-      const url = profile?.id ? `/api/embedding-profiles/${profile.id}` : '/api/embedding-profiles'
+      const url = profile?.id ? `/api/v1/embedding-profiles/${profile.id}` : '/api/v1/embedding-profiles'
       const method = profile?.id ? 'PUT' : 'POST'
 
       const result = await fetchJson(url, {
@@ -80,14 +78,12 @@ export function ProfileModal({
         throw new Error(result.error || 'Failed to save profile')
       }
 
-      clientLogger.debug('Embedding profile saved successfully')
       onSuccess()
       handleClose()
     })
   }
 
   const handleClose = () => {
-    clientLogger.debug('Closing embedding profile modal')
     clearFormError()
     form.resetForm()
     onClose()

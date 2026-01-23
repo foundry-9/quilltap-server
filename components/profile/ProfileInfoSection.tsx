@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { UserProfile } from './types'
-import { clientLogger } from '@/lib/client-logger'
 
 export interface ProfileInfoSectionProps {
   profile: UserProfile
@@ -79,10 +78,9 @@ function InfoField({
     try {
       await navigator.clipboard.writeText(value)
       setCopied(true)
-      clientLogger.debug('Copied profile field to clipboard', { field: label })
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      clientLogger.error('Failed to copy to clipboard', { error: err })
+      console.error('Failed to copy to clipboard', { error: err })
     }
   }
 
@@ -95,12 +93,12 @@ function InfoField({
       {copyable && (
         <button
           onClick={handleCopy}
-          className="qt-button-ghost p-2 ml-2"
+          className={`qt-copy-button qt-copy-button-icon ml-2 ${copied ? 'qt-copy-button-success' : ''}`}
           title="Copy to clipboard"
           aria-label={`Copy ${label}`}
         >
           {copied ? (
-            <CheckIcon className="w-4 h-4 text-green-500" />
+            <CheckIcon className="w-4 h-4" />
           ) : (
             <CopyIcon className="w-4 h-4" />
           )}
@@ -121,10 +119,6 @@ function InfoField({
  * - Updated At
  */
 export function ProfileInfoSection({ profile }: ProfileInfoSectionProps) {
-  useEffect(() => {
-    clientLogger.debug('ProfileInfoSection mounted', { userId: profile.id })
-  }, [profile.id])
-
   return (
     <div className="qt-card">
       <div className="qt-card-header">

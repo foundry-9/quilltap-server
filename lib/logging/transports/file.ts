@@ -10,6 +10,16 @@ import { LogLevel } from '@/lib/logger';
 import { LogTransport, LogData } from './base';
 
 /**
+ * Build a rotated log file path
+ * Extracted to a separate function to prevent Turbopack from analyzing
+ * the path pattern as a potential dynamic import
+ */
+function buildRotatedLogPath(logDir: string, filename: string, rotation: number): string {
+  const rotatedName = [filename, String(rotation)].join('.');
+  return join(logDir, rotatedName);
+}
+
+/**
  * File transport implementation
  * Handles writing log entries to disk with automatic file rotation
  * Features:
@@ -140,7 +150,7 @@ export class FileTransport implements LogTransport {
       const basePath = join(this.logDir, filename);
 
       // Remove oldest file if we're at max capacity
-      const oldestPath = join(this.logDir, `${filename}.${this.maxFiles}`);
+      const oldestPath = buildRotatedLogPath(this.logDir, filename, this.maxFiles);
       try {
         await fs.unlink(oldestPath);
       } catch {
@@ -149,8 +159,8 @@ export class FileTransport implements LogTransport {
 
       // Shift existing rotations: combined.log.2 -> combined.log.3, etc.
       for (let i = this.maxFiles - 1; i >= 1; i--) {
-        const oldPath = join(this.logDir, `${filename}.${i}`);
-        const newPath = join(this.logDir, `${filename}.${i + 1}`);
+        const oldPath = buildRotatedLogPath(this.logDir, filename, i);
+        const newPath = buildRotatedLogPath(this.logDir, filename, i + 1);
 
         try {
           await fs.rename(oldPath, newPath);
@@ -160,7 +170,7 @@ export class FileTransport implements LogTransport {
       }
 
       // Rename current log to .1
-      const rotatedPath = join(this.logDir, `${filename}.1`);
+      const rotatedPath = buildRotatedLogPath(this.logDir, filename, 1);
       try {
         await fs.rename(basePath, rotatedPath);
       } catch {

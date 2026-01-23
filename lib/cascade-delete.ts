@@ -7,12 +7,12 @@
 
 import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
-import { deleteFile as deleteS3File } from '@/lib/s3/operations'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 import { getVectorStoreManager } from '@/lib/embedding/vector-store'
 import type { ChatMetadata, FileEntry } from '@/lib/schemas/types'
 
 /**
- * Delete a file's bytes from storage (S3) and metadata from repository
+ * Delete a file's bytes from storage and metadata from repository
  */
 async function deleteFileCompletely(fileId: string): Promise<boolean> {
   const repos = getRepositories()
@@ -23,16 +23,16 @@ async function deleteFileCompletely(fileId: string): Promise<boolean> {
     return false
   }
 
-  // Delete the file bytes from S3
-  if (entry.s3Key) {
+  // Delete the file bytes from storage
+  if (entry.storageKey) {
     try {
-      await deleteS3File(entry.s3Key)
-      logger.debug('Deleted file from S3', { fileId, s3Key: entry.s3Key })
+      await fileStorageManager.deleteFile(entry)
+      logger.debug('Deleted file from storage', { fileId, storageKey: entry.storageKey })
     } catch (error) {
-      logger.error('Failed to delete file from S3', { fileId, s3Key: entry.s3Key }, error instanceof Error ? error : undefined)
+      logger.error('Failed to delete file from storage', { fileId, storageKey: entry.storageKey }, error instanceof Error ? error : undefined)
     }
   } else {
-    logger.warn('File has no S3 key, cannot delete bytes', { fileId })
+    logger.warn('File has no storage key, cannot delete bytes', { fileId })
   }
 
   // Delete metadata from repository
@@ -112,15 +112,10 @@ export async function findExclusiveImagesForCharacter(
         (image.linkedTo.length === 1 && image.linkedTo[0] === characterId)
 
       if (isExclusive) {
-        // Use targeted queries instead of findAll() + filter
-        const [charsUsingAsDefault, personasUsingAsDefault] = await Promise.all([
-          repos.characters.findByDefaultImageId(image.id),
-          repos.personas.findByDefaultImageId(image.id),
-        ])
+        // Use targeted queries to check if used as default image elsewhere
+        const charsUsingAsDefault = await repos.characters.findByDefaultImageId(image.id)
 
-        const usedElsewhere =
-          charsUsingAsDefault.some(c => c.id !== characterId) ||
-          personasUsingAsDefault.length > 0
+        const usedElsewhere = charsUsingAsDefault.some(c => c.id !== characterId)
 
         if (!usedElsewhere) {
           exclusiveImages.push(image)
@@ -206,19 +201,17 @@ export async function findExclusiveImagesForChats(
       continue
     }
 
-    // Use targeted queries to check if used as character/persona default or override
-    const [charsUsingAsDefault, charsUsingInOverrides, personasUsingAsDefault] = await Promise.all([
+    // Use targeted queries to check if used as character default or override
+    const [charsUsingAsDefault, charsUsingInOverrides] = await Promise.all([
       repos.characters.findByDefaultImageId(image.id),
       repos.characters.findByAvatarOverrideImageId(image.id),
-      repos.personas.findByDefaultImageId(image.id),
     ])
 
-    const usedByCharOrPersona =
+    const usedByCharacter =
       charsUsingAsDefault.length > 0 ||
-      charsUsingInOverrides.length > 0 ||
-      personasUsingAsDefault.length > 0
+      charsUsingInOverrides.length > 0
 
-    if (!usedByCharOrPersona) {
+    if (!usedByCharacter) {
       exclusiveImages.push(image)
     }
   }

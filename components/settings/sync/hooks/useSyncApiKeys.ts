@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { SyncApiKeyDisplay, CreateApiKeyResult } from '../types'
@@ -32,12 +31,6 @@ async function fetchWithRetry<T>(
         throw lastError
       }
 
-      clientLogger.debug('Retrying fetch after transient error', {
-        attempt,
-        maxRetries,
-        error: lastError.message,
-        delayMs,
-      })
 
       await new Promise(resolve => setTimeout(resolve, delayMs))
     }
@@ -65,16 +58,9 @@ export function useSyncApiKeys() {
    * Uses retry logic to handle transient connection errors during startup
    */
   const fetchKeys = useCallback(async () => {
-    clientLogger.debug('Fetching sync API keys')
     const result = await fetchOp.execute(async () => {
       return fetchWithRetry(async () => {
-        const response = await fetchJson<{ keys: SyncApiKeyDisplay[] }>('/api/sync/api-keys')
-        clientLogger.debug('Sync API keys response', {
-          ok: response.ok,
-          status: response.status,
-          hasData: !!response.data,
-          error: response.error || undefined,
-        })
+        const response = await fetchJson<{ keys: SyncApiKeyDisplay[] }>('/api/v1/sync/api-keys')
         if (!response.ok) {
           throw new Error(response.error || 'Failed to fetch sync API keys')
         }
@@ -83,7 +69,6 @@ export function useSyncApiKeys() {
     })
     if (result) {
       setKeys(result)
-      clientLogger.debug('Fetched sync API keys', { count: result.length })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // fetchOp.execute is stable
@@ -93,10 +78,9 @@ export function useSyncApiKeys() {
    */
   const createKey = useCallback(
     async (name: string) => {
-      clientLogger.debug('Creating sync API key', { name })
 
       const result = await createOp.execute(async () => {
-        const response = await fetchJson<CreateApiKeyResult>('/api/sync/api-keys', {
+        const response = await fetchJson<CreateApiKeyResult>('/api/v1/sync/api-keys', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name }),
@@ -117,7 +101,6 @@ export function useSyncApiKeys() {
         setKeys(prev => [result.key, ...prev])
         setNewlyCreatedKey(result.plaintextKey)
         setSuccess('API key created successfully. Copy it now - it won\'t be shown again!')
-        clientLogger.info('Sync API key created', { keyId: result.key.id })
         // Don't auto-clear success for key creation - user needs to copy the key
         return result
       }
@@ -133,10 +116,9 @@ export function useSyncApiKeys() {
    */
   const deleteKey = useCallback(
     async (keyId: string) => {
-      clientLogger.debug('Deleting sync API key', { keyId })
 
       const result = await deleteOp.execute(async () => {
-        const response = await fetchJson<void>(`/api/sync/api-keys/${keyId}`, {
+        const response = await fetchJson<void>(`/api/v1/sync/api-keys/${keyId}`, {
           method: 'DELETE',
         })
 
@@ -149,7 +131,6 @@ export function useSyncApiKeys() {
         setKeys(prev => prev.filter(k => k.id !== keyId))
         setSuccess('API key deleted successfully')
         setDeleteConfirm(null)
-        clientLogger.info('Sync API key deleted', { keyId })
         setTimeout(() => setSuccess(null), 3000)
       }
     },

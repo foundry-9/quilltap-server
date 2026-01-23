@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { getErrorMessage } from '@/lib/error-utils'
-import { clientLogger } from '@/lib/client-logger'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 
@@ -83,12 +82,12 @@ export interface UseListManagerResult<T> {
  *   handleEditorSave,
  * } = useListManager({
  *   fetchFn: async () => {
- *     const res = await fetch('/api/memories')
+ *     const res = await fetch('/api/v1/memories')
  *     if (!res.ok) throw new Error('Failed to fetch')
  *     return (await res.json()).memories
  *   },
  *   deleteFn: async (id) => {
- *     const res = await fetch(`/api/memories/${id}`, { method: 'DELETE' })
+ *     const res = await fetch(`/api/v1/memories/${id}`, { method: 'DELETE' })
  *     if (!res.ok) throw new Error('Failed to delete')
  *   },
  *   deleteConfirmMessage: 'Are you sure you want to delete this memory?',
@@ -127,15 +126,13 @@ export function useListManager<T extends Record<string, any>>(
 
   const refetch = useCallback(async () => {
     try {
-      clientLogger.debug('useListManager: Fetching items')
       setLoading(true)
       setError(null)
       const data = await fetchFnRef.current()
       setItems(data)
-      clientLogger.debug('useListManager: Fetched items', { count: data.length })
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to fetch items')
-      clientLogger.error('useListManager: Fetch failed', { error: errorMessage })
+      console.error('useListManager: Fetch failed', { error: errorMessage })
       setError(errorMessage)
     } finally {
       setLoading(false)
@@ -151,26 +148,22 @@ export function useListManager<T extends Record<string, any>>(
 
   const handleDelete = useCallback(async (id: string) => {
     if (!deleteFnRef.current) {
-      clientLogger.warn('useListManager: No deleteFn provided, skipping delete')
       return
     }
 
     const confirmed = await showConfirmation(deleteConfirmMessage)
     if (!confirmed) {
-      clientLogger.debug('useListManager: Delete cancelled by user')
       return
     }
 
     setDeletingId(id)
     try {
-      clientLogger.debug('useListManager: Deleting item', { id })
       await deleteFnRef.current(id)
       setItems(prev => prev.filter(item => String(item[idField]) !== id))
       showSuccessToast(deleteSuccessMessage)
-      clientLogger.debug('useListManager: Item deleted successfully', { id })
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to delete')
-      clientLogger.error('useListManager: Delete failed', { id, error: errorMessage })
+      console.error('useListManager: Delete failed', { id, error: errorMessage })
       showErrorToast(errorMessage)
     } finally {
       setDeletingId(null)
@@ -178,25 +171,21 @@ export function useListManager<T extends Record<string, any>>(
   }, [deleteConfirmMessage, deleteSuccessMessage, idField])
 
   const handleEdit = useCallback((item: T) => {
-    clientLogger.debug('useListManager: Opening editor for item', { id: item[idField] })
     setEditingItem(item)
     setShowEditor(true)
-  }, [idField])
+  }, [])
 
   const handleCreate = useCallback(() => {
-    clientLogger.debug('useListManager: Opening editor for new item')
     setEditingItem(null)
     setShowEditor(true)
   }, [])
 
   const handleEditorClose = useCallback(() => {
-    clientLogger.debug('useListManager: Closing editor')
     setShowEditor(false)
     setEditingItem(null)
   }, [])
 
   const handleEditorSave = useCallback(() => {
-    clientLogger.debug('useListManager: Editor save, refetching items')
     setShowEditor(false)
     setEditingItem(null)
     refetch()

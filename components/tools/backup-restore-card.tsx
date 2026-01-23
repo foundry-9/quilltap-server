@@ -29,7 +29,7 @@ export default function BackupRestoreCard() {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch('/api/tools/backup/list', {
+      const res = await fetch('/api/v1/system/backup', {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
       })
@@ -84,7 +84,7 @@ export default function BackupRestoreCard() {
     try {
       setDeletingKey(backupKey)
       setError(null)
-      const res = await fetch('/api/tools/backup/delete', {
+      const res = await fetch(`/api/v1/system/backup/${backupKey}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ s3Key: backupKey })

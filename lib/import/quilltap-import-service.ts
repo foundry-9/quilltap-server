@@ -11,7 +11,6 @@ import { getUserRepositories } from '@/lib/repositories/factory';
 import { getRepositories } from '@/lib/repositories/factory';
 import type {
   Character,
-  Persona,
   ChatMetadata,
   Tag,
   ConnectionProfile,
@@ -21,6 +20,7 @@ import type {
   RoleplayTemplate,
   MessageEvent,
   ChatParticipantBase,
+  Project,
 } from '@/lib/schemas/types';
 import type {
   QuilltapExportManifest,
@@ -29,9 +29,9 @@ import type {
   ConflictStrategy,
   ImportOptions as ExportImportOptions,
   ExportedCharacter,
-  ExportedPersona,
   ExportedChat,
   ExportedRoleplayTemplate,
+  ExportedProject,
   SanitizedConnectionProfile,
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
@@ -45,13 +45,13 @@ const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
  */
 interface AnyExportData {
   characters?: ExportedCharacter[];
-  personas?: ExportedPersona[];
   chats?: ExportedChat[];
   tags?: Tag[];
   connectionProfiles?: SanitizedConnectionProfile[];
   imageProfiles?: SanitizedImageProfile[];
   embeddingProfiles?: SanitizedEmbeddingProfile[];
   roleplayTemplates?: ExportedRoleplayTemplate[];
+  projects?: ExportedProject[];
   memories?: Memory[];
 }
 
@@ -80,13 +80,13 @@ export interface ImportPreview {
   manifest: QuilltapExportManifest;
   entities: {
     characters?: ImportPreviewEntity[];
-    personas?: ImportPreviewEntity[];
     chats?: ImportPreviewEntity[];
     roleplayTemplates?: ImportPreviewEntity[];
     connectionProfiles?: ImportPreviewEntity[];
     imageProfiles?: ImportPreviewEntity[];
     embeddingProfiles?: ImportPreviewEntity[];
     tags?: ImportPreviewEntity[];
+    projects?: ImportPreviewEntity[];
     memories?: { count: number };
   };
   conflictCounts: Record<string, number>;
@@ -107,12 +107,12 @@ export interface ImportResult {
 interface IdMappingState {
   tags: Map<string, string>;
   characters: Map<string, string>;
-  personas: Map<string, string>;
   chats: Map<string, string>;
   connectionProfiles: Map<string, string>;
   imageProfiles: Map<string, string>;
   embeddingProfiles: Map<string, string>;
   roleplayTemplates: Map<string, string>;
+  projects: Map<string, string>;
 }
 
 // ============================================================================
@@ -231,17 +231,12 @@ export async function previewImport(
   const data = getExportData(exportData);
 
   // Preview all entity types
-  const [characters, personas, chats, tags, connectionProfiles, imageProfiles, embeddingProfiles, roleplayTemplates] =
+  const [characters, chats, tags, connectionProfiles, imageProfiles, embeddingProfiles, roleplayTemplates, projects] =
     await Promise.all([
       checkExists(
         data.characters,
         (id) => repos.characters.findById(id),
         'characters'
-      ),
-      checkExists(
-        data.personas,
-        (id) => repos.personas.findById(id),
-        'personas'
       ),
       checkExists(
         data.chats,
@@ -276,19 +271,24 @@ export async function previewImport(
         },
         'roleplayTemplates'
       ),
+      checkExists(
+        data.projects,
+        (id) => repos.projects.findById(id),
+        'projects'
+      ),
     ]);
 
   const preview: ImportPreview = {
     manifest: exportData.manifest,
     entities: {
       ...(characters.length > 0 && { characters }),
-      ...(personas.length > 0 && { personas }),
       ...(chats.length > 0 && { chats }),
       ...(tags.length > 0 && { tags }),
       ...(connectionProfiles.length > 0 && { connectionProfiles }),
       ...(imageProfiles.length > 0 && { imageProfiles }),
       ...(embeddingProfiles.length > 0 && { embeddingProfiles }),
       ...(roleplayTemplates.length > 0 && { roleplayTemplates }),
+      ...(projects.length > 0 && { projects }),
       ...(data.memories && {
         memories: { count: data.memories.length },
       }),
@@ -330,18 +330,17 @@ export async function executeImport(
   const idMaps: IdMappingState = {
     tags: new Map(),
     characters: new Map(),
-    personas: new Map(),
     chats: new Map(),
     connectionProfiles: new Map(),
     imageProfiles: new Map(),
     embeddingProfiles: new Map(),
     roleplayTemplates: new Map(),
+    projects: new Map(),
   };
 
   // Initialize counts
   const imported: QuilltapExportCounts = {
     characters: 0,
-    personas: 0,
     chats: 0,
     messages: 0,
     roleplayTemplates: 0,
@@ -350,11 +349,11 @@ export async function executeImport(
     embeddingProfiles: 0,
     tags: 0,
     memories: 0,
+    projects: 0,
   };
 
   const skipped: QuilltapExportCounts = {
     characters: 0,
-    personas: 0,
     chats: 0,
     messages: 0,
     roleplayTemplates: 0,
@@ -363,6 +362,7 @@ export async function executeImport(
     embeddingProfiles: 0,
     tags: 0,
     memories: 0,
+    projects: 0,
   };
 
   const data = getExportData(exportData);
@@ -434,6 +434,20 @@ export async function executeImport(
       skipped.roleplayTemplates = counts.skipped;
     }
 
+    // 5.5. Projects (before characters since projects reference characters in roster)
+    if (data.projects && data.projects.length > 0) {
+      const counts = await importProjects(
+        userId,
+        data.projects,
+        options,
+        idMaps,
+        repos,
+        warnings
+      );
+      imported.projects = counts.imported;
+      skipped.projects = counts.skipped;
+    }
+
     // 6. Characters
     if (data.characters && data.characters.length > 0) {
       const counts = await importCharacters(
@@ -448,21 +462,7 @@ export async function executeImport(
       skipped.characters = counts.skipped;
     }
 
-    // 7. Personas
-    if (data.personas && data.personas.length > 0) {
-      const counts = await importPersonas(
-        userId,
-        data.personas,
-        options,
-        idMaps,
-        repos,
-        warnings
-      );
-      imported.personas = counts.imported;
-      skipped.personas = counts.skipped;
-    }
-
-    // 8. Chats
+    // 7. Chats
     if (data.chats && data.chats.length > 0) {
       const counts = await importChats(
         userId,
@@ -477,7 +477,7 @@ export async function executeImport(
       skipped.chats = counts.skipped;
     }
 
-    // 9. Memories (if includeMemories option is enabled)
+    // 8. Memories (if includeMemories option is enabled)
     if (options.includeMemories && data.memories && data.memories.length > 0) {
       const counts = await importMemories(
         userId,
@@ -822,6 +822,66 @@ async function importRoleplayTemplates(
   return { imported, skipped };
 }
 
+async function importProjects(
+  userId: string,
+  projects: Project[],
+  options: ImportOptions,
+  idMaps: IdMappingState,
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
+): Promise<ImportCounts> {
+  moduleLogger.debug('Importing projects', { count: projects.length });
+  let imported = 0;
+  let skipped = 0;
+
+  for (const project of projects) {
+    try {
+      const existing = await repos.projects.findById(project.id);
+
+      if (existing) {
+        if (options.conflictStrategy === 'skip') {
+          skipped++;
+          idMaps.projects.set(project.id, project.id);
+          continue;
+        }
+
+        if (options.conflictStrategy === 'overwrite') {
+          await repos.projects.delete(project.id);
+        }
+
+        if (options.conflictStrategy === 'duplicate') {
+          const newId = randomUUID();
+          idMaps.projects.set(project.id, newId);
+          const { id: _, userId: __, createdAt, updatedAt, ...projectData } = project;
+          const newProject = await repos.projects.create({
+            ...projectData,
+            name: `${projectData.name} (imported)`,
+          });
+          imported++;
+          continue;
+        }
+      }
+
+      const { id: _, userId: __, createdAt, updatedAt, ...projectData } = project;
+      const newProject = await repos.projects.create(projectData);
+      idMaps.projects.set(project.id, newProject.id);
+      imported++;
+    } catch (error) {
+      warnings.push(
+        `Failed to import project "${project.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to import project', {
+        projectId: project.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return { imported, skipped };
+}
+
 async function importCharacters(
   userId: string,
   characters: Character[],
@@ -874,66 +934,6 @@ async function importCharacters(
       );
       moduleLogger.warn('Failed to import character', {
         characterId: character.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  return { imported, skipped };
-}
-
-async function importPersonas(
-  userId: string,
-  personas: Persona[],
-  options: ImportOptions,
-  idMaps: IdMappingState,
-  repos: ReturnType<typeof getUserRepositories>,
-  warnings: string[]
-): Promise<ImportCounts> {
-  moduleLogger.debug('Importing personas', { count: personas.length });
-  let imported = 0;
-  let skipped = 0;
-
-  for (const persona of personas) {
-    try {
-      const existing = await repos.personas.findById(persona.id);
-
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          idMaps.personas.set(persona.id, persona.id);
-          continue;
-        }
-
-        if (options.conflictStrategy === 'overwrite') {
-          await repos.personas.delete(persona.id);
-        }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const newId = randomUUID();
-          idMaps.personas.set(persona.id, newId);
-          const { id: _, userId: __, createdAt, updatedAt, ...personaData } = persona;
-          const newPersona = await repos.personas.create({
-            ...personaData,
-            name: `${personaData.name} (imported)`,
-          });
-          imported++;
-          continue;
-        }
-      }
-
-      const { id: _, userId: __, createdAt, updatedAt, ...personaData } = persona;
-      const newPersona = await repos.personas.create(personaData);
-      idMaps.personas.set(persona.id, newPersona.id);
-      imported++;
-    } catch (error) {
-      warnings.push(
-        `Failed to import persona "${persona.name}": ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to import persona', {
-        personaId: persona.id,
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -1056,18 +1056,11 @@ async function importMemories(
         continue;
       }
 
-      // Remap persona ID if present (legacy, for backwards compatibility)
-      let newPersonaId = memory.personaId;
-      if (memory.personaId) {
-        newPersonaId = idMaps.personas.get(memory.personaId) || null;
-      }
-
       // Remap aboutCharacterId if present (Characters Not Personas: who the memory is about)
       let newAboutCharacterId = memory.aboutCharacterId;
       if (memory.aboutCharacterId) {
-        // Try to map as a character first, then as a persona (for migrated data)
-        newAboutCharacterId = idMaps.characters.get(memory.aboutCharacterId) ||
-                              idMaps.personas.get(memory.aboutCharacterId) || null;
+        // Try to map as a character first
+        newAboutCharacterId = idMaps.characters.get(memory.aboutCharacterId) || null;
       }
 
       // Remap chat ID if present
@@ -1080,7 +1073,7 @@ async function importMemories(
       await repos.memories.create({
         ...memoryData,
         characterId: newCharacterId,
-        personaId: newPersonaId,
+        personaId: null,
         aboutCharacterId: newAboutCharacterId,
         chatId: newChatId,
       });
@@ -1156,20 +1149,6 @@ async function reconcileRelationships(
         }
       }
 
-      // Remap personaLinks
-      if (character.personaLinks && character.personaLinks.length > 0) {
-        updates.personaLinks = character.personaLinks
-          .map((link) => {
-            const newPersonaId = remapId(link.personaId, idMaps.personas);
-            if (newPersonaId) {
-              return { ...link, personaId: newPersonaId };
-            }
-            return null;
-          })
-          .filter((link) => link !== null) as { personaId: string; isDefault: boolean }[];
-        hasUpdates = true;
-      }
-
       if (hasUpdates) {
         await repos.characters.update(newId, updates);
         moduleLogger.debug('Reconciled character relationships', {
@@ -1184,52 +1163,6 @@ async function reconcileRelationships(
       );
       moduleLogger.warn('Failed to reconcile character', {
         characterId: newId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  // Reconcile personas
-  for (const [backupId, newId] of idMaps.personas) {
-    try {
-      const persona = await repos.personas.findById(newId);
-      if (!persona) continue;
-
-      const updates: Partial<Persona> = {};
-      let hasUpdates = false;
-
-      // Remap tags
-      if (persona.tags && persona.tags.length > 0) {
-        const remappedTags = remapIdArray(persona.tags, idMaps.tags);
-        if (remappedTags.length > 0) {
-          updates.tags = remappedTags;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap characterLinks
-      if (persona.characterLinks && persona.characterLinks.length > 0) {
-        const remappedCharLinks = remapIdArray(persona.characterLinks, idMaps.characters);
-        if (remappedCharLinks.length > 0) {
-          updates.characterLinks = remappedCharLinks;
-          hasUpdates = true;
-        }
-      }
-
-      if (hasUpdates) {
-        await repos.personas.update(newId, updates);
-        moduleLogger.debug('Reconciled persona relationships', {
-          personaId: newId,
-        });
-      }
-    } catch (error) {
-      warnings.push(
-        `Failed to reconcile persona relationships: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to reconcile persona', {
-        personaId: newId,
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -1253,11 +1186,6 @@ async function reconcileRelationships(
             if (participant.characterId) {
               const newCharId = remapId(participant.characterId, idMaps.characters);
               if (newCharId) remapped.characterId = newCharId;
-            }
-
-            if (participant.personaId) {
-              const newPersonaId = remapId(participant.personaId, idMaps.personas);
-              if (newPersonaId) remapped.personaId = newPersonaId;
             }
 
             if (participant.connectionProfileId) {
@@ -1290,6 +1218,15 @@ async function reconcileRelationships(
         }
       }
 
+      // Remap projectId
+      if (chat.projectId) {
+        const newProjectId = remapId(chat.projectId, idMaps.projects);
+        if (newProjectId) {
+          updates.projectId = newProjectId;
+          hasUpdates = true;
+        }
+      }
+
       if (hasUpdates) {
         await repos.chats.update(newId, updates);
         moduleLogger.debug('Reconciled chat relationships', { chatId: newId });
@@ -1302,6 +1239,41 @@ async function reconcileRelationships(
       );
       moduleLogger.warn('Failed to reconcile chat', {
         chatId: newId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Reconcile projects
+  for (const [backupId, newId] of idMaps.projects) {
+    try {
+      const project = await repos.projects.findById(newId);
+      if (!project) continue;
+
+      const updates: Partial<Project> = {};
+      let hasUpdates = false;
+
+      // Remap characterRoster
+      if (project.characterRoster && project.characterRoster.length > 0) {
+        const remappedRoster = remapIdArray(project.characterRoster, idMaps.characters);
+        if (remappedRoster.length > 0) {
+          updates.characterRoster = remappedRoster;
+          hasUpdates = true;
+        }
+      }
+
+      if (hasUpdates) {
+        await repos.projects.update(newId, updates);
+        moduleLogger.debug('Reconciled project relationships', { projectId: newId });
+      }
+    } catch (error) {
+      warnings.push(
+        `Failed to reconcile project relationships: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to reconcile project', {
+        projectId: newId,
         error: error instanceof Error ? error.message : String(error),
       });
     }

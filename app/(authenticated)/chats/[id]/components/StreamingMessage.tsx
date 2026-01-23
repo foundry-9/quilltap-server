@@ -2,13 +2,17 @@ import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import MessageContent from '@/components/chat/MessageContent'
 import Avatar from '@/components/ui/Avatar'
 import type { CharacterData, Participant } from '../types'
+import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
 interface StreamingMessageProps {
   streaming: boolean
   streamingContent: string
   waitingForResponse: boolean
   respondingCharacter: CharacterData | undefined
-  roleplayTemplateName: string | null
+  /** Patterns for styling roleplay text in message content */
+  renderingPatterns?: RenderingPattern[]
+  /** Optional dialogue detection for paragraph-level styling */
+  dialogueDetection?: DialogueDetection | null
   shouldShowAvatars: boolean
   onStopClick: () => void
 }
@@ -18,7 +22,8 @@ export function StreamingMessage({
   streamingContent,
   waitingForResponse,
   respondingCharacter,
-  roleplayTemplateName,
+  renderingPatterns,
+  dialogueDetection,
   shouldShowAvatars,
   onStopClick,
 }: StreamingMessageProps) {
@@ -80,7 +85,7 @@ export function StreamingMessage({
           </div>
         ) : (
           <div className="flex-1 min-w-0 px-4 py-3 rounded-lg bg-card border border-border text-foreground">
-            <MessageContent content={streamingContent} roleplayTemplateName={roleplayTemplateName} />
+            <MessageContent content={streamingContent} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} />
             <QuillAnimation size="sm" className="inline-block ml-2 text-muted-foreground" />
           </div>
         )}

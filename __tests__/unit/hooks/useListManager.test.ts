@@ -5,14 +5,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useListManager } from '@/hooks/useListManager'
 
-// Mock the dependencies
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-  },
-}))
 
 jest.mock('@/lib/alert', () => ({
   showConfirmation: jest.fn(),

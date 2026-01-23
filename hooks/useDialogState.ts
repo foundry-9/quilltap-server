@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
  * Options for configuring the useDialogState hook
@@ -13,8 +12,6 @@ export interface UseDialogStateOptions<TState> {
   initialState: TState
   /** Optional callback for additional reset logic (e.g., clearing file inputs) */
   onReset?: () => void
-  /** Context string for logging - identifies the dialog in logs */
-  logContext?: string
 }
 
 /**
@@ -51,7 +48,6 @@ export interface UseDialogStateResult<TState> {
  * const { state, setState, setField, reset } = useDialogState({
  *   isOpen,
  *   initialState: { step: 'file', error: null, importing: false },
- *   logContext: 'useImportKeys',
  *   onReset: () => {
  *     if (fileInputRef.current) fileInputRef.current.value = ''
  *   }
@@ -60,7 +56,7 @@ export interface UseDialogStateResult<TState> {
 export function useDialogState<TState>(
   options: UseDialogStateOptions<TState>
 ): UseDialogStateResult<TState> {
-  const { isOpen, initialState, onReset, logContext } = options
+  const { isOpen, initialState, onReset } = options
 
   const [state, setState] = useState<TState>(initialState)
 
@@ -77,30 +73,15 @@ export function useDialogState<TState>(
   // Reset state when dialog closes
   useEffect(() => {
     if (!isOpen) {
-      clientLogger.debug('Dialog closed, resetting state', {
-        context: logContext || 'useDialogState',
-      })
       setState(initialStateRef.current)
       onResetRef.current?.()
     }
-  }, [isOpen, logContext])
-
-  // Log when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('Dialog opened', {
-        context: logContext || 'useDialogState',
-      })
-    }
-  }, [isOpen, logContext])
+  }, [isOpen])
 
   const reset = useCallback(() => {
-    clientLogger.debug('Manual state reset', {
-      context: logContext || 'useDialogState',
-    })
     setState(initialStateRef.current)
     onResetRef.current?.()
-  }, [logContext])
+  }, [])
 
   const setField = useCallback(<K extends keyof TState>(field: K, value: TState[K]) => {
     setState((prev) => ({ ...prev, [field]: value } as TState))
@@ -154,7 +135,6 @@ export interface UseDialogStateWithFileInputResult<TState>
  * const { state, setState, fileInputRef } = useDialogStateWithFileInput({
  *   isOpen,
  *   initialState: { step: 'file', selectedFile: null },
- *   logContext: 'useImportKeys',
  * })
  *
  * return <input type="file" ref={fileInputRef} />

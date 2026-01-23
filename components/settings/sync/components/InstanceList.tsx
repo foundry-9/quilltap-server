@@ -12,7 +12,6 @@
 import { useEffect } from 'react';
 import { SyncInstanceDisplay } from '../types';
 import { InstanceCard } from './InstanceCard';
-import { clientLogger } from '@/lib/client-logger';
 import type { SyncDirection } from '@/lib/sync/types';
 
 interface InstanceListProps {
@@ -43,10 +42,6 @@ export function InstanceList({
 }: InstanceListProps) {
   // Log render in useEffect to avoid state updates during render
   useEffect(() => {
-    clientLogger.debug('InstanceList: rendered', {
-      instanceCount: instances.length,
-      syncingInstanceId,
-    });
   }, [instances.length, syncingInstanceId]);
 
   // Empty state

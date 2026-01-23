@@ -11,15 +11,6 @@ import { useImportData } from '@/components/tools/import-export/hooks/useImportD
 const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
 global.fetch = mockFetch;
 
-// Mock clientLogger
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}));
 
 // Helper to create mock File with working text() method
 function createMockFile(content: string, name = 'export.qtap'): File {

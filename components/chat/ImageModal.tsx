@@ -3,7 +3,6 @@
 import { useEffect, useCallback, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
-import { clientLogger } from '@/lib/client-logger'
 
 interface ImageModalProps {
   isOpen: boolean
@@ -64,7 +63,7 @@ export default function ImageModal({
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (error) {
-      clientLogger.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -73,7 +72,7 @@ export default function ImageModal({
 
     setIsTagging(true)
     try {
-      const res = await fetch(`/api/chat-files/${fileId}`, {
+      const res = await fetch(`/api/v1/chat-files/${fileId}?action=tag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -89,7 +88,7 @@ export default function ImageModal({
 
       showSuccessToast(`Image added to ${characterName || 'character'}'s gallery`)
     } catch (error) {
-      clientLogger.error('Failed to tag image:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to tag image:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to tag image')
     } finally {
       setIsTagging(false)
@@ -101,7 +100,7 @@ export default function ImageModal({
 
     setIsTagging(true)
     try {
-      const res = await fetch(`/api/chat-files/${fileId}`, {
+      const res = await fetch(`/api/v1/chat-files/${fileId}?action=tag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -117,7 +116,7 @@ export default function ImageModal({
 
       showSuccessToast(`Image added to ${personaName || 'persona'}'s gallery`)
     } catch (error) {
-      clientLogger.error('Failed to tag image:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to tag image:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to tag image')
     } finally {
       setIsTagging(false)
@@ -133,7 +132,7 @@ export default function ImageModal({
 
     setIsDeleting(true)
     try {
-      const res = await fetch(`/api/chat-files/${fileId}`, {
+      const res = await fetch(`/api/v1/chat-files/${fileId}`, {
         method: 'DELETE',
       })
 
@@ -146,7 +145,7 @@ export default function ImageModal({
       onDelete?.()
       onClose()
     } catch (error) {
-      clientLogger.error('Failed to delete image:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to delete image:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to delete image')
     } finally {
       setIsDeleting(false)

@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription } from '@/components/characters/ai-wizard'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
@@ -49,26 +48,19 @@ export default function NewCharacterPage() {
     // Store physical description to save after character creation
     if (data.physicalDescription) {
       pendingPhysicalDescription.current = data.physicalDescription
-      clientLogger.debug('Physical description stored for post-creation save', {
-        name: data.physicalDescription.name,
-      })
     }
-    clientLogger.info('AI Wizard data applied to new character form', {
-      fieldsApplied: Object.keys(data).filter(k => k !== 'physicalDescription'),
-      hasPendingPhysicalDescription: !!data.physicalDescription,
-    })
   }
 
   useEffect(() => {
     const fetchProfiles = async () => {
       try {
-        const res = await fetch('/api/profiles')
+        const res = await fetch('/api/v1/connection-profiles')
         if (res.ok) {
           const data = await res.json()
           setProfiles(data)
         }
       } catch (err) {
-        clientLogger.error('Failed to fetch profiles', { error: err instanceof Error ? err.message : String(err) })
+        console.error('Failed to fetch profiles', { error: err instanceof Error ? err.message : String(err) })
       }
     }
     fetchProfiles()
@@ -80,7 +72,7 @@ export default function NewCharacterPage() {
     setError(null)
 
     try {
-      const res = await fetch('/api/characters', {
+      const res = await fetch('/api/v1/characters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -97,12 +89,7 @@ export default function NewCharacterPage() {
       // Save pending physical description if any
       if (pendingPhysicalDescription.current) {
         try {
-          clientLogger.debug('Saving physical description for new character', {
-            characterId,
-            name: pendingPhysicalDescription.current.name,
-          })
-
-          const descResponse = await fetch(`/api/characters/${characterId}/descriptions`, {
+          const descResponse = await fetch(`/api/v1/characters/${characterId}?action=descriptions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -117,20 +104,13 @@ export default function NewCharacterPage() {
 
           if (descResponse.ok) {
             showSuccessToast('Physical description created')
-            clientLogger.debug('Physical description saved successfully', { characterId })
           } else {
             const errorData = await descResponse.json()
-            clientLogger.error('Failed to save physical description', {
-              characterId,
-              error: errorData.error || 'Unknown error',
-            })
+            console.error('Failed to save physical description', errorData.error || 'Unknown error')
             showErrorToast('Character created, but physical description failed to save')
           }
         } catch (descErr) {
-          clientLogger.error('Error saving physical description', {
-            characterId,
-            error: descErr instanceof Error ? descErr.message : String(descErr),
-          })
+          console.error('Error saving physical description', descErr instanceof Error ? descErr.message : String(descErr))
           showErrorToast('Character created, but physical description failed to save')
         }
       }

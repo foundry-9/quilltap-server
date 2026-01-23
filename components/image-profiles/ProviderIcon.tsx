@@ -1,81 +1,63 @@
 'use client'
 
 interface ProviderIconProps {
-  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN'
+  provider: string
   className?: string
 }
 
+// Provider-specific icons
+const PROVIDER_ICONS: Record<string, { color: string; abbrev: string }> = {
+  OPENAI: { color: 'text-green-600', abbrev: 'OAI' },
+  GROK: { color: 'text-purple-600', abbrev: 'XAI' },
+  GOOGLE_IMAGEN: { color: 'text-blue-600', abbrev: 'GGL' },
+  GOOGLE: { color: 'text-blue-600', abbrev: 'GGL' },
+  OPENROUTER: { color: 'text-orange-600', abbrev: 'OR' },
+  ETERNAL_AI: { color: 'text-purple-600', abbrev: 'EAI' },
+}
+
 export function ProviderIcon({ provider, className = 'h-5 w-5' }: ProviderIconProps) {
-  switch (provider) {
-    case 'OPENAI':
-      return (
-        <svg
-          className={`text-green-600 ${className}`}
-          fill="currentColor"
-          viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path d="M12 0c6.627 0 12 5.373 12 12s-5.373 12-12 12S0 18.627 0 12 5.373 0 12 0z" />
-          <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="14" fontWeight="bold">
-            OAI
-          </text>
-        </svg>
-      )
+  const iconInfo = PROVIDER_ICONS[provider] || { color: 'text-gray-600', abbrev: provider.slice(0, 3).toUpperCase() }
 
-    case 'GROK':
-      return (
-        <svg
-          className={`text-purple-600 ${className}`}
-          fill="currentColor"
-          viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <circle cx="12" cy="12" r="12" />
-          <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="12" fontWeight="bold">
-            XAI
-          </text>
-        </svg>
-      )
+  return (
+    <svg
+      className={`${iconInfo.color} ${className}`}
+      fill="currentColor"
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="12" />
+      <text
+        x="50%"
+        y="50%"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="white"
+        fontSize={iconInfo.abbrev.length > 3 ? '9' : '10'}
+        fontWeight="bold"
+      >
+        {iconInfo.abbrev}
+      </text>
+    </svg>
+  )
+}
 
-    case 'GOOGLE_IMAGEN':
-      return (
-        <svg
-          className={`text-blue-600 ${className}`}
-          fill="currentColor"
-          viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <circle cx="12" cy="12" r="12" />
-          <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="10" fontWeight="bold">
-            GGL
-          </text>
-        </svg>
-      )
-
-    default:
-      return null
-  }
+// Provider badge colors and labels
+const PROVIDER_BADGES: Record<string, { bg: string; text: string; label: string }> = {
+  OPENAI: { bg: 'bg-green-100', text: 'text-green-800', label: 'OpenAI' },
+  GROK: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Grok' },
+  GOOGLE_IMAGEN: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Google Imagen' },
+  GOOGLE: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Google' },
+  OPENROUTER: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'OpenRouter' },
+  ETERNAL_AI: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Eternal AI' },
 }
 
 export function ProviderBadge({ provider }: { provider: string }) {
-  const colors: Record<string, { bg: string; text: string }> = {
-    OPENAI: { bg: 'bg-green-100', text: 'text-green-800' },
-    GROK: { bg: 'bg-purple-100', text: 'text-purple-800' },
-    GOOGLE_IMAGEN: { bg: 'bg-blue-100', text: 'text-blue-800' },
-  }
-
-  const labels: Record<string, string> = {
-    OPENAI: 'OpenAI',
-    GROK: 'Grok',
-    GOOGLE_IMAGEN: 'Google Imagen',
-  }
-
-  const color = colors[provider] || { bg: 'bg-gray-100', text: 'text-gray-800' }
+  const badge = PROVIDER_BADGES[provider] || { bg: 'bg-gray-100', text: 'text-gray-800', label: provider }
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${color.bg} ${color.text}`}>
-      <ProviderIcon provider={provider as any} className="h-3 w-3" />
-      {labels[provider] || provider}
+    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
+      <ProviderIcon provider={provider} className="h-3 w-3" />
+      {badge.label}
     </span>
   )
 }

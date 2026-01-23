@@ -14,6 +14,62 @@ import {
 } from './common.types';
 
 // ============================================================================
+// ANNOTATION BUTTONS (for formatting toolbar)
+// ============================================================================
+
+/**
+ * Configuration for annotation buttons shown in the formatting toolbar.
+ * Each roleplay template can define its own set of formatting buttons.
+ */
+export const AnnotationButtonSchema = z.object({
+  /** Full name displayed in tooltip (e.g., "Narration", "Internal Monologue") */
+  label: z.string().min(1).max(50),
+  /** Abbreviated label displayed on button (e.g., "Nar", "Int", "OOC") */
+  abbrev: z.string().min(1).max(10),
+  /** Opening delimiter (e.g., "[", "*", "{{") */
+  prefix: z.string(),
+  /** Closing delimiter (e.g., "]", "*", "}}") - empty string for line-end delimiters */
+  suffix: z.string(),
+});
+
+export type AnnotationButton = z.infer<typeof AnnotationButtonSchema>;
+
+// ============================================================================
+// RENDERING PATTERNS (for message content styling)
+// ============================================================================
+
+/**
+ * Pattern for styling roleplay text in message content.
+ * Defines how to match and style specific text patterns (narration, OOC, etc.)
+ */
+export const RenderingPatternSchema = z.object({
+  /** Regex pattern as a string (converted to RegExp at runtime) */
+  pattern: z.string().min(1),
+  /** CSS class to apply to matched text (e.g., qt-chat-narration, qt-chat-ooc) */
+  className: z.string().min(1),
+  /** Optional regex flags (e.g., 'm' for multiline) */
+  flags: z.string().optional(),
+});
+
+export type RenderingPattern = z.infer<typeof RenderingPatternSchema>;
+
+/**
+ * Configuration for detecting dialogue at the paragraph level.
+ * When dialogue contains markdown formatting, inline patterns can't match.
+ * This detects paragraphs that start/end with quote characters.
+ */
+export const DialogueDetectionSchema = z.object({
+  /** Opening quote characters to detect (e.g., ['"', '"']) */
+  openingChars: z.array(z.string()),
+  /** Closing quote characters to detect (e.g., ['"', '"']) */
+  closingChars: z.array(z.string()),
+  /** CSS class to apply to dialogue paragraphs */
+  className: z.string().min(1),
+});
+
+export type DialogueDetection = z.infer<typeof DialogueDetectionSchema>;
+
+// ============================================================================
 // ROLEPLAY TEMPLATES
 // ============================================================================
 
@@ -26,6 +82,12 @@ export const RoleplayTemplateSchema = z.object({
   isBuiltIn: z.boolean().default(false),     // Built-in templates are read-only
   pluginName: z.string().nullable().optional(), // Plugin name if provided by a plugin
   tags: z.array(UUIDSchema).default([]),     // Optional categorization
+  /** Annotation buttons for the formatting toolbar - defines available formatting options */
+  annotationButtons: z.array(AnnotationButtonSchema).default([]),
+  /** Patterns for styling roleplay text in message content */
+  renderingPatterns: z.array(RenderingPatternSchema).default([]),
+  /** Optional dialogue detection for paragraph-level styling */
+  dialogueDetection: DialogueDetectionSchema.nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

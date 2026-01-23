@@ -4,7 +4,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useSession } from '@/components/providers/session-provider';
 import type { TagStyleMap, TagVisualStyle } from '@/lib/schemas/types';
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles';
-import { clientLogger } from '@/lib/client-logger';
 
 interface TagStyleContextValue {
   styles: TagStyleMap;
@@ -31,7 +30,7 @@ export function TagStyleProvider({ children }: { children: React.ReactNode }) {
 
     try {
       // Fetch tags directly - visual styles are now stored on the tag entities
-      const res = await fetch('/api/tags', { cache: 'no-store' });
+      const res = await fetch('/api/v1/tags', { cache: 'no-store' });
       if (res.status === 401) {
         setStyles({});
       } else if (!res.ok) {
@@ -48,7 +47,7 @@ export function TagStyleProvider({ children }: { children: React.ReactNode }) {
         setStyles(styleMap);
       }
     } catch (error) {
-      clientLogger.warn('Unable to load tag styles:', { error: error instanceof Error ? error.message : String(error) });
+      console.warn('Unable to load tag styles:', { error: error instanceof Error ? error.message : String(error) });
       setStyles({});
     } finally {
       setLoading(false);

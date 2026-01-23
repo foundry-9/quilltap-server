@@ -135,9 +135,10 @@
 
   /**
    * Dialog overlay/backdrop
+   * z-[60] ensures modals appear above the left sidebar (z-50)
    */
   .qt-dialog-overlay {
-    @apply fixed inset-0 z-50;
+    @apply fixed inset-0 z-[60];
     @apply flex items-center justify-center;
     background: var(--qt-dialog-backdrop);
   }

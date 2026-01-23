@@ -31,6 +31,8 @@ export interface LoadedPlugin {
   source: PluginSource;
   /** Version from package.json (preferred for display) */
   packageVersion?: string;
+  /** Package name from package.json (for npm packages, may be scoped like @org/name) */
+  packageName?: string;
 }
 
 export interface PluginLoadError {
@@ -108,6 +110,21 @@ async function getPackageVersion(pluginPath: string): Promise<string | undefined
 }
 
 /**
+ * Get the package name from package.json
+ * @param pluginPath - Path to the plugin directory
+ * @returns Package name (may be scoped like @org/name) or undefined
+ */
+async function getPackageName(pluginPath: string): Promise<string | undefined> {
+  try {
+    const packageJsonPath = path.join(pluginPath, 'package.json');
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
+    return packageJson.name;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Determines the source of a plugin based on its path and package.json
  * @param pluginPath - Path to the plugin directory
  * @returns Plugin source type
@@ -118,7 +135,14 @@ async function determinePluginSource(pluginPath: string): Promise<PluginSource> 
     return 'included';
   }
 
-  // Check for package.json to determine npm vs manual
+  // Check if plugin is in a node_modules directory (npm-installed)
+  // This takes precedence over git repository detection since npm packages
+  // often have repository fields in their package.json
+  if (pluginPath.includes('node_modules')) {
+    return 'npm';
+  }
+
+  // Check for package.json to determine source
   try {
     const packageJsonPath = path.join(pluginPath, 'package.json');
     await fs.access(packageJsonPath);
@@ -126,7 +150,12 @@ async function determinePluginSource(pluginPath: string): Promise<PluginSource> 
     // Read package.json to check for repository info
     const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
 
-    // If it has a git repository, it's from git
+    // If it has a valid plugin name and version, likely from npm
+    if (packageJson.name && isQuilltapPlugin(packageJson.name) && packageJson.version) {
+      return 'npm';
+    }
+
+    // If it has a git repository, it's from git (cloned directly)
     if (packageJson.repository) {
       const repoUrl = typeof packageJson.repository === 'string'
         ? packageJson.repository
@@ -135,11 +164,6 @@ async function determinePluginSource(pluginPath: string): Promise<PluginSource> 
       if (repoUrl && (repoUrl.includes('git') || repoUrl.includes('github') || repoUrl.includes('gitlab'))) {
         return 'git';
       }
-    }
-
-    // If it has a valid plugin name and version, likely from npm
-    if (packageJson.name && isQuilltapPlugin(packageJson.name) && packageJson.version) {
-      return 'npm';
     }
 
     return 'manual';
@@ -325,9 +349,10 @@ export async function scanPlugins(
         // Get capabilities from manifest
         const capabilities = [...manifest.capabilities];
 
-        // Determine plugin source and get package version
+        // Determine plugin source and get package info
         const source = await determinePluginSource(pluginPath);
         const packageVersion = await getPackageVersion(pluginPath);
+        const npmPackageName = await getPackageName(pluginPath);
 
         result.plugins.push({
           manifest,
@@ -337,6 +362,7 @@ export async function scanPlugins(
           capabilities,
           source,
           packageVersion,
+          packageName: npmPackageName,
         });
       }
     } catch (error) {

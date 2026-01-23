@@ -10,7 +10,6 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { fetchJson } from '@/lib/fetch-helpers'
 import type { SyncProgress, SyncDirection, SyncOperationStatus } from '@/lib/sync/types'
 
@@ -75,7 +74,7 @@ export function useSyncProgress(
 
     try {
       const response = await fetchJson<SyncProgressResponse>(
-        `/api/sync/operations/${opId}/progress`,
+        `/api/v1/sync/operations/${opId}?action=progress`,
         { method: 'GET' }
       )
 
@@ -91,24 +90,15 @@ export function useSyncProgress(
           isCompleteRef.current = true
           setIsComplete(true)
           setIsFailed(response.data.errors?.length > 0)
-          clientLogger.debug('Sync progress: completed', {
-            operationId: opId,
-            entityCounts: response.data.entityCounts,
-            errorCount: response.data.errors?.length || 0,
-          })
         } else if (response.data.status === 'FAILED') {
           isCompleteRef.current = true
           setIsComplete(true)
           setIsFailed(true)
-          clientLogger.debug('Sync progress: failed', {
-            operationId: opId,
-            errors: response.data.errors,
-          })
         }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
-      clientLogger.warn('Error fetching sync progress', {
+      console.warn('Error fetching sync progress', {
         operationId: opId,
         error: errorMessage,
       })
@@ -132,11 +122,6 @@ export function useSyncProgress(
       setIsFailed(false)
       isCompleteRef.current = false
 
-      clientLogger.debug('Starting sync progress polling', {
-        operationId,
-        instanceName,
-        pollingInterval,
-      })
 
       // Fetch immediately
       fetchProgress(operationId)
@@ -148,7 +133,6 @@ export function useSyncProgress(
         } else {
           // Stop polling when complete
           if (intervalRef.current) {
-            clientLogger.debug('Clearing interval from inside callback (sync complete)')
             clearInterval(intervalRef.current)
             intervalRef.current = null
           }
@@ -168,11 +152,6 @@ export function useSyncProgress(
   // Stop polling when complete
   useEffect(() => {
     if ((isComplete || isFailed) && intervalRef.current) {
-      clientLogger.debug('Stopping sync progress polling', {
-        operationId,
-        isComplete,
-        isFailed,
-      })
       clearInterval(intervalRef.current)
       intervalRef.current = null
     }

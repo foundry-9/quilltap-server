@@ -131,7 +131,8 @@ describe('FormActions', () => {
     const cancelButton = screen.getByRole('button', { name: /cancel/i })
     const submitButton = screen.getByRole('button', { name: /save/i })
 
-    expect(cancelButton).toBeDisabled()
+    // Cancel button only disables during loading, not when form is invalid
+    expect(cancelButton).not.toBeDisabled()
     expect(submitButton).toBeDisabled()
   })
 

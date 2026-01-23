@@ -13,12 +13,14 @@
 import type { LLMProviderPlugin } from './types';
 import { OpenAICompatibleProvider } from './provider';
 import { OpenAICompatibleIcon } from './icon';
-import { logger } from '../../../lib/logger';
 import {
+  createPluginLogger,
   parseOpenAIToolCalls,
   type OpenAIToolDefinition,
   type ToolCallRequest,
-} from '../../../lib/llm/tool-formatting-utils';
+} from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-openai-compatible');
 
 /**
  * Plugin metadata configuration

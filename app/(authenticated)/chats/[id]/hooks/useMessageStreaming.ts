@@ -1,9 +1,6 @@
 'use client'
 
 import { useCallback, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
-import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { getErrorMessage } from '@/lib/error-utils'
 import type { Message, Participant } from '../types'
 
 export interface PendingToolCall {
@@ -71,7 +68,6 @@ export function useMessageStreaming({
   const userStoppedStreamRef = useRef<boolean>(false)
 
   const stopStreaming = useCallback(() => {
-    clientLogger.debug('[Chat] Stopping streaming response')
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
@@ -85,7 +81,6 @@ export function useMessageStreaming({
     setToolExecutionStatus(null)
     // In multi-character chats, set flag to prevent auto-triggering
     if (isMultiChar) {
-      clientLogger.debug('[Chat] Setting userStoppedStreamRef to prevent auto-triggering')
       userStoppedStreamRef.current = true
     }
     setStreamingContent('')
@@ -94,7 +89,6 @@ export function useMessageStreaming({
   const triggerContinueMode = useCallback(async (participantId: string) => {
     // This is a placeholder - the actual implementation is in page.tsx
     // because it needs access to many page-level dependencies
-    clientLogger.debug('[Chat] triggerContinueMode called for participant', { participantId })
   }, [])
 
   return {

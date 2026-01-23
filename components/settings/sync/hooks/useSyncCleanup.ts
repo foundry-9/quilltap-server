@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 
@@ -29,10 +28,8 @@ export function useSyncCleanup() {
    * Execute the cleanup operation
    */
   const executeCleanup = useCallback(async () => {
-    clientLogger.debug('Executing sync data cleanup')
-
     const result = await cleanupOp.execute(async () => {
-      const response = await fetchJson<CleanupResult>('/api/sync/cleanup', {
+      const response = await fetchJson<CleanupResult>('/api/v1/sync?action=cleanup', {
         method: 'POST',
       })
 
@@ -50,13 +47,6 @@ export function useSyncCleanup() {
     if (result) {
       setLastResult(result)
       setShowConfirm(false)
-      clientLogger.info('Sync cleanup completed', {
-        mappingsDeleted: result.mappingsDeleted,
-        operationsDeleted: result.operationsDeleted,
-        instancesReset: result.instancesReset,
-      })
-    } else {
-      clientLogger.error('Sync cleanup failed')
     }
 
     return result

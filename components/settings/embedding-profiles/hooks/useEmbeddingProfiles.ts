@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -32,46 +31,44 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
     execute: executeLoad,
   } = useAsyncOperation<void>()
 
-  const triggerAutoAssociate = useAutoAssociate('embedding-profiles')
+  const triggerAutoAssociate = useAutoAssociate()
 
   const loadData = useCallback(async () => {
-    clientLogger.debug('Loading embedding profiles tab data')
     await executeLoad(async () => {
       const [profilesRes, keysRes, modelsRes] = await Promise.all([
-        fetchJson<EmbeddingProfile[]>('/api/embedding-profiles'),
-        fetchJson<ApiKey[]>('/api/keys'),
-        fetchJson<Record<string, EmbeddingModel[]>>('/api/embedding-profiles/models'),
+        fetchJson<{ profiles: EmbeddingProfile[]; count: number }>('/api/v1/embedding-profiles'),
+        fetchJson<{ apiKeys: ApiKey[]; count: number }>('/api/v1/api-keys'),
+        fetchJson<Record<string, EmbeddingModel[]>>('/api/v1/embedding-profiles?action=list-models'),
       ])
 
       if (!profilesRes.ok) {
         throw new Error(profilesRes.error || 'Failed to fetch profiles')
       }
       if (!keysRes.ok) {
-        clientLogger.error('Failed to fetch API keys', { error: keysRes.error })
-      } else if (keysRes.data) {
-        setApiKeys(keysRes.data)
+        console.error('Failed to fetch API keys', { error: keysRes.error })
+      } else if (keysRes.data?.apiKeys) {
+        setApiKeys(keysRes.data.apiKeys)
       }
       if (!modelsRes.ok) {
-        clientLogger.error('Failed to fetch embedding models', { error: modelsRes.error })
+        console.error('Failed to fetch embedding models', { error: modelsRes.error })
       } else if (modelsRes.data) {
         setEmbeddingModels(modelsRes.data)
       }
 
-      if (profilesRes.data) {
-        setProfiles(profilesRes.data)
+      if (profilesRes.data?.profiles) {
+        setProfiles(profilesRes.data.profiles)
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // executeLoad is stable (empty deps in useAsyncOperation)
 
   const fetchProfiles = useCallback(async () => {
-    clientLogger.debug('Fetching embedding profiles')
-    const result = await fetchJson<EmbeddingProfile[]>('/api/embedding-profiles')
+    const result = await fetchJson<{ profiles: EmbeddingProfile[]; count: number }>('/api/v1/embedding-profiles')
     if (!result.ok) {
       throw new Error(result.error || 'Failed to fetch profiles')
     }
-    if (result.data) {
-      setProfiles(result.data)
+    if (result.data?.profiles) {
+      setProfiles(result.data.profiles)
     }
   }, [])
 

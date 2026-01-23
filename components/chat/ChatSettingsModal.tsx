@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 
@@ -174,11 +173,6 @@ function ParticipantEditor({
 
     if (isCharacter && participant.character?.systemPrompts) {
       if (selectedSystemPromptId !== (participant.selectedSystemPromptId || '')) {
-        clientLogger.debug('System prompt selection changed', {
-          participantId: participant.id,
-          oldPromptId: participant.selectedSystemPromptId,
-          newPromptId: selectedSystemPromptId || null,
-        })
         updates.selectedSystemPromptId = selectedSystemPromptId || null
       }
     }
@@ -365,28 +359,27 @@ export default function ChatSettingsModal({
     try {
       setLoading(true)
       const [profilesRes, imageProfilesRes, apiKeysRes] = await Promise.all([
-        fetch('/api/profiles'),
-        fetch('/api/image-profiles'),
-        fetch('/api/keys'),
+        fetch('/api/v1/connection-profiles'),
+        fetch('/api/v1/image-profiles'),
+        fetch('/api/v1/api-keys'),
       ])
 
       if (profilesRes.ok) {
         const data = await profilesRes.json()
-        setConnectionProfiles(data)
+        setConnectionProfiles(data.profiles || [])
       }
 
       if (imageProfilesRes.ok) {
         const data = await imageProfilesRes.json()
-        setImageProfiles(data)
+        setImageProfiles(data.profiles || [])
       }
 
       if (apiKeysRes.ok) {
         const data = await apiKeysRes.json()
-        setApiKeys(data)
-        clientLogger.debug('Fetched API keys for profile validation', { count: data.length })
+        setApiKeys(data.apiKeys || [])
       }
     } catch (error) {
-      clientLogger.error('Failed to fetch profiles', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to fetch profiles', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast('Failed to load profiles')
     } finally {
       setLoading(false)
@@ -395,22 +388,21 @@ export default function ChatSettingsModal({
 
   const fetchRoleplayTemplates = async () => {
     try {
-      const res = await fetch('/api/roleplay-templates')
+      const res = await fetch('/api/v1/roleplay-templates')
       if (res.ok) {
         const data = await res.json()
         setRoleplayTemplates(data)
       }
     } catch (error) {
-      clientLogger.error('Failed to fetch roleplay templates', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to fetch roleplay templates', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
   const handleRoleplayTemplateChange = async (templateId: string | null) => {
     try {
       setRoleplayTemplateSaving(true)
-      clientLogger.debug('Updating roleplay template', { chatId, templateId })
 
-      const res = await fetch(`/api/chats/${chatId}`, {
+      const res = await fetch(`/api/v1/chats/${chatId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roleplayTemplateId: templateId }),
@@ -430,11 +422,10 @@ export default function ChatSettingsModal({
 
       setSelectedRoleplayTemplateId(templateId)
       showSuccessToast('Roleplay template updated')
-      clientLogger.info('Roleplay template updated for chat', { chatId, templateId })
       onSuccess?.()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      clientLogger.error('Failed to update roleplay template', {
+      console.error('Failed to update roleplay template', {
         chatId,
         templateId,
         error: errorMessage,
@@ -449,7 +440,7 @@ export default function ChatSettingsModal({
   const handleParticipantUpdate = async (participantId: string, updates: ParticipantUpdate) => {
     try {
       setLoading(true)
-      const res = await fetch(`/api/chats/${chatId}`, {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -468,7 +459,7 @@ export default function ChatSettingsModal({
       showSuccessToast('Participant settings updated')
       onSuccess?.()
     } catch (error) {
-      clientLogger.error('Failed to update participant', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to update participant', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update participant')
     } finally {
       setLoading(false)

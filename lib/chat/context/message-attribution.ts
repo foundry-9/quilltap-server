@@ -5,7 +5,7 @@
  * Converts messages to the responding character's perspective for context building.
  */
 
-import type { Character, Persona, ChatParticipantBase } from '@/lib/schemas/types'
+import type { Character, ChatParticipantBase } from '@/lib/schemas/types'
 import type { MultiCharacterMessage } from '@/lib/llm/message-formatter'
 import { logger } from '@/lib/logger'
 
@@ -64,12 +64,11 @@ export function filterMessagesByHistoryAccess(
 
 /**
  * Get participant name for message attribution
- * Supports both CHARACTER (LLM or user-controlled) and legacy PERSONA types
+ * Supports CHARACTER participants (both LLM and user-controlled)
  */
 export function getParticipantName(
   participantId: string | null | undefined,
   participantCharacters: Map<string, Character>,
-  participantPersonas: Map<string, Persona>,
   allParticipants: ChatParticipantBase[]
 ): string | undefined {
   if (!participantId) {
@@ -88,12 +87,6 @@ export function getParticipantName(
     return character?.name
   }
 
-  // Legacy PERSONA participants (deprecated - use CHARACTER with controlledBy='user' instead)
-  if (participant.type === 'PERSONA' && participant.personaId) {
-    const persona = participantPersonas.get(participant.personaId)
-    return persona?.name
-  }
-
   return undefined
 }
 
@@ -102,13 +95,12 @@ export function getParticipantName(
  * Converts messages to the responding character's perspective:
  * - Messages from the responding character → role: assistant
  * - Messages from other characters → role: user, with name
- * - Messages from user/persona → role: user, with name
+ * - Messages from user/character → role: user, with name
  */
 export function attributeMessagesForCharacter(
   messages: MessageWithParticipant[],
   respondingParticipantId: string,
   participantCharacters: Map<string, Character>,
-  participantPersonas: Map<string, Persona>,
   allParticipants: ChatParticipantBase[]
 ): MultiCharacterMessage[] {
   logger.debug('[MessageAttribution] Attributing messages for character', {
@@ -120,7 +112,6 @@ export function attributeMessagesForCharacter(
     const participantName = getParticipantName(
       msg.participantId,
       participantCharacters,
-      participantPersonas,
       allParticipants
     )
 
@@ -151,14 +142,13 @@ export function attributeMessagesForCharacter(
 
 /**
  * Find the user participant for message attribution in multi-character mode
- * Prefers user-controlled CHARACTER, falls back to legacy PERSONA
+ * Returns the first active user-controlled CHARACTER participant
  */
 export function findUserParticipantName(
   allParticipants: ChatParticipantBase[],
-  participantCharacters: Map<string, Character>,
-  participantPersonas: Map<string, Persona>
+  participantCharacters: Map<string, Character>
 ): string | undefined {
-  // First, try to find a user-controlled CHARACTER participant (new model)
+  // Find a user-controlled CHARACTER participant
   const userCharacterParticipant = allParticipants.find(p =>
     p.type === 'CHARACTER' && p.controlledBy === 'user' && p.isActive && p.characterId
   )
@@ -166,15 +156,6 @@ export function findUserParticipantName(
     const character = participantCharacters.get(userCharacterParticipant.characterId)
     if (character?.name) {
       return character.name
-    }
-  }
-
-  // Fall back to legacy PERSONA participant
-  const personaParticipant = allParticipants.find(p => p.type === 'PERSONA' && p.isActive)
-  if (personaParticipant?.personaId) {
-    const personaData = participantPersonas.get(personaParticipant.personaId)
-    if (personaData?.name) {
-      return personaData.name
     }
   }
 

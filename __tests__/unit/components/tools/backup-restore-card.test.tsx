@@ -36,10 +36,10 @@ describe('BackupRestoreCard', () => {
   it('lists cloud backups returned by the API', async () => {
     const fetchMock = jest.spyOn(global as any, 'fetch').mockImplementation((input: RequestInfo, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.url
-      if (url === '/api/tools/backup/list') {
-        return jsonResponse({ backups })
+      if (url === '/api/v1/system/backup') {
+        return jsonResponse({ backups, count: backups.length })
       }
-      if (url === '/api/tools/backup/delete' && init?.method === 'DELETE') {
+      if (url.startsWith('/api/v1/system/backup/') && init?.method === 'DELETE') {
         return jsonResponse({ success: true })
       }
       return jsonResponse({})
@@ -54,18 +54,18 @@ describe('BackupRestoreCard', () => {
       expect(screen.getByText(/Cloud Backups/)).toBeInTheDocument()
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/tools/backup/list', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/system/backup', expect.any(Object))
   })
 
   it('sends delete request after confirmation and refreshes list', async () => {
     let listCall = 0
     const fetchMock = jest.spyOn(global as any, 'fetch').mockImplementation((input: RequestInfo, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.url
-      if (url === '/api/tools/backup/list') {
+      if (url === '/api/v1/system/backup' && (!init?.method || init.method === 'GET')) {
         listCall += 1
-        return jsonResponse({ backups: listCall === 1 ? backups : [] })
+        return jsonResponse({ backups: listCall === 1 ? backups : [], count: listCall === 1 ? backups.length : 0 })
       }
-      if (url === '/api/tools/backup/delete' && init?.method === 'DELETE') {
+      if (url.startsWith('/api/v1/system/backup/') && init?.method === 'DELETE') {
         return jsonResponse({ success: true })
       }
       return jsonResponse({})
@@ -88,7 +88,7 @@ describe('BackupRestoreCard', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/tools/backup/delete',
+        `/api/v1/system/backup/${backups[0].key}`,
         expect.objectContaining({
           method: 'DELETE',
           body: JSON.stringify({ s3Key: backups[0].key }),
@@ -97,7 +97,7 @@ describe('BackupRestoreCard', () => {
     })
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/tools/backup/list', expect.any(Object))
+      expect(fetchMock).toHaveBeenCalledWith('/api/v1/system/backup', expect.any(Object))
       expect(listCall).toBeGreaterThanOrEqual(2)
     })
   })

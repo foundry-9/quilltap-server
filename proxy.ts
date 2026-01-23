@@ -52,7 +52,8 @@ const securityHeaders = {
     "img-src 'self' data: https:",
     "font-src 'self' data:",
     "connect-src 'self' https://api.openai.com https://api.anthropic.com https://openrouter.ai",
-    "frame-ancestors 'none'",
+    "frame-src 'self'", // Allow embedding same-origin content in iframes
+    "frame-ancestors 'self'", // Allow this page to be embedded by same-origin
   ].join('; '),
 };
 

@@ -53,7 +53,7 @@ function sanitizeURI(uri: string): string {
  * @returns Parsed MongoDB configuration
  */
 function getMongoDBConfigFromEnv(): Partial<MongoDBConfig> {
-  const dataBackend = process.env.DATA_BACKEND || 'json';
+  const dataBackend = process.env.DATA_BACKEND || 'mongodb';
   const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
   const database = process.env.MONGODB_DATABASE || 'quilltap';
   const mode = (process.env.MONGODB_MODE || 'external') as 'external' | 'embedded';

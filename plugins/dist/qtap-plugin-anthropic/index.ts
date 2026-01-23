@@ -11,14 +11,17 @@
 import type { LLMProviderPlugin } from './types'
 import { AnthropicProvider } from './provider'
 import { AnthropicIcon } from './icon'
-import { logger } from '../../../lib/logger'
 import {
-  convertOpenAIToAnthropicFormat,
+  createPluginLogger,
+  convertToAnthropicFormat,
   parseAnthropicToolCalls,
   type OpenAIToolDefinition,
+  type UniversalTool,
   type AnthropicToolDefinition,
   type ToolCallRequest,
-} from '../../../lib/llm/tool-formatting-utils'
+} from '@quilltap/plugin-utils'
+
+const logger = createPluginLogger('qtap-plugin-anthropic')
 
 /**
  * Plugin metadata configuration
@@ -56,12 +59,14 @@ const capabilities = {
 
 /**
  * File attachment support
+ * Note: Anthropic has a 5MB limit for base64-encoded images
  */
 const attachmentSupport = {
   supportsAttachments: true as const,
-  supportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'] as string[],
-  description: 'Images (JPEG, PNG, GIF, WebP) and PDFs',
-  notes: 'Images and PDFs are supported in Claude models for analysis and understanding',
+  supportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain'] as string[],
+  description: 'Images (JPEG, PNG, GIF, WebP), PDFs, and text files',
+  notes: 'Images, PDFs, and plain text files are supported in Claude models for analysis and understanding',
+  maxBase64Size: 5 * 1024 * 1024, // 5MB - Anthropic's API limit for base64-encoded images
 };
 
 /**
@@ -246,8 +251,22 @@ export const plugin: LLMProviderPlugin = {
 
         const openaiTool = tool as OpenAIToolDefinition;
 
-        // Convert from OpenAI format to Anthropic format
-        const anthropicTool = convertOpenAIToAnthropicFormat(openaiTool);
+        // Convert to UniversalTool format (ensuring required fields have defaults)
+        const universalTool: UniversalTool = {
+          type: 'function',
+          function: {
+            name: openaiTool.function.name,
+            description: openaiTool.function.description ?? '',
+            parameters: {
+              type: 'object',
+              properties: openaiTool.function.parameters?.properties ?? {},
+              required: openaiTool.function.parameters?.required ?? [],
+            },
+          },
+        };
+
+        // Convert from Universal format to Anthropic format
+        const anthropicTool = convertToAnthropicFormat(universalTool);
         formattedTools.push(anthropicTool);
       }
 

@@ -9,15 +9,6 @@ import { ParticipantSidebar } from '@/components/chat/ParticipantSidebar'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 
-// Mock the client logger to prevent side effects during tests
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}))
 
 // Mock the ParticipantCard component to simplify testing the sidebar
 jest.mock('@/components/chat/ParticipantCard', () => ({
@@ -72,6 +63,16 @@ jest.mock('@/components/chat/ParticipantCard', () => ({
   ),
 }))
 
+// Mock the Avatar component for collapsed sidebar
+jest.mock('@/components/ui/Avatar', () => ({
+  Avatar: ({ name, src, size }: { name: string; src?: unknown; size?: string }) => (
+    <div data-testid={`avatar-${name}`} data-size={size} className="avatar-mock">
+      {name}
+    </div>
+  ),
+  getAvatarSrc: (src: unknown) => src,
+}))
+
 // Helper to create test participants
 function createCharacterParticipant(id: string, name: string, displayOrder: number, isActive = true): ParticipantData {
   return {
@@ -123,9 +124,37 @@ function createDefaultProps() {
   }
 }
 
+// Mock localStorage
+const mockLocalStorage = (() => {
+  let store: Record<string, string> = {}
+  return {
+    getItem: jest.fn((key: string) => store[key] || null),
+    setItem: jest.fn((key: string, value: string) => {
+      store[key] = value
+    }),
+    removeItem: jest.fn((key: string) => {
+      delete store[key]
+    }),
+    clear: jest.fn(() => {
+      store = {}
+    }),
+    get store() {
+      return store
+    },
+  }
+})()
+
+Object.defineProperty(window, 'localStorage', {
+  value: mockLocalStorage,
+  writable: true,
+})
+
 describe('ParticipantSidebar', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockLocalStorage.clear()
+    // Default to expanded state for most tests (collapsed sidebar tests will override this)
+    mockLocalStorage.setItem('quilltap.participant-sidebar.collapsed', 'false')
   })
 
   afterEach(() => {
@@ -799,7 +828,22 @@ describe('ParticipantSidebar', () => {
       expect(sidebar).toHaveClass('custom-class')
     })
 
-    it('applies qt-chat-sidebar class', () => {
+    it('applies qt-chat-sidebar-collapsed class when collapsed', () => {
+      // Clear localStorage to test default collapsed state
+      mockLocalStorage.clear()
+
+      const { container } = render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+        />
+      )
+
+      const sidebar = container.firstChild
+      expect(sidebar).toHaveClass('qt-chat-sidebar-collapsed')
+    })
+
+    it('applies qt-chat-sidebar class when expanded', () => {
+      // localStorage is already set to expanded in beforeEach
       const { container } = render(
         <ParticipantSidebar
           {...createDefaultProps()}
@@ -808,6 +852,270 @@ describe('ParticipantSidebar', () => {
 
       const sidebar = container.firstChild
       expect(sidebar).toHaveClass('qt-chat-sidebar')
+    })
+  })
+
+  describe('Collapsed state', () => {
+    beforeEach(() => {
+      // Clear localStorage to test default collapsed behavior
+      mockLocalStorage.clear()
+    })
+
+    it('starts collapsed by default', () => {
+      const { container } = render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+        />
+      )
+
+      const sidebar = container.firstChild
+      expect(sidebar).toHaveClass('qt-chat-sidebar-collapsed')
+    })
+
+    it('loads collapsed state from localStorage on mount', () => {
+      // Set localStorage to expanded
+      mockLocalStorage.setItem('quilltap.participant-sidebar.collapsed', 'false')
+
+      const { container } = render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+        />
+      )
+
+      const sidebar = container.firstChild
+      expect(sidebar).toHaveClass('qt-chat-sidebar')
+      // localStorage is read during initial render via lazy initializer
+      expect(mockLocalStorage.getItem).toHaveBeenCalled()
+    })
+
+    it('persists collapsed state true to localStorage', () => {
+      mockLocalStorage.setItem('quilltap.participant-sidebar.collapsed', 'true')
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+        />
+      )
+
+      expect(mockLocalStorage.store['quilltap.participant-sidebar.collapsed']).toBe('true')
+    })
+
+    it('expands when toggle button is clicked from collapsed state', () => {
+      const { container } = render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+        />
+      )
+
+      // Initially collapsed
+      expect(container.firstChild).toHaveClass('qt-chat-sidebar-collapsed')
+
+      // Click expand button
+      const expandButton = screen.getByRole('button', { name: /expand participant sidebar/i })
+      fireEvent.click(expandButton)
+
+      // Now expanded
+      expect(container.firstChild).toHaveClass('qt-chat-sidebar')
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith('quilltap.participant-sidebar.collapsed', 'false')
+    })
+
+    it('collapses when toggle button is clicked from expanded state', () => {
+      // Start expanded
+      mockLocalStorage.setItem('quilltap.participant-sidebar.collapsed', 'false')
+
+      const { container } = render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+        />
+      )
+
+      // Initially expanded
+      expect(container.firstChild).toHaveClass('qt-chat-sidebar')
+
+      // Click collapse button
+      const collapseButton = screen.getByRole('button', { name: /collapse participant sidebar/i })
+      fireEvent.click(collapseButton)
+
+      // Now collapsed
+      expect(container.firstChild).toHaveClass('qt-chat-sidebar-collapsed')
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith('quilltap.participant-sidebar.collapsed', 'true')
+    })
+
+    it('expands when avatar is clicked in collapsed state', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+      ]
+
+      const { container } = render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+        />
+      )
+
+      // Initially collapsed
+      expect(container.firstChild).toHaveClass('qt-chat-sidebar-collapsed')
+
+      // Click avatar
+      const avatarButton = screen.getByRole('button', { name: /alice.*click to expand/i })
+      fireEvent.click(avatarButton)
+
+      // Now expanded
+      expect(container.firstChild).toHaveClass('qt-chat-sidebar')
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith('quilltap.participant-sidebar.collapsed', 'false')
+    })
+
+    it('shows mini avatars in collapsed state', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+        createCharacterParticipant('char-2', 'Bob', 2),
+      ]
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+        />
+      )
+
+      // In collapsed state, should show avatars
+      expect(screen.getByTestId('avatar-Alice')).toBeInTheDocument()
+      expect(screen.getByTestId('avatar-Bob')).toBeInTheDocument()
+    })
+
+    it('shows icon-only pause button in collapsed state', () => {
+      const onTogglePause = jest.fn()
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          onTogglePause={onTogglePause}
+        />
+      )
+
+      // In collapsed state, pause button should be icon-only (no text)
+      const pauseButton = screen.getByRole('button', { name: /pause auto-responses/i })
+      expect(pauseButton).toBeInTheDocument()
+      expect(screen.queryByText('Pause')).not.toBeInTheDocument()
+    })
+
+    it('applies active class to current turn avatar in collapsed state', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+        createCharacterParticipant('char-2', 'Bob', 2),
+      ]
+
+      const turnSelectionResult: TurnSelectionResult = {
+        nextSpeakerId: 'char-1',
+        reason: 'weighted_selection',
+        cycleComplete: false,
+      }
+
+      const { container } = render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+          turnSelectionResult={turnSelectionResult}
+        />
+      )
+
+      // Find the Alice avatar button
+      const aliceButton = screen.getByRole('button', { name: /alice.*click to expand/i })
+      expect(aliceButton).toHaveClass('qt-chat-sidebar-collapsed-avatar-active')
+
+      // Bob should not have active class
+      const bobButton = screen.getByRole('button', { name: /bob.*click to expand/i })
+      expect(bobButton).not.toHaveClass('qt-chat-sidebar-collapsed-avatar-active')
+    })
+
+    it('applies streaming class to avatar when isGenerating is true', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+      ]
+
+      const turnSelectionResult: TurnSelectionResult = {
+        nextSpeakerId: 'char-1',
+        reason: 'weighted_selection',
+        cycleComplete: false,
+      }
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+          turnSelectionResult={turnSelectionResult}
+          isGenerating={true}
+          respondingParticipantId="char-1"
+        />
+      )
+
+      const aliceButton = screen.getByRole('button', { name: /alice.*click to expand/i })
+      expect(aliceButton).toHaveClass('qt-chat-sidebar-collapsed-avatar-streaming')
+      expect(aliceButton).toHaveClass('qt-chat-sidebar-collapsed-avatar-active')
+    })
+
+    it('shows queue badge on avatar in collapsed state', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+        createCharacterParticipant('char-2', 'Bob', 2),
+      ]
+
+      const turnState: TurnState = {
+        spokenSinceUserTurn: [],
+        currentTurnParticipantId: null,
+        queue: ['char-2'],
+        lastSpeakerId: null,
+      }
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+          turnState={turnState}
+        />
+      )
+
+      // Bob is in queue, should show badge with position 1
+      const bobButton = screen.getByRole('button', { name: /bob.*click to expand/i })
+      expect(bobButton).toBeInTheDocument()
+      // Check title includes queue position
+      expect(bobButton).toHaveAttribute('title', 'Bob (queue #1)')
+      expect(bobButton.querySelector('.qt-chat-sidebar-collapsed-queue-badge')).toHaveTextContent('1')
+    })
+
+    it('does not show participant cards in collapsed state', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+      ]
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+        />
+      )
+
+      // In collapsed state, should not render ParticipantCard
+      expect(screen.queryByTestId('participant-char-1')).not.toBeInTheDocument()
+    })
+
+    it('shows participant cards in expanded state', () => {
+      // Set to expanded
+      mockLocalStorage.setItem('quilltap.participant-sidebar.collapsed', 'false')
+
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+      ]
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+        />
+      )
+
+      // In expanded state, should render ParticipantCard
+      expect(screen.getByTestId('participant-char-1')).toBeInTheDocument()
     })
   })
 })

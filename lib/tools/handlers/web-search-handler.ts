@@ -3,6 +3,9 @@
  *
  * This handler performs web searches when the LLM explicitly requests
  * real-time information from the internet.
+ *
+ * Uses Serper.dev API for Google search results.
+ * Get a free API key at https://serper.dev/ (2,500 free searches/month)
  */
 
 import {
@@ -12,6 +15,34 @@ import {
   validateWebSearchInput,
 } from '../web-search-tool'
 import { logger } from '@/lib/logger'
+
+/**
+ * Serper API response types
+ */
+interface SerperOrganicResult {
+  title: string
+  link: string
+  snippet: string
+  date?: string
+  position?: number
+}
+
+interface SerperKnowledgeGraph {
+  title?: string
+  type?: string
+  description?: string
+  source?: { name: string; link: string }
+}
+
+interface SerperResponse {
+  organic?: SerperOrganicResult[]
+  knowledgeGraph?: SerperKnowledgeGraph
+  searchParameters?: {
+    q: string
+    num?: number
+  }
+  credits?: number
+}
 
 /**
  * Context required for web search execution
@@ -27,19 +58,28 @@ export interface WebSearchToolContext {
 export class WebSearchError extends Error {
   constructor(
     message: string,
-    public code: 'VALIDATION_ERROR' | 'SEARCH_ERROR' | 'API_ERROR'
+    public code: 'VALIDATION_ERROR' | 'SEARCH_ERROR' | 'API_ERROR' | 'CONFIG_ERROR'
   ) {
     super(message)
     this.name = 'WebSearchError'
   }
 }
 
+/** Serper API endpoint */
+const SERPER_API_URL = 'https://google.serper.dev/search'
+
 /**
- * Execute a web search tool call
+ * Check if web search is configured
+ */
+export function isWebSearchConfigured(): boolean {
+  return !!process.env.SERPER_API_KEY
+}
+
+/**
+ * Execute a web search using the Serper.dev API
  *
- * This is a placeholder implementation. In production, you would integrate
- * with a real search API like Google Custom Search, Bing Search API, Brave Search API,
- * or another search provider.
+ * Requires SERPER_API_KEY environment variable to be set.
+ * Get a free API key at https://serper.dev/ (2,500 free searches/month)
  *
  * @param input - The tool input parameters
  * @param context - Execution context including user ID
@@ -52,6 +92,7 @@ export async function executeWebSearchTool(
   try {
     // Validate input
     if (!validateWebSearchInput(input)) {
+      logger.warn('Web search validation failed', { userId: context.userId, input })
       return {
         success: false,
         error: 'Invalid input: query is required and must be a non-empty string',
@@ -62,42 +103,101 @@ export async function executeWebSearchTool(
 
     const { query, maxResults = 5 } = input
 
+    // Check for API key
+    const apiKey = process.env.SERPER_API_KEY
+    if (!apiKey) {
+      logger.warn('Web search attempted without API key', { userId: context.userId, query })
+      return {
+        success: false,
+        error: 'Web search is not configured. Please set SERPER_API_KEY in your environment variables. Get a free API key at https://serper.dev/',
+        totalFound: 0,
+        query,
+      }
+    }
+
     logger.debug('Web search initiated', { userId: context.userId, query, maxResults })
 
-    // TODO: Implement actual web search API integration
-    // This is a placeholder that returns mock results
-    // In production, replace this with a call to your chosen search API:
-    //
-    // Examples:
-    // - Google Custom Search API: https://developers.google.com/custom-search/v1/overview
-    // - Bing Search API: https://www.microsoft.com/en-us/bing/apis/bing-web-search-api
-    // - Brave Search API: https://brave.com/search/api/
-    // - DuckDuckGo API: https://duckduckgo.com/api
-    // - SerpAPI: https://serpapi.com/
-    //
-    // Example implementation:
-    // const response = await fetch(`https://api.searchprovider.com/search?q=${encodeURIComponent(query)}&count=${maxResults}`, {
-    //   headers: {
-    //     'Authorization': `Bearer ${process.env.SEARCH_API_KEY}`,
-    //   },
-    // })
-    // const data = await response.json()
-    // const results = data.results.map(r => ({
-    //   title: r.title,
-    //   url: r.url,
-    //   snippet: r.snippet,
-    //   publishedDate: r.date,
-    // }))
-
-    // Placeholder mock results
-    const results: WebSearchResult[] = [
-      {
-        title: 'Web Search Not Yet Implemented',
-        url: 'https://example.com',
-        snippet: `This is a placeholder result. To enable real web search, implement the executeWebSearchTool function in lib/tools/handlers/web-search-handler.ts with your preferred search API provider. Your query was: "${query}"`,
-        publishedDate: new Date().toISOString(),
+    // Call Serper API
+    const response = await fetch(SERPER_API_URL, {
+      method: 'POST',
+      headers: {
+        'X-API-KEY': apiKey,
+        'Content-Type': 'application/json',
       },
-    ]
+      body: JSON.stringify({
+        q: query,
+        num: maxResults,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      logger.error('Serper API request failed', {
+        userId: context.userId,
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText,
+      })
+
+      if (response.status === 401 || response.status === 403) {
+        return {
+          success: false,
+          error: 'Invalid Serper API key. Please check your SERPER_API_KEY environment variable.',
+          totalFound: 0,
+          query,
+        }
+      }
+
+      if (response.status === 429) {
+        return {
+          success: false,
+          error: 'Serper API rate limit exceeded. Please try again later or upgrade your plan at serper.dev.',
+          totalFound: 0,
+          query,
+        }
+      }
+
+      return {
+        success: false,
+        error: `Search API error: ${response.status} ${response.statusText}`,
+        totalFound: 0,
+        query,
+      }
+    }
+
+    const data: SerperResponse = await response.json()
+
+    logger.debug('Serper API response received', {
+      userId: context.userId,
+      query,
+      resultsCount: data.organic?.length ?? 0,
+      hasKnowledgeGraph: !!data.knowledgeGraph,
+      creditsRemaining: data.credits,
+    })
+
+    // Map Serper results to our format
+    const results: WebSearchResult[] = (data.organic ?? []).map((result) => ({
+      title: result.title,
+      url: result.link,
+      snippet: result.snippet,
+      publishedDate: result.date,
+    }))
+
+    // If we have a knowledge graph result and few organic results, include it
+    const kg = data.knowledgeGraph
+    if (kg?.description && results.length < maxResults) {
+      results.unshift({
+        title: kg.title ?? 'Knowledge Graph',
+        url: kg.source?.link ?? '',
+        snippet: kg.description,
+      })
+    }
+
+    logger.info('Web search completed', {
+      userId: context.userId,
+      query,
+      resultsCount: results.length,
+    })
 
     return {
       success: true,
@@ -106,7 +206,7 @@ export async function executeWebSearchTool(
       query,
     }
   } catch (error) {
-    logger.error('Web search tool execution failed', {}, error instanceof Error ? error : undefined)
+    logger.error('Web search tool execution failed', { userId: context.userId }, error instanceof Error ? error : undefined)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error during web search',

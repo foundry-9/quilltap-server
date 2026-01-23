@@ -3,159 +3,196 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import React from 'react'
 import ConnectionProfilesTab from '@/components/settings/connection-profiles-tab'
 
-// Mock clientLogger to prevent console output and avoid module issues
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-  },
+
+// Mock fetchJson helper
+jest.mock('@/lib/fetch-helpers', () => ({
+  fetchJson: jest.fn(),
 }))
 
-function jsonResponse(data: any, ok = true) {
-  return Promise.resolve({
-    ok,
-    status: ok ? 200 : 500,
-    json: async () => data,
-    text: async () => JSON.stringify(data),
-  } as Response)
-}
-
-function setupSettingsFetchMock() {
-  return jest.spyOn(global as any, 'fetch').mockImplementation((input: RequestInfo, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input.url
-
-    if (url.startsWith('/api/profiles?t=')) {
-      return jsonResponse([])
-    }
-
-    if (url.startsWith('/api/profiles/') && url.endsWith('/tags')) {
-      return jsonResponse({ tags: [] })
-    }
-
-    if (url === '/api/chats') {
-      return jsonResponse([])
-    }
-
-    if (url.startsWith('/api/chats/') && url.endsWith('/messages')) {
-      return jsonResponse([])
-    }
-
-    if (url === '/api/keys') {
-      return jsonResponse([
-        { id: 'key-1', label: 'Primary', provider: 'OPENAI', isActive: true },
-      ])
-    }
-
-    if (url === '/api/providers') {
-      return jsonResponse({
-        providers: [
-          {
-            name: 'OPENAI',
-            displayName: 'OpenAI',
-            configRequirements: { requiresApiKey: true, requiresBaseUrl: false },
-            capabilities: { chat: true, imageGeneration: true, embeddings: true, webSearch: true },
-          },
-        ],
-      })
-    }
-
-    if (url === '/api/chat-settings') {
-      return jsonResponse({ cheapLLMSettings: { defaultCheapProfileId: null } })
-    }
-
-    if (url === '/api/profiles/test-connection') {
-      return jsonResponse({ message: 'Connected' })
-    }
-
-    if (url === '/api/models') {
-      return jsonResponse({
-        models: ['gpt-3.5-turbo'],
-        modelsWithInfo: [
-          {
-            id: 'gpt-3.5-turbo',
-            label: 'gpt-3.5-turbo',
-            maxOutputTokens: 8192,
-            contextWindow: 16384,
-          },
-        ],
-      })
-    }
-
-    if (url === '/api/profiles/test-message') {
-      return jsonResponse({ message: 'ok' })
-    }
-
-    return jsonResponse([])
-  })
-}
+// Mock useAutoAssociate hook
+jest.mock('@/hooks/useAutoAssociate', () => ({
+  useAutoAssociate: jest.fn(() => jest.fn()),
+}))
 
 describe('ConnectionProfilesTab max tokens limit', () => {
+  let fetchJsonMock: jest.Mock
+
   beforeEach(() => {
-    // Don't use fake timers - they can interfere with async hooks
     jest.clearAllMocks()
+    const { fetchJson } = require('@/lib/fetch-helpers')
+    fetchJsonMock = fetchJson
+
+    // Setup default mock responses for fetchJson
+    fetchJsonMock.mockImplementation(async (url: string, options?: any) => {
+      // Test connection (v1 endpoint) - check before general connection-profiles
+      if (url === '/api/v1/connection-profiles?action=test-connection') {
+        return { ok: true, data: { message: 'Connected' } }
+      }
+
+      // Test message (v1 endpoint) - check before general connection-profiles
+      if (url === '/api/v1/connection-profiles?action=test-message') {
+        return { ok: true, data: { message: 'ok' } }
+      }
+
+      // Connection profiles list (no action param)
+      if (url === '/api/v1/connection-profiles' || url.startsWith('/api/v1/connection-profiles/')) {
+        return { ok: true, data: { profiles: [], count: 0 } }
+      }
+
+      // API keys
+      if (url === '/api/v1/api-keys') {
+        return {
+          ok: true,
+          data: {
+            apiKeys: [{ id: 'key-1', label: 'Primary', provider: 'OPENAI', isActive: true }],
+            count: 1,
+          },
+        }
+      }
+
+      // Providers configuration
+      if (url === '/api/providers') {
+        return {
+          ok: true,
+          data: {
+            providers: [
+              {
+                name: 'OPENAI',
+                displayName: 'OpenAI',
+                configRequirements: { requiresApiKey: true, requiresBaseUrl: false },
+                capabilities: { chat: true, imageGeneration: true, embeddings: true, webSearch: true },
+              },
+            ],
+          },
+        }
+      }
+
+      // Chat settings
+      if (url === '/api/chat-settings') {
+        return { ok: true, data: { cheapLLMSettings: { defaultCheapProfileId: null } } }
+      }
+
+      // Fetch models
+      if (url === '/api/v1/models') {
+        return {
+          ok: true,
+          data: {
+            models: ['gpt-3.5-turbo'],
+            modelsWithInfo: [
+              {
+                id: 'gpt-3.5-turbo',
+                label: 'gpt-3.5-turbo',
+                maxOutputTokens: 8192,
+                contextWindow: 16384,
+              },
+            ],
+          },
+        }
+      }
+
+      // Default response
+      return { ok: true, data: null }
+    })
   })
 
   afterEach(() => {
     jest.restoreAllMocks()
   })
 
-  // TODO: This test needs to be updated for the refactored component that uses fetchJson
-  // The timing of async operations has changed and the test needs adjustments
-  it.skip('clamps max tokens input using selected model metadata', async () => {
-    const fetchMock = setupSettingsFetchMock()
+  it('clamps max tokens input using selected model metadata', async () => {
+    const user = userEvent.setup()
 
     render(<ConnectionProfilesTab />)
 
-    const addProfileButton = await screen.findByRole('button', { name: /\+ Add Profile/ })
-    await act(async () => {
-      fireEvent.click(addProfileButton)
+    // Wait for the profiles list to load
+    await waitFor(() => {
+      expect(fetchJsonMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/connection-profiles'),
+        expect.any(Object)
+      )
     })
 
-    const maxTokensInput = (await screen.findByLabelText('Max Tokens')) as HTMLInputElement
+    // Find and click the "Add Profile" button
+    const addProfileButton = await screen.findByRole('button', { name: /\+ Add Profile/ })
+    await user.click(addProfileButton)
+
+    // Wait for modal to appear - check for the modal title
+    await screen.findByText(/Create Connection Profile/)
+
+    // Initial max tokens limit should be 128000 (default)
+    let maxTokensInput = (await screen.findByLabelText('Max Tokens')) as HTMLInputElement
     expect(maxTokensInput).toHaveAttribute('max', '128000')
 
+    // Select an API key
     const apiKeySelect = await screen.findByLabelText('API Key *')
-    await act(async () => {
-      fireEvent.change(apiKeySelect, { target: { value: 'key-1' } })
-    })
+    await user.selectOptions(apiKeySelect, 'key-1')
 
-    const connectButton = screen.getByRole('button', { name: /^connect$/i })
-    await act(async () => {
-      fireEvent.click(connectButton)
-    })
+    // Click the Connect button
+    const connectButton = screen.getByRole('button', { name: /^Connect$/i })
+    await user.click(connectButton)
 
+    // Wait for connection message to appear
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/profiles/test-connection',
-        expect.objectContaining({ method: 'POST' })
-      )
+      expect(screen.getByText(/Connected/i)).toBeInTheDocument()
     })
 
-    await screen.findByText(/connected/i)
+    // Verify connection test was called
+    expect(fetchJsonMock).toHaveBeenCalledWith(
+      '/api/v1/connection-profiles?action=test-connection',
+      expect.objectContaining({ method: 'POST' })
+    )
 
-    const fetchModelsButton = screen.getByRole('button', { name: /fetch models/i })
+    // Fetch Models button should now be enabled
+    const fetchModelsButton = screen.getByRole('button', { name: /Fetch Models/i })
     await waitFor(() => expect(fetchModelsButton).not.toBeDisabled())
-    await act(async () => {
-      fireEvent.click(fetchModelsButton)
-    })
 
+    // Click Fetch Models
+    await user.click(fetchModelsButton)
+
+    // Wait for models to be fetched
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/models',
+      expect(fetchJsonMock).toHaveBeenCalledWith(
+        '/api/v1/models',
         expect.objectContaining({ method: 'POST' })
       )
     })
 
-    await waitFor(() => {
-      expect(maxTokensInput).toHaveAttribute('max', '8192')
-    })
+    // Select a model by finding the input with placeholder matching "model" or "gpt"
+    const modelInput = screen.queryAllByPlaceholderText(/gpt|model|search/i)[0] as HTMLInputElement
 
-    expect(screen.getByText(/Model limit: 8,192 tokens/)).toBeInTheDocument()
+    if (modelInput) {
+      // Type in the model input to select it
+      await user.type(modelInput, 'gpt-3.5-turbo')
+
+      // Wait for the model to be selected and the max tokens limit to update
+      await waitFor(() => {
+        maxTokensInput = screen.getByLabelText('Max Tokens') as HTMLInputElement
+        expect(maxTokensInput).toHaveAttribute('max', '8192')
+      }, { timeout: 3000 })
+
+      // Verify the model limit text is displayed with correct formatting
+      const modelLimitElements = screen.queryAllByText((content, element) => {
+        return element?.textContent?.includes('Model limit') && element?.textContent?.includes('8,192')
+      })
+      expect(modelLimitElements.length).toBeGreaterThan(0)
+    } else {
+      // If model input not found, just verify the max tokens limit was updated
+      // (it might be fetched automatically)
+      await waitFor(() => {
+        maxTokensInput = screen.getByLabelText('Max Tokens') as HTMLInputElement
+        expect(maxTokensInput).toHaveAttribute('max', '8192')
+      }, { timeout: 3000 })
+
+      // Verify the model limit text is displayed
+      const modelLimitElements = screen.queryAllByText((content, element) => {
+        return element?.textContent?.includes('Model limit') && element?.textContent?.includes('8,192')
+      })
+      expect(modelLimitElements.length).toBeGreaterThan(0)
+    }
   })
 })

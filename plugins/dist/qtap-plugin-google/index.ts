@@ -14,14 +14,16 @@ import type { LLMProviderPlugin, ImageGenerationModelInfo } from './types';
 import { GoogleProvider } from './provider';
 import { GoogleImagenProvider } from './image-provider';
 import { GoogleIcon } from './icon';
-import { logger } from '../../../lib/logger';
 import {
-  convertOpenAIToGoogleFormat,
+  createPluginLogger,
+  convertToGoogleFormat,
   parseGoogleToolCalls,
   type OpenAIToolDefinition,
   type GoogleToolDefinition,
   type ToolCallRequest,
-} from '../../../lib/llm/tool-formatting-utils';
+} from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-google');
 
 /**
  * Plugin metadata configuration
@@ -65,6 +67,7 @@ const attachmentSupport = {
   supportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as string[],
   description: 'Images only (JPEG, PNG, GIF, WebP)',
   notes: 'Images are supported in Gemini models for vision analysis',
+  maxBase64Size: 20 * 1024 * 1024, // 20MB - Google's API limit for images
 };
 
 /**
@@ -362,7 +365,7 @@ export const plugin: LLMProviderPlugin = {
         const openaiTool = tool as OpenAIToolDefinition;
 
         // Convert from OpenAI format to Google format
-        const googleTool = convertOpenAIToGoogleFormat(openaiTool);
+        const googleTool = convertToGoogleFormat(openaiTool);
         formattedTools.push(googleTool);
       }
 

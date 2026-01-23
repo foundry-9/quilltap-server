@@ -15,7 +15,11 @@ import { registerArcticProvider, clearArcticProviders } from '@/lib/auth/arctic/
 import type { ArcticProviderPlugin } from '@/lib/auth/arctic/types';
 import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-registry';
 import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/lib/plugins/roleplay-template-registry';
+import { initializeToolRegistry, toolRegistry } from '@/lib/plugins/tool-registry';
+import type { ToolPlugin } from '@/lib/plugins/interfaces/tool-plugin';
 import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugins/plugin-logger-bridge';
+import { fileStorageManager } from '@/lib/file-storage/manager';
+import type { FileStorageProviderPlugin } from '@/lib/file-storage/interfaces';
 import packageJson from '@/package.json';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
@@ -23,12 +27,6 @@ import { existsSync } from 'node:fs';
 
 // Create a require function that bypasses Next.js bundling for dynamic plugin loading
 const dynamicRequire = createRequire(import.meta.url || __filename);
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-const UPGRADE_PLUGIN_NAME = 'qtap-plugin-upgrade';
 
 // ============================================================================
 // TYPES
@@ -60,81 +58,11 @@ let initializationPromise: Promise<PluginInitializationResult> | null = null;
 let initialized = false;
 
 /**
- * Run upgrade migrations from the upgrade plugin
- *
- * This function:
- * 1. Force-enables the upgrade plugin (it should always run)
- * 2. Loads and runs all pending migrations
- * 3. Disables the upgrade plugin after migrations complete
- *
- * This happens early in initialization, before provider plugins are loaded,
- * so that data migrations can enable provider plugins as needed.
- */
-async function runUpgradeMigrations(): Promise<void> {
-  const upgradePlugin = pluginRegistry.get(UPGRADE_PLUGIN_NAME);
-  if (!upgradePlugin) {
-    logger.debug('Upgrade plugin not found, skipping migrations');
-    return;
-  }
-
-  // Force-enable the upgrade plugin regardless of its manifest setting
-  if (!upgradePlugin.enabled) {
-    pluginRegistry.enable(UPGRADE_PLUGIN_NAME);
-    logger.debug('Force-enabled upgrade plugin for migrations');
-  }
-
-  try {
-    // Load the upgrade plugin using require() - plugins are transpiled to JS first
-    const mainFile = upgradePlugin.manifest.main || 'index.js';
-    const modulePath = resolve(process.cwd(), upgradePlugin.pluginPath, mainFile);
-
-    logger.info('Loading upgrade plugin for migrations', {
-      plugin: UPGRADE_PLUGIN_NAME,
-      path: modulePath,
-    });
-
-    // Use require() to load the compiled JavaScript module
-    const pluginModule = dynamicRequire(modulePath);
-    const plugin = pluginModule?.plugin || pluginModule?.default?.plugin || pluginModule?.default;
-
-    if (!plugin || typeof plugin.runMigrations !== 'function') {
-      logger.warn('Upgrade plugin does not export runMigrations function', {
-        plugin: UPGRADE_PLUGIN_NAME,
-        exports: Object.keys(pluginModule),
-      });
-      return;
-    }
-
-    // Run all pending migrations
-    const result = await plugin.runMigrations();
-
-    if (result.success) {
-      logger.info('Upgrade migrations completed', {
-        migrationsRun: result.migrationsRun,
-        migrationsSkipped: result.migrationsSkipped,
-        totalDurationMs: result.totalDurationMs,
-      });
-    } else {
-      logger.error('Upgrade migrations failed', {
-        results: result.results,
-      });
-    }
-
-    // Disable the upgrade plugin after migrations are done
-    // It doesn't need to run again until the next startup
-    pluginRegistry.disable(UPGRADE_PLUGIN_NAME);
-    logger.debug('Disabled upgrade plugin after migrations');
-
-  } catch (error) {
-    logger.error('Failed to run upgrade migrations', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
-/**
  * Initialize the plugin system
  * This function is idempotent - multiple calls will return the same promise
+ *
+ * Note: Migrations are now run in instrumentation.ts BEFORE this function is called,
+ * so all data is guaranteed to be in the correct format when plugins are initialized.
  */
 export async function initializePlugins(): Promise<PluginInitializationResult> {
   // If already initialized, return existing result
@@ -267,9 +195,8 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       }
     }
 
-    // IMPORTANT: Force-enable the upgrade plugin and run migrations early
-    // This ensures data compatibility before other plugins are loaded
-    await runUpgradeMigrations();
+    // Note: Migrations are now run in instrumentation.ts BEFORE plugin initialization.
+    // This ensures data compatibility before any plugins are loaded.
 
     // Get final stats
     const stats = pluginRegistry.getStats();
@@ -487,6 +414,123 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       });
     }
 
+    // Initialize tool registry from enabled plugins with TOOL_PROVIDER capability
+    logger.debug('Initializing tool registry');
+    const toolPlugins = pluginRegistry.getEnabledByCapability('TOOL_PROVIDER');
+    if (toolPlugins.length > 0) {
+      const tools: ToolPlugin[] = [];
+      for (const loadedPlugin of toolPlugins) {
+        try {
+          const mainFile = loadedPlugin.manifest.main || 'index.js';
+          const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+
+          logger.debug('Loading tool plugin module', {
+            plugin: loadedPlugin.manifest.name,
+            path: modulePath,
+          });
+
+          // Use require() to load the compiled JavaScript module
+          const pluginModule = dynamicRequire(modulePath);
+
+          if (pluginModule?.plugin) {
+            tools.push(pluginModule.plugin as ToolPlugin);
+            logger.debug('Tool plugin loaded', {
+              plugin: loadedPlugin.manifest.name,
+              tool: (pluginModule.plugin as ToolPlugin)?.metadata?.toolName,
+            });
+          } else if (pluginModule?.default?.plugin) {
+            tools.push(pluginModule.default.plugin as ToolPlugin);
+            logger.debug('Tool plugin loaded (default export)', {
+              plugin: loadedPlugin.manifest.name,
+              tool: (pluginModule.default.plugin as ToolPlugin)?.metadata?.toolName,
+            });
+          } else {
+            logger.warn('Tool plugin module does not export a plugin object', {
+              plugin: loadedPlugin.manifest.name,
+              exports: Object.keys(pluginModule),
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to load tool plugin module', {
+            plugin: loadedPlugin.manifest.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      if (tools.length > 0) {
+        await initializeToolRegistry(tools);
+        const toolStats = toolRegistry.getStats();
+        logger.info('Tool plugins initialized', {
+          total: toolStats.total,
+          plugins: toolStats.plugins,
+        });
+      }
+    }
+
+    // Initialize file storage registry from enabled plugins with FILE_BACKEND capability
+    logger.debug('Initializing file storage backend plugins');
+    const fileBackendPlugins = pluginRegistry.getEnabledByCapability('FILE_BACKEND');
+    if (fileBackendPlugins.length > 0) {
+      for (const loadedPlugin of fileBackendPlugins) {
+        try {
+          const mainFile = loadedPlugin.manifest.main || 'index.js';
+          const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+
+          logger.debug('Loading file backend plugin module', {
+            plugin: loadedPlugin.manifest.name,
+            path: modulePath,
+          });
+
+          // Use require() to load the compiled JavaScript module
+          const pluginModule = dynamicRequire(modulePath);
+
+          if (pluginModule?.plugin) {
+            fileStorageManager.registerProviderPlugin(pluginModule.plugin as FileStorageProviderPlugin);
+            logger.debug('File backend plugin loaded', {
+              plugin: loadedPlugin.manifest.name,
+              backendId: (pluginModule.plugin as FileStorageProviderPlugin)?.metadata?.backendId,
+            });
+          } else if (pluginModule?.default?.plugin) {
+            fileStorageManager.registerProviderPlugin(pluginModule.default.plugin as FileStorageProviderPlugin);
+            logger.debug('File backend plugin loaded (default export)', {
+              plugin: loadedPlugin.manifest.name,
+              backendId: (pluginModule.default.plugin as FileStorageProviderPlugin)?.metadata?.backendId,
+            });
+          } else {
+            logger.warn('File backend plugin module does not export a plugin object', {
+              plugin: loadedPlugin.manifest.name,
+              exports: Object.keys(pluginModule),
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to load file backend plugin module', {
+            plugin: loadedPlugin.manifest.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      logger.info('File backend plugins initialized', {
+        total: fileBackendPlugins.length,
+      });
+    }
+
+    // Initialize the file storage manager after backend plugins are registered
+    // This loads mount points from the database and sets up the default backend
+    try {
+      logger.debug('Initializing file storage manager');
+      await fileStorageManager.initialize();
+      logger.info('File storage manager initialized successfully');
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to initialize file storage manager', { error: errorMsg });
+      result.warnings.push({
+        plugin: 'file-storage',
+        warnings: [`File storage initialization failed: ${errorMsg}`],
+      });
+    }
+
     return result;
   } catch (error) {
     logger.error('Failed to initialize plugin system', { error });
@@ -521,6 +565,8 @@ export function resetPluginSystem(): void {
   themeRegistry.reset();
   // Reset roleplay template registry
   roleplayTemplateRegistry.reset();
+  // Reset tool registry
+  toolRegistry.reset();
   // Clear the plugin logger factory
   clearPluginLoggerFactory();
   logger.debug('Plugin system reset');

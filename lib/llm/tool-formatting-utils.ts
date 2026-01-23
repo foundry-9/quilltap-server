@@ -299,12 +299,23 @@ export function parseOpenAIToolCalls(response: any): ToolCallRequest[] {
   const toolCalls: ToolCallRequest[] = [];
 
   try {
-    // Handle direct tool_calls array
+    // Handle direct tool_calls array (snake_case)
     let toolCallsArray = response?.tool_calls;
 
-    // Check nested structure from streaming responses
-    if (!toolCallsArray && response?.choices?.[0]?.message?.tool_calls) {
-      toolCallsArray = response.choices[0].message.tool_calls;
+    // Handle direct toolCalls array (camelCase - some SDKs use this)
+    if (!toolCallsArray) {
+      toolCallsArray = response?.toolCalls;
+    }
+
+    // Check nested structure from non-streaming responses: choices[0].message.tool_calls
+    if (!toolCallsArray && response?.choices?.[0]?.message) {
+      toolCallsArray = response.choices[0].message.tool_calls || response.choices[0].message.toolCalls;
+    }
+
+    // Check nested structure from streaming responses: choices[0].delta.toolCalls
+    // OpenRouter SDK uses camelCase and puts tool calls in delta for streaming
+    if (!toolCallsArray && response?.choices?.[0]?.delta) {
+      toolCallsArray = response.choices[0].delta.tool_calls || response.choices[0].delta.toolCalls;
     }
 
     if (toolCallsArray && Array.isArray(toolCallsArray) && toolCallsArray.length > 0) {

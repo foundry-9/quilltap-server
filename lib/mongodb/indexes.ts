@@ -92,6 +92,23 @@ export const INDEX_DEFINITIONS: Record<string, IndexDefinition[]> = {
     },
   ],
 
+  // Projects collection indexes
+  projects: [
+    {
+      key: { userId: 1 },
+    },
+    {
+      key: { userId: 1, name: 1 },
+      options: { unique: true, name: 'projects_userId_name_unique' },
+    },
+    {
+      key: { name: 'text', description: 'text' },
+    },
+    {
+      key: { createdAt: 1 },
+    },
+  ],
+
   // Chats collection indexes
   chats: [
     {
@@ -103,6 +120,10 @@ export const INDEX_DEFINITIONS: Record<string, IndexDefinition[]> = {
     {
       key: { updatedAt: 1 },
     },
+    {
+      key: { projectId: 1 },
+      options: { sparse: true },
+    },
   ],
 
   // Memories collection indexes
@@ -112,6 +133,10 @@ export const INDEX_DEFINITIONS: Record<string, IndexDefinition[]> = {
     },
     {
       key: { userId: 1 },
+    },
+    {
+      key: { projectId: 1 },
+      options: { sparse: true },
     },
   ],
 
@@ -143,6 +168,10 @@ export const INDEX_DEFINITIONS: Record<string, IndexDefinition[]> = {
     },
     {
       key: { sha256: 1 },
+    },
+    {
+      key: { projectId: 1 },
+      options: { sparse: true },
     },
   ],
 

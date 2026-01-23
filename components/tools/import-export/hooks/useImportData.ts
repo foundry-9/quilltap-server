@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { useDialogStateWithFileInput } from '@/hooks/useDialogState'
 import type { ImportState, ImportStep } from '../types'
@@ -49,7 +48,6 @@ export function useImportData({
   const { state, setState, reset, fileInputRef } = useDialogStateWithFileInput({
     isOpen,
     initialState,
-    logContext: 'useImportData',
   })
 
   const parseExportFile = useCallback(async (file: File): Promise<QuilltapExport> => {
@@ -61,12 +59,6 @@ export function useImportData({
       if (!data.manifest || data.manifest.format !== 'quilltap-export') {
         throw new Error('Invalid export file format. Please select a valid Quilltap export file (.qtap).')
       }
-
-      clientLogger.debug('Export file parsed successfully', {
-        context: 'useImportData',
-        fileName: file.name,
-        exportType: data.manifest.exportType,
-      })
 
       return data
     } catch (error) {
@@ -84,12 +76,6 @@ export function useImportData({
       const file = event.target.files?.[0]
       if (!file) return
 
-      clientLogger.debug('File selected for import', {
-        context: 'useImportData',
-        fileName: file.name,
-        fileSize: file.size,
-      })
-
       try {
         const exportData = await parseExportFile(file)
 
@@ -101,7 +87,7 @@ export function useImportData({
         }))
       } catch (error) {
         const message = getErrorMessage(error)
-        clientLogger.error('Failed to parse import file', {
+        console.error('Failed to parse import file', {
           context: 'useImportData',
           error: message,
         })
@@ -123,11 +109,6 @@ export function useImportData({
       if (!files.length) return
 
       const file = files[0]
-      clientLogger.debug('File dropped for import', {
-        context: 'useImportData',
-        fileName: file.name,
-        fileSize: file.size,
-      })
 
       try {
         const exportData = await parseExportFile(file)
@@ -140,7 +121,7 @@ export function useImportData({
         }))
       } catch (error) {
         const message = getErrorMessage(error)
-        clientLogger.error('Failed to parse dropped file', {
+        console.error('Failed to parse dropped file', {
           context: 'useImportData',
           error: message,
         })
@@ -154,18 +135,10 @@ export function useImportData({
   )
 
   const setConflictStrategy = useCallback((strategy: 'skip' | 'overwrite' | 'duplicate') => {
-    clientLogger.debug('Conflict strategy changed', {
-      context: 'useImportData',
-      strategy,
-    })
     setState((prev) => ({ ...prev, conflictStrategy: strategy as ConflictStrategy }))
   }, [setState])
 
   const setImportMemories = useCallback((value: boolean) => {
-    clientLogger.debug('Import memories toggled', {
-      context: 'useImportData',
-      importMemories: value,
-    })
     setState((prev) => ({ ...prev, importMemories: value }))
   }, [setState])
 
@@ -191,12 +164,7 @@ export function useImportData({
       setState((prev) => ({ ...prev, loadingPreview: true, error: null }))
 
       try {
-        clientLogger.debug('Loading import preview', {
-          context: 'useImportData',
-          exportType: exportData.manifest.exportType,
-        })
-
-        const response = await fetch('/api/tools/quilltap-import', {
+        const response = await fetch('/api/v1/system/tools?action=import-preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ exportData }),
@@ -209,11 +177,6 @@ export function useImportData({
 
         const preview = await response.json()
 
-        clientLogger.info('Import preview loaded', {
-          context: 'useImportData',
-          entityTypes: Object.keys(preview.entities || {}),
-        })
-
         setState((prev) => ({
           ...prev,
           preview,
@@ -221,7 +184,7 @@ export function useImportData({
         }))
       } catch (error) {
         const message = getErrorMessage(error)
-        clientLogger.error('Failed to load preview', {
+        console.error('Failed to load preview', {
           context: 'useImportData',
           error: message,
         })
@@ -238,9 +201,6 @@ export function useImportData({
   const handleNext = useCallback(async () => {
     // Check if we can proceed before setting state
     if (state.step === 'file' && !state.exportData) {
-      clientLogger.warn('Cannot proceed without file selected', {
-        context: 'useImportData',
-      })
       return
     }
 
@@ -261,12 +221,6 @@ export function useImportData({
         return
     }
 
-    clientLogger.debug('Moving to next step', {
-      context: 'useImportData',
-      currentStep,
-      nextStep,
-    })
-
     setState((prev) => ({ ...prev, step: nextStep }))
 
     // Load preview when moving to preview step
@@ -276,10 +230,6 @@ export function useImportData({
   }, [state.step, state.exportData, loadPreview, setState])
 
   const handleBack = useCallback(() => {
-    clientLogger.debug('Moving to previous step', {
-      context: 'useImportData',
-    })
-
     setState((prev) => {
       let previousStep: ImportStep = prev.step
 
@@ -307,13 +257,7 @@ export function useImportData({
     setState((prev) => ({ ...prev, importing: true, error: null }))
 
     try {
-      clientLogger.debug('Starting import', {
-        context: 'useImportData',
-        conflictStrategy: state.conflictStrategy,
-        importMemories: state.importMemories,
-      })
-
-      const response = await fetch('/api/tools/quilltap-import/execute', {
+      const response = await fetch('/api/v1/system/tools?action=import-execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -333,12 +277,6 @@ export function useImportData({
 
       const result = await response.json()
 
-      clientLogger.info('Import completed successfully', {
-        context: 'useImportData',
-        imported: result.imported,
-        skipped: result.skipped,
-      })
-
       setState((prev) => ({
         ...prev,
         step: 'complete',
@@ -349,7 +287,7 @@ export function useImportData({
       onSuccess?.()
     } catch (error) {
       const message = getErrorMessage(error)
-      clientLogger.error('Failed to import data', {
+      console.error('Failed to import data', {
         context: 'useImportData',
         error: message,
       })

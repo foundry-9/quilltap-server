@@ -41,6 +41,7 @@ describe('LLM Attachment Support', () => {
         'image/gif',
         'image/webp',
         'application/pdf',
+        'text/plain',
       ])
     })
 
@@ -104,6 +105,10 @@ describe('LLM Attachment Support', () => {
       expect(supportsMimeType('ANTHROPIC', 'application/pdf')).toBe(true)
     })
 
+    it('should return true for text/plain on Anthropic', () => {
+      expect(supportsMimeType('ANTHROPIC', 'text/plain')).toBe(true)
+    })
+
     it('should return false for text files on Grok (uses fallback)', () => {
       expect(supportsMimeType('GROK', 'text/plain')).toBe(false)
       expect(supportsMimeType('GROK', 'text/markdown')).toBe(false)
@@ -128,8 +133,8 @@ describe('LLM Attachment Support', () => {
       const fileTypes = getSupportedFileTypes('ANTHROPIC')
       expect(fileTypes.images).toHaveLength(4)
       expect(fileTypes.documents).toHaveLength(1)
-      expect(fileTypes.text).toHaveLength(0)
-      expect(fileTypes.all).toHaveLength(5)
+      expect(fileTypes.text).toHaveLength(1) // text/plain now supported
+      expect(fileTypes.all).toHaveLength(6)
     })
 
     it('should categorize file types for Grok', () => {

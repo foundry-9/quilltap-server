@@ -405,6 +405,333 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
       throw error;
     }
   }
+
+  // =========================================================================
+  // FOLDER QUERY METHODS
+  // =========================================================================
+
+  /**
+   * Find files in a specific folder (exact match)
+   * @param userId - The user ID for ownership verification
+   * @param projectId - The project ID (null for general files)
+   * @param folderPath - The folder path to search in
+   */
+  async findByFolder(
+    userId: string,
+    projectId: string | null,
+    folderPath: string
+  ): Promise<FileEntry[]> {
+    try {
+      const collection = await this.getCollection();
+
+      const query: Record<string, unknown> = {
+        userId,
+        folderPath,
+      };
+
+      if (projectId) {
+        query.projectId = projectId;
+      } else {
+        // General files - either null or not set
+        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
+      }
+
+      const files = await collection.find(query).toArray();
+
+      logger.debug('Found files in folder', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        folderPath,
+        count: files.length,
+      });
+
+      return files.map((file: unknown) => this.validate(file));
+    } catch (error) {
+      logger.error('Error finding files in folder', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        folderPath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Find files in a folder and all subfolders (recursive)
+   * @param userId - The user ID for ownership verification
+   * @param projectId - The project ID (null for general files)
+   * @param folderPath - The folder path to search from (use "/" for all files)
+   */
+  async findInFolderRecursive(
+    userId: string,
+    projectId: string | null,
+    folderPath: string
+  ): Promise<FileEntry[]> {
+    try {
+      const collection = await this.getCollection();
+
+      const query: Record<string, unknown> = {
+        userId,
+      };
+
+      // Root folder matches everything
+      if (folderPath !== '/') {
+        // Use regex to match folder path prefix
+        query.folderPath = { $regex: `^${this.escapeRegex(folderPath)}` };
+      }
+
+      if (projectId) {
+        query.projectId = projectId;
+      } else {
+        // General files - either null or not set
+        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
+      }
+
+      const files = await collection.find(query).toArray();
+
+      logger.debug('Found files in folder (recursive)', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        folderPath,
+        count: files.length,
+      });
+
+      return files.map((file: unknown) => this.validate(file));
+    } catch (error) {
+      logger.error('Error finding files in folder (recursive)', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        folderPath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * List unique folder paths for a user/project
+   * @param userId - The user ID for ownership verification
+   * @param projectId - The project ID (null for general files)
+   */
+  async listFolders(
+    userId: string,
+    projectId: string | null
+  ): Promise<string[]> {
+    try {
+      const collection = await this.getCollection();
+
+      const matchStage: Record<string, unknown> = {
+        userId,
+      };
+
+      if (projectId) {
+        matchStage.projectId = projectId;
+      } else {
+        matchStage.$or = [{ projectId: null }, { projectId: { $exists: false } }];
+      }
+
+      const result = await collection.aggregate([
+        { $match: matchStage },
+        { $group: { _id: '$folderPath' } },
+        { $sort: { _id: 1 } },
+      ]).toArray();
+
+      const folders = result.map(r => r._id as string).filter(Boolean);
+
+      // Always include root if not present
+      if (!folders.includes('/')) {
+        folders.unshift('/');
+      }
+
+      logger.debug('Listed folders', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        count: folders.length,
+      });
+
+      return folders;
+    } catch (error) {
+      logger.error('Error listing folders', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Find files by project ID
+   * @param userId - The user ID for ownership verification
+   * @param projectId - The project ID
+   */
+  async findByProjectId(userId: string, projectId: string): Promise<FileEntry[]> {
+    try {
+      const collection = await this.getCollection();
+      const files = await collection.find({ userId, projectId }).toArray();
+
+      logger.debug('Found files by project ID', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        count: files.length,
+      });
+
+      return files.map((file: unknown) => this.validate(file));
+    } catch (error) {
+      logger.error('Error finding files by project ID', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Find files by original filename within a project
+   * Used for duplicate detection when uploading files
+   * @param userId - The user ID for ownership verification
+   * @param projectId - The project ID
+   * @param filename - The original filename to search for
+   */
+  async findByFilenameInProject(
+    userId: string,
+    projectId: string,
+    filename: string
+  ): Promise<FileEntry[]> {
+    try {
+      const collection = await this.getCollection();
+      const files = await collection.find({
+        userId,
+        projectId,
+        originalFilename: filename,
+      }).toArray();
+
+      logger.debug('Found files by filename in project', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        filename,
+        count: files.length,
+      });
+
+      return files.map((file: unknown) => this.validate(file));
+    } catch (error) {
+      logger.error('Error finding files by filename in project', {
+        context: 'files-repository',
+        userId,
+        projectId,
+        filename,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Find file by storage key
+   * Used for serving files via proxy route with proper authentication
+   * @param storageKey - The storage key to search for
+   */
+  async findByStorageKey(storageKey: string): Promise<FileEntry | null> {
+    try {
+      const collection = await this.getCollection();
+      const file = await collection.findOne({ storageKey });
+
+      if (file) {
+        logger.debug('Found file by storage key', {
+          context: 'files-repository',
+          storageKey,
+        });
+        return this.validate(file);
+      }
+
+      logger.debug('File not found by storage key', {
+        context: 'files-repository',
+        storageKey,
+      });
+      return null;
+    } catch (error) {
+      logger.error('Error finding file by storage key', {
+        context: 'files-repository',
+        storageKey,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Find all files stored in a specific mount point
+   * @param mountPointId - The mount point ID
+   * @returns Array of file entries stored in the mount point
+   */
+  async findByMountPointId(mountPointId: string): Promise<FileEntry[]> {
+    try {
+      const collection = await this.getCollection();
+      const files = await collection.find({ mountPointId }).toArray();
+
+      logger.debug('Found files by mount point', {
+        context: 'files-repository',
+        mountPointId,
+        count: files.length,
+      });
+
+      return files.map((file: unknown) => this.validate(file));
+    } catch (error) {
+      logger.error('Error finding files by mount point', {
+        context: 'files-repository',
+        mountPointId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Find general files (not in any project)
+   * @param userId - The user ID for ownership verification
+   */
+  async findGeneralFiles(userId: string): Promise<FileEntry[]> {
+    try {
+      const collection = await this.getCollection();
+      const files = await collection.find({
+        userId,
+        $or: [{ projectId: null }, { projectId: { $exists: false } }],
+      }).toArray();
+
+      logger.debug('Found general files', {
+        context: 'files-repository',
+        userId,
+        count: files.length,
+      });
+
+      return files.map((file: unknown) => this.validate(file));
+    } catch (error) {
+      logger.error('Error finding general files', {
+        context: 'files-repository',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Helper to escape special regex characters
+   */
+  private escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
 }
 
 // Export singleton instance

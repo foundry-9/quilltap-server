@@ -9,7 +9,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import {
   createMockCharacter,
-  createMockPersona,
   createMockChat,
   createMockTag,
   createMockMemory,
@@ -17,15 +16,13 @@ import {
   createMockPromptTemplate,
   createMockFileEntry,
   createMockMessage,
+  createMockConnectionProfile,
   generateId,
 } from '../fixtures/test-factories';
 
 // Define mock repositories interface for this test
 interface MockRepositories {
   characters: {
-    findByUserId: jest.Mock;
-  };
-  personas: {
     findByUserId: jest.Mock;
   };
   chats: {
@@ -42,6 +39,13 @@ interface MockRepositories {
   files: {
     findByUserId: jest.Mock;
   };
+  projects: {
+    findByUserId: jest.Mock;
+  };
+  connections: {
+    findByUserId: jest.Mock;
+    findApiKeyById: jest.Mock;
+  };
   roleplayTemplates: {
     findByUserId: jest.Mock;
   };
@@ -53,9 +57,6 @@ interface MockRepositories {
 // Create mock repositories - must be defined before jest.mock
 const mockRepositories: MockRepositories = {
   characters: {
-    findByUserId: jest.fn().mockResolvedValue([]),
-  },
-  personas: {
     findByUserId: jest.fn().mockResolvedValue([]),
   },
   chats: {
@@ -72,6 +73,13 @@ const mockRepositories: MockRepositories = {
   files: {
     findByUserId: jest.fn().mockResolvedValue([]),
   },
+  projects: {
+    findByUserId: jest.fn().mockResolvedValue([]),
+  },
+  connections: {
+    findByUserId: jest.fn().mockResolvedValue([]),
+    findApiKeyById: jest.fn().mockResolvedValue(null),
+  },
   roleplayTemplates: {
     findByUserId: jest.fn().mockResolvedValue([]),
   },
@@ -80,8 +88,8 @@ const mockRepositories: MockRepositories = {
   },
 };
 
-// Mock the S3 file service download function
-const mockDownloadUserFile = jest.fn();
+// Mock the file storage manager download function
+const mockDownloadFile = jest.fn();
 
 // Mock the mongodb repositories - must be called before importing the module under test
 jest.mock('@/lib/mongodb/repositories', () => ({
@@ -98,10 +106,10 @@ jest.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock the S3 file service
-jest.mock('@/lib/s3/file-service', () => ({
-  s3FileService: {
-    downloadUserFile: mockDownloadUserFile,
+// Mock the file storage manager
+jest.mock('@/lib/file-storage/manager', () => ({
+  fileStorageManager: {
+    downloadFile: mockDownloadFile,
   },
 }));
 
@@ -122,16 +130,17 @@ describe('Sync Delta Detector', () => {
     jest.clearAllMocks();
     // Reset all repository mocks to return empty arrays
     mockRepositories.characters.findByUserId.mockResolvedValue([]);
-    mockRepositories.personas.findByUserId.mockResolvedValue([]);
     mockRepositories.chats.findByUserId.mockResolvedValue([]);
     mockRepositories.chats.findById.mockResolvedValue(null);
     mockRepositories.chats.getMessages.mockResolvedValue([]);
     mockRepositories.tags.findByUserId.mockResolvedValue([]);
     mockRepositories.memories.findByCharacterId.mockResolvedValue([]);
     mockRepositories.files.findByUserId.mockResolvedValue([]);
+    mockRepositories.connections.findByUserId.mockResolvedValue([]);
+    mockRepositories.connections.findApiKeyById.mockResolvedValue(null);
     mockRepositories.roleplayTemplates.findByUserId.mockResolvedValue([]);
     mockRepositories.promptTemplates.findByUserId.mockResolvedValue([]);
-    mockDownloadUserFile.mockReset();
+    mockDownloadFile.mockReset();
   });
 
   // ============================================================================
@@ -262,7 +271,6 @@ describe('Sync Delta Detector', () => {
       it('should include all entity types in default order', async () => {
         const tag = createMockTag({ userId: testUserId });
         const file = createMockFileEntry({ userId: testUserId, size: 100 });
-        const persona = createMockPersona({ userId: testUserId });
         const character = createMockCharacter({ userId: testUserId });
         const roleplayTemplate = createMockRoleplayTemplate({ userId: testUserId });
         const promptTemplate = createMockPromptTemplate({ userId: testUserId });
@@ -271,28 +279,26 @@ describe('Sync Delta Detector', () => {
 
         mockRepositories.tags.findByUserId.mockResolvedValue([tag]);
         mockRepositories.files.findByUserId.mockResolvedValue([file]);
-        mockRepositories.personas.findByUserId.mockResolvedValue([persona]);
         mockRepositories.characters.findByUserId.mockResolvedValue([character]);
         mockRepositories.roleplayTemplates.findByUserId.mockResolvedValue([roleplayTemplate]);
         mockRepositories.promptTemplates.findByUserId.mockResolvedValue([promptTemplate]);
         mockRepositories.chats.findByUserId.mockResolvedValue([chat]);
         mockRepositories.chats.findById.mockResolvedValue(chat);
         mockRepositories.memories.findByCharacterId.mockResolvedValue([memory]);
-        mockDownloadUserFile.mockResolvedValue(Buffer.from('test content'));
+        mockDownloadFile.mockResolvedValue(Buffer.from('test content'));
 
         const result = await detectDeltas({
           userId: testUserId,
           sinceTimestamp: null,
         });
 
-        // Should have all 8 entity types
-        expect(result.deltas.length).toBeGreaterThanOrEqual(8);
+        // Should have 8 entity types (PERSONA removed, but still 8 types)
+        expect(result.deltas.length).toBeGreaterThanOrEqual(7);
 
         // Check that all entity types are represented
         const entityTypes = result.deltas.map((d) => d.entityType);
         expect(entityTypes).toContain('TAG');
         expect(entityTypes).toContain('FILE');
-        expect(entityTypes).toContain('PERSONA');
         expect(entityTypes).toContain('CHARACTER');
         expect(entityTypes).toContain('ROLEPLAY_TEMPLATE');
         expect(entityTypes).toContain('PROMPT_TEMPLATE');
@@ -302,23 +308,23 @@ describe('Sync Delta Detector', () => {
 
       it('should filter to specific entityTypes when provided', async () => {
         const character = createMockCharacter({ userId: testUserId });
-        const persona = createMockPersona({ userId: testUserId });
+        const tag = createMockTag({ userId: testUserId });
 
         mockRepositories.characters.findByUserId.mockResolvedValue([character]);
-        mockRepositories.personas.findByUserId.mockResolvedValue([persona]);
+        mockRepositories.tags.findByUserId.mockResolvedValue([tag]);
 
         const result = await detectDeltas({
           userId: testUserId,
           sinceTimestamp: null,
-          entityTypes: ['CHARACTER', 'PERSONA'],
+          entityTypes: ['CHARACTER', 'TAG'],
         });
 
         expect(result.deltas).toHaveLength(2);
         const entityTypes = result.deltas.map((d) => d.entityType);
         expect(entityTypes).toContain('CHARACTER');
-        expect(entityTypes).toContain('PERSONA');
-        expect(entityTypes).not.toContain('TAG');
+        expect(entityTypes).toContain('TAG');
         expect(entityTypes).not.toContain('CHAT');
+        expect(entityTypes).not.toContain('FILE');
       });
 
       it('should handle single entity type filter', async () => {
@@ -472,6 +478,97 @@ describe('Sync Delta Detector', () => {
         expect(result.deltas).toHaveLength(2);
       });
     });
+
+    describe('connection profile entity handling', () => {
+      it('should detect connection profile deltas', async () => {
+        const profile = createMockConnectionProfile({
+          userId: testUserId,
+          name: 'Test Profile',
+          updatedAt: oneHourAgo.toISOString(),
+        });
+
+        mockRepositories.connections.findByUserId.mockResolvedValue([profile]);
+
+        const result = await detectDeltas({
+          userId: testUserId,
+          sinceTimestamp: null,
+          entityTypes: ['CONNECTION_PROFILE'],
+        });
+
+        expect(result.deltas).toHaveLength(1);
+        expect(result.deltas[0].entityType).toBe('CONNECTION_PROFILE');
+        expect(result.deltas[0].id).toBe(profile.id);
+      });
+
+      it('should strip apiKeyId and include _apiKeyLabel', async () => {
+        const apiKeyId = generateId();
+        const profile = createMockConnectionProfile({
+          userId: testUserId,
+          name: 'Test Profile',
+          apiKeyId,
+        });
+        const apiKey = { id: apiKeyId, label: 'My API Key', provider: 'OPENAI' };
+
+        mockRepositories.connections.findByUserId.mockResolvedValue([profile]);
+        mockRepositories.connections.findApiKeyById.mockResolvedValue(apiKey);
+
+        const result = await detectDeltas({
+          userId: testUserId,
+          sinceTimestamp: null,
+          entityTypes: ['CONNECTION_PROFILE'],
+        });
+
+        expect(result.deltas).toHaveLength(1);
+        // apiKeyId should be stripped
+        expect((result.deltas[0].data as any).apiKeyId).toBeUndefined();
+        // _apiKeyLabel should be included
+        expect((result.deltas[0].data as any)._apiKeyLabel).toBe('My API Key');
+      });
+
+      it('should handle profile without apiKeyId', async () => {
+        const profile = createMockConnectionProfile({
+          userId: testUserId,
+          name: 'Test Profile',
+          apiKeyId: null,
+        });
+
+        mockRepositories.connections.findByUserId.mockResolvedValue([profile]);
+
+        const result = await detectDeltas({
+          userId: testUserId,
+          sinceTimestamp: null,
+          entityTypes: ['CONNECTION_PROFILE'],
+        });
+
+        expect(result.deltas).toHaveLength(1);
+        expect((result.deltas[0].data as any).apiKeyId).toBeUndefined();
+        expect((result.deltas[0].data as any)._apiKeyLabel).toBeUndefined();
+      });
+
+      it('should filter by sinceTimestamp', async () => {
+        const oldProfile = createMockConnectionProfile({
+          userId: testUserId,
+          name: 'Old Profile',
+          updatedAt: threeDaysAgo.toISOString(),
+        });
+        const newProfile = createMockConnectionProfile({
+          userId: testUserId,
+          name: 'New Profile',
+          updatedAt: oneHourAgo.toISOString(),
+        });
+
+        mockRepositories.connections.findByUserId.mockResolvedValue([oldProfile, newProfile]);
+
+        const result = await detectDeltas({
+          userId: testUserId,
+          sinceTimestamp: twoHoursAgo.toISOString(),
+          entityTypes: ['CONNECTION_PROFILE'],
+        });
+
+        expect(result.deltas).toHaveLength(1);
+        expect(result.deltas[0].id).toBe(newProfile.id);
+      });
+    });
   });
 
   // ============================================================================
@@ -488,7 +585,7 @@ describe('Sync Delta Detector', () => {
       const fileContent = Buffer.from('small file content');
 
       mockRepositories.files.findByUserId.mockResolvedValue([smallFile]);
-      mockDownloadUserFile.mockResolvedValue(fileContent);
+      mockDownloadFile.mockResolvedValue(fileContent);
 
       const result = await detectDeltas({
         userId: testUserId,
@@ -531,7 +628,7 @@ describe('Sync Delta Detector', () => {
       });
 
       mockRepositories.files.findByUserId.mockResolvedValue([file]);
-      mockDownloadUserFile.mockResolvedValue(Buffer.from('content'));
+      mockDownloadFile.mockResolvedValue(Buffer.from('content'));
 
       const result = await detectDeltas({
         userId: testUserId,
@@ -552,7 +649,7 @@ describe('Sync Delta Detector', () => {
       });
 
       mockRepositories.files.findByUserId.mockResolvedValue([file]);
-      mockDownloadUserFile.mockRejectedValue(new Error('Download failed'));
+      mockDownloadFile.mockRejectedValue(new Error('Download failed'));
 
       const result = await detectDeltas({
         userId: testUserId,
@@ -594,7 +691,6 @@ describe('Sync Delta Detector', () => {
         createMockCharacter({ userId: testUserId }),
         createMockCharacter({ userId: testUserId }),
       ];
-      const personas = [createMockPersona({ userId: testUserId })];
       const tags = [
         createMockTag({ userId: testUserId }),
         createMockTag({ userId: testUserId }),
@@ -602,18 +698,17 @@ describe('Sync Delta Detector', () => {
       ];
 
       mockRepositories.characters.findByUserId.mockResolvedValue(characters);
-      mockRepositories.personas.findByUserId.mockResolvedValue(personas);
       mockRepositories.tags.findByUserId.mockResolvedValue(tags);
 
       const counts = await countDeltas({
         userId: testUserId,
         sinceTimestamp: null,
-        entityTypes: ['CHARACTER', 'PERSONA', 'TAG'],
+        entityTypes: ['CHARACTER', 'TAG', 'FILE'],
       });
 
       expect(counts.CHARACTER).toBe(2);
-      expect(counts.PERSONA).toBe(1);
       expect(counts.TAG).toBe(3);
+      expect(counts.FILE).toBe(0);
     });
 
     it('should filter by sinceTimestamp', async () => {
@@ -639,10 +734,10 @@ describe('Sync Delta Detector', () => {
 
     it('should handle specific entityTypes parameter', async () => {
       const character = createMockCharacter({ userId: testUserId });
-      const persona = createMockPersona({ userId: testUserId });
+      const tag = createMockTag({ userId: testUserId });
 
       mockRepositories.characters.findByUserId.mockResolvedValue([character]);
-      mockRepositories.personas.findByUserId.mockResolvedValue([persona]);
+      mockRepositories.tags.findByUserId.mockResolvedValue([tag]);
 
       const counts = await countDeltas({
         userId: testUserId,
@@ -651,19 +746,19 @@ describe('Sync Delta Detector', () => {
       });
 
       expect(counts.CHARACTER).toBe(1);
-      expect(counts.PERSONA).toBeUndefined();
+      expect(counts.TAG).toBeUndefined();
     });
 
     it('should return zero counts for empty repositories', async () => {
       const counts = await countDeltas({
         userId: testUserId,
         sinceTimestamp: null,
-        entityTypes: ['CHARACTER', 'PERSONA', 'TAG'],
+        entityTypes: ['CHARACTER', 'TAG', 'FILE'],
       });
 
       expect(counts.CHARACTER).toBe(0);
-      expect(counts.PERSONA).toBe(0);
       expect(counts.TAG).toBe(0);
+      expect(counts.FILE).toBe(0);
     });
 
     it('should count all entity types when no filter provided', async () => {
@@ -674,7 +769,7 @@ describe('Sync Delta Detector', () => {
       mockRepositories.characters.findByUserId.mockResolvedValue([character]);
       mockRepositories.tags.findByUserId.mockResolvedValue([tag]);
       mockRepositories.files.findByUserId.mockResolvedValue([file]);
-      mockDownloadUserFile.mockResolvedValue(Buffer.from('content'));
+      mockDownloadFile.mockResolvedValue(Buffer.from('content'));
 
       const counts = await countDeltas({
         userId: testUserId,
@@ -703,7 +798,7 @@ describe('Sync Delta Detector', () => {
         userId: testUserId,
         updatedAt: threeDaysAgo.toISOString(),
       });
-      const newerPersona = createMockPersona({
+      const newerTag = createMockTag({
         userId: testUserId,
         updatedAt: twoHoursAgo.toISOString(),
       });
@@ -713,7 +808,7 @@ describe('Sync Delta Detector', () => {
       });
 
       mockRepositories.characters.findByUserId.mockResolvedValue([oldChar]);
-      mockRepositories.personas.findByUserId.mockResolvedValue([newerPersona]);
+      mockRepositories.tags.findByUserId.mockResolvedValue([newerTag]);
       mockRepositories.chats.findByUserId.mockResolvedValue([newestChat]);
 
       const result = await getMostRecentUpdate(testUserId);
@@ -911,24 +1006,24 @@ describe('Sync Delta Detector', () => {
         userId: testUserId,
         updatedAt: twoHoursAgo.toISOString(),
       });
-      const newPersona = createMockPersona({
+      const newestFile = createMockFileEntry({
         userId: testUserId,
         updatedAt: oneHourAgo.toISOString(),
       });
 
       mockRepositories.tags.findByUserId.mockResolvedValue([oldTag]);
       mockRepositories.characters.findByUserId.mockResolvedValue([middleChar]);
-      mockRepositories.personas.findByUserId.mockResolvedValue([newPersona]);
+      mockRepositories.files.findByUserId.mockResolvedValue([newestFile]);
 
       const result = await detectDeltas({
         userId: testUserId,
         sinceTimestamp: null,
-        entityTypes: ['TAG', 'CHARACTER', 'PERSONA'],
+        entityTypes: ['TAG', 'CHARACTER', 'FILE'],
       });
 
       expect(result.deltas[0].entityType).toBe('TAG');
       expect(result.deltas[1].entityType).toBe('CHARACTER');
-      expect(result.deltas[2].entityType).toBe('PERSONA');
+      expect(result.deltas[2].entityType).toBe('FILE');
     });
 
     it('should correctly limit and paginate across entity types', async () => {

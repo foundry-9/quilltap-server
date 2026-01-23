@@ -39,7 +39,7 @@ export function FormActions({
       <button
         type="button"
         onClick={onCancel}
-        disabled={isButtonDisabled}
+        disabled={isLoading}
         className="qt-button-secondary"
       >
         {cancelLabel}

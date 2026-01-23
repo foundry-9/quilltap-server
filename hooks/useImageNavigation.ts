@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 interface UseImageNavigationOptions {
   /** Whether the modal/viewer is currently open */
@@ -21,8 +20,6 @@ interface UseImageNavigationOptions {
    * Whether to prevent body scroll when open. Default: true.
    */
   preventBodyScroll?: boolean
-  /** Log context for debugging */
-  logContext?: string
 }
 
 /**
@@ -51,32 +48,22 @@ export function useImageNavigation({
   onNext,
   handleEscape = true,
   preventBodyScroll = true,
-  logContext = 'useImageNavigation',
 }: UseImageNavigationOptions): void {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape' && handleEscape) {
-        clientLogger.debug('Escape pressed, closing', { context: logContext })
         onClose()
       } else if (e.key === 'ArrowLeft' && onPrev) {
-        clientLogger.debug('ArrowLeft pressed, navigating to previous', { context: logContext })
         onPrev()
       } else if (e.key === 'ArrowRight' && onNext) {
-        clientLogger.debug('ArrowRight pressed, navigating to next', { context: logContext })
         onNext()
       }
     },
-    [onClose, onPrev, onNext, handleEscape, logContext]
+    [onClose, onPrev, onNext, handleEscape]
   )
 
   useEffect(() => {
     if (isOpen) {
-      clientLogger.debug('Registering keyboard navigation', {
-        context: logContext,
-        hasEscape: handleEscape,
-        hasPrev: !!onPrev,
-        hasNext: !!onNext,
-      })
       document.addEventListener('keydown', handleKeyDown)
 
       if (preventBodyScroll) {
@@ -90,5 +77,5 @@ export function useImageNavigation({
         document.body.style.overflow = ''
       }
     }
-  }, [isOpen, handleKeyDown, preventBodyScroll, logContext, onPrev, onNext, handleEscape])
+  }, [isOpen, handleKeyDown, preventBodyScroll])
 }

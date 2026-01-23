@@ -91,7 +91,7 @@ export function CharactersSection() {
   // Don't show section if loading or no characters
   if (loading) {
     return (
-      <SidebarSection title="Characters">
+      <SidebarSection id="characters" title="Characters">
         <div className="px-2 py-1 text-xs text-muted-foreground animate-pulse">
           {!isCollapsed && 'Loading...'}
         </div>
@@ -106,7 +106,7 @@ export function CharactersSection() {
 
   if (visibleCharacters.length === 0) {
     return (
-      <SidebarSection title="Characters">
+      <SidebarSection id="characters" title="Characters">
         <div className="px-2 py-1 text-xs text-muted-foreground">
           {!isCollapsed && 'No characters yet'}
         </div>
@@ -116,7 +116,7 @@ export function CharactersSection() {
   }
 
   return (
-    <SidebarSection title="Characters">
+    <SidebarSection id="characters" title="Characters">
       {visibleCharacters.slice(0, 5).map(character => (
         <CharacterItem
           key={character.id}

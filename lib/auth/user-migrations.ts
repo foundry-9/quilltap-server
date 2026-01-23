@@ -1,9 +1,16 @@
 /**
  * User Migrations Wrapper
  *
- * This module provides a thin wrapper around the upgrade plugin's user migrations
- * functionality. It uses dynamic imports to avoid Next.js Turbopack bundling issues
- * with the upgrade plugin's compiled bundle.
+ * Previously, this module ran per-user migrations after login via the upgrade plugin.
+ *
+ * With the new migration system, ALL migrations (including per-user data fixes)
+ * run at server startup in instrumentation.ts BEFORE any requests are served.
+ * This ensures data compatibility from the moment the server starts.
+ *
+ * This function is kept for backwards compatibility with existing code that
+ * calls it after authentication, but it now does nothing.
+ *
+ * @deprecated All migrations now run at startup. This function is a no-op.
  */
 
 import { logger } from '@/lib/logger';
@@ -11,24 +18,14 @@ import { logger } from '@/lib/logger';
 /**
  * Run all post-login migrations for a user
  *
- * This function is called after successful authentication.
- * It dynamically imports the upgrade plugin to run per-user migrations.
- *
+ * @deprecated This function is now a no-op. Migrations run at startup.
  * @param userId - The ID of the user who just logged in
  */
 export async function runPostLoginMigrations(userId: string): Promise<void> {
-  try {
-    // Dynamic import to avoid Turbopack bundling issues with the plugin
-    const { runPostLoginMigrations: runMigrations } = await import(
-      '@/plugins/dist/qtap-plugin-upgrade/user-migrations'
-    );
-    await runMigrations(userId);
-  } catch (error) {
-    logger.error('Failed to run post-login migrations', {
-      context: 'user-migrations.runPostLoginMigrations',
-      userId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Don't throw - migrations should not block login
-  }
+  // All migrations now run at startup in instrumentation.ts
+  // This function is kept for backwards compatibility but does nothing.
+  logger.debug('Post-login migrations no longer needed - all migrations run at startup', {
+    context: 'user-migrations.runPostLoginMigrations',
+    userId,
+  });
 }

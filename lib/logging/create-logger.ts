@@ -37,12 +37,12 @@ export function createLogger(module: string) {
  *
  * Standardizes logging context for API routes with endpoint information.
  *
- * @param endpoint - The API endpoint path (e.g., '/api/characters')
+ * @param endpoint - The API endpoint path (e.g., '/api/v1/characters')
  * @returns A child logger with the endpoint context
  *
  * @example
  * ```ts
- * const logger = createApiLogger('/api/characters');
+ * const logger = createApiLogger('/api/v1/characters');
  * logger.debug('Processing request', { method: 'GET' });
  * ```
  */

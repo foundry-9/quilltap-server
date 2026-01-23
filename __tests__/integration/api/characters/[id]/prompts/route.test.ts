@@ -1,162 +1,49 @@
-import { describe, it, expect, beforeAll, beforeEach, jest } from '@jest/globals'
+/**
+ * Integration tests for legacy prompts route
+ * Tests that legacy route returns 410 Gone with redirect info
+ *
+ * Actual functionality is now in /api/v1/characters/[id]/prompts
+ */
 
-jest.mock('@/lib/auth/session', () => ({
-  getServerSession: jest.fn(),
-}))
+import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
 
-jest.mock('@/lib/repositories/factory', () => ({
-  getRepositories: jest.fn(),
-}))
+let GET: typeof import('@/app/api/characters/[id]/prompts/route').GET;
+let POST: typeof import('@/app/api/characters/[id]/prompts/route').POST;
 
-type RouteModule = typeof import('@/app/api/characters/[id]/prompts/route')
-type SessionModule = typeof import('@/lib/auth/session')
-type RepositoriesModule = typeof import('@/lib/repositories/factory')
-
-let GET: RouteModule['GET']
-let POST: RouteModule['POST']
-let mockGetServerSession: jest.MockedFunction<SessionModule['getServerSession']>
-let mockGetRepositories: jest.MockedFunction<RepositoriesModule['getRepositories']>
-
-const buildContext = (id: string = 'char-1') => ({
-  params: Promise.resolve({ id }),
-})
-
-describe('Character System Prompts API', () => {
-  beforeAll(async () => {
-    const routeModule = await import('@/app/api/characters/[id]/prompts/route')
-    GET = routeModule.GET
-    POST = routeModule.POST
-
-    const sessionModule = await import('@/lib/auth/session')
-    mockGetServerSession = sessionModule.getServerSession as jest.MockedFunction<SessionModule['getServerSession']>
-
-    const reposModule = await import('@/lib/repositories/factory')
-    mockGetRepositories = reposModule.getRepositories as jest.MockedFunction<RepositoriesModule['getRepositories']>
-  })
-
+describe('Legacy Character Prompts Route (movedToV1)', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
-    mockGetRepositories.mockReset()
-  })
+    jest.clearAllMocks();
 
-  it('returns prompts for the owning user', async () => {
-    mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } } as any)
+    jest.isolateModules(() => {
+      const routesModule = require('@/app/api/characters/[id]/prompts/route');
+      GET = routesModule.GET;
+      POST = routesModule.POST;
+    });
+  });
 
-    const systemPrompts = [
-      { id: 'p1', name: 'Default', content: 'You are {{char}}.', isDefault: true },
-      { id: 'p2', name: 'Battle', content: 'Protect {{user}}.', isDefault: false },
-    ]
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
-    mockGetRepositories.mockReturnValue({
-      users: {
-        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
-      },
-      characters: {
-        findById: jest.fn().mockResolvedValue({
-          id: 'char-1',
-          userId: 'user-1',
-          systemPrompts,
-        }),
-      },
-    } as any)
+  describe('GET /api/characters/[id]/prompts', () => {
+    it('should return 410 Gone with redirect to v1 endpoint', async () => {
+      const response = await GET();
+      const body = await response.json();
 
-    const response = await GET(new Request('http://test.local/api/characters/char-1/prompts'), buildContext())
-    expect(response.status).toBe(200)
-    const data = await response.json()
-    expect(data).toEqual(systemPrompts)
-  })
+      expect(response.status).toBe(410);
+      expect(body.error).toBe('Endpoint removed');
+      expect(body.details.newEndpoint).toBe('/api/v1/characters/[id]/prompts');
+    });
+  });
 
-  it('returns 403 when character belongs to another user', async () => {
-    mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } } as any)
+  describe('POST /api/characters/[id]/prompts', () => {
+    it('should return 410 Gone with redirect to v1 endpoint', async () => {
+      const response = await POST();
+      const body = await response.json();
 
-    const findById = jest.fn().mockResolvedValue({
-      id: 'char-1',
-      userId: 'user-2',
-      systemPrompts: [],
-    })
-    mockGetRepositories.mockReturnValue({
-      users: {
-        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
-      },
-      characters: { findById },
-    } as any)
-
-    const response = await GET(new Request('http://test.local/api/characters/char-1/prompts'), buildContext())
-    expect(response.status).toBe(403)
-    const payload = await response.json()
-    expect(payload.error).toBe('Forbidden')
-  })
-
-  it('creates a new prompt via POST and returns 201', async () => {
-    mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } } as any)
-
-    const addSystemPrompt = jest.fn().mockResolvedValue({
-      id: 'prompt-new',
-      name: 'Mission',
-      content: 'Stay focused, {{char}}.',
-      isDefault: true,
-    })
-
-    mockGetRepositories.mockReturnValue({
-      users: {
-        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
-      },
-      characters: {
-        findById: jest.fn().mockResolvedValue({
-          id: 'char-1',
-          userId: 'user-1',
-          systemPrompts: [],
-        }),
-        addSystemPrompt,
-      },
-    } as any)
-
-    const request = new Request('http://test.local/api/characters/char-1/prompts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: 'Mission',
-        content: 'Stay focused, {{char}}.',
-        isDefault: true,
-      }),
-    })
-
-    const response = await POST(request, buildContext())
-    expect(response.status).toBe(201)
-    const data = await response.json()
-    expect(data).toMatchObject({ id: 'prompt-new', name: 'Mission', isDefault: true })
-    expect(addSystemPrompt).toHaveBeenCalledWith('char-1', {
-      name: 'Mission',
-      content: 'Stay focused, {{char}}.',
-      isDefault: true,
-    })
-  })
-
-  it('returns 400 for invalid prompt payloads', async () => {
-    mockGetServerSession.mockResolvedValue({ user: { id: 'user-1' } } as any)
-    mockGetRepositories.mockReturnValue({
-      users: {
-        findById: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@example.com' }),
-      },
-      characters: {
-        findById: jest.fn(),
-        addSystemPrompt: jest.fn(),
-      },
-    } as any)
-
-    const request = new Request('http://test.local/api/characters/char-1/prompts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: '',
-        content: '',
-      }),
-    })
-
-    const response = await POST(request, buildContext())
-    expect(response.status).toBe(400)
-    const body = await response.json()
-    expect(body.error).toBe('Validation error')
-    expect(Array.isArray(body.details)).toBe(true)
-  })
-})
+      expect(response.status).toBe(410);
+      expect(body.error).toBe('Endpoint removed');
+      expect(body.details.newEndpoint).toBe('/api/v1/characters/[id]/prompts');
+    });
+  });
+});

@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showInfoToast } from '@/lib/toast'
 import {
   type TurnState,
@@ -43,11 +42,8 @@ export function useTurnManagement(
   }, [participantsAsBase])
 
   const handleNudge = useCallback(async (participantId: string) => {
-    clientLogger.debug('[Chat] Nudging participant', { participantId, isPaused })
-
     // If chat is paused, unpause it first
     if (isPaused && onUnpause) {
-      clientLogger.debug('[Chat] Unpausing chat before nudge')
       await onUnpause()
     }
 
@@ -79,7 +75,6 @@ export function useTurnManagement(
   }, [turnState, participantsAsBase, charactersMap, userParticipantId, participantData, ephemeralMessages, setTurnState, setTurnSelectionResult, setEphemeralMessages, triggerContinueMode, isPaused, onUnpause])
 
   const handleQueue = useCallback((participantId: string) => {
-    clientLogger.debug('[Chat] Queueing participant', { participantId })
     const newTurnState = addToQueue(turnState, participantId)
     setTurnState(newTurnState)
 
@@ -96,7 +91,6 @@ export function useTurnManagement(
   }, [turnState, participantsAsBase, charactersMap, userParticipantId, setTurnState, setTurnSelectionResult])
 
   const handleDequeue = useCallback((participantId: string) => {
-    clientLogger.debug('[Chat] Dequeuing participant', { participantId })
     const newTurnState = removeFromQueue(turnState, participantId)
     setTurnState(newTurnState)
 
@@ -113,11 +107,8 @@ export function useTurnManagement(
   }, [turnState, participantsAsBase, charactersMap, userParticipantId, setTurnState, setTurnSelectionResult])
 
   const handleContinue = useCallback(() => {
-    clientLogger.debug('[Chat] User passing turn via Continue button')
-
     // Edge case: No active characters
     if (!hasActiveCharacters) {
-      clientLogger.warn('[Chat] Cannot continue - no active characters')
       showErrorToast('No characters available. Add a character to continue.')
       return
     }
@@ -126,22 +117,13 @@ export function useTurnManagement(
     let result = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
 
     if (result.nextSpeakerId && result.nextSpeakerId !== userParticipantId) {
-      clientLogger.debug('[Chat] Selected next speaker for continue', {
-        participantId: result.nextSpeakerId,
-        reason: result.reason,
-      })
       triggerContinueMode(result.nextSpeakerId)
     } else {
-      clientLogger.warn('[Chat] Continue button clicked but no valid next speaker', {
-        nextSpeakerId: result.nextSpeakerId,
-        reason: result.reason,
-      })
       showInfoToast('No characters available to speak. Try adding or activating a character.')
     }
   }, [participantsAsBase, charactersMap, turnState, userParticipantId, hasActiveCharacters, triggerContinueMode])
 
   const handleDismissEphemeral = useCallback((ephemeralId: string) => {
-    clientLogger.debug('[Chat] Dismissing ephemeral message', { ephemeralId })
     setEphemeralMessages(ephemeralMessages.filter(em => em.id !== ephemeralId))
   }, [ephemeralMessages, setEphemeralMessages])
 

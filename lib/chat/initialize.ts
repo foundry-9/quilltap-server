@@ -3,7 +3,7 @@
 // Updated for characters-not-personas migration
 
 import { getRepositories } from '@/lib/repositories/factory'
-import { processCharacterTemplates } from '@/lib/templates/processor'
+import { processCharacterTemplates, processTemplate } from '@/lib/templates/processor'
 import { logger } from '@/lib/logger'
 
 interface CharacterSystemPrompt {
@@ -177,13 +177,23 @@ function buildSystemPrompt({
   }
 
   // Add user character info (who the AI is talking to)
+  // Process templates in the user character's description/personality with their own context
+  // ({{char}} in user character's description refers to that character, not the AI character)
   if (userCharacter) {
     prompt += `\n\nYou are talking to ${userCharacter.name}.`
     if (userCharacter.description) {
-      prompt += `\n${userCharacter.description}`
+      const processedUserDesc = processTemplate(userCharacter.description, {
+        char: userCharacter.name,
+        user: character.name, // From user character's perspective, the AI is the "user"
+      })
+      prompt += `\n${processedUserDesc}`
     }
     if (userCharacter.personality) {
-      prompt += `\nThey are: ${userCharacter.personality}`
+      const processedUserPersonality = processTemplate(userCharacter.personality, {
+        char: userCharacter.name,
+        user: character.name,
+      })
+      prompt += `\nThey are: ${processedUserPersonality}`
     }
   }
 

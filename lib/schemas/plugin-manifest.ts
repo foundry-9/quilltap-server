@@ -35,6 +35,7 @@ export const PluginCapabilityEnum = z.enum([
   'FILE_BACKEND',          // Replaces/augments file storage
   'UPGRADE_MIGRATION',     // Provides version upgrade migrations (runs early in startup)
   'ROLEPLAY_TEMPLATE',     // Provides roleplay formatting templates
+  'TOOL_PROVIDER',         // Provides LLM tools (e.g., curl, calculators, etc.)
 ]);
 
 export type PluginCapability = z.infer<typeof PluginCapabilityEnum>;
@@ -406,6 +407,51 @@ export const ThemeConfigSchema = z.object({
 export type ThemeConfig = z.infer<typeof ThemeConfigSchema>;
 
 /**
+ * Annotation button configuration for roleplay templates
+ * Defines formatting buttons shown in the document editing toolbar
+ */
+export const AnnotationButtonConfigSchema = z.object({
+  /** Full name displayed in tooltip (e.g., "Narration", "Internal Monologue") */
+  label: z.string().min(1).max(50).describe('Full name for tooltip'),
+  /** Abbreviated label displayed on button (e.g., "Nar", "Int", "OOC") */
+  abbrev: z.string().min(1).max(10).describe('Short label for button'),
+  /** Opening delimiter (e.g., "[", "*", "{{") */
+  prefix: z.string().describe('Opening delimiter'),
+  /** Closing delimiter (e.g., "]", "*", "}}") - empty string for line-end delimiters */
+  suffix: z.string().describe('Closing delimiter'),
+});
+
+export type AnnotationButtonConfig = z.infer<typeof AnnotationButtonConfigSchema>;
+
+/**
+ * Rendering pattern for message content styling
+ */
+export const RenderingPatternConfigSchema = z.object({
+  /** Regex pattern as a string (converted to RegExp at runtime) */
+  pattern: z.string().min(1).describe('Regex pattern string'),
+  /** CSS class to apply to matched text */
+  className: z.string().min(1).describe('CSS class name'),
+  /** Optional regex flags (e.g., "m" for multiline) */
+  flags: z.string().optional().describe('Regex flags'),
+});
+
+export type RenderingPatternConfig = z.infer<typeof RenderingPatternConfigSchema>;
+
+/**
+ * Dialogue detection for paragraph-level styling
+ */
+export const DialogueDetectionConfigSchema = z.object({
+  /** Opening quote characters to detect */
+  openingChars: z.array(z.string()).describe('Opening quote characters'),
+  /** Closing quote characters to detect */
+  closingChars: z.array(z.string()).describe('Closing quote characters'),
+  /** CSS class to apply to dialogue paragraphs */
+  className: z.string().min(1).describe('CSS class name'),
+});
+
+export type DialogueDetectionConfig = z.infer<typeof DialogueDetectionConfigSchema>;
+
+/**
  * Roleplay template plugin configuration schema
  *
  * Defines the configuration for roleplay template plugins.
@@ -413,7 +459,7 @@ export type ThemeConfig = z.infer<typeof ThemeConfigSchema>;
  * to character system prompts during chat.
  */
 export const RoleplayTemplateConfigSchema = z.object({
-  /** Display name for the template (e.g., 'Quilltap RP') */
+  /** Display name for the template */
   name: z.string().min(1).max(100).describe('Template display name'),
 
   /** Short description of the template formatting style */
@@ -424,9 +470,95 @@ export const RoleplayTemplateConfigSchema = z.object({
 
   /** Optional categorization tags */
   tags: z.array(z.string()).default([]).optional().describe('Tags for categorization'),
+
+  /** Annotation buttons for the formatting toolbar - defines available formatting options */
+  annotationButtons: z.array(AnnotationButtonConfigSchema).default([]).optional().describe('Formatting toolbar buttons'),
+
+  /** Patterns for styling roleplay text in message content */
+  renderingPatterns: z.array(RenderingPatternConfigSchema).default([]).optional().describe('Message content rendering patterns'),
+
+  /** Optional dialogue detection for paragraph-level styling (null = none) */
+  dialogueDetection: DialogueDetectionConfigSchema.nullable().optional().describe('Dialogue paragraph detection'),
 });
 
 export type RoleplayTemplateConfig = z.infer<typeof RoleplayTemplateConfigSchema>;
+
+/**
+ * Tool plugin configuration schema
+ *
+ * Defines the configuration for tool plugins that provide LLM tools.
+ * Tool plugins use the TOOL_PROVIDER capability and provide tools
+ * that can be called by LLMs during chat interactions.
+ */
+export const ToolConfigSchema = z.object({
+  /** Tool name used in LLM function calls (lowercase with underscores) */
+  toolName: z.string().regex(/^[a-z][a-z0-9_]*$/).min(1).max(50).describe('Tool name for LLM function calls'),
+
+  /** Human-readable display name */
+  displayName: z.string().min(1).max(100).describe('Display name for UI'),
+
+  /** Tool description for LLM to understand when to use it */
+  description: z.string().min(1).max(1000).describe('Description for LLM'),
+
+  /** Whether the tool requires user configuration before use (e.g., API keys, allowlists) */
+  requiresConfiguration: z.boolean().default(false).describe('Whether user must configure before use'),
+
+  /** Whether the tool is enabled by default when the plugin is installed */
+  enabledByDefault: z.boolean().default(true).describe('Whether tool is enabled by default'),
+});
+
+export type ToolConfig = z.infer<typeof ToolConfigSchema>;
+
+/**
+ * File backend configuration field schema
+ *
+ * Defines a single configuration field for file storage backend plugins.
+ * Similar to ConfigSchemaSchema but specifically for file backend settings.
+ */
+export const FileBackendConfigFieldSchema = z.object({
+  /** Field name (used as key in config object) */
+  name: z.string().min(1).max(50).describe('Field name'),
+
+  /** Human-readable label for UI */
+  label: z.string().min(1).max(100).describe('Display label'),
+
+  /** Field type */
+  type: z.enum(['string', 'secret', 'boolean', 'number']).describe('Field type'),
+
+  /** Whether the field is required */
+  required: z.boolean().default(false).optional().describe('Whether field is required'),
+
+  /** Default value for the field */
+  defaultValue: z.union([z.string(), z.boolean(), z.number()]).optional().describe('Default value'),
+
+  /** Help text or description */
+  description: z.string().max(500).optional().describe('Field description'),
+
+  /** Placeholder text for string fields */
+  placeholder: z.string().max(200).optional().describe('Placeholder text'),
+});
+
+export type FileBackendConfigField = z.infer<typeof FileBackendConfigFieldSchema>;
+
+/**
+ * File backend plugin configuration schema
+ *
+ * Defines the configuration for file storage backend plugins.
+ * These plugins use the FILE_BACKEND capability and provide storage
+ * backends like S3, GCS, local filesystem, etc.
+ */
+export const FileBackendConfigSchema = z.object({
+  /** Unique backend identifier (e.g., 's3', 'gcs', 'local') */
+  backendId: z.string().min(1).max(50).describe('Backend identifier'),
+
+  /** Human-readable display name */
+  displayName: z.string().min(1).max(100).describe('Display name for UI'),
+
+  /** Configuration fields required by this backend */
+  configFields: z.array(FileBackendConfigFieldSchema).default([]).describe('Configuration fields'),
+});
+
+export type FileBackendConfig = z.infer<typeof FileBackendConfigSchema>;
 
 // ============================================================================
 // MAIN MANIFEST SCHEMA
@@ -441,8 +573,8 @@ export const PluginManifestSchema = z.object({
   $schema: z.string().optional(),
 
   // ===== BASIC METADATA =====
-  /** Plugin package name (must start with 'qtap-plugin-') */
-  name: z.string().regex(/^qtap-plugin-[a-z0-9-]+$/),
+  /** Plugin package name (must start with 'qtap-plugin-' or '@scope/qtap-plugin-') */
+  name: z.string().regex(/^(@[a-z0-9-]+\/)?qtap-plugin-[a-z0-9-]+$/),
 
   /** Display title */
   title: z.string().min(1).max(100),
@@ -542,6 +674,12 @@ export const PluginManifestSchema = z.object({
   /** Roleplay template configuration (for ROLEPLAY_TEMPLATE capability plugins) */
   roleplayTemplateConfig: RoleplayTemplateConfigSchema.optional(),
 
+  /** Tool configuration (for TOOL_PROVIDER capability plugins) */
+  toolConfig: ToolConfigSchema.optional(),
+
+  /** File backend configuration (for FILE_BACKEND capability plugins) */
+  fileBackendConfig: FileBackendConfigSchema.optional(),
+
   // ===== SECURITY & PERMISSIONS =====
   /** Permissions required by the plugin */
   permissions: PermissionsSchema.default({}).optional(),
@@ -570,6 +708,7 @@ export const PluginManifestSchema = z.object({
     'DATABASE',
     'STORAGE',
     'AUTHENTICATION',
+    'TOOLS',
     'OTHER',
   ]).default('OTHER').optional(),
 
@@ -578,6 +717,9 @@ export const PluginManifestSchema = z.object({
 
   /** Plugin status */
   status: z.enum(['STABLE', 'BETA', 'ALPHA', 'DEPRECATED']).default('STABLE').optional(),
+
+  /** Whether this plugin requires a server restart to activate (inferred from capabilities if not set) */
+  requiresRestart: z.boolean().optional(),
 }).strict(); // Prevent unknown fields
 
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;
@@ -642,4 +784,39 @@ export function functionalityToCapabilities(functionality?: Functionality): Plug
   }
 
   return capabilities;
+}
+
+/**
+ * Capabilities that require a server restart to activate.
+ * These capabilities affect core infrastructure that is initialized at startup.
+ * Note: LLM_PROVIDER and IMAGE_PROVIDER are hot-loaded after installation,
+ * so they don't require a restart (handled in installer.ts).
+ */
+const RESTART_REQUIRED_CAPABILITIES: PluginCapability[] = [
+  'AUTH_METHODS',
+  'DATABASE_BACKEND',
+  'FILE_BACKEND',
+  'UPGRADE_MIGRATION',
+];
+
+/**
+ * Determines if a plugin requires a server restart to activate.
+ *
+ * The restart requirement is determined by:
+ * 1. Explicit `requiresRestart` field in the manifest (takes precedence)
+ * 2. Inference from capabilities (AUTH_METHODS, DATABASE_BACKEND, FILE_BACKEND, UPGRADE_MIGRATION)
+ *
+ * @param manifest - The plugin manifest to check
+ * @returns true if the plugin requires a server restart to activate
+ */
+export function pluginRequiresRestart(manifest: PluginManifest): boolean {
+  // Explicit field takes precedence
+  if (manifest.requiresRestart !== undefined) {
+    return manifest.requiresRestart;
+  }
+
+  // Infer from capabilities
+  return manifest.capabilities.some(cap =>
+    RESTART_REQUIRED_CAPABILITIES.includes(cap)
+  );
 }

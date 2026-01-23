@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
+import { useEffect, useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface ToolPaletteProps {
@@ -12,10 +11,13 @@ interface ToolPaletteProps {
   onGenerateImageClick: () => void
   onSettingsClick: () => void
   onRenameClick?: () => void
+  onProjectClick?: () => void // Assign chat to project
+  projectName?: string | null // Current project name (to show in button)
   onAddCharacterClick?: () => void
   onDeleteChatMemoriesClick?: () => void
   onReextractMemoriesClick?: () => void
   onSearchReplaceClick?: () => void // Search and replace in chat
+  onBulkCharacterReplaceClick?: () => void // Bulk re-attribute messages between characters
   chatPhotoCount: number
   hasImageProfile: boolean
   showAddCharacter?: boolean // Show "Add Character" button for single-character chats
@@ -27,42 +29,8 @@ interface ToolPaletteProps {
   // Preview toggle props
   showPreview?: boolean
   onTogglePreview?: () => void
-  // Roleplay props
-  roleplayTemplateId?: string | null
-  inputRef?: React.RefObject<HTMLTextAreaElement | null>
-  input?: string
-  setInput?: (value: string) => void
   disabled?: boolean
 }
-
-type AnnotationType = 'narration' | 'internal' | 'ooc'
-
-interface AnnotationConfig {
-  label: string
-  type: AnnotationType
-  prefix: string
-  suffix: string
-}
-
-interface RoleplayTemplate {
-  id: string
-  name: string
-  description: string | null
-  isBuiltIn: boolean
-}
-
-// Standard template annotations
-const STANDARD_ANNOTATIONS: AnnotationConfig[] = [
-  { label: 'Narration', type: 'narration', prefix: '*', suffix: '*' },
-  { label: 'OOC', type: 'ooc', prefix: '((', suffix: '))' },
-]
-
-// Quilltap RP template annotations
-const QUILLTAP_RP_ANNOTATIONS: AnnotationConfig[] = [
-  { label: 'Narration', type: 'narration', prefix: '[', suffix: ']' },
-  { label: 'Internal', type: 'internal', prefix: '{', suffix: '}' },
-  { label: 'OOC', type: 'ooc', prefix: '// ', suffix: '' },
-]
 
 export default function ToolPalette({
   isOpen,
@@ -72,10 +40,13 @@ export default function ToolPalette({
   onGenerateImageClick,
   onSettingsClick,
   onRenameClick,
+  onProjectClick,
+  projectName,
   onAddCharacterClick,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
   onSearchReplaceClick,
+  onBulkCharacterReplaceClick,
   chatPhotoCount,
   hasImageProfile,
   showAddCharacter = false,
@@ -87,108 +58,9 @@ export default function ToolPalette({
   // Preview toggle
   showPreview = false,
   onTogglePreview,
-  // Roleplay
-  roleplayTemplateId,
-  inputRef,
-  input = '',
-  setInput,
   disabled = false,
 }: ToolPaletteProps) {
   const paletteRef = useRef<HTMLDivElement>(null)
-  const [template, setTemplate] = useState<RoleplayTemplate | null>(null)
-  const [loadingTemplate, setLoadingTemplate] = useState(false)
-
-  // Fetch template info when roleplayTemplateId changes
-  useEffect(() => {
-    if (!roleplayTemplateId) {
-      setTemplate(null)
-      return
-    }
-
-    const fetchTemplate = async () => {
-      try {
-        setLoadingTemplate(true)
-        clientLogger.debug('[ToolPalette] Fetching template', {
-          roleplayTemplateId,
-        })
-
-        const response = await fetch(`/api/roleplay-templates/${roleplayTemplateId}`)
-        if (response.ok) {
-          const data = await response.json()
-          setTemplate(data)
-          clientLogger.debug('[ToolPalette] Template loaded', {
-            templateName: data.name,
-            isBuiltIn: data.isBuiltIn,
-          })
-        } else {
-          clientLogger.warn('[ToolPalette] Failed to fetch template', {
-            roleplayTemplateId,
-            status: response.status,
-          })
-          setTemplate(null)
-        }
-      } catch (error) {
-        clientLogger.error('[ToolPalette] Error fetching template', {
-          roleplayTemplateId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        setTemplate(null)
-      } finally {
-        setLoadingTemplate(false)
-      }
-    }
-
-    fetchTemplate()
-  }, [roleplayTemplateId])
-
-  // Get annotations based on template type
-  const getAnnotations = useCallback((): AnnotationConfig[] => {
-    if (!template) return []
-
-    if (template.name === 'Standard') {
-      return STANDARD_ANNOTATIONS
-    } else if (template.name === 'Quilltap RP') {
-      return QUILLTAP_RP_ANNOTATIONS
-    }
-
-    return STANDARD_ANNOTATIONS
-  }, [template])
-
-  // Insert annotation at cursor position
-  const insertAnnotation = useCallback(
-    (config: AnnotationConfig) => {
-      const textarea = inputRef?.current
-      if (!textarea || !setInput) return
-
-      clientLogger.debug('[ToolPalette] Inserting annotation', {
-        type: config.type,
-        label: config.label,
-      })
-
-      const start = textarea.selectionStart
-      const end = textarea.selectionEnd
-      const selectedText = input.substring(start, end)
-
-      const before = input.substring(0, start)
-      const after = input.substring(end)
-      const wrapped = config.prefix + selectedText + config.suffix
-      const newValue = before + wrapped + after
-
-      setInput(newValue)
-
-      const newCursorPos = selectedText
-        ? start + wrapped.length
-        : start + config.prefix.length
-
-      setTimeout(() => {
-        textarea.focus()
-        textarea.setSelectionRange(newCursorPos, newCursorPos)
-      }, 0)
-
-      onClose()
-    },
-    [input, inputRef, setInput, onClose]
-  )
 
   useClickOutside(paletteRef, onClose, {
     enabled: isOpen,
@@ -212,79 +84,58 @@ export default function ToolPalette({
   }
 
   const handleRenameClick = () => {
-    clientLogger.debug('[ToolPalette] Rename clicked')
     onRenameClick?.()
     onClose()
   }
 
+  const handleProjectClick = () => {
+    onProjectClick?.()
+    onClose()
+  }
+
   const handleAddCharacterClick = () => {
-    clientLogger.debug('[ToolPalette] Add Character clicked')
     onAddCharacterClick?.()
     onClose()
   }
 
   const handleExportClick = () => {
-    clientLogger.debug('[ToolPalette] Export Chat clicked', { chatId })
     // Trigger download by navigating to the export endpoint
-    window.location.href = `/api/chats/${chatId}/export`
+    window.location.href = `/api/v1/chats/${chatId}?action=export`
     onClose()
   }
 
   const handleDeleteChatMemoriesClick = () => {
-    clientLogger.debug('[ToolPalette] Delete Chat Memories clicked', { chatId, chatMemoryCount })
     onDeleteChatMemoriesClick?.()
     onClose()
   }
 
   const handleReextractMemoriesClick = () => {
-    clientLogger.debug('[ToolPalette] Re-extract Memories clicked', { chatId })
     onReextractMemoriesClick?.()
     onClose()
   }
 
   const handleAttachFileClick = () => {
-    clientLogger.debug('[ToolPalette] Attach File clicked')
     onAttachFileClick?.()
     onClose()
   }
 
   const handleSearchReplaceClick = () => {
-    clientLogger.debug('[ToolPalette] Search & Replace clicked', { chatId })
     onSearchReplaceClick?.()
     onClose()
   }
 
+  const handleBulkCharacterReplaceClick = () => {
+    onBulkCharacterReplaceClick?.()
+    onClose()
+  }
+
   const handleTogglePreview = () => {
-    clientLogger.debug('[ToolPalette] Toggle Preview clicked', { showPreview })
     onTogglePreview?.()
     onClose()
   }
 
-  // Debug logging when palette opens
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('[ToolPalette] Opened', {
-        showAddCharacter,
-        hasAddCharacterCallback: !!onAddCharacterClick,
-        hasDeleteMemoriesCallback: !!onDeleteChatMemoriesClick,
-        hasReextractMemoriesCallback: !!onReextractMemoriesClick,
-        hasSearchReplaceCallback: !!onSearchReplaceClick,
-        hasRenameCallback: !!onRenameClick,
-        chatPhotoCount,
-        hasImageProfile,
-        chatId,
-        chatMemoryCount,
-        roleplayTemplateId,
-        hasAttachFile: !!onAttachFileClick,
-        hasPreviewToggle: !!onTogglePreview,
-      })
-    }
-  }, [isOpen, showAddCharacter, onAddCharacterClick, onDeleteChatMemoriesClick, onReextractMemoriesClick, onSearchReplaceClick, onRenameClick, chatPhotoCount, hasImageProfile, chatId, chatMemoryCount, roleplayTemplateId, onAttachFileClick, onTogglePreview])
 
   if (!isOpen) return null
-
-  const annotations = getAnnotations()
-  const hasRpButtons = roleplayTemplateId && template && annotations.length > 0 && !loadingTemplate
 
   return (
     <div
@@ -341,6 +192,21 @@ export default function ToolPalette({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
             <span>Rename</span>
+          </button>
+        )}
+
+        {/* Project Assignment */}
+        {onProjectClick && (
+          <button
+            type="button"
+            onClick={handleProjectClick}
+            className="qt-tool-palette-button"
+            title={projectName ? `In project: ${projectName}` : 'Assign to project'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+            <span>{projectName ? projectName : 'Project'}</span>
           </button>
         )}
 
@@ -416,25 +282,22 @@ export default function ToolPalette({
             <span>Add Character</span>
           </button>
         )}
-      </div>
 
-      {/* Center section: Roleplay buttons */}
-      {hasRpButtons && (
-        <div className="qt-tool-palette-section qt-tool-palette-section-center">
-          {annotations.map((config) => (
-            <button
-              key={config.type}
-              type="button"
-              onClick={() => insertAnnotation(config)}
-              disabled={disabled}
-              className={`qt-rp-annotation-button qt-rp-annotation-button-${config.type}`}
-              title={`Insert ${config.label.toLowerCase()} notation (${config.prefix}...${config.suffix || 'end of line'})`}
-            >
-              {config.label}
-            </button>
-          ))}
-        </div>
-      )}
+        {/* Bulk Character Replace */}
+        {onBulkCharacterReplaceClick && (
+          <button
+            type="button"
+            onClick={handleBulkCharacterReplaceClick}
+            className="qt-tool-palette-button"
+            title="Bulk re-attribute messages between characters"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            <span>Bulk Replace</span>
+          </button>
+        )}
+      </div>
 
       {/* Right section: Re-extract, Delete, Preview */}
       <div className="qt-tool-palette-section qt-tool-palette-section-right">

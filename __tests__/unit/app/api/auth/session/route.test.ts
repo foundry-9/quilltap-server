@@ -1,6 +1,6 @@
 /**
  * Unit tests for Session API Route
- * Tests: GET /api/auth/session
+ * Tests: GET /api/v1/auth/session
  *
  * Tests the session endpoint that returns the current session for authenticated users.
  */
@@ -68,7 +68,7 @@ const loggerMock = jest.requireMock('@/lib/logger') as {
 const mockLogger = loggerMock.logger;
 
 // Handler function reference
-let GET: typeof import('@/app/api/auth/session/route').GET;
+let GET: typeof import('@/app/api/v1/auth/session/route').GET;
 
 // Mock session data
 const mockSession: ExtendedSession = {
@@ -81,13 +81,13 @@ const mockSession: ExtendedSession = {
   expires: '2024-01-08T00:00:00.000Z',
 };
 
-describe('Session API Route - GET /api/auth/session', () => {
+describe('Session API Route - GET /api/v1/auth/session', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
     // Re-import the route module to reset state
     jest.isolateModules(() => {
-      const routeModule = require('@/app/api/auth/session/route');
+      const routeModule = require('@/app/api/v1/auth/session/route');
       GET = routeModule.GET;
     });
   });
@@ -113,12 +113,12 @@ describe('Session API Route - GET /api/auth/session', () => {
       });
     });
 
-    it('should not log debug when no session exists', async () => {
+    it('should log debug when no session exists', async () => {
       mockGetServerSession.mockResolvedValue(null);
 
       await GET();
 
-      expect(mockLogger.debug).not.toHaveBeenCalled();
+      expect(mockLogger.debug).toHaveBeenCalledWith('[Auth v1] Session check - no active session');
     });
   });
 
@@ -146,12 +146,12 @@ describe('Session API Route - GET /api/auth/session', () => {
       expect(body.expires).toBe(mockSession.expires);
     });
 
-    it('should not log debug when session exists (noise reduction)', async () => {
+    it('should log debug when session exists', async () => {
       mockGetServerSession.mockResolvedValue(mockSession);
 
       await GET();
 
-      expect(mockLogger.debug).not.toHaveBeenCalled();
+      expect(mockLogger.debug).toHaveBeenCalledWith('[Auth v1] Session retrieved', { userId: 'user-123' });
     });
 
     it('should return correct SessionResponse shape', async () => {
@@ -195,8 +195,8 @@ describe('Session API Route - GET /api/auth/session', () => {
       await GET();
 
       expect(mockLogger.error).toHaveBeenCalledWith(
-        'Session fetch error',
-        { context: 'session.GET' },
+        '[Auth v1] Error checking session',
+        {},
         testError
       );
     });

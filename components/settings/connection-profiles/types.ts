@@ -41,9 +41,13 @@ export interface ConnectionProfile {
   isDefault: boolean
   isCheap?: boolean
   allowWebSearch?: boolean
+  useNativeWebSearch?: boolean
   apiKey?: ApiKey | null
   tags?: Tag[]
   messageCount?: number
+  totalTokens?: number
+  totalPromptTokens?: number
+  totalCompletionTokens?: number
 }
 
 export interface ProfileFormData {
@@ -58,6 +62,7 @@ export interface ProfileFormData {
   isDefault: boolean
   isCheap: boolean
   allowWebSearch: boolean
+  useNativeWebSearch: boolean
   // OpenRouter-specific fields
   fallbackModels: string[]
   enableZDR: boolean
@@ -81,6 +86,7 @@ export const initialFormState: ProfileFormData = {
   isDefault: false,
   isCheap: false,
   allowWebSearch: false,
+  useNativeWebSearch: false,
   // OpenRouter-specific fields
   fallbackModels: [],
   enableZDR: false,

@@ -10,14 +10,6 @@ jest.mock('@/lib/alert', () => ({
   showConfirmation: jest.fn().mockResolvedValue(true),
 }))
 
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-  },
-}))
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -109,7 +101,7 @@ describe('MemoryList', () => {
       expect(screen.getByText(/Memories \(2\)/i)).toBeInTheDocument()
     })
 
-    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining(`/api/characters/${mockCharacterId}/memories`), undefined)
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining(`/api/v1/memories?characterId=${mockCharacterId}`), undefined)
   })
 
   it('shows an error message if the fetch fails', async () => {

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import type { GalleryImage, EntityType } from '../types'
 
@@ -14,13 +13,12 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
     setLoading(true)
     try {
       // Fetch ALL images for the user, not filtered by tag
-      const res = await fetch('/api/images')
+      const res = await fetch('/api/v1/images')
       if (!res.ok) throw new Error('Failed to fetch images')
       const json = await res.json()
       setAllImages(json.data || [])
-      clientLogger.debug('Gallery images fetched successfully', { count: json.data?.length || 0 })
     } catch (error) {
-      clientLogger.error('Error fetching images:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Error fetching images:', { error: error instanceof Error ? error.message : String(error) })
       setAllImages([])
     } finally {
       setLoading(false)
@@ -33,7 +31,7 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
 
   const handleImageError = (imageId: string) => {
     setMissingImages(prev => new Set(prev).add(imageId))
-    clientLogger.warn('Image failed to load', { imageId })
+    console.warn('Image failed to load', { imageId })
   }
 
   const isImageTagged = (image: GalleryImage) => {
@@ -52,27 +50,31 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
     const isTagged = !!existingTag
 
     try {
-      clientLogger.debug('Toggle tag action started', { imageId: image.id, isTagged, entityType })
-
       if (isTagged && existingTag) {
-        // Remove the existing tag (use its actual tagType for the API call)
-        const res = await fetch(`/api/images/${image.id}/tags?tagType=${existingTag.tagType}&tagId=${entityId}`, {
-          method: 'DELETE',
+        // Remove the existing tag using action dispatch
+        const res = await fetch(`/api/v1/images/${image.id}?action=remove-tag`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tagId: entityId }),
         })
-        if (!res.ok) throw new Error('Failed to remove tag')
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || 'Failed to remove tag')
+        }
         showSuccessToast(`Removed from ${entityName}`)
-        clientLogger.debug('Tag removed successfully', { imageId: image.id })
       } else {
         // Add new tag - always use CHARACTER for new tags
         const tagType = 'CHARACTER'
-        const res = await fetch(`/api/images/${image.id}/tags`, {
+        const res = await fetch(`/api/v1/images/${image.id}?action=add-tag`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tagType, tagId: entityId }),
         })
-        if (!res.ok) throw new Error('Failed to add tag')
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || 'Failed to add tag')
+        }
         showSuccessToast(`Tagged to ${entityName}`)
-        clientLogger.debug('Tag added successfully', { imageId: image.id })
       }
 
       // Update local state
@@ -89,17 +91,15 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
       }))
     } catch (error) {
       showErrorToast(error instanceof Error ? error.message : 'Failed to update tag')
-      clientLogger.error('Error toggling tag:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Error toggling tag:', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
   const handleSetAvatar = async (image: GalleryImage, currentAvatarId: string | undefined, onAvatarChange?: (imageId: string | null) => void) => {
     if (!onAvatarChange) return
     try {
-      clientLogger.debug('Setting avatar', { imageId: image.id, entityType })
-
       // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-      const endpoint = `/api/characters/${entityId}/avatar`
+      const endpoint = `/api/v1/characters/${entityId}?action=avatar`
 
       const res = await fetch(endpoint, {
         method: 'PATCH',
@@ -111,10 +111,9 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
 
       onAvatarChange(image.id)
       showSuccessToast('Avatar updated!')
-      clientLogger.debug('Avatar set successfully', { imageId: image.id })
     } catch (error) {
       showErrorToast(error instanceof Error ? error.message : 'Failed to set avatar')
-      clientLogger.error('Error setting avatar:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Error setting avatar:', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -122,10 +121,8 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
     if (!currentAvatarId || !onAvatarChange) return
 
     try {
-      clientLogger.debug('Clearing avatar', { entityType })
-
       // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-      const endpoint = `/api/characters/${entityId}/avatar`
+      const endpoint = `/api/v1/characters/${entityId}?action=avatar`
 
       const res = await fetch(endpoint, {
         method: 'PATCH',
@@ -137,22 +134,19 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
 
       onAvatarChange(null)
       showSuccessToast('Avatar cleared!')
-      clientLogger.debug('Avatar cleared successfully')
     } catch (error) {
       showErrorToast(error instanceof Error ? error.message : 'Failed to clear avatar')
-      clientLogger.error('Error clearing avatar:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Error clearing avatar:', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
   const handleDeleteImage = async (image: GalleryImage, currentAvatarId: string | undefined, onAvatarChange?: (imageId: string | null) => void) => {
     try {
-      clientLogger.debug('Deleting image', { imageId: image.id })
-
       // If this is the current avatar (especially for missing images), clear it first
       const isCurrentAvatar = currentAvatarId === image.id
       if (isCurrentAvatar && onAvatarChange) {
         // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-        const endpoint = `/api/characters/${entityId}/avatar`
+        const endpoint = `/api/v1/characters/${entityId}?action=avatar`
 
         const clearRes = await fetch(endpoint, {
           method: 'PATCH',
@@ -164,10 +158,9 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
           throw new Error('Failed to clear avatar before deletion')
         }
         onAvatarChange(null)
-        clientLogger.debug('Avatar cleared before deletion')
       }
 
-      const res = await fetch(`/api/images/${image.id}`, {
+      const res = await fetch(`/api/v1/images/${image.id}`, {
         method: 'DELETE',
       })
 
@@ -179,10 +172,9 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
       // Remove from local state
       setAllImages(prev => prev.filter(img => img.id !== image.id))
       showSuccessToast('Image deleted')
-      clientLogger.debug('Image deleted successfully', { imageId: image.id })
     } catch (error) {
       showErrorToast(error instanceof Error ? error.message : 'Failed to delete image')
-      clientLogger.error('Error deleting image:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Error deleting image:', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 

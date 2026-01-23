@@ -9,7 +9,7 @@ import { importSTChat, type STChat } from '@/lib/sillytavern/chat'
 import { logger } from '@/lib/logger'
 import { generateContextSummaryAsync } from '@/lib/chat/context-summary'
 import { enqueueMemoryExtractionBatch, ensureProcessorRunning, type MessagePair } from '@/lib/background-jobs'
-import type { ChatParticipantBase, Character, Persona } from '@/lib/schemas/types'
+import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { SpeakerMapping } from '@/lib/sillytavern/multi-char-parser'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
 import { getFilePath } from '@/lib/api/middleware/file-path'
@@ -39,7 +39,6 @@ export interface LegacyImportOptions {
   chatData: STChat
   characterId: string
   connectionProfileId: string
-  personaId?: string
   title?: string
 }
 
@@ -50,7 +49,6 @@ export interface ImportResult {
   chat: ChatMetadataWithMessages
   createdEntities?: {
     characters: Character[]
-    personas: Persona[]
   }
   memoryJobCount?: number
 }
@@ -73,7 +71,6 @@ interface ChatMetadataWithMessages {
 
 interface EnrichedParticipant extends ChatParticipantBase {
   character: (Character & { defaultImage: DefaultImageData | null }) | null
-  persona: Persona | null
 }
 
 interface DefaultImageData {
@@ -170,14 +167,12 @@ export async function importMultiCharacterChat(
     string,
     {
       entityId: string
-      entityType: 'CHARACTER' | 'PERSONA'
       connectionProfileId?: string
     }
   >()
 
-  const createdEntities: { characters: Character[]; personas: Persona[] } = {
+  const createdEntities: { characters: Character[] } = {
     characters: [],
-    personas: [],
   }
 
   const tagIds = new Set<string>()
@@ -193,8 +188,8 @@ export async function importMultiCharacterChat(
     }
 
     let entityId: string
-    let entityType: 'CHARACTER' | 'PERSONA'
     let connectionProfileId: string | undefined
+    const controlledBy = mapping.controlledBy || 'llm'
 
     if (mapping.mappingType === 'existing_character') {
       const character = await repos.characters.findById(mapping.entityId!)
@@ -202,14 +197,22 @@ export async function importMultiCharacterChat(
         throw new Error(`Character not found: ${mapping.entityName}`)
       }
       entityId = character.id
-      entityType = 'CHARACTER'
-      connectionProfileId = mapping.connectionProfileId || defaultConnectionProfileId
+      // Only set connection profile for LLM-controlled characters
+      if (controlledBy === 'llm') {
+        connectionProfileId = mapping.connectionProfileId || defaultConnectionProfileId
+      }
 
       if (character.tags) {
         for (const tagId of character.tags) {
           tagIds.add(tagId)
         }
       }
+
+      importLogger.debug('Using existing character', {
+        characterId: character.id,
+        name: character.name,
+        controlledBy,
+      })
     } else if (mapping.mappingType === 'create_character') {
       const character = await repos.characters.create({
         userId,
@@ -222,7 +225,7 @@ export async function importMultiCharacterChat(
         exampleDialogues: null,
         avatarUrl: null,
         defaultConnectionProfileId:
-          mapping.connectionProfileId || defaultConnectionProfileId || null,
+          controlledBy === 'llm' ? (mapping.connectionProfileId || defaultConnectionProfileId) : null,
         isFavorite: false,
         tags: [] as string[],
         personaLinks: [] as { personaId: string; isDefault: boolean }[],
@@ -231,48 +234,63 @@ export async function importMultiCharacterChat(
         physicalDescriptions: [],
       })
       entityId = character.id
-      entityType = 'CHARACTER'
-      connectionProfileId = mapping.connectionProfileId || defaultConnectionProfileId
+      if (controlledBy === 'llm') {
+        connectionProfileId = mapping.connectionProfileId || defaultConnectionProfileId
+      }
       createdEntities.characters.push(character)
 
       importLogger.info('Created character', {
         characterId: character.id,
         name: character.name,
+        controlledBy,
       })
     } else if (mapping.mappingType === 'existing_persona') {
-      const persona = await repos.personas.findById(mapping.entityId!)
-      if (!persona || persona.userId !== userId) {
-        throw new Error(`Persona not found: ${mapping.entityName}`)
+      // Legacy: persona mappings should be treated as user-controlled characters
+      const character = await repos.characters.findById(mapping.entityId!)
+      if (!character || character.userId !== userId) {
+        throw new Error(`Character (from persona import) not found: ${mapping.entityName}`)
       }
-      entityId = persona.id
-      entityType = 'PERSONA'
+      entityId = character.id
+      // Personas are always user-controlled, so no connection profile needed
 
-      if (persona.tags) {
-        for (const tagId of persona.tags) {
+      if (character.tags) {
+        for (const tagId of character.tags) {
           tagIds.add(tagId)
         }
       }
+
+      importLogger.debug('Using existing character (legacy persona)', {
+        characterId: character.id,
+        name: character.name,
+        controlledBy: 'user',
+      })
     } else if (mapping.mappingType === 'create_persona') {
-      const persona = await repos.personas.create({
+      // Legacy: create a user-controlled character instead of persona
+      const character = await repos.characters.create({
         userId,
         name: mapping.entityName || mapping.speakerName,
         title: null,
-        description: 'Persona created during chat import',
-        personalityTraits: null,
+        description: 'User character created during chat import',
+        personality: null,
+        scenario: null,
+        firstMessage: null,
+        exampleDialogues: null,
         avatarUrl: null,
-        sillyTavernData: null,
+        defaultConnectionProfileId: null, // User-controlled characters don't need a connection profile
+        isFavorite: false,
         tags: [] as string[],
-        characterLinks: [] as string[],
+        personaLinks: [] as { personaId: string; isDefault: boolean }[],
+        avatarOverrides: [] as { chatId: string; imageId: string }[],
         defaultImageId: null,
         physicalDescriptions: [],
       })
-      entityId = persona.id
-      entityType = 'PERSONA'
-      createdEntities.personas.push(persona)
+      entityId = character.id
+      createdEntities.characters.push(character)
 
-      importLogger.info('Created persona', {
-        personaId: persona.id,
-        name: persona.name,
+      importLogger.info('Created user-controlled character (legacy persona)', {
+        characterId: character.id,
+        name: character.name,
+        controlledBy: 'user',
       })
     } else {
       continue
@@ -280,17 +298,15 @@ export async function importMultiCharacterChat(
 
     speakerToEntity.set(mapping.speakerName, {
       entityId,
-      entityType,
       connectionProfileId,
     })
 
     participants.push({
       id: crypto.randomUUID(),
-      type: entityType,
-      characterId: entityType === 'CHARACTER' ? entityId : null,
-      personaId: entityType === 'PERSONA' ? entityId : null,
-      controlledBy: entityType === 'PERSONA' ? 'user' : 'llm',
-      connectionProfileId: connectionProfileId || null,
+      type: 'CHARACTER',
+      characterId: entityId,
+      controlledBy,
+      connectionProfileId: controlledBy === 'llm' ? (connectionProfileId || null) : null,
       imageProfileId: null,
       systemPromptOverride: null,
       displayOrder: displayOrder++,
@@ -302,10 +318,10 @@ export async function importMultiCharacterChat(
     })
   }
 
-  // Verify we have at least one character
-  const hasCharacter = participants.some(p => p.type === 'CHARACTER')
-  if (!hasCharacter) {
-    throw new Error('At least one character must be mapped')
+  // Verify we have at least one LLM-controlled character
+  const hasLLMCharacter = participants.some(p => p.type === 'CHARACTER' && p.controlledBy === 'llm')
+  if (!hasLLMCharacter) {
+    throw new Error('At least one AI-controlled character must be mapped')
   }
 
   // Verify default connection profile
@@ -457,7 +473,13 @@ export async function importLegacyChat(
   options: LegacyImportOptions,
   repos: RepositoryContainer
 ): Promise<ImportResult> {
-  const { chatData, characterId, connectionProfileId, personaId, title } = options
+  const { chatData, characterId, connectionProfileId, title } = options
+
+  importLogger.info('Legacy single-character import starting', {
+    userId,
+    characterId,
+    connectionProfileId,
+  })
 
   // Verify character belongs to user
   const character = await repos.characters.findById(characterId)
@@ -471,15 +493,6 @@ export async function importLegacyChat(
     throw new Error('Connection profile not found')
   }
 
-  // If persona specified, verify it belongs to user
-  let persona: Persona | null = null
-  if (personaId) {
-    persona = await repos.personas.findById(personaId)
-    if (!persona || persona.userId !== userId) {
-      throw new Error('Persona not found')
-    }
-  }
-
   // Import chat from SillyTavern format
   const importedData = importSTChat(chatData, characterId, userId)
 
@@ -487,11 +500,6 @@ export async function importLegacyChat(
   const tagIds = new Set<string>()
   if (character.tags) {
     for (const tagId of character.tags) {
-      tagIds.add(tagId)
-    }
-  }
-  if (persona?.tags) {
-    for (const tagId of persona.tags) {
       tagIds.add(tagId)
     }
   }
@@ -509,7 +517,6 @@ export async function importLegacyChat(
     id: crypto.randomUUID(),
     type: 'CHARACTER',
     characterId,
-    personaId: null,
     controlledBy: 'llm',
     connectionProfileId,
     imageProfileId: null,
@@ -522,25 +529,6 @@ export async function importLegacyChat(
     updatedAt: now,
   })
 
-  if (personaId) {
-    participants.push({
-      id: crypto.randomUUID(),
-      type: 'PERSONA',
-      characterId: null,
-      personaId,
-      controlledBy: 'user',
-      connectionProfileId: null,
-      imageProfileId: null,
-      systemPromptOverride: null,
-      displayOrder: 1,
-      isActive: true,
-      hasHistoryAccess: false,
-      joinScenario: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-  }
-
   // Create chat
   const chat = await repos.chats.create({
     userId,
@@ -550,6 +538,12 @@ export async function importLegacyChat(
     tags: Array.from(tagIds),
     messageCount: importedData.messages.length,
     lastRenameCheckInterchange: 0,
+  })
+
+  importLogger.info('Created legacy chat', {
+    chatId: chat.id,
+    title: chat.title,
+    participantCount: participants.length,
   })
 
   // Add messages
@@ -567,11 +561,15 @@ export async function importLegacyChat(
     })
   }
 
+  importLogger.info('Imported legacy chat messages', {
+    chatId: chat.id,
+    messageCount: importedData.messages.length,
+  })
+
   // Build response
   const result = await buildLegacyImportResponse(
     chat,
     character,
-    persona,
     profile,
     repos
   )
@@ -684,7 +682,7 @@ async function buildImportResponse(
   chat: { id: string; userId: string; title: string; tags: string[]; sillyTavernMetadata?: Record<string, unknown> | null; createdAt: string; updatedAt: string },
   participants: ChatParticipantBase[],
   repos: RepositoryContainer,
-  createdEntities: { characters: Character[]; personas: Persona[] },
+  createdEntities: { characters: Character[] },
   triggerTitleGeneration?: boolean,
   memoryJobCount?: number
 ): Promise<ImportResult> {
@@ -725,17 +723,9 @@ async function buildImportResponse(
         return {
           ...p,
           character: character ? { ...character, defaultImage } : null,
-          persona: null,
-        }
-      } else if (p.type === 'PERSONA' && p.personaId) {
-        const persona = await repos.personas.findById(p.personaId)
-        return {
-          ...p,
-          character: null,
-          persona,
         }
       }
-      return { ...p, character: null, persona: null }
+      return { ...p, character: null }
     })
   )
 
@@ -773,7 +763,6 @@ async function buildImportResponse(
 async function buildLegacyImportResponse(
   chat: { id: string; userId: string; title: string; tags: string[]; sillyTavernMetadata?: Record<string, unknown> | null; createdAt: string; updatedAt: string; participants: ChatParticipantBase[] },
   character: Character,
-  persona: Persona | null,
   profile: { id: string; name: string; provider: string; modelName: string },
   repos: RepositoryContainer
 ): Promise<ImportResult> {
@@ -808,20 +797,10 @@ async function buildLegacyImportResponse(
       },
     }))
 
-  const enrichedParticipants: EnrichedParticipant[] = chat.participants.map(p => {
-    if (p.type === 'CHARACTER') {
-      return {
-        ...p,
-        character: { ...character, defaultImage },
-        persona: null,
-      }
-    }
-    return {
-      ...p,
-      character: null,
-      persona,
-    }
-  })
+  const enrichedParticipants: EnrichedParticipant[] = chat.participants.map(p => ({
+    ...p,
+    character: p.type === 'CHARACTER' ? { ...character, defaultImage } : null,
+  }))
 
   const completeChat: ChatMetadataWithMessages = {
     id: chat.id,

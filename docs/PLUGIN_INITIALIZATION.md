@@ -15,9 +15,11 @@ The plugin initialization system automatically scans, validates, transpiles, and
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              instrumentation.ts (Early Diagnostics)          │
-│  - Logs startup information                                  │
-│  - Reports environment details                               │
+│              instrumentation.ts (Startup)                    │
+│  - Runs migrations (MUST complete before requests)          │
+│  - Initializes MongoDB                                       │
+│  - Initializes plugins                                       │
+│  - Initializes file storage                                  │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -46,9 +48,8 @@ The plugin initialization system automatically scans, validates, transpiles, and
 │  │ 2. scanPlugins()          ◄── Scan filesystem        │  │
 │  │ 3. Validate compatibility ◄── Check versions         │  │
 │  │ 4. Security validation    ◄── Check permissions      │  │
-│  │ 5. Run upgrade migrations ◄── Database updates       │  │
-│  │ 6. Register providers     ◄── LLM provider plugins   │  │
-│  │ 7. pluginRegistry.initialize()                       │  │
+│  │ 5. Register providers     ◄── LLM provider plugins   │  │
+│  │ 6. pluginRegistry.initialize()                       │  │
 │  └──────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -67,17 +68,21 @@ The plugin initialization system automatically scans, validates, transpiles, and
 
 ## Components
 
-### 1. Instrumentation: Early Startup
+### 1. Instrumentation: Startup Sequence
 
 **File:** `instrumentation.ts`
 
-Next.js instrumentation hook that runs before the application fully starts.
+Next.js instrumentation hook that runs before the application accepts requests.
 
 **Features:**
 
-- Logs startup timestamp and environment
-- Reports Node.js version and platform
-- Provides early diagnostics for debugging
+- Runs all data migrations (MUST complete before requests)
+- Initializes MongoDB connection
+- Initializes plugin system
+- Initializes file storage
+- Logs startup information and diagnostics
+
+**Note:** Migrations are handled by the `MigrationRunner` class in `migrations/` and run BEFORE plugins are initialized. This ensures data compatibility before any requests are served. If migrations fail, the process exits with code 1.
 
 ### 2. Client Component: `PluginInitializer`
 
@@ -166,9 +171,10 @@ Core initialization logic that runs on the server.
    - Manifest schema validity
    - Version compatibility
    - Security permissions
-5. **Migrations** - Run upgrade plugin migrations
-6. **Register** - Register provider plugins with provider registry
-7. **Finalize** - Store validated plugins in registry
+5. **Register** - Register provider plugins with provider registry
+6. **Finalize** - Store validated plugins in registry
+
+**Note:** Data migrations run BEFORE this function is called, in `instrumentation.ts`. By the time plugin initialization runs, all data is guaranteed to be in the correct format.
 
 **Features:**
 
@@ -318,16 +324,7 @@ if (!isPluginCompatible(plugin.manifest, quilltapVersion)) {
 const warnings = validatePluginSecurity(plugin.manifest);
 ```
 
-### Step 6: Upgrade Migrations
-
-The upgrade plugin runs database migrations:
-
-```typescript
-// Run migrations before providers load
-await runUpgradeMigrations();
-```
-
-### Step 7: Provider Registration
+### Step 6: Provider Registration
 
 Provider plugins are dynamically loaded and registered:
 
@@ -339,7 +336,7 @@ const module = await import(pluginPath);
 providerRegistry.registerProvider(module.plugin);
 ```
 
-### Step 8: Completion
+### Step 7: Completion
 
 Results are logged and returned to the client.
 

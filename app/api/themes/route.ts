@@ -1,74 +1,12 @@
 /**
- * Theme API Routes
+ * Theme API Routes (DEPRECATED)
  *
- * GET /api/themes - Get list of available themes
+ * This route has been moved to /api/v1/themes
+ * @deprecated Use /api/v1/themes instead - will be removed after 2026-04-15
  */
 
-import { NextResponse } from 'next/server';
-import { themeRegistry } from '@/lib/themes/theme-registry';
-import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
-import { logger } from '@/lib/logger';
+import { movedToV1 } from '@/lib/api/responses';
 
-/**
- * GET /api/themes
- * Returns list of available theme plugins
- *
- * Response format:
- * {
- *   themes: Array<{
- *     id: string;
- *     name: string;
- *     description?: string;
- *     supportsDarkMode: boolean;
- *     previewImage?: string;
- *     tags: string[];
- *     isDefault: boolean;
- *   }>;
- *   stats: {
- *     total: number;
- *     withDarkMode: number;
- *     withCssOverrides: number;
- *   };
- * }
- */
 export async function GET() {
-  try {
-    logger.debug('Fetching available themes', { context: 'GET /api/themes' });
-
-    // Ensure plugin/theme system is initialized
-    if (!isPluginSystemInitialized()) {
-      logger.info('Plugin system not initialized, initializing now', {
-        context: 'themes-GET',
-      });
-      await initializePlugins();
-    }
-
-    // Get theme list (without full tokens for efficiency)
-    const themes = themeRegistry.getThemeList();
-    const stats = themeRegistry.getStats();
-
-    logger.debug('Themes retrieved successfully', {
-      context: 'GET /api/themes',
-      themeCount: themes.length,
-    });
-
-    return NextResponse.json({
-      themes,
-      stats: {
-        total: stats.total,
-        withDarkMode: stats.withDarkMode,
-        withCssOverrides: stats.withCssOverrides,
-      },
-    });
-  } catch (error) {
-    logger.error(
-      'Failed to get themes',
-      { context: 'GET /api/themes' },
-      error instanceof Error ? error : undefined
-    );
-    return NextResponse.json(
-      { error: 'Failed to retrieve themes' },
-      { status: 500 }
-    );
-  }
+  return movedToV1('/api/v1/themes');
 }

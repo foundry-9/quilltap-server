@@ -6,7 +6,9 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { buildContext, type MessageWithParticipant, type BuiltContext } from '@/lib/chat/context-manager'
+import { buildContext, type MessageWithParticipant, type BuiltContext, type ProjectContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
+import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import {
@@ -19,7 +21,6 @@ import type {
   ChatMetadataBase,
   ChatParticipantBase,
   Character,
-  Persona,
   ConnectionProfile,
   MessageEvent,
   TimestampConfig,
@@ -39,15 +40,23 @@ export interface BuildMessageContextOptions {
   characterParticipant: ChatParticipantBase
   connectionProfile: ConnectionProfile
   persona: { name: string; description: string } | null
-  personaData: Persona | null
   isMultiCharacter: boolean
   participantCharacters?: Map<string, Character>
-  participantPersonas?: Map<string, Persona>
   roleplayTemplate: { systemPrompt: string } | null
   chatSettings: { cheapLLMSettings?: { embeddingProfileId?: string }; defaultTimestampConfig?: TimestampConfig | null } | null
   pseudoToolInstructions?: string
   newUserMessage?: string
   isContinueMode: boolean
+  /** Project context if chat is in a project */
+  projectContext?: ProjectContext | null
+  /** Context compression settings (if enabled) */
+  contextCompressionSettings?: ContextCompressionSettings | null
+  /** Cheap LLM selection for compression (required if compression is enabled) */
+  cheapLLMSelection?: CheapLLMSelection | null
+  /** Whether to bypass compression for this request */
+  bypassCompression?: boolean
+  /** Pre-computed compression result from async cache (avoids blocking on compression) */
+  cachedCompressionResult?: ContextCompressionResult | null
 }
 
 /**
@@ -108,8 +117,11 @@ export async function loadAndProcessFiles(
     size: file.size,
   }))
 
-  // Load file data for LLM
-  const fileAttachments = await loadChatFilesForLLM(attachedFiles.map(f => f.id))
+  // Load file data for LLM with provider-aware image resizing
+  const fileAttachments = await loadChatFilesForLLM(
+    attachedFiles.map(f => f.id),
+    { provider: connectionProfile.provider }
+  )
 
   // Process file attachment fallbacks if provider doesn't support them
   const fallbackResults: FallbackResult[] = []
@@ -254,11 +266,15 @@ export async function buildMessageContext(
     persona,
     isMultiCharacter,
     participantCharacters,
-    participantPersonas,
     roleplayTemplate,
     chatSettings,
     pseudoToolInstructions,
     newUserMessage,
+    projectContext,
+    contextCompressionSettings,
+    cheapLLMSelection,
+    bypassCompression,
+    cachedCompressionResult,
   } = options
 
   // Build conversation messages
@@ -293,13 +309,19 @@ export async function buildMessageContext(
     respondingParticipant: isMultiCharacter ? characterParticipant : undefined,
     allParticipants: isMultiCharacter ? chat.participants : undefined,
     participantCharacters: isMultiCharacter ? participantCharacters : undefined,
-    participantPersonas: isMultiCharacter ? participantPersonas : undefined,
     messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
     // Pseudo-tool support
     pseudoToolInstructions,
     // Timestamp injection
     timestampConfig,
     isInitialMessage,
+    // Project context
+    projectContext,
+    // Context compression
+    contextCompressionSettings,
+    cheapLLMSelection,
+    bypassCompression,
+    cachedCompressionResult,
   })
 
   // Log context building results for debugging

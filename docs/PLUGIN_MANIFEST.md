@@ -215,7 +215,7 @@ For plugins with `LLM_PROVIDER` capability, this section defines provider-specif
 | `colors.bg` | string | Yes | Tailwind background color class |
 | `colors.text` | string | Yes | Tailwind text color class |
 | `colors.icon` | string | Yes | Tailwind icon color class |
-| `requiresApiKey` | boolean | Yes | Whether provider needs an API key |
+| `requiresApiKey` | boolean | Yes | Whether provider needs an API key. If `true`, the provider appears in the API Keys settings dropdown, allowing users to add API keys for this provider. |
 | `requiresBaseUrl` | boolean | Yes | Whether provider needs a custom URL |
 | `apiKeyLabel` | string | No | Custom label for API key field |
 | `baseUrlLabel` | string | No | Custom label for base URL field |
@@ -510,6 +510,21 @@ Declares required permissions.
 
 - **Default**: `"STABLE"`
 - **Options**: `STABLE`, `BETA`, `ALPHA`, `DEPRECATED`
+
+### `requiresRestart` (boolean, optional)
+
+- **Default**: Inferred from capabilities
+- **Purpose**: Whether this plugin requires a server restart to activate
+
+If not specified, this field is automatically inferred based on the plugin's capabilities:
+- `AUTH_METHODS` → requires restart
+- `DATABASE_BACKEND` → requires restart
+- `FILE_BACKEND` → requires restart
+- `UPGRADE_MIGRATION` → requires restart
+
+Set this field explicitly to override the inferred value.
+
+**Important for hosted deployments:** Plugins that require a restart cannot be installed as user-only on hosted (non-self-managed) deployments. They must be installed site-wide, and the server will automatically restart after installation.
 
 ## Complete Example: LLM Provider Plugin
 

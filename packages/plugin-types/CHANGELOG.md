@@ -5,6 +5,87 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] - 2026-01-14
+
+### Changed
+
+- **Breaking**: `getMultipleToolDefinitions` now accepts a `config` parameter
+  - Old signature: `getMultipleToolDefinitions?: () => UniversalTool[]`
+  - New signature: `getMultipleToolDefinitions?: (config: Record<string, unknown>) => UniversalTool[]`
+  - This allows multi-tool plugins to discover tools dynamically based on user configuration
+  - Required for plugins like MCP that need configuration to connect to external servers
+
+## [1.8.0] - 2026-01-13
+
+### Added
+
+- Multi-tool plugin support for `ToolPlugin` interface:
+  - `getMultipleToolDefinitions?: () => UniversalTool[]` - Allows plugins to provide multiple tools dynamically
+  - `executeByName?: (toolName, input, context) => Promise<ToolExecutionResult>` - Execute a specific tool by name (required for multi-tool plugins)
+  - `onConfigurationChange?: (config) => Promise<void>` - Callback when user configuration changes
+- These additions enable plugins like the MCP connector to discover and expose multiple tools from external servers
+
+## [1.7.0] - 2026-01-09
+
+### Added
+
+- Added file storage plugin types for building custom storage backend plugins:
+  - `FileBackendCapabilities` - Interface describing storage backend features
+  - `FileBackendMetadata` - Backend registration metadata
+  - `FileMetadata` - Stored file metadata (size, contentType, lastModified)
+  - `FileStorageBackend` - Core interface with upload, download, delete, exists, and optional operations
+  - `FileStorageConfigField` - Configuration field definitions for plugin setup UI
+  - `FileStorageProviderPlugin` - Main plugin interface for storage providers
+  - `FileStoragePluginExport` - Standard export type for file storage plugins
+- Added `@types/node` to devDependencies for Node.js type support (Buffer, Readable)
+
+## [1.5.1] - 2026-01-05
+
+### Added
+
+- Added `maxBase64Size?: number` field to `AttachmentSupport` interface
+  - Allows provider plugins to specify their maximum base64-encoded file size limit
+  - Used by core to automatically resize images that exceed provider limits
+  - Anthropic sets 5MB, OpenAI/Google/Grok set 20MB
+
+## [1.5.0] - 2026-01-02
+
+### Added
+
+- Added `RenderingPattern` interface for configurable message content styling:
+  - `pattern: string` - Regex pattern as a string (converted to RegExp at runtime)
+  - `className: string` - CSS class to apply to matched text
+  - `flags?: string` - Optional regex flags (e.g., 'm' for multiline)
+- Added `DialogueDetection` interface for paragraph-level dialogue detection:
+  - `openingChars: string[]` - Opening quote characters to detect
+  - `closingChars: string[]` - Closing quote characters to detect
+  - `className: string` - CSS class to apply to dialogue paragraphs
+- Added `renderingPatterns?: RenderingPattern[]` field to `RoleplayTemplateConfig`
+- Added `dialogueDetection?: DialogueDetection` field to `RoleplayTemplateConfig`
+- Exported `AnnotationButton`, `RenderingPattern`, `DialogueDetection` from `@quilltap/plugin-types/plugins`
+
+## [1.4.0] - 2026-01-02
+
+### Added
+
+- Added `AnnotationButton` interface for roleplay template annotation buttons:
+  - `label: string` - Full name for tooltip (e.g., "Narration", "Internal Monologue")
+  - `abbrev: string` - Abbreviated label for button display (e.g., "Nar", "Int", "OOC")
+  - `prefix: string` - Opening delimiter (e.g., "[", "{", "// ")
+  - `suffix: string` - Closing delimiter (e.g., "]", "}", "")
+- Added `annotationButtons?: AnnotationButton[]` field to `RoleplayTemplateConfig` interface
+  - Enables roleplay template plugins to define custom annotation formatting buttons
+  - Used by the Document Editing Mode formatting toolbar
+
+## [1.3.0] - 2026-01-02
+
+### Added
+
+- Added `requiresRestart?: boolean` field to `PluginManifest` interface
+  - Optional field to indicate if a plugin requires a server restart to activate
+  - If not specified, restart requirement is inferred from capabilities (AUTH_METHODS, DATABASE_BACKEND, FILE_BACKEND, UPGRADE_MIGRATION)
+  - Used by hosted deployments to enforce site-wide installation for restart-requiring plugins
+
 ## [1.2.0] - 2025-12-31
 
 ### Added

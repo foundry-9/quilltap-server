@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -26,8 +25,6 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
     setLoading(true)
 
     try {
-      clientLogger.info('Starting backup creation', { destination, hasFilename: !!filename })
-
       const body: Record<string, any> = {
         destination,
       }
@@ -36,7 +33,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
         body.filename = filename
       }
 
-      const response = await fetch('/api/tools/backup/create', {
+      const response = await fetch('/api/v1/system/backup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -48,14 +45,9 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
         throw new Error(data.error || 'Failed to create backup')
       }
 
-      clientLogger.info('Backup created successfully', {
-        destination,
-        backupId: data.backupId,
-      })
-
       if (destination === 'download' && data.backupId) {
         // Trigger download
-        const downloadUrl = `/api/tools/backup/download?backupId=${data.backupId}`
+        const downloadUrl = `/api/v1/system/backup/${data.backupId}`
         const link = document.createElement('a')
         link.href = downloadUrl
         link.download = data.filename || `quilltap-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`
@@ -80,7 +72,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to create backup')
       setError(errorMessage)
-      clientLogger.error('Backup creation failed', {
+      console.error('Backup creation failed', {
         error: errorMessage,
         errorType: err instanceof Error ? err.name : typeof err,
         destination,
@@ -200,7 +192,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                   type="text"
                   value={filename}
                   onChange={(e) => setFilename(e.target.value)}
-                  placeholder="backup-2025-12-07"
+                  placeholder={`backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`}
                   className="qt-input"
                 />
                 <p className="mt-1 qt-text-xs">

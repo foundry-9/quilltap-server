@@ -2,6 +2,7 @@ import { ProfileCard as BaseProfileCard, ProfileCardBadge } from '@/components/u
 import { TagBadge } from '@/components/tags/tag-badge'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
+import { formatTokenCount } from '@/lib/utils/format-tokens'
 import type { ConnectionProfile } from './types'
 
 interface ProfileCardProps {
@@ -72,11 +73,19 @@ export function ProfileCard({
         {getAttachmentSupportDescription(profile.provider as any, profile.baseUrl ?? undefined)}
       </p>
 
-      {/* Message count */}
-      {profile.messageCount !== undefined && (
-        <p className="text-sm text-primary mt-1 font-medium">
-          {profile.messageCount} message{profile.messageCount === 1 ? '' : 's'} used
-        </p>
+      {/* Usage stats */}
+      {(profile.messageCount !== undefined || profile.totalTokens !== undefined) && (
+        <div className="text-sm text-primary mt-1 font-medium">
+          {profile.messageCount !== undefined && (
+            <span>{profile.messageCount} message{profile.messageCount === 1 ? '' : 's'}</span>
+          )}
+          {profile.messageCount !== undefined && profile.totalTokens !== undefined && (
+            <span className="text-muted-foreground"> • </span>
+          )}
+          {profile.totalTokens !== undefined && profile.totalTokens > 0 && (
+            <span>{formatTokenCount(profile.totalTokens)} tokens</span>
+          )}
+        </div>
       )}
 
       {/* API Key info */}

@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import type { Chat, ChatSettings, Message } from '../types'
 
 export interface SwipeState {
@@ -22,7 +21,7 @@ export function useChatData(chatId: string) {
 
   const fetchChatSettings = useCallback(async () => {
     try {
-      const res = await fetch('/api/chat-settings')
+      const res = await fetch('/api/v1/settings/chat')
       if (!res.ok) {
         const errorBody = await res.text().catch(() => 'Unable to read response body')
         throw new Error(`Failed to fetch chat settings: ${res.status} ${res.statusText} - ${errorBody}`)
@@ -30,7 +29,7 @@ export function useChatData(chatId: string) {
       const data = await res.json()
       setChatSettings(data)
     } catch (err) {
-      clientLogger.error('Failed to fetch chat settings', {
+      console.error('Failed to fetch chat settings', {
         error: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       })
@@ -41,7 +40,7 @@ export function useChatData(chatId: string) {
 
   const fetchChat = useCallback(async () => {
     try {
-      const res = await fetch(`/api/chats/${chatId}`)
+      const res = await fetch(`/api/v1/chats/${chatId}`)
       if (!res.ok) throw new Error('Failed to fetch chat')
       const data = await res.json()
       setChat(data.chat)
@@ -89,41 +88,41 @@ export function useChatData(chatId: string) {
 
   const fetchChatPhotoCount = useCallback(async () => {
     try {
-      const res = await fetch(`/api/chats/${chatId}/files`)
+      const res = await fetch(`/api/v1/chats/${chatId}?action=files`)
       if (res.ok) {
         const data = await res.json()
         const imageCount = (data.files || []).filter((f: { mimeType: string }) => f.mimeType.startsWith('image/')).length
         setChatPhotoCount(imageCount)
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch chat photo count:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch chat photo count:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [chatId])
 
   const fetchChatMemoryCount = useCallback(async () => {
     try {
-      const res = await fetch(`/api/chats/${chatId}/memories`)
+      const res = await fetch(`/api/v1/memories?chatId=${chatId}`)
       if (res.ok) {
         const data = await res.json()
         setChatMemoryCount(data.memoryCount || 0)
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch chat memory count:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch chat memory count:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [chatId])
 
   const persistTurnState = useCallback(async (lastTurnParticipantId: string | null) => {
     try {
-      const res = await fetch(`/api/chats/${chatId}/turn`, {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=turn`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lastTurnParticipantId }),
       })
       if (!res.ok) {
-        clientLogger.warn('[Chat] Failed to persist turn state', { status: res.status })
+        console.warn('[Chat] Failed to persist turn state', { status: res.status })
       }
     } catch (err) {
-      clientLogger.error('[Chat] Error persisting turn state', { error: err instanceof Error ? err.message : String(err) })
+      console.error('[Chat] Error persisting turn state', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [chatId])
 

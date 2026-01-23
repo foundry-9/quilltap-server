@@ -5,6 +5,8 @@ import { AvatarSettings } from './AvatarSettings'
 import { CheapLLMSettings } from './CheapLLMSettings'
 import { ImageDescriptionSettings } from './ImageDescriptionSettings'
 import { MemoryCascadeSettings } from './MemoryCascadeSettings'
+import { TokenDisplaySettingsComponent } from './TokenDisplaySettings'
+import { ContextCompressionSettingsComponent } from './ContextCompressionSettings'
 
 /**
  * ChatSettingsTab Component
@@ -13,6 +15,8 @@ import { MemoryCascadeSettings } from './MemoryCascadeSettings'
  * - Cheap LLM configuration
  * - Image description profiles
  * - Memory cascade behavior
+ * - Token display preferences
+ * - Context compression settings
  */
 export default function ChatSettingsTab() {
   const {
@@ -29,6 +33,8 @@ export default function ChatSettingsTab() {
     handleCheapLLMUpdate,
     handleImageDescriptionProfileChange,
     handleMemoryCascadeUpdate,
+    handleTokenDisplayChange,
+    handleContextCompressionUpdate,
   } = useChatSettings()
 
   if (loading) {
@@ -90,6 +96,20 @@ export default function ChatSettingsTab() {
         saving={saving}
         onUpdate={handleMemoryCascadeUpdate}
       />
+
+      <ContextCompressionSettingsComponent
+        settings={settings}
+        saving={saving}
+        onUpdate={handleContextCompressionUpdate}
+      />
+
+      <div className="border-t border-border pt-6">
+        <TokenDisplaySettingsComponent
+          settings={settings}
+          saving={saving}
+          onTokenDisplayChange={handleTokenDisplayChange}
+        />
+      </div>
     </div>
   )
 }

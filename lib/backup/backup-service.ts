@@ -6,11 +6,11 @@
  */
 
 import archiver from 'archiver';
+import { createHash, randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/mongodb/repositories';
-import { s3FileService } from '@/lib/s3/file-service';
-import { downloadFile } from '@/lib/s3/operations';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import type { BackupManifest, BackupData, BackupInfo, ChatWithMessages } from './types';
 import type { ChatEvent, ProviderModel } from '@/lib/schemas/types';
 
@@ -31,7 +31,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   // Collect all entities in parallel
   const [
     characters,
-    personas,
     chatMetadatas,
     tags,
     connectionProfiles,
@@ -41,9 +40,9 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     promptTemplates,
     roleplayTemplates,
     providerModels,
+    projects,
   ] = await Promise.all([
     repos.characters.findAll(),
-    repos.personas.findAll(),
     repos.chats.findAll(),
     repos.tags.findAll(),
     repos.connections.findAll(),
@@ -55,12 +54,13 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     globalRepos.roleplayTemplates.findByUserId(userId),
     // Get provider models
     globalRepos.providerModels.findAll(),
+    // Get projects
+    repos.projects.findAll(),
   ]);
 
   moduleLogger.debug('Collected base entities', {
     userId,
     characters: characters.length,
-    personas: personas.length,
     chats: chatMetadatas.length,
     tags: tags.length,
     connectionProfiles: connectionProfiles.length,
@@ -70,6 +70,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     promptTemplates: promptTemplates.length,
     roleplayTemplates: roleplayTemplates.length,
     providerModels: providerModels.length,
+    projects: projects.length,
   });
 
   // Collect messages for each chat
@@ -108,7 +109,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
 
   return {
     characters,
-    personas,
     chats,
     tags,
     connectionProfiles: sanitizedConnectionProfiles,
@@ -119,6 +119,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     promptTemplates,
     roleplayTemplates,
     providerModels,
+    projects,
   };
 }
 
@@ -135,7 +136,6 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
     appVersion: APP_VERSION,
     counts: {
       characters: data.characters.length,
-      personas: data.personas.length,
       chats: data.chats.length,
       messages: totalMessages,
       tags: data.tags.length,
@@ -147,6 +147,7 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       promptTemplates: data.promptTemplates.length,
       roleplayTemplates: data.roleplayTemplates.length,
       providerModels: data.providerModels.length,
+      projects: data.projects.length,
     },
   };
 }
@@ -206,9 +207,6 @@ export async function createBackup(userId: string): Promise<{
   archive.append(JSON.stringify(data.characters, null, 2), {
     name: `${folderName}/data/characters.json`,
   });
-  archive.append(JSON.stringify(data.personas, null, 2), {
-    name: `${folderName}/data/personas.json`,
-  });
   archive.append(JSON.stringify(data.chats, null, 2), {
     name: `${folderName}/data/chats.json`,
   });
@@ -239,18 +237,21 @@ export async function createBackup(userId: string): Promise<{
   archive.append(JSON.stringify(data.providerModels, null, 2), {
     name: `${folderName}/data/provider-models.json`,
   });
+  archive.append(JSON.stringify(data.projects, null, 2), {
+    name: `${folderName}/data/projects.json`,
+  });
 
-  // Add actual files from S3
-  moduleLogger.debug('Adding files from S3', { userId, fileCount: data.files.length });
+  // Add actual files from storage
+  moduleLogger.debug('Adding files from storage', { userId, fileCount: data.files.length });
   moduleLogger.debug('Added provider models to archive', {
     userId,
     providerModelCount: data.providerModels.length,
   });
 
   for (const file of data.files) {
-    if (file.s3Key) {
+    if (file.storageKey) {
       try {
-        const fileBuffer = await downloadFile(file.s3Key);
+        const fileBuffer = await fileStorageManager.downloadFile(file);
         archive.append(fileBuffer, {
           name: `${folderName}/files/${file.category}/${file.id}_${file.originalFilename}`,
         });
@@ -261,7 +262,7 @@ export async function createBackup(userId: string): Promise<{
       } catch (error) {
         moduleLogger.warn('Failed to download file for backup, skipping', {
           fileId: file.id,
-          s3Key: file.s3Key,
+          storageKey: file.storageKey,
           error: error instanceof Error ? error.message : String(error),
         });
         // Continue with backup even if some files fail
@@ -291,7 +292,7 @@ export async function createBackup(userId: string): Promise<{
 }
 
 /**
- * Saves a backup ZIP to S3
+ * Saves a backup ZIP to storage
  */
 export async function saveBackupToS3(
   userId: string,
@@ -299,88 +300,166 @@ export async function saveBackupToS3(
   customFilename?: string
 ): Promise<string> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const fileId = randomUUID();
   const filename = customFilename || `backup-${timestamp}.zip`;
 
-  // Store in the user's backups folder
-  const s3Key = `users/${userId}/backups/${filename}`;
+  moduleLogger.debug('Saving backup to storage', { userId, filename, size: zipBuffer.length });
 
-  moduleLogger.debug('Saving backup to S3', { userId, s3Key, size: zipBuffer.length });
-
-  await s3FileService.uploadUserFile(
+  // Upload to S3 storage
+  const result = await fileStorageManager.uploadFile({
     userId,
-    `backup-${timestamp}`,
+    fileId,
     filename,
-    'backups',
-    zipBuffer,
-    'application/zip'
+    content: zipBuffer,
+    contentType: 'application/zip',
+    folderPath: '/backups',
+  });
+
+  // Calculate SHA256 hash
+  const sha256 = createHash('sha256').update(new Uint8Array(zipBuffer)).digest('hex');
+
+  // Create file metadata entry in MongoDB so backups appear in listings
+  // Note: userId is automatically added by the user-scoped repository
+  const repos = getUserRepositories(userId);
+  await repos.files.create(
+    {
+      originalFilename: filename,
+      mimeType: 'application/zip',
+      size: zipBuffer.length,
+      sha256,
+      source: 'GENERATED',
+      category: 'BACKUP',
+      storageKey: result.storageKey,
+      mountPointId: result.mountPointId,
+      folderPath: '/backups',
+      linkedTo: [],
+      tags: [],
+    },
+    { id: fileId }
   );
 
-  moduleLogger.info('Backup saved to S3', { userId, s3Key });
+  moduleLogger.info('Backup saved to storage', {
+    userId,
+    fileId,
+    storageKey: result.storageKey,
+    mountPointId: result.mountPointId,
+  });
 
-  return s3Key;
+  return result.storageKey;
 }
 
 /**
- * Lists all backups stored in S3 for a user
+ * Lists all backups stored in storage for a user
  */
 export async function listS3Backups(userId: string): Promise<BackupInfo[]> {
-  moduleLogger.debug('Listing S3 backups', { userId });
+  moduleLogger.debug('Listing user backups', { userId });
 
-  const keys = await s3FileService.listUserFiles(userId, 'backups');
+  const repos = getUserRepositories(userId);
 
-  const backups: BackupInfo[] = [];
+  try {
+    // Get all user files and filter for backups by category or folder path
+    const allFiles = await repos.files.findAll();
+    const backupFiles = allFiles.filter(
+      (file) =>
+        file.storageKey &&
+        (file.category === 'BACKUP' ||
+        file.folderPath === '/backups' ||
+        file.originalFilename?.endsWith('.zip'))
+    );
 
-  for (const key of keys) {
-    try {
-      const metadata = await s3FileService.getFileInfo(key);
-      if (metadata) {
-        // Extract filename from key
-        const parts = key.split('/');
-        const filename = parts[parts.length - 1];
+    const backups: BackupInfo[] = backupFiles
+      .filter((file) => file.storageKey) // Ensure storageKey exists
+      .map((file) => ({
+        key: file.storageKey as string,
+        filename: file.originalFilename,
+        createdAt: new Date(file.createdAt),
+        size: file.size || 0,
+      }));
 
-        backups.push({
-          key,
-          filename,
-          createdAt: metadata.lastModified,
-          size: metadata.size,
-        });
-      }
-    } catch (error) {
-      moduleLogger.warn('Failed to get metadata for backup', {
-        key,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    // Sort by creation date, newest first
+    backups.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    moduleLogger.debug('Listed user backups', { userId, count: backups.length });
+
+    return backups;
+  } catch (error) {
+    moduleLogger.warn('Failed to list backups', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
   }
-
-  // Sort by creation date, newest first
-  backups.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-  moduleLogger.debug('Listed S3 backups', { userId, count: backups.length });
-
-  return backups;
 }
 
 /**
- * Downloads a backup from S3
+ * Downloads a backup from storage
+ *
+ * @param userId - User ID to scope the backup lookup
+ * @param storageKey - Storage key of the backup file
  */
-export async function downloadBackupFromS3(s3Key: string): Promise<Buffer> {
-  moduleLogger.debug('Downloading backup from S3', { s3Key });
+export async function downloadBackupFromS3(userId: string, storageKey: string): Promise<Buffer> {
+  moduleLogger.debug('Downloading backup from storage', { userId, storageKey });
 
-  const buffer = await downloadFile(s3Key);
+  const repos = getUserRepositories(userId);
 
-  moduleLogger.debug('Downloaded backup from S3', { s3Key, size: buffer.length });
+  try {
+    // Find the backup file by storage key
+    const allFiles = await repos.files.findAll();
+    const backupFile = allFiles.find((f) => f.storageKey === storageKey);
 
-  return buffer;
+    if (!backupFile) {
+      throw new Error(`Backup file not found: ${storageKey}`);
+    }
+
+    const buffer = await fileStorageManager.downloadFile(backupFile);
+
+    moduleLogger.debug('Downloaded backup from storage', { userId, storageKey, size: buffer.length });
+
+    return buffer;
+  } catch (error) {
+    moduleLogger.error('Failed to download backup', {
+      userId,
+      storageKey,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 /**
- * Deletes a backup from S3
+ * Deletes a backup from storage
+ *
+ * @param userId - User ID to scope the backup lookup
+ * @param storageKey - Storage key of the backup file
  */
-export async function deleteBackupFromS3(s3Key: string): Promise<void> {
-  moduleLogger.debug('Deleting backup from S3', { s3Key });
+export async function deleteBackupFromS3(userId: string, storageKey: string): Promise<void> {
+  moduleLogger.debug('Deleting backup from storage', { userId, storageKey });
 
-  await s3FileService.deleteByS3Key(s3Key);
+  const repos = getUserRepositories(userId);
 
-  moduleLogger.info('Deleted backup from S3', { s3Key });
+  try {
+    // Find the backup file by storage key
+    const allFiles = await repos.files.findAll();
+    const backupFile = allFiles.find((f) => f.storageKey === storageKey);
+
+    if (!backupFile) {
+      moduleLogger.warn('Backup file not found for deletion', { userId, storageKey });
+      return;
+    }
+
+    // Delete from storage
+    await fileStorageManager.deleteFile(backupFile);
+
+    // Delete metadata from database
+    await repos.files.delete(backupFile.id);
+
+    moduleLogger.info('Deleted backup from storage', { userId, fileId: backupFile.id, storageKey });
+  } catch (error) {
+    moduleLogger.error('Failed to delete backup', {
+      userId,
+      storageKey,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }

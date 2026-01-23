@@ -14,7 +14,6 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { use } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 interface Props {
   params: Promise<{
@@ -27,7 +26,6 @@ export default function PersonaDetailPage({ params }: Props) {
   const { id } = use(params)
 
   useEffect(() => {
-    clientLogger.info('[PersonaDetailPage] Redirecting to Character page - Personas deprecated', { id })
     // Redirect to the character with the same ID (after migration, persona IDs are preserved as character IDs)
     router.replace(`/characters/${id}`)
   }, [router, id])

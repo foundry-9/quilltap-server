@@ -7,7 +7,6 @@
  * - User info display
  * - Theme selection (submenu)
  * - Quick-hide tag management (submenu)
- * - DevConsole toggle (dev mode only)
  * - Sign out
  *
  * @module components/dashboard/nav-user-menu
@@ -17,11 +16,9 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/components/providers/theme-provider'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
-import { useDevConsoleOptional } from '@/components/providers/dev-console-provider'
 import { NavUserMenuItem } from './nav-user-menu-item'
 import { NavUserMenuThemeContent, ThemeIcon } from './nav-user-menu-theme'
 import { NavUserMenuQuickHideContent, QuickHideIcon } from './nav-user-menu-quick-hide'
-import { clientLogger } from '@/lib/client-logger'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface NavUserMenuProps {
@@ -73,23 +70,6 @@ function SignOutIcon({ className }: { className?: string }) {
   )
 }
 
-/**
- * Wrench/tool icon for DevConsole menu item
- */
-function DevConsoleIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 -0.5 17 17"
-      fill="currentColor"
-    >
-      <path
-        d="M15.732,2.509 L13.495,0.274 C13.064,-0.159 12.346,-0.141 11.892,0.312 C11.848,0.356 11.817,0.411 11.8,0.471 C11.241,2.706 11.253,3.487 11.346,3.794 L5.081,10.059 L3.162,8.142 L0.872,10.432 C0.123,11.18 -0.503,13.91 0.795,15.207 C2.092,16.504 4.819,15.875 5.566,15.128 L7.86,12.836 L5.981,10.958 L12.265,4.675 C12.607,4.752 13.423,4.732 15.535,4.205 C15.595,4.188 15.65,4.158 15.694,4.114 C16.147,3.661 16.163,2.941 15.732,2.509 L15.732,2.509 Z M15.15,3.459 C14.047,3.77 12.765,4.046 12.481,3.992 L12.046,3.557 C11.984,3.291 12.262,1.996 12.576,0.886 C12.757,0.752 12.989,0.748 13.129,0.888 L15.147,2.906 C15.285,3.045 15.281,3.277 15.15,3.459 L15.15,3.459 Z"
-      />
-    </svg>
-  )
-}
-
 export function NavUserMenu({ user }: NavUserMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [authDisabled, setAuthDisabled] = useState(false)
@@ -98,14 +78,13 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
 
   const { showNavThemeSelector } = useTheme()
   const { quickHideTags, hiddenTagIds } = useQuickHide()
-  const devConsole = useDevConsoleOptional()
 
   const hasAnyHidden = hiddenTagIds.size > 0
   const hasQuickHideTags = quickHideTags.length > 0
 
   // Check if auth is disabled (no point showing sign out if auto-logged in)
   useEffect(() => {
-    fetch('/api/auth/status')
+    fetch('/api/v1/auth/status')
       .then(res => res.json())
       .then(data => {
         if (data.authDisabled) {
@@ -124,34 +103,23 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
   })
 
   const handleToggle = () => {
-    clientLogger.debug('User menu toggle', { wasOpen: isOpen })
     setIsOpen(!isOpen)
   }
 
   const handleProfileClick = () => {
-    clientLogger.debug('Navigating to profile')
     setIsOpen(false)
     router.push('/profile')
   }
 
-  const handleDevConsoleClick = () => {
-    if (devConsole) {
-      clientLogger.debug('DevConsole toggle from user menu', { wasOpen: devConsole.isOpen })
-      devConsole.togglePanel()
-      setIsOpen(false)
-    }
-  }
-
   const handleSignOut = async () => {
-    clientLogger.info('User signing out from user menu')
     try {
-      await fetch('/api/auth/logout', {
+      await fetch('/api/v1/auth/logout', {
         method: 'POST',
         credentials: 'include',
       })
       router.push('/')
     } catch (error) {
-      clientLogger.error('Sign out failed', { error })
+      console.error('Sign out failed', error)
       // Still redirect even if logout fails - cookie will expire anyway
       router.push('/')
     }
@@ -242,18 +210,6 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
                 submenuContent={<NavUserMenuQuickHideContent />}
                 isActive={hasAnyHidden}
                 testId="user-menu-quick-hide"
-              />
-            )}
-
-            {/* DevConsole (shown in development only) */}
-            {devConsole && (
-              <NavUserMenuItem
-                icon={<DevConsoleIcon className="w-4 h-4" />}
-                label="Dev Console"
-                shortLabel="DevConsole"
-                onClick={handleDevConsoleClick}
-                isActive={devConsole.isOpen}
-                testId="user-menu-dev-console"
               />
             )}
 

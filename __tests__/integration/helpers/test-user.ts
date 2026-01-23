@@ -72,7 +72,7 @@ export class TestUserHelper {
     }
 
     try {
-      const res = await page.request.get('/api/auth/status')
+      const res = await page.request.get('/api/v1/auth/status')
       if (res.ok()) {
         const data = await res.json()
         this.authDisabled = Boolean(data?.authDisabled)
@@ -183,7 +183,7 @@ export class TestUserHelper {
       return false
     }
 
-    const signupRes = await page.request.post('/api/auth/signup', {
+    const signupRes = await page.request.post('/api/v1/auth/signup', {
       data: {
         username: this.credentials.username,
         password: this.credentials.password,
@@ -216,7 +216,7 @@ export class TestUserHelper {
       return
     }
 
-    const loginRes = await page.request.post('/api/auth/login', {
+    const loginRes = await page.request.post('/api/v1/auth/login', {
       data: {
         username: this.credentials.username,
         password: this.credentials.password,
@@ -443,7 +443,7 @@ export class TestUserHelper {
 
     await this.login(page)
 
-    const res = await this.deleteWithRetry(page, '/api/auth/delete-account')
+    const res = await this.deleteWithRetry(page, '/api/v1/auth/delete-account')
     if (res.ok()) {
       console.log(`Deleted user: ${this.credentials.username}`)
     } else {

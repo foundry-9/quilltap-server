@@ -2,7 +2,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useSession } from '@/components/providers/session-provider'
-import { clientLogger } from '@/lib/client-logger'
 
 interface QuickHideTag {
   id: string
@@ -24,7 +23,7 @@ const STORAGE_KEY = 'quilltap.quickHide.activeTags'
 const QuickHideContext = createContext<QuickHideContextValue | null>(null)
 
 async function fetchQuickHideTags(): Promise<QuickHideTag[]> {
-  const res = await fetch('/api/tags', { cache: 'no-store' })
+  const res = await fetch('/api/v1/tags', { cache: 'no-store' })
   if (!res.ok) {
     throw new Error('Failed to load tags')
   }
@@ -61,7 +60,7 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
         return next.size === prev.size ? prev : next
       })
     } catch (error) {
-      clientLogger.warn('Unable to load quick-hide tags', { error: error instanceof Error ? error.message : String(error) })
+      console.warn('Unable to load quick-hide tags', { error: error instanceof Error ? error.message : String(error) })
       setQuickHideTags([])
     } finally {
       setLoading(false)
@@ -83,7 +82,7 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (error) {
-      clientLogger.warn('Unable to load quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
+      console.warn('Unable to load quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
     } finally {
       setStorageReady(true)
     }
@@ -96,7 +95,7 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(hiddenTagIds)))
     } catch (error) {
-      clientLogger.warn('Unable to persist quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
+      console.warn('Unable to persist quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
     }
   }, [hiddenTagIds, storageReady])
 
@@ -126,22 +125,12 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
       } else {
         next.add(tagId)
       }
-      // Defer logging to avoid setState during render
-      queueMicrotask(() => {
-        clientLogger.debug(wasHidden ? 'Unhiding tag' : 'Hiding tag', { tagId })
-      })
       return next
     })
   }, [])
 
   const clearAllHidden = useCallback(() => {
-    setHiddenTagIds((prev) => {
-      // Defer logging to avoid setState during render
-      queueMicrotask(() => {
-        clientLogger.debug('Clearing all hidden tags', { previousCount: prev.size })
-      })
-      return new Set()
-    })
+    setHiddenTagIds(new Set())
   }, [])
 
   const shouldHideByIds = useCallback(

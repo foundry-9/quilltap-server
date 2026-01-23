@@ -26,7 +26,7 @@
   "providerConfig": {
     "providerName": "ANTHROPIC",
     "displayName": "Anthropic",
-    "description": "Anthropic Claude models with support for image and PDF analysis",
+    "description": "Anthropic Claude models with support for image, PDF, and text file analysis",
     "abbreviation": "ANT",
     "colors": {
       "bg": "bg-purple-100",
@@ -44,8 +44,8 @@
     },
     "attachmentSupport": {
       "supported": true,
-      "mimeTypes": ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"],
-      "description": "Images (JPEG, PNG, GIF, WebP) and PDFs"
+      "mimeTypes": ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain"],
+      "description": "Images (JPEG, PNG, GIF, WebP), PDFs, and text files"
     }
   },
   "permissions": {

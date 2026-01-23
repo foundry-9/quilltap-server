@@ -1,0 +1,428 @@
+/**
+ * Characters API v1 - Collection Endpoint
+ *
+ * GET /api/v1/characters - List all characters
+ * POST /api/v1/characters - Create a new character
+ * POST /api/v1/characters?action=ai-wizard - AI wizard generation
+ * POST /api/v1/characters?action=import - Import SillyTavern character
+ * POST /api/v1/characters?action=quick-create - Quick create minimal character
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createAuthenticatedHandler, AuthenticatedContext } from '@/lib/api/middleware';
+import { getActionParam } from '@/lib/api/middleware/actions';
+import { getFilePath } from '@/lib/api/middleware/file-path';
+import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/character';
+import { runCharacterWizard, type WizardRequest } from '@/lib/services/character-wizard.service';
+import { z } from 'zod';
+import { logger } from '@/lib/logger';
+import { badRequest, serverError, notFound, validationError } from '@/lib/api/responses';
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
+const createCharacterSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  personality: z.string().optional(),
+  scenario: z.string().optional(),
+  firstMessage: z.string().optional(),
+  exampleDialogues: z.string().optional(),
+  avatarUrl: z.string().url().optional().or(z.literal('')),
+  defaultConnectionProfileId: z.string().uuid().optional(),
+  npc: z.boolean().optional(),
+  systemPrompts: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        name: z.string().min(1).max(100),
+        content: z.string().min(1),
+        isDefault: z.boolean().default(false),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+      })
+    )
+    .optional(),
+  physicalDescriptions: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        name: z.string().min(1),
+        shortPrompt: z.string().max(350).nullable().optional(),
+        mediumPrompt: z.string().max(500).nullable().optional(),
+        longPrompt: z.string().max(750).nullable().optional(),
+        completePrompt: z.string().max(1000).nullable().optional(),
+        fullDescription: z.string().nullable().optional(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+      })
+    )
+    .optional(),
+});
+
+const quickCreateSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100),
+  defaultConnectionProfileId: z.string().uuid().optional(),
+});
+
+const wizardRequestSchema = z.object({
+  primaryProfileId: z.string().uuid(),
+  visionProfileId: z.string().uuid().optional(),
+  sourceType: z.enum(['existing', 'upload', 'gallery', 'skip']),
+  imageId: z.string().uuid().optional(),
+  characterName: z.string().min(1),
+  existingData: z
+    .object({
+      title: z.string().optional(),
+      description: z.string().optional(),
+      personality: z.string().optional(),
+      scenario: z.string().optional(),
+      exampleDialogues: z.string().optional(),
+      systemPrompt: z.string().optional(),
+    })
+    .optional(),
+  background: z.string(),
+  fieldsToGenerate: z.array(
+    z.enum([
+      'title',
+      'description',
+      'personality',
+      'scenario',
+      'exampleDialogues',
+      'systemPrompt',
+      'physicalDescription',
+    ])
+  ),
+  characterId: z.string().uuid().optional(),
+});
+
+// ============================================================================
+// GET Handler
+// ============================================================================
+
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+  try {
+    logger.debug('[Characters v1] GET list', { userId: user.id });
+
+    let characters = await repos.characters.findByUserId(user.id);
+
+    const { searchParams } = new URL(req.url);
+
+    // Filter by NPC status
+    const npcFilter = searchParams.get('npc');
+    if (npcFilter === 'true') {
+      characters = characters.filter((c) => c.npc === true);
+    } else if (npcFilter === 'false') {
+      characters = characters.filter((c) => !c.npc);
+    }
+
+    // Filter by controlledBy
+    const controlledByFilter = searchParams.get('controlledBy');
+    if (controlledByFilter === 'user') {
+      const beforeCount = characters.length;
+      characters = characters.filter((c) => c.controlledBy === 'user');
+      logger.debug('[Characters v1] Filtered by controlledBy=user', {
+        beforeCount,
+        afterCount: characters.length,
+        userId: user.id,
+      });
+    } else if (controlledByFilter === 'llm') {
+      characters = characters.filter((c) => c.controlledBy === 'llm' || c.controlledBy === undefined);
+    }
+
+    // Sort by createdAt descending
+    characters.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // Enrich characters
+    const enrichedCharacters = await Promise.all(
+      characters.map(async (character) => {
+        let defaultImage = null;
+        if (character.defaultImageId) {
+          const fileEntry = await repos.files.findById(character.defaultImageId);
+          if (fileEntry) {
+            defaultImage = {
+              id: fileEntry.id,
+              filepath: getFilePath(fileEntry),
+              url: null,
+            };
+          }
+        }
+
+        let defaultPartnerName: string | null = null;
+        if (character.defaultPartnerId) {
+          const partner = await repos.characters.findById(character.defaultPartnerId);
+          if (partner) {
+            defaultPartnerName = partner.name;
+          }
+        }
+
+        const chats = await repos.chats.findByCharacterId(character.id);
+
+        return {
+          id: character.id,
+          name: character.name,
+          title: character.title,
+          description: character.description,
+          avatarUrl: character.avatarUrl,
+          defaultImageId: character.defaultImageId,
+          defaultImage,
+          isFavorite: character.isFavorite,
+          controlledBy: character.controlledBy ?? 'llm',
+          defaultPartnerName,
+          npc: character.npc ?? false,
+          createdAt: character.createdAt,
+          tags: character.tags || [],
+          updatedAt: character.updatedAt,
+          _count: {
+            chats: chats.length,
+          },
+        };
+      })
+    );
+
+    return NextResponse.json({
+      characters: enrichedCharacters,
+      count: enrichedCharacters.length,
+    });
+  } catch (error) {
+    logger.error('[Characters v1] Error listing characters', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to fetch characters');
+  }
+});
+
+// ============================================================================
+// POST Handlers
+// ============================================================================
+
+async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
+  const { user, repos } = context;
+
+  try {
+    const body = await req.json();
+    const validatedData = createCharacterSchema.parse(body);
+
+    const character = await repos.characters.create({
+      userId: user.id,
+      name: validatedData.name,
+      title: validatedData.title || null,
+      description: validatedData.description || null,
+      personality: validatedData.personality || null,
+      scenario: validatedData.scenario || null,
+      firstMessage: validatedData.firstMessage || null,
+      exampleDialogues: validatedData.exampleDialogues || null,
+      avatarUrl: validatedData.avatarUrl || null,
+      defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
+      isFavorite: false,
+      npc: validatedData.npc ?? false,
+      tags: [] as string[],
+      personaLinks: [] as { personaId: string; isDefault: boolean }[],
+      avatarOverrides: [] as { chatId: string; imageId: string }[],
+      defaultImageId: null,
+      physicalDescriptions: validatedData.physicalDescriptions || [],
+      systemPrompts: validatedData.systemPrompts || [],
+    });
+
+    logger.info('[Characters v1] Character created', {
+      characterId: character.id,
+      name: character.name,
+      npc: character.npc,
+    });
+
+    return NextResponse.json({ character }, { status: 201 });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+
+    logger.error('[Characters v1] Error creating character', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to create character');
+  }
+}
+
+async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext) {
+  const { user, repos } = context;
+
+  try {
+    const body = await req.json();
+    const validatedData = quickCreateSchema.parse(body);
+
+    logger.info('[Characters v1] Quick creating character', {
+      userId: user.id,
+      name: validatedData.name,
+    });
+
+    const character = await repos.characters.create({
+      userId: user.id,
+      name: validatedData.name,
+      title: null,
+      description: 'Character created during chat import',
+      personality: null,
+      scenario: null,
+      firstMessage: null,
+      exampleDialogues: null,
+      avatarUrl: null,
+      defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
+      isFavorite: false,
+      tags: [] as string[],
+      personaLinks: [] as { personaId: string; isDefault: boolean }[],
+      avatarOverrides: [] as { chatId: string; imageId: string }[],
+      defaultImageId: null,
+      physicalDescriptions: [],
+    });
+
+    logger.info('[Characters v1] Quick create completed', {
+      characterId: character.id,
+      name: character.name,
+    });
+
+    return NextResponse.json({ character }, { status: 201 });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+
+    logger.error('[Characters v1] Error in quick create', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to create character');
+  }
+}
+
+async function handleImport(req: NextRequest, context: AuthenticatedContext) {
+  const { user, repos } = context;
+
+  try {
+    const contentType = req.headers.get('content-type');
+
+    let characterData = null;
+    let avatarUrl = null;
+
+    if (contentType?.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      const file = formData.get('file') as File;
+
+      if (!file) {
+        return badRequest('No file provided');
+      }
+
+      const buffer = Buffer.from(await file.arrayBuffer());
+
+      if (file.type === 'image/png' || file.name.endsWith('.png')) {
+        characterData = await parseSTCharacterPNG(buffer);
+
+        if (!characterData) {
+          return badRequest('Invalid SillyTavern PNG file');
+        }
+
+        avatarUrl = null;
+      } else if (file.type === 'application/json' || file.name.endsWith('.json')) {
+        const jsonText = buffer.toString('utf-8');
+        characterData = JSON.parse(jsonText);
+      } else {
+        return badRequest('Unsupported file type. Please upload PNG or JSON');
+      }
+    } else if (contentType?.includes('application/json')) {
+      const body = await req.json();
+      characterData = body.characterData || body;
+
+      if (!characterData) {
+        return badRequest('Character data is required');
+      }
+    } else {
+      return badRequest('Unsupported content type');
+    }
+
+    const importedData = importSTCharacter(characterData);
+
+    const character = await repos.characters.create({
+      userId: user.id,
+      ...importedData,
+      avatarUrl: avatarUrl,
+      isFavorite: false,
+      tags: [] as string[],
+      personaLinks: [] as { personaId: string; isDefault: boolean }[],
+      avatarOverrides: [] as { chatId: string; imageId: string }[],
+      defaultImageId: null,
+      physicalDescriptions: [],
+    });
+
+    const chats = await repos.chats.findByCharacterId(character.id);
+
+    logger.info('[Characters v1] Character imported', {
+      characterId: character.id,
+      name: character.name,
+    });
+
+    return NextResponse.json(
+      {
+        character: {
+          id: character.id,
+          name: character.name,
+          description: character.description,
+          avatarUrl: character.avatarUrl,
+          createdAt: character.createdAt,
+          updatedAt: character.updatedAt,
+          _count: {
+            chats: chats.length,
+          },
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    logger.error('[Characters v1] Error importing character', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to import character');
+  }
+}
+
+async function handleAiWizard(req: NextRequest, context: AuthenticatedContext) {
+  const { user, repos } = context;
+
+  try {
+    const body = await req.json();
+    const request = wizardRequestSchema.parse(body) as WizardRequest;
+
+    logger.info('[Characters v1] AI Wizard starting', {
+      userId: user.id,
+      characterName: request.characterName,
+      fieldsToGenerate: request.fieldsToGenerate,
+      sourceType: request.sourceType,
+    });
+
+    const result = await runCharacterWizard(request, user.id, repos);
+
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Generation failed';
+
+    // Handle specific error types with appropriate responses
+    if (errorMessage.includes('not found')) {
+      return notFound(errorMessage.replace(' not found', ''));
+    }
+    if (errorMessage.includes('required')) {
+      return badRequest(errorMessage);
+    }
+
+    logger.error('[Characters v1] AI Wizard failed', { error: errorMessage });
+    return serverError(errorMessage);
+  }
+}
+
+export const POST = createAuthenticatedHandler(async (req, context) => {
+  const action = getActionParam(req);
+
+  switch (action) {
+    case 'ai-wizard':
+      return handleAiWizard(req, context);
+    case 'import':
+      return handleImport(req, context);
+    case 'quick-create':
+      return handleQuickCreate(req, context);
+    default:
+      return handleCreate(req, context);
+  }
+});

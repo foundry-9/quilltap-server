@@ -41,13 +41,13 @@ export type ImportStep = 'file' | 'preview' | 'options' | 'importing' | 'complet
 // Entity type labels for UI
 export const ENTITY_TYPE_LABELS: Record<ExportEntityType, string> = {
   characters: 'Characters',
-  personas: 'Personas',
   chats: 'Chats',
   'roleplay-templates': 'Roleplay Templates',
   'connection-profiles': 'Connection Profiles',
   'image-profiles': 'Image Profiles',
   'embedding-profiles': 'Embedding Profiles',
   tags: 'Tags',
+  projects: 'Projects',
 }
 
 // Available entity with optional memory count

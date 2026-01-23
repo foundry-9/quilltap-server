@@ -1,16 +1,8 @@
 import type { ReactNode } from 'react'
-import { describe, it, expect, beforeEach, afterAll } from '@jest/globals'
+import { describe, it, expect, beforeEach } from '@jest/globals'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QuickHideProvider, useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useSession } from '@/components/providers/session-provider'
-import { clientLogger } from '@/lib/client-logger'
-
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    warn: jest.fn(),
-  },
-}))
 
 const STORAGE_KEY = 'quilltap.quickHide.activeTags'
 const defaultTags = [
@@ -20,23 +12,7 @@ const defaultTags = [
 ]
 
 const useSessionMock = useSession as jest.MockedFunction<typeof useSession>
-const loggerMock = clientLogger as jest.Mocked<typeof clientLogger>
 const fetchMock = global.fetch as jest.Mock
-const globalAny = globalThis as any
-const originalQueueMicrotask =
-  globalAny.queueMicrotask ??
-  ((cb: VoidFunction) => {
-    Promise.resolve().then(cb)
-  })
-
-const queueMicrotaskMock = jest.fn<void, [VoidFunction]>()
-let queuedMicrotasks: VoidFunction[] = []
-
-const flushQueuedMicrotasks = () => {
-  const callbacks = [...queuedMicrotasks]
-  queuedMicrotasks = []
-  callbacks.forEach((cb) => cb())
-}
 
 const wrapper = ({ children }: { children: ReactNode }) => (
   <QuickHideProvider>{children}</QuickHideProvider>
@@ -52,11 +28,6 @@ describe('QuickHideProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     localStorage.clear()
-    queuedMicrotasks = []
-    queueMicrotaskMock.mockImplementation((cb: VoidFunction) => {
-      queuedMicrotasks.push(cb)
-    })
-    globalAny.queueMicrotask = queueMicrotaskMock
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ tags: defaultTags }),
@@ -68,11 +39,7 @@ describe('QuickHideProvider', () => {
     } as any)
   })
 
-  afterAll(() => {
-    globalAny.queueMicrotask = originalQueueMicrotask
-  })
-
-  it('defers toggle logging until the microtask queue runs', async () => {
+  it('toggles tag visibility correctly', async () => {
     const { result } = await renderQuickHideHook()
 
     act(() => {
@@ -80,31 +47,17 @@ describe('QuickHideProvider', () => {
     })
 
     expect(result.current.hiddenTagIds.has('tag-1')).toBe(true)
-    expect(queueMicrotaskMock).toHaveBeenCalledTimes(1)
-    expect(loggerMock.debug).not.toHaveBeenCalled()
-
-    flushQueuedMicrotasks()
-    expect(loggerMock.debug).toHaveBeenCalledWith('Hiding tag', { tagId: 'tag-1' })
     expect(result.current.shouldHideByIds(['tag-1', 'tag-x'])).toBe(true)
-
-    queueMicrotaskMock.mockClear()
-    loggerMock.debug.mockClear()
 
     act(() => {
       result.current.toggleTag('tag-1')
     })
 
     expect(result.current.hiddenTagIds.has('tag-1')).toBe(false)
-    expect(queueMicrotaskMock).toHaveBeenCalledTimes(1)
-    expect(loggerMock.debug).not.toHaveBeenCalled()
-
-    flushQueuedMicrotasks()
-
-    expect(loggerMock.debug).toHaveBeenCalledWith('Unhiding tag', { tagId: 'tag-1' })
     expect(result.current.shouldHideByIds(['tag-1'])).toBe(false)
   })
 
-  it('clears all hidden tags and logs after microtask processing', async () => {
+  it('clears all hidden tags', async () => {
     const { result } = await renderQuickHideHook()
 
     act(() => {
@@ -112,11 +65,7 @@ describe('QuickHideProvider', () => {
       result.current.toggleTag('tag-2')
     })
 
-    flushQueuedMicrotasks()
     expect(result.current.hiddenTagIds.size).toBe(2)
-
-    queueMicrotaskMock.mockClear()
-    loggerMock.debug.mockClear()
 
     act(() => {
       result.current.clearAllHidden()
@@ -124,11 +73,6 @@ describe('QuickHideProvider', () => {
 
     expect(result.current.hiddenTagIds.size).toBe(0)
     expect(result.current.shouldHideByIds(['tag-1', 'tag-2'])).toBe(false)
-    expect(queueMicrotaskMock).toHaveBeenCalledTimes(1)
-    expect(loggerMock.debug).not.toHaveBeenCalled()
-
-    flushQueuedMicrotasks()
-    expect(loggerMock.debug).toHaveBeenCalledWith('Clearing all hidden tags', { previousCount: 2 })
   })
 
   it('restores persisted hidden tags but removes ones that no longer exist', async () => {
