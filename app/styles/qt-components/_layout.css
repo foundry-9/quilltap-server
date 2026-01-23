@@ -1187,4 +1187,80 @@
     font-family: var(--font-brand);
     color: var(--qt-brand-fg, var(--color-foreground));
   }
+
+  /* ==========================================================================
+     HOMEPAGE GRID LAYOUT
+     ========================================================================== */
+
+  /**
+   * Homepage 3-column grid - responsive layout for dashboard sections
+   * Uses minmax(0, 1fr) to prevent content from expanding columns
+   * Desktop (1100px+): 3 columns
+   * Tablet (700-1100px): 2 columns
+   * Mobile (<700px): 1 column
+   */
+  .qt-homepage-grid {
+    @apply grid gap-6;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  @media (max-width: 1100px) {
+    .qt-homepage-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 700px) {
+    .qt-homepage-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /**
+   * Homepage section card - container for each dashboard section
+   */
+  .qt-homepage-section {
+    @apply flex flex-col overflow-hidden;
+    @apply p-4 rounded-lg;
+    @apply border border-border;
+    min-width: 0; /* Prevent flex/grid item from expanding */
+    background: var(--qt-card-bg, var(--color-card));
+  }
+
+  /**
+   * Homepage section header - title with optional action link
+   */
+  .qt-homepage-section-header {
+    @apply flex items-center justify-between mb-4;
+  }
+
+  .qt-homepage-section-title {
+    @apply text-lg font-semibold text-foreground;
+  }
+
+  .qt-homepage-section-link {
+    @apply text-sm text-muted-foreground hover:text-foreground transition-colors;
+  }
+
+  /**
+   * Homepage section content - scrollable area with items
+   */
+  .qt-homepage-section-content {
+    @apply flex-1 space-y-2;
+  }
+
+  /**
+   * Quick actions row - row of action buttons
+   */
+  .qt-quick-actions {
+    @apply flex flex-wrap gap-3 justify-center;
+  }
+
+  /**
+   * Characters 2x2 grid for homepage
+   */
+  .qt-characters-grid {
+    @apply grid gap-3;
+    grid-template-columns: repeat(2, 1fr);
+  }
 }

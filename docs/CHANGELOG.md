@@ -4,6 +4,16 @@
 
 ### 2.7-dev
 
+- feat: Homepage redesign with 3-column responsive layout (2026-01-23)
+  - New `components/homepage/` module with modular components
+  - WelcomeSection: Personalized greeting with user's name
+  - QuickActionsRow: Start Chat, Continue Last, New Project, Generate Image buttons
+  - RecentChatsSection: 4 most recent chats with avatars and message counts
+  - ProjectsSection: 4 most recent active projects
+  - CharactersSection: 2x2 grid of favorite characters with quick chat
+  - Responsive grid: 3 columns (desktop), 2 columns (tablet), 1 column (mobile)
+  - New `qt-homepage-grid` and related CSS classes in `_layout.css`
+  - New standalone `/generate-image` page for image generation outside of chats
 - test: Comprehensive unit test expansion across core modules (2026-01-22)
   - Created `docs/TESTING_GUIDE.md` with testing conventions, patterns, and best practices
   - **Phase 1 (API Layer)**: Added 53 tests for `lib/api/responses.ts`, 91 tests for API middleware (`actions.ts`, `auth.ts`, `enrichment.ts`, `file-path.ts`), 57 tests for `lib/services/search.service.ts` - Total: 201 tests

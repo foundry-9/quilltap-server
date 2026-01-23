@@ -2,9 +2,21 @@ import Link from "next/link";
 import { getServerSession } from "@/lib/auth/session";
 import { getRepositories } from "@/lib/repositories/factory";
 import { BrandLogo } from "@/components/ui/brand-logo";
-import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
 import { getFilePath } from "@/lib/api/middleware/file-path";
+import {
+  WelcomeSection,
+  QuickActionsRow,
+  RecentChatsSection,
+  ProjectsSection,
+  CharactersSection,
+} from "@/components/homepage";
+import { enrichChatsForList, cleanEnrichedChats } from "@/lib/services/chat-enrichment.service";
 import type { FileEntry } from "@/lib/schemas/types";
+import type {
+  RecentChat,
+  HomepageProject,
+  HomepageCharacter,
+} from "@/components/homepage";
 
 // Revalidate on every request
 export const revalidate = 0;
@@ -55,16 +67,80 @@ export default async function Home() {
     ? await repos.users.findById(userId)
     : null;
 
-  // Get favorite characters for this user
-  const allCharacters = userId
-    ? await repos.characters.findByUserId(userId)
-    : [];
+  // Fetch data in parallel for the homepage sections
+  const [allChatsRaw, allProjects, allCharacters] = await Promise.all([
+    // Recent chats - fetch all, will slice later
+    userId
+      ? repos.chats.findByUserId(userId)
+      : [],
+    // Projects - fetch all, will sort and slice later
+    userId
+      ? repos.projects.findByUserId(userId)
+      : [],
+    // Characters - all, will filter to favorites
+    userId
+      ? repos.characters.findByUserId(userId)
+      : [],
+  ]);
+
+  // Enrich chats with participant data using the enrichment service
+  const enrichedChats = await enrichChatsForList(allChatsRaw, repos);
+  const cleanedChats = cleanEnrichedChats(enrichedChats);
+
+  // Get the 4 most recent chats
+  const recentEnrichedChats = cleanedChats.slice(0, 4);
+
+  // Get the last chat ID for "Continue Last" button
+  const lastChatId = recentEnrichedChats.length > 0 ? recentEnrichedChats[0].id : null;
+
+  // Transform enriched chats to the homepage format
+  const recentChats: RecentChat[] = recentEnrichedChats.map(chat => ({
+    id: chat.id,
+    title: chat.title,
+    updatedAt: chat.updatedAt,
+    participants: chat.participants.map(p => ({
+      id: p.id,
+      type: p.type,
+      isActive: p.isActive,
+      displayOrder: p.displayOrder,
+      character: p.character ? {
+        id: p.character.id,
+        name: p.character.name,
+        avatarUrl: p.character.avatarUrl || undefined,
+        defaultImageId: p.character.defaultImageId || undefined,
+        defaultImage: p.character.defaultImage ? {
+          id: p.character.defaultImage.id,
+          filepath: p.character.defaultImage.filepath,
+          url: p.character.defaultImage.url || undefined,
+        } : null,
+      } : null,
+      persona: null, // Personas are now handled as user-controlled characters
+    })),
+    _count: {
+      messages: chat._count.messages,
+    },
+  }));
+
+  // Transform projects to the homepage format, sorted by updatedAt
+  const sortedProjects = [...allProjects]
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 4);
+
+  const projects: HomepageProject[] = sortedProjects.map(project => ({
+    id: project.id,
+    name: project.name,
+    description: project.description,
+    color: project.color,
+    icon: project.icon,
+    chatCount: 0, // Projects don't store this in the schema, would need aggregation
+    updatedAt: project.updatedAt,
+  }));
 
   // Filter to favorites and add default images
-  const favoriteCharacters = await Promise.all(
+  const favoriteCharacters: HomepageCharacter[] = await Promise.all(
     allCharacters
       .filter(c => c.isFavorite && !c.npc)
-      .slice(0, 10)
+      .slice(0, 4)
       .map(async (char) => {
         // Get the default image for this character
         let defaultImage = null;
@@ -108,60 +184,24 @@ export default async function Home() {
   const displayName = user?.name || session.user?.name || 'there';
 
   return (
-    <div className="qt-page-container max-w-[800px] mx-auto">
+    <div className="qt-page-container max-w-6xl mx-auto">
       {/* Welcome section */}
-      <div className="text-center py-8">
-        <h1 className="text-3xl font-bold mb-2">
-          Welcome back, <span className="text-primary">{displayName}</span>!
-        </h1>
-        <p className="text-muted-foreground">
-          What would you like to do today?
-        </p>
+      <WelcomeSection displayName={displayName} />
+
+      {/* Quick action buttons */}
+      <QuickActionsRow lastChatId={lastChatId} />
+
+      {/* Three-column grid */}
+      <div className="qt-homepage-grid">
+        {/* Recent Chats */}
+        <RecentChatsSection chats={recentChats} />
+
+        {/* Active Projects */}
+        <ProjectsSection projects={projects} />
+
+        {/* Favorite Characters */}
+        <CharactersSection characters={favoriteCharacters} />
       </div>
-
-      {/* Start Chat button */}
-      <div className="flex justify-center mb-8">
-        <Link
-          href="/chats/new"
-          className="qt-button qt-button-primary qt-button-lg gap-2"
-        >
-          <svg
-            className="w-5 h-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="10" y1="10" x2="14" y2="10" />
-          </svg>
-          Start a Chat
-        </Link>
-      </div>
-
-      {/* Favorite characters */}
-      {favoriteCharacters.length > 0 && (
-        <FavoriteCharactersSection characters={favoriteCharacters} />
-      )}
-
-      {/* Empty state if no favorites */}
-      {favoriteCharacters.length === 0 && (
-        <div className="qt-card p-8 text-center">
-          <h2 className="text-xl font-semibold mb-2">No favorites yet</h2>
-          <p className="text-muted-foreground mb-4">
-            Mark some characters as favorites to see them here.
-          </p>
-          <Link
-            href="/characters"
-            className="qt-button qt-button-secondary"
-          >
-            Browse Characters
-          </Link>
-        </div>
-      )}
     </div>
   );
 }
