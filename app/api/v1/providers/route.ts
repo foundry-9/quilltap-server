@@ -11,10 +11,6 @@ import {
   serverError,
   successResponse,
 } from '@/lib/api/responses';
-import {
-  initializePlugins,
-  isPluginSystemInitialized,
-} from '@/lib/startup';
 import { providerRegistry, hotLoadProviderPlugin } from '@/lib/plugins/provider-registry';
 import { scanPlugins } from '@/lib/plugins/manifest-loader';
 
@@ -25,15 +21,6 @@ import { scanPlugins } from '@/lib/plugins/manifest-loader';
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
     logger.debug('[Providers v1] GET list', { userId: context.user.id });
-
-    // Ensure plugin system is initialized
-    if (!isPluginSystemInitialized() || !providerRegistry.isInitialized()) {
-      const initResult = await initializePlugins();
-      if (!initResult.success) {
-        logger.warn('[Providers v1] Plugin initialization failed');
-        return serverError('Plugin system not ready');
-      }
-    }
 
     // Lazy-load user's LLM provider plugins (not loaded at startup)
     try {

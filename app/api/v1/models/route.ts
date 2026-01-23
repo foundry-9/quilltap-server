@@ -15,10 +15,6 @@ import {
   badRequest,
   notFound,
 } from '@/lib/api/responses';
-import {
-  initializePlugins,
-  isPluginSystemInitialized,
-} from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { decryptApiKey } from '@/lib/encryption';
 import { createLLMProvider } from '@/lib/llm';
@@ -140,18 +136,6 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     // Validate API key requirements
     if (requiresApiKey(provider) && !decryptedKey) {
       return badRequest(`API key is required for ${provider} provider`);
-    }
-
-    // Ensure plugin system is initialized
-    if (!isPluginSystemInitialized() || !providerRegistry.isInitialized()) {
-      logger.warn('[Models v1] Plugin system not fully initialized, initializing now', {
-        provider,
-      });
-      const initResult = await initializePlugins();
-      if (!initResult.success) {
-        logger.error('[Models v1] Plugin initialization failed', { provider });
-        return serverError('Plugin system not ready');
-      }
     }
 
     // Create LLM provider instance

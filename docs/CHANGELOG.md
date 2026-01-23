@@ -4,6 +4,21 @@
 
 ### 2.7-dev
 
+- feat: Capabilities report now shows Image Prompt LLM override in Cost Configuration (2026-01-23)
+  - When a separate LLM is configured for image prompt expansion, it appears in the report
+  - Added `ImagePromptLLMInfo` interface and `collectImagePromptLLMInfo` function
+  - Updated report data structure and markdown generation
+- fix: All authenticated API routes now wait for server startup to complete (2026-01-23)
+  - Added `ensureServerReady()` to auth middleware (`lib/api/middleware/auth.ts`)
+  - All routes using `createAuthenticatedHandler` or `createAuthenticatedParamsHandler` now wait
+  - Prevents race conditions where API requests hit before plugins/providers are loaded
+  - Waits up to 30 seconds for startup, logs warning if timeout expires
+- refactor: Removed redundant plugin initialization checks from authenticated routes (2026-01-23)
+  - Cleaned up `/api/v1/models`, `/api/v1/providers`, `/api/v1/plugins`, `/api/v1/plugins/[name]`
+  - Cleaned up `/api/v1/connection-profiles`, `/api/v1/image-profiles`, `/api/v1/embedding-profiles`
+  - Cleaned up `/api/v1/api-keys/[id]`, `/api/v1/user/profile`
+  - These routes no longer need individual `isPluginSystemInitialized()` checks
+  - Note: `/api/v1/plugins` still reinitializes after install/uninstall (intentional)
 - fix: Cloud backups now appear in backup list after creation (2026-01-23)
   - `saveBackupToS3` was uploading files but not creating MongoDB metadata entries
   - Added file metadata creation after S3 upload so backups appear in listings

@@ -14,7 +14,6 @@ import { getUserRepositories } from '@/lib/repositories/factory';
 import { encryptApiKey, decryptApiKey, maskApiKey } from '@/lib/encryption';
 import { Provider } from '@/lib/schemas/types';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
-import { initializePlugins } from '@/lib/startup/plugin-initialization';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 
@@ -201,9 +200,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
     try {
       logger.debug('[API Keys v1] Testing key', { keyId: id, userId: user.id });
-
-      // Ensure plugin system is initialized
-      await initializePlugins();
 
       // Get the API key
       const apiKey = await repos.connections.findApiKeyByIdAndUserId(id, user.id);

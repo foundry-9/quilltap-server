@@ -9,10 +9,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession, type ExtendedSession } from '@/lib/auth/session';
 import { getRepositoriesSafe, type RepositoryContainer } from '@/lib/repositories/factory';
+import { startupState } from '@/lib/startup/startup-state';
 import { logger } from '@/lib/logger';
 import type { User } from '@/lib/schemas/types';
 
 const authLogger = logger.child({ module: 'api-auth-middleware' });
+
+/**
+ * Wait for server startup to complete before processing requests.
+ * This ensures plugins and providers are fully loaded.
+ */
+async function ensureServerReady(): Promise<void> {
+  if (!startupState.isReady()) {
+    authLogger.debug('Waiting for server startup to complete');
+    const isReady = await startupState.waitForReady(30000);
+    if (!isReady) {
+      authLogger.warn('Server startup not complete after 30s, proceeding anyway', {
+        currentPhase: startupState.getPhase(),
+      });
+    }
+  }
+}
 
 /**
  * Context provided to authenticated route handlers
@@ -80,6 +97,9 @@ export type AuthenticatedParamsHandler<P = Record<string, string>, T = NextRespo
 export async function withAuth<T>(
   handler: AuthenticatedHandler<T>
 ): Promise<T | NextResponse> {
+  // Ensure server is fully ready (plugins loaded, etc.)
+  await ensureServerReady();
+
   const session = await getServerSession();
 
   if (!session?.user?.id) {
@@ -125,6 +145,9 @@ export async function withAuthParams<P extends Record<string, string>, T>(
   params: P,
   handler: AuthenticatedParamsHandler<P, T>
 ): Promise<T | NextResponse> {
+  // Ensure server is fully ready (plugins loaded, etc.)
+  await ensureServerReady();
+
   const session = await getServerSession();
 
   if (!session?.user?.id) {
@@ -165,6 +188,9 @@ export function createAuthenticatedHandler(
   ) => Promise<NextResponse>
 ): (request: NextRequest) => Promise<NextResponse> {
   return async (request: NextRequest) => {
+    // Ensure server is fully ready (plugins loaded, etc.)
+    await ensureServerReady();
+
     const session = await getServerSession();
 
     if (!session?.user?.id) {
@@ -215,6 +241,9 @@ export function createAuthenticatedParamsHandler<P extends Record<string, string
   context: { params: Promise<P> }
 ) => Promise<NextResponse> {
   return async (request: NextRequest, context: { params: Promise<P> }) => {
+    // Ensure server is fully ready (plugins loaded, etc.)
+    await ensureServerReady();
+
     const params = await context.params;
     const session = await getServerSession();
 

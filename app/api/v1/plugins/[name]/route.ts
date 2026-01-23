@@ -10,7 +10,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { pluginRegistry } from '@/lib/plugins/registry';
-import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -34,11 +33,6 @@ async function handleGetConfig(req: NextRequest, context: any, name: string) {
 
   try {
     logger.debug('[Plugins v1] GET config', { pluginName: name, userId: user.id });
-
-    // Ensure plugins are initialized
-    if (!isPluginSystemInitialized()) {
-      await initializePlugins();
-    }
 
     if (!pluginRegistry.has(name)) {
       logger.warn('[Plugins v1] Plugin not found for config request', {
@@ -101,11 +95,6 @@ async function handleSetConfig(req: NextRequest, context: any, name: string) {
 
   try {
     logger.debug('[Plugins v1] POST set-config', { pluginName: name, userId: user.id });
-
-    // Ensure plugins are initialized
-    if (!isPluginSystemInitialized()) {
-      await initializePlugins();
-    }
 
     if (!pluginRegistry.has(name)) {
       logger.warn('[Plugins v1] Plugin not found for config update', {
@@ -261,12 +250,6 @@ export const GET = createAuthenticatedParamsHandler<{ name: string }>(
     try {
       logger.debug('[Plugins v1] GET plugin', { pluginName: name, userId: user.id });
 
-      // Ensure plugins are initialized
-      if (!isPluginSystemInitialized()) {
-        logger.info('[Plugins v1] Plugin system not initialized, initializing now');
-        await initializePlugins();
-      }
-
       const { searchParams } = new URL(req.url);
       const action = searchParams.get('action');
 
@@ -339,11 +322,6 @@ export const PUT = createAuthenticatedParamsHandler<{ name: string }>(
 
     try {
       logger.debug('[Plugins v1] PUT request to toggle plugin', { pluginName: name, userId: user.id });
-
-      // Ensure plugins are initialized
-      if (!isPluginSystemInitialized()) {
-        await initializePlugins();
-      }
 
       const body = await req.json().catch(() => ({}));
       const { enabled } = body;

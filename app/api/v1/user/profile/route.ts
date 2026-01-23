@@ -13,7 +13,6 @@ import { createAuthenticatedHandler, AuthenticatedContext } from '@/lib/api/midd
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { themeRegistry } from '@/lib/themes/theme-registry';
-import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
 import { ThemePreferenceSchema, type ThemePreference } from '@/lib/themes/types';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -165,11 +164,6 @@ export const PUT = createAuthenticatedHandler(async (req, context) => {
 
       // Validate activeThemeId if provided (and not null)
       if (validated.activeThemeId !== undefined && validated.activeThemeId !== null) {
-        // Ensure plugin/theme system is initialized
-        if (!isPluginSystemInitialized()) {
-          await initializePlugins();
-        }
-
         if (!themeRegistry.has(validated.activeThemeId)) {
           return badRequest(`Theme not found: ${validated.activeThemeId}`);
         }

@@ -92,6 +92,12 @@ export interface EmbeddingInfo {
   profileName?: string;
 }
 
+export interface ImagePromptLLMInfo {
+  provider?: string;
+  model?: string;
+  profileName?: string;
+}
+
 export interface ImageProviderInfo {
   provider: string;
   displayName: string;
@@ -116,6 +122,7 @@ export interface CapabilitiesReportData {
   providers: ProviderInfo[];
   modelsByProvider: ModelInfo[];
   cheapLLM: CheapLLMInfo;
+  imagePromptLLM: ImagePromptLLMInfo;
   embeddingProvider: EmbeddingInfo;
   imageProviders: ImageProviderInfo[];
   embeddingProviders: EmbeddingProviderInfo[];
@@ -411,6 +418,34 @@ async function collectCheapLLMInfo(userId: string): Promise<CheapLLMInfo> {
 }
 
 /**
+ * Get image prompt LLM configuration (separate override for image prompt expansion)
+ */
+async function collectImagePromptLLMInfo(userId: string): Promise<ImagePromptLLMInfo> {
+  moduleLogger.info('Collecting image prompt LLM configuration', { userId });
+
+  const globalRepos = getRepositories();
+  const repos = getUserRepositories(userId);
+
+  // Get the chat settings to check for imagePromptProfileId
+  const chatSettings = await globalRepos.chatSettings.findByUserId(userId);
+
+  const info: ImagePromptLLMInfo = {};
+
+  if (chatSettings?.cheapLLMSettings?.imagePromptProfileId) {
+    // Look up the connection profile for this ID
+    const profile = await repos.connections.findById(chatSettings.cheapLLMSettings.imagePromptProfileId);
+    if (profile) {
+      info.provider = profile.provider;
+      info.model = profile.modelName;
+      info.profileName = profile.name;
+    }
+  }
+
+  moduleLogger.info('Collected image prompt LLM configuration', { rawResult: info });
+  return info;
+}
+
+/**
  * Get embedding provider configuration
  */
 async function collectEmbeddingInfo(userId: string): Promise<EmbeddingInfo> {
@@ -645,6 +680,7 @@ export async function generateReportData(userId: string): Promise<CapabilitiesRe
     providers: await collectProviderInfo(userId),
     modelsByProvider: await collectModels(userId),
     cheapLLM: await collectCheapLLMInfo(userId),
+    imagePromptLLM: await collectImagePromptLLMInfo(userId),
     embeddingProvider: await collectEmbeddingInfo(userId),
     imageProviders: await collectImageProviders(),
     embeddingProviders: await collectEmbeddingProviders(),
@@ -770,6 +806,9 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
     lines.push(`- **Cheap LLM**: ${data.cheapLLM.provider} / ${data.cheapLLM.model} (${data.cheapLLM.profileName})`);
   } else {
     lines.push('- **Cheap LLM**: *Not configured*');
+  }
+  if (data.imagePromptLLM.provider) {
+    lines.push(`- **Image Prompt LLM**: ${data.imagePromptLLM.provider} / ${data.imagePromptLLM.model} (${data.imagePromptLLM.profileName})`);
   }
   if (data.embeddingProvider.provider) {
     lines.push(`- **Embedding Provider**: ${data.embeddingProvider.provider} / ${data.embeddingProvider.model} (${data.embeddingProvider.profileName})`);

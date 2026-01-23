@@ -13,8 +13,6 @@ import { getActionParam } from '@/lib/api/middleware/actions';
 import { decryptApiKey } from '@/lib/encryption';
 import { supportsImageGeneration } from '@/lib/llm/image-capable';
 import { createLLMProvider } from '@/lib/llm';
-import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
-import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { requiresBaseUrl, testProviderConnection, validateProviderConfig } from '@/lib/plugins/provider-validation';
 import { ProviderEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
@@ -187,26 +185,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
     if (!modelName || typeof modelName !== 'string' || modelName.trim().length === 0) {
       return badRequest('Model name is required');
-    }
-
-    // Ensure plugin system is initialized
-    const pluginSystemInitialized = isPluginSystemInitialized();
-
-    logger.debug('[Connection Profiles v1] Checking plugin system', {
-      provider,
-      pluginSystemInitialized,
-    });
-
-    if (!pluginSystemInitialized) {
-      logger.warn('[Connection Profiles v1] Plugin system not initialized, initializing now', { provider });
-      const initResult = await initializePlugins();
-      logger.info('[Connection Profiles v1] Plugin system initialization result', {
-        success: initResult.success,
-        stats: initResult.stats,
-      });
-      if (!initResult.success) {
-        return serverError('Plugin system initialization failed');
-      }
     }
 
     // Validate apiKeyId if provided
@@ -386,26 +364,6 @@ async function handleTestMessage(req: NextRequest, context: AuthenticatedContext
       }
 
       decryptedKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, user.id);
-    }
-
-    // Ensure plugin system is initialized
-    const pluginSystemInitialized = isPluginSystemInitialized();
-    const providerRegistryInitialized = providerRegistry.isInitialized();
-
-    logger.debug('[Connection Profiles v1] Checking plugin system for test-message', {
-      provider,
-      pluginSystemInitialized,
-      providerRegistryInitialized,
-    });
-
-    if (!pluginSystemInitialized || !providerRegistryInitialized) {
-      logger.warn('[Connection Profiles v1] Plugin system not fully initialized, initializing now', {
-        provider,
-      });
-      const initResult = await initializePlugins();
-      if (!initResult.success) {
-        return serverError('Plugin system initialization failed');
-      }
     }
 
     // Validate configuration

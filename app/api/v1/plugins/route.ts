@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { pluginRegistry } from '@/lib/plugins/registry';
-import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
+import { initializePlugins } from '@/lib/startup/plugin-initialization';
 import { installPluginFromNpm, uninstallPlugin, type PluginScope } from '@/lib/plugins/installer';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -282,14 +282,6 @@ async function handleUninstall(req: NextRequest, context: any) {
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
     logger.debug('[Plugins v1] GET list', { userId: user.id });
-
-    // Ensure plugins are initialized
-    if (!isPluginSystemInitialized()) {
-      logger.info('[Plugins v1] Plugin system not initialized, initializing now', {
-        userId: user.id,
-      });
-      await initializePlugins();
-    }
 
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get('filter');

@@ -12,8 +12,6 @@ import { getActionParam } from '@/lib/api/middleware/actions';
 import { successResponse, created, notFound, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import type { EmbeddingProfileProvider } from '@/lib/schemas/types';
-import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
-import { providerRegistry } from '@/lib/plugins/provider-registry';
 import {
   getEmbeddingProviders,
   getEmbeddingModels,
@@ -98,27 +96,6 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
   try {
     const { searchParams } = new URL(req.url);
     const provider = searchParams.get('provider')?.toUpperCase();
-
-    // Ensure plugin system is initialized
-    const pluginSystemInitialized = isPluginSystemInitialized();
-    const providerRegistryInitialized = providerRegistry.isInitialized();
-
-    logger.debug('[Embedding Profiles v1] Checking plugin system for list-models', {
-      pluginSystemInitialized,
-      providerRegistryInitialized,
-    });
-
-    if (!pluginSystemInitialized || !providerRegistryInitialized) {
-      logger.warn('[Embedding Profiles v1] Plugin system not fully initialized, initializing now');
-      const initResult = await initializePlugins();
-      logger.info('[Embedding Profiles v1] Plugin system initialization result', {
-        success: initResult.success,
-        stats: initResult.stats,
-      });
-      if (!initResult.success) {
-        return serverError('Plugin system initialization failed');
-      }
-    }
 
     if (provider) {
       const embeddingProviders = getEmbeddingProviders();

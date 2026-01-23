@@ -50,6 +50,15 @@ jest.mock('@/lib/auth/session', () => ({
   }),
 }))
 
+// Mock startup state to avoid waiting for server initialization in tests
+jest.mock('@/lib/startup/startup-state', () => ({
+  startupState: {
+    isReady: jest.fn().mockReturnValue(true),
+    waitForReady: jest.fn().mockResolvedValue(true),
+    getPhase: jest.fn().mockReturnValue('complete'),
+  },
+}))
+
 // Mock session provider for tests
 jest.mock('@/components/providers/session-provider', () => ({
   useSession: jest.fn(() => ({

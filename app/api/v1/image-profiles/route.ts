@@ -16,7 +16,6 @@ import { logger } from '@/lib/logger';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { decryptApiKey } from '@/lib/encryption';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
-import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 
 /**
  * GET /api/v1/image-profiles
@@ -144,30 +143,6 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
       return badRequest('Provider is required');
     }
 
-    // Ensure plugin system is initialized
-    const pluginSystemInitialized = isPluginSystemInitialized();
-    const providerRegistryInitialized = providerRegistry.isInitialized();
-    const providerCount = providerRegistry.getAllProviders().length;
-
-    logger.debug('[Image Profiles v1] Checking plugin system for list-models', {
-      pluginSystemInitialized,
-      providerRegistryInitialized,
-      providerCount,
-    });
-
-    // Re-initialize if providers are empty (module reload in dev mode)
-    if (!pluginSystemInitialized || !providerRegistryInitialized || providerCount === 0) {
-      logger.warn('[Image Profiles v1] Provider registry empty or not initialized, re-initializing');
-      const initResult = await initializePlugins();
-      logger.info('[Image Profiles v1] Plugin system initialization result', {
-        success: initResult.success,
-        stats: initResult.stats,
-      });
-      if (!initResult.success) {
-        return serverError('Plugin system initialization failed');
-      }
-    }
-
     // Validate provider by attempting to get it
     let imageProvider;
     try {
@@ -239,30 +214,6 @@ async function handleListProviders(req: NextRequest, context: AuthenticatedConte
   try {
     logger.debug('[Image Profiles v1] list-providers');
 
-    // Ensure plugin system is initialized
-    const pluginSystemInitialized = isPluginSystemInitialized();
-    const providerRegistryInitialized = providerRegistry.isInitialized();
-    const providerCount = providerRegistry.getAllProviders().length;
-
-    logger.debug('[Image Profiles v1] Checking plugin system for list-providers', {
-      pluginSystemInitialized,
-      providerRegistryInitialized,
-      providerCount,
-    });
-
-    // Re-initialize if providers are empty (module reload in dev mode)
-    if (!pluginSystemInitialized || !providerRegistryInitialized || providerCount === 0) {
-      logger.warn('[Image Profiles v1] Provider registry empty or not initialized, re-initializing');
-      const initResult = await initializePlugins();
-      logger.info('[Image Profiles v1] Plugin system initialization result', {
-        success: initResult.success,
-        stats: initResult.stats,
-      });
-      if (!initResult.success) {
-        return serverError('Plugin system initialization failed');
-      }
-    }
-
     // Get all providers with image generation capability
     const allProviders = providerRegistry.getAllProviders();
     const imageProviders = allProviders
@@ -328,16 +279,6 @@ async function handleValidateKey(req: NextRequest, context: AuthenticatedContext
 
     if (!apiKeyId) {
       return badRequest('API key ID is required');
-    }
-
-    // Ensure plugin system is initialized
-    const providerCount = providerRegistry.getAllProviders().length;
-    if (providerCount === 0) {
-      logger.warn('[Image Profiles v1] Provider registry empty, re-initializing');
-      const initResult = await initializePlugins();
-      if (!initResult.success) {
-        return serverError('Plugin system initialization failed');
-      }
     }
 
     // Get the API key
