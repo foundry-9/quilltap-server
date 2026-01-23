@@ -3,6 +3,9 @@ import fetchMock from 'jest-fetch-mock'
 
 fetchMock.enableMocks()
 
+// Polyfill setImmediate for Node.js APIs used in archiver
+global.setImmediate = global.setImmediate || ((fn: (...args: any[]) => void, ...args: any[]) => global.setTimeout(fn, 0, ...args))
+
 const shouldSilenceConsole = process.env.ENABLE_TEST_LOGS !== 'true'
 
 if (shouldSilenceConsole) {
@@ -166,18 +169,33 @@ if (!(globalThis as any).Cookies) {
 // Mock next/server Response
 jest.mock('next/server', () => {
   const actual = jest.requireActual('next/server')
-  const jsonMock = jest.fn((data: any, init?: any) => ({
-    status: init?.status || 200,
-    json: async () => data,
-    headers: new Map(),
-  }))
+  
+  class MockNextResponse {
+    status: number
+    statusText: string
+    body: any
+    headers: Headers
+
+    constructor(body?: any, init?: ResponseInit & { statusText?: string }) {
+      this.body = body
+      this.status = init?.status || 200
+      this.statusText = init?.statusText || ''
+      this.headers = init?.headers ? new Headers(init.headers) : new Headers()
+    }
+
+    async json() {
+      return this.body
+    }
+
+    static json = jest.fn((data: any, init?: ResponseInit) => {
+      const response = new MockNextResponse(data, init)
+      return response
+    })
+  }
 
   return {
     ...actual,
-    NextResponse: {
-      ...actual.NextResponse,
-      json: jsonMock,
-    },
+    NextResponse: MockNextResponse,
   }
 })
 
