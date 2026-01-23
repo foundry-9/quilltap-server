@@ -922,32 +922,36 @@
    * Success alert
    */
   .qt-alert-success {
-    @apply border-green-200 bg-green-50 text-green-800;
-    @apply dark:border-green-900/50 dark:bg-green-900/20 dark:text-green-200;
+    background-color: var(--qt-alert-success-bg);
+    color: var(--qt-alert-success-fg);
+    border-color: var(--qt-alert-success-border);
   }
 
   /**
    * Warning alert
    */
   .qt-alert-warning {
-    @apply border-amber-200 bg-amber-50 text-amber-800;
-    @apply dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200;
+    background-color: var(--qt-alert-warning-bg);
+    color: var(--qt-alert-warning-fg);
+    border-color: var(--qt-alert-warning-border);
   }
 
   /**
    * Error alert
    */
   .qt-alert-error {
-    @apply border-red-200 bg-red-50 text-red-800;
-    @apply dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-200;
+    background-color: var(--qt-alert-error-bg);
+    color: var(--qt-alert-error-fg);
+    border-color: var(--qt-alert-error-border);
   }
 
   /**
    * Info alert
    */
   .qt-alert-info {
-    @apply border-blue-200 bg-blue-50 text-blue-800;
-    @apply dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-200;
+    background-color: var(--qt-alert-info-bg);
+    color: var(--qt-alert-info-fg);
+    border-color: var(--qt-alert-info-border);
   }
 
   /* ==========================================================================
@@ -959,35 +963,40 @@
    * Character badge (blue)
    */
   .qt-badge-character {
-    @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
+    background-color: var(--qt-badge-character-bg);
+    color: var(--qt-badge-character-fg);
   }
 
   /**
    * Persona badge (purple)
    */
   .qt-badge-persona {
-    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+    background-color: var(--qt-badge-persona-bg);
+    color: var(--qt-badge-persona-fg);
   }
 
   /**
    * Chat badge (green)
    */
   .qt-badge-chat {
-    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+    background-color: var(--qt-badge-chat-bg);
+    color: var(--qt-badge-chat-fg);
   }
 
   /**
    * Tag badge (orange)
    */
   .qt-badge-tag {
-    @apply bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400;
+    background-color: var(--qt-badge-tag-bg);
+    color: var(--qt-badge-tag-fg);
   }
 
   /**
    * Memory badge (pink)
    */
   .qt-badge-memory {
-    @apply bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400;
+    background-color: var(--qt-badge-memory-bg);
+    color: var(--qt-badge-memory-fg);
   }
 
   /* ==========================================================================
@@ -999,21 +1008,24 @@
    * Characters badge (blue) - for dashboard character count
    */
   .qt-badge-characters {
-    @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
+    background-color: var(--qt-badge-character-bg);
+    color: var(--qt-badge-character-fg);
   }
 
   /**
    * Chats badge (green) - for dashboard chat count
    */
   .qt-badge-chats {
-    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+    background-color: var(--qt-badge-chat-bg);
+    color: var(--qt-badge-chat-fg);
   }
 
   /**
    * Personas badge (purple) - for dashboard persona count
    */
   .qt-badge-personas {
-    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+    background-color: var(--qt-badge-persona-bg);
+    color: var(--qt-badge-persona-fg);
   }
 
   /* ==========================================================================
@@ -1024,35 +1036,40 @@
    * Enabled status badge (green)
    */
   .qt-badge-enabled {
-    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+    background-color: var(--qt-badge-enabled-bg);
+    color: var(--qt-badge-enabled-fg);
   }
 
   /**
    * Disabled status badge (muted)
    */
   .qt-badge-disabled {
-    @apply bg-muted text-muted-foreground;
+    background-color: var(--qt-badge-disabled-bg);
+    color: var(--qt-badge-disabled-fg);
   }
 
   /**
    * Related badge (purple)
    */
   .qt-badge-related {
-    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+    background-color: var(--qt-badge-related-bg);
+    color: var(--qt-badge-related-fg);
   }
 
   /**
    * Manual badge (purple)
    */
   .qt-badge-manual {
-    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+    background-color: var(--qt-badge-manual-bg);
+    color: var(--qt-badge-manual-fg);
   }
 
   /**
    * Auto badge (muted)
    */
   .qt-badge-auto {
-    @apply bg-muted text-muted-foreground;
+    background-color: var(--qt-badge-auto-bg);
+    color: var(--qt-badge-auto-fg);
   }
 
   /* ==========================================================================
@@ -1063,28 +1080,32 @@
    * Included plugin source badge (purple)
    */
   .qt-badge-source-included {
-    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+    background-color: var(--qt-badge-source-included-bg);
+    color: var(--qt-badge-source-included-fg);
   }
 
   /**
    * NPM plugin source badge (red)
    */
   .qt-badge-source-npm {
-    @apply bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400;
+    background-color: var(--qt-badge-source-npm-bg);
+    color: var(--qt-badge-source-npm-fg);
   }
 
   /**
    * Git plugin source badge (orange)
    */
   .qt-badge-source-git {
-    @apply bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400;
+    background-color: var(--qt-badge-source-git-bg);
+    color: var(--qt-badge-source-git-fg);
   }
 
   /**
    * Manual plugin source badge (muted)
    */
   .qt-badge-source-manual {
-    @apply bg-muted text-muted-foreground;
+    background-color: var(--qt-badge-source-manual-bg);
+    color: var(--qt-badge-source-manual-fg);
   }
 
   /* ==========================================================================
@@ -1095,13 +1116,15 @@
    * Capability badge (blue)
    */
   .qt-badge-capability {
-    @apply bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400;
+    background-color: var(--qt-badge-capability-bg);
+    color: var(--qt-badge-capability-fg);
   }
 
   /**
    * Version badge (muted)
    */
   .qt-badge-version {
-    @apply bg-muted text-muted-foreground;
+    background-color: var(--qt-badge-disabled-bg);
+    color: var(--qt-badge-disabled-fg);
   }
 }

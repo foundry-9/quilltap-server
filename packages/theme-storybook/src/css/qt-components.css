@@ -42,6 +42,10 @@
   --qt-button-success-fg: hsl(0 0% 10%); /* Dark text for contrast on bright green */
   --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
 
+  --qt-button-warning-bg: var(--color-warning);
+  --qt-button-warning-fg: hsl(0 0% 10%); /* Dark text for contrast on amber */
+  --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, black);
+
   /* Card variables */
   --qt-card-radius: var(--radius-lg);
   --qt-card-padding: 1.5rem;
@@ -85,6 +89,61 @@
   --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 85%, transparent);
   --qt-status-danger-fg: var(--color-destructive-foreground);
   --qt-status-danger-border: var(--color-destructive);
+
+  /* Alert tokens - semi-transparent backgrounds with readable text */
+  --qt-alert-success-bg: hsl(142 76% 36% / 0.1);
+  --qt-alert-success-fg: hsl(142 76% 30%);
+  --qt-alert-success-border: hsl(142 76% 36% / 0.3);
+
+  --qt-alert-warning-bg: hsl(38 92% 50% / 0.1);
+  --qt-alert-warning-fg: hsl(38 92% 30%);
+  --qt-alert-warning-border: hsl(38 92% 50% / 0.3);
+
+  --qt-alert-error-bg: hsl(0 84% 60% / 0.1);
+  --qt-alert-error-fg: hsl(0 84% 35%);
+  --qt-alert-error-border: hsl(0 84% 60% / 0.3);
+
+  --qt-alert-info-bg: hsl(199 89% 48% / 0.1);
+  --qt-alert-info-fg: hsl(199 89% 30%);
+  --qt-alert-info-border: hsl(199 89% 48% / 0.3);
+
+  /* Entity-type badge colors */
+  --qt-badge-character-bg: hsl(217 91% 60% / 0.15);
+  --qt-badge-character-fg: hsl(217 91% 45%);
+  --qt-badge-persona-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-persona-fg: hsl(270 70% 45%);
+  --qt-badge-chat-bg: hsl(142 76% 36% / 0.15);
+  --qt-badge-chat-fg: hsl(142 76% 30%);
+  --qt-badge-tag-bg: hsl(25 95% 53% / 0.15);
+  --qt-badge-tag-fg: hsl(25 95% 40%);
+  --qt-badge-memory-bg: hsl(330 80% 60% / 0.15);
+  --qt-badge-memory-fg: hsl(330 80% 40%);
+
+  /* Status badge colors */
+  --qt-badge-enabled-bg: hsl(142 76% 36% / 0.15);
+  --qt-badge-enabled-fg: hsl(142 76% 30%);
+  --qt-badge-disabled-bg: var(--color-muted);
+  --qt-badge-disabled-fg: var(--color-muted-foreground);
+  --qt-badge-related-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-related-fg: hsl(270 70% 45%);
+  --qt-badge-manual-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-manual-fg: hsl(270 70% 45%);
+  --qt-badge-auto-bg: var(--color-muted);
+  --qt-badge-auto-fg: var(--color-muted-foreground);
+
+  /* Plugin source badge colors */
+  --qt-badge-source-included-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-source-included-fg: hsl(270 70% 45%);
+  --qt-badge-source-npm-bg: hsl(0 84% 60% / 0.15);
+  --qt-badge-source-npm-fg: hsl(0 84% 40%);
+  --qt-badge-source-git-bg: hsl(25 95% 53% / 0.15);
+  --qt-badge-source-git-fg: hsl(25 95% 40%);
+  --qt-badge-source-manual-bg: var(--color-muted);
+  --qt-badge-source-manual-fg: var(--color-muted-foreground);
+
+  /* Capability badge colors */
+  --qt-badge-capability-bg: hsl(217 91% 60% / 0.1);
+  --qt-badge-capability-fg: hsl(217 91% 45%);
 
   /* Avatar variables */
   --qt-avatar-radius: 9999px;
@@ -1145,4 +1204,59 @@
   50% {
     opacity: 0.5;
   }
+}
+
+/* ==========================================================================
+   DARK MODE OVERRIDES
+   Adjusted colors for dark backgrounds with better contrast
+   ========================================================================== */
+.dark {
+  /* Alert tokens - brighter, more saturated for dark backgrounds */
+  --qt-alert-success-bg: hsl(142 76% 36% / 0.2);
+  --qt-alert-success-fg: hsl(142 76% 65%);
+  --qt-alert-success-border: hsl(142 76% 36% / 0.5);
+
+  --qt-alert-warning-bg: hsl(38 92% 50% / 0.2);
+  --qt-alert-warning-fg: hsl(38 92% 70%);
+  --qt-alert-warning-border: hsl(38 92% 50% / 0.5);
+
+  --qt-alert-error-bg: hsl(0 84% 60% / 0.2);
+  --qt-alert-error-fg: hsl(0 84% 70%);
+  --qt-alert-error-border: hsl(0 84% 60% / 0.5);
+
+  --qt-alert-info-bg: hsl(199 89% 48% / 0.2);
+  --qt-alert-info-fg: hsl(199 89% 70%);
+  --qt-alert-info-border: hsl(199 89% 48% / 0.5);
+
+  /* Entity badge tokens - brighter for dark backgrounds */
+  --qt-badge-character-bg: hsl(217 91% 60% / 0.3);
+  --qt-badge-character-fg: hsl(217 91% 70%);
+  --qt-badge-persona-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-persona-fg: hsl(270 70% 70%);
+  --qt-badge-chat-bg: hsl(142 76% 36% / 0.3);
+  --qt-badge-chat-fg: hsl(142 76% 65%);
+  --qt-badge-tag-bg: hsl(25 95% 53% / 0.3);
+  --qt-badge-tag-fg: hsl(25 95% 65%);
+  --qt-badge-memory-bg: hsl(330 80% 60% / 0.3);
+  --qt-badge-memory-fg: hsl(330 80% 70%);
+
+  /* Status badge tokens */
+  --qt-badge-enabled-bg: hsl(142 76% 36% / 0.3);
+  --qt-badge-enabled-fg: hsl(142 76% 65%);
+  --qt-badge-related-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-related-fg: hsl(270 70% 70%);
+  --qt-badge-manual-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-manual-fg: hsl(270 70% 70%);
+
+  /* Plugin source badge tokens */
+  --qt-badge-source-included-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-source-included-fg: hsl(270 70% 70%);
+  --qt-badge-source-npm-bg: hsl(0 84% 60% / 0.3);
+  --qt-badge-source-npm-fg: hsl(0 84% 70%);
+  --qt-badge-source-git-bg: hsl(25 95% 53% / 0.3);
+  --qt-badge-source-git-fg: hsl(25 95% 65%);
+
+  /* Capability badge tokens */
+  --qt-badge-capability-bg: hsl(217 91% 60% / 0.2);
+  --qt-badge-capability-fg: hsl(217 91% 70%);
 }

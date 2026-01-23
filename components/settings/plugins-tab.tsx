@@ -61,37 +61,37 @@ const getSourceBadge = (source: PluginSource) => {
     case 'bundled':
       return {
         label: 'Bundled',
-        className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+        className: 'qt-badge-source-included',
       }
     case 'npm':
       return {
         label: 'NPM',
-        className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+        className: 'qt-badge-source-npm',
       }
     case 'site':
       return {
         label: 'Site',
-        className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+        className: 'qt-badge-source-npm', // Using npm style for site plugins
       }
     case 'user':
       return {
         label: 'Personal',
-        className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+        className: 'qt-badge-source-manual', // Using manual style for user plugins
       }
     case 'git':
       return {
         label: 'Git',
-        className: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+        className: 'qt-badge-source-git',
       }
     case 'manual':
       return {
         label: 'Manual',
-        className: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
+        className: 'qt-badge-source-manual',
       }
     default:
       return {
         label: 'Unknown',
-        className: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
+        className: 'qt-badge-source-manual',
       }
   }
 }

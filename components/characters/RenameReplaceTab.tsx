@@ -328,7 +328,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
 
       {/* Error Display */}
       {error && (
-        <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded-lg">
+        <div className="qt-alert-error px-4 py-3 rounded-lg border">
           {error}
         </div>
       )}
@@ -441,11 +441,11 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
       )}
 
       {/* Info Box */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <h4 className="qt-text-label text-blue-800 dark:text-blue-200 mb-2">
+      <div className="qt-alert-info border rounded-lg p-4">
+        <h4 className="qt-text-label mb-2">
           How this works
         </h4>
-        <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-disc list-inside">
+        <ul className="text-sm space-y-1 list-disc list-inside">
           <li>Enter a new name to rename the character across all associated data</li>
           <li>Add additional replacements for nicknames or aliases (e.g., &quot;Snips&quot; → &quot;Ace&quot;)</li>
           <li>Click &quot;Preview Changes&quot; to see what will be affected before making changes</li>

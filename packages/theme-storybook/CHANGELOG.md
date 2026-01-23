@@ -2,6 +2,17 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.13] - 2026-01-23
+
+### Added
+- Alert CSS variables: `--qt-alert-success-*`, `--qt-alert-warning-*`, `--qt-alert-error-*`, `--qt-alert-info-*` for fully themeable alerts
+- Entity badge CSS variables: `--qt-badge-character-*`, `--qt-badge-persona-*`, `--qt-badge-chat-*`, `--qt-badge-tag-*`, `--qt-badge-memory-*`
+- Status badge CSS variables: `--qt-badge-enabled-*`, `--qt-badge-disabled-*`, `--qt-badge-related-*`, `--qt-badge-manual-*`, `--qt-badge-auto-*`
+- Plugin source badge CSS variables: `--qt-badge-source-included-*`, `--qt-badge-source-npm-*`, `--qt-badge-source-git-*`, `--qt-badge-source-manual-*`
+- Capability badge CSS variables: `--qt-badge-capability-*`
+- Warning button CSS variables: `--qt-button-warning-*`
+- Dark mode overrides for all new badge and alert variables with improved contrast
+
 ## [1.0.12] - 2026-01-23
 
 ### Added

@@ -4,6 +4,45 @@
 
 ### 2.7-dev
 
+- refactor: Convert Tailwind color classes to qt-* semantic classes (2026-01-23)
+  - `RenameReplaceTab.tsx`: Converted error alert to `qt-alert-error`, info box to `qt-alert-info`
+  - `plugins-tab.tsx`: Converted plugin source badges to `qt-badge-source-*` classes
+  - These conversions leverage the CSS variables created earlier for consistent theming
+- refactor: Extract AI wizard to character-wizard.service.ts (2026-01-23)
+  - Created `lib/services/character-wizard.service.ts` with all wizard logic
+  - Reduced characters route from 821 lines to 428 lines (48% reduction)
+  - Service exports: `runCharacterWizard`, `buildContextPrompt`, `generateField`, `generateImageDescription`, `generatePhysicalDescriptions`
+  - Wizard is now testable in isolation and potentially reusable
+- refactor: Extract chats/[id] route into modular handlers and actions (2026-01-23)
+  - Reduced route.ts from 1,876 lines to 49 lines
+  - Created `handlers/` directory with GET, PUT, POST, DELETE, PATCH handlers
+  - Created `actions/` directory with specialized action modules:
+    - `tags.ts`: add-tag, remove-tag
+    - `title.ts`: regenerate-title
+    - `participants.ts`: impersonate, stop-impersonate, set-active-speaker, add/update/remove-participant
+    - `turn.ts`: nudge/queue/dequeue turn actions
+    - `avatars.ts`: get-avatars, set-avatar, remove-avatar
+    - `bulk.ts`: bulk-reattribute messages
+    - `tools.ts`: add-tool-result
+    - `memories.ts`: queue-memories
+  - Extracted `schemas.ts` with all 14 Zod validation schemas
+  - Extracted `helpers.ts` with shared enrichment and participant management functions
+  - Extracted `types.ts` with route-specific type definitions
+- feat: Implement background job handlers for inter-character memory, context summary, and title update (2026-01-23)
+  - `handleInterCharacterMemory`: Extracts memories that one character learns about another in conversations
+  - `handleContextSummary`: Updates running context summaries for chats using cheap LLM
+  - `handleTitleUpdate`: Evaluates and updates chat titles based on recent conversation content
+  - All handlers use the cheap LLM selection system for cost-effective background processing
+- refactor: Replace raw Tailwind colors with themeable qt-* CSS variables (2026-01-23)
+  - Added alert CSS variables: `--qt-alert-success-*`, `--qt-alert-warning-*`, `--qt-alert-error-*`, `--qt-alert-info-*`
+  - Added entity badge CSS variables: `--qt-badge-character-*`, `--qt-badge-persona-*`, `--qt-badge-chat-*`, `--qt-badge-tag-*`, `--qt-badge-memory-*`
+  - Added status badge CSS variables: `--qt-badge-enabled-*`, `--qt-badge-disabled-*`, `--qt-badge-related-*`, `--qt-badge-manual-*`, `--qt-badge-auto-*`
+  - Added plugin source badge CSS variables: `--qt-badge-source-included-*`, `--qt-badge-source-npm-*`, `--qt-badge-source-git-*`, `--qt-badge-source-manual-*`
+  - Added capability badge CSS variables: `--qt-badge-capability-*`
+  - Added warning button CSS variables: `--qt-button-warning-*`
+  - Updated all alert and badge classes in `_content.css` to use CSS variables instead of @apply with Tailwind colors
+  - Added dark mode overrides for all new variables with improved contrast
+  - Updated `@quilltap/theme-storybook` to v1.0.13 with matching variables
 - feat: Enhanced global search with improved UX and theming (2026-01-23)
   - Fixed search bar crash when API returned unexpected format (defensive coding for undefined results)
   - "See all results" now pre-populates the search dialog with the current query
