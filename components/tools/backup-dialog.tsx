@@ -192,7 +192,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                   type="text"
                   value={filename}
                   onChange={(e) => setFilename(e.target.value)}
-                  placeholder="backup-2025-12-07"
+                  placeholder={`backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`}
                   className="qt-input"
                 />
                 <p className="mt-1 qt-text-xs">

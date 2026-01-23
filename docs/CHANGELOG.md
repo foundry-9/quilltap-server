@@ -4,6 +4,12 @@
 
 ### 2.7-dev
 
+- fix: Cloud backups now appear in backup list after creation (2026-01-23)
+  - `saveBackupToS3` was uploading files but not creating MongoDB metadata entries
+  - Added file metadata creation after S3 upload so backups appear in listings
+  - Added new 'BACKUP' category to `FileCategoryEnum` for proper categorization
+  - Fixed fileId to use proper UUID format instead of timestamp-based string
+  - Updated backup dialog filename placeholder to show actual default filename format
 - feat: Add quick-hide filtering to Recent Chats on homepage (2026-01-23)
   - RecentChatsSection now uses `useQuickHide` to filter chats by character tags
   - Chats with hidden character tags are excluded from the homepage display

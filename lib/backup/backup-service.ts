@@ -6,6 +6,7 @@
  */
 
 import archiver from 'archiver';
+import { createHash, randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/mongodb/repositories';
@@ -299,20 +300,50 @@ export async function saveBackupToS3(
   customFilename?: string
 ): Promise<string> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const fileId = randomUUID();
   const filename = customFilename || `backup-${timestamp}.zip`;
 
   moduleLogger.debug('Saving backup to storage', { userId, filename, size: zipBuffer.length });
 
+  // Upload to S3 storage
   const result = await fileStorageManager.uploadFile({
     userId,
-    fileId: `backup-${timestamp}`,
+    fileId,
     filename,
     content: zipBuffer,
     contentType: 'application/zip',
     folderPath: '/backups',
   });
 
-  moduleLogger.info('Backup saved to storage', { userId, storageKey: result.storageKey, mountPointId: result.mountPointId });
+  // Calculate SHA256 hash
+  const sha256 = createHash('sha256').update(new Uint8Array(zipBuffer)).digest('hex');
+
+  // Create file metadata entry in MongoDB so backups appear in listings
+  // Note: userId is automatically added by the user-scoped repository
+  const repos = getUserRepositories(userId);
+  await repos.files.create(
+    {
+      originalFilename: filename,
+      mimeType: 'application/zip',
+      size: zipBuffer.length,
+      sha256,
+      source: 'GENERATED',
+      category: 'BACKUP',
+      storageKey: result.storageKey,
+      mountPointId: result.mountPointId,
+      folderPath: '/backups',
+      linkedTo: [],
+      tags: [],
+    },
+    { id: fileId }
+  );
+
+  moduleLogger.info('Backup saved to storage', {
+    userId,
+    fileId,
+    storageKey: result.storageKey,
+    mountPointId: result.mountPointId,
+  });
 
   return result.storageKey;
 }
@@ -326,12 +357,13 @@ export async function listS3Backups(userId: string): Promise<BackupInfo[]> {
   const repos = getUserRepositories(userId);
 
   try {
-    // Get all user files and filter for backups in the backups folder
+    // Get all user files and filter for backups by category or folder path
     const allFiles = await repos.files.findAll();
     const backupFiles = allFiles.filter(
       (file) =>
         file.storageKey &&
-        (file.folderPath === '/backups' ||
+        (file.category === 'BACKUP' ||
+        file.folderPath === '/backups' ||
         file.originalFilename?.endsWith('.zip'))
     );
 
