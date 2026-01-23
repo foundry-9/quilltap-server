@@ -101,17 +101,28 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
       user.id
     );
 
-    // TODO: Implement sync instance creation in database
-    // For now, just return a mock response
-    const instance = {
-      id: 'mock-id',
+    // Check if instance already exists for this user and URL
+    const existingInstance = await repos.syncInstances?.findByUserAndUrl(
+      user.id,
+      validatedData.url
+    );
+
+    if (existingInstance) {
+      return badRequest('A sync instance with this URL already exists');
+    }
+
+    // Create the sync instance in the database
+    const instance = await repos.syncInstances?.create({
       userId: user.id,
       name: validatedData.name,
       url: validatedData.url,
+      apiKey: {
+        ciphertext: encrypted,
+        iv,
+        authTag,
+      },
       isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    });
 
     if (!instance) {
       return serverError('Failed to create sync instance');

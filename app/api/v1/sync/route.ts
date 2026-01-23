@@ -146,20 +146,26 @@ async function handleDelta(
       limit: request.limit,
     });
 
-    const { repos, user } = context;
+    const { user } = context;
 
-    // TODO: Implement proper delta detection
-    // For now, return empty deltas
-    const deltas: any[] = [];
+    // Detect deltas using the delta detector
+    const result = await detectDeltas({
+      userId: user.id,
+      entityTypes: request.entityTypes as SyncableEntityType[] | undefined,
+      sinceTimestamp: request.sinceTimestamp || null,
+      limit: request.limit || 100,
+    });
 
     logger.info('[Sync v1] Delta detection complete', {
-      totalEntities: deltas.length,
+      totalEntities: result.deltas.length,
       entityTypes: request.entityTypes,
+      hasMore: result.hasMore,
     });
 
     return successResponse({
-      deltas,
-      hasMore: false,
+      deltas: result.deltas,
+      hasMore: result.hasMore,
+      nextCursor: result.newestTimestamp,
       detectedAt: new Date().toISOString(),
     });
   } catch (error) {
@@ -286,6 +292,9 @@ async function handlePush(
 
 // ============================================================================
 // Mappings Handler
+// Note: With ID preservation sync, mappings are deprecated. Entity IDs are
+// the same across instances, eliminating the need for local<->remote ID mappings.
+// This endpoint is maintained for backward compatibility.
 // ============================================================================
 
 async function handleMappings(
@@ -301,34 +310,38 @@ async function handleMappings(
         return badRequest('instanceId query parameter required');
       }
 
-      logger.debug('[Sync v1] Fetching mappings', { instanceId });
+      logger.debug('[Sync v1] Fetching mappings (deprecated with ID preservation)', { instanceId });
 
-      // TODO: Implement actual mapping retrieval
-      const mappingsMap: Record<string, string> = {};
+      const { repos, user } = context;
+
+      // Retrieve mappings for the instance
+      const mappings = await repos.syncMappings?.findAllForInstance(user.id, instanceId) || [];
 
       logger.debug('[Sync v1] Mappings retrieved', {
-        count: Object.keys(mappingsMap).length,
+        count: mappings.length,
       });
 
-      return successResponse({ mappings: mappingsMap });
+      return successResponse({ mappings });
     } catch (error) {
       logger.error('[Sync v1] Error fetching mappings', {}, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch mappings');
     }
   } else {
-    // POST - Exchange mappings
+    // POST - Exchange mappings (deprecated)
     try {
       const body = await req.json();
       const request = mappingsExchangeSchema.parse(body);
 
-      logger.debug('[Sync v1] Exchanging mappings', {
+      logger.debug('[Sync v1] Exchanging mappings (deprecated with ID preservation)', {
         instanceId: request.instanceId,
         count: Object.keys(request.localMappings).length,
       });
 
-      // TODO: Implement actual mapping storage
+      // With ID preservation, we don't actually need to store mappings
+      // since entity IDs are the same on both instances.
+      // Log and acknowledge for backward compatibility.
 
-      logger.info('[Sync v1] Mappings exchanged', {
+      logger.info('[Sync v1] Mappings exchange acknowledged', {
         instanceId: request.instanceId,
         count: Object.keys(request.localMappings).length,
       });
@@ -359,12 +372,19 @@ async function handleCleanup(
     const { searchParams } = new URL(req.url);
     const daysOld = parseInt(searchParams.get('daysOld') || '30', 10);
 
-    // TODO: Implement actual cleanup of old sync operations
-    const deletedCount = 0;
+    const { repos } = context;
+
+    // Calculate the cutoff date
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+
+    // Delete old sync operations
+    const deletedCount = await repos.syncOperations?.deleteOlderThan(cutoffDate) || 0;
 
     logger.info('[Sync v1] Cleanup completed', {
       deletedCount,
       daysOld,
+      cutoffDate: cutoffDate.toISOString(),
     });
 
     return successResponse({

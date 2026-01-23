@@ -244,10 +244,13 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       // Delete instance
       await repos.syncInstances?.delete(id);
 
-      // TODO: Clean up associated mappings when method signature is correct
-      // await repos.syncMappings?.deleteByInstanceId(id);
+      // Clean up associated mappings
+      const mappingsDeleted = await repos.syncMappings?.deleteByInstanceId(id) || 0;
 
-      logger.info('[Sync Instance v1] Instance deleted', { instanceId: id });
+      logger.info('[Sync Instance v1] Instance deleted', {
+        instanceId: id,
+        mappingsDeleted,
+      });
 
       return messageResponse('Sync instance deleted successfully');
     } catch (error) {

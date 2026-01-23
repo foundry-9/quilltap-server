@@ -43,20 +43,27 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
       hasStreaming: hasStreamingFilter,
     });
 
-    // Ensure plugin system is initialized
-    if (!isPluginSystemInitialized() || !providerRegistry.isInitialized()) {
-      const initResult = await initializePlugins();
-      if (!initResult.success) {
-        logger.warn('[Models v1] Plugin initialization failed');
-        return serverError('Plugin system not ready');
-      }
+    const { repos } = context;
+
+    // Get cached models from the database
+    let allModels = providerFilter
+      ? await repos.providerModels.findByProvider(providerFilter)
+      : await repos.providerModels.findAll();
+
+    // Apply filters
+    if (hasVisionFilter === 'true') {
+      // Filter to models that support vision (if we have that metadata)
+      // For now, this is a placeholder as vision support isn't tracked in the cache
+      logger.debug('[Models v1] Vision filter requested but not yet tracked in cache');
     }
 
-    // For now, return empty models list
-    // TODO: Models will be retrieved from provider plugins once that capability is added
-    const allModels: any[] = [];
+    if (hasStreamingFilter === 'true') {
+      // Filter to models that support streaming (if we have that metadata)
+      // For now, this is a placeholder as streaming support isn't tracked in the cache
+      logger.debug('[Models v1] Streaming filter requested but not yet tracked in cache');
+    }
 
-    logger.info('[Models v1] Listed models', {
+    logger.info('[Models v1] Listed cached models', {
       count: allModels.length,
       provider: providerFilter,
     });
@@ -69,6 +76,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
         hasVision: hasVisionFilter === 'true' ? true : false,
         hasStreaming: hasStreamingFilter === 'true' ? true : false,
       },
+      cached: true,
     });
   } catch (error) {
     logger.error(

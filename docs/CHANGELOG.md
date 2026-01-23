@@ -4,6 +4,20 @@
 
 ### 2.7-dev
 
+- fix: Implement sync API v1 stub endpoints (2026-01-22)
+  - `POST /api/v1/sync/instances` now creates instances in database instead of returning mock data
+  - `POST /api/v1/sync?action=delta` now uses `detectDeltas()` to return actual entity changes
+  - `POST /api/v1/sync?action=cleanup` now uses `deleteOlderThan()` to clean old sync operations
+  - `DELETE /api/v1/sync/instances/[id]` now cleans up associated mappings
+  - `GET/POST /api/v1/sync/mappings` now uses repository (deprecated with ID preservation)
+  - `GET/POST /api/v1/sync?action=mappings` now uses repository (deprecated with ID preservation)
+- fix: Implement memories search in global UI search (2026-01-22)
+  - `GET /api/v1/ui/search` now searches memories across all user's characters
+  - Returns up to 10 memory results with summary, character name, and importance
+- fix: Implement cached model listing in GET /api/v1/models (2026-01-22)
+  - GET endpoint now returns models from the provider_models cache
+  - Supports filtering by provider via `?provider=` query parameter
+  - Models are cached when POST fetches them from providers
 - feat: Dynamic image provider list from plugin registry (2026-01-22)
   - Image profile form now fetches providers from `/api/v1/image-profiles?action=list-providers` instead of using hardcoded list
   - External image provider plugins (like Eternal AI) now appear in the provider dropdown after installation

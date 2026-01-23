@@ -70,9 +70,23 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
         title: c.title,
       }));
 
-    // TODO: Implement memories search when memories are available
-    // For now, skip memories
-    results.memories = [];
+    // Search memories across all user's characters
+    const memoryResults: any[] = [];
+    for (const character of characters) {
+      const characterMemories = await repos.memories.searchByContent(character.id, query);
+      for (const memory of characterMemories.slice(0, 5)) {
+        memoryResults.push({
+          id: memory.id,
+          type: 'memory',
+          summary: memory.summary,
+          characterId: memory.characterId,
+          characterName: character.name,
+          importance: memory.importance,
+        });
+      }
+      if (memoryResults.length >= 10) break;
+    }
+    results.memories = memoryResults.slice(0, 10);
 
     // Search tags
     const tags = await repos.tags.findByUserId(user.id);

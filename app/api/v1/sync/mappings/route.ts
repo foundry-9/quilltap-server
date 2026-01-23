@@ -3,6 +3,10 @@
  *
  * GET /api/v1/sync/mappings - List all sync mappings
  * POST /api/v1/sync/mappings - Create/update mappings
+ *
+ * Note: With ID preservation sync, mappings are largely deprecated.
+ * Entity IDs are the same across instances, so mappings aren't needed.
+ * This endpoint is maintained for backward compatibility.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,6 +19,7 @@ import {
   validationError,
   successResponse,
 } from '@/lib/api/responses';
+import { SyncableEntityTypeEnum, SyncableEntityType } from '@/lib/sync/types';
 
 // ============================================================================
 // Schemas
@@ -22,14 +27,7 @@ import {
 
 const createMappingSchema = z.object({
   instanceId: z.string().uuid(),
-  entityType: z.enum([
-    'CHARACTER',
-    'CHAT',
-    'MEMORY',
-    'TAG',
-    'ROLEPLAY_TEMPLATE',
-    'PROMPT_TEMPLATE',
-  ]),
+  entityType: SyncableEntityTypeEnum,
   localId: z.string().uuid(),
   remoteId: z.string().uuid(),
 });
@@ -46,11 +44,39 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
 
     const { searchParams } = new URL(req.url);
     const instanceId = searchParams.get('instanceId');
-    const entityType = searchParams.get('entityType');
+    const entityType = searchParams.get('entityType') as SyncableEntityType | null;
     const localId = searchParams.get('localId');
 
-    // TODO: Implement actual mapping retrieval
+    const { repos, user } = context;
+
     let mappings: any[] = [];
+
+    if (instanceId && entityType && localId) {
+      // Get specific mapping by local ID
+      const mapping = await repos.syncMappings?.findByLocalId(
+        user.id,
+        instanceId,
+        entityType,
+        localId
+      );
+      if (mapping) {
+        mappings = [mapping];
+      }
+    } else if (instanceId && entityType) {
+      // Get mappings by entity type for an instance
+      mappings = await repos.syncMappings?.findByEntityType(
+        user.id,
+        instanceId,
+        entityType
+      ) || [];
+    } else if (instanceId) {
+      // Get all mappings for an instance
+      mappings = await repos.syncMappings?.findAllForInstance(user.id, instanceId) || [];
+    } else {
+      // No filters provided - return empty (too broad a query)
+      logger.warn('[Sync Mappings v1] GET called without instanceId filter');
+      return badRequest('instanceId query parameter is required');
+    }
 
     logger.info('[Sync Mappings v1] Listed mappings', {
       count: mappings.length,
@@ -80,17 +106,19 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
     const body = await req.json();
 
     // Check if it's a single mapping or batch
-    let mappings: z.infer<typeof createMappingSchema>[];
+    let mappingsData: z.infer<typeof createMappingSchema>[];
 
     if (Array.isArray(body)) {
-      mappings = batchCreateSchema.parse(body);
+      mappingsData = batchCreateSchema.parse(body);
     } else {
-      mappings = [createMappingSchema.parse(body)];
+      mappingsData = [createMappingSchema.parse(body)];
     }
 
     logger.info('[Sync Mappings v1] Creating mappings', {
-      count: mappings.length,
+      count: mappingsData.length,
     });
+
+    const { repos, user } = context;
 
     const results = {
       created: 0,
@@ -98,14 +126,48 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
       errors: [] as string[],
     };
 
-    // TODO: Implement actual mapping storage
-    results.created = mappings.length;
+    for (const mappingData of mappingsData) {
+      try {
+        // Check if mapping already exists
+        const existingMapping = await repos.syncMappings?.findByLocalId(
+          user.id,
+          mappingData.instanceId,
+          mappingData.entityType,
+          mappingData.localId
+        );
 
-    for (const mapping of mappings) {
-      logger.debug('[Sync Mappings v1] Mapping processed', {
-        localId: mapping.localId,
-        remoteId: mapping.remoteId,
-      });
+        if (existingMapping) {
+          // Update existing mapping if remoteId changed
+          if (existingMapping.remoteId !== mappingData.remoteId) {
+            await repos.syncMappings?.update(existingMapping.id, {
+              remoteId: mappingData.remoteId,
+            });
+            results.updated++;
+          }
+        } else {
+          // Create new mapping
+          await repos.syncMappings?.create({
+            userId: user.id,
+            instanceId: mappingData.instanceId,
+            entityType: mappingData.entityType,
+            localId: mappingData.localId,
+            remoteId: mappingData.remoteId,
+            lastSyncedAt: new Date().toISOString(),
+            lastLocalUpdatedAt: new Date().toISOString(),
+            lastRemoteUpdatedAt: new Date().toISOString(),
+          });
+          results.created++;
+        }
+
+        logger.debug('[Sync Mappings v1] Mapping processed', {
+          localId: mappingData.localId,
+          remoteId: mappingData.remoteId,
+        });
+      } catch (error) {
+        const errorMsg = `Failed to process mapping ${mappingData.localId} -> ${mappingData.remoteId}: ${error instanceof Error ? error.message : String(error)}`;
+        results.errors.push(errorMsg);
+        logger.warn('[Sync Mappings v1] Mapping error', { error: errorMsg });
+      }
     }
 
     logger.info('[Sync Mappings v1] Mappings created/updated', {
@@ -115,7 +177,7 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
     });
 
     return successResponse({
-      success: true,
+      success: results.errors.length === 0,
       ...results,
     });
   } catch (error) {
