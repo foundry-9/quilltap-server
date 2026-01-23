@@ -25,9 +25,14 @@ import { logger } from '@/lib/logger';
 import {
   badRequest,
   serverError,
+  serviceUnavailable,
   validationError,
   successResponse,
 } from '@/lib/api/responses';
+import {
+  initializePlugins,
+  isPluginSystemInitialized,
+} from '@/lib/startup/plugin-initialization';
 import type { SyncableEntityType } from '@/lib/sync/types';
 import { SyncDeltaRequestSchema, SyncEntityDeltaSchema, SyncableEntityTypeEnum } from '@/lib/sync/types';
 
@@ -402,6 +407,21 @@ async function handleCleanup(
 // ============================================================================
 
 export const POST = createSyncAuthenticatedHandler(async (req, context) => {
+  // Ensure plugin system is initialized before processing sync requests
+  // This is critical for FILE entity syncing which requires the S3 storage backend plugin
+  const pluginSystemInitialized = isPluginSystemInitialized();
+  if (!pluginSystemInitialized) {
+    logger.warn('[Sync v1] Plugin system not initialized, initializing now');
+    const initResult = await initializePlugins();
+    logger.info('[Sync v1] Plugin system initialization result', {
+      success: initResult.success,
+      stats: initResult.stats,
+    });
+    if (!initResult.success) {
+      return serviceUnavailable('Server is still initializing. Please retry in a moment.');
+    }
+  }
+
   const action = getActionParam(req);
 
   switch (action) {
@@ -423,6 +443,16 @@ export const POST = createSyncAuthenticatedHandler(async (req, context) => {
 });
 
 export const GET = createSyncAuthenticatedHandler(async (req, context) => {
+  // Ensure plugin system is initialized before processing sync requests
+  const pluginSystemInitialized = isPluginSystemInitialized();
+  if (!pluginSystemInitialized) {
+    logger.warn('[Sync v1] Plugin system not initialized, initializing now');
+    const initResult = await initializePlugins();
+    if (!initResult.success) {
+      return serviceUnavailable('Server is still initializing. Please retry in a moment.');
+    }
+  }
+
   const action = getActionParam(req);
 
   if (action === 'mappings') {

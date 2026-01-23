@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- fix: Add plugin initialization guard to sync API (2026-01-23)
+  - Sync API now checks `isPluginSystemInitialized()` before processing requests
+  - Returns 503 Service Unavailable if plugins aren't ready (e.g., during container startup)
+  - Fixes "Provider plugin for backend type 's3' not registered" errors during sync
+  - Added `serviceUnavailable()` helper to API responses module
 - fix: Fix image tagging in character photo gallery (2026-01-23)
   - `useGalleryData` was calling non-existent `/api/v1/images/[id]/tags` endpoints
   - Updated to use correct action dispatch: `?action=add-tag` and `?action=remove-tag`

@@ -201,6 +201,18 @@ export function serverError(
 }
 
 /**
+ * Create a service unavailable response (503)
+ *
+ * @param message - Optional custom message (default: 'Service unavailable')
+ * @returns NextResponse with 503 status
+ */
+export function serviceUnavailable(
+  message: string = 'Service unavailable'
+): NextResponse<ErrorResponse> {
+  return errorResponse(message, 503);
+}
+
+/**
  * Create a created response (201)
  *
  * @param data - The created resource data
