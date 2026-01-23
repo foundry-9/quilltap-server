@@ -171,16 +171,6 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
     // Validate provider by attempting to get it
     let imageProvider;
     try {
-      // Log all available providers for debugging
-      const allProviders = providerRegistry.getAllProviders();
-      const imageProviders = allProviders.filter(p => p.capabilities.imageGeneration);
-      logger.debug('[Image Profiles v1] Available image providers', {
-        allProvidersCount: allProviders.length,
-        allProviders: allProviders.map(p => p.metadata.providerName),
-        imageProvidersCount: imageProviders.length,
-        imageProviders: imageProviders.map(p => p.metadata.providerName),
-      });
-      
       imageProvider = createImageProvider(provider);
     } catch (error) {
       logger.error('[Image Profiles v1] Provider not available', { provider, error: error instanceof Error ? error.message : String(error) });
