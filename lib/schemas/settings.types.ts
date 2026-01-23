@@ -57,6 +57,8 @@ export const CheapLLMSettingsSchema = z.object({
   embeddingProvider: EmbeddingProviderEnum.default('OPENAI'),
   /** Embedding profile ID to use for text embeddings */
   embeddingProfileId: UUIDSchema.nullable().optional(),
+  /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
+  imagePromptProfileId: UUIDSchema.nullable().optional(),
 });
 
 export type CheapLLMSettings = z.infer<typeof CheapLLMSettingsSchema>;

@@ -4,6 +4,17 @@
 
 ### 2.7-dev
 
+- fix: Fix image tagging in character photo gallery (2026-01-23)
+  - `useGalleryData` was calling non-existent `/api/v1/images/[id]/tags` endpoints
+  - Updated to use correct action dispatch: `?action=add-tag` and `?action=remove-tag`
+  - Improved error handling to show actual API error messages
+- feat: Optional Image Prompt LLM Override in Cheap LLM Settings (2026-01-23)
+  - New `imagePromptProfileId` field in `CheapLLMSettings` type
+  - Settings UI: "Image Prompt Expansion LLM" dropdown in Chat Settings > Cheap LLM Settings
+  - When set, uses designated profile for image prompt crafting instead of global cheap LLM
+  - Allows using a more capable model for better image generation prompts
+  - Falls back to global cheap LLM when not set or if configured profile is not found
+  - Debug logging shows which LLM is being used for prompt expansion
 - feat: Homepage redesign with 3-column responsive layout (2026-01-23)
   - New `components/homepage/` module with modular components
   - WelcomeSection: Personalized greeting with user's name

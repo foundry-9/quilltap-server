@@ -17,7 +17,8 @@ import {
 } from '@/lib/tools/image-generation-tool';
 import { preparePromptExpansion } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt } from '@/lib/memory/cheap-llm-tasks';
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm';
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { getErrorMessage } from '@/lib/errors';
@@ -350,7 +351,8 @@ async function expandPromptWithDescriptions(
   userId: string,
   provider: string,
   chatId?: string,
-  callingParticipantId?: string
+  callingParticipantId?: string,
+  cheapLLMSettings?: CheapLLMSettings
 ): Promise<{ expandedPrompt: string; wasExpanded: boolean }> {
   try {
     // Map ImageProvider string to the enum type
@@ -376,26 +378,72 @@ async function expandPromptWithDescriptions(
     // Get cheap LLM selection
     const repos = getRepositories();
     const allProfiles = await repos.connections.findByUserId(userId);
-    const cheapLLMConfig = DEFAULT_CHEAP_LLM_CONFIG;
 
-    // For now, use a simple default profile selection
-    // In production, you might want to pass the current connection profile
-    const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-
-    if (!defaultProfile) {
-      // No profiles available, return original prompt
-      return {
-        expandedPrompt: originalPrompt,
-        wasExpanded: false,
-      };
+    // Check if user has a specific image prompt profile override
+    let cheapLLMSelection: CheapLLMSelection | null = null;
+    if (cheapLLMSettings?.imagePromptProfileId) {
+      const imagePromptProfile = allProfiles.find(p => p.id === cheapLLMSettings.imagePromptProfileId);
+      if (imagePromptProfile) {
+        logger.debug('[Image Generation] Using dedicated image prompt LLM override', {
+          context: 'llm-api',
+          profileId: imagePromptProfile.id,
+          profileName: imagePromptProfile.name,
+          provider: imagePromptProfile.provider,
+          model: imagePromptProfile.modelName,
+        });
+        // Create a direct selection from the override profile
+        const isLocal = imagePromptProfile.provider === 'OLLAMA';
+        cheapLLMSelection = {
+          provider: imagePromptProfile.provider,
+          modelName: imagePromptProfile.modelName,
+          connectionProfileId: imagePromptProfile.id,
+          baseUrl: isLocal ? (imagePromptProfile.baseUrl || 'http://localhost:11434') : undefined,
+          isLocal,
+        };
+      } else {
+        logger.warn('[Image Generation] Image prompt profile not found, falling back to global cheap LLM', {
+          context: 'llm-api',
+          configuredProfileId: cheapLLMSettings.imagePromptProfileId,
+        });
+      }
     }
 
-    const cheapLLMSelection = getCheapLLMProvider(
-      defaultProfile,
-      cheapLLMConfig,
-      allProfiles,
-      false // ollamaAvailable - could be detected
-    );
+    // If no override selection, use the standard cheap LLM logic
+    if (!cheapLLMSelection) {
+      // Build config from user settings if provided, otherwise use defaults
+      const cheapLLMConfig: CheapLLMConfig = cheapLLMSettings ? {
+        strategy: cheapLLMSettings.strategy,
+        userDefinedProfileId: cheapLLMSettings.userDefinedProfileId ?? undefined,
+        defaultCheapProfileId: cheapLLMSettings.defaultCheapProfileId ?? undefined,
+        fallbackToLocal: cheapLLMSettings.fallbackToLocal,
+      } : DEFAULT_CHEAP_LLM_CONFIG;
+
+      // For now, use a simple default profile selection
+      // In production, you might want to pass the current connection profile
+      const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
+
+      if (!defaultProfile) {
+        // No profiles available, return original prompt
+        return {
+          expandedPrompt: originalPrompt,
+          wasExpanded: false,
+        };
+      }
+
+      cheapLLMSelection = getCheapLLMProvider(
+        defaultProfile,
+        cheapLLMConfig,
+        allProfiles,
+        false // ollamaAvailable - could be detected
+      );
+
+      logger.debug('[Image Generation] Using global cheap LLM for prompt expansion', {
+        context: 'llm-api',
+        provider: cheapLLMSelection.provider,
+        model: cheapLLMSelection.modelName,
+        isLocal: cheapLLMSelection.isLocal,
+      });
+    }
 
     // Craft the image prompt using cheap LLM
     logger.debug('[Image Generation] Cheap LLM Input for prompt expansion', {
@@ -498,7 +546,23 @@ export async function executeImageGenerationTool(
       };
     }
 
-    // 4. Expand prompt with character/persona descriptions if needed
+    // 4. Fetch user's chat settings for cheap LLM configuration
+    const repos = getRepositories();
+    let chatSettings;
+    try {
+      chatSettings = await repos.chatSettings.findByUserId(context.userId);
+      logger.debug('[Image Generation] Loaded chat settings for prompt expansion', {
+        context: 'llm-api',
+        hasChatSettings: !!chatSettings,
+        hasImagePromptOverride: !!chatSettings?.cheapLLMSettings?.imagePromptProfileId,
+      });
+    } catch (error) {
+      logger.warn('[Image Generation] Failed to load chat settings, using defaults', {
+        errorMessage: getErrorMessage(error),
+      });
+    }
+
+    // 5. Expand prompt with character/persona descriptions if needed
     let expandedPrompt = toolInput.prompt;
     try {
       const expandResult = await expandPromptWithDescriptions(
@@ -506,7 +570,8 @@ export async function executeImageGenerationTool(
         context.userId,
         imageProfile.provider,
         context.chatId,
-        context.callingParticipantId
+        context.callingParticipantId,
+        chatSettings?.cheapLLMSettings
       );
       expandedPrompt = expandResult.expandedPrompt;
     } catch (error) {

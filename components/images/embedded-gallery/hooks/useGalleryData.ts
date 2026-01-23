@@ -51,21 +51,29 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
 
     try {
       if (isTagged && existingTag) {
-        // Remove the existing tag (use its actual tagType for the API call)
-        const res = await fetch(`/api/v1/images/${image.id}/tags?tagType=${existingTag.tagType}&tagId=${entityId}`, {
-          method: 'DELETE',
+        // Remove the existing tag using action dispatch
+        const res = await fetch(`/api/v1/images/${image.id}?action=remove-tag`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tagId: entityId }),
         })
-        if (!res.ok) throw new Error('Failed to remove tag')
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || 'Failed to remove tag')
+        }
         showSuccessToast(`Removed from ${entityName}`)
       } else {
         // Add new tag - always use CHARACTER for new tags
         const tagType = 'CHARACTER'
-        const res = await fetch(`/api/v1/images/${image.id}/tags`, {
+        const res = await fetch(`/api/v1/images/${image.id}?action=add-tag`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tagType, tagId: entityId }),
         })
-        if (!res.ok) throw new Error('Failed to add tag')
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || 'Failed to add tag')
+        }
         showSuccessToast(`Tagged to ${entityName}`)
       }
 

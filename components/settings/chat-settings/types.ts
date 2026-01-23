@@ -29,6 +29,8 @@ export interface CheapLLMSettings {
   fallbackToLocal: boolean
   embeddingProvider: EmbeddingProvider
   embeddingProfileId?: string | null
+  /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
+  imagePromptProfileId?: string | null
 }
 
 export interface TimestampConfig {
