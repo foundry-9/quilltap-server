@@ -113,6 +113,7 @@ export default async function Home() {
           filepath: p.character.defaultImage.filepath,
           url: p.character.defaultImage.url || undefined,
         } : null,
+        tags: p.character.tags || [],
       } : null,
       persona: null, // Personas are now handled as user-controlled characters
     })),

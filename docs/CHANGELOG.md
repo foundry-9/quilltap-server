@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- feat: Add quick-hide filtering to Recent Chats on homepage (2026-01-23)
+  - RecentChatsSection now uses `useQuickHide` to filter chats by character tags
+  - Chats with hidden character tags are excluded from the homepage display
+  - Added character tags to `RecentChat` type and homepage data flow
+  - Added unit tests for quick-hide filtering behavior
 - docs: Major README overhaul and roadmap extraction (2026-01-23)
   - Repositioned Quilltap as a general-purpose AI chat platform (not just roleplay)
   - Streamlined feature descriptions with better organization

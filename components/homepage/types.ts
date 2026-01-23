@@ -26,6 +26,7 @@ export interface RecentChat {
         filepath: string
         url?: string
       } | null
+      tags?: string[]
     } | null
     persona?: {
       id: string

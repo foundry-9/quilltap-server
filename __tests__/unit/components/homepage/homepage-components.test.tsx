@@ -582,6 +582,126 @@ describe('RecentChatsSection', () => {
     // 3 chat items + 1 view all link
     expect(links.length).toBeGreaterThanOrEqual(4)
   })
+
+  it('filters chats based on quick-hide tags', () => {
+    // Mock shouldHideByIds to hide chats with 'hidden-tag'
+    const mockUseQuickHide = require('@/components/providers/quick-hide-provider').useQuickHide
+    mockUseQuickHide.mockReturnValue({
+      shouldHideByIds: jest.fn((tagIds: string[]) => tagIds?.includes('hidden-tag')),
+    })
+
+    const chats = [
+      createMockRecentChat({
+        id: 'chat-1',
+        title: 'Visible Chat',
+        participants: [{
+          id: 'p1',
+          type: 'CHARACTER',
+          isActive: true,
+          displayOrder: 0,
+          character: { id: 'c1', name: 'Alice', defaultImage: null, tags: ['normal-tag'] },
+          persona: null,
+        }],
+      }),
+      createMockRecentChat({
+        id: 'chat-2',
+        title: 'Hidden Chat',
+        participants: [{
+          id: 'p2',
+          type: 'CHARACTER',
+          isActive: true,
+          displayOrder: 0,
+          character: { id: 'c2', name: 'Bob', defaultImage: null, tags: ['hidden-tag'] },
+          persona: null,
+        }],
+      }),
+    ]
+
+    render(<RecentChatsSection chats={chats} />)
+    expect(screen.getByText('Visible Chat')).toBeInTheDocument()
+    expect(screen.queryByText('Hidden Chat')).not.toBeInTheDocument()
+
+    // Reset mock to default
+    mockUseQuickHide.mockReturnValue({
+      shouldHideByIds: jest.fn(() => false),
+    })
+  })
+
+  it('shows empty state when all chats are hidden by quick-hide', () => {
+    // Mock shouldHideByIds to hide all chats
+    const mockUseQuickHide = require('@/components/providers/quick-hide-provider').useQuickHide
+    mockUseQuickHide.mockReturnValue({
+      shouldHideByIds: jest.fn(() => true),
+    })
+
+    const chats = [
+      createMockRecentChat({
+        id: 'chat-1',
+        title: 'Chat One',
+        participants: [{
+          id: 'p1',
+          type: 'CHARACTER',
+          isActive: true,
+          displayOrder: 0,
+          character: { id: 'c1', name: 'Alice', defaultImage: null, tags: ['hidden-tag'] },
+          persona: null,
+        }],
+      }),
+    ]
+
+    render(<RecentChatsSection chats={chats} />)
+    expect(screen.queryByText('Chat One')).not.toBeInTheDocument()
+    expect(screen.getByText('No chats yet')).toBeInTheDocument()
+
+    // Reset mock to default
+    mockUseQuickHide.mockReturnValue({
+      shouldHideByIds: jest.fn(() => false),
+    })
+  })
+
+  it('collects tags from all character participants for filtering', () => {
+    // Mock to track what tags are passed
+    const mockShouldHideByIds = jest.fn(() => false)
+    const mockUseQuickHide = require('@/components/providers/quick-hide-provider').useQuickHide
+    mockUseQuickHide.mockReturnValue({
+      shouldHideByIds: mockShouldHideByIds,
+    })
+
+    const chats = [
+      createMockRecentChat({
+        id: 'chat-1',
+        title: 'Multi-Character Chat',
+        participants: [
+          {
+            id: 'p1',
+            type: 'CHARACTER',
+            isActive: true,
+            displayOrder: 0,
+            character: { id: 'c1', name: 'Alice', defaultImage: null, tags: ['tag-a', 'tag-b'] },
+            persona: null,
+          },
+          {
+            id: 'p2',
+            type: 'CHARACTER',
+            isActive: true,
+            displayOrder: 1,
+            character: { id: 'c2', name: 'Bob', defaultImage: null, tags: ['tag-c'] },
+            persona: null,
+          },
+        ],
+      }),
+    ]
+
+    render(<RecentChatsSection chats={chats} />)
+
+    // Verify shouldHideByIds was called with all tags from all participants
+    expect(mockShouldHideByIds).toHaveBeenCalledWith(['tag-a', 'tag-b', 'tag-c'])
+
+    // Reset mock to default
+    mockUseQuickHide.mockReturnValue({
+      shouldHideByIds: jest.fn(() => false),
+    })
+  })
 })
 
 describe('ProjectItem', () => {
