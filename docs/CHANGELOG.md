@@ -4,6 +4,11 @@
 
 ### 2.7-dev
 
+- fix: Sign out now properly clears session and resets UI (2026-01-23)
+  - Logout API was using wrong cookie name (`session` instead of `qt_session`)
+  - Now uses `clearSessionCookie()` utility for proper cookie clearing
+  - Client now uses full page reload instead of soft navigation
+  - Ensures all React state is cleared and user lands on unauthenticated landing page
 - fix: Startup state now persists across Next.js module reloads (2026-01-23)
   - Moved startup state storage from module-local variables to `global` namespace
   - Fixes issue where API routes would wait 30s on first request after server restart

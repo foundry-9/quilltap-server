@@ -6,8 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { successResponse } from '@/lib/api/responses';
 import { getServerSession } from '@/lib/auth/session';
+import { clearSessionCookie } from '@/lib/auth/session/cookies';
 
 // ============================================================================
 // POST Handler
@@ -31,8 +31,10 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
 
-    // Clear session cookie by setting an expired one
-    response.cookies.delete('session');
+    // Clear session cookie using the proper cookie utility
+    clearSessionCookie(response);
+
+    logger.debug('[Auth v1] Session cookie cleared');
 
     return response;
   } catch (error) {
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest) {
     );
 
     // Clear session cookie even on error
-    response.cookies.delete('session');
+    clearSessionCookie(response);
 
     return response;
   }

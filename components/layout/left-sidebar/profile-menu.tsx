@@ -150,11 +150,15 @@ export function ProfileMenu() {
         method: 'POST',
         credentials: 'include',
       })
-      router.push('/')
     } catch (error) {
       console.error('Sign out failed', error)
-      router.push('/')
     }
+    // Force a full page reload to clear all React state and session data
+    // Using window.location.href instead of router.push ensures:
+    // - All React state is cleared
+    // - SessionProvider re-initializes from scratch
+    // - No stale UI elements remain (sidebar, etc.)
+    window.location.href = '/'
   }
 
   if (!user) {

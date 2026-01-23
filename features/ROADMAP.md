@@ -5,11 +5,14 @@ This document tracks planned features and improvements for Quilltap.
 ## In Progress
 
 ### Authentication Enhancements
+
 - [ ] Retain site-installed plugins in `plugins/`, controlled by environment variables
 - [ ] Move user-installed plugins to `plugins/users/[login-uuid]/`
 - [ ] Add Apple, GitHub OAuth plugins
+- [X] Make the signout actually completely wipe the session data from the browser and take you back to the beginning page
 
 ### Mobile Responsive
+
 - [ ] Fully mobile-capable media breakpoints
   - [ ] Home
   - [ ] Chat (partially done in v2.4)
@@ -21,27 +24,34 @@ This document tracks planned features and improvements for Quilltap.
 ## Planned Features
 
 ### Chat & Conversation
+
 - [ ] Server-side Markdown render of historical chat messages to speed up delivery
 - [ ] Character checkpointing (backups of a character at a certain point in time)
 - [ ] "Visual Novel" options
 
 ### LLM Integration
+
 - [ ] Tool management UI - Settings interface to enable/disable individual tools per profile
 - [ ] Finish file read/write tool calling support with permissions
 
 ### Content & Worldbuilding
+
 - [ ] Worldbook/Lore system
 
 ### External Integrations
+
 - [ ] General SSE-based MCP support improvements
 - [ ] Python script support
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./comfy_ui_local_image.md))
+- [ ] Ability to auto-upgrade plugins
 
 ### Themes & UI
+
 - [ ] Arcadia "art deco" theme to show off what the theme system can really do
 - [ ] Get theme-storybook to match the app for everything
 
 ### Setup & Onboarding
+
 - [ ] Setup wizard
   - [ ] Default assistant, editable
   - [ ] Can be restored quickly to basics
@@ -49,6 +59,7 @@ This document tracks planned features and improvements for Quilltap.
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
 
 ### Platform Expansion
+
 - [ ] Create web-only version that uses IndexedDB for everything
 
 ## Completed in v2.7
