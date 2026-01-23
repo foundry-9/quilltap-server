@@ -44,8 +44,27 @@ You must adhere to the following standard roleplay syntax for all outputs.
 5. STRICT COMPLIANCE: Ensure a clear visual separation between actions (* *) and speech (" ").`,
     isBuiltIn: true,
     tags: [],
+    annotationButtons: [
+      { label: 'Narration', abbrev: 'Nar', prefix: '*', suffix: '*' },
+      { label: 'Out of Character', abbrev: 'OOC', prefix: '((', suffix: '))' },
+    ],
+    // Rendering patterns for message content styling
+    renderingPatterns: [
+      // OOC: ((comments)) - double parentheses
+      { pattern: '\\(\\([^)]+\\)\\)', className: 'qt-chat-ooc' },
+      // Dialogue: "speech" - straight and curly quotes (inline detection as fallback)
+      { pattern: '[""][^""]+[""]', className: 'qt-chat-dialogue' },
+      // Narration: *actions* - single asterisks (not bold **)
+      { pattern: '(?<!\\*)\\*[^*]+\\*(?!\\*)', className: 'qt-chat-narration' },
+    ],
+    // Paragraph-level dialogue detection (handles dialogue with formatting inside)
+    dialogueDetection: {
+      openingChars: ['"', '"'],
+      closingChars: ['"', '"'],
+      className: 'qt-chat-dialogue',
+    },
   },
-  // Additional templates (like Quilltap RP) are provided by plugins
+  // Additional templates are provided by plugins
 ];
 
 /**
@@ -65,6 +84,9 @@ function pluginTemplateToRoleplayTemplate(pluginTemplate: LoadedRoleplayTemplate
     isBuiltIn: true, // Plugin templates are treated as built-in (read-only)
     pluginName: pluginTemplate.pluginName, // Include the plugin name for display
     tags: pluginTemplate.tags,
+    annotationButtons: pluginTemplate.annotationButtons || [],
+    renderingPatterns: pluginTemplate.renderingPatterns || [],
+    dialogueDetection: pluginTemplate.dialogueDetection || null,
     createdAt: pluginTimestamp,
     updatedAt: pluginTimestamp,
   };
@@ -173,10 +195,28 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
 
           logger.info('Built-in roleplay template seeded', {
             templateId: id,
-            name: template.name,
+            templateName: template.name,
           });
         } else {
-          logger.debug('Built-in roleplay template already exists', {
+          // Update existing built-in template with new fields (e.g., annotationButtons, renderingPatterns)
+          // This ensures built-in templates stay in sync with code changes
+          const now = this.getCurrentTimestamp();
+          const updateData: Partial<RoleplayTemplate> = {
+            systemPrompt: template.systemPrompt,
+            description: template.description,
+            annotationButtons: template.annotationButtons,
+            renderingPatterns: template.renderingPatterns,
+            dialogueDetection: template.dialogueDetection,
+            updatedAt: now,
+          };
+
+          await collection.updateOne(
+            { _id: existing._id },
+            { $set: updateData }
+          );
+
+          logger.debug('Built-in roleplay template updated', {
+            templateId: existing.id,
             name: template.name,
           });
         }

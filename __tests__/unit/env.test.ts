@@ -110,3 +110,156 @@ describe('Environment Validation', () => {
     expect(env.LOG_LEVEL).toBe('info');
   });
 });
+
+describe('isUserManaged Detection', () => {
+  let originalEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    // Save original environment
+    originalEnv = { ...process.env };
+
+    // Set up minimum required environment variables
+    process.env.NODE_ENV = 'test';
+    process.env.ENCRYPTION_MASTER_PEPPER = 'test-pepper-key-minimum-32-characters';
+  });
+
+  afterEach(() => {
+    // Restore original environment
+    process.env = originalEnv;
+
+    // Clear module cache to reset env validation
+    jest.resetModules();
+  });
+
+  it('should return true when MongoDB URI is localhost', async () => {
+    process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
+    process.env.S3_MODE = 'external';
+    process.env.S3_ENDPOINT = 'https://s3.amazonaws.com';
+    process.env.S3_ACCESS_KEY = 'test-key';
+    process.env.S3_SECRET_KEY = 'test-secret';
+
+    jest.resetModules();
+
+    const { checkIsUserManaged } = await import('@/lib/env');
+    expect(checkIsUserManaged()).toBe(true);
+  });
+
+  it('should return true when MongoDB URI is 127.0.0.1', async () => {
+    process.env.MONGODB_URI = 'mongodb://127.0.0.1:27017/quilltap';
+    process.env.S3_MODE = 'external';
+    process.env.S3_ENDPOINT = 'https://s3.amazonaws.com';
+    process.env.S3_ACCESS_KEY = 'test-key';
+    process.env.S3_SECRET_KEY = 'test-secret';
+
+    jest.resetModules();
+
+    const { checkIsUserManaged } = await import('@/lib/env');
+    expect(checkIsUserManaged()).toBe(true);
+  });
+
+  it('should return true when MongoDB is in embedded mode', async () => {
+    process.env.MONGODB_URI = 'mongodb://remote-host.example.com:27017/quilltap';
+    process.env.MONGODB_MODE = 'embedded';
+    process.env.S3_MODE = 'external';
+    process.env.S3_ENDPOINT = 'https://s3.amazonaws.com';
+    process.env.S3_ACCESS_KEY = 'test-key';
+    process.env.S3_SECRET_KEY = 'test-secret';
+
+    jest.resetModules();
+
+    const { checkIsUserManaged } = await import('@/lib/env');
+    expect(checkIsUserManaged()).toBe(true);
+  });
+
+  it('should return true when S3 endpoint is localhost', async () => {
+    process.env.MONGODB_URI = 'mongodb://remote-host.example.com:27017/quilltap';
+    process.env.MONGODB_MODE = 'external';
+    process.env.S3_MODE = 'external';
+    process.env.S3_ENDPOINT = 'http://localhost:9000';
+    process.env.S3_ACCESS_KEY = 'test-key';
+    process.env.S3_SECRET_KEY = 'test-secret';
+
+    jest.resetModules();
+
+    const { checkIsUserManaged } = await import('@/lib/env');
+    expect(checkIsUserManaged()).toBe(true);
+  });
+
+  it('should return true when S3 endpoint is 127.0.0.1', async () => {
+    process.env.MONGODB_URI = 'mongodb://remote-host.example.com:27017/quilltap';
+    process.env.MONGODB_MODE = 'external';
+    process.env.S3_MODE = 'external';
+    process.env.S3_ENDPOINT = 'http://127.0.0.1:9000';
+    process.env.S3_ACCESS_KEY = 'test-key';
+    process.env.S3_SECRET_KEY = 'test-secret';
+
+    jest.resetModules();
+
+    const { checkIsUserManaged } = await import('@/lib/env');
+    expect(checkIsUserManaged()).toBe(true);
+  });
+
+  it('should return true when S3 is in embedded mode', async () => {
+    process.env.MONGODB_URI = 'mongodb://remote-host.example.com:27017/quilltap';
+    process.env.MONGODB_MODE = 'external';
+    process.env.S3_MODE = 'embedded';
+
+    jest.resetModules();
+
+    const { checkIsUserManaged } = await import('@/lib/env');
+    expect(checkIsUserManaged()).toBe(true);
+  });
+
+  it('should return false when both MongoDB and S3 are remote', async () => {
+    process.env.MONGODB_URI = 'mongodb://remote-host.example.com:27017/quilltap';
+    process.env.MONGODB_MODE = 'external';
+    process.env.S3_MODE = 'external';
+    process.env.S3_ENDPOINT = 'https://s3.amazonaws.com';
+    process.env.S3_ACCESS_KEY = 'test-key';
+    process.env.S3_SECRET_KEY = 'test-secret';
+
+    jest.resetModules();
+
+    const { checkIsUserManaged } = await import('@/lib/env');
+    expect(checkIsUserManaged()).toBe(false);
+  });
+
+  it('should return false when S3 has no endpoint (AWS default) and MongoDB is remote', async () => {
+    process.env.MONGODB_URI = 'mongodb://remote-host.example.com:27017/quilltap';
+    process.env.MONGODB_MODE = 'external';
+    process.env.S3_MODE = 'external';
+    delete process.env.S3_ENDPOINT;
+
+    jest.resetModules();
+
+    const { checkIsUserManaged } = await import('@/lib/env');
+    expect(checkIsUserManaged()).toBe(false);
+  });
+
+  it('should handle MongoDB URI with authentication', async () => {
+    process.env.MONGODB_URI = 'mongodb://user:password@localhost:27017/quilltap';
+    process.env.S3_MODE = 'external';
+    process.env.S3_ENDPOINT = 'https://s3.amazonaws.com';
+    process.env.S3_ACCESS_KEY = 'test-key';
+    process.env.S3_SECRET_KEY = 'test-secret';
+
+    jest.resetModules();
+
+    const { checkIsUserManaged } = await import('@/lib/env');
+    expect(checkIsUserManaged()).toBe(true);
+  });
+
+  it('should handle mongodb+srv URIs', async () => {
+    process.env.MONGODB_URI = 'mongodb+srv://user:password@cluster.mongodb.net/quilltap';
+    process.env.MONGODB_MODE = 'external';
+    process.env.S3_MODE = 'external';
+    process.env.S3_ENDPOINT = 'https://s3.amazonaws.com';
+    process.env.S3_ACCESS_KEY = 'test-key';
+    process.env.S3_SECRET_KEY = 'test-secret';
+
+    jest.resetModules();
+
+    const { checkIsUserManaged } = await import('@/lib/env');
+    expect(checkIsUserManaged()).toBe(false);
+  });
+});

@@ -183,7 +183,7 @@ export function CapabilitiesReportDialog({
           {/* Footer */}
           <div className="qt-dialog-footer flex-shrink-0 flex justify-end gap-3">
             <a
-              href={`/api/tools/capabilities-report/${reportId}?download=true`}
+              href={`/api/v1/system/tools?action=capabilities-report-get&reportId=${reportId}&download=true`}
               download={filename}
               className="qt-button qt-button-secondary"
             >

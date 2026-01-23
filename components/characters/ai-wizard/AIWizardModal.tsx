@@ -8,7 +8,6 @@
  */
 
 import { useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAIWizard } from './hooks/useAIWizard'
 import { ProfileSelectionStep } from './steps/ProfileSelectionStep'
 import { DescriptionSourceStep } from './steps/DescriptionSourceStep'
@@ -55,12 +54,6 @@ export function AIWizardModal({
     onClose,
   })
 
-  // Log modal open/close
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('AI Wizard modal opened', { characterId, characterName })
-    }
-  }, [isOpen, characterId, characterName])
 
   // Handle escape key
   useEffect(() => {

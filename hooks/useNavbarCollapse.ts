@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, RefObject, useCallback } from 'react';
-import { clientLogger } from '@/lib/client-logger';
 
 interface UseNavbarCollapseOptions {
   /** Width reserved for logo area (default: 160) */
@@ -60,14 +59,6 @@ export function useNavbarCollapse(options?: UseNavbarCollapseOptions): UseNavbar
     const availableWidth = containerWidth - logoWidth - rightWidth - containerPadding - (sectionGap * 2) - bufferWidth;
 
     const shouldCollapse = menuWidth > availableWidth;
-
-    clientLogger.debug('Navbar collapse check', {
-      containerWidth,
-      menuWidth,
-      rightWidth,
-      availableWidth,
-      shouldCollapse,
-    });
 
     setIsCollapsed(shouldCollapse);
   }, [logoWidth, bufferWidth]);

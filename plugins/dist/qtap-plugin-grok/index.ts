@@ -14,12 +14,14 @@ import type { LLMProviderPlugin, ImageProviderConstraints } from './types';
 import { GrokProvider } from './provider';
 import { GrokImageProvider } from './image-provider';
 import { GrokIcon } from './icon';
-import { logger } from '../../../lib/logger';
 import {
+  createPluginLogger,
   parseOpenAIToolCalls,
   type OpenAIToolDefinition,
   type ToolCallRequest,
-} from '../../../lib/llm/tool-formatting-utils';
+} from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-grok');
 
 /**
  * Grok image generation constraints
@@ -73,6 +75,7 @@ const attachmentSupport = {
   supportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as string[],
   description: 'Images only (JPEG, PNG, GIF, WebP)',
   notes: 'Images are supported in Grok models for vision capabilities',
+  maxBase64Size: 20 * 1024 * 1024, // 20MB - Grok's API limit for images (OpenAI-compatible)
 };
 
 /**

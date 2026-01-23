@@ -44,6 +44,16 @@ export async function processToolCalls(
     const toolCall = toolCalls[toolIndex]
     const toolResult = await executeToolCallWithContext(toolCall, toolContext)
 
+    // Debug: Log what we received from executeToolCallWithContext
+    logger.debug('Tool execution result received', {
+      toolName: toolResult.toolName,
+      success: toolResult.success,
+      requiresPermission: toolResult.requiresPermission,
+      hasPendingWrite: !!toolResult.pendingWrite,
+      error: toolResult.error,
+      resultKeys: toolResult.result ? Object.keys(toolResult.result as object) : [],
+    })
+
     if (toolResult.success && Array.isArray(toolResult.result)) {
       for (const img of toolResult.result) {
         if (img.filepath && img.id) {
@@ -61,9 +71,47 @@ export async function processToolCalls(
       }
     }
 
+    // Handle permission-required case differently - don't add to toolMessages yet
+    // The frontend will show a prompt, and when user approves/denies,
+    // the /api/files/write-permission/complete endpoint will handle the rest
+    if (toolResult.requiresPermission) {
+      logger.info('Tool requires permission, sending pending status to frontend', {
+        toolName: toolResult.toolName,
+        pendingWrite: toolResult.pendingWrite,
+      })
+
+      // Send SSE event for frontend to show permission prompt
+      // Don't add to toolMessages - we don't want LLM to see an error yet
+      controller.enqueue(
+        encoder.encode(
+          `data: ${JSON.stringify({
+            toolResult: {
+              index: toolIndex,
+              name: toolResult.toolName,
+              success: false,
+              requiresPermission: true,
+              pendingWrite: toolResult.pendingWrite,
+              status: 'pending_approval',
+            },
+          })}\n\n`
+        )
+      )
+
+      // Add a placeholder message indicating we're waiting for approval
+      // This prevents the LLM from thinking the tool errored
+      toolMessages.push({
+        toolName: toolResult.toolName,
+        success: true, // Mark as success so LLM doesn't see it as an error
+        content: 'File write request sent to user for approval. Waiting for response.',
+        arguments: toolCall.arguments,
+        metadata: toolResult.metadata,
+      })
+      continue
+    }
+
     let resultText: string
     if (!toolResult.success) {
-      resultText = `Error: ${toolResult.error || 'Unknown error'}`
+      resultText = `Error: ${toolResult.error || 'Unknown error'}${toolResult.message ? ` - ${toolResult.message}` : ''}`
     } else if (toolResult.toolName === 'generate_image') {
       resultText = `Generated ${(toolResult.result as unknown[])?.length || 1} image(s)`
     } else {
@@ -78,15 +126,18 @@ export async function processToolCalls(
       metadata: toolResult.metadata,
     })
 
+    // Build tool result payload
+    const toolResultPayload: Record<string, unknown> = {
+      index: toolIndex,
+      name: toolResult.toolName,
+      success: toolResult.success,
+      result: toolResult.result,
+    };
+
     controller.enqueue(
       encoder.encode(
         `data: ${JSON.stringify({
-          toolResult: {
-            index: toolIndex,
-            name: toolResult.toolName,
-            success: toolResult.success,
-            result: toolResult.result,
-          },
+          toolResult: toolResultPayload,
         })}\n\n`
       )
     )
@@ -180,7 +231,8 @@ export function createToolContext(
   characterId: string,
   characterParticipantId: string,
   imageProfileId?: string | null,
-  embeddingProfileId?: string
+  embeddingProfileId?: string,
+  projectId?: string | null
 ): ToolExecutionContext {
   return {
     chatId,
@@ -189,5 +241,6 @@ export function createToolContext(
     characterId,
     embeddingProfileId,
     callingParticipantId: characterParticipantId,
+    projectId: projectId || undefined,
   }
 }

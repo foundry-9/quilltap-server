@@ -5,7 +5,6 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { clientLogger } from '@/lib/client-logger';
 import type {
   SearchReplaceScope,
   SearchReplacePreview,
@@ -64,7 +63,7 @@ export function useSearchReplace(
     setPreviewError(null);
 
     try {
-      const response = await fetch('/api/search-replace/preview', {
+      const response = await fetch('/api/v1/search-replace?action=preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -86,7 +85,7 @@ export function useSearchReplace(
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch preview';
       setPreviewError(message);
-      clientLogger.error('[useSearchReplace] Preview fetch error', { error: message });
+      console.error('[useSearchReplace] Preview fetch error', { error: message });
     } finally {
       setLoadingPreview(false);
     }
@@ -122,13 +121,7 @@ export function useSearchReplace(
     setExecutionPhase('Starting...');
 
     try {
-      clientLogger.info('[useSearchReplace] Executing search/replace', {
-        scope,
-        searchTextLength: searchText.length,
-        replaceTextLength: replaceText.length,
-      });
-
-      const response = await fetch('/api/search-replace', {
+      const response = await fetch('/api/v1/search-replace?action=execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -148,19 +141,13 @@ export function useSearchReplace(
       const data: SearchReplaceResult = await response.json();
       setResult(data);
       setCurrentStep('results');
-      clientLogger.info('[useSearchReplace] Search/replace complete', {
-        messagesUpdated: data.messagesUpdated,
-        memoriesUpdated: data.memoriesUpdated,
-        chatsAffected: data.chatsAffected,
-        errorCount: data.errors.length,
-      });
 
       onComplete?.(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to execute search/replace';
       setError(message);
       setCurrentStep('results');
-      clientLogger.error('[useSearchReplace] Execute error', { error: message });
+      console.error('[useSearchReplace] Execute error', { error: message });
     } finally {
       setExecuting(false);
       setExecutionPhase('');

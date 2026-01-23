@@ -35,6 +35,9 @@ export {
   convertToolTo,
   convertToolsTo,
   applyDescriptionLimit,
+  // Backward-compatible aliases
+  convertOpenAIToAnthropicFormat,
+  convertOpenAIToGoogleFormat,
 } from './tools';
 
 export type {

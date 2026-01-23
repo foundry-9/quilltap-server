@@ -6,7 +6,9 @@
  */
 
 import { OpenRouter } from '@openrouter/sdk';
-import { logger } from '../../../lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-openrouter');
 
 /**
  * Result of an embedding operation

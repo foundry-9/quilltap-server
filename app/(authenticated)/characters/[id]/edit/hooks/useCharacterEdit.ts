@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { clientLogger } from '@/lib/client-logger'
 import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useSidebarDataOptional } from '@/components/providers/sidebar-data-provider'
@@ -51,8 +50,7 @@ export function useCharacterEdit(id: string) {
    */
   const fetchCharacter = useCallback(async () => {
     try {
-      clientLogger.debug('Fetching character', { characterId: id })
-      const res = await fetch(`/api/characters/${id}`, {
+      const res = await fetch(`/api/v1/characters/${id}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
@@ -86,11 +84,9 @@ export function useCharacterEdit(id: string) {
           loading: false,
         }
       })
-
-      clientLogger.debug('Character fetched successfully', { characterId: id })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-      clientLogger.error('Failed to fetch character', { error: errorMsg })
+      console.error('Failed to fetch character', errorMsg)
       setState((prev) => ({
         ...prev,
         error: errorMsg,
@@ -103,7 +99,6 @@ export function useCharacterEdit(id: string) {
    * Initial data loading effect
    */
   useEffect(() => {
-    clientLogger.debug('Initializing character edit page', { characterId: id })
     fetchCharacter()
   }, [id, fetchCharacter])
 
@@ -130,10 +125,8 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({ ...prev, saving: true, error: null }))
 
     try {
-      clientLogger.debug('Saving character', { characterId: id })
-
       // Update character fields
-      const res = await fetch(`/api/characters/${id}`, {
+      const res = await fetch(`/api/v1/characters/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(state.formData),
@@ -144,12 +137,9 @@ export function useCharacterEdit(id: string) {
         throw new Error(data.error || 'Failed to update character')
       }
 
-      clientLogger.info('Character fields updated', { characterId: id })
-
       await fetchCharacter()
       setState((prev) => ({ ...prev, saving: false }))
       showSuccessToast('Character saved successfully!')
-      clientLogger.info('Character saved successfully', { characterId: id })
 
       // Refresh sidebar to reflect character changes
       sidebarData?.refreshCharacters()
@@ -158,7 +148,7 @@ export function useCharacterEdit(id: string) {
       return true
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-      clientLogger.error('Failed to save character', { error: errorMsg })
+      console.error('Failed to save character', errorMsg)
       setState((prev) => ({
         ...prev,
         saving: false,
@@ -183,16 +173,13 @@ export function useCharacterEdit(id: string) {
 
       if (result === 'Save') {
         // Submit the form
-        clientLogger.debug('User chose to save changes', { characterId: id })
         const submitEvent = new Event('submit', { bubbles: true, cancelable: true })
         document.querySelector('form')?.dispatchEvent(submitEvent)
         return
       } else if (result === 'Cancel' || result === undefined) {
-        clientLogger.debug('User chose to cancel', { characterId: id })
         return
       }
       // If 'Discard', continue to navigation
-      clientLogger.debug('User chose to discard changes', { characterId: id })
     }
     // Navigate to appropriate location based on character type
     if (state.character?.npc) {
@@ -216,9 +203,7 @@ export function useCharacterEdit(id: string) {
         throw new Error('Character ID is missing')
       }
 
-      clientLogger.debug('Setting character avatar', { characterId: id, imageId })
-
-      const res = await fetch(`/api/characters/${id}/avatar`, {
+      const res = await fetch(`/api/v1/characters/${id}?action=avatar`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: imageId || null }),
@@ -233,10 +218,9 @@ export function useCharacterEdit(id: string) {
       await fetchCharacter()
       setState((prev) => ({ ...prev, showAvatarSelector: false }))
       showSuccessToast('Avatar updated!')
-      clientLogger.info('Avatar updated successfully', { characterId: id })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to set avatar'
-      clientLogger.error('Failed to set avatar', { error: errorMsg })
+      console.error('Failed to set avatar', errorMsg)
       showErrorToast(errorMsg)
     }
   }
@@ -276,8 +260,7 @@ export function useCharacterEdit(id: string) {
    */
   const clearAvatar = async () => {
     try {
-      clientLogger.debug('Clearing character avatar', { characterId: id })
-      const res = await fetch(`/api/characters/${id}/avatar`, {
+      const res = await fetch(`/api/v1/characters/${id}?action=avatar`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: null }),
@@ -289,10 +272,9 @@ export function useCharacterEdit(id: string) {
 
       await fetchCharacter()
       showSuccessToast('Avatar cleared!')
-      clientLogger.info('Avatar cleared successfully', { characterId: id })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to clear avatar'
-      clientLogger.error('Failed to clear avatar', { error: errorMsg })
+      console.error('Failed to clear avatar', errorMsg)
       showErrorToast(errorMsg)
     }
   }

@@ -7,7 +7,6 @@
 
 import type {
   Character,
-  Persona,
   ChatMetadata,
   Tag,
   ConnectionProfile,
@@ -16,6 +15,7 @@ import type {
   Memory,
   MessageEvent,
   RoleplayTemplate,
+  Project,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -28,13 +28,13 @@ import type {
  */
 export type ExportEntityType =
   | 'characters'
-  | 'personas'
   | 'chats'
   | 'roleplay-templates'
   | 'connection-profiles'
   | 'image-profiles'
   | 'embedding-profiles'
-  | 'tags';
+  | 'tags'
+  | 'projects';
 
 // ============================================================================
 // EXPORT MANIFEST
@@ -57,7 +57,6 @@ export interface QuilltapExportSettings {
  */
 export interface QuilltapExportCounts {
   characters?: number;
-  personas?: number;
   chats?: number;
   messages?: number;
   roleplayTemplates?: number;
@@ -66,6 +65,7 @@ export interface QuilltapExportCounts {
   embeddingProfiles?: number;
   tags?: number;
   memories?: number;
+  projects?: number;
 }
 
 /**
@@ -104,14 +104,6 @@ export interface ExportedCharacter extends Character {
 }
 
 /**
- * Persona with resolved relationships
- */
-export interface ExportedPersona extends Persona {
-  _linkedCharacterNames?: string[];
-  _tagNames?: string[];
-}
-
-/**
  * Chat with messages and resolved participant information
  */
 export interface ExportedChat extends ChatMetadata {
@@ -119,8 +111,7 @@ export interface ExportedChat extends ChatMetadata {
   _participantInfo?: Array<{
     participantId: string;
     characterName?: string;
-    personaName?: string;
-    type: 'CHARACTER' | 'PERSONA';
+    type: 'CHARACTER';
   }>;
   _tagNames?: string[];
 }
@@ -163,14 +154,6 @@ export interface SanitizedEmbeddingProfile extends Omit<EmbeddingProfile, 'apiKe
  */
 export interface CharactersExportData {
   characters: ExportedCharacter[];
-  memories?: Memory[];
-}
-
-/**
- * Persona export data
- */
-export interface PersonasExportData {
-  personas: ExportedPersona[];
   memories?: Memory[];
 }
 
@@ -218,17 +201,33 @@ export interface TagsExportData {
 }
 
 /**
+ * Project with resolved relationships
+ */
+export interface ExportedProject extends Project {
+  _characterRosterNames?: string[];
+  _chatCount?: number;
+  _fileCount?: number;
+}
+
+/**
+ * Projects export data
+ */
+export interface ProjectsExportData {
+  projects: ExportedProject[];
+}
+
+/**
  * Union of all possible export data structures
  */
 export type QuilltapExportData =
   | CharactersExportData
-  | PersonasExportData
   | ChatsExportData
   | RoleplayTemplatesExportData
   | ConnectionProfilesExportData
   | ImageProfilesExportData
   | EmbeddingProfilesExportData
-  | TagsExportData;
+  | TagsExportData
+  | ProjectsExportData;
 
 /**
  * Complete export structure with manifest and data

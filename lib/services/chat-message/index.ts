@@ -28,7 +28,6 @@ export {
 export {
   resolveRespondingParticipant,
   loadAllParticipantData,
-  getPersonaData,
   getRoleplayTemplate,
   getActiveCharacterParticipants,
   type ParticipantResolutionResult,
@@ -63,6 +62,9 @@ export {
   encodeContentChunk,
   encodeDoneEvent,
   encodeErrorEvent,
+  encodeKeepAlive,
+  safeEnqueue,
+  safeClose,
   createStreamingResult,
   type StreamOptions,
   type StreamDebugInfo,
@@ -85,6 +87,7 @@ export {
 export {
   triggerMemoryExtraction,
   triggerInterCharacterMemory,
+  triggerUserControlledCharacterMemory,
   triggerContextSummaryCheck,
   type MemoryChatSettings,
 } from './memory-trigger.service'

@@ -1,17 +1,18 @@
 /**
  * Chat file utility functions for handling file uploads in chat messages
- * Version 2: Uses repository pattern for metadata storage and S3 for file storage when enabled
+ * Version 2: Uses repository pattern for metadata storage and centralized file storage manager
  */
 
 import { createHash } from 'node:crypto';
 import { extname } from 'node:path';
 import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
-import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as downloadS3File } from './s3/operations';
-import { buildS3Key } from './s3/client';
-import type { FileEntry, FileCategory } from './schemas/types';
+import { fileStorageManager } from './file-storage/manager';
+import { detectTextContent, getBestMimeType } from './files/text-detection';
+import type { FileEntry, FileCategory, Provider } from './schemas/types';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from './files/tag-inheritance';
+import { resizeImageForProvider, canResizeImage, calculateBase64Size, getProviderMaxBase64Size } from './files/image-processing';
 
 export interface ChatFileUploadResult {
   id: string;
@@ -25,22 +26,43 @@ export interface ChatFileUploadResult {
 }
 
 /**
- * Allowed file MIME types for chat attachments
- * Includes images and documents that various providers support
+ * Result when a duplicate file is detected in project uploads
  */
-const ALLOWED_CHAT_FILE_TYPES = [
-  // Images (supported by OpenAI, Anthropic, Grok)
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  // Documents (supported by Anthropic, Grok)
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-];
+export interface ChatFileDuplicateResult {
+  duplicate: true;
+  conflictType: 'filename' | 'content' | 'both';
+  existingFile: {
+    id: string;
+    filename: string;
+    size: number;
+    createdAt: string;
+    sha256: string;
+  };
+  newFile: {
+    filename: string;
+    size: number;
+    sha256: string;
+  };
+}
+
+/**
+ * Resolution action for duplicate file conflicts
+ */
+export type ConflictResolution = 'replace' | 'keepBoth' | 'skip';
+
+/**
+ * Options for chat file upload
+ */
+export interface ChatFileUploadOptions {
+  /** Message ID to link the file to */
+  messageId?: string;
+  /** Project ID if this chat belongs to a project */
+  projectId?: string | null;
+  /** Resolution action for duplicate conflicts */
+  resolution?: ConflictResolution;
+  /** ID of the conflicting file (for replace action) */
+  conflictingFileId?: string;
+}
 
 /**
  * Maximum file size in bytes (10 MB)
@@ -56,22 +78,43 @@ function getExtension(filename: string): string {
 }
 
 /**
- * Get the filepath for a file - always returns API path for S3-backed files
+ * Generate a unique filename by appending (1), (2), etc.
+ * @param filename - Original filename
+ * @param existingFilenames - Set of filenames that already exist
  */
-function getFileApiPath(fileId: string): string {
-  return `/api/files/${fileId}`;
+function generateUniqueFilename(
+  filename: string,
+  existingFilenames: Set<string>
+): string {
+  if (!existingFilenames.has(filename)) {
+    return filename;
+  }
+
+  const ext = extname(filename);
+  const basename = ext ? filename.slice(0, -ext.length) : filename;
+
+  let counter = 1;
+  let newName = `${basename} (${counter})${ext}`;
+
+  while (existingFilenames.has(newName)) {
+    counter++;
+    newName = `${basename} (${counter})${ext}`;
+  }
+
+  return newName;
 }
 
 /**
- * Validate chat file
+ * Get the filepath for a file - always returns API path for S3-backed files
+ */
+function getFileApiPath(fileId: string): string {
+  return `/api/v1/files/${fileId}`;
+}
+
+/**
+ * Validate chat file (size only - no type restrictions)
  */
 export function validateChatFile(file: File): void {
-  if (!ALLOWED_CHAT_FILE_TYPES.includes(file.type)) {
-    throw new Error(
-      `Invalid file type: ${file.type}. Allowed types: ${ALLOWED_CHAT_FILE_TYPES.join(', ')}`
-    );
-  }
-
   if (file.size > MAX_FILE_SIZE) {
     throw new Error(
       `File size exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024} MB`
@@ -81,21 +124,37 @@ export function validateChatFile(file: File): void {
 
 /**
  * Upload a chat file to the server
+ * When projectId is provided, the file is stored as a project file with duplicate detection
  */
 export async function uploadChatFile(
   file: File,
   chatId: string,
   userId: string,
-  messageId?: string
-): Promise<ChatFileUploadResult> {
+  options: ChatFileUploadOptions = {}
+): Promise<ChatFileUploadResult | ChatFileDuplicateResult> {
+  const { messageId, projectId, resolution, conflictingFileId } = options;
+
   validateChatFile(file);
 
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
   const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
 
+  // Detect text content and infer better MIME type if needed
+  const textDetection = detectTextContent(buffer, file.name, file.type);
+  const mimeType = getBestMimeType(textDetection, file.type);
+
+  logger.debug('Text detection result for chat file', {
+    context: 'chat-files-v2',
+    filename: file.name,
+    providedMimeType: file.type,
+    detectedMimeType: textDetection.detectedMimeType,
+    finalMimeType: mimeType,
+    isPlainText: textDetection.isPlainText,
+  });
+
   // Determine category based on MIME type
-  const category: FileCategory = file.type.startsWith('image/') ? 'IMAGE' : 'ATTACHMENT';
+  const category: FileCategory = mimeType.startsWith('image/') ? 'IMAGE' : 'ATTACHMENT';
 
   // Build linkedTo array
   const linkedTo: string[] = [chatId];
@@ -105,7 +164,147 @@ export async function uploadChatFile(
 
   const repos = getRepositories();
 
-  // Check for duplicate by hash
+  // For project files, check for duplicates within the project
+  if (projectId) {
+    logger.debug('Checking for duplicates in project', {
+      context: 'chat-files-v2',
+      projectId,
+      filename: file.name,
+      sha256,
+    });
+
+    // Check for content duplicate (same SHA256) in project
+    const existingByHash = await repos.files.findBySha256(sha256);
+    const contentDuplicate = existingByHash.find(f => f.projectId === projectId);
+
+    // Check for filename duplicate in project
+    const existingByName = await repos.files.findByFilenameInProject(userId, projectId, file.name);
+    const filenameDuplicate = existingByName.length > 0 ? existingByName[0] : null;
+
+    // Determine conflict type
+    const hasContentConflict = !!contentDuplicate;
+    const hasFilenameConflict = !!filenameDuplicate;
+
+    if ((hasContentConflict || hasFilenameConflict) && !resolution) {
+      // Duplicate detected and no resolution provided - return conflict info
+      const conflictType: 'filename' | 'content' | 'both' =
+        hasContentConflict && hasFilenameConflict ? 'both' :
+        hasContentConflict ? 'content' : 'filename';
+
+      // Use the more relevant duplicate for the response
+      const existingFile = hasFilenameConflict ? filenameDuplicate! : contentDuplicate!;
+
+      logger.debug('Duplicate file detected in project', {
+        context: 'chat-files-v2',
+        projectId,
+        conflictType,
+        existingFileId: existingFile.id,
+      });
+
+      return {
+        duplicate: true,
+        conflictType,
+        existingFile: {
+          id: existingFile.id,
+          filename: existingFile.originalFilename,
+          size: existingFile.size,
+          createdAt: existingFile.createdAt,
+          sha256: existingFile.sha256,
+        },
+        newFile: {
+          filename: file.name,
+          size: buffer.length,
+          sha256,
+        },
+      };
+    }
+
+    // Handle resolution
+    if (resolution) {
+      logger.debug('Handling conflict resolution', {
+        context: 'chat-files-v2',
+        resolution,
+        conflictingFileId,
+      });
+
+      if (resolution === 'skip') {
+        // User chose to skip - return the existing file info
+        const existingFile = conflictingFileId
+          ? await repos.files.findById(conflictingFileId)
+          : (filenameDuplicate || contentDuplicate);
+
+        if (existingFile) {
+          logger.debug('Skipping upload, returning existing file', {
+            context: 'chat-files-v2',
+            fileId: existingFile.id,
+          });
+
+          return {
+            id: existingFile.id,
+            filename: existingFile.originalFilename,
+            filepath: getFileApiPath(existingFile.id),
+            mimeType: existingFile.mimeType,
+            size: existingFile.size,
+            sha256: existingFile.sha256,
+            width: existingFile.width || undefined,
+            height: existingFile.height || undefined,
+          };
+        }
+      }
+
+      if (resolution === 'replace' && conflictingFileId) {
+        // Delete the existing file first
+        const existingFile = await repos.files.findById(conflictingFileId);
+        if (existingFile) {
+          try {
+            await fileStorageManager.deleteFile(existingFile);
+            logger.debug('Deleted existing file from storage for replacement', {
+              context: 'chat-files-v2',
+              fileId: conflictingFileId,
+            });
+          } catch (error) {
+            logger.error('Failed to delete existing file from storage', {
+              context: 'chat-files-v2',
+              fileId: conflictingFileId,
+            }, error instanceof Error ? error : undefined);
+          }
+        }
+        await repos.files.delete(conflictingFileId);
+        logger.debug('Deleted existing file for replacement', {
+          context: 'chat-files-v2',
+          fileId: conflictingFileId,
+        });
+      }
+
+      // For 'keepBoth', generate a unique filename
+      let finalFilename = file.name;
+      if (resolution === 'keepBoth') {
+        const projectFiles = await repos.files.findByProjectId(userId, projectId);
+        const existingFilenames = new Set(projectFiles.map(f => f.originalFilename));
+        finalFilename = generateUniqueFilename(file.name, existingFilenames);
+        logger.debug('Generated unique filename for keepBoth', {
+          context: 'chat-files-v2',
+          originalFilename: file.name,
+          newFilename: finalFilename,
+        });
+      }
+
+      // Proceed with upload using the final filename
+      return await uploadFileToProject(
+        buffer,
+        finalFilename,
+        mimeType,
+        sha256,
+        category,
+        userId,
+        projectId,
+        linkedTo,
+        textDetection.isPlainText
+      );
+    }
+  }
+
+  // Non-project files: use existing behavior with hash-based deduplication
   const existingFiles = await repos.files.findBySha256(sha256);
   if (existingFiles.length > 0) {
     const existing = existingFiles[0];
@@ -140,19 +339,54 @@ export async function uploadChatFile(
     };
   }
 
+  // No project - upload as before (general file)
+  return await uploadFileToProject(
+    buffer,
+    file.name,
+    mimeType,
+    sha256,
+    category,
+    userId,
+    projectId || undefined,
+    linkedTo,
+    textDetection.isPlainText
+  );
+}
+
+/**
+ * Internal helper to upload file to S3 and create repository entry
+ */
+async function uploadFileToProject(
+  buffer: Buffer,
+  filename: string,
+  mimeType: string,
+  sha256: string,
+  category: FileCategory,
+  userId: string,
+  projectId: string | undefined,
+  linkedTo: string[],
+  isPlainText?: boolean
+): Promise<ChatFileUploadResult> {
+  const repos = getRepositories();
+
   // Generate a new file ID
   const fileId = crypto.randomUUID();
 
-  // Upload to S3
-  const s3Key = buildS3Key(userId, fileId, file.name, category);
-  await uploadS3File(s3Key, buffer, file.type, {
+  // Upload to file storage
+  const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
     userId,
     fileId,
-    category,
-    filename: file.name,
-    sha256,
+    filename,
+    content: buffer,
+    contentType: mimeType,
+    projectId: projectId || null,
+    folderPath: '/',
+    metadata: {
+      category,
+      sha256,
+    },
   });
-  logger.debug('Uploaded chat file to S3', { fileId, s3Key, size: buffer.length });
+  logger.debug('Uploaded chat file to storage', { fileId, storageKey, mountPointId, size: buffer.length, projectId });
 
   // Inherit tags from the chat (and any other linked entities)
   const inheritedTags = await getInheritedTags(linkedTo, userId);
@@ -160,19 +394,20 @@ export async function uploadChatFile(
   logger.debug('Inherited tags for chat file', {
     context: 'chat-files-v2',
     fileId,
-    chatId,
     inheritedTagCount: inheritedTags.length,
   });
 
   // Create metadata in repository
+  // IMPORTANT: Pass the fileId to ensure metadata matches storage path
   const fileEntry = await repos.files.create({
     userId,
     sha256,
-    originalFilename: file.name,
-    mimeType: file.type,
+    originalFilename: filename,
+    mimeType,
     size: buffer.length,
     width: null,
     height: null,
+    isPlainText,
     linkedTo,
     source: 'UPLOADED',
     category,
@@ -181,10 +416,13 @@ export async function uploadChatFile(
     generationRevisedPrompt: null,
     description: null,
     tags: inheritedTags,
-    s3Key,
-  });
+    projectId: projectId || null,
+    folderPath: '/',
+    storageKey,
+    mountPointId,
+  }, { id: fileId });
 
-  logger.debug('Created chat file metadata in repository', { fileId: fileEntry.id, s3Key });
+  logger.debug('Created chat file metadata in repository', { fileId: fileEntry.id, storageKey, mountPointId, projectId });
 
   return {
     id: fileEntry.id,
@@ -199,9 +437,23 @@ export async function uploadChatFile(
 }
 
 /**
- * Read a file as base64 from S3
+ * Options for loading chat files for LLM
  */
-async function readFileAsBase64(fileId: string): Promise<string> {
+export interface LoadChatFilesOptions {
+  /** The provider being used (for size limit calculation) */
+  provider?: Provider
+  /** Whether to automatically resize images that exceed limits (default: true) */
+  autoResize?: boolean
+}
+
+/**
+ * Read a file as base64 from S3, optionally resizing images for provider limits
+ */
+async function readFileAsBase64(
+  fileId: string,
+  mimeType: string,
+  provider?: Provider
+): Promise<{ data: string; wasResized?: boolean; mimeType: string }> {
   const repos = getRepositories();
   const entry = await repos.files.findById(fileId);
 
@@ -209,25 +461,75 @@ async function readFileAsBase64(fileId: string): Promise<string> {
     throw new Error(`File not found: ${fileId}`);
   }
 
-  if (!entry.s3Key) {
-    throw new Error(`File ${fileId} has no S3 key - file may need migration`);
+  if (!entry.storageKey) {
+    throw new Error(`File ${fileId} has no storage key - file may need migration`);
   }
 
-  // Download from S3
-  const buffer = await downloadS3File(entry.s3Key);
-  logger.debug('Downloaded file from S3 for base64', { fileId, s3Key: entry.s3Key, size: buffer.length });
+  // Download from file storage
+  let buffer = await fileStorageManager.downloadFile(entry);
+  let outputMimeType = mimeType;
+  let wasResized = false;
 
-  return buffer.toString('base64');
+  logger.debug('Downloaded file from storage for base64', { fileId, storageKey: entry.storageKey, size: buffer.length });
+
+  // Check if this is an image that might need resizing
+  if (provider && mimeType.startsWith('image/') && canResizeImage(mimeType)) {
+    const maxBase64Size = getProviderMaxBase64Size(provider);
+    const base64Size = calculateBase64Size(buffer);
+
+    if (base64Size > maxBase64Size) {
+      logger.info('Image exceeds provider limits, attempting resize', {
+        module: 'chat-files-v2',
+        fileId,
+        originalSize: buffer.length,
+        base64Size,
+        maxBase64Size,
+        provider,
+      });
+
+      const resizeResult = await resizeImageForProvider({
+        provider,
+        buffer,
+        mimeType,
+        filename: entry.originalFilename,
+      });
+
+      if (resizeResult.wasResized) {
+        buffer = resizeResult.buffer;
+        outputMimeType = resizeResult.mimeType;
+        wasResized = true;
+
+        logger.info('Image resized successfully', {
+          module: 'chat-files-v2',
+          fileId,
+          originalSize: resizeResult.originalSize,
+          finalSize: resizeResult.finalSize,
+          dimensions: resizeResult.width && resizeResult.height
+            ? `${resizeResult.width}x${resizeResult.height}`
+            : 'unknown',
+        });
+      }
+    }
+  }
+
+  return {
+    data: buffer.toString('base64'),
+    wasResized,
+    mimeType: outputMimeType,
+  };
 }
 
 /**
  * Convert file entries to FileAttachment format for LLM
- * Loads file data as base64
+ * Loads file data as base64, optionally resizing images for provider limits
  */
 export async function loadChatFilesForLLM(
-  fileIds: string[]
+  fileIds: string[],
+  options: LoadChatFilesOptions = {}
 ): Promise<FileAttachment[]> {
-  logger.debug('Loading chat files for LLM', { fileIds });
+  const { provider, autoResize = true } = options;
+
+  logger.debug('Loading chat files for LLM', { fileIds, provider, autoResize });
   const attachments: FileAttachment[] = [];
   const repos = getRepositories();
 
@@ -239,13 +541,18 @@ export async function loadChatFilesForLLM(
         continue;
       }
 
-      const data = await readFileAsBase64(fileId);
+      // Read file with potential resizing
+      const { data, wasResized, mimeType } = await readFileAsBase64(
+        fileId,
+        fileEntry.mimeType,
+        autoResize ? provider : undefined
+      );
 
       attachments.push({
         id: fileEntry.id,
         filepath: getFileApiPath(fileEntry.id),
         filename: fileEntry.originalFilename,
-        mimeType: fileEntry.mimeType,
+        mimeType, // Use potentially updated MIME type
         size: fileEntry.size,
         data,
       });
@@ -253,9 +560,11 @@ export async function loadChatFilesForLLM(
       logger.debug('Loaded chat file', {
         fileId: fileEntry.id,
         filename: fileEntry.originalFilename,
-        mimeType: fileEntry.mimeType,
+        mimeType,
+        originalMimeType: fileEntry.mimeType,
         size: fileEntry.size,
         dataLength: data?.length || 0,
+        wasResized,
       });
     } catch (error) {
       logger.error(`Failed to load chat file ${fileId}:`, {}, error instanceof Error ? error : new Error(String(error)));
@@ -279,14 +588,12 @@ export async function deleteChatFileById(fileId: string): Promise<void> {
     return;
   }
 
-  // Delete the file bytes from S3
-  if (entry.s3Key) {
-    try {
-      await deleteS3File(entry.s3Key);
-      logger.debug('Deleted chat file from S3', { fileId, s3Key: entry.s3Key });
-    } catch (error) {
-      logger.error('Failed to delete chat file from S3', { fileId, s3Key: entry.s3Key }, error instanceof Error ? error : undefined);
-    }
+  // Delete the file bytes from storage
+  try {
+    await fileStorageManager.deleteFile(entry);
+    logger.debug('Deleted chat file from storage', { fileId, storageKey: entry.storageKey });
+  } catch (error) {
+    logger.error('Failed to delete chat file from storage', { fileId, storageKey: entry.storageKey }, error instanceof Error ? error : undefined);
   }
 
   // Delete metadata from repository
@@ -313,19 +620,21 @@ export async function readChatFileBuffer(fileId: string): Promise<Buffer> {
     throw new Error(`File not found: ${fileId}`);
   }
 
-  if (!entry.s3Key) {
-    throw new Error(`File ${fileId} has no S3 key - file may need migration`);
+  if (!entry.storageKey) {
+    throw new Error(`File ${fileId} has no storage key - file may need migration`);
   }
 
-  // Download from S3
-  const buffer = await downloadS3File(entry.s3Key);
-  logger.debug('Downloaded chat file from S3', { fileId, s3Key: entry.s3Key, size: buffer.length });
+  // Download from file storage
+  const buffer = await fileStorageManager.downloadFile(entry);
+  logger.debug('Downloaded chat file from storage', { fileId, storageKey: entry.storageKey, size: buffer.length });
   return buffer;
 }
 
 /**
  * Get supported MIME types for chat file uploads
+ * @deprecated All file types are now supported. This function returns an empty array.
  */
 export function getSupportedMimeTypes(): string[] {
-  return [...ALLOWED_CHAT_FILE_TYPES];
+  // All file types are now supported - no restrictions
+  return [];
 }

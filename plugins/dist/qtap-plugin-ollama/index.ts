@@ -13,12 +13,14 @@
 import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
 import { OllamaProvider } from './provider';
 import { OllamaIcon } from './icon';
-import { logger } from '../../../lib/logger';
 import {
+  createPluginLogger,
   parseOpenAIToolCalls,
   type OpenAIToolDefinition,
   type ToolCallRequest,
-} from '../../../lib/llm/tool-formatting-utils';
+} from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-ollama');
 
 /**
  * Plugin metadata configuration

@@ -1,115 +1,217 @@
 'use client'
 
-import { useMemo, ReactNode } from 'react'
+import { useMemo, useState, useCallback, ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import type { Components } from 'react-markdown'
+import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+
+/**
+ * Code block with copy button component
+ */
+function CodeBlockWithCopy({ code, language }: { code: string; language: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy code block', { error: err instanceof Error ? err.message : String(err) })
+    }
+  }, [code])
+
+  return (
+    <div
+      className="qt-code-block-container"
+      style={{
+        position: 'relative',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        borderRadius: '0.375rem',
+        marginTop: '0.5rem',
+        marginBottom: '0.5rem',
+      }}
+    >
+      <button
+        onClick={handleCopy}
+        className={`qt-copy-button qt-code-block-copy ${copied ? 'qt-copy-button-success' : ''}`}
+        title={copied ? 'Copied!' : 'Copy to clipboard'}
+      >
+        {copied ? '✓' : '📋'}
+        <span className="qt-copy-button-text">{copied ? 'Copied' : 'Copy'}</span>
+      </button>
+      <SyntaxHighlighter
+        style={oneDark}
+        language={language}
+        PreTag="div"
+        wrapLines={true}
+        wrapLongLines={true}
+        customStyle={{
+          margin: 0,
+          padding: '1rem',
+          paddingTop: '2.5rem', // Extra padding for copy button
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          overflowWrap: 'break-word',
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+        }}
+      >
+        {code.replace(/\n$/, '')}
+      </SyntaxHighlighter>
+    </div>
+  )
+}
 
 interface MessageContentProps {
   content: string
   className?: string
-  roleplayTemplateName?: string | null
+  /** Patterns for styling roleplay text in message content */
+  renderingPatterns?: RenderingPattern[]
+  /** Optional dialogue detection for paragraph-level styling */
+  dialogueDetection?: DialogueDetection | null
 }
 
-// Pattern definitions for roleplay syntax styling
-interface RoleplayPattern {
+// Internal compiled pattern type
+interface CompiledPattern {
   regex: RegExp
   className: string
-  wrapper: (match: string, inner: string) => string
 }
 
-// Standard template patterns: *actions*, "dialogue", ((OOC))
-const STANDARD_PATTERNS: RoleplayPattern[] = [
-  // Standard: ((OOC)) - double parentheses
-  { regex: /\(\([^)]+\)\)/, className: 'qt-chat-ooc', wrapper: (m) => m },
-  // Standard: "dialogue"
-  { regex: /"[^"]+"/, className: 'qt-chat-dialogue', wrapper: (m) => m },
-  // Standard: *narration* - single asterisks only (not bold **)
-  { regex: /(?<!\*)\*[^*]+\*(?!\*)/, className: 'qt-chat-narration', wrapper: (m) => m },
-]
-
-// Quilltap RP template patterns: [actions], {thoughts}, // OOC, bare dialogue
-const QUILLTAP_RP_PATTERNS: RoleplayPattern[] = [
-  // Quilltap RP: // OOC (comment-style, line prefix)
-  { regex: /^\/\/ .+$/m, className: 'qt-chat-ooc', wrapper: (m) => m },
-  // Quilltap RP: {internal monologue}
-  { regex: /\{[^}]+\}/, className: 'qt-chat-inner-monologue', wrapper: (m) => m },
-  // Quilltap RP: [narration] - not followed by ( to avoid links
-  { regex: /\[[^\]]+\](?!\()/, className: 'qt-chat-narration', wrapper: (m) => m },
+/**
+ * Default rendering patterns used when template doesn't specify any.
+ * Includes common patterns from both Standard and Quilltap-style formatting.
+ */
+const DEFAULT_RENDERING_PATTERNS: RenderingPattern[] = [
+  // OOC: ((comments)) - double parentheses
+  { pattern: '\\(\\([^)]+\\)\\)', className: 'qt-chat-ooc' },
+  // OOC: // comment - line prefix style
+  { pattern: '^// .+$', className: 'qt-chat-ooc', flags: 'm' },
+  // Dialogue: "speech" - straight and curly quotes
+  { pattern: '[""][^""]+[""]', className: 'qt-chat-dialogue' },
+  // Narration: *actions* - single asterisks (not bold **)
+  { pattern: '(?<!\\*)\\*[^*]+\\*(?!\\*)', className: 'qt-chat-narration' },
+  // Narration: [actions] - square brackets (not links)
+  { pattern: '\\[[^\\]]+\\](?!\\()', className: 'qt-chat-narration' },
+  // Internal monologue: {thoughts}
+  { pattern: '\\{[^}]+\\}', className: 'qt-chat-inner-monologue' },
 ]
 
 /**
- * Get the appropriate patterns based on template name
+ * Default dialogue detection for paragraph-level styling.
+ * Handles straight and curly quotes.
  */
-function getPatternsForTemplate(templateName?: string | null): RoleplayPattern[] {
-  if (templateName === 'Quilltap RP') {
-    return QUILLTAP_RP_PATTERNS
-  }
-  if (templateName === 'Standard') {
-    return STANDARD_PATTERNS
-  }
-  // For unknown/custom templates or no template, use all patterns as fallback
-  return [...QUILLTAP_RP_PATTERNS, ...STANDARD_PATTERNS]
+const DEFAULT_DIALOGUE_DETECTION: DialogueDetection = {
+  openingChars: ['"', '"'],
+  closingChars: ['"', '"'],
+  className: 'qt-chat-dialogue',
+}
+
+/**
+ * Compile string patterns to RegExp objects
+ */
+function compilePatterns(patterns: RenderingPattern[]): CompiledPattern[] {
+  return patterns.map(p => ({
+    regex: new RegExp(p.pattern, p.flags || ''),
+    className: p.className,
+  }))
 }
 
 /**
  * Escape markdown syntax characters inside roleplay brackets to prevent
  * ReactMarkdown from breaking up the segments before we can style them.
  * This handles cases like [narration with *emphasis* inside]
+ *
+ * IMPORTANT: This function preserves fenced code blocks (``` ... ```) unchanged
+ * to prevent corrupting code content with escape sequences.
  */
-function escapeMarkdownInBrackets(content: string, templateName?: string | null): string {
+function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[]): string {
   // Characters that trigger markdown parsing
   const markdownChars = /([*_~`])/g
 
-  let result = content
+  // Check if patterns include bracket-style narration [...]
+  const hasBracketNarration = patterns.some(p => p.pattern.includes('\\['))
+  // Check if patterns include brace-style monologue {...}
+  const hasBraceMonologue = patterns.some(p => p.pattern.includes('\\{'))
+  // Check if patterns include single-asterisk narration *...*
+  const hasAsteriskNarration = patterns.some(p =>
+    p.pattern.includes('\\*') && p.className === 'qt-chat-narration'
+  )
 
-  // Escape inside [...] (Quilltap RP narration, or fallback)
-  if (!templateName || templateName === 'Quilltap RP') {
-    result = result.replace(/\[([^\]]+)\](?!\()/g, (match, inner) => {
-      // Escape markdown characters with backslash
-      const escaped = inner.replace(markdownChars, '\\$1')
-      return `[${escaped}]`
-    })
-
-    // Escape inside {...} (Quilltap RP internal monologue)
-    result = result.replace(/\{([^}]+)\}/g, (match, inner) => {
-      const escaped = inner.replace(markdownChars, '\\$1')
-      return `{${escaped}}`
-    })
+  // If no relevant patterns, return content unchanged
+  if (!hasBracketNarration && !hasBraceMonologue && !hasAsteriskNarration) {
+    return content
   }
 
-  // Escape inside *...* for Standard template (single asterisks for narration)
-  // Be careful not to double-escape or break bold **...**
-  if (templateName === 'Standard') {
-    // Match single asterisk pairs that aren't bold
-    result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (match, inner) => {
-      // Only escape if there are nested markdown chars (unlikely but safe)
-      const escaped = inner.replace(/([_~`])/g, '\\$1')
-      return `*${escaped}*`
-    })
-  }
+  // Split content by fenced code blocks to preserve them unchanged
+  // Match ``` optionally followed by language, then content, then closing ```
+  const codeBlockRegex = /(```[\s\S]*?```)/g
+  const parts = content.split(codeBlockRegex)
 
-  return result
+  // Process only non-code-block parts
+  const processedParts = parts.map((part, index) => {
+    // Odd indices are code blocks (captured groups from split)
+    if (index % 2 === 1) {
+      return part // Return code blocks unchanged
+    }
+
+    let result = part
+
+    // Escape inside [...] if bracket narration is in patterns
+    if (hasBracketNarration) {
+      result = result.replace(/\[([^\]]+)\](?!\()/g, (match, inner) => {
+        // Escape markdown characters with backslash
+        const escaped = inner.replace(markdownChars, '\\$1')
+        return `[${escaped}]`
+      })
+    }
+
+    // Escape inside {...} if brace monologue is in patterns
+    if (hasBraceMonologue) {
+      result = result.replace(/\{([^}]+)\}/g, (match, inner) => {
+        const escaped = inner.replace(markdownChars, '\\$1')
+        return `{${escaped}}`
+      })
+    }
+
+    // Escape inside *...* if single asterisks are used for narration
+    // Be careful not to double-escape or break bold **...**
+    if (hasAsteriskNarration) {
+      // Match single asterisk pairs that aren't bold
+      result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (match, inner) => {
+        // Only escape if there are nested markdown chars (unlikely but safe)
+        const escaped = inner.replace(/([_~`])/g, '\\$1')
+        return `*${escaped}*`
+      })
+    }
+
+    return result
+  })
+
+  return processedParts.join('')
 }
 
 /**
  * Process roleplay syntax in a string and return React elements
- * Applies patterns based on the active roleplay template
+ * Applies patterns based on the compiled pattern list
  */
-function processRoleplayText(text: string, templateName?: string | null): ReactNode[] {
+function processRoleplayText(text: string, compiledPatterns: CompiledPattern[]): ReactNode[] {
   const result: ReactNode[] = []
   let remaining = text
   let key = 0
-
-  const patterns = getPatternsForTemplate(templateName)
 
   while (remaining.length > 0) {
     let earliestMatch: { index: number; length: number; className: string; text: string } | null = null
 
     // Find the earliest match among all patterns
-    for (const pattern of patterns) {
+    for (const pattern of compiledPatterns) {
       const match = remaining.match(pattern.regex)
       if (match && match.index !== undefined) {
         if (!earliestMatch || match.index < earliestMatch.index) {
@@ -117,7 +219,7 @@ function processRoleplayText(text: string, templateName?: string | null): ReactN
             index: match.index,
             length: match[0].length,
             className: pattern.className,
-            text: pattern.wrapper(match[0], match[0]),
+            text: match[0],
           }
         }
       }
@@ -151,9 +253,9 @@ function processRoleplayText(text: string, templateName?: string | null): ReactN
 /**
  * Recursively process children to apply roleplay styling to text nodes
  */
-function processChildren(children: ReactNode, templateName?: string | null): ReactNode {
+function processChildren(children: ReactNode, compiledPatterns: CompiledPattern[]): ReactNode {
   if (typeof children === 'string') {
-    const processed = processRoleplayText(children, templateName)
+    const processed = processRoleplayText(children, compiledPatterns)
     return processed.length === 1 && typeof processed[0] === 'string'
       ? processed[0]
       : <>{processed}</>
@@ -162,7 +264,7 @@ function processChildren(children: ReactNode, templateName?: string | null): Rea
   if (Array.isArray(children)) {
     return children.map((child, i) => {
       if (typeof child === 'string') {
-        const processed = processRoleplayText(child, templateName)
+        const processed = processRoleplayText(child, compiledPatterns)
         return processed.length === 1 && typeof processed[0] === 'string'
           ? processed[0]
           : <span key={i}>{processed}</span>
@@ -174,82 +276,122 @@ function processChildren(children: ReactNode, templateName?: string | null): Rea
   return children
 }
 
+/**
+ * Extract plain text content from React children (recursively)
+ * Used to detect paragraph-level patterns when content contains formatting
+ */
+function extractTextContent(children: ReactNode): string {
+  if (typeof children === 'string') {
+    return children
+  }
+  if (typeof children === 'number') {
+    return String(children)
+  }
+  if (Array.isArray(children)) {
+    return children.map(extractTextContent).join('')
+  }
+  // Handle React elements - extract text from their children
+  if (children && typeof children === 'object' && 'props' in children) {
+    const element = children as { props: { children?: ReactNode } }
+    return extractTextContent(element.props.children)
+  }
+  return ''
+}
 
-export default function MessageContent({ content, className = '', roleplayTemplateName }: MessageContentProps) {
-  // Pre-process content to escape markdown inside roleplay brackets
-  const processedContent = useMemo(
-    () => escapeMarkdownInBrackets(content, roleplayTemplateName),
-    [content, roleplayTemplateName]
+/**
+ * Check if text content represents dialogue based on configured detection
+ * Uses the openingChars and closingChars from DialogueDetection config
+ */
+function isDialogueParagraph(text: string, detection: DialogueDetection): boolean {
+  const trimmed = text.trim()
+  if (trimmed.length < 2) return false
+
+  const firstChar = trimmed[0]
+  const lastChar = trimmed[trimmed.length - 1]
+
+  return detection.openingChars.includes(firstChar) && detection.closingChars.includes(lastChar)
+}
+
+
+export default function MessageContent({
+  content,
+  className = '',
+  renderingPatterns,
+  dialogueDetection,
+}: MessageContentProps) {
+  // Use provided patterns or fall back to defaults
+  const patterns = renderingPatterns && renderingPatterns.length > 0
+    ? renderingPatterns
+    : DEFAULT_RENDERING_PATTERNS
+
+  // Use provided dialogue detection or fall back to default
+  const dialogueConfig = dialogueDetection || DEFAULT_DIALOGUE_DETECTION
+
+  // Compile patterns once for efficient matching
+  const compiledPatterns = useMemo(
+    () => compilePatterns(patterns),
+    [patterns]
   )
 
-  const components: Components = {
-    // Code blocks with syntax highlighting
-    code({ className, children, ...props }) {
-      const match = /language-(\w+)/.exec(className || '')
-      const language = match ? match[1] : ''
-      const inline = !match
-      const childrenString = typeof children === 'string' || typeof children === 'number' ? String(children) : ''
+  // Pre-process content to escape markdown inside roleplay brackets
+  const processedContent = useMemo(
+    () => escapeMarkdownInBrackets(content, patterns),
+    [content, patterns]
+  )
 
-      return !inline && language ? (
-        <div style={{
-          width: '100%',
-          maxWidth: '100%',
-          boxSizing: 'border-box',
-          overflow: 'hidden',
-          borderRadius: '0.375rem',
-          marginTop: '0.5rem',
-          marginBottom: '0.5rem',
-        }}>
-          <SyntaxHighlighter
-            // @ts-expect-error - style type mismatch between library versions
-            style={oneDark}
-            language={language}
-            PreTag="div"
-            wrapLines={true}
-            wrapLongLines={true}
-            customStyle={{
-              margin: 0,
-              padding: '1rem',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              overflowWrap: 'break-word',
-              width: '100%',
-              maxWidth: '100%',
-              boxSizing: 'border-box',
-            }}
-            {...props}
-          >
-            {childrenString.replace(/\n$/, '')}
-          </SyntaxHighlighter>
-        </div>
-      ) : (
-        <code className={`${className} qt-code-inline`} {...props}>
+  const components: Components = useMemo(() => ({
+    // Fenced code blocks - handled by pre component since they're <pre><code>
+    // This ensures ALL fenced code blocks get block styling, regardless of language
+    pre({ children }) {
+      // Extract the code element's props from children
+      const codeElement = children as any
+      const className = codeElement?.props?.className || ''
+      const codeChildren = codeElement?.props?.children
+
+      const match = /language-(\w+)/.exec(className)
+      const language = match ? match[1] : 'text'
+      const codeString = typeof codeChildren === 'string' || typeof codeChildren === 'number'
+        ? String(codeChildren)
+        : ''
+
+      return <CodeBlockWithCopy code={codeString} language={language} />
+    },
+    // Inline code only (not wrapped in pre)
+    code({ className, children, ...props }) {
+      return (
+        <code className={`${className || ''} qt-code-inline`} {...props}>
           {children}
         </code>
       )
     },
     // Paragraph spacing - inherits font from parent, processes roleplay syntax
+    // Also detects dialogue paragraphs (start/end with quotes) for paragraph-level styling
     p({ children }) {
-      return <p className="mb-2 last:mb-0">{processChildren(children, roleplayTemplateName)}</p>
+      const textContent = extractTextContent(children)
+      const isDialogue = isDialogueParagraph(textContent, dialogueConfig)
+      // Apply dialogue class at paragraph level when detected
+      // This handles cases where dialogue contains formatting like **bold** that splits the text
+      const dialogueClass = isDialogue ? ` ${dialogueConfig.className}` : ''
+      return <p className={`mb-2 last:mb-0${dialogueClass}`}>{processChildren(children, compiledPatterns)}</p>
     },
     // Headings - inherit font from parent
     h1({ children }) {
-      return <h1 className="text-2xl font-bold mb-2 mt-4 first:mt-0">{processChildren(children, roleplayTemplateName)}</h1>
+      return <h1 className="text-2xl font-bold mb-2 mt-4 first:mt-0">{processChildren(children, compiledPatterns)}</h1>
     },
     h2({ children }) {
-      return <h2 className="text-xl font-bold mb-2 mt-3 first:mt-0">{processChildren(children, roleplayTemplateName)}</h2>
+      return <h2 className="text-xl font-bold mb-2 mt-3 first:mt-0">{processChildren(children, compiledPatterns)}</h2>
     },
     h3({ children }) {
-      return <h3 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{processChildren(children, roleplayTemplateName)}</h3>
+      return <h3 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{processChildren(children, compiledPatterns)}</h3>
     },
     h4({ children }) {
-      return <h4 className="text-base font-semibold mb-1 mt-2 first:mt-0">{processChildren(children, roleplayTemplateName)}</h4>
+      return <h4 className="text-base font-semibold mb-1 mt-2 first:mt-0">{processChildren(children, compiledPatterns)}</h4>
     },
     h5({ children }) {
-      return <h5 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{processChildren(children, roleplayTemplateName)}</h5>
+      return <h5 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{processChildren(children, compiledPatterns)}</h5>
     },
     h6({ children }) {
-      return <h6 className="text-xs font-semibold mb-1 mt-2 first:mt-0">{processChildren(children, roleplayTemplateName)}</h6>
+      return <h6 className="text-xs font-semibold mb-1 mt-2 first:mt-0">{processChildren(children, compiledPatterns)}</h6>
     },
     // Lists - inherit font from parent
     ul({ children }) {
@@ -259,13 +401,13 @@ export default function MessageContent({ content, className = '', roleplayTempla
       return <ol className="list-decimal list-inside mb-2 ml-4">{children}</ol>
     },
     li({ children }) {
-      return <li className="mb-1">{processChildren(children, roleplayTemplateName)}</li>
+      return <li className="mb-1">{processChildren(children, compiledPatterns)}</li>
     },
     // Blockquotes - inherit font from parent
     blockquote({ children }) {
       return (
         <blockquote className="border-l-4 border-border pl-4 py-1 my-2 italic">
-          {processChildren(children, roleplayTemplateName)}
+          {processChildren(children, compiledPatterns)}
         </blockquote>
       )
     },
@@ -321,7 +463,7 @@ export default function MessageContent({ content, className = '', roleplayTempla
     em({ children }) {
       return <em className="italic">{children}</em>
     },
-  }
+  }), [compiledPatterns, dialogueConfig])
 
   return (
     <>

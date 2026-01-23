@@ -1,107 +1,37 @@
 /**
- * Unit Tests for Connection Profile Test Connection Endpoint
- * Tests app/api/profiles/test-connection/route.ts
+ * Unit tests for legacy test-connection route
+ * Tests that legacy route returns 410 Gone with redirect info
+ *
+ * Actual functionality is now in /api/v1/connection-profiles?action=test-connection
  */
 
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
-import { getServerSession } from '@/lib/auth/session'
-import { decryptApiKey } from '@/lib/encryption'
-import { getRepositories } from '@/lib/repositories/factory'
+import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
 
-// Mock dependencies
-jest.mock('@/lib/encryption', () => ({
-  decryptApiKey: jest.fn(),
-}))
+let POST: typeof import('@/app/api/profiles/test-connection/route').POST;
 
-// Helper to create a mock NextRequest
-function createMockRequest(body: any) {
-  return {
-    json: async () => body,
-  } as any
-}
-
-describe('POST /api/profiles/test-connection', () => {
-  let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
-  let mockConnectionsRepo: any
-  const mockGetRepositories = jest.mocked(getRepositories)
-
-  const mockSession = {
-    user: {
-      id: 'user-123',
-      email: 'test@example.com',
-    },
-  }
-
+describe('Legacy Test Connection Route (movedToV1)', () => {
   beforeEach(() => {
-    ;(getServerSession as jest.Mock).mockClear?.()
-    ;(decryptApiKey as jest.Mock).mockClear?.()
+    jest.clearAllMocks();
 
-    // Set up repository mocks
-    mockConnectionsRepo = {
-      getAllApiKeys: jest.fn(),
-      findApiKeyById: jest.fn(),
-      createApiKey: jest.fn(),
-      updateApiKey: jest.fn(),
-      deleteApiKey: jest.fn(),
-      findByUserId: jest.fn(),
-      findById: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    }
-
-    mockGetRepositories.mockReturnValue({
-      connections: mockConnectionsRepo,
-      characters: {},
-      personas: {},
-      chats: {},
-      tags: {},
-      users: {},
-      images: {},
-      imageProfiles: {},
-    })
-
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-  })
+    jest.isolateModules(() => {
+      const routesModule = require('@/app/api/profiles/test-connection/route');
+      POST = routesModule.POST;
+    });
+  });
 
   afterEach(() => {
-    consoleErrorSpy.mockRestore()
-    jest.clearAllMocks()
-  })
+    jest.restoreAllMocks();
+  });
 
-  describe('Authentication', () => {
-    it('should return 401 for unauthenticated user', async () => {
-      expect(true).toBe(true)
-    })
-  })
+  describe('POST /api/profiles/test-connection', () => {
+    it('should return 410 Gone with redirect to v1 test-connection endpoint', async () => {
+      const response = await POST();
+      const body = await response.json();
 
-  describe('Validation', () => {
-    it('should return 400 when provider validation fails', async () => {
-      expect(true).toBe(true)
-    })
-  })
-
-  describe('Successful Connection Tests', () => {
-    it('should successfully test connection with API key', async () => {
-      expect(true).toBe(true)
-    })
-  })
-
-  describe('Failed Connection Tests', () => {
-    it('should return 400 when connection test fails', async () => {
-      expect(true).toBe(true)
-    })
-  })
-
-  describe('Different Providers', () => {
-    it('should work with Ollama without API key', async () => {
-      expect(true).toBe(true)
-    })
-  })
-
-  describe('Error Handling', () => {
-    it('should handle database errors gracefully', async () => {
-      expect(true).toBe(true)
-    })
-  })
-})
+      expect(response.status).toBe(410);
+      expect(body.error).toBe('Endpoint removed');
+      expect(body.details.newEndpoint).toBe('/api/v1/connection-profiles');
+      expect(body.details.actionHint).toBe('action=test-connection');
+    });
+  });
+});

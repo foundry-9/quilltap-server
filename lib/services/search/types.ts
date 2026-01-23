@@ -9,7 +9,7 @@ import type { MatchPriority } from './search-utils'
 /**
  * Valid entity types for search
  */
-export const VALID_SEARCH_TYPES = ['chats', 'characters', 'personas', 'tags', 'memories'] as const
+export const VALID_SEARCH_TYPES = ['chats', 'characters', 'tags', 'memories'] as const
 export type SearchType = typeof VALID_SEARCH_TYPES[number]
 
 /**
@@ -38,13 +38,8 @@ export interface BaseSearchResult {
 export interface ChatSearchResult extends BaseSearchResult {
   type: 'chats'
   characterNames?: string[]
-  personaName?: string
   messageCount?: number
   matchedViaCharacter?: {
-    id: string
-    name: string
-  }
-  matchedViaPersona?: {
     id: string
     name: string
   }
@@ -58,15 +53,6 @@ export interface CharacterSearchResult extends BaseSearchResult {
   title?: string | null
   avatarUrl?: string | null
   isFavorite?: boolean
-}
-
-/**
- * Persona search result
- */
-export interface PersonaSearchResult extends BaseSearchResult {
-  type: 'personas'
-  title?: string | null
-  avatarUrl?: string | null
 }
 
 /**
@@ -95,7 +81,6 @@ export interface MemorySearchResult extends BaseSearchResult {
 export type SearchResult =
   | ChatSearchResult
   | CharacterSearchResult
-  | PersonaSearchResult
   | TagSearchResult
   | MemorySearchResult
 

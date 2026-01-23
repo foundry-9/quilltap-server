@@ -384,10 +384,12 @@ export function createMockMessage(overrides: Partial<MessageEvent> = {}): Messag
 export function createMockFileEntry(overrides: Partial<FileEntry> = {}): FileEntry {
   const now = generateTimestamp();
   const id = overrides.id || generateId();
+  const userId = overrides.userId || generateId();
+  const storageKey = `users/${userId}/files/${id}.png`;
 
   return {
     id,
-    userId: generateId(),
+    userId,
     sha256: 'a'.repeat(64),
     originalFilename: 'test-image.png',
     mimeType: 'image/png',
@@ -402,8 +404,10 @@ export function createMockFileEntry(overrides: Partial<FileEntry> = {}): FileEnt
     generationRevisedPrompt: null,
     description: null,
     tags: [],
-    s3Key: `users/${id}/files/${id}.png`,
-    s3Bucket: 'quilltap-files',
+    s3Key: storageKey,  // Keep for backward compatibility
+    s3Bucket: 'quilltap-files',  // Keep for backward compatibility
+    storageKey,  // New field for file storage manager
+    mountPointId: 'mock-mount-point',  // Default mount point
     createdAt: now,
     updatedAt: now,
     ...overrides,

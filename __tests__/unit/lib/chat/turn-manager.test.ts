@@ -49,7 +49,7 @@ const makeCharacterParticipant = (participantId: string, characterId: string, ov
   id: participantId,
   type: 'CHARACTER',
   characterId,
-  personaId: null,
+  controlledBy: 'llm',
   connectionProfileId: null,
   imageProfileId: null,
   systemPromptOverride: null,
@@ -62,11 +62,11 @@ const makeCharacterParticipant = (participantId: string, characterId: string, ov
   ...overrides,
 })
 
-const makePersonaParticipant = (participantId: string, personaId: string): ChatParticipantBase => ({
+const makeUserControlledParticipant = (participantId: string, characterId: string, overrides: Partial<ChatParticipantBase> = {}): ChatParticipantBase => ({
   id: participantId,
-  type: 'PERSONA',
-  personaId,
-  characterId: null,
+  type: 'CHARACTER',
+  characterId,
+  controlledBy: 'user',
   connectionProfileId: null,
   imageProfileId: null,
   systemPromptOverride: null,
@@ -76,6 +76,7 @@ const makePersonaParticipant = (participantId: string, personaId: string): ChatP
   joinScenario: null,
   createdAt: now,
   updatedAt: now,
+  ...overrides,
 })
 
 const makeMessage = (id: string, role: 'USER' | 'ASSISTANT', participantId?: string | null): MessageEvent => ({
@@ -244,11 +245,11 @@ describe('turn manager state', () => {
   })
 
   it('finds user participant and active characters', () => {
-    const persona = makePersonaParticipant('u1', 'persona-1')
+    const userChar = makeUserControlledParticipant('u1', 'char-user')
     const char1 = makeCharacterParticipant('p1', 'char-1')
     const char2 = makeCharacterParticipant('p2', 'char-2', { isActive: false })
 
-    expect(findUserParticipant([char1, persona])).toBe(persona)
+    expect(findUserParticipant([char1, userChar])).toBe(userChar)
     expect(getActiveCharacterParticipants([char1, char2])).toEqual([char1])
     expect(isMultiCharacterChat([char1, makeCharacterParticipant('p3', 'char-3')])).toBe(true)
   })
@@ -582,10 +583,10 @@ describe('turn manager edge cases', () => {
       expect(selection.cycleComplete).toBe(true)
     })
 
-    it('handles mixed active/inactive with only persona active', () => {
+    it('handles mixed active/inactive with only user-controlled active', () => {
       const participants = [
         makeCharacterParticipant('p1', 'char-1', { isActive: false }),
-        makePersonaParticipant('u1', 'persona-1'), // Persona is active but not a character
+        makeUserControlledParticipant('u1', 'char-user'), // User-controlled character is active
       ]
       const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])
       const state = createInitialTurnState()

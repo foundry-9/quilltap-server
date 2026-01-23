@@ -7,7 +7,6 @@
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { filterProfilesBySupportedMimeType, profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type {
@@ -69,22 +68,23 @@ export function useAIWizard({
     const fetchProfiles = async () => {
       try {
         setLoadingProfiles(true)
-        const response = await fetch('/api/profiles')
+        const response = await fetch('/api/v1/connection-profiles')
         if (!response.ok) {
           throw new Error('Failed to fetch connection profiles')
         }
         const data = await response.json()
-        setProfiles(data)
+        const profileList = data.profiles || []
+        setProfiles(profileList)
 
         // Auto-select default profile if available
-        const defaultProfile = data.find((p: ConnectionProfile) => p.isDefault)
+        const defaultProfile = profileList.find((p: ConnectionProfile) => p.isDefault)
         if (defaultProfile) {
           setPrimaryProfileId(defaultProfile.id)
-        } else if (data.length > 0) {
-          setPrimaryProfileId(data[0].id)
+        } else if (profileList.length > 0) {
+          setPrimaryProfileId(profileList[0].id)
         }
       } catch (err) {
-        clientLogger.error('Failed to fetch profiles for AI wizard', {
+        console.error('Failed to fetch profiles for AI wizard', {
           error: err instanceof Error ? err.message : String(err),
         })
         setError('Failed to load connection profiles')
@@ -96,10 +96,6 @@ export function useAIWizard({
     fetchProfiles()
   }, [])
 
-  // Log step changes
-  useEffect(() => {
-    clientLogger.debug('AI Wizard step changed', { step: currentStep })
-  }, [currentStep])
 
   // Computed: Vision-capable profiles
   const visionProfiles = useMemo(() => {
@@ -202,13 +198,11 @@ export function useAIWizard({
   const handleImageUpload = useCallback((imageId: string, imageUrl: string) => {
     setUploadedImageId(imageId)
     setUploadedImageUrl(imageUrl)
-    clientLogger.debug('AI Wizard image uploaded', { imageId })
   }, [])
 
   const handleGallerySelect = useCallback((imageId: string, imageUrl: string) => {
     setSelectedGalleryImageId(imageId)
     setSelectedGalleryImageUrl(imageUrl)
-    clientLogger.debug('AI Wizard gallery image selected', { imageId })
   }, [])
 
   const toggleField = useCallback((field: GeneratableField) => {
@@ -246,12 +240,6 @@ export function useAIWizard({
       errors: {},
     })
 
-    clientLogger.info('AI Wizard starting generation', {
-      characterName,
-      fieldsToGenerate: Array.from(selectedFields),
-      descriptionSource,
-    })
-
     try {
       // Determine image ID if using image source
       let imageId: string | undefined
@@ -273,7 +261,7 @@ export function useAIWizard({
         characterId,
       }
 
-      const response = await fetch('/api/characters/ai-wizard', {
+      const response = await fetch('/api/v1/characters?action=ai-wizard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
@@ -291,11 +279,6 @@ export function useAIWizard({
         completedFields: Array.from(selectedFields),
         errors: result.errors || {},
       })
-
-      clientLogger.info('AI Wizard generation complete', {
-        fieldsGenerated: Object.keys(result.generated),
-        errors: result.errors,
-      })
     } catch (err) {
       let errorMessage = 'Generation failed'
       if (err instanceof Error) {
@@ -304,7 +287,7 @@ export function useAIWizard({
         errorMessage = err
       }
       setError(errorMessage)
-      clientLogger.error('AI Wizard generation failed', { error: errorMessage, rawError: String(err) })
+      console.error('AI Wizard generation failed', { error: errorMessage, rawError: String(err) })
     } finally {
       setGenerating(false)
     }
@@ -325,9 +308,6 @@ export function useAIWizard({
   // Apply generated data
   const applyGenerated = useCallback(() => {
     if (generatedData) {
-      clientLogger.info('AI Wizard applying generated data', {
-        fields: Object.keys(generatedData),
-      })
       onApply(generatedData)
       onClose()
     }

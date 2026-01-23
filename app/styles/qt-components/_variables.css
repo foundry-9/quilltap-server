@@ -42,24 +42,49 @@
   --qt-button-success-fg: hsl(0 0% 10%); /* Dark text for contrast on bright green */
   --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
 
+  --qt-button-warning-bg: var(--color-warning);
+  --qt-button-warning-fg: hsl(0 0% 10%); /* Dark text for contrast on amber */
+  --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, black);
+
   /* ==========================================================================
      STATUS TOKENS
+     Use solid/semi-solid backgrounds with contrasting foreground for readability
      ========================================================================== */
-  --qt-status-success-bg: color-mix(in srgb, var(--color-success) 12%, transparent);
-  --qt-status-success-fg: var(--color-success);
-  --qt-status-success-border: color-mix(in srgb, var(--color-success) 35%, transparent);
+  --qt-status-success-bg: color-mix(in srgb, var(--color-success) 85%, transparent);
+  --qt-status-success-fg: var(--color-success-foreground);
+  --qt-status-success-border: var(--color-success);
 
-  --qt-status-warning-bg: color-mix(in srgb, var(--color-warning) 12%, transparent);
-  --qt-status-warning-fg: var(--color-warning);
-  --qt-status-warning-border: color-mix(in srgb, var(--color-warning) 35%, transparent);
+  --qt-status-warning-bg: color-mix(in srgb, var(--color-warning) 85%, transparent);
+  --qt-status-warning-fg: var(--color-warning-foreground);
+  --qt-status-warning-border: var(--color-warning);
 
-  --qt-status-info-bg: color-mix(in srgb, var(--color-info) 12%, transparent);
-  --qt-status-info-fg: var(--color-info);
-  --qt-status-info-border: color-mix(in srgb, var(--color-info) 35%, transparent);
+  --qt-status-info-bg: color-mix(in srgb, var(--color-info) 85%, transparent);
+  --qt-status-info-fg: var(--color-info-foreground);
+  --qt-status-info-border: var(--color-info);
 
-  --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 12%, transparent);
-  --qt-status-danger-fg: var(--color-destructive);
-  --qt-status-danger-border: color-mix(in srgb, var(--color-destructive) 35%, transparent);
+  --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 85%, transparent);
+  --qt-status-danger-fg: var(--color-destructive-foreground);
+  --qt-status-danger-border: var(--color-destructive);
+
+  /* ==========================================================================
+     ALERT TOKENS
+     Semi-transparent backgrounds with readable text for light/dark modes
+     ========================================================================== */
+  --qt-alert-success-bg: hsl(142 76% 36% / 0.1);
+  --qt-alert-success-fg: hsl(142 76% 30%);
+  --qt-alert-success-border: hsl(142 76% 36% / 0.3);
+
+  --qt-alert-warning-bg: hsl(38 92% 50% / 0.1);
+  --qt-alert-warning-fg: hsl(38 92% 30%);
+  --qt-alert-warning-border: hsl(38 92% 50% / 0.3);
+
+  --qt-alert-error-bg: hsl(0 84% 60% / 0.1);
+  --qt-alert-error-fg: hsl(0 84% 35%);
+  --qt-alert-error-border: hsl(0 84% 60% / 0.3);
+
+  --qt-alert-info-bg: hsl(199 89% 48% / 0.1);
+  --qt-alert-info-fg: hsl(199 89% 30%);
+  --qt-alert-info-border: hsl(199 89% 48% / 0.3);
 
   /* ==========================================================================
      CARD VARIABLES
@@ -227,6 +252,7 @@
   --qt-page-max-width: 64rem;
 
   --qt-chat-sidebar-width: 20rem;
+  --qt-chat-sidebar-collapsed-width: 4rem;
   --qt-chat-sidebar-bg: var(--color-card);
   --qt-chat-sidebar-border: var(--color-border);
   --qt-chat-sidebar-header-border: var(--color-border);
@@ -301,6 +327,44 @@
   --qt-badge-outline-fg: var(--color-foreground);
   --qt-badge-outline-border: var(--color-border);
 
+  /* Entity-type badge colors - Characters, Chats, Personas, etc. */
+  --qt-badge-character-bg: hsl(217 91% 60% / 0.15);
+  --qt-badge-character-fg: hsl(217 91% 45%);
+  --qt-badge-persona-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-persona-fg: hsl(270 70% 45%);
+  --qt-badge-chat-bg: hsl(142 76% 36% / 0.15);
+  --qt-badge-chat-fg: hsl(142 76% 30%);
+  --qt-badge-tag-bg: hsl(25 95% 53% / 0.15);
+  --qt-badge-tag-fg: hsl(25 95% 40%);
+  --qt-badge-memory-bg: hsl(330 80% 60% / 0.15);
+  --qt-badge-memory-fg: hsl(330 80% 40%);
+
+  /* Status badge colors - Enabled, Disabled, etc. */
+  --qt-badge-enabled-bg: hsl(142 76% 36% / 0.15);
+  --qt-badge-enabled-fg: hsl(142 76% 30%);
+  --qt-badge-disabled-bg: var(--color-muted);
+  --qt-badge-disabled-fg: var(--color-muted-foreground);
+  --qt-badge-related-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-related-fg: hsl(270 70% 45%);
+  --qt-badge-manual-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-manual-fg: hsl(270 70% 45%);
+  --qt-badge-auto-bg: var(--color-muted);
+  --qt-badge-auto-fg: var(--color-muted-foreground);
+
+  /* Plugin source badge colors */
+  --qt-badge-source-included-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-source-included-fg: hsl(270 70% 45%);
+  --qt-badge-source-npm-bg: hsl(0 84% 60% / 0.15);
+  --qt-badge-source-npm-fg: hsl(0 84% 40%);
+  --qt-badge-source-git-bg: hsl(25 95% 53% / 0.15);
+  --qt-badge-source-git-fg: hsl(25 95% 40%);
+  --qt-badge-source-manual-bg: var(--color-muted);
+  --qt-badge-source-manual-fg: var(--color-muted-foreground);
+
+  /* Capability badge colors */
+  --qt-badge-capability-bg: hsl(217 91% 60% / 0.1);
+  --qt-badge-capability-fg: hsl(217 91% 45%);
+
   /* ==========================================================================
      AVATAR VARIABLES
      ========================================================================== */
@@ -357,6 +421,36 @@
   --qt-auth-divider-color: var(--color-border);
 
   /* ==========================================================================
+     HIGHLIGHT VARIABLES (Search result highlighting)
+     ========================================================================== */
+  --qt-highlight-bg: hsl(50 100% 50%);
+  --qt-highlight-fg: hsl(40 100% 10%);
+  --qt-highlight-radius: 0.125rem;
+  --qt-highlight-padding-x: 0.125rem;
+  --qt-highlight-font-weight: 500;
+
+  /* ==========================================================================
+     FILTER CHIP VARIABLES (Search filter toggles)
+     ========================================================================== */
+  --qt-filter-chip-radius: 9999px;
+  --qt-filter-chip-padding-x: 0.5rem;
+  --qt-filter-chip-padding-y: 0.25rem;
+  --qt-filter-chip-font-size: 0.75rem;
+  --qt-filter-chip-font-weight: 500;
+  --qt-filter-chip-transition: all 150ms ease;
+
+  /* Active state (filter is enabled, showing results) */
+  --qt-filter-chip-active-bg: var(--color-primary);
+  --qt-filter-chip-active-fg: var(--color-primary-foreground);
+  --qt-filter-chip-active-border: transparent;
+
+  /* Inactive state (filter is disabled, hiding results) */
+  --qt-filter-chip-inactive-bg: var(--color-muted);
+  --qt-filter-chip-inactive-fg: var(--color-muted-foreground);
+  --qt-filter-chip-inactive-border: transparent;
+  --qt-filter-chip-inactive-hover-bg: color-mix(in srgb, var(--color-muted) 80%, var(--color-foreground) 5%);
+
+  /* ==========================================================================
      TAB VARIABLES
      ========================================================================== */
   --qt-tab-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -382,118 +476,59 @@
   /* Tab group/container */
   --qt-tab-group-gap: 0.25rem;
   --qt-tab-divider-color: var(--color-border);
-
-  /* ==========================================================================
-     DEVCONSOLE VARIABLES
-     ========================================================================== */
-  --qt-devconsole-bg: var(--color-background);
-  --qt-devconsole-header-bg: var(--color-card);
-  --qt-devconsole-tabs-bg: var(--color-muted);
-  --qt-devconsole-content-bg: var(--color-background);
-  --qt-devconsole-footer-bg: var(--color-card);
-  --qt-devconsole-border: var(--color-border);
-
-  /* Log entry level colors - Error (red) */
-  --qt-log-error-bg: hsl(0 100% 97%);
-  --qt-log-error-fg: hsl(0 72% 51%);
-  --qt-log-error-border: hsl(0 72% 51%);
-  --qt-log-error-details-bg: hsl(0 100% 95%);
-  --qt-log-error-stack-fg: hsl(0 65% 45%);
-
-  /* Log entry level colors - Warning (amber/yellow) */
-  --qt-log-warn-bg: hsl(45 100% 96%);
-  --qt-log-warn-fg: hsl(32 95% 44%);
-  --qt-log-warn-border: hsl(38 92% 50%);
-
-  /* Log entry level colors - Info (blue) */
-  --qt-log-info-bg: hsl(214 100% 97%);
-  --qt-log-info-fg: hsl(221 83% 53%);
-  --qt-log-info-border: hsl(221 83% 53%);
-
-  /* Log entry level colors - Debug (gray) */
-  --qt-log-debug-bg: var(--color-muted);
-  --qt-log-debug-fg: var(--color-muted-foreground);
-  --qt-log-debug-border: hsl(215 14% 70%);
-
-  /* Log entry level colors - Default/Log (neutral) */
-  --qt-log-default-bg: color-mix(in srgb, var(--color-muted) 30%, transparent);
-  --qt-log-default-fg: var(--color-muted-foreground);
-  --qt-log-default-border: var(--color-muted-foreground);
 }
 
-/* Dark mode overrides for DevConsole */
+/* ==========================================================================
+   DARK MODE OVERRIDES
+   Adjusted colors for dark backgrounds with better contrast
+   ========================================================================== */
 .dark {
-  --qt-log-error-bg: hsl(0 50% 10%);
-  --qt-log-error-fg: hsl(0 90% 70%);
-  --qt-log-error-border: hsl(0 72% 51%);
-  --qt-log-error-details-bg: hsl(0 40% 15%);
-  --qt-log-error-stack-fg: hsl(0 80% 65%);
+  /* Alert tokens - brighter, more saturated for dark backgrounds */
+  --qt-alert-success-bg: hsl(142 76% 36% / 0.2);
+  --qt-alert-success-fg: hsl(142 76% 65%);
+  --qt-alert-success-border: hsl(142 76% 36% / 0.5);
 
-  --qt-log-warn-bg: hsl(45 50% 10%);
-  --qt-log-warn-fg: hsl(38 92% 65%);
-  --qt-log-warn-border: hsl(38 92% 50%);
+  --qt-alert-warning-bg: hsl(38 92% 50% / 0.2);
+  --qt-alert-warning-fg: hsl(38 92% 70%);
+  --qt-alert-warning-border: hsl(38 92% 50% / 0.5);
 
-  --qt-log-info-bg: hsl(214 50% 12%);
-  --qt-log-info-fg: hsl(217 91% 70%);
-  --qt-log-info-border: hsl(221 83% 53%);
+  --qt-alert-error-bg: hsl(0 84% 60% / 0.2);
+  --qt-alert-error-fg: hsl(0 84% 70%);
+  --qt-alert-error-border: hsl(0 84% 60% / 0.5);
 
-  --qt-log-debug-bg: var(--color-muted);
-  --qt-log-debug-fg: var(--color-muted-foreground);
-  --qt-log-debug-border: hsl(215 14% 50%);
+  --qt-alert-info-bg: hsl(199 89% 48% / 0.2);
+  --qt-alert-info-fg: hsl(199 89% 70%);
+  --qt-alert-info-border: hsl(199 89% 48% / 0.5);
 
-  /* Debug panel - entry cards */
-  --qt-debug-outgoing-bg: hsl(217 50% 15%);
-  --qt-debug-outgoing-border: hsl(217 91% 60%);
-  --qt-debug-outgoing-fg: hsl(217 91% 75%);
-  --qt-debug-incoming-bg: hsl(142 50% 12%);
-  --qt-debug-incoming-border: hsl(142 71% 45%);
-  --qt-debug-incoming-fg: hsl(142 71% 65%);
+  /* Entity badge tokens - brighter for dark backgrounds */
+  --qt-badge-character-bg: hsl(217 91% 60% / 0.3);
+  --qt-badge-character-fg: hsl(217 91% 70%);
+  --qt-badge-persona-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-persona-fg: hsl(270 70% 70%);
+  --qt-badge-chat-bg: hsl(142 76% 36% / 0.3);
+  --qt-badge-chat-fg: hsl(142 76% 65%);
+  --qt-badge-tag-bg: hsl(25 95% 53% / 0.3);
+  --qt-badge-tag-fg: hsl(25 95% 65%);
+  --qt-badge-memory-bg: hsl(330 80% 60% / 0.3);
+  --qt-badge-memory-fg: hsl(330 80% 70%);
 
-  /* Debug panel - Cyan theme (LLM Request Details) */
-  --qt-debug-cyan-bg: hsl(187 50% 12%);
-  --qt-debug-cyan-fg: hsl(187 100% 70%);
-  --qt-debug-cyan-hover: hsl(187 50% 18%);
-  --qt-debug-cyan-border: hsl(187 50% 30%);
-  --qt-debug-cyan-content-bg: hsl(187 50% 8%);
-  --qt-debug-cyan-meta: hsl(187 100% 65%);
+  /* Status badge tokens */
+  --qt-badge-enabled-bg: hsl(142 76% 36% / 0.3);
+  --qt-badge-enabled-fg: hsl(142 76% 65%);
+  --qt-badge-related-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-related-fg: hsl(270 70% 70%);
+  --qt-badge-manual-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-manual-fg: hsl(270 70% 70%);
 
-  /* Debug panel - Violet theme (Context Management) */
-  --qt-debug-violet-bg: hsl(258 50% 15%);
-  --qt-debug-violet-fg: hsl(258 90% 75%);
-  --qt-debug-violet-hover: hsl(258 50% 20%);
-  --qt-debug-violet-border: hsl(258 50% 35%);
-  --qt-debug-violet-content-bg: hsl(258 50% 10%);
-  --qt-debug-violet-meta: hsl(258 90% 70%);
+  /* Plugin source badge tokens */
+  --qt-badge-source-included-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-source-included-fg: hsl(270 70% 70%);
+  --qt-badge-source-npm-bg: hsl(0 84% 60% / 0.3);
+  --qt-badge-source-npm-fg: hsl(0 84% 70%);
+  --qt-badge-source-git-bg: hsl(25 95% 53% / 0.3);
+  --qt-badge-source-git-fg: hsl(25 95% 65%);
 
-  /* Debug panel - Emerald theme (Stitched Response) */
-  --qt-debug-emerald-bg: hsl(152 50% 12%);
-  --qt-debug-emerald-fg: hsl(152 80% 65%);
-  --qt-debug-emerald-hover: hsl(152 50% 18%);
-  --qt-debug-emerald-border: hsl(152 50% 30%);
-  --qt-debug-emerald-content-bg: hsl(152 50% 8%);
-  --qt-debug-emerald-meta: hsl(152 80% 60%);
-
-  /* Debug panel - Amber theme (Final Response) */
-  --qt-debug-amber-bg: hsl(38 50% 12%);
-  --qt-debug-amber-fg: hsl(38 92% 70%);
-  --qt-debug-amber-hover: hsl(38 50% 18%);
-  --qt-debug-amber-border: hsl(38 50% 30%);
-  --qt-debug-amber-content-bg: hsl(38 50% 8%);
-  --qt-debug-amber-meta: hsl(38 92% 65%);
-
-  /* Debug panel - Purple theme (Tool Executions) */
-  --qt-debug-purple-bg: hsl(280 50% 15%);
-  --qt-debug-purple-fg: hsl(280 90% 75%);
-  --qt-debug-purple-hover: hsl(280 50% 20%);
-  --qt-debug-purple-border: hsl(280 50% 35%);
-  --qt-debug-purple-content-bg: hsl(280 50% 10%);
-  --qt-debug-purple-meta: hsl(280 90% 70%);
-
-  /* Debug panel - Indigo theme (Memory Extraction) */
-  --qt-debug-indigo-bg: hsl(239 50% 18%);
-  --qt-debug-indigo-fg: hsl(239 85% 80%);
-  --qt-debug-indigo-hover: hsl(239 50% 25%);
-  --qt-debug-indigo-border: hsl(239 60% 50%);
-  --qt-debug-indigo-content-bg: hsl(239 50% 12%);
-  --qt-debug-indigo-meta: hsl(239 85% 70%);
+  /* Capability badge tokens */
+  --qt-badge-capability-bg: hsl(217 91% 60% / 0.2);
+  --qt-badge-capability-fg: hsl(217 91% 70%);
 }

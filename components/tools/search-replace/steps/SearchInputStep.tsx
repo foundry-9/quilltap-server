@@ -6,8 +6,6 @@
  * Step 2: Enter search and replace text with live preview.
  */
 
-import { useEffect } from 'react';
-import { clientLogger } from '@/lib/client-logger';
 import type { SearchReplacePreview } from '../types';
 
 interface SearchInputStepProps {
@@ -37,14 +35,6 @@ export function SearchInputStep({
   onIncludeMessagesChange,
   onIncludeMemoriesChange,
 }: SearchInputStepProps) {
-  // Log on mount (intentionally captures initial values only)
-  useEffect(() => {
-    clientLogger.debug('[SearchInputStep] Rendered', {
-      searchTextLength: searchText.length,
-      hasPreview: !!preview,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const totalMatches = (preview?.messageMatches || 0) + (preview?.memoryMatches || 0);
 

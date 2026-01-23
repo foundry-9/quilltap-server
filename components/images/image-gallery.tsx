@@ -50,7 +50,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
       if (tagType) params.append('tagType', tagType);
       if (tagId) params.append('tagId', tagId);
 
-      const response = await fetch(`/api/images?${params.toString()}`);
+      const response = await fetch(`/api/v1/images?${params.toString()}`);
       const data = await response.json();
 
       if (!response.ok) {
@@ -75,7 +75,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
     }
 
     try {
-      const response = await fetch(`/api/images/${imageId}`, {
+      const response = await fetch(`/api/v1/images/${imageId}`, {
         method: 'DELETE',
       });
 

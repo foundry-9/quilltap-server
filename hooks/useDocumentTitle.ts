@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from 'react';
-import { clientLogger } from '@/lib/client-logger';
 
 const DEFAULT_TITLE = 'Quilltap - AI Chat Platform';
 
@@ -24,16 +23,13 @@ export function useDocumentTitle(title: string | null | undefined): void {
     if (title) {
       const newTitle = `Quilltap: ${title}`;
       document.title = newTitle;
-      clientLogger.debug('[useDocumentTitle] Set title', { title: newTitle });
     } else {
       document.title = DEFAULT_TITLE;
-      clientLogger.debug('[useDocumentTitle] Reset to default title');
     }
 
     // Restore default title on unmount
     return () => {
       document.title = DEFAULT_TITLE;
-      clientLogger.debug('[useDocumentTitle] Cleanup - restored default title');
     };
   }, [title]);
 }

@@ -59,7 +59,6 @@ export function ExportDialog({
 
     if (
       state.entityType === 'characters' ||
-      state.entityType === 'personas' ||
       state.entityType === 'chats'
     ) {
       return state.step === 'type' || state.step === 'select' ? 5 : 4
@@ -208,7 +207,7 @@ export function ExportDialog({
                       Cancel
                     </button>
 
-                    {state.step === 'options' || (state.step === 'select' && state.entityType && !['characters', 'personas', 'chats'].includes(state.entityType)) ? (
+                    {state.step === 'options' || (state.step === 'select' && state.entityType && !['characters', 'chats'].includes(state.entityType)) ? (
                       <button
                         onClick={actions.handleExport}
                         disabled={

@@ -1,12 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { clientLogger } from '@/lib/client-logger'
 import type {
   SearchResult,
   SearchType,
   CharacterSearchResult,
-  PersonaSearchResult,
   ChatSearchResult,
   TagSearchResult,
   MemorySearchResult,
@@ -18,6 +16,10 @@ interface SearchResultsProps {
   query: string
   isLoading?: boolean
   onResultClick?: () => void
+  /** Total counts per type (from API, before pagination) */
+  countsByType?: Partial<Record<SearchType, number>>
+  /** Callback when clicking on a type's count to filter by that type */
+  onTypeCountClick?: (type: SearchType) => void
 }
 
 // Individual result card components
@@ -26,14 +28,13 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
     <Link
       href={result.url}
       onClick={() => {
-        clientLogger.debug('Search result clicked', { type: 'character', id: result.id, query })
         onResultClick?.()
       }}
       className="block p-3 hover:bg-accent rounded-lg transition-colors"
     >
       <div className="flex items-start gap-3">
         {result.avatarUrl ? (
-           
+
           <img
             src={result.avatarUrl}
             alt={result.name}
@@ -75,67 +76,13 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
   )
 }
 
-function PersonaResultCard({ result, query, onResultClick }: { result: PersonaSearchResult; query: string; onResultClick?: () => void }) {
-  return (
-    <Link
-      href={result.url}
-      onClick={() => {
-        clientLogger.debug('Search result clicked', { type: 'persona', id: result.id, query })
-        onResultClick?.()
-      }}
-      className="block p-3 hover:bg-accent rounded-lg transition-colors"
-    >
-      <div className="flex items-start gap-3">
-        {result.avatarUrl ? (
-           
-          <img
-            src={result.avatarUrl}
-            alt={result.name}
-            className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-            <span className="text-lg">{TYPE_ICONS.personas}</span>
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="qt-text-primary truncate">
-              {result.name}
-            </span>
-            <span className="text-xs px-1.5 py-0.5 rounded qt-badge-persona">
-              {TYPE_LABELS.personas}
-            </span>
-          </div>
-          {result.title && (
-            <p className="qt-text-xs truncate">{result.title}</p>
-          )}
-          <p className="qt-text-small mt-1 line-clamp-2">
-            {result.matchedTag ? (
-              <span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-tag">
-                  🏷️ {result.matchedTag.name}
-                </span>
-                {result.snippet.replace(`Tagged with "${result.matchedTag.name}"`, '').replace(/^[:\s-]+/, '')}
-              </span>
-            ) : (
-              <HighlightedText text={result.snippet} query={query} />
-            )}
-          </p>
-        </div>
-      </div>
-    </Link>
-  )
-}
-
 function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchResult; query: string; onResultClick?: () => void }) {
-  const isRelatedResult = result.matchedViaCharacter || result.matchedViaPersona
+  const isRelatedResult = result.matchedViaCharacter
 
   return (
     <Link
       href={result.url}
       onClick={() => {
-        clientLogger.debug('Search result clicked', { type: 'chat', id: result.id, query })
         onResultClick?.()
       }}
       className="block p-3 hover:bg-accent rounded-lg transition-colors"
@@ -181,13 +128,6 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
                 </span>
                 Chat includes matching character
               </span>
-            ) : result.matchedViaPersona ? (
-              <span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-persona">
-                  👤 {result.matchedViaPersona.name}
-                </span>
-                Chat includes matching persona
-              </span>
             ) : (
               <HighlightedText text={result.snippet} query={query} />
             )}
@@ -201,11 +141,10 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
 function TagResultCard({ result, query, onResultClick }: { result: TagSearchResult; query: string; onResultClick?: () => void }) {
   return (
     <Link
-      href={`/api/search?q=${encodeURIComponent(result.name)}&types=characters,personas,chats,memories`}
+      href={result.url}
       onClick={(e) => {
         // For tags, we want to show items with this tag
         // This will be handled by the SearchDialog to show expanded results
-        clientLogger.debug('Tag search result clicked', { type: 'tag', id: result.id, name: result.name, query })
         onResultClick?.()
       }}
       className="block p-3 hover:bg-accent rounded-lg transition-colors"
@@ -229,7 +168,7 @@ function TagResultCard({ result, query, onResultClick }: { result: TagSearchResu
             )}
           </div>
           <p className="qt-text-small mt-1">
-            Used {result.usageCount} time{result.usageCount !== 1 ? 's' : ''} across characters, personas, and chats
+            Used {result.usageCount} time{result.usageCount !== 1 ? 's' : ''} across characters and chats
           </p>
         </div>
       </div>
@@ -242,7 +181,6 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
     <Link
       href={result.url}
       onClick={() => {
-        clientLogger.debug('Search result clicked', { type: 'memory', id: result.id, query })
         onResultClick?.()
       }}
       className="block p-3 hover:bg-accent rounded-lg transition-colors"
@@ -311,7 +249,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={i} className="bg-yellow-200 text-foreground rounded px-0.5">
+          <mark key={i} className="qt-highlight">
             {part}
           </mark>
         ) : (
@@ -322,7 +260,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
   )
 }
 
-export function SearchResults({ results, query, isLoading, onResultClick }: SearchResultsProps) {
+export function SearchResults({ results, query, isLoading, onResultClick, countsByType, onTypeCountClick }: SearchResultsProps) {
   if (isLoading) {
     return (
       <div className="p-6 text-center">
@@ -339,7 +277,7 @@ export function SearchResults({ results, query, isLoading, onResultClick }: Sear
           No results found for &quot;{query}&quot;
         </p>
         <p className="qt-text-xs mt-1">
-          Try searching for characters, chats, personas, tags, or memories
+          Try searching for characters, chats, tags, or memories
         </p>
       </div>
     )
@@ -356,31 +294,50 @@ export function SearchResults({ results, query, isLoading, onResultClick }: Sear
 
   return (
     <div className="divide-y divide-border">
-      {Object.entries(groupedResults).map(([type, typeResults]) => (
+      {Object.entries(groupedResults).map(([type, typeResults]) => {
+        const searchType = type as SearchType
+        // Use total count from API if available, otherwise fall back to displayed count
+        const totalForType = countsByType?.[searchType] ?? typeResults.length
+        const displayedCount = typeResults.length
+        const hasMore = totalForType > displayedCount
+
+        return (
         <div key={type} className="py-2">
-          <div className="px-3 py-1 qt-text-xs font-semibold uppercase tracking-wider">
-            {TYPE_ICONS[type as SearchType]} {TYPE_LABELS_PLURAL[type as SearchType]} ({typeResults.length})
+          <div className="px-3 py-1 qt-text-xs font-semibold uppercase tracking-wider flex items-center gap-1">
+            <span>{TYPE_ICONS[searchType]} {TYPE_LABELS_PLURAL[searchType]}</span>
+            {onTypeCountClick && hasMore ? (
+              <button
+                onClick={() => onTypeCountClick(searchType)}
+                className="text-primary hover:underline cursor-pointer"
+                title={`Show all ${totalForType} ${TYPE_LABELS_PLURAL[searchType].toLowerCase()}`}
+              >
+                ({displayedCount}/{totalForType})
+              </button>
+            ) : (
+              <span>({totalForType})</span>
+            )}
           </div>
           <div className="space-y-1">
             {typeResults.map((result) => {
+              // Use composite key to ensure uniqueness across types
+              const key = `${result.type}-${result.id}`
               switch (result.type) {
                 case 'characters':
-                  return <CharacterResultCard key={result.id} result={result as CharacterSearchResult} query={query} onResultClick={onResultClick} />
-                case 'personas':
-                  return <PersonaResultCard key={result.id} result={result as PersonaSearchResult} query={query} onResultClick={onResultClick} />
+                  return <CharacterResultCard key={key} result={result as CharacterSearchResult} query={query} onResultClick={onResultClick} />
                 case 'chats':
-                  return <ChatResultCard key={result.id} result={result as ChatSearchResult} query={query} onResultClick={onResultClick} />
+                  return <ChatResultCard key={key} result={result as ChatSearchResult} query={query} onResultClick={onResultClick} />
                 case 'tags':
-                  return <TagResultCard key={result.id} result={result as TagSearchResult} query={query} onResultClick={onResultClick} />
+                  return <TagResultCard key={key} result={result as TagSearchResult} query={query} onResultClick={onResultClick} />
                 case 'memories':
-                  return <MemoryResultCard key={result.id} result={result as MemorySearchResult} query={query} onResultClick={onResultClick} />
+                  return <MemoryResultCard key={key} result={result as MemorySearchResult} query={query} onResultClick={onResultClick} />
                 default:
                   return null
               }
             })}
           </div>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

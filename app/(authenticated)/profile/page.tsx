@@ -9,7 +9,6 @@ import {
   TrustedDevicesSection,
   UserProfile,
 } from '@/components/profile'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
  * Profile Page
@@ -26,44 +25,36 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [authDisabled, setAuthDisabled] = useState(false)
 
-  useEffect(() => {
-    clientLogger.debug('ProfilePage mounted')
-  }, [])
 
   const fetchProfile = useCallback(async () => {
-    clientLogger.debug('Fetching user profile')
-
     try {
-      const res = await fetch('/api/user/profile')
+      const res = await fetch('/api/v1/user/profile')
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to load profile')
       }
 
       const data = await res.json()
-      setProfile(data)
-      clientLogger.debug('Profile loaded', { userId: data.id })
+      const profile = data.profile || data
+      setProfile(profile)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load profile'
       setError(message)
-      clientLogger.error('Failed to load profile', { error: message })
+      console.error('Failed to load profile', { error: message })
     } finally {
       setLoading(false)
     }
   }, [])
 
   const fetchAuthStatus = useCallback(async () => {
-    clientLogger.debug('Fetching auth status for profile page')
-
     try {
-      const res = await fetch('/api/auth/status')
+      const res = await fetch('/api/v1/auth/status')
       if (res.ok) {
         const data = await res.json()
         setAuthDisabled(data.authDisabled || false)
-        clientLogger.debug('Auth status fetched', { authDisabled: data.authDisabled })
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch auth status', { error: err })
+      console.error('Failed to fetch auth status', { error: err })
       // Default to showing 2FA section if we can't determine auth status
     }
   }, [])
@@ -75,13 +66,11 @@ export default function ProfilePage() {
 
   const handleProfileUpdate = (updatedProfile: UserProfile) => {
     setProfile(updatedProfile)
-    clientLogger.debug('Profile state updated', { userId: updatedProfile.id })
   }
 
   const handleTotpStatusChange = (enabled: boolean) => {
     if (profile) {
       setProfile({ ...profile, totpEnabled: enabled })
-      clientLogger.debug('TOTP status changed', { enabled })
     }
   }
 

@@ -7,7 +7,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { showErrorToast } from '@/lib/toast';
-import { clientLogger } from '@/lib/client-logger';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { TagBadge } from '@/components/tags/tag-badge';
 
@@ -35,15 +34,15 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Map entity type to API endpoint
-  const getApiPath = useCallback(() => {
+  // Map entity type to API endpoint base path
+  const getApiBasePath = useCallback(() => {
     switch (entityType) {
       case 'character':
-        return `/api/characters/${entityId}/tags`;
+        return `/api/v1/characters/${entityId}`;
       case 'chat':
-        return `/api/chats/${entityId}/tags`;
+        return `/api/v1/chats/${entityId}`;
       case 'profile':
-        return `/api/profiles/${entityId}/tags`;
+        return `/api/v1/profiles/${entityId}`;
     }
   }, [entityType, entityId]);
 
@@ -53,19 +52,20 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
 
     const loadTags = async () => {
       try {
-        const res = await fetch(getApiPath());
+        const basePath = getApiBasePath();
+        const res = await fetch(`${basePath}?action=get-tags`);
         if (res.ok) {
           const data = await res.json();
           setTags(data.tags || []);
           onTagsChange?.(data.tags || []);
         }
       } catch (error) {
-        clientLogger.error('Error loading tags:', { error: error instanceof Error ? error.message : String(error) });
+        console.error('Error loading tags:', { error: error instanceof Error ? error.message : String(error) });
       }
     };
 
     loadTags();
-  }, [entityId, getApiPath, onTagsChange]);
+  }, [entityId, getApiBasePath, onTagsChange]);
 
   // Load all available tags when input is focused
   useEffect(() => {
@@ -73,13 +73,13 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
 
     const loadAllTags = async () => {
       try {
-        const res = await fetch('/api/tags');
+        const res = await fetch('/api/v1/tags');
         if (res.ok) {
           const data = await res.json();
           setAllTags(data.tags || []);
         }
       } catch (error) {
-        clientLogger.error('Error loading all tags:', { error: error instanceof Error ? error.message : String(error) });
+        console.error('Error loading all tags:', { error: error instanceof Error ? error.message : String(error) });
       }
     };
 
@@ -104,7 +104,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
     setLoading(true);
     try {
       // First, create or get the tag
-      const tagRes = await fetch('/api/tags', {
+      const tagRes = await fetch('/api/v1/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: tagName.trim() }),
@@ -117,8 +117,8 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       const { tag } = await tagRes.json();
 
       // Then attach it to the entity
-      const apiPath = getApiPath();
-      const attachRes = await fetch(apiPath, {
+      const basePath = getApiBasePath();
+      const attachRes = await fetch(`${basePath}?action=add-tag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tagId: tag.id }),
@@ -135,7 +135,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       setShowSuggestions(false);
       setIsAddingTag(false);
     } catch (error) {
-      clientLogger.error('Error adding tag:', { error: error instanceof Error ? error.message : String(error) });
+      console.error('Error adding tag:', { error: error instanceof Error ? error.message : String(error) });
       showErrorToast('Failed to add tag. Please try again.');
     } finally {
       setLoading(false);
@@ -147,9 +147,10 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
 
     setLoading(true);
     try {
-      const apiPath = getApiPath();
-      const res = await fetch(`${apiPath}?tagId=${tagId}`, {
-        method: 'DELETE',
+      const basePath = getApiBasePath();
+      const res = await fetch(`${basePath}?action=remove-tag&tagId=${tagId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!res.ok) {
@@ -160,7 +161,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
       setTags(newTags);
       onTagsChange?.(newTags);
     } catch (error) {
-      clientLogger.error('Error removing tag:', { error: error instanceof Error ? error.message : String(error) });
+      console.error('Error removing tag:', { error: error instanceof Error ? error.message : String(error) });
       showErrorToast('Failed to remove tag. Please try again.');
     } finally {
       setLoading(false);

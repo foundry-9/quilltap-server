@@ -19,11 +19,14 @@ let mongoClientPromise: Promise<MongoClient> | null = null;
 
 /**
  * Helper function to check if client is still connected
+ * Uses the configured database instead of 'admin' to work with
+ * hosted MongoDB services where the user may not have admin access.
  */
 async function isClientConnected(client: MongoClient | null): Promise<boolean> {
   if (!client) return false;
   try {
-    await client.db('admin').command({ ping: 1 });
+    const config = validateMongoDBConfig();
+    await client.db(config.database).command({ ping: 1 });
     return true;
   } catch {
     return false;
@@ -71,8 +74,9 @@ export async function getMongoClient(): Promise<MongoClient> {
       database: config.database,
     });
 
-    // Test the connection
-    await connectingClient.db('admin').command({ ping: 1 });
+    // Test the connection using the configured database (not admin)
+    // to work with hosted MongoDB services where user may not have admin access
+    await connectingClient.db(config.database).command({ ping: 1 });
 
     // Set up error listener for connection errors
     connectingClient.on('error', (error) => {
@@ -134,6 +138,8 @@ export async function getMongoDatabase(): Promise<Db> {
 
 /**
  * Checks if MongoDB is currently connected
+ * Uses the configured database instead of 'admin' to work with
+ * hosted MongoDB services where the user may not have admin access.
  * @returns boolean True if connected, false otherwise
  */
 export async function isMongoConnected(): Promise<boolean> {
@@ -142,7 +148,8 @@ export async function isMongoConnected(): Promise<boolean> {
   }
 
   try {
-    await mongoClient.db('admin').command({ ping: 1 });
+    const config = validateMongoDBConfig();
+    await mongoClient.db(config.database).command({ ping: 1 });
     return true;
   } catch {
     mongoClient = null;

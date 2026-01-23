@@ -21,8 +21,10 @@ export interface MemoryExtractionContext {
   characterId: string
   /** Character name for context */
   characterName: string
-  /** Persona name if available */
+  /** Persona name if available (deprecated - use userCharacterId instead) */
   personaName?: string
+  /** User character ID - who the memory is about (the user-controlled character in the chat) */
+  userCharacterId?: string
   /** All character names in a multi-character chat (for clear identity context) */
   allCharacterNames?: string[]
   /** Chat ID for source reference */
@@ -228,6 +230,8 @@ async function createMemoryFromCandidate(
   const memory = await createMemoryWithEmbedding(
     {
       characterId: ctx.characterId,
+      // Set aboutCharacterId if we know who the memory is about (user-controlled character)
+      aboutCharacterId: ctx.userCharacterId || null,
       chatId: ctx.chatId,
       content: candidate.content || '',
       summary: candidate.summary || '',
@@ -242,6 +246,13 @@ async function createMemoryFromCandidate(
       // Embedding generation is automatic if profile is configured
     }
   )
+
+  logger.debug('[Memory] Created memory with aboutCharacterId', {
+    memoryId: memory.id,
+    characterId: ctx.characterId,
+    aboutCharacterId: ctx.userCharacterId || null,
+    hasUserCharacterId: !!ctx.userCharacterId,
+  })
 
   return memory
 }

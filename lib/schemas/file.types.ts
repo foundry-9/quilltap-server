@@ -20,7 +20,7 @@ import {
 export const FileSourceEnum = z.enum(['UPLOADED', 'GENERATED', 'IMPORTED', 'SYSTEM']);
 export type FileSource = z.infer<typeof FileSourceEnum>;
 
-export const FileCategoryEnum = z.enum(['IMAGE', 'DOCUMENT', 'AVATAR', 'ATTACHMENT', 'EXPORT']);
+export const FileCategoryEnum = z.enum(['IMAGE', 'DOCUMENT', 'AVATAR', 'ATTACHMENT', 'EXPORT', 'BACKUP']);
 export type FileCategory = z.infer<typeof FileCategoryEnum>;
 
 // ============================================================================
@@ -40,6 +40,9 @@ export const FileEntrySchema = z.object({
   width: z.number().nullable().optional(),
   height: z.number().nullable().optional(),
 
+  // Text content detection (populated during upload)
+  isPlainText: z.boolean().optional(),
+
   // Linking - array of IDs this file is associated with
   linkedTo: z.array(UUIDSchema).default([]),  // messageId, chatId, characterId, personaId, etc.
 
@@ -56,7 +59,21 @@ export const FileEntrySchema = z.object({
   // Tags
   tags: z.array(UUIDSchema).default([]),
 
-  // S3 storage reference
+  // Project and folder association
+  projectId: UUIDSchema.nullable().optional(),
+
+  // Folder path within project or general files
+  // "/" = root (default), "/documents/", "/documents/reports/"
+  // Always starts and ends with "/" when non-root
+  // Defaults to "/" when not specified
+  folderPath: z.string().nullable().optional(),
+
+  // Storage abstraction - new fields for pluggable file storage
+  mountPointId: UUIDSchema.nullable().optional(), // Which mount point stores this file
+  storageKey: z.string().nullable().optional(),   // Backend-agnostic storage key
+
+  // S3 storage reference (deprecated - kept for backward compatibility)
+  // Migration populates mountPointId/storageKey from these fields
   s3Key: z.string().nullable().optional(),    // Full S3 object key
   s3Bucket: z.string().nullable().optional(), // S3 bucket name
 

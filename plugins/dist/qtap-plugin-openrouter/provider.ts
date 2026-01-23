@@ -15,7 +15,9 @@ import type {
   ImageGenParams,
   ImageGenResponse,
 } from './types';
-import { logger } from '../../../lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-openrouter');
 
 /**
  * OpenRouter provider preferences for fine-grained provider control
@@ -321,6 +323,10 @@ export class OpenRouterProvider implements LLMProvider {
     const stream = await client.chat.send(requestParams);
     let fullMessage: ChatStreamingResponseChunkData | null = null;
 
+    // Track usage and finish reason separately - they may come in different chunks
+    let accumulatedUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null = null;
+    let finalFinishReason: string | null = null;
+
     for await (const chunk of stream) {
       const content = chunk.choices?.[0]?.delta?.content;
       const finishReason = chunk.choices?.[0]?.finishReason;
@@ -346,48 +352,67 @@ export class OpenRouterProvider implements LLMProvider {
         }
       }
 
-      // Yield content unless this is the final chunk with usage info
-      if (content && !(finishReason && hasUsage)) {
+      // Track finish reason when we get it
+      if (finishReason) {
+        finalFinishReason = finishReason;
+      }
+
+      // Track usage when we get it (may come in a separate final chunk)
+      if (hasUsage) {
+        accumulatedUsage = {
+          promptTokens: chunk.usage?.promptTokens,
+          completionTokens: chunk.usage?.completionTokens,
+          totalTokens: chunk.usage?.totalTokens,
+        };
+        logger.debug('Received usage data in stream', {
+          context: 'OpenRouterProvider.streamMessage',
+          promptTokens: chunk.usage?.promptTokens,
+          completionTokens: chunk.usage?.completionTokens,
+        });
+      }
+
+      // Yield content chunks
+      if (content) {
         yield {
           content,
           done: false,
         };
       }
-
-      // Final chunk with usage info
-      if (finishReason && hasUsage) {
-        // Extract cache usage if available
-        const usageAny = chunk.usage as any;
-        const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount
-          ? {
-              cachedTokens: usageAny.cachedTokens,
-              cacheDiscount: usageAny.cacheDiscount,
-              cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
-              cacheReadInputTokens: usageAny.cacheReadInputTokens,
-            }
-          : undefined;
-
-        logger.debug('Stream completed', {
-          context: 'OpenRouterProvider.streamMessage',
-          finishReason,
-          promptTokens: chunk.usage?.promptTokens,
-          completionTokens: chunk.usage?.completionTokens,
-          cachedTokens: cacheUsage?.cachedTokens,
-        });
-        yield {
-          content: '',
-          done: true,
-          usage: {
-            promptTokens: chunk.usage?.promptTokens ?? 0,
-            completionTokens: chunk.usage?.completionTokens ?? 0,
-            totalTokens: chunk.usage?.totalTokens ?? 0,
-          },
-          attachmentResults,
-          rawResponse: fullMessage,
-          cacheUsage,
-        };
-      }
     }
+
+    // After stream ends, yield final chunk with accumulated usage
+    // Extract cache usage if available
+    const usageAny = accumulatedUsage as any;
+    const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount
+      ? {
+          cachedTokens: usageAny.cachedTokens,
+          cacheDiscount: usageAny.cacheDiscount,
+          cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
+          cacheReadInputTokens: usageAny.cacheReadInputTokens,
+        }
+      : undefined;
+
+    logger.debug('Stream completed', {
+      context: 'OpenRouterProvider.streamMessage',
+      finishReason: finalFinishReason,
+      promptTokens: accumulatedUsage?.promptTokens,
+      completionTokens: accumulatedUsage?.completionTokens,
+      hasUsage: !!accumulatedUsage,
+      cachedTokens: cacheUsage?.cachedTokens,
+    });
+
+    yield {
+      content: '',
+      done: true,
+      usage: accumulatedUsage ? {
+        promptTokens: accumulatedUsage.promptTokens ?? 0,
+        completionTokens: accumulatedUsage.completionTokens ?? 0,
+        totalTokens: accumulatedUsage.totalTokens ?? 0,
+      } : undefined,
+      attachmentResults,
+      rawResponse: fullMessage,
+      cacheUsage,
+    };
   }
 
   async validateApiKey(apiKey: string): Promise<boolean> {

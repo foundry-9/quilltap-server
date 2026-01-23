@@ -43,6 +43,7 @@ export const MemorySchema = z.object({
    */
   aboutCharacterId: UUIDSchema.nullable().optional(),
   chatId: UUIDSchema.nullable().optional(),         // Optional: source chat reference
+  projectId: UUIDSchema.nullable().optional(),      // Optional: project this memory belongs to
   content: z.string(),                              // The actual memory content
   summary: z.string(),                              // Distilled version for context injection
   keywords: z.array(z.string()).default([]),        // For text-based search

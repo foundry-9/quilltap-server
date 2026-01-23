@@ -7,7 +7,7 @@ This module provides utilities for determining which file attachments each LLM p
 Different LLM providers support different types of file attachments:
 
 - **OpenAI**: Images only (JPEG, PNG, GIF, WebP)
-- **Anthropic**: Images and PDF documents
+- **Anthropic**: Images, PDF documents, and text files
 - **Google**: Images only (JPEG, PNG, GIF, WebP)
 - **Grok**: Images, PDF documents, and text files
 - **Ollama, OpenRouter, OpenAI-Compatible, Gab AI**: No file attachment support
@@ -30,7 +30,7 @@ const noAttach = supportsFileAttachments('OLLAMA')   // false
 
 // Get supported MIME types for a provider
 const mimeTypes = getSupportedMimeTypes('ANTHROPIC')
-// Returns: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+// Returns: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain']
 
 // Check if a specific MIME type is supported
 const supportsPDF = supportsMimeType('ANTHROPIC', 'application/pdf')  // true

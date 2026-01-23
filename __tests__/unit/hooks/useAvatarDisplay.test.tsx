@@ -57,7 +57,7 @@ describe('useAvatarDisplay', () => {
     const fetchMock = jest.spyOn(global as any, 'fetch')
     // Use mockImplementation to handle multiple calls by URL
     fetchMock.mockImplementation((url: string, options?: RequestInit) => {
-      if (url === '/api/chat-settings') {
+      if (url === '/api/v1/settings/chat') {
         if (options?.method === 'PUT') {
           return jsonResponse({ avatarDisplayStyle: 'RECTANGULAR' })
         }
@@ -77,7 +77,7 @@ describe('useAvatarDisplay', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/chat-settings',
+      '/api/v1/settings/chat',
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({ avatarDisplayStyle: 'RECTANGULAR' }),

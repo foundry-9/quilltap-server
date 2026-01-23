@@ -8,6 +8,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
 import { buildToolsForProvider, checkModelSupportsTools } from '@/lib/tools'
+import { getRepositories } from '@/lib/repositories/factory'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
@@ -53,7 +54,7 @@ export interface StreamDebugInfo {
 export type StreamChunkCallback = (chunk: {
   content?: string
   done?: boolean
-  usage?: { totalTokens?: number }
+  usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }
   cacheUsage?: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number }
   attachmentResults?: { sent: string[]; failed: { id: string; error: string }[] }
   rawResponse?: unknown
@@ -68,7 +69,11 @@ export async function buildTools(
   imageProfileId: string | null,
   imageProfile: ImageProfile | null,
   userId: string,
-  usePseudoTools: boolean
+  usePseudoTools: boolean,
+  /** Project ID if chat is associated with a project (enables project_info tool) */
+  projectId?: string | null,
+  /** Whether context compression is enabled (enables request_full_context tool) */
+  requestFullContext?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -85,7 +90,8 @@ export async function buildTools(
     userId
   )
 
-  const useNativeWebSearch = connectionProfile.allowWebSearch && provider.supportsWebSearch
+  // Native web search requires both the profile setting AND provider support
+  const useNativeWebSearch = connectionProfile.useNativeWebSearch && provider.supportsWebSearch
 
   if (usePseudoTools) {
     logger.debug('Skipping native tools (using pseudo-tools)', {
@@ -100,15 +106,43 @@ export async function buildTools(
     imageProfileId: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
     memorySearchEnabled: true,
-    webSearchEnabled: connectionProfile.allowWebSearch && !useNativeWebSearch,
+    webSearchToolEnabled: connectionProfile.allowWebSearch,
+    projectInfoEnabled: !!projectId,
+    requestFullContextEnabled: !!requestFullContext,
     useNativeWebSearch,
   })
 
-  const tools = buildToolsForProvider(connectionProfile.provider, {
+  // Fetch user's plugin tool configurations from database
+  let toolConfigs = new Map<string, Record<string, unknown>>()
+  try {
+    const repos = getRepositories()
+    const userPluginConfigs = await repos.pluginConfigs.findByUserId(userId)
+    for (const config of userPluginConfigs) {
+      // Extract tool name from plugin name (e.g., 'qtap-plugin-curl' -> 'curl')
+      const toolName = config.pluginName.replace(/^qtap-plugin-/, '')
+      toolConfigs.set(toolName, config.config)
+    }
+    logger.debug('Loaded plugin tool configs', {
+      userId,
+      configCount: toolConfigs.size,
+      tools: Array.from(toolConfigs.keys()),
+    })
+  } catch (configError) {
+    logger.warn('Failed to load plugin tool configs, using defaults', {
+      userId,
+      error: configError instanceof Error ? configError.message : String(configError),
+    })
+  }
+
+  // Web search tool is independent of native web search - user can enable both
+  const tools = await buildToolsForProvider(connectionProfile.provider, {
     imageGeneration: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
     memorySearch: true,
-    webSearch: connectionProfile.allowWebSearch && !useNativeWebSearch,
+    webSearch: connectionProfile.allowWebSearch,
+    projectInfo: !!projectId,
+    requestFullContext: !!requestFullContext,
+    toolConfigs,
   })
 
   logger.debug('Native tools built successfully', {
@@ -127,7 +161,7 @@ export async function* streamMessage(
 ): AsyncGenerator<{
   content?: string
   done?: boolean
-  usage?: { totalTokens?: number }
+  usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }
   cacheUsage?: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number }
   attachmentResults?: { sent: string[]; failed: { id: string; error: string }[] }
   rawResponse?: unknown
@@ -186,7 +220,7 @@ export async function* streamMessage(
 
   let chunkCount = 0
   let totalContentLength = 0
-  let lastUsage: { totalTokens?: number } | undefined
+  let lastUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined
   let lastCacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | undefined
 
   for await (const chunk of provider.streamMessage(
@@ -303,7 +337,7 @@ export function encodeDoneEvent(
   encoder: TextEncoder,
   data: {
     messageId: string | null
-    usage: { totalTokens?: number } | null
+    usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
     cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
     attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
     toolsExecuted: boolean
@@ -333,11 +367,50 @@ export function encodeErrorEvent(
 }
 
 /**
+ * Encode a keep-alive/heartbeat ping
+ * SSE comment lines (starting with :) are ignored by clients but keep the connection alive
+ */
+export function encodeKeepAlive(encoder: TextEncoder): Uint8Array {
+  return encoder.encode(': keep-alive\n\n')
+}
+
+/**
+ * Safely enqueue data to a stream controller
+ * Returns true if successful, false if the controller is already closed
+ */
+export function safeEnqueue(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  data: Uint8Array
+): boolean {
+  try {
+    controller.enqueue(data)
+    return true
+  } catch (error) {
+    // Controller is already closed (client disconnected, timeout, etc.)
+    logger.debug('Stream controller closed, enqueue skipped', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
+}
+
+/**
+ * Safely close a stream controller
+ */
+export function safeClose(controller: ReadableStreamDefaultController<Uint8Array>): void {
+  try {
+    controller.close()
+  } catch {
+    // Already closed - ignore
+  }
+}
+
+/**
  * Create streaming response result
  */
 export function createStreamingResult(
   fullResponse: string,
-  usage: { totalTokens?: number } | null,
+  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null,
   cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null,
   attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null,
   rawResponse: unknown,

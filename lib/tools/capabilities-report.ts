@@ -18,10 +18,8 @@ import {
 } from '@/lib/plugins/provider-registry';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
-import { s3FileService } from '@/lib/s3/file-service';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { decryptApiKey } from '@/lib/encryption';
-import { getFileMetadata, listFiles } from '@/lib/s3/operations';
-import { validateS3Config } from '@/lib/s3/config';
 import type { LLMProviderPlugin } from '@/lib/plugins/interfaces/provider-plugin';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
 import { getErrorMessage } from '@/lib/errors';
@@ -94,6 +92,12 @@ export interface EmbeddingInfo {
   profileName?: string;
 }
 
+export interface ImagePromptLLMInfo {
+  provider?: string;
+  model?: string;
+  profileName?: string;
+}
+
 export interface ImageProviderInfo {
   provider: string;
   displayName: string;
@@ -118,6 +122,7 @@ export interface CapabilitiesReportData {
   providers: ProviderInfo[];
   modelsByProvider: ModelInfo[];
   cheapLLM: CheapLLMInfo;
+  imagePromptLLM: ImagePromptLLMInfo;
   embeddingProvider: EmbeddingInfo;
   imageProviders: ImageProviderInfo[];
   embeddingProviders: EmbeddingProviderInfo[];
@@ -413,6 +418,34 @@ async function collectCheapLLMInfo(userId: string): Promise<CheapLLMInfo> {
 }
 
 /**
+ * Get image prompt LLM configuration (separate override for image prompt expansion)
+ */
+async function collectImagePromptLLMInfo(userId: string): Promise<ImagePromptLLMInfo> {
+  moduleLogger.info('Collecting image prompt LLM configuration', { userId });
+
+  const globalRepos = getRepositories();
+  const repos = getUserRepositories(userId);
+
+  // Get the chat settings to check for imagePromptProfileId
+  const chatSettings = await globalRepos.chatSettings.findByUserId(userId);
+
+  const info: ImagePromptLLMInfo = {};
+
+  if (chatSettings?.cheapLLMSettings?.imagePromptProfileId) {
+    // Look up the connection profile for this ID
+    const profile = await repos.connections.findById(chatSettings.cheapLLMSettings.imagePromptProfileId);
+    if (profile) {
+      info.provider = profile.provider;
+      info.model = profile.modelName;
+      info.profileName = profile.name;
+    }
+  }
+
+  moduleLogger.info('Collected image prompt LLM configuration', { rawResult: info });
+  return info;
+}
+
+/**
  * Get embedding provider configuration
  */
 async function collectEmbeddingInfo(userId: string): Promise<EmbeddingInfo> {
@@ -576,49 +609,42 @@ async function collectDatabaseStats(userId: string): Promise<DatabaseStats> {
 }
 
 /**
- * Collect S3 storage statistics
+ * Collect storage statistics
  */
 async function collectStorageStats(userId: string): Promise<StorageStats> {
   moduleLogger.info('Collecting storage statistics', { userId });
 
   try {
-    const config = validateS3Config();
-    const prefix = config.pathPrefix || '';
-    const userPrefix = `${prefix}users/${userId}/`;
+    const repos = getUserRepositories(userId);
 
-    // List all files for the user
-    const allKeys = await listFiles(userPrefix, 10000);
+    // Get all files for the user
+    const userFiles = await repos.files.findAll();
 
     // Build folder statistics
     const folderStats = new Map<string, FolderStats>();
     let totalSize = 0;
 
-    for (const key of allKeys) {
-      // Get file metadata for size
-      const metadata = await getFileMetadata(key);
-      const fileSize = metadata?.size || 0;
-      totalSize += fileSize;
+    for (const file of userFiles) {
+      totalSize += file.size;
 
-      // Extract category from key (e.g., users/userId/IMAGE/file -> IMAGE)
-      const relativePath = key.replace(userPrefix, '');
-      const parts = relativePath.split('/');
-      const category = parts[0] || 'root';
+      // Extract folder path or use root
+      const folderPath = file.folderPath || '/';
 
-      if (!folderStats.has(category)) {
-        folderStats.set(category, {
-          path: `/${category}`,
+      if (!folderStats.has(folderPath)) {
+        folderStats.set(folderPath, {
+          path: folderPath,
           fileCount: 0,
           totalSize: 0,
         });
       }
 
-      const folder = folderStats.get(category)!;
+      const folder = folderStats.get(folderPath)!;
       folder.fileCount++;
-      folder.totalSize += fileSize;
+      folder.totalSize += file.size;
     }
 
     const stats: StorageStats = {
-      totalFiles: allKeys.length,
+      totalFiles: userFiles.length,
       totalSize,
       folders: Array.from(folderStats.values()).sort((a, b) => b.totalSize - a.totalSize),
     };
@@ -654,6 +680,7 @@ export async function generateReportData(userId: string): Promise<CapabilitiesRe
     providers: await collectProviderInfo(userId),
     modelsByProvider: await collectModels(userId),
     cheapLLM: await collectCheapLLMInfo(userId),
+    imagePromptLLM: await collectImagePromptLLMInfo(userId),
     embeddingProvider: await collectEmbeddingInfo(userId),
     imageProviders: await collectImageProviders(),
     embeddingProviders: await collectEmbeddingProviders(),
@@ -780,6 +807,9 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
   } else {
     lines.push('- **Cheap LLM**: *Not configured*');
   }
+  if (data.imagePromptLLM.provider) {
+    lines.push(`- **Image Prompt LLM**: ${data.imagePromptLLM.provider} / ${data.imagePromptLLM.model} (${data.imagePromptLLM.profileName})`);
+  }
   if (data.embeddingProvider.provider) {
     lines.push(`- **Embedding Provider**: ${data.embeddingProvider.provider} / ${data.embeddingProvider.model} (${data.embeddingProvider.profileName})`);
   } else {
@@ -877,30 +907,29 @@ export async function generateAndSaveReport(userId: string): Promise<{
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `capabilities-report-${timestamp}.md`;
 
-  // Upload to S3
+  // Upload to file storage
   const buffer = Buffer.from(markdown, 'utf-8');
-  await s3FileService.uploadUserFile(
+  const uploadResult = await fileStorageManager.uploadFile({
     userId,
-    reportId,
+    fileId: reportId,
     filename,
-    'REPORT',
-    buffer,
-    'text/markdown'
-  );
-
-  const s3Key = s3FileService.generateS3Key(userId, reportId, filename, 'REPORT');
+    content: buffer,
+    contentType: 'text/markdown',
+    projectId: null,
+  });
 
   moduleLogger.info('Capabilities report saved', {
     reportId,
     filename,
-    s3Key,
+    storageKey: uploadResult.storageKey,
+    mountPointId: uploadResult.mountPointId,
     size: buffer.length,
   });
 
   return {
     reportId,
     filename,
-    s3Key,
+    s3Key: uploadResult.storageKey, // Return as s3Key for backward compatibility
     size: buffer.length,
     content: markdown,
   };

@@ -14,7 +14,6 @@ import { useEffect, useState, useRef } from 'react';
 import { SyncInstanceDisplay } from '../types';
 import { SyncStatusBadge } from './SyncStatusBadge';
 import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover';
-import { clientLogger } from '@/lib/client-logger';
 import type { SyncDirection } from '@/lib/sync/types';
 
 interface InstanceCardProps {
@@ -67,10 +66,6 @@ export function InstanceCard({
 
   // Log render in useEffect to avoid state updates during render
   useEffect(() => {
-    clientLogger.debug('InstanceCard: rendered', {
-      instanceId: instance.id,
-      isSyncing,
-    });
   }, [instance.id, isSyncing]);
 
   // Close menu when clicking outside

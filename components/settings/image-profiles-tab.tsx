@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -24,7 +23,7 @@ interface ApiKey {
 interface ImageProfile {
   id: string
   name: string
-  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN'
+  provider: string
   apiKeyId?: string
   baseUrl?: string
   modelName: string
@@ -53,7 +52,7 @@ export default function ImageProfilesTab() {
     execute: executeDelete,
   } = useAsyncOperation<void>()
 
-  const triggerAutoAssociate = useAutoAssociate('image-profiles')
+  const triggerAutoAssociate = useAutoAssociate()
 
   // Trigger auto-association on mount (fire and forget)
   useEffect(() => {
@@ -63,16 +62,14 @@ export default function ImageProfilesTab() {
   // Fetch profiles on mount only
   useEffect(() => {
     const loadProfiles = async () => {
-      clientLogger.debug('Loading image profiles')
       const result = await executeLoadProfiles(async () => {
-        const response = await fetchJson<ImageProfile[]>('/api/image-profiles')
+        const response = await fetchJson<{ profiles: ImageProfile[], count: number }>('/api/v1/image-profiles')
         if (!response.ok) {
           throw new Error(response.error || 'Failed to load profiles')
         }
-        return response.data || []
+        return response.data?.profiles || []
       })
       if (result) {
-        clientLogger.debug('Image profiles loaded successfully', { count: result.length })
         setProfiles(result)
       }
     }
@@ -84,13 +81,11 @@ export default function ImageProfilesTab() {
   // Fetch API keys on mount
   useEffect(() => {
     const loadApiKeys = async () => {
-      clientLogger.debug('Loading API keys for image profiles')
-      const response = await fetchJson<ApiKey[]>('/api/keys')
-      if (response.ok && response.data) {
-        clientLogger.debug('API keys loaded successfully', { count: response.data.length })
-        setApiKeys(response.data)
+      const response = await fetchJson<{ apiKeys: ApiKey[]; count: number }>('/api/v1/api-keys')
+      if (response.ok && response.data?.apiKeys) {
+        setApiKeys(response.data.apiKeys)
       } else {
-        clientLogger.error('Failed to load API keys', { error: response.error })
+        console.error('Failed to load API keys', { error: response.error })
       }
     }
 
@@ -98,46 +93,39 @@ export default function ImageProfilesTab() {
   }, [])
 
   const refreshProfiles = async () => {
-    clientLogger.debug('Refreshing image profiles')
-    const response = await fetchJson<ImageProfile[]>('/api/image-profiles')
-    if (response.ok && response.data) {
-      setProfiles(response.data)
-      clientLogger.debug('Profiles refreshed', { count: response.data.length })
+    const response = await fetchJson<{ profiles: ImageProfile[], count: number }>('/api/v1/image-profiles')
+    if (response.ok && response.data?.profiles) {
+      setProfiles(response.data.profiles)
     } else {
-      clientLogger.error('Failed to refresh profiles', { error: response.error })
+      console.error('Failed to refresh profiles', { error: response.error })
     }
   }
 
   const handleDelete = async (id: string) => {
-    clientLogger.debug('Deleting image profile', { profileId: id })
     const result = await executeDelete(async () => {
-      const response = await fetchJson(`/api/image-profiles/${id}`, { method: 'DELETE' })
+      const response = await fetchJson(`/api/v1/image-profiles/${id}`, { method: 'DELETE' })
       if (!response.ok) {
         throw new Error(response.error || 'Failed to delete profile')
       }
     })
 
     if (result !== null) {
-      clientLogger.debug('Profile deleted successfully', { profileId: id })
       setDeleteConfirming(null)
       await refreshProfiles()
     }
   }
 
   const handleOpenModal = (profile?: ImageProfile) => {
-    clientLogger.debug('Opening image profile modal', { isEditing: !!profile })
     setEditingProfile(profile || null)
     setIsModalOpen(true)
   }
 
   const handleCloseModal = () => {
-    clientLogger.debug('Closing image profile modal')
     setIsModalOpen(false)
     setEditingProfile(null)
   }
 
   const handleModalSuccess = () => {
-    clientLogger.debug('Image profile saved via modal')
     refreshProfiles()
   }
 
@@ -186,7 +174,7 @@ export default function ImageProfilesTab() {
             }}
           />
         ) : (
-          profiles.toSorted((a, b) => a.name.localeCompare(b.name)).map(profile => (
+          profiles.slice().sort((a, b) => a.name.localeCompare(b.name)).map(profile => (
             <div
               key={profile.id}
               className="border border-border rounded-lg p-4 hover:border-border/80 transition bg-card"
@@ -246,7 +234,6 @@ export default function ImageProfilesTab() {
                   <div className="relative">
                     <button
                       onClick={() => {
-                        clientLogger.debug('Toggling delete confirmation', { profileId: profile.id })
                         setDeleteConfirming(deleteConfirming === profile.id ? null : profile.id)
                       }}
                       className="px-3 py-1 text-sm text-destructive hover:bg-destructive/10 rounded border border-border/50 hover:border-destructive/30 focus:outline-none focus:ring-2 focus:ring-ring"
@@ -260,7 +247,6 @@ export default function ImageProfilesTab() {
                       isDeleting={deletingProfile}
                       message="Delete this profile?"
                       onCancel={() => {
-                        clientLogger.debug('Cancelling profile deletion')
                         setDeleteConfirming(null)
                       }}
                       onConfirm={() => handleDelete(profile.id)}

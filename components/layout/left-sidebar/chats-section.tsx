@@ -37,12 +37,33 @@ function MessageIcon({ className }: { className?: string }) {
 
 function getChatDisplayName(chat: SidebarChat): string {
   if (chat.title) return chat.title
-  if (chat.participants.length > 0) {
-    const names = chat.participants.map(p => p.name)
+  // Filter out undefined participants and those without names
+  const validParticipants = chat.participants.filter(p => p && p.name)
+  if (validParticipants.length > 0) {
+    const names = validParticipants.map(p => p.name)
     if (names.length <= 2) return names.join(' & ')
     return `${names[0]} +${names.length - 1}`
   }
   return 'Untitled Chat'
+}
+
+/**
+ * Folder icon for project indicator
+ */
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+    </svg>
+  )
 }
 
 function ChatItem({
@@ -58,13 +79,14 @@ function ChatItem({
   const firstParticipant = chat.participants[0]
   const avatarSrc = firstParticipant?.avatarUrl
   const messageCount = chat.messageCount || 0
+  const hasProject = !!chat.projectId
 
   return (
     <Link
       href={`/chats/${chat.id}`}
       className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
       onClick={onClick}
-      title={isCollapsed ? `${displayName} (${messageCount} messages)` : undefined}
+      title={isCollapsed ? `${displayName}${chat.projectName ? ` (${chat.projectName})` : ''} (${messageCount} messages)` : undefined}
     >
       {avatarSrc ? (
         <img
@@ -79,7 +101,15 @@ function ChatItem({
       )}
       {!isCollapsed && (
         <>
-          <span className="qt-left-sidebar-item-label">{displayName}</span>
+          <div className="flex-1 min-w-0">
+            <span className="qt-left-sidebar-item-label block truncate">{displayName}</span>
+            {hasProject && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+                <FolderIcon className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">{chat.projectName}</span>
+              </span>
+            )}
+          </div>
           {messageCount > 0 && (
             <span className="ml-auto px-1.5 py-0.5 text-xs bg-muted text-muted-foreground rounded-full flex-shrink-0">
               {messageCount > 999 ? '999+' : messageCount}
@@ -105,7 +135,7 @@ export function ChatsSection() {
   // Don't show section if loading or no chats
   if (loading) {
     return (
-      <SidebarSection title="Chats" grow>
+      <SidebarSection id="chats" title="Chats" grow collapsible={false}>
         <div className="px-2 py-1 text-xs text-muted-foreground animate-pulse">
           {!isCollapsed && 'Loading...'}
         </div>
@@ -113,14 +143,15 @@ export function ChatsSection() {
     )
   }
 
-  // Filter out chats with hidden character tags
+  // Filter out chats with hidden character tags AND chats that belong to projects
+  // Project chats are shown under their respective projects in the projects section
   const visibleChats = chats.filter(
-    chat => !shouldHideByIds(chat.characterTags)
+    chat => !shouldHideByIds(chat.characterTags) && !chat.projectId
   )
 
   if (visibleChats.length === 0) {
     return (
-      <SidebarSection title="Chats" grow>
+      <SidebarSection id="chats" title="Chats" grow collapsible={false}>
         <div className="px-2 py-1 text-xs text-muted-foreground">
           {!isCollapsed && 'No chats yet'}
         </div>
@@ -130,7 +161,7 @@ export function ChatsSection() {
   }
 
   return (
-    <SidebarSection title="Chats" grow>
+    <SidebarSection id="chats" title="Chats" grow collapsible={false}>
       {visibleChats.slice(0, 10).map(chat => (
         <ChatItem
           key={chat.id}

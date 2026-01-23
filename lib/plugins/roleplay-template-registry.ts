@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { getEnabledPluginsByCapability } from '@/lib/plugins';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
 import { getErrorMessage } from '@/lib/errors';
+import type { AnnotationButton, RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 
 // ============================================================================
 // TYPES
@@ -35,6 +36,15 @@ export interface LoadedRoleplayTemplate {
 
   /** Categorization tags */
   tags: string[];
+
+  /** Formatting toolbar annotation buttons */
+  annotationButtons?: AnnotationButton[];
+
+  /** Patterns for styling roleplay text in message content */
+  renderingPatterns?: RenderingPattern[];
+
+  /** Optional dialogue detection for paragraph-level styling */
+  dialogueDetection?: DialogueDetection;
 
   /** Source plugin name */
   pluginName: string;
@@ -174,6 +184,9 @@ class RoleplayTemplateRegistry {
       description: templateConfig.description,
       systemPrompt: templateConfig.systemPrompt,
       tags: templateConfig.tags || [],
+      annotationButtons: templateConfig.annotationButtons || [],
+      renderingPatterns: templateConfig.renderingPatterns || [],
+      dialogueDetection: templateConfig.dialogueDetection ?? undefined,
       pluginName: plugin.manifest.name,
       version: plugin.manifest.version,
       isBuiltIn: true, // Plugin templates are always treated as built-in

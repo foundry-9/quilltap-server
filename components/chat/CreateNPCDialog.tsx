@@ -13,7 +13,6 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useSidebarDataOptional } from '@/components/providers/sidebar-data-provider'
 
@@ -95,17 +94,16 @@ export default function CreateNPCDialog({
 
   const loadConnectionProfiles = async () => {
     setIsLoading(true)
-    clientLogger.debug('[CreateNPCDialog] Loading connection profiles')
 
     try {
-      const response = await fetch('/api/profiles')
+      const response = await fetch('/api/v1/connection-profiles')
 
       if (!response.ok) {
         throw new Error('Failed to load connection profiles')
       }
 
       const profilesData = await response.json()
-      const loadedProfiles = Array.isArray(profilesData) ? profilesData : []
+      const loadedProfiles = profilesData.profiles || []
 
       setConnectionProfiles(loadedProfiles)
 
@@ -113,12 +111,8 @@ export default function CreateNPCDialog({
       if (loadedProfiles.length > 0) {
         setSelectedConnectionProfileId(loadedProfiles[0].id)
       }
-
-      clientLogger.debug('[CreateNPCDialog] Connection profiles loaded', {
-        profileCount: loadedProfiles.length,
-      })
     } catch (error) {
-      clientLogger.error('[CreateNPCDialog] Error loading connection profiles', {
+      console.error('[CreateNPCDialog] Error loading connection profiles', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast('Failed to load connection profiles')
@@ -136,11 +130,6 @@ export default function CreateNPCDialog({
         return
       }
       setAvatarFile(file)
-      clientLogger.debug('[CreateNPCDialog] Avatar file selected', {
-        filename: file.name,
-        type: file.type,
-        size: file.size,
-      })
     }
   }
 
@@ -162,28 +151,18 @@ export default function CreateNPCDialog({
     }
 
     setIsCreating(true)
-    clientLogger.debug('[CreateNPCDialog] Creating NPC', {
-      name,
-      hasDescription: !!description,
-      hasPhysicalDescription: !!physicalDescription,
-      hasScenario: !!scenario,
-      hasSystemPrompt: !!systemPrompt,
-      hasAvatar: !!avatarFile,
-      connectionProfileId: selectedConnectionProfileId,
-    })
 
     try {
       let uploadedImageId: string | null = null
 
       // Step 1: Upload avatar if provided
       if (avatarFile) {
-        clientLogger.debug('[CreateNPCDialog] Uploading avatar')
         const formData = new FormData()
         formData.append('file', avatarFile)
         formData.append('referenceType', 'CHARACTER')
         formData.append('referenceId', 'pending')
 
-        const uploadResponse = await fetch('/api/images', {
+        const uploadResponse = await fetch('/api/v1/images', {
           method: 'POST',
           body: formData,
         })
@@ -195,10 +174,6 @@ export default function CreateNPCDialog({
 
         const uploadData = await uploadResponse.json()
         uploadedImageId = uploadData.id
-
-        clientLogger.debug('[CreateNPCDialog] Avatar uploaded', {
-          imageId: uploadedImageId,
-        })
       }
 
       // Step 2: Create character with npc flag
@@ -243,11 +218,7 @@ export default function CreateNPCDialog({
         ]
       }
 
-      clientLogger.debug('[CreateNPCDialog] Creating character', {
-        characterData,
-      })
-
-      const createResponse = await fetch('/api/characters', {
+      const createResponse = await fetch('/api/v1/characters', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -263,19 +234,9 @@ export default function CreateNPCDialog({
       const createdCharacter = await createResponse.json()
       const characterId = createdCharacter.id
 
-      clientLogger.info('[CreateNPCDialog] NPC created successfully', {
-        characterId,
-        name: createdCharacter.name,
-      })
-
       // Step 3: Set avatar if it was uploaded
       if (uploadedImageId) {
-        clientLogger.debug('[CreateNPCDialog] Setting character avatar', {
-          characterId,
-          imageId: uploadedImageId,
-        })
-
-        const avatarResponse = await fetch(`/api/characters/${characterId}/avatar`, {
+        const avatarResponse = await fetch(`/api/v1/characters/${characterId}?action=avatar`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -287,12 +248,10 @@ export default function CreateNPCDialog({
 
         if (!avatarResponse.ok) {
           // Log error but don't fail the whole operation
-          clientLogger.error('[CreateNPCDialog] Failed to set avatar', {
+          console.error('[CreateNPCDialog] Failed to set avatar', {
             characterId,
             imageId: uploadedImageId,
           })
-        } else {
-          clientLogger.debug('[CreateNPCDialog] Avatar set successfully')
         }
       }
 
@@ -304,7 +263,7 @@ export default function CreateNPCDialog({
       onNPCCreated(characterId)
       onClose()
     } catch (error) {
-      clientLogger.error('[CreateNPCDialog] Error creating NPC', {
+      console.error('[CreateNPCDialog] Error creating NPC', {
         error: error instanceof Error ? error.message : String(error),
       })
       showErrorToast(error instanceof Error ? error.message : 'Failed to create NPC')

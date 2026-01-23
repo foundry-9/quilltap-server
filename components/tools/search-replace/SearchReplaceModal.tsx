@@ -9,7 +9,6 @@
 
 import { useEffect } from 'react';
 import { BaseModal } from '@/components/ui/BaseModal';
-import { clientLogger } from '@/lib/client-logger';
 import { useSearchReplace } from './hooks/useSearchReplace';
 import {
   ScopeSelectionStep,
@@ -57,14 +56,6 @@ export function SearchReplaceModal({
     reset,
   } = useSearchReplace({
     initialScope,
-    onComplete: (result) => {
-      clientLogger.info('[SearchReplaceModal] Operation complete', {
-        messagesUpdated: result.messagesUpdated,
-        memoriesUpdated: result.memoriesUpdated,
-        chatsAffected: result.chatsAffected,
-        errorCount: result.errors.length,
-      });
-    },
   });
 
   // Reset when modal closes
@@ -74,15 +65,6 @@ export function SearchReplaceModal({
     }
   }, [isOpen, reset]);
 
-  // Log modal open
-  useEffect(() => {
-    if (isOpen) {
-      clientLogger.debug('[SearchReplaceModal] Modal opened', {
-        hasInitialScope: !!initialScope,
-        currentChatId,
-      });
-    }
-  }, [isOpen, initialScope, currentChatId]);
 
   // Get step title
   const currentStepConfig = WIZARD_STEPS.find(s => s.id === currentStep);

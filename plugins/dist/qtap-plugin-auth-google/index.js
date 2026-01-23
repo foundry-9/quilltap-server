@@ -1,6 +1,6 @@
 "use strict";
 
-// ../../../node_modules/@oslojs/encoding/dist/base32.js
+// node_modules/@oslojs/encoding/dist/base32.js
 var EncodingPadding;
 (function(EncodingPadding5) {
   EncodingPadding5[EncodingPadding5["Include"] = 0] = "Include";
@@ -12,7 +12,7 @@ var DecodingPadding;
   DecodingPadding5[DecodingPadding5["Ignore"] = 1] = "Ignore";
 })(DecodingPadding || (DecodingPadding = {}));
 
-// ../../../node_modules/@oslojs/encoding/dist/base64.js
+// node_modules/@oslojs/encoding/dist/base64.js
 function encodeBase64(bytes) {
   return encodeBase64_internal(bytes, base64Alphabet, EncodingPadding2.Include);
 }
@@ -55,7 +55,7 @@ var DecodingPadding2;
   DecodingPadding5[DecodingPadding5["Ignore"] = 1] = "Ignore";
 })(DecodingPadding2 || (DecodingPadding2 = {}));
 
-// ../../../node_modules/@oslojs/binary/dist/uint.js
+// node_modules/@oslojs/binary/dist/uint.js
 var BigEndian = class {
   uint8(data, offset) {
     if (data.byteLength < offset + 1) {
@@ -209,12 +209,12 @@ var LittleEndian = class {
 var bigEndian = new BigEndian();
 var littleEndian = new LittleEndian();
 
-// ../../../node_modules/@oslojs/binary/dist/bits.js
+// node_modules/@oslojs/binary/dist/bits.js
 function rotr32(x, n) {
   return (x << 32 - n | x >>> n) >>> 0;
 }
 
-// ../../../node_modules/@oslojs/crypto/dist/sha2/sha224.js
+// node_modules/@oslojs/crypto/dist/sha2/sha224.js
 var K = new Uint32Array([
   1116352408,
   1899447441,
@@ -282,7 +282,7 @@ var K = new Uint32Array([
   3329325298
 ]);
 
-// ../../../node_modules/@oslojs/crypto/dist/sha2/sha256.js
+// node_modules/@oslojs/crypto/dist/sha2/sha256.js
 function sha256(data) {
   const hash = new SHA256();
   hash.update(data);
@@ -459,7 +459,7 @@ var K2 = new Uint32Array([
   3329325298
 ]);
 
-// ../../../node_modules/@oslojs/crypto/dist/sha2/sha512.js
+// node_modules/@oslojs/crypto/dist/sha2/sha512.js
 var K3 = new BigUint64Array([
   0x428a2f98d728ae22n,
   0x7137449123ef65cdn,
@@ -543,7 +543,7 @@ var K3 = new BigUint64Array([
   0x6c44198c4a475817n
 ]);
 
-// ../../../node_modules/arctic/dist/oauth2.js
+// node_modules/arctic/dist/oauth2.js
 var OAuth2Tokens = class {
   data;
   constructor(data) {
@@ -600,7 +600,7 @@ function createS256CodeChallenge(codeVerifier) {
   return encodeBase64urlNoPadding(codeChallengeBytes);
 }
 
-// ../../../node_modules/arctic/dist/request.js
+// node_modules/arctic/dist/request.js
 function createOAuth2Request(endpoint, body) {
   const bodyBytes = new TextEncoder().encode(body.toString());
   const request = new Request(endpoint, {
@@ -764,7 +764,7 @@ var UnexpectedErrorResponseBodyError = class extends Error {
   }
 };
 
-// ../../../node_modules/arctic/dist/client.js
+// node_modules/arctic/dist/client.js
 var OAuth2Client = class {
   clientId;
   clientPassword;
@@ -867,7 +867,7 @@ var CodeChallengeMethod;
   CodeChallengeMethod2[CodeChallengeMethod2["Plain"] = 1] = "Plain";
 })(CodeChallengeMethod || (CodeChallengeMethod = {}));
 
-// ../../../node_modules/@oslojs/jwt/node_modules/@oslojs/encoding/dist/base32.js
+// node_modules/@oslojs/jwt/node_modules/@oslojs/encoding/dist/base32.js
 var EncodingPadding3;
 (function(EncodingPadding5) {
   EncodingPadding5[EncodingPadding5["Include"] = 0] = "Include";
@@ -879,7 +879,7 @@ var DecodingPadding3;
   DecodingPadding5[DecodingPadding5["Ignore"] = 1] = "Ignore";
 })(DecodingPadding3 || (DecodingPadding3 = {}));
 
-// ../../../node_modules/@oslojs/jwt/node_modules/@oslojs/encoding/dist/base64.js
+// node_modules/@oslojs/jwt/node_modules/@oslojs/encoding/dist/base64.js
 var EncodingPadding4;
 (function(EncodingPadding5) {
   EncodingPadding5[EncodingPadding5["Include"] = 0] = "Include";
@@ -891,7 +891,7 @@ var DecodingPadding4;
   DecodingPadding5[DecodingPadding5["Ignore"] = 1] = "Ignore";
 })(DecodingPadding4 || (DecodingPadding4 = {}));
 
-// ../../../node_modules/arctic/dist/providers/google.js
+// node_modules/arctic/dist/providers/google.js
 var authorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
 var tokenEndpoint = "https://oauth2.googleapis.com/token";
 var tokenRevocationEndpoint = "https://oauth2.googleapis.com/revoke";
@@ -938,7 +938,7 @@ function checkEnvVars(requiredVars) {
 }
 function getCallbackUrl() {
   const baseUrl = process.env.BASE_URL || "http://localhost:3000";
-  return `${baseUrl}/api/auth/oauth/google/callback`;
+  return `${baseUrl}/api/v1/auth/oauth/google/callback`;
 }
 function isConfigured() {
   const status = getConfigStatus();

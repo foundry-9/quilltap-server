@@ -18,6 +18,23 @@ import {
 import { UserSchema } from './auth.types';
 
 // ============================================================================
+// CONTEXT COMPRESSION SETTINGS
+// ============================================================================
+
+export const ContextCompressionSettingsSchema = z.object({
+  /** Whether context compression is enabled (default: true) */
+  enabled: z.boolean().default(true),
+  /** Number of messages to keep in full context (sliding window size) */
+  windowSize: z.number().min(3).max(10).default(5),
+  /** Target token count for compressed history (500-1200 tokens) */
+  compressionTargetTokens: z.number().min(300).max(2000).default(800),
+  /** Target token count for compressed system prompt */
+  systemPromptTargetTokens: z.number().min(500).max(3000).default(1500),
+});
+
+export type ContextCompressionSettings = z.infer<typeof ContextCompressionSettingsSchema>;
+
+// ============================================================================
 // CHEAP LLM SETTINGS
 // ============================================================================
 
@@ -40,6 +57,8 @@ export const CheapLLMSettingsSchema = z.object({
   embeddingProvider: EmbeddingProviderEnum.default('OPENAI'),
   /** Embedding profile ID to use for text embeddings */
   embeddingProfileId: UUIDSchema.nullable().optional(),
+  /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
+  imagePromptProfileId: UUIDSchema.nullable().optional(),
 });
 
 export type CheapLLMSettings = z.infer<typeof CheapLLMSettingsSchema>;
@@ -95,6 +114,23 @@ export const MemoryCascadePreferencesSchema = z.object({
 export type MemoryCascadePreferences = z.infer<typeof MemoryCascadePreferencesSchema>;
 
 // ============================================================================
+// TOKEN DISPLAY SETTINGS
+// ============================================================================
+
+export const TokenDisplaySettingsSchema = z.object({
+  /** Show per-message token counts in chat */
+  showPerMessageTokens: z.boolean().default(false),
+  /** Show estimated cost per message */
+  showPerMessageCost: z.boolean().default(false),
+  /** Show chat-level token aggregation and cost */
+  showChatTotals: z.boolean().default(false),
+  /** Show system events (cheap LLM operations) in chat */
+  showSystemEvents: z.boolean().default(false),
+});
+
+export type TokenDisplaySettings = z.infer<typeof TokenDisplaySettingsSchema>;
+
+// ============================================================================
 // CHAT SETTINGS
 // ============================================================================
 
@@ -132,6 +168,20 @@ export const ChatSettingsSchema = z.object({
   memoryCascadePreferences: MemoryCascadePreferencesSchema.default({
     onMessageDelete: 'ASK_EVERY_TIME',
     onSwipeRegenerate: 'DELETE_MEMORIES',
+  }),
+  /** Token display settings for showing usage and costs */
+  tokenDisplaySettings: TokenDisplaySettingsSchema.default({
+    showPerMessageTokens: false,
+    showPerMessageCost: false,
+    showChatTotals: false,
+    showSystemEvents: false,
+  }),
+  /** Context compression settings for long conversations */
+  contextCompressionSettings: ContextCompressionSettingsSchema.default({
+    enabled: true,
+    windowSize: 5,
+    compressionTargetTokens: 800,
+    systemPromptTargetTokens: 1500,
   }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

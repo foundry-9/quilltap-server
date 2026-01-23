@@ -34,7 +34,6 @@ export function formatDate(dateString: string): string {
 export function toExportEntityType(key: string): ExportEntityType {
   const mapping: Record<string, ExportEntityType> = {
     characters: 'characters',
-    personas: 'personas',
     chats: 'chats',
     tags: 'tags',
     connectionProfiles: 'connection-profiles',

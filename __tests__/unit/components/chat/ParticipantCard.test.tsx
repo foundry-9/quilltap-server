@@ -16,15 +16,6 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import { ParticipantCard, ParticipantData } from '@/components/chat/ParticipantCard'
 
-// Mock the client logger
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}))
 
 // Mock the Avatar component
 jest.mock('@/components/ui/Avatar', () => ({

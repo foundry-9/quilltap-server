@@ -33,6 +33,8 @@ export const plugin: LLMProviderPlugin = {
     },
   },
   config: {
+    // Setting requiresApiKey: true adds this provider to the API Keys dropdown
+    // in Settings, allowing users to store API keys for your provider
     requiresApiKey: true,
     requiresBaseUrl: false,
     apiKeyLabel: 'API Key',

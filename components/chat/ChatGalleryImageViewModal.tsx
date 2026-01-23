@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
-import { clientLogger } from '@/lib/client-logger'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
@@ -59,7 +58,7 @@ export default function ChatGalleryImageViewModal({
         // Check if image exists in gallery with these tags
         const params = new URLSearchParams()
         if (characterId) {
-          const charRes = await fetch(`/api/images?tagType=CHARACTER&tagId=${characterId}`)
+          const charRes = await fetch(`/api/v1/images?tagType=CHARACTER&tagId=${characterId}`)
           if (charRes.ok) {
             const charData = await safeJsonParse<{ data?: Array<{ filepath: string }> }>(charRes)
             const found = (charData.data || []).some((img) => img.filepath === file.filepath)
@@ -67,7 +66,7 @@ export default function ChatGalleryImageViewModal({
           }
         }
         if (personaId) {
-          const personaRes = await fetch(`/api/images?tagType=PERSONA&tagId=${personaId}`)
+          const personaRes = await fetch(`/api/v1/images?tagType=PERSONA&tagId=${personaId}`)
           if (personaRes.ok) {
             const personaData = await safeJsonParse<{ data?: Array<{ filepath: string }> }>(personaRes)
             const found = (personaData.data || []).some((img) => img.filepath === file.filepath)
@@ -75,7 +74,7 @@ export default function ChatGalleryImageViewModal({
           }
         }
       } catch (error) {
-        clientLogger.error('Failed to check tags:', { error: error instanceof Error ? error.message : String(error) })
+        console.error('Failed to check tags:', { error: error instanceof Error ? error.message : String(error) })
       } finally {
         setCheckingTags(false)
       }
@@ -89,7 +88,6 @@ export default function ChatGalleryImageViewModal({
     onClose,
     onPrev,
     onNext,
-    logContext: 'ChatGalleryImageViewModal',
   })
 
   const handleDownload = async () => {
@@ -105,7 +103,7 @@ export default function ChatGalleryImageViewModal({
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (error) {
-      clientLogger.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -116,19 +114,20 @@ export default function ChatGalleryImageViewModal({
     try {
       if (isTaggedToCharacter) {
         // Find the image in gallery first
-        const imagesRes = await fetch(`/api/images?tagType=CHARACTER&tagId=${characterId}`)
+        const imagesRes = await fetch(`/api/v1/images?tagType=CHARACTER&tagId=${characterId}`)
         const imagesData = await safeJsonParse<{ data?: Array<{ id: string; filepath: string }>; error?: string }>(imagesRes)
         if (!imagesRes.ok) throw new Error(imagesData.error || 'Failed to find image')
         const galleryImage = (imagesData.data || []).find((img) => img.filepath === file.filepath)
 
         if (galleryImage) {
           // Remove tag
-          const params = new URLSearchParams({
-            tagType: 'CHARACTER',
-            tagId: characterId,
-          })
-          const res = await fetch(`/api/images/${galleryImage.id}/tags?${params.toString()}`, {
-            method: 'DELETE',
+          const res = await fetch(`/api/v1/images/${galleryImage.id}?action=remove-tag`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tagType: 'CHARACTER',
+              tagId: characterId,
+            }),
           })
           if (!res.ok) {
             const data = await safeJsonParse<{ error?: string }>(res)
@@ -140,7 +139,7 @@ export default function ChatGalleryImageViewModal({
       } else {
         // Add tag - both generated images and chat files use the same endpoint
         // Both need to be copied to gallery first if not already there
-        const res = await fetch(`/api/chat-files/${file.id}`, {
+        const res = await fetch(`/api/v1/chat-files/${file.id}?action=tag`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -156,7 +155,7 @@ export default function ChatGalleryImageViewModal({
         showSuccessToast(`Added to ${characterName || 'character'}'s gallery`)
       }
     } catch (error) {
-      clientLogger.error('Failed to toggle character tag:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to toggle character tag:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update tag')
     } finally {
       setIsTagging(false)
@@ -170,19 +169,20 @@ export default function ChatGalleryImageViewModal({
     try {
       if (isTaggedToPersona) {
         // Find the image in gallery first
-        const imagesRes = await fetch(`/api/images?tagType=PERSONA&tagId=${personaId}`)
+        const imagesRes = await fetch(`/api/v1/images?tagType=PERSONA&tagId=${personaId}`)
         const imagesData = await safeJsonParse<{ data?: Array<{ id: string; filepath: string }>; error?: string }>(imagesRes)
         if (!imagesRes.ok) throw new Error(imagesData.error || 'Failed to find image')
         const galleryImage = (imagesData.data || []).find((img) => img.filepath === file.filepath)
 
         if (galleryImage) {
           // Remove tag
-          const params = new URLSearchParams({
-            tagType: 'PERSONA',
-            tagId: personaId,
-          })
-          const res = await fetch(`/api/images/${galleryImage.id}/tags?${params.toString()}`, {
-            method: 'DELETE',
+          const res = await fetch(`/api/v1/images/${galleryImage.id}?action=remove-tag`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tagType: 'PERSONA',
+              tagId: personaId,
+            }),
           })
           if (!res.ok) {
             const data = await safeJsonParse<{ error?: string }>(res)
@@ -194,7 +194,7 @@ export default function ChatGalleryImageViewModal({
       } else {
         // Add tag - both generated images and chat files use the same endpoint
         // Both need to be copied to gallery first if not already there
-        const res = await fetch(`/api/chat-files/${file.id}`, {
+        const res = await fetch(`/api/v1/chat-files/${file.id}?action=tag`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -210,7 +210,7 @@ export default function ChatGalleryImageViewModal({
         showSuccessToast(`Added to ${personaName || 'persona'}'s gallery`)
       }
     } catch (error) {
-      clientLogger.error('Failed to toggle persona tag:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to toggle persona tag:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update tag')
     } finally {
       setIsTagging(false)

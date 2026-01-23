@@ -12,7 +12,6 @@
 
 import { useEffect } from 'react';
 import { SyncFormData } from '../types';
-import { clientLogger } from '@/lib/client-logger';
 
 interface InstanceFormProps {
   formData: SyncFormData;
@@ -36,10 +35,6 @@ export function InstanceForm({
 }: InstanceFormProps) {
   // Log render in useEffect to avoid state updates during render
   useEffect(() => {
-    clientLogger.debug('InstanceForm: rendered', {
-      isEditing,
-      isSaving,
-    });
   }, [isEditing, isSaving]);
 
   return (

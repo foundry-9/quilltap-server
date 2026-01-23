@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { SyncCard } from '@/components/tools/sync-card'
 import BackupRestoreCard from '@/components/tools/backup-restore-card'
 import { ImportExportCard } from '@/components/tools/import-export-card'
 import { DeleteDataCard } from '@/components/tools/delete-data-card'
@@ -19,6 +20,7 @@ export default function ToolsPage() {
 
       {/* Tool Cards Grid */}
       <div className="grid gap-6 md:grid-cols-2">
+        <SyncCard />
         <BackupRestoreCard />
         <ImportExportCard />
         <CapabilitiesReportCard />

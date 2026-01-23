@@ -1,0 +1,952 @@
+/**
+ * System Tools API v1 - Collection Endpoint
+ *
+ * POST /api/v1/system/tools?action=delete-data - Delete all user data
+ * GET /api/v1/system/tools?action=delete-data-preview - Preview what will be deleted
+ * GET /api/v1/system/tools?action=tasks-queue - Get tasks queue status
+ * POST /api/v1/system/tools?action=tasks-queue - Control tasks queue (start/stop)
+ * POST /api/v1/system/tools?action=export - Export user data (Quilltap format)
+ * GET /api/v1/system/tools?action=export-entities - Get available entities for export
+ * GET /api/v1/system/tools?action=export-preview - Preview export contents
+ * POST /api/v1/system/tools?action=import-preview - Preview import contents
+ * POST /api/v1/system/tools?action=import-execute - Execute the actual import
+ * GET /api/v1/system/tools?action=capabilities-report - Get system capabilities report
+ * POST /api/v1/system/tools?action=capabilities-report-generate - Generate a new report
+ * GET /api/v1/system/tools?action=capabilities-report-list - List saved reports
+ * GET /api/v1/system/tools?action=capabilities-report-get - Get a specific report
+ * POST /api/v1/system/tools?action=capabilities-report-delete - Delete a specific report
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { logger } from '@/lib/logger';
+import { badRequest, notFound, serverError } from '@/lib/api/responses';
+import { deleteAllUserData, previewDeleteAllUserData } from '@/lib/backup/restore-service';
+import { BackgroundJob } from '@/lib/schemas/types';
+import { startProcessor, stopProcessor, getProcessorStatus } from '@/lib/background-jobs/processor';
+import { createExport, previewExport } from '@/lib/export/quilltap-export-service';
+import { previewImport, executeImport, type QuilltapExport, type ConflictStrategy } from '@/lib/import/quilltap-import-service';
+import { generateAndSaveReport } from '@/lib/tools/capabilities-report';
+import { fileStorageManager } from '@/lib/file-storage/manager';
+import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
+import type { ExportEntityType } from '@/lib/export/types';
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+function estimateTokensForJob(job: BackgroundJob): number {
+  const baseTokens = 500;
+
+  switch (job.type) {
+    case 'MEMORY_EXTRACTION': {
+      const payload = job.payload as { userMessage?: string; assistantMessage?: string };
+      const userMsgTokens = Math.ceil((payload.userMessage?.length || 0) / 4);
+      const assistantMsgTokens = Math.ceil((payload.assistantMessage?.length || 0) / 4);
+      return baseTokens + userMsgTokens + assistantMsgTokens + 300;
+    }
+    case 'INTER_CHARACTER_MEMORY': {
+      const payload = job.payload as { userMessage?: string; assistantMessage?: string };
+      const userMsgTokens = Math.ceil((payload.userMessage?.length || 0) / 4);
+      const assistantMsgTokens = Math.ceil((payload.assistantMessage?.length || 0) / 4);
+      return baseTokens + userMsgTokens + assistantMsgTokens + 400;
+    }
+    case 'CONTEXT_SUMMARY': {
+      return baseTokens + 2000;
+    }
+    case 'TITLE_UPDATE': {
+      return baseTokens + 300;
+    }
+    default:
+      return baseTokens;
+  }
+}
+
+function getJobTypeName(type: string): string {
+  const typeNames: Record<string, string> = {
+    MEMORY_EXTRACTION: 'Memory Extraction',
+    INTER_CHARACTER_MEMORY: 'Character Memory',
+    CONTEXT_SUMMARY: 'Context Summary',
+    TITLE_UPDATE: 'Title Update',
+  };
+  return typeNames[type] || type;
+}
+
+// ============================================================================
+// Action Handlers
+// ============================================================================
+
+async function handleDeleteData(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    const body = await req.json();
+
+    if (body.confirm !== 'DELETE_ALL_MY_DATA') {
+      logger.warn('[System Tools v1] Delete all data attempted without confirmation', {
+        userId: user.id,
+      });
+      return badRequest('Confirmation required. Send { "confirm": "DELETE_ALL_MY_DATA" }');
+    }
+
+    logger.info('[System Tools v1] Starting complete data deletion', { userId: user.id });
+
+    const summary = await deleteAllUserData(user.id);
+
+    logger.info('[System Tools v1] Complete data deletion finished', { userId: user.id, summary });
+
+    return NextResponse.json({
+      success: true,
+      summary,
+    });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Delete all data failed',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to delete data');
+  }
+}
+
+async function handleDeleteDataPreview(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    logger.debug('[System Tools v1] Preview delete request received', { userId: user.id });
+
+    const summary = await previewDeleteAllUserData(user.id);
+
+    logger.info('[System Tools v1] Delete preview generated', { userId: user.id, summary });
+
+    return NextResponse.json({
+      success: true,
+      summary,
+    });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Preview delete failed',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to preview data deletion');
+  }
+}
+
+async function handleTasksQueue(req: NextRequest, context: any) {
+  const { user, repos } = context;
+
+  try {
+    logger.debug('[System Tools v1] GET tasks queue status', { userId: user.id });
+
+    const repo = repos.backgroundJobs;
+    const stats = await repo.getStats(user.id);
+
+    const pendingJobs = await repo.findByUserId(user.id, 'PENDING');
+    const processingJobs = await repo.findByUserId(user.id, 'PROCESSING');
+    const failedJobs = await repo.findByUserId(user.id, 'FAILED');
+    const pausedJobs = await repo.findByUserId(user.id, 'PAUSED');
+
+    const jobMap = new Map<string, BackgroundJob>();
+    for (const job of [
+      ...processingJobs,
+      ...pendingJobs,
+      ...failedJobs.filter((j: BackgroundJob) => j.attempts < j.maxAttempts),
+      ...pausedJobs,
+    ]) {
+      if (!jobMap.has(job.id)) {
+        jobMap.set(job.id, job);
+      }
+    }
+    const activeJobs = Array.from(jobMap.values());
+
+    activeJobs.sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+    });
+
+    let totalEstimatedTokens = 0;
+    const jobDetails = activeJobs.map((job) => {
+      const estimatedTokens = estimateTokensForJob(job);
+      totalEstimatedTokens += estimatedTokens;
+
+      const payload = job.payload as Record<string, unknown>;
+
+      return {
+        id: job.id,
+        type: job.type,
+        typeName: getJobTypeName(job.type),
+        status: job.status,
+        priority: job.priority,
+        attempts: job.attempts,
+        maxAttempts: job.maxAttempts,
+        scheduledAt: job.scheduledAt,
+        startedAt: job.startedAt,
+        lastError: job.lastError,
+        estimatedTokens,
+        chatId: payload.chatId as string | undefined,
+        characterName: payload.characterName as string | undefined,
+      };
+    });
+
+    const processorStatus = getProcessorStatus();
+
+    logger.debug('[System Tools v1] Tasks queue status retrieved', {
+      userId: user.id,
+      activeJobCount: activeJobs.length,
+      totalEstimatedTokens,
+    });
+
+    return NextResponse.json({
+      stats: {
+        pending: stats.pending,
+        processing: stats.processing,
+        failed: stats.failed,
+        completed: stats.completed,
+        dead: stats.dead,
+        activeTotal: activeJobs.length,
+      },
+      jobs: jobDetails,
+      totalEstimatedTokens,
+      processorStatus,
+    });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Error fetching tasks queue status',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to fetch queue status');
+  }
+}
+
+async function handleTasksQueueControl(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    const body = await req.json();
+    const { action } = body;
+
+    if (!action || !['start', 'stop'].includes(action)) {
+      return badRequest('Invalid action. Must be "start" or "stop"');
+    }
+
+    logger.info('[System Tools v1] Tasks queue control action', {
+      userId: user.id,
+      action,
+    });
+
+    if (action === 'start') {
+      startProcessor();
+    } else {
+      stopProcessor();
+    }
+
+    const processorStatus = getProcessorStatus();
+
+    logger.debug('[System Tools v1] Tasks queue processor status updated', {
+      userId: user.id,
+      action,
+      running: processorStatus.running,
+    });
+
+    return NextResponse.json({
+      success: true,
+      action,
+      processorStatus,
+    });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Error controlling tasks queue',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to control queue');
+  }
+}
+
+async function handleExport(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    const body = await req.json();
+    const { type, scope, selectedIds, includeMemories } = body;
+
+    logger.info('[System Tools v1] Creating export', {
+      userId: user.id,
+      type,
+      scope,
+      selectedIdsCount: selectedIds?.length || 0,
+      includeMemories: includeMemories || false,
+    });
+
+    // Create export using the export service
+    const exportData = await createExport(user.id, {
+      type: type as ExportEntityType,
+      scope: scope || 'all',
+      selectedIds,
+      includeMemories: includeMemories || false,
+    });
+
+    logger.debug('[System Tools v1] Export created', {
+      userId: user.id,
+      type,
+      exportDataSize: JSON.stringify(exportData).length,
+    });
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    const sanitizedType = (type || 'data').replace(/_/g, '-');
+    const filename = `quilltap-${sanitizedType}-${timestamp}.qtap`;
+
+    return new NextResponse(JSON.stringify(exportData, null, 2), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Export failed',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to create export');
+  }
+}
+
+async function handleExportEntities(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const type = searchParams.get('type') as ExportEntityType | null;
+
+    if (!type) {
+      return badRequest('Missing type parameter');
+    }
+
+    logger.debug('[System Tools v1] Fetching entities for export', { userId: user.id, type });
+
+    const repos = getUserRepositories(user.id);
+    const globalRepos = getRepositories();
+
+    let entities: Array<{ id: string; name: string; memoryCount?: number }> = [];
+    let totalMemoryCount = 0;
+
+    switch (type) {
+      case 'characters': {
+        const characters = await repos.characters.findAll();
+        for (const char of characters) {
+          const memories = await repos.memories.findByCharacterId(char.id);
+          const charMemoryCount = memories.length;
+          totalMemoryCount += charMemoryCount;
+          entities.push({
+            id: char.id,
+            name: char.name,
+            memoryCount: charMemoryCount,
+          });
+        }
+        break;
+      }
+
+      case 'chats': {
+        const chats = await repos.chats.findAll();
+        const characters = await repos.characters.findAll();
+        const allMemoriesArrays = await Promise.all(
+          characters.map((char) => repos.memories.findByCharacterId(char.id))
+        );
+        const allMemories = allMemoriesArrays.flat();
+
+        for (const chat of chats) {
+          const chatMemories = allMemories.filter((m) => m.chatId === chat.id);
+          const chatMemoryCount = chatMemories.length;
+          totalMemoryCount += chatMemoryCount;
+          entities.push({
+            id: chat.id,
+            name: chat.title,
+            memoryCount: chatMemoryCount,
+          });
+        }
+        break;
+      }
+
+      case 'roleplay-templates': {
+        const templates = await globalRepos.roleplayTemplates.findAll();
+        const userTemplates = templates.filter(
+          (t) => !t.isBuiltIn && !t.pluginName && t.userId === user.id
+        );
+        entities = userTemplates.map((t) => ({ id: t.id, name: t.name }));
+        break;
+      }
+
+      case 'connection-profiles': {
+        const profiles = await repos.connections.findAll();
+        entities = profiles.map((p) => ({ id: p.id, name: p.name }));
+        break;
+      }
+
+      case 'image-profiles': {
+        const profiles = await repos.imageProfiles.findAll();
+        entities = profiles.map((p) => ({ id: p.id, name: p.name }));
+        break;
+      }
+
+      case 'embedding-profiles': {
+        const profiles = await repos.embeddingProfiles.findAll();
+        entities = profiles.map((p) => ({ id: p.id, name: p.name }));
+        break;
+      }
+
+      case 'tags': {
+        const tags = await repos.tags.findAll();
+        entities = tags.map((t) => ({ id: t.id, name: t.name }));
+        break;
+      }
+
+      case 'projects': {
+        const projects = await repos.projects.findAll();
+        entities = projects.map((p) => ({ id: p.id, name: p.name }));
+        break;
+      }
+
+      default:
+        return badRequest(`Unknown entity type: ${type}`);
+    }
+
+    logger.info('[System Tools v1] Entities fetched for export', {
+      userId: user.id,
+      type,
+      count: entities.length,
+      totalMemoryCount,
+    });
+
+    return NextResponse.json({
+      entities,
+      memoryCount: totalMemoryCount,
+    });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Failed to fetch entities for export',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to fetch entities');
+  }
+}
+
+async function handleExportPreview(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const type = searchParams.get('type');
+    const scope = searchParams.get('scope') || 'all';
+    const selectedIdsParam = searchParams.get('selectedIds');
+    const includeMemories = searchParams.get('includeMemories') === 'true';
+
+    const selectedIds = selectedIdsParam ? selectedIdsParam.split(',').filter(Boolean) : [];
+
+    if (!type) {
+      logger.warn('[System Tools v1] Export preview missing type parameter', { userId: user.id });
+      return badRequest('Missing required parameter: type');
+    }
+
+    logger.info('[System Tools v1] Previewing export', {
+      userId: user.id,
+      type,
+      scope,
+      selectedIdsCount: selectedIds.length,
+      includeMemories,
+    });
+
+    const preview = await previewExport(user.id, {
+      type: type as ExportEntityType,
+      scope: scope as 'all' | 'selected',
+      selectedIds,
+      includeMemories,
+    });
+
+    logger.debug('[System Tools v1] Export preview generated', {
+      userId: user.id,
+      type,
+      entityCount: preview.entities.length,
+    });
+
+    return NextResponse.json(preview);
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Export preview failed',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to preview export');
+  }
+}
+
+// Max file size for imports: 100MB
+const MAX_IMPORT_FILE_SIZE = 100 * 1024 * 1024;
+
+function validateExportFile(data: unknown): boolean {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+
+  const exported = data as Record<string, unknown>;
+  if (!exported.manifest || typeof exported.manifest !== 'object') {
+    return false;
+  }
+
+  const manifest = exported.manifest as Record<string, unknown>;
+  if (manifest.format !== 'quilltap-export' || manifest.version !== '1.0') {
+    return false;
+  }
+
+  return true;
+}
+
+async function handleImportPreview(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    const contentType = req.headers.get('content-type') || '';
+    let exportData: unknown;
+
+    logger.info('[System Tools v1] Processing import preview request', {
+      userId: user.id,
+      contentType,
+    });
+
+    if (contentType.includes('multipart/form-data')) {
+      // Handle FormData with file upload
+      const formData = await req.formData();
+      const file = formData.get('file') as File | null;
+
+      if (!file) {
+        logger.warn('[System Tools v1] Import preview missing file', { userId: user.id });
+        return badRequest('No file provided');
+      }
+
+      if (file.size > MAX_IMPORT_FILE_SIZE) {
+        logger.warn('[System Tools v1] Import file too large', {
+          userId: user.id,
+          fileSize: file.size,
+          maxSize: MAX_IMPORT_FILE_SIZE,
+        });
+        return badRequest(`File too large (max ${Math.round(MAX_IMPORT_FILE_SIZE / 1024 / 1024)}MB)`);
+      }
+
+      logger.debug('[System Tools v1] Reading uploaded export file', {
+        userId: user.id,
+        fileName: file.name,
+        fileSize: file.size,
+      });
+
+      const text = await file.text();
+      try {
+        exportData = JSON.parse(text);
+      } catch {
+        return badRequest('Invalid JSON: Failed to parse export file');
+      }
+    } else {
+      // Handle JSON body
+      const body = await req.json();
+
+      if (!body.exportData) {
+        logger.warn('[System Tools v1] Import preview missing exportData', { userId: user.id });
+        return badRequest('Missing required field: exportData');
+      }
+
+      exportData = body.exportData;
+    }
+
+    // Validate export file
+    if (!validateExportFile(exportData)) {
+      logger.warn('[System Tools v1] Invalid export file format', { userId: user.id });
+      return badRequest('Invalid export file format. Expected quilltap-export v1.0 format.');
+    }
+
+    const exported = exportData as QuilltapExport;
+
+    logger.info('[System Tools v1] Export file validated', {
+      userId: user.id,
+      exportType: exported.manifest.exportType,
+    });
+
+    const preview = await previewImport(user.id, exported);
+
+    logger.debug('[System Tools v1] Import preview generated', {
+      userId: user.id,
+      entityTypes: Object.keys(preview.entities),
+      conflictCounts: preview.conflictCounts,
+    });
+
+    return NextResponse.json(preview);
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Import preview failed',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to preview import');
+  }
+}
+
+async function handleImportExecute(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    const body = await req.json();
+    const { exportData, options } = body;
+
+    if (!exportData) {
+      logger.warn('[System Tools v1] Import execute missing exportData', { userId: user.id });
+      return badRequest('Missing required field: exportData');
+    }
+
+    if (!options) {
+      logger.warn('[System Tools v1] Import execute missing options', { userId: user.id });
+      return badRequest('Missing required field: options');
+    }
+
+    const { conflictStrategy, importMemories, selectedIds } = options;
+
+    if (!conflictStrategy || !['skip', 'replace', 'duplicate'].includes(conflictStrategy)) {
+      logger.warn('[System Tools v1] Import execute invalid conflict strategy', {
+        userId: user.id,
+        conflictStrategy,
+      });
+      return badRequest('Invalid conflictStrategy. Must be one of: skip, replace, duplicate');
+    }
+
+    const manifest = (exportData as Record<string, unknown>).manifest as Record<string, unknown>;
+
+    // Map 'replace' to 'overwrite' for the import service
+    const mappedConflictStrategy: ConflictStrategy =
+      conflictStrategy === 'replace' ? 'overwrite' : conflictStrategy;
+
+    logger.info('[System Tools v1] Starting import execution', {
+      userId: user.id,
+      exportType: manifest.exportType,
+      conflictStrategy: mappedConflictStrategy,
+      importMemories: importMemories || false,
+    });
+
+    const result = await executeImport(user.id, exportData, {
+      conflictStrategy: mappedConflictStrategy,
+      includeMemories: importMemories || false,
+      includeRelatedEntities: false,
+      selectedIds,
+    });
+
+    logger.info('[System Tools v1] Import completed', {
+      userId: user.id,
+      success: result.success,
+      imported: result.imported,
+      skipped: result.skipped,
+      warningCount: result.warnings.length,
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Import execution failed',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to execute import');
+  }
+}
+
+async function handleCapabilitiesReport(req: NextRequest, context: any) {
+  try {
+    logger.debug('[System Tools v1] GET capabilities report');
+
+    const report = {
+      version: '1.0',
+      capabilities: {
+        maxFileSize: 52428800, // 50MB
+        supportedImageFormats: ['jpeg', 'png', 'webp', 'gif'],
+        supportedDocumentFormats: ['pdf', 'docx', 'txt'],
+        maxStoragePerUser: 5368709120, // 5GB
+      },
+      features: {
+        memorySystem: true,
+        imageGeneration: true,
+        contextCompression: true,
+        fileAttachments: true,
+      },
+      limits: {
+        maxChatsPerCharacter: 1000,
+        maxCharactersPerUser: 500,
+        maxMemoriesPerCharacter: 5000,
+        requestTimeoutMs: 300000,
+      },
+    };
+
+    logger.debug('[System Tools v1] Capabilities report generated');
+
+    return NextResponse.json(report);
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Error generating capabilities report',
+      {},
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to generate capabilities report');
+  }
+}
+
+async function handleCapabilitiesReportGenerate(req: NextRequest, context: any) {
+  const { user, repos } = context;
+
+  try {
+    logger.info('[System Tools v1] Generating capabilities report', { userId: user.id });
+
+    const result = await generateAndSaveReport(user.id);
+
+    // Create a file entry in the database for the report
+    const contentBuffer = Buffer.from(result.content, 'utf-8');
+    const sha256Hash = createHash('sha256').update(result.content, 'utf-8').digest('hex');
+    const fileEntry = await repos.files.create({
+      userId: user.id,
+      originalFilename: result.filename,
+      mimeType: 'text/markdown',
+      size: contentBuffer.length,
+      storageKey: result.s3Key,
+      category: 'DOCUMENT',
+      sha256: sha256Hash,
+      folderPath: '/reports',
+      source: 'SYSTEM',
+      projectId: null,
+      linkedTo: [],
+      generationPrompt: null,
+      generationModel: null,
+      generationRevisedPrompt: null,
+      description: 'System-generated capabilities report',
+      tags: [],
+    });
+
+    logger.info('[System Tools v1] Capabilities report generated successfully', {
+      userId: user.id,
+      reportId: result.reportId,
+      filename: result.filename,
+      size: result.size,
+      fileEntryId: fileEntry.id,
+    });
+
+    return NextResponse.json({
+      success: true,
+      reportId: result.reportId,
+      filename: result.filename,
+      s3Key: result.s3Key,
+      size: result.size,
+      content: result.content,
+    });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Failed to generate capabilities report',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to generate report');
+  }
+}
+
+async function handleCapabilitiesReportList(req: NextRequest, context: any) {
+  const { user, repos } = context;
+
+  try {
+    logger.info('[System Tools v1] Listing capabilities reports', { userId: user.id });
+
+    // List all files in the DOCUMENT category from /reports folder
+    const allDocuments = await repos.files.findByCategory('DOCUMENT');
+    const reportFiles = allDocuments.filter((f: any) => f.folderPath === '/reports');
+
+    // Convert to ReportInfo format
+    const reports = reportFiles.map((file: any) => ({
+      id: file.id,
+      filename: file.originalFilename,
+      storageKey: file.storageKey || '',
+      createdAt: file.createdAt,
+      size: file.size || 0,
+    }));
+
+    // Sort by creation date, newest first
+    reports.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    logger.info('[System Tools v1] Listed capabilities reports', {
+      userId: user.id,
+      count: reports.length,
+    });
+
+    return NextResponse.json({ reports });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Failed to list capabilities reports',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to list reports');
+  }
+}
+
+async function handleCapabilitiesReportGet(req: NextRequest, context: any) {
+  const { user, repos } = context;
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const reportId = searchParams.get('reportId');
+    const download = searchParams.get('download') === 'true';
+
+    if (!reportId) {
+      return badRequest('Missing reportId parameter');
+    }
+
+    logger.info('[System Tools v1] Getting capabilities report', { userId: user.id, reportId });
+
+    // Find the report file in the database from DOCUMENT category
+    const allDocuments = await repos.files.findByCategory('DOCUMENT');
+    const reportFile = allDocuments.find((f: any) => f.id === reportId && f.folderPath === '/reports');
+
+    if (!reportFile) {
+      return notFound('Report');
+    }
+
+    // Download the report content
+    const buffer = await fileStorageManager.downloadFile(reportFile);
+    const content = buffer.toString('utf-8');
+
+    logger.info('[System Tools v1] Retrieved capabilities report', {
+      userId: user.id,
+      reportId,
+      size: buffer.length,
+    });
+
+    if (download) {
+      return new NextResponse(new Uint8Array(buffer), {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/markdown',
+          'Content-Disposition': `attachment; filename="${reportFile.originalFilename}"`,
+          'Content-Length': String(buffer.length),
+        },
+      });
+    }
+
+    return NextResponse.json({
+      reportId,
+      filename: reportFile.originalFilename,
+      content,
+      size: buffer.length,
+    });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Failed to get capabilities report',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to get report');
+  }
+}
+
+async function handleCapabilitiesReportDelete(req: NextRequest, context: any) {
+  const { user, repos } = context;
+
+  try {
+    const body = await req.json();
+    const { reportId } = body;
+
+    if (!reportId) {
+      return badRequest('Missing reportId');
+    }
+
+    logger.info('[System Tools v1] Deleting capabilities report', { userId: user.id, reportId });
+
+    // Find the report file in the database from DOCUMENT category
+    const allDocuments = await repos.files.findByCategory('DOCUMENT');
+    const reportFile = allDocuments.find((f: any) => f.id === reportId && f.folderPath === '/reports');
+
+    if (!reportFile) {
+      return notFound('Report');
+    }
+
+    // Delete the report from storage
+    await fileStorageManager.deleteFile(reportFile);
+
+    // Delete the file entry from database
+    await repos.files.delete(reportFile.id);
+
+    logger.info('[System Tools v1] Deleted capabilities report', { userId: user.id, reportId });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Failed to delete capabilities report',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to delete report');
+  }
+}
+
+// ============================================================================
+// Request Handlers
+// ============================================================================
+
+export const GET = createAuthenticatedHandler(async (req: NextRequest, context) => {
+  const { searchParams } = new URL(req.url);
+  const action = searchParams.get('action');
+
+  logger.debug('[System Tools v1] GET request', { action, userId: context.user.id });
+
+  switch (action) {
+    case 'tasks-queue':
+      return handleTasksQueue(req, context);
+    case 'delete-data-preview':
+      return handleDeleteDataPreview(req, context);
+    case 'export-entities':
+      return handleExportEntities(req, context);
+    case 'export-preview':
+      return handleExportPreview(req, context);
+    case 'capabilities-report':
+      return handleCapabilitiesReport(req, context);
+    case 'capabilities-report-list':
+      return handleCapabilitiesReportList(req, context);
+    case 'capabilities-report-get':
+      return handleCapabilitiesReportGet(req, context);
+    default:
+      return badRequest(
+        `Unknown action: ${action}. Available GET actions: tasks-queue, delete-data-preview, export-entities, export-preview, capabilities-report, capabilities-report-list, capabilities-report-get`
+      );
+  }
+});
+
+export const POST = createAuthenticatedHandler(async (req: NextRequest, context) => {
+  const { searchParams } = new URL(req.url);
+  const action = searchParams.get('action');
+
+  logger.debug('[System Tools v1] POST request', { action, userId: context.user.id });
+
+  switch (action) {
+    case 'delete-data':
+      return handleDeleteData(req, context);
+    case 'tasks-queue':
+      return handleTasksQueueControl(req, context);
+    case 'export':
+      return handleExport(req, context);
+    case 'import-preview':
+      return handleImportPreview(req, context);
+    case 'import-execute':
+      return handleImportExecute(req, context);
+    case 'capabilities-report-generate':
+      return handleCapabilitiesReportGenerate(req, context);
+    case 'capabilities-report-delete':
+      return handleCapabilitiesReportDelete(req, context);
+    default:
+      return badRequest(
+        `Unknown action: ${action}. Available POST actions: delete-data, tasks-queue, export, import-preview, import-execute, capabilities-report-generate, capabilities-report-delete`
+      );
+  }
+});

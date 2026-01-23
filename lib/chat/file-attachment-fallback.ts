@@ -11,8 +11,6 @@ import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { FileAttachment } from '@/lib/llm/base'
-import { join } from 'path'
-import { readFile } from 'fs/promises'
 import { logger } from '@/lib/logger'
 
 /**
@@ -102,31 +100,39 @@ export interface FallbackResult {
 }
 
 /**
- * Read text content from a file
- * @param filepath - Relative path from public/ directory (e.g., 'uploads/chat-files/chatId/filename.md')
+ * Decode text content from base64 data
+ * @param data - Base64 encoded file data
+ * @returns Decoded text content
  */
-async function readTextFile(filepath: string): Promise<string> {
+function decodeTextFromBase64(data: string): string {
   try {
-    // Construct full path: filepath is relative to public/ directory
-    const fullPath = join(process.cwd(), 'public', filepath)
-    const content = await readFile(fullPath, 'utf-8')
-    return content
+    // Decode base64 to UTF-8 string
+    return Buffer.from(data, 'base64').toString('utf-8')
   } catch (error) {
-    throw new Error(`Failed to read text file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    throw new Error(`Failed to decode text file: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
 /**
  * Convert text file to inline message content
+ * @param file - File metadata
+ * @param base64Data - Base64 encoded file data (already loaded from S3)
  */
 export async function convertTextFileToInline(
-  file: { filepath: string; filename: string; mimeType: string }
+  file: { filepath: string; filename: string; mimeType: string },
+  base64Data: string
 ): Promise<FallbackResult> {
   try {
-    const content = await readTextFile(file.filepath)
+    const content = decodeTextFromBase64(base64Data)
 
     // Format the text with a header
     const textContent = `[User attached text file: ${file.filename}]\n\n${content}\n\n[End of attached file]`
+
+    logger.debug('[Text Fallback] Successfully converted text file to inline content', {
+      filename: file.filename,
+      mimeType: file.mimeType,
+      contentLength: content.length,
+    })
 
     return {
       type: 'text',
@@ -137,6 +143,11 @@ export async function convertTextFileToInline(
       },
     }
   } catch (error) {
+    logger.error('[Text Fallback] Failed to convert text file', {
+      filename: file.filename,
+      mimeType: file.mimeType,
+    }, error instanceof Error ? error : new Error(String(error)))
+
     return {
       type: 'unsupported',
       error: `Failed to process text file: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -397,7 +408,18 @@ export async function processFileAttachmentFallback(
 
   // Handle text files
   if (isTextFile(file.mimeType)) {
-    return await convertTextFileToInline(file)
+    // Use the already-loaded base64 data from fileAttachment
+    if (!fileAttachment.data) {
+      return {
+        type: 'unsupported',
+        error: 'Text file data was not loaded - file may be missing or inaccessible',
+        processingMetadata: {
+          originalFilename: file.filename,
+          originalMimeType: file.mimeType,
+        },
+      }
+    }
+    return await convertTextFileToInline(file, fileAttachment.data)
   }
 
   // Handle images

@@ -46,3 +46,68 @@ This feature has been fully implemented across the codebase.
   - `SelectLLMProfileDialog` prompts user to select a connection profile
   - Backend API accepts `newConnectionProfileId` when stopping impersonation
   - Character automatically transitions to LLM control with selected profile
+
+## Complete Removal of Personas (2026-01-15)
+
+The persona system has been completely removed from the codebase. All personas have been permanently migrated to user-controlled characters. This represents the final step in the transition from the legacy persona system.
+
+### What Was Removed
+
+- **Persona API Endpoints**: All `/api/personas/*` routes have been removed
+- **Persona Database Entity**: The `personas` collection is no longer used or supported
+- **PERSONA Participant Type**: Chat participants no longer use the `PERSONA` type; they use `CHARACTER` type with `controlledBy: 'user'`
+- **Persona Repository**: The persona database repository has been removed
+- **Persona TypeScript Schema**: Type definitions for personas have been removed from the codebase
+- **Persona Tests**: All persona-related unit and integration tests have been removed
+
+### Migration Details
+
+**Data Migration** (automatic on first load):
+- All personas in user's database are converted to characters with `controlledBy: 'user'`
+- The new character ID is the same as the original persona ID, preserving all references in chats and memories
+- Personas are never re-created; the migration is one-way and permanent
+
+**Backup Compatibility**:
+- Old backup files containing `personas.json` are handled gracefully
+- During restore, `personas.json` is skipped (it is optional in the backup manifest)
+- Any `personaId` fields in restored data are cleared for backwards compatibility
+- Any `personaLinks` arrays in restored character data are cleared
+
+**Database State**:
+- The `personas` collection is no longer accessed or updated
+- Existing `personaId` fields in legacy data are ignored
+- All persona references are mapped to their corresponding user-controlled characters
+
+### Current User-Controlled Character Behavior
+
+Users can now fully replace personas using the character system:
+
+```typescript
+// Create a user-controlled character (replacement for persona)
+POST /api/v1/characters
+{
+  "name": "John",
+  "controlledBy": "user",
+  // ... other character fields
+}
+
+// Use in chat creation
+POST /api/v1/chats
+{
+  "characterId": "some-npc-id",
+  "userCharacterId": "john-char-uuid",  // User-controlled character
+  "title": "Chat as John with NPC"
+}
+
+// Take over in multi-character chat
+POST /api/v1/chats/[id]?action=impersonate
+{
+  "participantId": "participant-uuid"
+}
+```
+
+### Documentation Updates
+
+- API documentation (`docs/API.md`) has been updated to remove persona endpoint references
+- The `sortByPersona` query parameter for connection profiles has been removed
+- All examples now use characters with `controlledBy: 'user'` instead of personas

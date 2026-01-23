@@ -12,7 +12,6 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { BrandLogo } from '@/components/ui/brand-logo';
-import { clientLogger } from '@/lib/client-logger';
 import { useClickOutside } from '@/hooks/useClickOutside';
 
 export interface NavMenuItem {
@@ -41,12 +40,10 @@ export function NavLogoMenu({ isCollapsed, menuItems }: NavLogoMenuProps) {
   });
 
   const handleToggle = () => {
-    clientLogger.debug('NavLogoMenu: toggle dropdown', { wasOpen: isOpen, isCollapsed });
     setIsOpen(!isOpen);
   };
 
   const handleItemClick = (href: string) => {
-    clientLogger.debug('NavLogoMenu: item clicked', { href });
     setIsOpen(false);
   };
 

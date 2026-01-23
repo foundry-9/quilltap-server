@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { SectionHeader } from '@/components/ui/SectionHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -56,25 +55,21 @@ export default function EmbeddingProfilesTab() {
   }, []) // loadData is stable
 
   const handleEdit = (profile: EmbeddingProfile) => {
-    clientLogger.debug('Editing profile', { profileId: profile.id })
     setEditingProfile(profile)
     setIsModalOpen(true)
   }
 
   const handleOpenModal = () => {
-    clientLogger.debug('Opening new profile modal')
     setEditingProfile(null)
     setIsModalOpen(true)
   }
 
   const handleCloseModal = () => {
-    clientLogger.debug('Closing profile modal')
     setIsModalOpen(false)
     setEditingProfile(null)
   }
 
   const handleModalSuccess = async () => {
-    clientLogger.debug('Profile saved via modal')
     await fetchProfiles()
   }
 
@@ -105,7 +100,6 @@ export default function EmbeddingProfilesTab() {
         <ErrorAlert
           message={loadError}
           onRetry={() => {
-            clientLogger.debug('Retrying load')
             window.location.reload()
           }}
         />

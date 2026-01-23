@@ -5,7 +5,7 @@
  * and multi-character chat scenarios.
  */
 
-import type { Character, Persona, ChatParticipantBase, TimestampConfig } from '@/lib/schemas/types'
+import type { Character, ChatParticipantBase, TimestampConfig } from '@/lib/schemas/types'
 import { calculateCurrentTimestamp, shouldInjectTimestamp, formatTimestampForSystemPrompt } from '@/lib/chat/timestamp-utils'
 import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter'
 import { logger } from '@/lib/logger'
@@ -17,7 +17,16 @@ import { processTemplate, type TemplateContext } from '@/lib/templates/processor
 export interface OtherParticipantInfo {
   name: string
   description?: string
-  type: 'CHARACTER' | 'PERSONA'
+  type: 'CHARACTER'
+}
+
+/**
+ * Project context for system prompts
+ */
+export interface ProjectContext {
+  name: string
+  description?: string | null
+  instructions?: string | null
 }
 
 /**
@@ -40,7 +49,9 @@ export function buildSystemPrompt(
   /** Timestamp configuration for injection */
   timestampConfig?: TimestampConfig | null,
   /** Whether this is the first message (for START_ONLY mode) */
-  isInitialMessage?: boolean
+  isInitialMessage?: boolean,
+  /** Project context to include in system prompt */
+  projectContext?: ProjectContext | null
 ): string {
   const parts: string[] = []
 
@@ -101,6 +112,29 @@ export function buildSystemPrompt(
       instructionsLength: pseudoToolInstructions.length,
     })
     parts.push(processedToolInstructions)
+  }
+
+  // Project context (if chat is associated with a project)
+  // Added before character's system prompt so project instructions set the context
+  if (projectContext) {
+    const projectParts: string[] = [`## Project Context: ${projectContext.name}`]
+
+    if (projectContext.description) {
+      projectParts.push(projectContext.description)
+    }
+
+    if (projectContext.instructions) {
+      const processedInstructions = processTemplate(projectContext.instructions, templateContext)
+      projectParts.push(`\n### Project Instructions\n${processedInstructions}`)
+    }
+
+    logger.debug('[SystemPromptBuilder] Adding project context', {
+      projectName: projectContext.name,
+      hasDescription: !!projectContext.description,
+      hasInstructions: !!projectContext.instructions,
+    })
+
+    parts.push(projectParts.join('\n'))
   }
 
   // Base system prompt - priority: override > selected prompt > default systemPrompt
@@ -201,13 +235,12 @@ export function buildSystemPrompt(
 
 /**
  * Build other participants info for system prompt
- * Supports CHARACTER (LLM and user-controlled) and legacy PERSONA types
+ * Supports CHARACTER participants (both LLM and user-controlled)
  */
 export function buildOtherParticipantsInfo(
   respondingParticipantId: string,
   allParticipants: ChatParticipantBase[],
-  participantCharacters: Map<string, Character>,
-  participantPersonas: Map<string, Persona>
+  participantCharacters: Map<string, Character>
 ): OtherParticipantInfo[] {
   const otherParticipants: OtherParticipantInfo[] = []
 
@@ -226,23 +259,10 @@ export function buildOtherParticipantsInfo(
     if (participant.type === 'CHARACTER' && participant.characterId) {
       const character = participantCharacters.get(participant.characterId)
       if (character) {
-        // For user-controlled characters, report as 'CHARACTER' type (not 'PERSONA')
-        // The controlledBy field determines behavior, not the display type
         otherParticipants.push({
           name: character.name,
           description: character.title || character.description || undefined,
           type: 'CHARACTER',
-        })
-      }
-    }
-    // Legacy PERSONA participants (deprecated - use CHARACTER with controlledBy='user' instead)
-    else if (participant.type === 'PERSONA' && participant.personaId) {
-      const persona = participantPersonas.get(participant.personaId)
-      if (persona) {
-        otherParticipants.push({
-          name: persona.name,
-          description: persona.description || undefined,
-          type: 'PERSONA',
         })
       }
     }

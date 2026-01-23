@@ -125,7 +125,19 @@ export abstract class MongoBaseRepository<T> {
     data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
     options?: { createdAt?: string }
   ): Promise<T> {
+    logger.debug('createOrUpdate: starting lookup', {
+      collection: this.collectionName,
+      id,
+    });
+
     const existing = await this.findById(id);
+
+    logger.debug('createOrUpdate: findById result', {
+      collection: this.collectionName,
+      id,
+      found: !!existing,
+      existingId: (existing as any)?.id,
+    });
 
     if (existing) {
       logger.debug('Entity exists, updating via createOrUpdate', {

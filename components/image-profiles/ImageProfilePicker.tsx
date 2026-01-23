@@ -13,7 +13,7 @@ interface ApiKey {
 interface ImageProfile {
   id: string
   name: string
-  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN'
+  provider: string
   modelName: string
   isDefault: boolean
   apiKey?: ApiKey | null
@@ -43,7 +43,7 @@ export function ImageProfilePicker({
         setLoading(true)
         setError(null)
 
-        const url = new URL('/api/image-profiles', window.location.origin)
+        const url = new URL('/api/v1/image-profiles', window.location.origin)
         if (characterId) {
           url.searchParams.set('sortByCharacter', characterId)
         }
@@ -55,7 +55,7 @@ export function ImageProfilePicker({
         if (!res.ok) throw new Error('Failed to fetch profiles')
 
         const data = await res.json()
-        setProfiles(data)
+        setProfiles(data.profiles || [])
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch profiles')
       } finally {

@@ -51,7 +51,7 @@ export function CharacterDeleteDialog({
   useEffect(() => {
     const fetchPreview = async () => {
       try {
-        const res = await fetch(`/api/characters/${characterId}/cascade-preview`)
+        const res = await fetch(`/api/v1/characters/${characterId}?action=cascade-preview`)
         if (!res.ok) throw new Error('Failed to load preview')
         const data = await res.json()
         setPreview(data)

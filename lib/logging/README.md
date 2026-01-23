@@ -13,12 +13,6 @@ The logging system supports multiple output destinations (transports) and can be
 ## Architecture
 
 ```
-┌─────────────┐
-│   Browser   │
-│ (React app) │
-└──────┬──────┘
-       │ POST /api/logs
-       ▼
 ┌─────────────────────────────────────┐
 │         Next.js Server              │
 │                                     │
@@ -53,13 +47,7 @@ requestLogger.info('Processing request'); // Automatically includes requestId
 
 ### Client-side (Browser)
 
-```typescript
-import { clientLogger } from '@/lib/client-logger';
-
-// Logs are batched and sent to server
-clientLogger.info('Button clicked', { buttonId: 'submit' });
-clientLogger.error('API call failed', { endpoint: '/api/users' });
-```
+For browser-side logging, use standard `console.log()`, `console.error()`, etc. These will appear in the browser's developer tools console.
 
 ## Configuration
 
@@ -108,15 +96,6 @@ Writes logs to files with automatic rotation:
 - Rotates when files exceed max size (combined.log.1, combined.log.2, etc.)
 - Automatically deletes old rotated files beyond max count
 - Newline-delimited JSON format for easy parsing
-
-## Browser Logging
-
-Browser logs are sent to the server via POST `/api/logs`:
-- Authenticated requests only
-- Rate limited to 100 logs/minute per user
-- Batched (up to 10 logs or 5 seconds)
-- Falls back to console if API fails
-- Always logs to console in development mode
 
 ## Adding New Transports
 

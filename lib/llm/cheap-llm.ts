@@ -16,6 +16,7 @@
  */
 
 import { ConnectionProfile, Provider } from '@/lib/schemas/types'
+import { logger } from '@/lib/logger'
 import {
   ModelPricing,
   getAverageCostPer1M,
@@ -130,6 +131,15 @@ export function getCheapLLMProvider(
   ollamaAvailable: boolean = false,
   onNoCheapLLM?: () => void
 ): CheapLLMSelection {
+  logger.debug('[CheapLLM] Selection started', {
+    context: 'getCheapLLMProvider',
+    strategy: config.strategy,
+    userDefinedProfileId: config.userDefinedProfileId,
+    defaultCheapProfileId: config.defaultCheapProfileId,
+    availableProfileCount: availableProfiles.length,
+    availableProfileIds: availableProfiles.map(p => p.id),
+  })
+
   // Priority 1: Global default cheap profile (always takes precedence if set)
   if (config.defaultCheapProfileId) {
     const defaultCheapProfile = availableProfiles.find(p => p.id === config.defaultCheapProfileId)
@@ -149,6 +159,12 @@ export function getCheapLLMProvider(
   if (config.strategy === 'USER_DEFINED' && config.userDefinedProfileId) {
     const userProfile = availableProfiles.find(p => p.id === config.userDefinedProfileId)
     if (userProfile) {
+      logger.debug('[CheapLLM] Using USER_DEFINED profile', {
+        context: 'getCheapLLMProvider',
+        profileId: userProfile.id,
+        provider: userProfile.provider,
+        modelName: userProfile.modelName,
+      })
       return {
         provider: userProfile.provider,
         modelName: userProfile.modelName,
@@ -158,6 +174,10 @@ export function getCheapLLMProvider(
       }
     }
     // Fall through to next strategy if profile not found
+    logger.warn('[CheapLLM] USER_DEFINED profile not found, falling through', {
+      context: 'getCheapLLMProvider',
+      userDefinedProfileId: config.userDefinedProfileId,
+    })
   }
 
   // Priority 3: Use any profile marked as "cheap" (isCheap flag)
@@ -211,6 +231,13 @@ export function getCheapLLMProvider(
 
   // Map current provider to its cheapest variant (fallback)
   const cheapModel = getCheapestModel(currentProfile.provider)
+
+  logger.warn('[CheapLLM] Using FALLBACK to cheapest model for current provider', {
+    context: 'getCheapLLMProvider',
+    provider: currentProfile.provider,
+    cheapModel,
+    currentProfileModel: currentProfile.modelName,
+  })
 
   return {
     provider: currentProfile.provider,

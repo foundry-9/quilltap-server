@@ -7,7 +7,9 @@
 
 import OpenAI from 'openai';
 import type { ImageGenProvider as ImageGenProviderBase, ImageGenParams, ImageGenResponse } from './types';
-import { logger } from '../../../lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-grok');
 
 export class GrokImageProvider implements ImageGenProviderBase {
   readonly provider = 'GROK';

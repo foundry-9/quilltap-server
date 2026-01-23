@@ -1,0 +1,75 @@
+{
+  "$schema": "https://quilltap.io/schemas/plugin-manifest.json",
+  "name": "qtap-plugin-mcp",
+  "title": "MCP Server Connector",
+  "description": "Connect to MCP (Model Context Protocol) servers via SSE and expose their tools to LLMs. Supports multiple server connections with Bearer token and API key authentication.",
+  "version": "1.1.5",
+  "author": {
+    "name": "Foundry-9 LLC",
+    "url": "https://github.com/foundry-9"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=2.7.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["TOOL_PROVIDER"],
+  "category": "TOOLS",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "NONE",
+  "styling": "NONE",
+  "enabledByDefault": true,
+  "status": "BETA",
+  "keywords": ["mcp", "model-context-protocol", "sse", "tools", "integration", "server-sent-events"],
+  "toolConfig": {
+    "toolName": "mcp_connector",
+    "displayName": "MCP Connector",
+    "description": "Dynamically provides tools from connected MCP servers",
+    "requiresConfiguration": true,
+    "enabledByDefault": true
+  },
+  "configSchema": [
+    {
+      "key": "servers",
+      "label": "MCP Servers Configuration",
+      "type": "textarea",
+      "description": "JSON array of MCP server configurations. Each server needs: name (used as tool prefix), displayName, url (SSE endpoint), authType ('none', 'bearer', 'api-key', or 'custom-header'), and enabled (boolean). Authentication fields: bearerToken (for bearer auth), apiKey and apiKeyHeader (for api-key auth), customHeaders as JSON (for custom-header auth).",
+      "default": "[]",
+      "required": true
+    },
+    {
+      "key": "discoveryTimeout",
+      "label": "Tool Discovery Timeout (seconds)",
+      "type": "number",
+      "description": "Maximum time to wait when discovering tools from MCP servers",
+      "default": 30,
+      "min": 5,
+      "max": 120
+    },
+    {
+      "key": "autoReconnect",
+      "label": "Auto-Reconnect",
+      "type": "boolean",
+      "description": "Automatically reconnect to MCP servers if connection is lost",
+      "default": true
+    },
+    {
+      "key": "maxReconnectAttempts",
+      "label": "Max Reconnect Attempts",
+      "type": "number",
+      "description": "Maximum number of reconnection attempts before giving up (0 = unlimited)",
+      "default": 3,
+      "min": 0,
+      "max": 10
+    }
+  ],
+  "permissions": {
+    "network": ["*"]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foundry-9/quilltap.git",
+    "directory": "plugins/dist/qtap-plugin-mcp"
+  }
+}

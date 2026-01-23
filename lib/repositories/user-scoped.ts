@@ -12,10 +12,8 @@
 
 import { logger } from '@/lib/logger';
 import {
-  getRepositories,
   RepositoryContainer,
   CharactersRepository,
-  PersonasRepository,
   MongoChatsRepository,
   MongoTagsRepository,
   ConnectionProfilesRepository,
@@ -23,10 +21,12 @@ import {
   EmbeddingProfilesRepository,
   MemoriesRepository,
   FilesRepository,
+  ProjectsRepository,
+  type CreateOptions,
 } from '@/lib/mongodb/repositories';
+import { getRepositories, getRepositoriesSafe } from './factory';
 import type {
   Character,
-  Persona,
   ChatMetadata,
   Tag,
   ConnectionProfile,
@@ -36,6 +36,7 @@ import type {
   FileEntry,
   ApiKey,
   ChatEvent,
+  Project,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -51,7 +52,7 @@ abstract class UserScopedRepository<
   R extends {
     findById(id: string): Promise<T | null>;
     findByUserId(userId: string): Promise<T[]>;
-    create(data: any): Promise<T>;
+    create(data: any, options?: CreateOptions): Promise<T>;
     update(id: string, data: any): Promise<T | null>;
     delete(id: string): Promise<boolean>;
   }
@@ -71,8 +72,8 @@ abstract class UserScopedRepository<
     return item;
   }
 
-  async create(data: Omit<T, 'id' | 'createdAt' | 'updatedAt' | 'userId'>): Promise<T> {
-    return this.baseRepo.create({ ...data, userId: this.userId });
+  async create(data: Omit<T, 'id' | 'createdAt' | 'updatedAt' | 'userId'>, options?: CreateOptions): Promise<T> {
+    return this.baseRepo.create({ ...data, userId: this.userId }, options);
   }
 
   async update(id: string, data: Partial<T>): Promise<T | null> {
@@ -105,7 +106,7 @@ abstract class UserScopedTaggableRepository<
     findById(id: string): Promise<T | null>;
     findByUserId(userId: string): Promise<T[]>;
     findByTag(tagId: string): Promise<T[]>;
-    create(data: any): Promise<T>;
+    create(data: any, options?: CreateOptions): Promise<T>;
     update(id: string, data: any): Promise<T | null>;
     delete(id: string): Promise<boolean>;
     addTag(id: string, tagId: string): Promise<T | null>;
@@ -184,53 +185,6 @@ class UserScopedCharactersRepository extends UserScopedTaggableRepository<Charac
     const character = await this.findById(characterId);
     if (!character) return null;
     return this.baseRepo.removePersona(characterId, personaId);
-  }
-}
-
-/**
- * User-scoped Personas Repository
- */
-class UserScopedPersonasRepository extends UserScopedTaggableRepository<Persona, PersonasRepository> {
-  async addDescription(personaId: string, description: any): Promise<any> {
-    const persona = await this.findById(personaId);
-    if (!persona) return null;
-    return this.baseRepo.addDescription(personaId, description);
-  }
-
-  async updateDescription(personaId: string, descriptionId: string, data: any): Promise<any> {
-    const persona = await this.findById(personaId);
-    if (!persona) return null;
-    return this.baseRepo.updateDescription(personaId, descriptionId, data);
-  }
-
-  async removeDescription(personaId: string, descriptionId: string): Promise<boolean> {
-    const persona = await this.findById(personaId);
-    if (!persona) return false;
-    return this.baseRepo.removeDescription(personaId, descriptionId);
-  }
-
-  async getDescription(personaId: string, descriptionId: string): Promise<any> {
-    const persona = await this.findById(personaId);
-    if (!persona) return null;
-    return this.baseRepo.getDescription(personaId, descriptionId);
-  }
-
-  async getDescriptions(personaId: string): Promise<any[]> {
-    const persona = await this.findById(personaId);
-    if (!persona) return [];
-    return this.baseRepo.getDescriptions(personaId);
-  }
-
-  async addCharacterLink(personaId: string, characterId: string): Promise<Persona | null> {
-    const persona = await this.findById(personaId);
-    if (!persona) return null;
-    return this.baseRepo.addCharacterLink(personaId, characterId);
-  }
-
-  async removeCharacterLink(personaId: string, characterId: string): Promise<Persona | null> {
-    const persona = await this.findById(personaId);
-    if (!persona) return null;
-    return this.baseRepo.removeCharacterLink(personaId, characterId);
   }
 }
 
@@ -393,6 +347,46 @@ class UserScopedMemoriesRepository {
 }
 
 /**
+ * User-scoped Projects Repository
+ */
+class UserScopedProjectsRepository extends UserScopedRepository<Project, ProjectsRepository> {
+  async findByCharacterId(characterId: string): Promise<Project[]> {
+    const projects = await this.baseRepo.findByCharacterId(characterId);
+    return this.filterByUser(projects);
+  }
+
+  async addToRoster(projectId: string, characterId: string): Promise<Project | null> {
+    const project = await this.findById(projectId);
+    if (!project) return null;
+    return this.baseRepo.addToRoster(projectId, characterId);
+  }
+
+  async addManyToRoster(projectId: string, characterIds: string[]): Promise<Project | null> {
+    const project = await this.findById(projectId);
+    if (!project) return null;
+    return this.baseRepo.addManyToRoster(projectId, characterIds);
+  }
+
+  async removeFromRoster(projectId: string, characterId: string): Promise<Project | null> {
+    const project = await this.findById(projectId);
+    if (!project) return null;
+    return this.baseRepo.removeFromRoster(projectId, characterId);
+  }
+
+  async canCharacterParticipate(projectId: string, characterId: string): Promise<boolean> {
+    const project = await this.findById(projectId);
+    if (!project) return false;
+    return this.baseRepo.canCharacterParticipate(projectId, characterId);
+  }
+
+  async setAllowAnyCharacter(projectId: string, allowAnyCharacter: boolean): Promise<Project | null> {
+    const project = await this.findById(projectId);
+    if (!project) return null;
+    return this.baseRepo.setAllowAnyCharacter(projectId, allowAnyCharacter);
+  }
+}
+
+/**
  * User-scoped Files Repository
  */
 class UserScopedFilesRepository extends UserScopedTaggableRepository<FileEntry, FilesRepository> {
@@ -436,8 +430,6 @@ export interface UserScopedRepositoryContainer {
   readonly userId: string;
   /** Characters repository - only returns user's characters */
   characters: UserScopedCharactersRepository;
-  /** Personas repository - only returns user's personas */
-  personas: UserScopedPersonasRepository;
   /** Chats repository - only returns user's chats */
   chats: UserScopedChatsRepository;
   /** Tags repository - only returns user's tags */
@@ -454,6 +446,8 @@ export interface UserScopedRepositoryContainer {
   files: UserScopedFilesRepository;
   /** Images repository (alias for files) - only returns user's images */
   images: UserScopedFilesRepository;
+  /** Projects repository - only returns user's projects */
+  projects: UserScopedProjectsRepository;
 }
 
 /**
@@ -497,7 +491,6 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
 
   // Create user-scoped wrappers
   const characters = new UserScopedCharactersRepository(userId, baseRepos.characters);
-  const personas = new UserScopedPersonasRepository(userId, baseRepos.personas);
   const chats = new UserScopedChatsRepository(userId, baseRepos.chats);
   const tags = new UserScopedTagsRepository(userId, baseRepos.tags);
   const connections = new UserScopedConnectionsRepository(userId, baseRepos.connections);
@@ -505,11 +498,11 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
   const embeddingProfiles = new UserScopedEmbeddingProfilesRepository(userId, baseRepos.embeddingProfiles);
   const files = new UserScopedFilesRepository(userId, baseRepos.files);
   const memories = new UserScopedMemoriesRepository(userId, baseRepos.memories, characters);
+  const projects = new UserScopedProjectsRepository(userId, baseRepos.projects);
 
   const container: UserScopedRepositoryContainer = {
     userId,
     characters,
-    personas,
     chats,
     tags,
     connections,
@@ -518,6 +511,7 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
     memories,
     files,
     images: files, // Alias for backwards compatibility
+    projects,
   };
 
   // Cache the container
@@ -539,4 +533,34 @@ export function clearUserRepositoryCache(userId?: string): void {
     userRepoCache.clear();
     logger.debug('Cleared all user repository caches');
   }
+}
+
+/**
+ * Get a user-scoped repository container with migration safety check.
+ * All operations through this container are automatically filtered to the specified user.
+ * This function ensures migrations have completed before returning repositories.
+ *
+ * Use this in API routes and request handlers to ensure data integrity.
+ *
+ * @param userId The user ID to scope all operations to
+ * @returns Promise<UserScopedRepositoryContainer> with all repositories scoped to the user
+ *
+ * @example
+ * ```typescript
+ * const repos = await getUserRepositoriesSafe(session.user.id);
+ *
+ * // All operations are automatically scoped to the user
+ * const characters = await repos.characters.findAll();
+ * ```
+ */
+export async function getUserRepositoriesSafe(userId: string): Promise<UserScopedRepositoryContainer> {
+  if (!userId) {
+    throw new Error('userId is required for getUserRepositoriesSafe');
+  }
+
+  // Ensure migrations are complete before proceeding
+  await getRepositoriesSafe();
+
+  // Now return the regular user repositories
+  return getUserRepositories(userId);
 }

@@ -1,79 +1,12 @@
 /**
- * Capabilities Report List API
+ * DEPRECATED - Capabilities Report List API (Legacy Route)
+ * This route has been moved to /api/v1/system/tools?action=capabilities-report-list
  *
- * GET /api/tools/capabilities-report/list
- * Lists all saved capabilities reports for the user
+ * 410 Gone - Endpoint permanently removed
  */
 
-import { NextResponse } from 'next/server';
-import { createAuthenticatedHandler } from '@/lib/api/middleware';
-import { logger } from '@/lib/logger';
-import { s3FileService } from '@/lib/s3/file-service';
-import { getFileMetadata } from '@/lib/s3/operations';
-import { getErrorMessage } from '@/lib/errors';
+import { movedToV1 } from '@/lib/api/responses'
 
-const moduleLogger = logger.child({ module: 'api:capabilities-report:list' });
-
-export interface ReportInfo {
-  id: string;
-  filename: string;
-  s3Key: string;
-  createdAt: string;
-  size: number;
+export async function GET() {
+  return movedToV1('/api/v1/system/tools?action=capabilities-report-list')
 }
-
-export const GET = createAuthenticatedHandler(async (req, { user }) => {
-  try {
-    const userId = user.id;
-    moduleLogger.info('Listing capabilities reports', { userId });
-
-    // List all files in the REPORT category
-    const keys = await s3FileService.listUserFiles(userId, 'REPORT');
-
-    // Get metadata for each file
-    const reports: ReportInfo[] = [];
-
-    for (const s3Key of keys) {
-      try {
-        const metadata = await getFileMetadata(s3Key);
-        if (!metadata) continue;
-
-        // Parse the filename to extract info
-        // Format: users/{userId}/REPORT/{reportId}_{filename}
-        const parts = s3Key.split('/');
-        const filenamePart = parts[parts.length - 1];
-        const underscoreIndex = filenamePart.indexOf('_');
-
-        const reportId = underscoreIndex > 0 ? filenamePart.substring(0, underscoreIndex) : filenamePart;
-        const filename = underscoreIndex > 0 ? filenamePart.substring(underscoreIndex + 1) : filenamePart;
-
-        reports.push({
-          id: reportId,
-          filename,
-          s3Key,
-          createdAt: metadata.lastModified.toISOString(),
-          size: metadata.size,
-        });
-      } catch (error) {
-        moduleLogger.warn('Failed to get metadata for report', { s3Key, error });
-      }
-    }
-
-    // Sort by creation date, newest first
-    reports.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    moduleLogger.info('Listed capabilities reports', {
-      userId,
-      count: reports.length,
-    });
-
-    return NextResponse.json({ reports });
-  } catch (error) {
-    const errorMessage = getErrorMessage(error);
-    moduleLogger.error('Failed to list capabilities reports', { error: errorMessage }, error instanceof Error ? error : undefined);
-    return NextResponse.json(
-      { error: 'Failed to list reports', details: errorMessage },
-      { status: 500 }
-    );
-  }
-});

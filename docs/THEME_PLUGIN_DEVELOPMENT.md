@@ -180,7 +180,7 @@ await esbuild.build({
   bundle: true,
   platform: 'node',
   target: 'node18',
-  format: 'cjs',
+  format: 'cjs',  // CRITICAL: Must be 'cjs' or 'esm', NOT 'iife'
   outfile: 'index.js',
   external: ['@quilltap/plugin-utils'],
   sourcemap: false,
@@ -189,6 +189,14 @@ await esbuild.build({
 
 console.log('Build complete: index.js');
 ```
+
+> **⚠️ CRITICAL: Module Format**
+>
+> The `format` option **must** be `'cjs'` (CommonJS) or `'esm'` (ES Modules).
+>
+> **Do NOT use `format: 'iife'`** - this wraps your code in an Immediately Invoked Function Expression that doesn't export anything at the module level. Quilltap uses Node.js `require()` to load plugins, and IIFE-bundled code will appear as an empty object with no exports.
+>
+> If your plugin isn't loading correctly, check your build output - it should have `module.exports` or `exports` statements, not be wrapped in `(() => { ... })()`.
 
 ---
 

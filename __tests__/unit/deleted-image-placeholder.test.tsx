@@ -133,7 +133,7 @@ describe('DeletedImagePlaceholder', () => {
       })
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(`/api/images/${mockImageId}`, {
+        expect(global.fetch).toHaveBeenCalledWith(`/api/v1/images/${mockImageId}`, {
           method: 'DELETE',
         })
       })

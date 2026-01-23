@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { useDialogState } from '@/hooks/useDialogState'
 import { useWizardState } from '@/hooks/useWizardState'
@@ -42,7 +41,7 @@ const initialState: ExportState = {
 
 // Helper to check if entity type supports memories
 const supportsMemories = (type: ExportEntityType | null): boolean =>
-  type === 'characters' || type === 'personas' || type === 'chats'
+  type === 'characters' || type === 'chats'
 
 export function useExportData({
   isOpen,
@@ -51,11 +50,10 @@ export function useExportData({
   const { state, setState, reset } = useDialogState({
     isOpen,
     initialState,
-    logContext: 'useExportData',
   })
 
   // Wizard step configuration
-  // Note: transitions vary based on entityType (characters/personas/chats go through 'options')
+  // Note: transitions vary based on entityType (characters/chats go through 'options')
   const wizard = useWizardState<ExportStep>(
     {
       initialStep: 'type',
@@ -67,7 +65,6 @@ export function useExportData({
         complete: { isTerminal: true },
         error: { prev: 'select', isTerminal: true }, // Goes back to select or options based on entityType
       },
-      logContext: 'useExportData',
     },
     state.step,
     (step) => setState((prev) => ({ ...prev, step }))
@@ -76,7 +73,7 @@ export function useExportData({
   // Calculate memory count based on scope and selection
   useEffect(() => {
     // Only calculate for entity types that support memories
-    if (!state.entityType || !['characters', 'personas', 'chats'].includes(state.entityType)) {
+    if (!state.entityType || !['characters', 'chats'].includes(state.entityType)) {
       return
     }
 
@@ -96,21 +93,11 @@ export function useExportData({
 
     // Only update if different to avoid infinite loops
     if (newMemoryCount !== state.memoryCount) {
-      clientLogger.debug('Memory count recalculated', {
-        context: 'useExportData',
-        scope: state.scope,
-        selectedCount: state.selectedIds.length,
-        memoryCount: newMemoryCount,
-      })
       setState((prev) => ({ ...prev, memoryCount: newMemoryCount }))
     }
   }, [state.scope, state.selectedIds, state.availableEntities, state.entityType, state.memoryCount, setState])
 
   const setEntityType = useCallback((type: ExportEntityType) => {
-    clientLogger.debug('Entity type selected', {
-      context: 'useExportData',
-      entityType: type,
-    })
     setState((prev) => ({
       ...prev,
       entityType: type,
@@ -121,10 +108,6 @@ export function useExportData({
   }, [setState])
 
   const setScope = useCallback((scope: 'all' | 'selected') => {
-    clientLogger.debug('Export scope changed', {
-      context: 'useExportData',
-      scope,
-    })
     setState((prev) => ({
       ...prev,
       scope,
@@ -138,13 +121,6 @@ export function useExportData({
         ? prev.selectedIds.filter((selectedId) => selectedId !== id)
         : [...prev.selectedIds, id]
 
-      clientLogger.debug('Entity selection toggled', {
-        context: 'useExportData',
-        entityId: id,
-        isSelected: !prev.selectedIds.includes(id),
-        totalSelected: newSelectedIds.length,
-      })
-
       return {
         ...prev,
         selectedIds: newSelectedIds,
@@ -153,10 +129,6 @@ export function useExportData({
   }, [setState])
 
   const setIncludeMemories = useCallback((value: boolean) => {
-    clientLogger.debug('Include memories toggled', {
-      context: 'useExportData',
-      includeMemories: value,
-    })
     setState((prev) => ({
       ...prev,
       includeMemories: value,
@@ -169,12 +141,7 @@ export function useExportData({
     setState((prev) => ({ ...prev, loadingEntities: true, error: null }))
 
     try {
-      clientLogger.debug('Loading available entities', {
-        context: 'useExportData',
-        entityType: type,
-      })
-
-      const response = await fetch(`/api/tools/quilltap-export/entities?type=${type}`)
+      const response = await fetch(`/api/v1/system/tools?action=export-entities&type=${type}`)
 
       if (!response.ok) {
         const data = await response.json()
@@ -182,13 +149,6 @@ export function useExportData({
       }
 
       const data = await response.json()
-
-      clientLogger.info('Available entities loaded', {
-        context: 'useExportData',
-        entityType: type,
-        count: data.entities?.length || 0,
-        memoryCount: data.memoryCount || 0,
-      })
 
       setState((prev) => ({
         ...prev,
@@ -198,7 +158,7 @@ export function useExportData({
       }))
     } catch (error) {
       const message = getErrorMessage(error)
-      clientLogger.error('Failed to load entities', {
+      console.error('Failed to load entities', {
         context: 'useExportData',
         error: message,
       })
@@ -215,9 +175,6 @@ export function useExportData({
     switch (state.step) {
       case 'type':
         if (!state.entityType) {
-          clientLogger.warn('Cannot proceed without entity type selected', {
-            context: 'useExportData',
-          })
           return
         }
         // Move to select step and load entities
@@ -228,9 +185,6 @@ export function useExportData({
 
       case 'select':
         if (state.scope === 'selected' && state.selectedIds.length === 0) {
-          clientLogger.warn('Cannot proceed without selecting entities', {
-            context: 'useExportData',
-          })
           return
         }
         // Use wizard for conditional navigation based on entity type
@@ -277,15 +231,7 @@ export function useExportData({
     setState((prev) => ({ ...prev, exporting: true, error: null }))
 
     try {
-      clientLogger.debug('Starting export', {
-        context: 'useExportData',
-        entityType: state.entityType,
-        scope: state.scope,
-        selectedCount: state.selectedIds.length,
-        includeMemories: state.includeMemories,
-      })
-
-      const response = await fetch('/api/tools/quilltap-export', {
+      const response = await fetch('/api/v1/system/tools?action=export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -302,12 +248,6 @@ export function useExportData({
       }
 
       const exportData = await response.json()
-
-      clientLogger.info('Export created successfully', {
-        context: 'useExportData',
-        entityType: state.entityType,
-        exportSize: JSON.stringify(exportData).length,
-      })
 
       // Trigger download
       const dataStr = JSON.stringify(exportData, null, 2)
@@ -330,7 +270,7 @@ export function useExportData({
       onSuccess?.()
     } catch (error) {
       const message = getErrorMessage(error)
-      clientLogger.error('Failed to export', {
+      console.error('Failed to export', {
         context: 'useExportData',
         error: message,
       })

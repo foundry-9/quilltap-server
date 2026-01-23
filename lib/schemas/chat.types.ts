@@ -28,6 +28,10 @@ export const MessageEventSchema = z.object({
   content: z.string(),
   rawResponse: JsonSchema.nullable().optional(),
   tokenCount: z.number().nullable().optional(),
+  /** Input/prompt tokens for this message */
+  promptTokens: z.number().nullable().optional(),
+  /** Output/completion tokens for this message */
+  completionTokens: z.number().nullable().optional(),
   swipeGroupId: z.string().nullable().optional(),
   swipeIndex: z.number().nullable().optional(),
   attachments: z.array(UUIDSchema).default([]),
@@ -39,6 +43,12 @@ export const MessageEventSchema = z.object({
   thoughtSignature: z.string().nullable().optional(),
   // Multi-character chat: which participant sent this message
   participantId: UUIDSchema.nullable().optional(),
+  // Recovery type: indicates this message was generated as an error recovery response
+  // 'token_limit' = LLM-generated recovery response for token limit errors
+  // 'token_limit_static' = Static fallback message when LLM recovery also failed
+  // 'content_limit' = LLM-generated recovery response for content limit errors (PDF pages, etc.)
+  // 'content_limit_static' = Static fallback message when LLM recovery for content limit also failed
+  recoveryType: z.enum(['token_limit', 'token_limit_static', 'content_limit', 'content_limit_static']).nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;
@@ -52,9 +62,49 @@ export const ContextSummaryEventSchema = z.object({
 
 export type ContextSummaryEvent = z.infer<typeof ContextSummaryEventSchema>;
 
+// ============================================================================
+// SYSTEM EVENTS (Cheap LLM Operations)
+// ============================================================================
+
+export const SystemEventTypeEnum = z.enum([
+  'MEMORY_EXTRACTION',
+  'SUMMARIZATION',
+  'TITLE_GENERATION',
+  'CONTEXT_SUMMARY',
+  'IMAGE_PROMPT_CRAFTING',
+  'CONTEXT_COMPRESSION',
+]);
+
+export type SystemEventType = z.infer<typeof SystemEventTypeEnum>;
+
+export const SystemEventSchema = z.object({
+  type: z.literal('system'),
+  id: UUIDSchema,
+  /** Type of system operation */
+  systemEventType: SystemEventTypeEnum,
+  /** Human-readable description of what the system did */
+  description: z.string(),
+  /** Input/prompt tokens used for this operation */
+  promptTokens: z.number().nullable().optional(),
+  /** Output/completion tokens used for this operation */
+  completionTokens: z.number().nullable().optional(),
+  /** Total tokens used (promptTokens + completionTokens) */
+  totalTokens: z.number().nullable().optional(),
+  /** Provider used for this operation */
+  provider: z.string().nullable().optional(),
+  /** Model name used for this operation */
+  modelName: z.string().nullable().optional(),
+  /** Estimated cost in USD for this operation */
+  estimatedCostUSD: z.number().nullable().optional(),
+  createdAt: TimestampSchema,
+});
+
+export type SystemEvent = z.infer<typeof SystemEventSchema>;
+
 export const ChatEventSchema = z.union([
   MessageEventSchema,
   ContextSummaryEventSchema,
+  SystemEventSchema,
 ]);
 
 export type ChatEvent = z.infer<typeof ChatEventSchema>;
@@ -63,18 +113,15 @@ export type ChatEvent = z.infer<typeof ChatEventSchema>;
 // CHAT PARTICIPANTS
 // ============================================================================
 
-export const ParticipantTypeEnum = z.enum(['CHARACTER', 'PERSONA']);
+export const ParticipantTypeEnum = z.enum(['CHARACTER']);
 export type ParticipantType = z.infer<typeof ParticipantTypeEnum>;
 
 export const ChatParticipantSchema = z.object({
   id: UUIDSchema,
 
   // Participant type and identity
-  // NOTE: 'type' is kept for backwards compatibility during migration.
-  // Going forward, all participants are effectively CHARACTER type with controlledBy determining behavior.
   type: ParticipantTypeEnum,
-  characterId: UUIDSchema.nullable().optional(),  // Set when type is CHARACTER (required after migration)
-  personaId: UUIDSchema.nullable().optional(),    // @deprecated - Set when type is PERSONA (will be removed after migration)
+  characterId: UUIDSchema,  // Required for all participants
 
   // Control mode - who controls this participant in this chat
   // 'llm' = AI-controlled, 'user' = player-controlled (impersonating)
@@ -101,18 +148,8 @@ export const ChatParticipantSchema = z.object({
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
-  (data) => {
-    // Must have characterId if type is CHARACTER
-    if (data.type === 'CHARACTER') {
-      return data.characterId != null;
-    }
-    // Must have personaId if type is PERSONA (for backwards compatibility during migration)
-    if (data.type === 'PERSONA') {
-      return data.personaId != null;
-    }
-    return false;
-  },
-  { message: 'CHARACTER participants must have characterId, PERSONA participants must have personaId' }
+  (data) => data.characterId != null,
+  { message: 'Participants must have characterId' }
 );
 
 export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
@@ -121,8 +158,7 @@ export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
 export const ChatParticipantBaseSchema = z.object({
   id: UUIDSchema,
   type: ParticipantTypeEnum,
-  characterId: UUIDSchema.nullable().optional(),
-  personaId: UUIDSchema.nullable().optional(),  // @deprecated - will be removed after migration
+  characterId: UUIDSchema,
   controlledBy: ControlledByEnum.optional().default('llm'),  // Who controls: 'llm' or 'user'
   connectionProfileId: UUIDSchema.nullable().optional(),
   imageProfileId: UUIDSchema.nullable().optional(),
@@ -179,6 +215,27 @@ export const ChatMetadataSchema = z.object({
   /** Turns since last user input or pause (for all-LLM pause logic) */
   allLLMPauseTurnCount: z.number().default(0),
 
+  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  documentEditingMode: z.boolean().default(false),
+
+  /** Project this chat belongs to (optional) */
+  projectId: UUIDSchema.nullable().optional(),
+
+  // Token usage tracking (aggregate totals for this chat)
+  /** Total prompt/input tokens used in this chat */
+  totalPromptTokens: z.number().default(0),
+  /** Total completion/output tokens used in this chat */
+  totalCompletionTokens: z.number().default(0),
+  /** Estimated total cost in USD for this chat */
+  estimatedCostUSD: z.number().nullable().optional(),
+  /** Source of pricing data for cost estimate */
+  priceSource: z.enum(['openrouter', 'registry', 'fallback', 'openrouter-estimate', 'unavailable']).nullable().optional(),
+  /** Per-chat override for showing system events (null = use global setting) */
+  showSystemEventsOverride: z.boolean().nullable().optional(),
+
+  /** Flag set when AI calls request_full_context tool - bypasses compression on next message */
+  requestFullContextOnNextMessage: z.boolean().default(false),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -214,6 +271,27 @@ export const ChatMetadataBaseSchema = z.object({
   impersonatingParticipantIds: z.array(UUIDSchema).default([]),
   activeTypingParticipantId: UUIDSchema.nullable().optional(),
   allLLMPauseTurnCount: z.number().default(0),
+  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  documentEditingMode: z.boolean().default(false),
+
+  /** Project this chat belongs to (optional) */
+  projectId: UUIDSchema.nullable().optional(),
+
+  // Token usage tracking (aggregate totals for this chat)
+  /** Total prompt/input tokens used in this chat */
+  totalPromptTokens: z.number().default(0),
+  /** Total completion/output tokens used in this chat */
+  totalCompletionTokens: z.number().default(0),
+  /** Estimated total cost in USD for this chat */
+  estimatedCostUSD: z.number().nullable().optional(),
+  /** Source of pricing data for cost estimate */
+  priceSource: z.enum(['openrouter', 'registry', 'fallback', 'openrouter-estimate', 'unavailable']).nullable().optional(),
+  /** Per-chat override for showing system events (null = use global setting) */
+  showSystemEventsOverride: z.boolean().nullable().optional(),
+
+  /** Flag set when AI calls request_full_context tool - bypasses compression on next message */
+  requestFullContextOnNextMessage: z.boolean().default(false),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

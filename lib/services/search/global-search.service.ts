@@ -1,13 +1,13 @@
 /**
  * Global Search Service
  *
- * Provides unified search across chats, characters, personas, tags, and memories.
+ * Provides unified search across chats, characters, tags, and memories.
  * Extracted from app/api/search/route.ts for reusability and testability.
  */
 
 import { logger } from '@/lib/logger'
 import type { UserScopedRepositoryContainer } from '@/lib/repositories/user-scoped'
-import type { Tag, Character, Persona, ChatMetadata } from '@/lib/schemas/types'
+import type { Tag, Character, ChatMetadata } from '@/lib/schemas/types'
 import {
   createSnippet,
   parseQueryTerms,
@@ -23,7 +23,6 @@ import {
   type SearchResult,
   type ChatSearchResult,
   type CharacterSearchResult,
-  type PersonaSearchResult,
   type TagSearchResult,
   type MemorySearchResult,
   type GlobalSearchResponse,
@@ -37,7 +36,6 @@ const searchLogger = logger.child({ module: 'global-search' })
  */
 const MIN_PER_TYPE: Record<SearchType, number> = {
   characters: 5,
-  personas: 3,
   chats: 15,
   tags: 3,
   memories: 10,
@@ -48,10 +46,9 @@ const MIN_PER_TYPE: Record<SearchType, number> = {
  */
 const TYPE_PRIORITY: Record<SearchType, number> = {
   characters: 0,
-  personas: 1,
-  chats: 2,
-  tags: 3,
-  memories: 4,
+  chats: 1,
+  tags: 2,
+  memories: 3,
 }
 
 /**
@@ -102,15 +99,12 @@ export async function executeGlobalSearch(
 
   // Pre-load all entities for cross-referencing
   const allCharacters = await repos.characters.findAll()
-  const allPersonas = await repos.personas.findAll()
   const allChats = await repos.chats.findAll()
 
   const charMap = new Map(allCharacters.map(c => [c.id, c]))
-  const personaMap = new Map(allPersonas.map(p => [p.id, p]))
 
-  // Track matched characters and personas for related chat lookup
+  // Track matched characters for related chat lookup
   const matchedCharacterIds = new Set<string>()
-  const matchedPersonaIds = new Set<string>()
 
   // Search characters
   if (types.includes('characters')) {
@@ -128,23 +122,7 @@ export async function executeGlobalSearch(
     }
   }
 
-  // Search personas
-  if (types.includes('personas')) {
-    const personaResults = searchPersonas(
-      allPersonas,
-      query,
-      terms,
-      matchingTagIds,
-      tagPriorityMap,
-      tagMap
-    )
-    for (const result of personaResults) {
-      matchedPersonaIds.add(result.id)
-      results.push(result)
-    }
-  }
-
-  // Search chats (after characters/personas so we can find related chats)
+  // Search chats (after characters so we can find related chats)
   if (types.includes('chats')) {
     const chatResults = searchChats(
       allChats,
@@ -154,9 +132,7 @@ export async function executeGlobalSearch(
       tagPriorityMap,
       tagMap,
       charMap,
-      personaMap,
-      matchedCharacterIds,
-      matchedPersonaIds
+      matchedCharacterIds
     )
     results.push(...chatResults)
   }
@@ -166,7 +142,6 @@ export async function executeGlobalSearch(
     const tagResults = searchTags(
       matchingTagsWithPriority,
       allCharacters,
-      allPersonas,
       allChats
     )
     results.push(...tagResults)
@@ -265,62 +240,6 @@ function searchCharacters(
 }
 
 /**
- * Search personas
- */
-function searchPersonas(
-  personas: Persona[],
-  query: string,
-  terms: string[],
-  matchingTagIds: Set<string>,
-  tagPriorityMap: Map<string, MatchPriority>,
-  tagMap: Map<string, Tag>
-): PersonaSearchResult[] {
-  const results: PersonaSearchResult[] = []
-  const personaFields = ['name', 'title', 'description', 'personalityTraits']
-
-  for (const persona of personas) {
-    const matchedTagId = persona.tags.find(tagId => matchingTagIds.has(tagId))
-    const matchedTag = matchedTagId ? tagMap.get(matchedTagId) : undefined
-    const tagMatchPriority = matchedTagId ? (tagPriorityMap.get(matchedTagId) ?? 3) : 3
-
-    const match = findMatchedField(
-      persona as unknown as Record<string, unknown>,
-      query,
-      personaFields,
-      terms
-    )
-
-    if (match || matchedTag) {
-      const matchPriority: MatchPriority = match
-        ? matchedTag
-          ? (Math.min(match.priority, tagMatchPriority) as MatchPriority)
-          : match.priority
-        : (tagMatchPriority as MatchPriority)
-
-      results.push({
-        id: persona.id,
-        type: 'personas',
-        name: persona.name,
-        matchedField: matchedTag ? 'tag' : match!.field,
-        matchedValue: matchedTag ? matchedTag.name : match!.value,
-        snippet: matchedTag
-          ? `Tagged with "${matchedTag.name}"${persona.description ? ': ' + createSnippet(persona.description, '', 60) : ''}`
-          : createSnippet(match!.value, query),
-        url: `/personas/${persona.id}`,
-        matchedTag: matchedTag ? { id: matchedTag.id, name: matchedTag.name } : undefined,
-        matchPriority,
-        title: persona.title,
-        avatarUrl: persona.avatarUrl,
-        createdAt: persona.createdAt,
-        updatedAt: persona.updatedAt,
-      })
-    }
-  }
-
-  return results
-}
-
-/**
  * Search chats
  */
 function searchChats(
@@ -331,9 +250,7 @@ function searchChats(
   tagPriorityMap: Map<string, MatchPriority>,
   tagMap: Map<string, Tag>,
   charMap: Map<string, Character>,
-  personaMap: Map<string, Persona>,
-  matchedCharacterIds: Set<string>,
-  matchedPersonaIds: Set<string>
+  matchedCharacterIds: Set<string>
 ): ChatSearchResult[] {
   const results: ChatSearchResult[] = []
   const addedChatIds = new Set<string>()
@@ -349,11 +266,6 @@ function searchChats(
       .map(p => charMap.get(p.characterId!))
       .filter(Boolean)
     const characterNames = charParticipants.map(c => c!.name)
-
-    const personaParticipant = chat.participants.find(p => p.type === 'PERSONA' && p.personaId)
-    const persona = personaParticipant?.personaId
-      ? personaMap.get(personaParticipant.personaId)
-      : undefined
 
     // Check matches
     const titlePriority = getMatchPriority(chat.title, query, terms)
@@ -377,18 +289,12 @@ function searchChats(
       ? charMap.get(matchedCharParticipant.characterId)
       : undefined
 
-    const matchedViaPersona =
-      personaParticipant?.personaId && matchedPersonaIds.has(personaParticipant.personaId)
-        ? personaMap.get(personaParticipant.personaId)
-        : undefined
-
     if (
       titleMatch ||
       charNameMatch ||
       contextMatch ||
       matchedTag ||
-      matchedViaCharacter ||
-      matchedViaPersona
+      matchedViaCharacter
     ) {
       if (addedChatIds.has(chat.id)) continue
       addedChatIds.add(chat.id)
@@ -402,7 +308,7 @@ function searchChats(
       if (charNameMatch) matchPriority = Math.min(matchPriority, charNamePriority) as MatchPriority
       if (contextMatch) matchPriority = Math.min(matchPriority, contextPriority) as MatchPriority
       if (matchedTag) matchPriority = Math.min(matchPriority, tagMatchPriority) as MatchPriority
-      if (matchPriority === 3 && (matchedViaCharacter || matchedViaPersona)) matchPriority = 2
+      if (matchPriority === 3 && matchedViaCharacter) matchPriority = 2
 
       if (matchedTag) {
         matchedField = 'tag'
@@ -412,10 +318,6 @@ function searchChats(
         matchedField = 'relatedCharacter'
         matchedValue = matchedViaCharacter.name
         snippet = `Chat with ${matchedViaCharacter.name}`
-      } else if (matchedViaPersona && !titleMatch && !charNameMatch && !contextMatch) {
-        matchedField = 'relatedPersona'
-        matchedValue = matchedViaPersona.name
-        snippet = `Chat as ${matchedViaPersona.name}`
       } else if (charNameMatch && !titleMatch) {
         const matchedCharName = characterNames.find(name =>
           matchesQueryMultiTerm(name, query, terms)
@@ -440,13 +342,9 @@ function searchChats(
         matchedTag: matchedTag ? { id: matchedTag.id, name: matchedTag.name } : undefined,
         matchPriority,
         characterNames,
-        personaName: persona?.name,
         messageCount: chat.messageCount,
         matchedViaCharacter: matchedViaCharacter
           ? { id: matchedViaCharacter.id, name: matchedViaCharacter.name }
-          : undefined,
-        matchedViaPersona: matchedViaPersona
-          ? { id: matchedViaPersona.id, name: matchedViaPersona.name }
           : undefined,
         createdAt: chat.createdAt,
         updatedAt: chat.updatedAt,
@@ -463,13 +361,11 @@ function searchChats(
 function searchTags(
   matchingTagsWithPriority: Array<{ tag: Tag; priority: MatchPriority }>,
   allCharacters: Character[],
-  allPersonas: Persona[],
   allChats: ChatMetadata[]
 ): TagSearchResult[] {
   return matchingTagsWithPriority.map(({ tag, priority }) => {
     const usageCount =
       allCharacters.filter(c => c.tags.includes(tag.id)).length +
-      allPersonas.filter(p => p.tags.includes(tag.id)).length +
       allChats.filter(c => c.tags.includes(tag.id)).length
 
     return {
@@ -581,7 +477,6 @@ function limitAndSortResults(
   // Group results by type
   const resultsByType: Record<SearchType, SearchResult[]> = {
     characters: [],
-    personas: [],
     chats: [],
     tags: [],
     memories: [],
@@ -601,13 +496,12 @@ function limitAndSortResults(
   const limitedResults: SearchResult[] = []
   const takenPerType: Record<SearchType, number> = {
     characters: 0,
-    personas: 0,
     chats: 0,
     tags: 0,
     memories: 0,
   }
 
-  const typeOrder: SearchType[] = ['characters', 'personas', 'chats', 'tags', 'memories']
+  const typeOrder: SearchType[] = ['characters', 'chats', 'tags', 'memories']
 
   // First pass: ensure minimums
   for (const type of typeOrder) {

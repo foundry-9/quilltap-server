@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { RoleplayTemplate, TemplateFormData, INITIAL_FORM_DATA } from '../types'
 
 export interface UseRoleplayTemplatesReturn {
@@ -68,15 +67,14 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch('/api/roleplay-templates')
+      const res = await fetch('/api/v1/roleplay-templates')
       if (!res.ok) throw new Error('Failed to fetch templates')
       const data = await res.json()
       setTemplates(data)
-      clientLogger.debug('Fetched roleplay templates', { count: data.length })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      clientLogger.error('Error fetching roleplay templates', { error: message })
+      console.error('Error fetching roleplay templates', { error: message })
     } finally {
       setLoading(false)
     }
@@ -84,15 +82,12 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
 
   const fetchChatSettings = useCallback(async () => {
     try {
-      const res = await fetch('/api/chat-settings')
+      const res = await fetch('/api/v1/settings/chat')
       if (!res.ok) throw new Error('Failed to fetch chat settings')
       const data = await res.json()
       setDefaultTemplateId(data.defaultRoleplayTemplateId || null)
-      clientLogger.debug('Fetched chat settings for default template', {
-        defaultRoleplayTemplateId: data.defaultRoleplayTemplateId,
-      })
     } catch (err) {
-      clientLogger.error('Error fetching chat settings', {
+      console.error('Error fetching chat settings', {
         error: err instanceof Error ? err.message : 'Unknown error',
       })
     }
@@ -108,7 +103,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       setDefaultSaving(true)
       setError(null)
 
-      const res = await fetch('/api/chat-settings', {
+      const res = await fetch('/api/v1/settings/chat', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ defaultRoleplayTemplateId: templateId }),
@@ -121,12 +116,11 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
 
       setDefaultTemplateId(templateId)
       setSuccess('Default template updated successfully')
-      clientLogger.info('Default roleplay template updated', { templateId })
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      clientLogger.error('Error updating default template', { error: message })
+      console.error('Error updating default template', { error: message })
     } finally {
       setDefaultSaving(false)
     }
@@ -161,7 +155,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
 
       if (editingTemplate) {
         // Update existing template
-        const res = await fetch(`/api/roleplay-templates/${editingTemplate.id}`, {
+        const res = await fetch(`/api/v1/roleplay-templates/${editingTemplate.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -177,10 +171,9 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
           prev.map(t => t.id === updated.id ? updated : t)
         )
         setSuccess('Template updated successfully')
-        clientLogger.info('Roleplay template updated', { templateId: updated.id })
       } else {
         // Create new template
-        const res = await fetch('/api/roleplay-templates', {
+        const res = await fetch('/api/v1/roleplay-templates', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -194,7 +187,6 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         const created = await res.json()
         setTemplates(prev => [...prev, created])
         setSuccess('Template created successfully')
-        clientLogger.info('Roleplay template created', { templateId: created.id })
       }
 
       closeModal()
@@ -202,7 +194,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      clientLogger.error('Error saving roleplay template', { error: message })
+      console.error('Error saving roleplay template', { error: message })
     } finally {
       setSaving(false)
     }
@@ -213,7 +205,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       setSaving(true)
       setError(null)
 
-      const res = await fetch(`/api/roleplay-templates/${templateId}`, {
+      const res = await fetch(`/api/v1/roleplay-templates/${templateId}`, {
         method: 'DELETE',
       })
 
@@ -225,12 +217,11 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       setTemplates(prev => prev.filter(t => t.id !== templateId))
       setSuccess('Template deleted successfully')
       setDeleteConfirm(null)
-      clientLogger.info('Roleplay template deleted', { templateId })
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      clientLogger.error('Error deleting roleplay template', { error: message })
+      console.error('Error deleting roleplay template', { error: message })
     } finally {
       setSaving(false)
     }

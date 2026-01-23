@@ -153,20 +153,13 @@ This document tracks the ongoing migration from hardcoded Tailwind utility class
 
 **Priority: Low** - Developer-facing components.
 
-| File | Current State | Migration Needs |
-|------|--------------|-----------------|
-| `components/debug/BrowserConsoleTab.tsx` | Hardcoded styling | `qt-button-*`, `qt-alert-*` |
-| `components/debug/DebugPanel.tsx` | Hardcoded panel | `qt-panel`, `qt-button-*` |
-| `components/debug/DevConsolePanel.tsx` | Hardcoded console | `qt-panel`, `qt-button-*` |
-| `components/debug/ServerLogsTab.tsx` | Hardcoded log styling | `qt-button-*`, `qt-alert-*` |
-
 ### Phase 14: Navigation Cleanup
 
 **Priority: Low** - Remaining nav elements.
 
 | File | Current State | Migration Needs |
 |------|--------------|-----------------|
-| `components/dashboard/nav.tsx` | Sign out button, DevConsole toggle, quick-hide buttons still hardcoded | `qt-button-*`, `qt-navbar-button` cleanup |
+| `components/dashboard/nav.tsx` | Sign out button, quick-hide buttons still hardcoded | `qt-button-*`, `qt-navbar-button` cleanup |
 
 ---
 

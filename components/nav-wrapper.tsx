@@ -3,7 +3,6 @@
 import { useSession } from '@/components/providers/session-provider';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { clientLogger } from '@/lib/client-logger';
 import DashboardNav from './dashboard/nav';
 import { ChatProvider } from './providers/chat-context';
 import type { Tag } from './tags/tag-editor';
@@ -42,13 +41,13 @@ export default function NavWrapper() {
       setTagsFetched(false);
       setTagsLoading(true);
       try {
-        const res = await fetch(`/api/chats/${chatId}/tags`);
+        const res = await fetch(`/api/v1/chats/${chatId}`);
         if (res.ok) {
           const data = await res.json();
-          setTags(data.tags || []);
+          setTags(data.chat?.tags || []);
         }
       } catch (err) {
-        clientLogger.error('Error loading tags:', { error: err instanceof Error ? err.message : String(err) });
+        console.error('Error loading tags:', { error: err instanceof Error ? err.message : String(err) });
       } finally {
         setTagsLoading(false);
         setTagsFetched(true);
@@ -62,7 +61,7 @@ export default function NavWrapper() {
     if (tagsLoading || !tagName.trim() || !chatId) return;
     setTagsLoading(true);
     try {
-      const tagRes = await fetch('/api/tags', {
+      const tagRes = await fetch('/api/v1/tags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: tagName.trim() }),
@@ -70,7 +69,7 @@ export default function NavWrapper() {
       if (!tagRes.ok) throw new Error('Failed to create tag');
       const { tag } = await tagRes.json();
 
-      const attachRes = await fetch(`/api/chats/${chatId}/tags`, {
+      const attachRes = await fetch(`/api/v1/chats/${chatId}?action=add-tag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tagId: tag.id }),
@@ -79,7 +78,7 @@ export default function NavWrapper() {
 
       setTags([...tags, tag]);
     } catch (err) {
-      clientLogger.error('Error adding tag:', { error: err instanceof Error ? err.message : String(err) });
+      console.error('Error adding tag:', { error: err instanceof Error ? err.message : String(err) });
     } finally {
       setTagsLoading(false);
     }
@@ -89,13 +88,15 @@ export default function NavWrapper() {
     if (tagsLoading || !chatId) return;
     setTagsLoading(true);
     try {
-      const res = await fetch(`/api/chats/${chatId}/tags?tagId=${tagId}`, {
-        method: 'DELETE',
+      const res = await fetch(`/api/v1/chats/${chatId}?action=remove-tag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagId }),
       });
       if (!res.ok) throw new Error('Failed to remove tag');
       setTags(tags.filter((t) => t.id !== tagId));
     } catch (err) {
-      clientLogger.error('Error removing tag:', { error: err instanceof Error ? err.message : String(err) });
+      console.error('Error removing tag:', { error: err instanceof Error ? err.message : String(err) });
     } finally {
       setTagsLoading(false);
     }

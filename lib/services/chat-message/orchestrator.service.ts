@@ -25,7 +25,6 @@ import type { MemoryChatSettings } from './memory-trigger.service'
 import {
   resolveRespondingParticipant,
   loadAllParticipantData,
-  getPersonaData,
   getRoleplayTemplate,
 } from './participant-resolver.service'
 import {
@@ -46,6 +45,9 @@ import {
   encodeContentChunk,
   encodeDoneEvent,
   encodeErrorEvent,
+  encodeKeepAlive,
+  safeEnqueue,
+  safeClose,
 } from './streaming.service'
 import {
   checkShouldUsePseudoTools,
@@ -64,8 +66,20 @@ import {
 import {
   triggerMemoryExtraction,
   triggerInterCharacterMemory,
+  triggerUserControlledCharacterMemory,
   triggerContextSummaryCheck,
 } from './memory-trigger.service'
+import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
+import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
+import { isRecoverableRequestError } from '@/lib/llm/errors'
+import { attemptRequestLimitRecovery } from './recovery.service'
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
+import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import {
+  getCachedCompression,
+  triggerAsyncCompression,
+  invalidateCompressionCache,
+} from './compression-cache.service'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
@@ -155,11 +169,77 @@ async function processMessage(
     apiKey = rawApiKey
   }
 
-  // Get persona data
-  const { persona, personaData } = await getPersonaData(repos, chat)
+  // Get persona data (kept for backward compatibility with legacy participant types)
+  let persona: { name: string; description: string } | null = null
+  let personaData: { name: string; description: string } | null = null
+
+  // Get user-controlled character ID (for memory aboutCharacterId)
+  // This is the character that the user is "playing as" in this chat
+  const userControlledParticipant = chat.participants.find(
+    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId && p.isActive
+  )
+  const userCharacterId = userControlledParticipant?.characterId || undefined
 
   // Get chat settings
   const chatSettings = await repos.chatSettings.findByUserId(userId)
+
+  // ============================================================================
+  // Context Compression Setup
+  // ============================================================================
+
+  // Check if full context was requested (requestFullContextOnNextMessage flag)
+  let bypassCompression = false
+  if (chat.requestFullContextOnNextMessage === true) {
+    bypassCompression = true
+    // Reset the flag
+    await repos.chats.update(chatId, { requestFullContextOnNextMessage: false })
+    logger.info('Bypassing context compression (full context requested)', { chatId })
+  }
+
+  // Get context compression settings (default to enabled)
+  const contextCompressionSettings: ContextCompressionSettings = chatSettings?.contextCompressionSettings || {
+    enabled: true,
+    windowSize: 5,
+    compressionTargetTokens: 800,
+    systemPromptTargetTokens: 1500,
+  }
+
+  // Get cheap LLM selection for compression
+  let cheapLLMSelection = null
+  if (contextCompressionSettings.enabled && !bypassCompression) {
+    try {
+      // Get all connection profiles for cheap LLM selection
+      const allProfiles = await repos.connections.findByUserId(userId)
+      const cheapLLMConfig = chatSettings?.cheapLLMSettings || DEFAULT_CHEAP_LLM_CONFIG
+
+      // Convert null values to undefined for CheapLLMConfig compatibility
+      const compatibleConfig = {
+        ...cheapLLMConfig,
+        userDefinedProfileId: cheapLLMConfig.userDefinedProfileId ?? undefined,
+        defaultCheapProfileId: cheapLLMConfig.defaultCheapProfileId ?? undefined,
+      }
+
+      cheapLLMSelection = getCheapLLMProvider(
+        connectionProfile,
+        compatibleConfig,
+        allProfiles,
+        false // Ollama availability - could be checked but keeping simple for now
+      )
+
+      logger.debug('Cheap LLM selection for compression', {
+        provider: cheapLLMSelection.provider,
+        model: cheapLLMSelection.modelName,
+        isLocal: cheapLLMSelection.isLocal,
+      })
+    } catch (error) {
+      logger.warn('Failed to get cheap LLM for compression, compression will be skipped', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // Determine if compression is actually enabled for this request
+  const compressionEnabled = !!(contextCompressionSettings.enabled && cheapLLMSelection && !bypassCompression)
 
   // Get roleplay template
   const roleplayTemplate = await getRoleplayTemplate(repos, chat, chatSettings ? { defaultRoleplayTemplateId: chatSettings.defaultRoleplayTemplateId ?? undefined } : null)
@@ -172,17 +252,14 @@ async function processMessage(
 
   // Load participant data for multi-character chats
   let participantCharacters = new Map()
-  let participantPersonas = new Map()
 
   if (isMultiCharacter) {
     const participantData = await loadAllParticipantData(
       repos,
       chat,
-      character,
-      personaData
+      character
     )
     participantCharacters = participantData.participantCharacters
-    participantPersonas = participantData.participantPersonas
   }
 
   // Get existing messages
@@ -241,13 +318,15 @@ async function processMessage(
     connectionProfile.allowWebSearch
   )
 
-  // Build tools
+  // Build tools (include request_full_context when compression is enabled)
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
     connectionProfile,
     imageProfileId,
     imageProfile,
     userId,
-    false // Will check after
+    false, // Will check pseudo-tools after
+    undefined, // projectId (will be set if needed)
+    compressionEnabled // requestFullContext - enable the tool when compression is active
   )
 
   const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)
@@ -268,6 +347,42 @@ async function processMessage(
     } : undefined,
     defaultTimestampConfig: chatSettings.defaultTimestampConfig,
   } : null
+
+  // ============================================================================
+  // Async Pre-Compression: Get cached compression result if available
+  // ============================================================================
+  let cachedCompressionResult = null
+  if (compressionEnabled && !bypassCompression) {
+    // Try to get cached compression from previous async pre-computation
+    cachedCompressionResult = await getCachedCompression(chatId, existingMessages.length)
+    if (cachedCompressionResult) {
+      logger.info('Using cached compression from async pre-computation', {
+        chatId,
+        messageCount: existingMessages.length,
+        savings: cachedCompressionResult.compressionDetails?.totalSavings,
+      })
+    }
+  } else if (bypassCompression) {
+    // Invalidate cache when bypass is requested
+    invalidateCompressionCache(chatId)
+  }
+
+  // Start keep-alive pings during context building (especially important during compression)
+  // This prevents proxy/load balancer timeouts during long compression operations
+  let keepAliveInterval: ReturnType<typeof setInterval> | null = null
+  if (compressionEnabled && !cachedCompressionResult) {
+    logger.debug('Starting keep-alive pings during context compression')
+    keepAliveInterval = setInterval(() => {
+      if (!safeEnqueue(controller, encodeKeepAlive(encoder))) {
+        // Stream closed, stop the interval
+        if (keepAliveInterval) {
+          clearInterval(keepAliveInterval)
+          keepAliveInterval = null
+        }
+      }
+    }, 15000) // Send ping every 15 seconds
+  }
+
   const { builtContext, formattedMessages, isInitialMessage } = await buildMessageContext(
     {
       repos,
@@ -277,19 +392,29 @@ async function processMessage(
       characterParticipant,
       connectionProfile,
       persona,
-      personaData,
       isMultiCharacter,
       participantCharacters,
-      participantPersonas,
       roleplayTemplate,
       chatSettings: contextChatSettings,
       pseudoToolInstructions,
       newUserMessage: finalUserMessageContent,
       isContinueMode,
+      // Context compression options
+      contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,
+      cheapLLMSelection,
+      bypassCompression,
+      cachedCompressionResult,
     },
     existingMessages,
     fileProcessing.attachmentsToSend
   )
+
+  // Stop keep-alive pings after context building completes
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval)
+    keepAliveInterval = null
+    logger.debug('Stopped keep-alive pings after context compression')
+  }
 
   // Create tool context
   const toolContext = createToolContext(
@@ -298,7 +423,8 @@ async function processMessage(
     character.id,
     characterParticipant.id,
     imageProfileId,
-    chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined
+    chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined,
+    chat.projectId
   )
 
   // Send debug info
@@ -323,37 +449,82 @@ async function processMessage(
 
   // Stream the response
   let fullResponse = ''
-  let usage: { totalTokens?: number } | null = null
+  let usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null = null
   let cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null = null
   let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
   let rawResponse: unknown = null
   let thoughtSignature: string | undefined
 
-  for await (const chunk of streamMessage({
-    messages: formattedMessages,
-    connectionProfile,
-    apiKey,
-    modelParams,
-    tools: actualTools,
-    useNativeWebSearch,
-  })) {
-    if (chunk.content) {
-      fullResponse += chunk.content
-      controller.enqueue(encodeContentChunk(encoder, chunk.content))
-    }
+  try {
+    for await (const chunk of streamMessage({
+      messages: formattedMessages,
+      connectionProfile,
+      apiKey,
+      modelParams,
+      tools: actualTools,
+      useNativeWebSearch,
+    })) {
+      if (chunk.content) {
+        fullResponse += chunk.content
+        controller.enqueue(encodeContentChunk(encoder, chunk.content))
+      }
 
-    if (chunk.done) {
-      usage = chunk.usage || null
-      cacheUsage = chunk.cacheUsage || null
-      attachmentResults = chunk.attachmentResults || null
-      rawResponse = chunk.rawResponse
-      if (chunk.thoughtSignature) {
-        thoughtSignature = chunk.thoughtSignature
-        logger.debug('Captured thought signature from response', {
-          signatureLength: thoughtSignature.length,
-        })
+      if (chunk.done) {
+        usage = chunk.usage || null
+        cacheUsage = chunk.cacheUsage || null
+        attachmentResults = chunk.attachmentResults || null
+        rawResponse = chunk.rawResponse
+        if (chunk.thoughtSignature) {
+          thoughtSignature = chunk.thoughtSignature
+          logger.debug('Captured thought signature from response', {
+            signatureLength: thoughtSignature.length,
+          })
+        }
       }
     }
+  } catch (streamingError) {
+    // Check if this is a recoverable request error (token limit, PDF pages, etc.)
+    if (isRecoverableRequestError(streamingError)) {
+      logger.info('Recoverable request error detected, attempting recovery', {
+        chatId,
+        provider: connectionProfile.provider,
+        model: connectionProfile.modelName,
+        attachmentCount: fileProcessing.attachedFiles.length,
+        error: streamingError instanceof Error ? streamingError.message : String(streamingError),
+      })
+
+      const recoveryResult = await attemptRequestLimitRecovery({
+        controller,
+        encoder,
+        character,
+        connectionProfile,
+        apiKey,
+        attachedFiles: fileProcessing.attachedFiles,
+        originalMessage: options.content,
+        error: streamingError,
+        repos,
+        chatId,
+        userId,
+        characterParticipantId: characterParticipant.id,
+      })
+
+      if (recoveryResult.success) {
+        logger.info('Request limit recovery successful', {
+          chatId,
+          messageId: recoveryResult.messageId,
+          isStaticFallback: recoveryResult.isStaticFallback,
+        })
+        // Close the stream - recovery has handled everything
+        safeClose(controller)
+        return
+      }
+
+      // Recovery failed, re-throw the original error
+      logger.warn('Request limit recovery failed, propagating error', { chatId })
+    }
+
+    // Not a recoverable error or recovery failed - re-throw
+    throw streamingError
   }
 
   // Process tool calls
@@ -591,6 +762,19 @@ async function processMessage(
       toolMessages
     )
 
+    // Track token usage for profile and chat aggregates
+    if (usage && (usage.promptTokens || usage.completionTokens)) {
+      // Estimate cost using available pricing data
+      const costResult = await estimateMessageCost(
+        connectionProfile.provider,
+        connectionProfile.modelName,
+        usage.promptTokens || 0,
+        usage.completionTokens || 0,
+        userId
+      )
+      await trackMessageTokenUsage(chatId, connectionProfile.id, usage, costResult.cost, costResult.source)
+    }
+
     // Update chat timestamp
     await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
 
@@ -620,10 +804,12 @@ async function processMessage(
         cheapLLMSettings: chatSettings.cheapLLMSettings,
       }
 
+      // Note: personaName is undefined since we only support CHARACTER type participants now
       await triggerMemoryExtraction(repos, {
         characterId: character.id,
         characterName: character.name,
-        personaName: personaData?.name,
+        personaName: undefined,
+        userCharacterId,
         allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
         chatId,
         userMessage: isContinueMode ? '[Continue/Nudge - no user message]' : content,
@@ -650,6 +836,52 @@ async function processMessage(
         })
       }
 
+      // Trigger memory extraction for user-controlled/impersonated characters
+      // If the user was typing as a character (not just the persona), that character
+      // should form memories about the exchange
+      if (!isContinueMode && chat.activeTypingParticipantId) {
+        const activeTypingParticipant = chat.participants.find(
+          p => p.id === chat.activeTypingParticipantId
+        )
+
+        // Check if the active typing participant is a character (not persona)
+        // and is different from the responding character
+        if (
+          activeTypingParticipant &&
+          activeTypingParticipant.type === 'CHARACTER' &&
+          activeTypingParticipant.characterId &&
+          activeTypingParticipant.id !== characterParticipant.id
+        ) {
+          // Get the character data for the user-controlled character
+          const userControlledCharacter = participantCharacters.get(activeTypingParticipant.characterId)
+            || await repos.characters.findById(activeTypingParticipant.characterId)
+
+          if (userControlledCharacter) {
+            logger.debug('Triggering memory for user-controlled character', {
+              userControlledCharacterId: userControlledCharacter.id,
+              userControlledCharacterName: userControlledCharacter.name,
+              respondingCharacterId: character.id,
+              respondingCharacterName: character.name,
+            })
+
+            await triggerUserControlledCharacterMemory(repos, {
+              userControlledCharacter,
+              userControlledParticipantId: activeTypingParticipant.id,
+              userTypedMessage: content,
+              respondingCharacter: character,
+              llmResponse: cleanedResponse,
+              llmResponseMessageId: assistantMessageId,
+              chatId,
+              userId,
+              chatSettings: memoryChatSettings,
+              allCharacterNames: isMultiCharacter
+                ? Array.from(participantCharacters.values()).map(c => c.name)
+                : [userControlledCharacter.name, character.name],
+            })
+          }
+        }
+      }
+
       await triggerContextSummaryCheck(repos, {
         chatId,
         provider: connectionProfile.provider,
@@ -657,6 +889,49 @@ async function processMessage(
         userId,
         connectionProfile,
         chatSettings: memoryChatSettings,
+      })
+    }
+
+    // ============================================================================
+    // Async Pre-Compression: Trigger compression for next message
+    // ============================================================================
+    // Start compression asynchronously so it's ready for the next message
+    if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
+      // Build updated messages list (including this response)
+      const updatedMessages = [
+        ...existingMessages
+          .filter((m): m is MessageEvent => m.type === 'message' && 'role' in m && 'content' in m)
+          .map(m => ({
+            role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
+            content: m.content || '',
+          })),
+        // Add the user message we just sent (if not continue mode)
+        ...(content && !isContinueMode ? [{
+          role: 'user' as const,
+          content,
+        }] : []),
+        // Add the assistant response we just received
+        {
+          role: 'assistant' as const,
+          content: cleanedResponse,
+        },
+      ]
+
+      // Trigger async compression (fire and forget)
+      triggerAsyncCompression({
+        chatId,
+        messages: updatedMessages,
+        systemPrompt: builtContext.originalSystemPrompt,
+        compressionOptions: {
+          enabled: contextCompressionSettings.enabled,
+          windowSize: contextCompressionSettings.windowSize,
+          compressionTargetTokens: contextCompressionSettings.compressionTargetTokens,
+          systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
+          selection: cheapLLMSelection,
+          userId,
+          characterName: character.name,
+          userName: 'User',
+        },
       })
     }
   } else if (toolMessages.length > 0) {
@@ -694,11 +969,7 @@ async function processMessage(
   }
 
   // Close stream
-  try {
-    controller.close()
-  } catch {
-    // Already closed
-  }
+  safeClose(controller)
 }
 
 /**
@@ -710,7 +981,7 @@ async function saveAssistantMessage(
   character: { id: string; name: string },
   characterParticipant: { id: string },
   content: string,
-  usage: { totalTokens?: number } | null,
+  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null,
   rawResponse: unknown,
   thoughtSignature: string | undefined,
   generatedImagePaths: GeneratedImage[],
@@ -726,6 +997,8 @@ async function saveAssistantMessage(
     content,
     createdAt: new Date().toISOString(),
     tokenCount: usage?.totalTokens || null,
+    promptTokens: usage?.promptTokens || null,
+    completionTokens: usage?.completionTokens || null,
     rawResponse: (rawResponse as Record<string, unknown>) || null,
     attachments: assistantAttachments,
     thoughtSignature: thoughtSignature || null,
@@ -855,6 +1128,7 @@ function handleStreamError(
     errorType = error.name
   }
 
-  controller.enqueue(encodeErrorEvent(encoder, 'Failed to generate response', errorType, errorMessage))
-  controller.close()
+  // Use safe methods to prevent crash if stream is already closed
+  safeEnqueue(controller, encodeErrorEvent(encoder, 'Failed to generate response', errorType, errorMessage))
+  safeClose(controller)
 }
