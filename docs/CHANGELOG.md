@@ -4,6 +4,9 @@
 
 ### 2.7-dev
 
+- fix: Fix Quick Chat dialog failing to load connection profiles (2026-01-23)
+  - `useQuickChat` hook expected `/api/v1/connection-profiles` to return array but API returns `{ profiles: [...] }`
+  - Caused "Failed to fetch quick chat data" error when opening Quick Chat dialog
 - fix: Implement sync API v1 stub endpoints (2026-01-22)
   - `POST /api/v1/sync/instances` now creates instances in database instead of returning mock data
   - `POST /api/v1/sync?action=delta` now uses `detectDeltas()` to return actual entity changes

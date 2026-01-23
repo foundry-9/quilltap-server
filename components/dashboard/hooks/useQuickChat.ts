@@ -71,7 +71,8 @@ export function useQuickChat(): UseQuickChatReturn {
       let fetchedProfiles: ConnectionProfile[] = []
       if (profilesRes.ok) {
         const data = await profilesRes.json()
-        fetchedProfiles = data.map((p: any) => ({ id: p.id, name: p.name }))
+        const profiles = data.profiles || []
+        fetchedProfiles = profiles.map((p: any) => ({ id: p.id, name: p.name }))
         setProfiles(fetchedProfiles)
       }
 
