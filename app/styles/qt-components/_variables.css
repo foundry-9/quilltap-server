@@ -359,6 +359,36 @@
   --qt-auth-divider-color: var(--color-border);
 
   /* ==========================================================================
+     HIGHLIGHT VARIABLES (Search result highlighting)
+     ========================================================================== */
+  --qt-highlight-bg: hsl(50 100% 50%);
+  --qt-highlight-fg: hsl(40 100% 10%);
+  --qt-highlight-radius: 0.125rem;
+  --qt-highlight-padding-x: 0.125rem;
+  --qt-highlight-font-weight: 500;
+
+  /* ==========================================================================
+     FILTER CHIP VARIABLES (Search filter toggles)
+     ========================================================================== */
+  --qt-filter-chip-radius: 9999px;
+  --qt-filter-chip-padding-x: 0.5rem;
+  --qt-filter-chip-padding-y: 0.25rem;
+  --qt-filter-chip-font-size: 0.75rem;
+  --qt-filter-chip-font-weight: 500;
+  --qt-filter-chip-transition: all 150ms ease;
+
+  /* Active state (filter is enabled, showing results) */
+  --qt-filter-chip-active-bg: var(--color-primary);
+  --qt-filter-chip-active-fg: var(--color-primary-foreground);
+  --qt-filter-chip-active-border: transparent;
+
+  /* Inactive state (filter is disabled, hiding results) */
+  --qt-filter-chip-inactive-bg: var(--color-muted);
+  --qt-filter-chip-inactive-fg: var(--color-muted-foreground);
+  --qt-filter-chip-inactive-border: transparent;
+  --qt-filter-chip-inactive-hover-bg: color-mix(in srgb, var(--color-muted) 80%, var(--color-foreground) 5%);
+
+  /* ==========================================================================
      TAB VARIABLES
      ========================================================================== */
   --qt-tab-radius: var(--radius-lg) var(--radius-lg) 0 0;

@@ -727,6 +727,67 @@
   }
 
   /* ==========================================================================
+     SEARCH HIGHLIGHT
+     ========================================================================== */
+
+  /**
+   * Search result text highlight
+   * Used to highlight matching search terms in results
+   * Designed for high contrast in both light and dark themes
+   */
+  .qt-highlight {
+    background-color: var(--qt-highlight-bg);
+    color: var(--qt-highlight-fg);
+    border-radius: var(--qt-highlight-radius);
+    padding-left: var(--qt-highlight-padding-x);
+    padding-right: var(--qt-highlight-padding-x);
+    font-weight: var(--qt-highlight-font-weight);
+  }
+
+  /* ==========================================================================
+     FILTER CHIPS (Search filter toggles)
+     ========================================================================== */
+
+  /**
+   * Base filter chip styles
+   * Used for toggling search result filters
+   */
+  .qt-filter-chip {
+    @apply inline-flex items-center justify-center cursor-pointer;
+    padding: var(--qt-filter-chip-padding-y) var(--qt-filter-chip-padding-x);
+    border-radius: var(--qt-filter-chip-radius);
+    font-size: var(--qt-filter-chip-font-size);
+    font-weight: var(--qt-filter-chip-font-weight);
+    transition: var(--qt-filter-chip-transition);
+    border: 1px solid var(--qt-filter-chip-inactive-border);
+    background: var(--qt-filter-chip-inactive-bg);
+    color: var(--qt-filter-chip-inactive-fg);
+  }
+
+  .qt-filter-chip:hover {
+    background: var(--qt-filter-chip-inactive-hover-bg);
+  }
+
+  /**
+   * Active filter chip (filter is enabled, showing results)
+   */
+  .qt-filter-chip-active {
+    @apply inline-flex items-center justify-center cursor-pointer;
+    padding: var(--qt-filter-chip-padding-y) var(--qt-filter-chip-padding-x);
+    border-radius: var(--qt-filter-chip-radius);
+    font-size: var(--qt-filter-chip-font-size);
+    font-weight: var(--qt-filter-chip-font-weight);
+    transition: var(--qt-filter-chip-transition);
+    border: 1px solid var(--qt-filter-chip-active-border);
+    background: var(--qt-filter-chip-active-bg);
+    color: var(--qt-filter-chip-active-fg);
+  }
+
+  .qt-filter-chip-active:hover {
+    opacity: 0.9;
+  }
+
+  /* ==========================================================================
      EMPTY STATES
      ========================================================================== */
 

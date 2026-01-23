@@ -346,6 +346,22 @@
   --qt-badge-outline-fg: hsl(var(--text-100));
   --qt-badge-outline-border: hsl(var(--border-300) / 0.2);
 
+  /* Highlight Variables - Blue accent for search highlights */
+  --qt-highlight-bg: hsl(var(--accent-secondary-100) / 0.3);
+  --qt-highlight-fg: hsl(var(--text-000));
+  --qt-highlight-radius: 0.125rem;
+  --qt-highlight-padding-x: 0.125rem;
+  --qt-highlight-font-weight: 500;
+
+  /* Filter Chip Variables - White active, dark inactive */
+  --qt-filter-chip-active-bg: hsl(var(--always-white));
+  --qt-filter-chip-active-fg: hsl(var(--always-black));
+  --qt-filter-chip-active-border: transparent;
+  --qt-filter-chip-inactive-bg: hsl(var(--bg-000));
+  --qt-filter-chip-inactive-fg: hsl(var(--text-200));
+  --qt-filter-chip-inactive-border: transparent;
+  --qt-filter-chip-inactive-hover-bg: hsl(var(--bg-hover));
+
   /* Avatar Variables */
   --qt-avatar-radius: 9999px;
   --qt-avatar-size: 2.5rem;

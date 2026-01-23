@@ -7,7 +7,7 @@ import { SearchResults } from './search-results'
 import { SearchDialog } from './search-dialog'
 import type { SearchResult, SearchResponse, SearchType } from './types'
 
-const ALL_TYPES: SearchType[] = ['chats', 'characters', 'personas', 'tags', 'memories']
+const ALL_TYPES: SearchType[] = ['chats', 'characters', 'tags', 'memories']
 
 export function SearchBar() {
   const router = useRouter()
@@ -17,6 +17,7 @@ export function SearchBar() {
   // Desktop inline search state
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
+  const [countsByType, setCountsByType] = useState<Partial<Record<SearchType, number>>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
@@ -24,6 +25,8 @@ export function SearchBar() {
 
   // Mobile dialog state
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [dialogInitialQuery, setDialogInitialQuery] = useState('')
+  const [dialogInitialTypes, setDialogInitialTypes] = useState<SearchType[] | undefined>(undefined)
 
   // Global keyboard shortcut (Cmd+K on macOS, Ctrl+K on Windows/Linux)
   // On macOS, Ctrl+K is "delete to end of line" and should not be intercepted
@@ -59,6 +62,7 @@ export function SearchBar() {
   const performSearch = useCallback(async (searchQuery: string) => {
     if (searchQuery.length < 2) {
       setResults([])
+      setCountsByType({})
       setHasSearched(false)
       return
     }
@@ -74,10 +78,12 @@ export function SearchBar() {
       }
 
       const data: SearchResponse = await response.json()
-      setResults(data.results)
+      setResults(data.results ?? [])
+      setCountsByType(data.countsByType ?? {})
     } catch (error) {
       console.error('Inline search error', { error: error instanceof Error ? error.message : String(error) })
       setResults([])
+      setCountsByType({})
     } finally {
       setIsLoading(false)
     }
@@ -105,7 +111,16 @@ export function SearchBar() {
     setShowDropdown(false)
     setQuery('')
     setResults([])
+    setCountsByType({})
     setHasSearched(false)
+  }
+
+  // Handle clicking on a type count to open dialog filtered to that type
+  const handleTypeCountClick = (type: SearchType) => {
+    setDialogInitialQuery(query)
+    setDialogInitialTypes([type])
+    setIsDialogOpen(true)
+    setShowDropdown(false)
   }
 
   // Handle keyboard navigation
@@ -170,6 +185,8 @@ export function SearchBar() {
                   query={query}
                   isLoading={isLoading}
                   onResultClick={handleResultClick}
+                  countsByType={countsByType}
+                  onTypeCountClick={handleTypeCountClick}
                 />
               ) : (
                 <div className="p-4 text-center qt-text-small">
@@ -177,10 +194,12 @@ export function SearchBar() {
                 </div>
               )}
             </div>
-            {results.length > 0 && (
+            {results?.length > 0 && (
               <div className="px-3 py-2 border-t border-border bg-muted">
                 <button
                   onClick={() => {
+                    setDialogInitialQuery(query)
+                    setDialogInitialTypes(undefined) // Show all types
                     setIsDialogOpen(true)
                     setShowDropdown(false)
                   }}
@@ -197,6 +216,7 @@ export function SearchBar() {
       {/* Mobile search button - hidden on desktop */}
       <button
         onClick={() => {
+          setDialogInitialQuery('')
           setIsDialogOpen(true)
         }}
         className="md:hidden p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
@@ -218,7 +238,16 @@ export function SearchBar() {
       </button>
 
       {/* Search dialog for mobile and "see all results" */}
-      <SearchDialog isOpen={isDialogOpen} onClose={() => setIsDialogOpen(false)} />
+      <SearchDialog
+        isOpen={isDialogOpen}
+        onClose={() => {
+          setIsDialogOpen(false)
+          setDialogInitialQuery('')
+          setDialogInitialTypes(undefined)
+        }}
+        initialQuery={dialogInitialQuery}
+        initialTypes={dialogInitialTypes}
+      />
     </>
   )
 }

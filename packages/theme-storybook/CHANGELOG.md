@@ -2,6 +2,20 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.12] - 2026-01-23
+
+### Added
+- Filter chip classes (`qt-filter-chip`, `qt-filter-chip-active`) for themeable search filter toggles
+- CSS variables: `--qt-filter-chip-radius`, `--qt-filter-chip-padding-x`, `--qt-filter-chip-padding-y`, `--qt-filter-chip-font-size`, `--qt-filter-chip-font-weight`, `--qt-filter-chip-transition`
+- Active state variables: `--qt-filter-chip-active-bg`, `--qt-filter-chip-active-fg`, `--qt-filter-chip-active-border`
+- Inactive state variables: `--qt-filter-chip-inactive-bg`, `--qt-filter-chip-inactive-fg`, `--qt-filter-chip-inactive-border`, `--qt-filter-chip-inactive-hover-bg`
+
+## [1.0.11] - 2026-01-23
+
+### Added
+- Search highlight class (`qt-highlight`) for consistent search result text highlighting
+- CSS variables: `--qt-highlight-bg`, `--qt-highlight-fg`, `--qt-highlight-radius`, `--qt-highlight-padding-x`, `--qt-highlight-font-weight`
+
 ## [1.0.10] - 2026-01-16
 
 ### Added

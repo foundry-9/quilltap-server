@@ -4,6 +4,25 @@
 
 ### 2.7-dev
 
+- feat: Enhanced global search with improved UX and theming (2026-01-23)
+  - Fixed search bar crash when API returned unexpected format (defensive coding for undefined results)
+  - "See all results" now pre-populates the search dialog with the current query
+  - Removed deprecated "Personas" from search UI and API
+  - Fixed filter buttons in search dialog not filtering results (API now parses `types` parameter)
+  - Implemented infinite scroll pagination in search dialog instead of fixed result count
+  - API returns `countsByType` with total counts per type before pagination
+  - Search results headers show total counts from database, not just displayed count
+  - Quick search dropdown shows "displayed/total" format (e.g., "5/19") when more results exist
+  - Clicking on count in quick search opens dialog filtered to that specific type
+  - Added `initialTypes` prop to SearchDialog for pre-selecting type filters
+  - Fixed duplicate key React warnings by using composite keys and deduplicating on load-more
+- feat: Themeable search highlight and filter chip classes (2026-01-23)
+  - New `qt-highlight` class for search result text highlighting
+  - CSS variables: `--qt-highlight-bg`, `--qt-highlight-fg`, `--qt-highlight-radius`, `--qt-highlight-padding-x`, `--qt-highlight-font-weight`
+  - New `qt-filter-chip` and `qt-filter-chip-active` classes for search filter toggles
+  - CSS variables for filter chips: `--qt-filter-chip-radius`, `--qt-filter-chip-padding-*`, `--qt-filter-chip-font-*`, `--qt-filter-chip-active-*`, `--qt-filter-chip-inactive-*`
+  - Updated all three included themes (Ocean, Earl Grey, Rains) with appropriate highlight and filter chip colors
+  - Updated `@quilltap/theme-storybook` to v1.0.12 with new variables and classes
 - fix: Add plugin initialization guard to sync API (2026-01-23)
   - Sync API now checks `isPluginSystemInitialized()` before processing requests
   - Returns 503 Service Unavailable if plugins aren't ready (e.g., during container startup)
