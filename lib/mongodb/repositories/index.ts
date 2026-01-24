@@ -35,6 +35,7 @@ export { FilePermissionsRepository } from './file-permissions.repository';
 export { PluginConfigRepository } from './plugin-config.repository';
 export { MountPointsRepository } from './mount-points.repository';
 export { FoldersRepository } from './folders.repository';
+export { LLMLogsRepository } from './llm-logs.repository';
 
 // Import all repository classes
 import { MongoBaseRepository } from './base.repository';
@@ -61,6 +62,7 @@ import { FilePermissionsRepository } from './file-permissions.repository';
 import { PluginConfigRepository } from './plugin-config.repository';
 import { MountPointsRepository } from './mount-points.repository';
 import { FoldersRepository } from './folders.repository';
+import { LLMLogsRepository } from './llm-logs.repository';
 
 /**
  * Container interface for all repository instances.
@@ -98,6 +100,8 @@ export interface RepositoryContainer {
   mountPoints: MountPointsRepository;
   // Folders repository
   folders: FoldersRepository;
+  // LLM logs repository
+  llmLogs: LLMLogsRepository;
 }
 
 /**
@@ -147,6 +151,8 @@ export function createRepositories(): RepositoryContainer {
       mountPoints: new MountPointsRepository(),
       // Folders repository
       folders: new FoldersRepository(),
+      // LLM logs repository
+      llmLogs: new LLMLogsRepository(),
     };
 
     logger.debug('Repository container created successfully', {

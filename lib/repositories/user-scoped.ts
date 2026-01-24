@@ -22,6 +22,7 @@ import {
   MemoriesRepository,
   FilesRepository,
   ProjectsRepository,
+  LLMLogsRepository,
   type CreateOptions,
 } from '@/lib/mongodb/repositories';
 import { getRepositories, getRepositoriesSafe } from './factory';
@@ -37,6 +38,7 @@ import type {
   ApiKey,
   ChatEvent,
   Project,
+  LLMLog,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -418,6 +420,70 @@ class UserScopedFilesRepository extends UserScopedTaggableRepository<FileEntry, 
   }
 }
 
+/**
+ * User-scoped LLM Logs Repository
+ * Note: LLM logs are user-scoped only (no tagging or special features)
+ */
+class UserScopedLLMLogsRepository extends UserScopedRepository<LLMLog, LLMLogsRepository> {
+  async findAll(limit?: number, offset?: number): Promise<LLMLog[]> {
+    return this.baseRepo.findByUserId(this.userId, limit ?? 50, offset ?? 0);
+  }
+
+  async findByMessageId(messageId: string): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findByMessageId(messageId);
+    return this.filterByUser(logs);
+  }
+
+  async findByChatId(chatId: string): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findByChatId(chatId);
+    return this.filterByUser(logs);
+  }
+
+  async findByCharacterId(characterId: string): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findByCharacterId(characterId);
+    return this.filterByUser(logs);
+  }
+
+  async findStandalone(limit?: number): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findStandalone(this.userId, limit);
+    return logs;
+  }
+
+  async findByType(type: any, limit?: number): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findByType(this.userId, type, limit);
+    return logs;
+  }
+
+  async findRecent(limit?: number): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findRecent(this.userId, limit);
+    return logs;
+  }
+
+  async countByUserId(): Promise<number> {
+    return this.baseRepo.countByUserId(this.userId);
+  }
+
+  async countByType(type: any): Promise<number> {
+    return this.baseRepo.countByType(this.userId, type);
+  }
+
+  async getTotalTokenUsage(): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
+    return this.baseRepo.getTotalTokenUsage(this.userId);
+  }
+
+  async deleteByMessageId(messageId: string): Promise<number> {
+    return this.baseRepo.deleteByMessageId(messageId);
+  }
+
+  async deleteByChatId(chatId: string): Promise<number> {
+    return this.baseRepo.deleteByChatId(chatId);
+  }
+
+  async deleteByCharacterId(characterId: string): Promise<number> {
+    return this.baseRepo.deleteByCharacterId(characterId);
+  }
+}
+
 // ============================================================================
 // Container and Factory
 // ============================================================================
@@ -448,6 +514,8 @@ export interface UserScopedRepositoryContainer {
   images: UserScopedFilesRepository;
   /** Projects repository - only returns user's projects */
   projects: UserScopedProjectsRepository;
+  /** LLM logs repository - only returns user's LLM logs */
+  llmLogs: UserScopedLLMLogsRepository;
 }
 
 /**
@@ -499,6 +567,7 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
   const files = new UserScopedFilesRepository(userId, baseRepos.files);
   const memories = new UserScopedMemoriesRepository(userId, baseRepos.memories, characters);
   const projects = new UserScopedProjectsRepository(userId, baseRepos.projects);
+  const llmLogs = new UserScopedLLMLogsRepository(userId, baseRepos.llmLogs);
 
   const container: UserScopedRepositoryContainer = {
     userId,
@@ -512,6 +581,7 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
     files,
     images: files, // Alias for backwards compatibility
     projects,
+    llmLogs,
   };
 
   // Cache the container

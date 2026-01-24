@@ -131,6 +131,21 @@ export const TokenDisplaySettingsSchema = z.object({
 export type TokenDisplaySettings = z.infer<typeof TokenDisplaySettingsSchema>;
 
 // ============================================================================
+// LLM LOGGING SETTINGS
+// ============================================================================
+
+export const LLMLoggingSettingsSchema = z.object({
+  /** Whether LLM request/response logging is enabled (default: true) */
+  enabled: z.boolean().default(true),
+  /** Whether to store full messages in logs (default: false for storage efficiency) */
+  verboseMode: z.boolean().default(false),
+  /** Number of days to retain logs, 0 = forever (default: 30) */
+  retentionDays: z.number().min(0).max(365).default(30),
+});
+
+export type LLMLoggingSettings = z.infer<typeof LLMLoggingSettingsSchema>;
+
+// ============================================================================
 // CHAT SETTINGS
 // ============================================================================
 
@@ -182,6 +197,12 @@ export const ChatSettingsSchema = z.object({
     windowSize: 5,
     compressionTargetTokens: 800,
     systemPromptTargetTokens: 1500,
+  }),
+  /** LLM logging settings for tracking API calls */
+  llmLoggingSettings: LLMLoggingSettingsSchema.default({
+    enabled: true,
+    verboseMode: false,
+    retentionDays: 30,
   }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

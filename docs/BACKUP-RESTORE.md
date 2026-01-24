@@ -29,6 +29,7 @@ The backup creates a ZIP file containing:
 - Connection profiles (API keys remain encrypted)
 - Image profiles
 - Embedding profiles
+- LLM request/response logs
 - File metadata (actual files are referenced from S3)
 
 ### Cloud Backups
@@ -86,6 +87,7 @@ For server administrators who need direct database access or want additional bac
 - `connectionProfiles` - LLM connection configurations
 - `embeddingProfiles` - Embedding provider configurations
 - `imageProfiles` - Image generation configurations
+- `llm_logs` - LLM request/response logs for debugging and monitoring
 
 ### S3 Storage
 

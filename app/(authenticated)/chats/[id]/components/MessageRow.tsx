@@ -47,6 +47,10 @@ interface MessageRowProps {
   onTogglePause?: () => void
   /** Token display settings */
   tokenDisplaySettings?: TokenDisplaySettings
+  /** Whether this message has LLM logs available */
+  hasLLMLogs?: boolean
+  /** Callback to view LLM logs */
+  onViewLLMLogs?: (messageId: string) => void
 
   // Callbacks
   onEditStart: (message: Message) => void
@@ -98,6 +102,8 @@ function MessageRowInner({
   isPaused = false,
   onTogglePause,
   tokenDisplaySettings,
+  hasLLMLogs,
+  onViewLLMLogs,
   onEditStart,
   onEditSave,
   onEditCancel,
@@ -453,6 +459,18 @@ function MessageRowInner({
                       </svg>
                     </button>
                   )}
+                  {/* View LLM Logs (assistant messages with logs) */}
+                  {hasLLMLogs && message.role === 'ASSISTANT' && onViewLLMLogs && (
+                    <button
+                      onClick={() => onViewLLMLogs(message.id)}
+                      className="qt-chat-message-action-icon"
+                      title="View LLM request/response logs"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                      </svg>
+                    </button>
+                  )}
                   {/* Resend (user messages only) */}
                   {message.role === 'USER' && showResendButton && (
                     <button
@@ -553,6 +571,17 @@ function MessageRowInner({
                 </svg>
               )}
             </button>
+            {hasLLMLogs && message.role === 'ASSISTANT' && onViewLLMLogs && (
+              <button
+                onClick={() => onViewLLMLogs(message.id)}
+                className="p-1 text-muted-foreground hover:text-foreground"
+                title="View LLM logs"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                </svg>
+              </button>
+            )}
           </div>
         )}
 
@@ -724,6 +753,9 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
     if (prev.message.promptTokens !== next.message.promptTokens) return false
     if (prev.message.completionTokens !== next.message.completionTokens) return false
   }
+
+  // LLM logs availability
+  if (prev.hasLLMLogs !== next.hasLLMLogs) return false
 
   // Props are equal, skip re-render
   return true

@@ -297,6 +297,11 @@ export class ChatSettingsRepository extends MongoBaseRepository<ChatSettings> {
             compressionTargetTokens: 800,
             systemPromptTargetTokens: 1500,
           },
+          llmLoggingSettings: {
+            enabled: true,
+            verboseMode: false,
+            retentionDays: 30,
+          },
           defaultRoleplayTemplateId,
           ...data,
         };

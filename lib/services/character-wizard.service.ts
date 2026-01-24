@@ -11,6 +11,7 @@ import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { logger } from '@/lib/logger';
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types';
 import type { FileAttachment } from '@/lib/llm/base';
@@ -219,7 +220,10 @@ export async function generateField(
   modelName: string,
   contextPrompt: string,
   fieldPrompt: string,
-  maxTokens: number = 500
+  maxTokens: number = 500,
+  userId?: string,
+  characterId?: string,
+  profileProvider?: string
 ): Promise<string> {
   logger.debug('[CharacterWizard] Generating field', {
     modelName,
@@ -227,21 +231,56 @@ export async function generateField(
     promptLength: fieldPrompt.length,
   });
 
+  const messages = [
+    { role: 'system' as const, content: contextPrompt },
+    { role: 'user' as const, content: fieldPrompt },
+  ];
+
+  const startTime = Date.now();
+
   const response = await provider.sendMessage(
     {
       model: modelName,
-      messages: [
-        { role: 'system', content: contextPrompt },
-        { role: 'user', content: fieldPrompt },
-      ],
+      messages,
       maxTokens,
       temperature: 0.8,
     },
     apiKey
   );
 
+  const durationMs = Date.now() - startTime;
+
   if (!response?.content) {
     throw new Error('No response from model');
+  }
+
+  // Log the wizard LLM call if userId is available (fire and forget)
+  if (userId && profileProvider) {
+    logLLMCall({
+      userId,
+      type: 'CHARACTER_WIZARD',
+      characterId: characterId || undefined,
+      provider: profileProvider,
+      modelName,
+      request: {
+        messages: [
+          { role: 'system', content: contextPrompt },
+          { role: 'user', content: fieldPrompt },
+        ],
+        temperature: 0.8,
+        maxTokens,
+      },
+      response: {
+        content: response.content,
+        error: undefined,
+      },
+      usage: response.usage,
+      durationMs,
+    }).catch(err => {
+      logger.warn('Failed to log character wizard LLM call', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
 
   return response.content.trim();
@@ -255,7 +294,9 @@ const MAX_VISION_IMAGE_SIZE = 5 * 1024 * 1024;
 export async function generateImageDescription(
   imageFile: FileEntry,
   visionProfile: ConnectionProfile,
-  apiKey: string
+  apiKey: string,
+  userId?: string,
+  characterId?: string
 ): Promise<string> {
   if (!imageFile.storageKey) {
     throw new Error('Image file has no storage key');
@@ -290,22 +331,28 @@ export async function generateImageDescription(
 
   const provider = await createLLMProvider(visionProfile.provider, visionProfile.baseUrl || undefined);
 
+  const messages = [
+    {
+      role: 'user' as const,
+      content:
+        'Please describe this image in great detail. Focus on the physical appearance of any person or character shown. Include: face shape, eye color/shape, hair color/style/length, skin tone, body type/build, clothing, pose, and any distinctive features. Be thorough and specific.',
+      attachments: [attachment],
+    },
+  ];
+
+  const startTime = Date.now();
+
   const response = await provider.sendMessage(
     {
       model: visionProfile.modelName,
-      messages: [
-        {
-          role: 'user',
-          content:
-            'Please describe this image in great detail. Focus on the physical appearance of any person or character shown. Include: face shape, eye color/shape, hair color/style/length, skin tone, body type/build, clothing, pose, and any distinctive features. Be thorough and specific.',
-          attachments: [attachment],
-        },
-      ],
+      messages,
       maxTokens: 1000,
       temperature: 0.7,
     },
     apiKey
   );
+
+  const durationMs = Date.now() - startTime;
 
   if (!response?.content) {
     throw new Error('No response from vision model');
@@ -314,6 +361,39 @@ export async function generateImageDescription(
   logger.debug('[CharacterWizard] Image description generated', {
     descriptionLength: response.content.length,
   });
+
+  // Log the vision LLM call if userId is available (fire and forget)
+  if (userId) {
+    logLLMCall({
+      userId,
+      type: 'CHARACTER_WIZARD',
+      characterId: characterId || undefined,
+      provider: visionProfile.provider,
+      modelName: visionProfile.modelName,
+      request: {
+        messages: [
+          {
+            role: 'user',
+            content:
+              'Please describe this image in great detail. Focus on the physical appearance of any person or character shown. Include: face shape, eye color/shape, hair color/style/length, skin tone, body type/build, clothing, pose, and any distinctive features. Be thorough and specific.',
+            attachments: [{ id: attachment.id }],
+          },
+        ],
+        temperature: 0.7,
+        maxTokens: 1000,
+      },
+      response: {
+        content: response.content,
+        error: undefined,
+      },
+      usage: response.usage,
+      durationMs,
+    }).catch(err => {
+      logger.warn('Failed to log character wizard image description LLM call', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
 
   return response.content.trim();
 }
@@ -325,7 +405,10 @@ export async function generatePhysicalDescriptions(
   provider: LLMProvider,
   apiKey: string,
   modelName: string,
-  contextPrompt: string
+  contextPrompt: string,
+  userId?: string,
+  characterId?: string,
+  profileProvider?: string
 ): Promise<GeneratedPhysicalDescription> {
   logger.debug('[CharacterWizard] Generating physical descriptions', { modelName });
 
@@ -335,7 +418,17 @@ export async function generatePhysicalDescriptions(
 
   for (const [level, prompt] of Object.entries(PHYSICAL_DESCRIPTION_PROMPTS)) {
     const maxTokens = level === 'full' ? 1500 : level === 'complete' ? 400 : 300;
-    const content = await generateField(provider, apiKey, modelName, contextPrompt, prompt, maxTokens);
+    const content = await generateField(
+      provider,
+      apiKey,
+      modelName,
+      contextPrompt,
+      prompt,
+      maxTokens,
+      userId,
+      characterId,
+      profileProvider
+    );
 
     switch (level) {
       case 'short':
@@ -435,7 +528,13 @@ export async function runCharacterWizard(
       visionProfile = secondaryProfile;
     }
 
-    imageDescription = await generateImageDescription(imageFile, visionProfile, visionApiKey);
+    imageDescription = await generateImageDescription(
+      imageFile,
+      visionProfile,
+      visionApiKey,
+      userId,
+      request.characterId
+    );
   }
 
   // Build context prompt
@@ -457,7 +556,10 @@ export async function runCharacterWizard(
           primaryProvider,
           primaryApiKey,
           primaryProfile.modelName,
-          contextPrompt
+          contextPrompt,
+          userId,
+          request.characterId,
+          primaryProfile.provider
         );
       } else {
         const fieldPrompt = FIELD_PROMPTS[field];
@@ -468,7 +570,10 @@ export async function runCharacterWizard(
           primaryProfile.modelName,
           contextPrompt,
           fieldPrompt,
-          maxTokens
+          maxTokens,
+          userId,
+          request.characterId,
+          primaryProfile.provider
         );
       }
 

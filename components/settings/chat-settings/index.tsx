@@ -7,6 +7,7 @@ import { ImageDescriptionSettings } from './ImageDescriptionSettings'
 import { MemoryCascadeSettings } from './MemoryCascadeSettings'
 import { TokenDisplaySettingsComponent } from './TokenDisplaySettings'
 import { ContextCompressionSettingsComponent } from './ContextCompressionSettings'
+import { LLMLoggingSettingsComponent } from './LLMLoggingSettings'
 
 /**
  * ChatSettingsTab Component
@@ -15,8 +16,9 @@ import { ContextCompressionSettingsComponent } from './ContextCompressionSetting
  * - Cheap LLM configuration
  * - Image description profiles
  * - Memory cascade behavior
- * - Token display preferences
+ * - LLM logging preferences
  * - Context compression settings
+ * - Token display preferences
  */
 export default function ChatSettingsTab() {
   const {
@@ -35,6 +37,7 @@ export default function ChatSettingsTab() {
     handleMemoryCascadeUpdate,
     handleTokenDisplayChange,
     handleContextCompressionUpdate,
+    handleLLMLoggingChange,
   } = useChatSettings()
 
   if (loading) {
@@ -102,6 +105,14 @@ export default function ChatSettingsTab() {
         saving={saving}
         onUpdate={handleContextCompressionUpdate}
       />
+
+      <div className="border-t border-border pt-6">
+        <LLMLoggingSettingsComponent
+          settings={settings}
+          saving={saving}
+          onLLMLoggingChange={handleLLMLoggingChange}
+        />
+      </div>
 
       <div className="border-t border-border pt-6">
         <TokenDisplaySettingsComponent

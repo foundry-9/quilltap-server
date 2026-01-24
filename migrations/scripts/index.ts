@@ -48,6 +48,8 @@ import { fixOrphanPersonaParticipantsMigration } from './fix-orphan-persona-part
 import { fixMissingStorageKeysMigration } from './fix-missing-storage-keys';
 // Cleanup orphan file records
 import { cleanupOrphanFileRecordsMigration } from './cleanup-orphan-file-records';
+// LLM logs collection
+import { addLLMLogsCollectionMigration } from './add-llm-logs-collection';
 
 /**
  * All available migrations.
@@ -93,6 +95,8 @@ export const migrations: Migration[] = [
   fixMissingStorageKeysMigration,
   // Cleanup orphan file records
   cleanupOrphanFileRecordsMigration,
+  // LLM logs collection
+  addLLMLogsCollectionMigration,
 ];
 
 export {
@@ -135,4 +139,6 @@ export {
   fixMissingStorageKeysMigration,
   // Cleanup orphan file records
   cleanupOrphanFileRecordsMigration,
+  // LLM logs collection
+  addLLMLogsCollectionMigration,
 };

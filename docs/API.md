@@ -26,6 +26,7 @@ Complete API reference for Quilltap v2.7.
   - [Folders](#folders)
   - [Templates](#templates)
   - [System & Backup](#system--backup)
+  - [LLM Logs](#llm-logs)
   - [Themes](#themes)
   - [Search](#search)
   - [Plugins](#plugins)
@@ -1560,6 +1561,97 @@ List generated reports.
 #### `GET /api/tools/capabilities-report/[id]`
 
 Download a report.
+
+---
+
+### LLM Logs
+
+#### `GET /api/v1/llm-logs`
+
+List LLM logs with filters.
+
+**Query Parameters**:
+- `messageId` - Filter by message ID
+- `chatId` - Filter by chat ID
+- `characterId` - Filter by character ID
+- `type` - Filter by log type (CHAT_MESSAGE, TOOL_CONTINUATION, MEMORY_EXTRACTION, CHARACTER_WIZARD, etc.)
+- `standalone` - Set to 'true' for logs without entity associations
+- `limit` - Max results (default 50, max 100)
+- `offset` - Pagination offset
+
+**Response**: `200 OK`
+
+```json
+{
+  "logs": [
+    {
+      "id": "log-uuid",
+      "type": "CHAT_MESSAGE",
+      "messageId": "msg-uuid",
+      "chatId": "chat-uuid",
+      "characterId": "char-uuid",
+      "request": {
+        "model": "gpt-4",
+        "messages": [...],
+        "temperature": 0.8
+      },
+      "response": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": "Response text"
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 50,
+          "total_tokens": 150
+        }
+      },
+      "timestamp": "2026-01-23T10:00:00.000Z",
+      "durationMs": 1500
+    }
+  ],
+  "count": 1,
+  "total": 50,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+#### `GET /api/v1/llm-logs/[id]`
+
+Get a single log entry by ID.
+
+**Response**: `200 OK`
+
+```json
+{
+  "id": "log-uuid",
+  "type": "CHAT_MESSAGE",
+  "messageId": "msg-uuid",
+  "chatId": "chat-uuid",
+  "characterId": "char-uuid",
+  "request": {...},
+  "response": {...},
+  "timestamp": "2026-01-23T10:00:00.000Z",
+  "durationMs": 1500
+}
+```
+
+#### `DELETE /api/v1/llm-logs/[id]`
+
+Delete a log entry by ID.
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Log deleted"
+}
+```
 
 ---
 

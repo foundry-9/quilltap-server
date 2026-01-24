@@ -22,6 +22,7 @@ export const BackgroundJobTypeEnum = z.enum([
   'INTER_CHARACTER_MEMORY',
   'CONTEXT_SUMMARY',
   'TITLE_UPDATE',
+  'LLM_LOG_CLEANUP',
 ]);
 export type BackgroundJobType = z.infer<typeof BackgroundJobTypeEnum>;
 

@@ -35,6 +35,7 @@ import type {
   RoleplayTemplate,
   ProviderModel,
   Project,
+  LLMLog,
 } from '@/lib/schemas/types';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
@@ -101,6 +102,8 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
   const providerModels = readJsonOptional<ProviderModel[]>('data/provider-models.json', []);
   // Projects are optional for backwards compatibility with older backups
   const projects = readJsonOptional<Project[]>('data/projects.json', []);
+  // LLM logs are optional for backwards compatibility with older backups
+  const llmLogs = readJsonOptional<LLMLog[]>('data/llm-logs.json', []);
 
   moduleLogger.info('Parsed backup ZIP', {
     version: manifest.version,
@@ -122,6 +125,7 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
     roleplayTemplates,
     providerModels,
     projects,
+    llmLogs,
   };
 }
 
@@ -182,6 +186,7 @@ export function previewRestore(zipBuffer: Buffer): RestoreSummary {
     },
     providerModels: data.providerModels.length,
     projects: data.projects.length,
+    llmLogs: data.llmLogs.length,
     warnings: [],
   };
 }
@@ -197,7 +202,7 @@ async function deleteUserData(userId: string): Promise<void> {
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -209,6 +214,7 @@ async function deleteUserData(userId: string): Promise<void> {
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
       repos.projects.findAll(),
+      repos.llmLogs.findAll(10000), // High limit to get all user logs
     ]);
 
   // Delete memories for each character first
@@ -219,7 +225,7 @@ async function deleteUserData(userId: string): Promise<void> {
     }
   }
 
-  // Delete all entities (including user-created templates and projects)
+  // Delete all entities (including user-created templates, projects, and LLM logs)
   await Promise.all([
     ...characters.map((c) => repos.characters.delete(c.id)),
     ...chats.map((c) => repos.chats.delete(c.id)),
@@ -230,6 +236,7 @@ async function deleteUserData(userId: string): Promise<void> {
     ...promptTemplates.map((pt) => globalRepos.promptTemplates.delete(pt.id)),
     ...roleplayTemplates.map((rt) => globalRepos.roleplayTemplates.delete(rt.id)),
     ...projects.map((p) => repos.projects.delete(p.id)),
+    ...llmLogs.map((log) => repos.llmLogs.delete(log.id)),
   ]);
 
   // Delete files from storage
@@ -260,6 +267,7 @@ async function deleteUserData(userId: string): Promise<void> {
       promptTemplates: promptTemplates.length,
       roleplayTemplates: roleplayTemplates.length,
       projects: projects.length,
+      llmLogs: llmLogs.length,
     },
   });
 }
@@ -643,6 +651,12 @@ function remapBackupData(
     userId: targetUserId,
   })) as Project[];
 
+  // Remap LLM logs
+  const remappedLLMLogs = data.llmLogs.map((log) => ({
+    ...remapper.remapFields(log, ['id', 'messageId', 'chatId', 'characterId']),
+    userId: targetUserId,
+  })) as LLMLog[];
+
   return {
     manifest: data.manifest,
     characters: remappedCharacters,
@@ -657,6 +671,7 @@ function remapBackupData(
     roleplayTemplates: remappedRoleplayTemplates,
     providerModels: remappedProviderModels,
     projects: remappedProjects,
+    llmLogs: remappedLLMLogs,
   };
 }
 
@@ -943,6 +958,20 @@ export async function restore(
     }
   }
 
+  // 14. LLM Logs
+  moduleLogger.debug('Restoring LLM logs', { count: data.llmLogs.length });
+  let llmLogsRestored = 0;
+  for (const log of data.llmLogs) {
+    try {
+      const { id, createdAt, ...logData } = log;
+      await repos.llmLogs.create(logData, { id, createdAt });
+      llmLogsRestored++;
+    } catch (error) {
+      warnings.push(`Failed to restore LLM log: ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore LLM log', { logId: log.id, error });
+    }
+  }
+
   // ============================================================================
   // POST-RESTORE RECONCILIATION PHASE
   // ============================================================================
@@ -1164,6 +1193,7 @@ export async function restore(
     },
     providerModels: providerModelsRestored,
     projects: projectsRestored,
+    llmLogs: llmLogsRestored,
     warnings,
   };
 

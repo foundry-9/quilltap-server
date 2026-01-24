@@ -455,6 +455,9 @@ async function processMessage(
   let rawResponse: unknown = null
   let thoughtSignature: string | undefined
 
+  // Pre-generate assistant message ID so logs can reference it
+  const preGeneratedAssistantMessageId = crypto.randomUUID()
+
   try {
     for await (const chunk of streamMessage({
       messages: formattedMessages,
@@ -463,6 +466,9 @@ async function processMessage(
       modelParams,
       tools: actualTools,
       useNativeWebSearch,
+      userId,
+      messageId: preGeneratedAssistantMessageId,
+      chatId,
     })) {
       if (chunk.content) {
         fullResponse += chunk.content
@@ -585,6 +591,9 @@ async function processMessage(
       modelParams,
       tools: actualTools,
       useNativeWebSearch,
+      userId,
+      messageId: preGeneratedAssistantMessageId,
+      chatId,
     })) {
       if (chunk.content) {
         currentResponse += chunk.content
@@ -658,6 +667,9 @@ async function processMessage(
         modelParams,
         tools: actualTools,
         useNativeWebSearch,
+        userId,
+        messageId: preGeneratedAssistantMessageId,
+        chatId,
       })) {
         if (chunk.content) {
           continuationResponse += chunk.content
@@ -720,6 +732,9 @@ async function processMessage(
         modelParams,
         tools: [],
         useNativeWebSearch: useNativeWebSearch && !usePseudoTools,
+        userId,
+        messageId: preGeneratedAssistantMessageId,
+        chatId,
       })) {
         if (chunk.content) {
           continuationResponse += chunk.content
@@ -759,7 +774,8 @@ async function processMessage(
       rawResponse,
       thoughtSignature,
       generatedImagePaths,
-      toolMessages
+      toolMessages,
+      preGeneratedAssistantMessageId
     )
 
     // Track token usage for profile and chat aggregates
@@ -985,9 +1001,10 @@ async function saveAssistantMessage(
   rawResponse: unknown,
   thoughtSignature: string | undefined,
   generatedImagePaths: GeneratedImage[],
-  toolMessages: ToolMessage[]
+  toolMessages: ToolMessage[],
+  preGeneratedMessageId?: string
 ): Promise<string> {
-  const assistantMessageId = crypto.randomUUID()
+  const assistantMessageId = preGeneratedMessageId || crypto.randomUUID()
   const assistantAttachments = generatedImagePaths.map(img => img.id)
 
   const assistantMessage = {

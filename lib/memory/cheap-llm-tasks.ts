@@ -14,6 +14,8 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { getErrorMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
+import { logLLMCall } from '@/lib/services/llm-logging.service'
+import type { LLMLogType } from '@/lib/schemas/llm-log.types'
 
 /**
  * Candidate memory extracted from a conversation
@@ -71,6 +73,28 @@ export interface CheapLLMTaskResult<T> {
 const profilesWithoutCustomTemp = new Set<string>()
 
 /**
+ * Maps a cheap LLM task type to an LLM log type for logging
+ */
+function mapTaskTypeToLogType(taskType?: string): LLMLogType {
+  const mapping: Record<string, LLMLogType> = {
+    'memory-extraction-user': 'MEMORY_EXTRACTION',
+    'memory-extraction-character': 'MEMORY_EXTRACTION',
+    'memory-extraction-inter-character': 'MEMORY_EXTRACTION',
+    'title-chat': 'TITLE_GENERATION',
+    'title-from-summary': 'TITLE_GENERATION',
+    'consider-title-update': 'TITLE_GENERATION',
+    'compress-conversation-history': 'CONTEXT_COMPRESSION',
+    'compress-system-prompt': 'CONTEXT_COMPRESSION',
+    'summarize-chat': 'SUMMARIZATION',
+    'update-context-summary': 'SUMMARIZATION',
+    'craft-image-prompt': 'IMAGE_PROMPT_CRAFTING',
+    'describe-attachment': 'IMAGE_DESCRIPTION',
+    'batch-memory-extraction': 'MEMORY_EXTRACTION',
+  }
+  return mapping[taskType || ''] || 'SUMMARIZATION'
+}
+
+/**
  * Gets the decrypted API key for a cheap LLM selection
  */
 async function getApiKeyForSelection(
@@ -108,7 +132,9 @@ async function executeCheapLLMTask<T>(
   messages: LLMMessage[],
   userId: string,
   parseResponse: (content: string) => T,
-  taskType?: string
+  taskType?: string,
+  chatId?: string,
+  messageId?: string
 ): Promise<CheapLLMTaskResult<T>> {
   try {
     const apiKey = await getApiKeyForSelection(selection, userId)
@@ -165,6 +191,28 @@ async function executeCheapLLMTask<T>(
 
       const result = parseResponse(response.content)
 
+      // Log the cheap LLM call (fire and forget)
+      logLLMCall({
+        userId,
+        type: mapTaskTypeToLogType(taskType),
+        chatId,
+        messageId,
+        provider: selection.provider,
+        modelName: selection.modelName,
+        request: {
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          maxTokens: 1000,
+        },
+        response: {
+          content: response.content,
+        },
+        usage: response.usage,
+      }).catch(err => {
+        logger.warn('Failed to log cheap LLM call', {
+          error: err instanceof Error ? err.message : String(err)
+        })
+      })
+
       return {
         success: true,
         result,
@@ -196,6 +244,29 @@ async function executeCheapLLMTask<T>(
       })
 
       const result = parseResponse(response.content)
+
+      // Log the cheap LLM call (fire and forget)
+      logLLMCall({
+        userId,
+        type: mapTaskTypeToLogType(taskType),
+        chatId,
+        messageId,
+        provider: selection.provider,
+        modelName: selection.modelName,
+        request: {
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          temperature: 0.3,
+          maxTokens: 1000,
+        },
+        response: {
+          content: response.content,
+        },
+        usage: response.usage,
+      }).catch(err => {
+        logger.warn('Failed to log cheap LLM call', {
+          error: err instanceof Error ? err.message : String(err)
+        })
+      })
 
       return {
         success: true,
@@ -236,6 +307,28 @@ async function executeCheapLLMTask<T>(
         })
 
         const result = parseResponse(response.content)
+
+        // Log the cheap LLM call (fire and forget)
+        logLLMCall({
+          userId,
+          type: mapTaskTypeToLogType(taskType),
+          chatId,
+          messageId,
+          provider: selection.provider,
+          modelName: selection.modelName,
+          request: {
+            messages: messages.map(m => ({ role: m.role, content: m.content })),
+            maxTokens: 1000,
+          },
+          response: {
+            content: response.content,
+          },
+          usage: response.usage,
+        }).catch(err => {
+          logger.warn('Failed to log cheap LLM call', {
+            error: err instanceof Error ? err.message : String(err)
+          })
+        })
 
         return {
           success: true,

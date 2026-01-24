@@ -9,6 +9,7 @@ import { handleMemoryExtraction } from './memory-extraction';
 import { handleInterCharacterMemory } from './inter-character-memory';
 import { handleContextSummary } from './context-summary';
 import { handleTitleUpdate } from './title-update';
+import { handleLLMLogCleanup } from './llm-log-cleanup';
 
 /**
  * Job handler function type
@@ -23,6 +24,7 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   INTER_CHARACTER_MEMORY: handleInterCharacterMemory,
   CONTEXT_SUMMARY: handleContextSummary,
   TITLE_UPDATE: handleTitleUpdate,
+  LLM_LOG_CLEANUP: handleLLMLogCleanup,
 };
 
 /**
@@ -41,3 +43,4 @@ export { handleMemoryExtraction };
 export { handleInterCharacterMemory };
 export { handleContextSummary };
 export { handleTitleUpdate };
+export { handleLLMLogCleanup };

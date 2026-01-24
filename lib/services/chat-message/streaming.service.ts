@@ -9,6 +9,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
 import { buildToolsForProvider, checkModelSupportsTools } from '@/lib/tools'
 import { getRepositories } from '@/lib/repositories/factory'
+import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
@@ -32,6 +33,9 @@ export interface StreamOptions {
   modelParams: Record<string, unknown>
   tools: unknown[]
   useNativeWebSearch: boolean
+  userId?: string
+  messageId?: string
+  chatId?: string
 }
 
 /**
@@ -167,7 +171,7 @@ export async function* streamMessage(
   rawResponse?: unknown
   thoughtSignature?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -218,8 +222,11 @@ export async function* streamMessage(
     tools: tools.length > 0 ? JSON.stringify(tools) : undefined,
   })
 
+  // Track timing and accumulated content
+  const startTime = Date.now()
   let chunkCount = 0
   let totalContentLength = 0
+  let accumulatedContent = ''
   let lastUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined
   let lastCacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | undefined
 
@@ -239,6 +246,7 @@ export async function* streamMessage(
     chunkCount++
     if (chunk.content) {
       totalContentLength += chunk.content.length
+      accumulatedContent += chunk.content
     }
     if (chunk.usage) {
       lastUsage = chunk.usage
@@ -257,6 +265,50 @@ export async function* streamMessage(
         cacheUsage: lastCacheUsage ? JSON.stringify(lastCacheUsage) : undefined,
         hasThoughtSignature: !!chunk.thoughtSignature,
       })
+
+      // Log the LLM call if userId is provided
+      if (userId) {
+        const durationMs = Date.now() - startTime
+        logger.debug('Logging LLM call from streaming service', {
+          userId,
+          messageId,
+          chatId,
+          provider: connectionProfile.provider,
+          model: connectionProfile.modelName,
+          durationMs,
+          contentLength: accumulatedContent.length,
+        })
+
+        logLLMCall({
+          userId,
+          type: 'CHAT_MESSAGE',
+          messageId,
+          chatId,
+          provider: connectionProfile.provider,
+          modelName: connectionProfile.modelName,
+          request: {
+            messages: llmMessages.map(m => ({
+              role: m.role,
+              content: m.content,
+              attachments: m.attachments,
+            })),
+            temperature: modelParams.temperature as number | undefined,
+            maxTokens: modelParams.maxTokens as number | undefined,
+            tools: tools.length > 0 ? tools : undefined,
+          },
+          response: {
+            content: accumulatedContent,
+          },
+          usage: lastUsage,
+          cacheUsage: lastCacheUsage,
+          durationMs,
+        }).catch(err => {
+          logger.warn('Failed to log LLM call from streaming service', {
+            userId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        })
+      }
     }
     yield chunk
   }

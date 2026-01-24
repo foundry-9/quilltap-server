@@ -4,6 +4,24 @@
 
 ### 2.8-dev
 
+- feat: LLM request/response logging system (2026-01-23)
+  - Store all LLM API calls in MongoDB for debugging and monitoring
+  - View logs per message via button in chat message action bar
+  - Configure logging settings (enabled, verbose mode, retention days) in Chat Settings
+  - View recent logs on Tools page
+  - View character wizard logs on character edit page
+  - Automatic cleanup of old logs based on retention settings
+  - Logs included in backup/restore operations
+  - Added LLM_LOG_CLEANUP background job type for scheduled log deletion
+  - Use `enqueueLLMLogCleanup()` to trigger manual cleanup or `scheduleCleanup()` for automatic daily runs
+  - Respects user retention preferences - only deletes logs older than configured days
+- fix: LLM logs now correctly linked to assistant messages (2026-01-23)
+  - Pre-generate assistant message ID before streaming starts
+  - Logs are now associated with the correct message ID in the database
+  - Fixes issue where "View LLM Logs" button wasn't appearing on messages
+- change: LLM logs now always store full content (2026-01-23)
+  - Request messages and response content are no longer truncated
+  - Full content stored for complete debugging regardless of verbose mode setting
 - Started 2.8 dev cycle
 
 ### 2.7.0
@@ -1476,4 +1494,3 @@
   - Useful for enabling admin/debug features on self-hosted instances
   - Added 10 unit tests covering all detection scenarios
 - Started 2.7-dev
-

@@ -58,6 +58,10 @@ function estimateTokensForJob(job: BackgroundJob): number {
     case 'TITLE_UPDATE': {
       return baseTokens + 300;
     }
+    case 'LLM_LOG_CLEANUP': {
+      // No LLM tokens needed for cleanup
+      return 0;
+    }
     default:
       return baseTokens;
   }
@@ -69,6 +73,7 @@ function getJobTypeName(type: string): string {
     INTER_CHARACTER_MEMORY: 'Character Memory',
     CONTEXT_SUMMARY: 'Context Summary',
     TITLE_UPDATE: 'Title Update',
+    LLM_LOG_CLEANUP: 'LLM Log Cleanup',
   };
   return typeNames[type] || type;
 }

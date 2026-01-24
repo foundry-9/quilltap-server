@@ -40,11 +40,8 @@ interface StartupStateData {
 
 // Extend globalThis type for our startup state
 declare global {
-  // eslint-disable-next-line no-var
   var __quilltapStartupState: StartupStateData | undefined;
-  // eslint-disable-next-line no-var
   var __quilltapStartupReadyPromise: Promise<void> | undefined;
-  // eslint-disable-next-line no-var
   var __quilltapStartupReadyResolve: (() => void) | undefined;
 }
 

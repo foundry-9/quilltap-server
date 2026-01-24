@@ -7,6 +7,7 @@ import { ImportExportCard } from '@/components/tools/import-export-card'
 import { DeleteDataCard } from '@/components/tools/delete-data-card'
 import { CapabilitiesReportCard } from '@/components/tools/capabilities-report-card'
 import { TasksQueueCard } from '@/components/tools/tasks-queue-card'
+import LLMLogsCard from '@/components/tools/llm-logs-card'
 import { BrandName } from '@/components/ui/brand-name'
 
 export default function ToolsPage() {
@@ -25,6 +26,7 @@ export default function ToolsPage() {
         <ImportExportCard />
         <CapabilitiesReportCard />
         <TasksQueueCard />
+        <LLMLogsCard />
         <DeleteDataCard />
       </div>
 

@@ -9,7 +9,9 @@ import { NextRequest } from 'next/server'
 import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware'
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
-import { TagStyleMapSchema, ThemePreferenceSchema, TokenDisplaySettingsSchema, type AvatarDisplayMode } from '@/lib/schemas/types'
+import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
+import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema } from '@/lib/schemas/settings.types'
+import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/errors'
 
 /**
@@ -27,7 +29,8 @@ async function updateChatSettings(
   defaultRoleplayTemplateId?: string | null,
   sidebarWidth?: number,
   tokenDisplaySettings?: unknown,
-  memoryCascadePreferences?: unknown
+  memoryCascadePreferences?: unknown,
+  llmLoggingSettings?: unknown
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -111,6 +114,10 @@ async function updateChatSettings(
     }
     updateData.memoryCascadePreferences = memoryCascadePreferences
   }
+  if (typeof llmLoggingSettings !== 'undefined') {
+    const validatedLLMLoggingSettings = LLMLoggingSettingsSchema.parse(llmLoggingSettings)
+    updateData.llmLoggingSettings = validatedLLMLoggingSettings
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -155,17 +162,18 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
   try {
     const body = await req.json()
-    const { 
-      avatarDisplayMode, 
-      avatarDisplayStyle, 
-      tagStyles, 
-      cheapLLMSettings, 
-      imageDescriptionProfileId, 
-      themePreference, 
-      defaultRoleplayTemplateId, 
-      sidebarWidth, 
+    const {
+      avatarDisplayMode,
+      avatarDisplayStyle,
+      tagStyles,
+      cheapLLMSettings,
+      imageDescriptionProfileId,
+      themePreference,
+      defaultRoleplayTemplateId,
+      sidebarWidth,
       tokenDisplaySettings,
-      memoryCascadePreferences
+      memoryCascadePreferences,
+      llmLoggingSettings
     } = body
 
     logger.debug('[Settings v1] PUT chat settings', { 
@@ -185,7 +193,8 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       defaultRoleplayTemplateId,
       sidebarWidth,
       tokenDisplaySettings,
-      memoryCascadePreferences
+      memoryCascadePreferences,
+      llmLoggingSettings
     )
 
     return successResponse(chatSettings)

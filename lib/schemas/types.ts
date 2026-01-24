@@ -305,3 +305,26 @@ export type {
   ModelType,
   ProviderModel,
 } from './model.types';
+
+// ============================================================================
+// LLM LOG TYPES
+// ============================================================================
+export {
+  LLMLogTypeEnum,
+  LLMLogMessageSummarySchema,
+  LLMLogRequestSummarySchema,
+  LLMLogResponseSummarySchema,
+  LLMLogTokenUsageSchema,
+  LLMLogCacheUsageSchema,
+  LLMLogSchema,
+} from './llm-log.types';
+
+export type {
+  LLMLogType,
+  LLMLogMessageSummary,
+  LLMLogRequestSummary,
+  LLMLogResponseSummary,
+  LLMLogTokenUsage,
+  LLMLogCacheUsage,
+  LLMLog,
+} from './llm-log.types';

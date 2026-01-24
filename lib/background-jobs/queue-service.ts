@@ -74,6 +74,15 @@ export interface TitleUpdatePayload {
 }
 
 /**
+ * Payload for LLM log cleanup job
+ */
+export interface LLMLogCleanupPayload {
+  userId: string;
+  /** Optional: override the retention days from settings (for manual cleanup) */
+  retentionDays?: number;
+}
+
+/**
  * Message pair for batch memory extraction
  */
 export interface MessagePair {
@@ -161,6 +170,17 @@ export async function enqueueTitleUpdate(
   options?: EnqueueJobOptions
 ): Promise<string> {
   return enqueueJob(userId, 'TITLE_UPDATE', payload as unknown as Record<string, unknown>, options);
+}
+
+/**
+ * Enqueue an LLM log cleanup job
+ */
+export async function enqueueLLMLogCleanup(
+  userId: string,
+  payload: LLMLogCleanupPayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  return enqueueJob(userId, 'LLM_LOG_CLEANUP', payload as unknown as Record<string, unknown>, options);
 }
 
 /**

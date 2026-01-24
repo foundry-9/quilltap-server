@@ -8,6 +8,7 @@ import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor'
 import { AIWizardModal, type GeneratedCharacterData } from '@/components/characters/ai-wizard'
+import LLMLogsSection from '@/components/characters/LLMLogsSection'
 import { useCharacterEdit } from './hooks'
 import { CharacterBasicInfo } from './components'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
@@ -276,6 +277,9 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           </button>
         </div>
       </form>
+
+      {/* LLM Logs Section */}
+      <LLMLogsSection characterId={id} />
 
       {/* Avatar Selector Modal */}
       <AvatarSelector

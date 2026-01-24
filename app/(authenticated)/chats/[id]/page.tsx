@@ -17,6 +17,7 @@ import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog
 import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
+import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
 import FileWriteApprovalModal from '@/components/chat/FileWriteApprovalModal'
 import FileWritePermissionPrompt from '@/components/chat/FileWritePermissionPrompt'
 import FileConflictDialog from '@/components/chat/FileConflictDialog'
@@ -62,7 +63,7 @@ import {
   shouldPauseForAllLLM,
   getNextPauseThreshold,
 } from '@/lib/chat/turn-manager'
-import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
+import type { ChatParticipantBase, Character, LLMLog } from '@/lib/schemas/types'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
 // Import extracted hooks
@@ -165,6 +166,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       defaultConnectionProfileId?: string | null
     } | null
   } | null>(null)
+
+  // LLM log viewer state
+  const [llmLogViewerOpen, setLLMLogViewerOpen] = useState(false)
+  const [llmLogsForViewer, setLLMLogsForViewer] = useState<LLMLog[]>([])
+  const [selectedMessageIdForLogs, setSelectedMessageIdForLogs] = useState<string | null>(null)
+  // Track which messages have logs (for showing the button)
+  const [messagesWithLogs, setMessagesWithLogs] = useState<Set<string>>(new Set())
 
   // Use the extracted file attachments hook
   const fileHook = useFileAttachments(id, chat?.projectId)
@@ -1282,6 +1290,58 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     await handleStartImpersonation(participantId)
   }, [handleStartImpersonation])
 
+  // Check which messages have LLM logs
+  const checkMessagesForLogs = useCallback(async () => {
+    if (!id || !messages.length) return
+
+    // Get assistant message IDs
+    const assistantMessageIds = messages
+      .filter(m => m.role === 'ASSISTANT')
+      .map(m => m.id)
+
+    if (assistantMessageIds.length === 0) return
+
+    try {
+      // Batch check - get all logs for this chat and extract message IDs
+      const res = await fetch(`/api/v1/llm-logs?chatId=${id}&limit=1000`)
+      if (res.ok) {
+        const data = await res.json()
+        const messageIdsWithLogs = new Set<string>(
+          data.logs
+            .filter((log: LLMLog) => log.messageId)
+            .map((log: LLMLog) => log.messageId!)
+        )
+        setMessagesWithLogs(messageIdsWithLogs)
+      }
+    } catch (error) {
+      // Silent fail - logging is not critical
+    }
+  }, [id, messages])
+
+  // Call on mount and when messages change
+  useEffect(() => {
+    checkMessagesForLogs()
+  }, [checkMessagesForLogs])
+
+  // Handle viewing LLM logs
+  const handleViewLLMLogs = useCallback(async (messageId: string) => {
+    try {
+      const res = await fetch(`/api/v1/llm-logs?messageId=${messageId}`)
+      if (!res.ok) throw new Error('Failed to fetch logs')
+
+      const data = await res.json()
+      if (data.logs && data.logs.length > 0) {
+        setLLMLogsForViewer(data.logs)
+        setSelectedMessageIdForLogs(messageId)
+        setLLMLogViewerOpen(true)
+      }
+    } catch (error) {
+      console.error('Failed to fetch LLM logs:', error)
+      // Optionally show a toast
+      showErrorToast('Failed to load LLM logs')
+    }
+  }, [])
+
   // Handle memories
   const handleDeleteChatMemories = useCallback(async () => {
     if (chatMemoryCount === 0) {
@@ -1930,6 +1990,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       onHandleRemoveCharacter={handleRemoveCharacter}
                       onHandleContinue={turnManagement.handleContinue}
                       onReattribute={handleReattribute}
+                      hasLLMLogs={messagesWithLogs.has(message.id)}
+                      onViewLLMLogs={handleViewLLMLogs}
                     />
                   </div>
                 )
@@ -2319,6 +2381,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             onConfirm={messageActions.handleMemoryCascadeConfirm}
           />
         )}
+
+        {/* LLM Log Viewer Modal */}
+        <LLMLogViewerModal
+          isOpen={llmLogViewerOpen}
+          onClose={() => {
+            setLLMLogViewerOpen(false)
+            setLLMLogsForViewer([])
+            setSelectedMessageIdForLogs(null)
+          }}
+          logs={llmLogsForViewer}
+          messageId={selectedMessageIdForLogs ?? undefined}
+        />
       </div>
 
       {shouldShowParticipantSidebar && (
