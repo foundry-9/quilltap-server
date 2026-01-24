@@ -3,10 +3,12 @@
  *
  * Provides chat completion functionality using OpenRouter's API
  * Supports 100+ models including GPT-4, Claude, Gemini, Llama and more
+ *
+ * Updated to use SDK v0.4.0 with callModel() and getTextStream() for improved streaming
  */
 
-import { OpenRouter } from '@openrouter/sdk';
-import type { ChatGenerationParams, ChatStreamingResponseChunkData } from '@openrouter/sdk/models';
+import { OpenRouter, fromChatMessages } from '@openrouter/sdk';
+import type { ChatGenerationParams, Message, OpenResponsesNonStreamingResponse } from '@openrouter/sdk/models';
 import type {
   LLMProvider,
   LLMParams,
@@ -217,7 +219,7 @@ export class OpenRouterProvider implements LLMProvider {
     params: LLMParams,
     apiKey: string
   ): AsyncGenerator<StreamChunk> {
-    logger.debug('OpenRouter streamMessage called', {
+    logger.debug('OpenRouter streamMessage called (SDK v0.4.0 callModel API)', {
       context: 'OpenRouterProvider.streamMessage',
       model: params.model,
     });
@@ -230,42 +232,49 @@ export class OpenRouterProvider implements LLMProvider {
       xTitle: 'Quilltap',
     });
 
-    // Strip attachments from messages and convert to OpenRouter format
-    // Filter out 'tool' role messages as they require special handling
-    const messages = params.messages
+    // Convert messages to SDK format, filtering out 'tool' role messages
+    const messages: Message[] = params.messages
       .filter(m => m.role !== 'tool')
       .map((m) => ({
         role: m.role as 'system' | 'user' | 'assistant',
         content: m.content,
       }));
 
-    const requestParams: ChatGenerationParams & { stream: true } = {
+    // Convert chat messages to OpenResponses input format for callModel()
+    const input = fromChatMessages(messages);
+
+    // Build the request for callModel()
+    const requestParams: any = {
       model: params.model,
-      messages: messages as any,
+      input,
       temperature: params.temperature ?? 0.7,
-      maxTokens: params.maxTokens ?? 4096,
+      maxOutputTokens: params.maxTokens ?? 4096,
       topP: params.topP ?? 1,
-      stream: true,
-      streamOptions: { includeUsage: true },
     };
 
-    // Add tools if provided
+    // Add tools if provided (without execute functions - we handle tool execution ourselves)
     if (params.tools && params.tools.length > 0) {
       logger.debug('Adding tools to stream request', {
         context: 'OpenRouterProvider.streamMessage',
         toolCount: params.tools.length,
       });
-      (requestParams as any).tools = params.tools;
-      // Explicitly enable tool use with "auto" - let the model decide when to use tools
+      // Convert to OpenResponses tool format
+      requestParams.tools = params.tools.map((tool: any) => ({
+        type: 'function',
+        name: tool.function?.name || tool.name,
+        description: tool.function?.description || tool.description,
+        parameters: tool.function?.parameters || tool.parameters,
+      }));
       requestParams.toolChoice = 'auto';
     }
 
-    // Add web search plugin if enabled
+    // Add web search tool if enabled
     if (params.webSearchEnabled) {
-      logger.debug('Enabling web search plugin for streaming', {
+      logger.debug('Enabling web search tool for streaming', {
         context: 'OpenRouterProvider.streamMessage',
       });
-      (requestParams as any).plugins = [{ id: 'web', maxResults: 5 }];
+      requestParams.tools = requestParams.tools || [];
+      requestParams.tools.push({ type: 'web_search_preview' });
     }
 
     // Add structured output format if specified
@@ -275,16 +284,18 @@ export class OpenRouterProvider implements LLMProvider {
           context: 'OpenRouterProvider.streamMessage',
           schemaName: params.responseFormat.jsonSchema.name,
         });
-        (requestParams as any).responseFormat = {
-          type: 'json_schema',
-          jsonSchema: {
-            name: params.responseFormat.jsonSchema.name,
-            strict: params.responseFormat.jsonSchema.strict ?? true,
-            schema: params.responseFormat.jsonSchema.schema,
+        requestParams.text = {
+          format: {
+            type: 'json_schema',
+            jsonSchema: {
+              name: params.responseFormat.jsonSchema.name,
+              strict: params.responseFormat.jsonSchema.strict ?? true,
+              schema: params.responseFormat.jsonSchema.schema,
+            },
           },
         };
-      } else if (params.responseFormat.type !== 'text') {
-        (requestParams as any).responseFormat = { type: params.responseFormat.type };
+      } else if (params.responseFormat.type === 'json_object') {
+        requestParams.text = { format: { type: 'json_object' } };
       }
     }
 
@@ -297,9 +308,8 @@ export class OpenRouterProvider implements LLMProvider {
         context: 'OpenRouterProvider.streamMessage',
         fallbackCount: profileParams.fallbackModels.length,
       });
-      (requestParams as any).models = [params.model, ...profileParams.fallbackModels];
-      (requestParams as any).route = 'fallback';
-      delete (requestParams as any).model; // Can't have both model and models
+      requestParams.models = [params.model, ...profileParams.fallbackModels];
+      delete requestParams.model; // Can't have both model and models
     }
 
     // Add provider preferences if configured
@@ -310,107 +320,107 @@ export class OpenRouterProvider implements LLMProvider {
         hasOrder: !!providerPrefs.order,
         dataCollection: providerPrefs.dataCollection,
       });
-      (requestParams as any).provider = {};
-      if (providerPrefs.order) (requestParams as any).provider.order = providerPrefs.order;
-      if (providerPrefs.allowFallbacks !== undefined) (requestParams as any).provider.allowFallbacks = providerPrefs.allowFallbacks;
-      if (providerPrefs.requireParameters) (requestParams as any).provider.requireParameters = providerPrefs.requireParameters;
-      if (providerPrefs.dataCollection) (requestParams as any).provider.dataCollection = providerPrefs.dataCollection;
-      if (providerPrefs.ignore) (requestParams as any).provider.ignore = providerPrefs.ignore;
-      if (providerPrefs.only) (requestParams as any).provider.only = providerPrefs.only;
+      requestParams.provider = {};
+      if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
+      if (providerPrefs.allowFallbacks !== undefined) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
+      if (providerPrefs.requireParameters) requestParams.provider.requireParameters = providerPrefs.requireParameters;
+      if (providerPrefs.dataCollection) requestParams.provider.dataCollection = providerPrefs.dataCollection;
+      if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
+      if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
     }
 
-    // SDK 0.2.x returns properly typed EventStream<ChatStreamingResponseChunkData>
-    const stream = await client.chat.send(requestParams);
-    let fullMessage: ChatStreamingResponseChunkData | null = null;
+    // Use callModel() which returns ModelResult with streaming capabilities
+    // SDK v0.4.0 provides getTextStream() for cleaner text delta streaming
+    const result = client.callModel(requestParams);
 
-    // Track usage and finish reason separately - they may come in different chunks
-    let accumulatedUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null = null;
-    let finalFinishReason: string | null = null;
-
-    for await (const chunk of stream) {
-      const content = chunk.choices?.[0]?.delta?.content;
-      const finishReason = chunk.choices?.[0]?.finishReason;
-      const hasUsage = chunk.usage;
-
-      // Store the most recent chunk (needed for tool calls)
-      if (!fullMessage) {
-        fullMessage = chunk;
-      } else {
-        // Merge tool calls if present
-        const toolCalls = chunk.choices?.[0]?.delta?.toolCalls;
-        if (toolCalls) {
-          fullMessage.choices[0].delta.toolCalls ??= [];
-          fullMessage.choices[0].delta.toolCalls = toolCalls;
-        }
-        // Update finish reason
-        if (finishReason) {
-          fullMessage.choices[0].finishReason = finishReason;
-        }
-        // Update usage
-        if (hasUsage) {
-          fullMessage.usage = chunk.usage;
-        }
-      }
-
-      // Track finish reason when we get it
-      if (finishReason) {
-        finalFinishReason = finishReason;
-      }
-
-      // Track usage when we get it (may come in a separate final chunk)
-      if (hasUsage) {
-        accumulatedUsage = {
-          promptTokens: chunk.usage?.promptTokens,
-          completionTokens: chunk.usage?.completionTokens,
-          totalTokens: chunk.usage?.totalTokens,
-        };
-        logger.debug('Received usage data in stream', {
-          context: 'OpenRouterProvider.streamMessage',
-          promptTokens: chunk.usage?.promptTokens,
-          completionTokens: chunk.usage?.completionTokens,
-        });
-      }
-
-      // Yield content chunks
-      if (content) {
+    // Stream text deltas using the new getTextStream() API
+    // This is cleaner than manually extracting from chunk.choices[0].delta.content
+    for await (const textDelta of result.getTextStream()) {
+      if (textDelta) {
         yield {
-          content,
+          content: textDelta,
           done: false,
         };
       }
     }
 
-    // After stream ends, yield final chunk with accumulated usage
+    // After text stream ends, get the complete response with usage data
+    // The ReusableReadableStream allows concurrent consumption patterns
+    let response: OpenResponsesNonStreamingResponse;
+    try {
+      response = await result.getResponse();
+    } catch (error) {
+      logger.error('Failed to get response after stream', {
+        context: 'OpenRouterProvider.streamMessage',
+      }, error instanceof Error ? error : undefined);
+      // Yield final chunk without usage data
+      yield {
+        content: '',
+        done: true,
+        attachmentResults,
+      };
+      return;
+    }
+
+    // Extract usage from response
+    const usage = response.usage ? {
+      promptTokens: response.usage.inputTokens ?? 0,
+      completionTokens: response.usage.outputTokens ?? 0,
+      totalTokens: (response.usage.inputTokens ?? 0) + (response.usage.outputTokens ?? 0),
+    } : undefined;
+
     // Extract cache usage if available
-    const usageAny = accumulatedUsage as any;
-    const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount
+    const responseUsage = response.usage as any;
+    const cacheUsage = responseUsage?.cachedTokens || responseUsage?.cacheDiscount
       ? {
-          cachedTokens: usageAny.cachedTokens,
-          cacheDiscount: usageAny.cacheDiscount,
-          cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
-          cacheReadInputTokens: usageAny.cacheReadInputTokens,
+          cachedTokens: responseUsage.cachedTokens,
+          cacheDiscount: responseUsage.cacheDiscount,
+          cacheCreationInputTokens: responseUsage.cacheCreationInputTokens,
+          cacheReadInputTokens: responseUsage.cacheReadInputTokens,
         }
       : undefined;
 
-    logger.debug('Stream completed', {
+    logger.debug('Stream completed (callModel API)', {
       context: 'OpenRouterProvider.streamMessage',
-      finishReason: finalFinishReason,
-      promptTokens: accumulatedUsage?.promptTokens,
-      completionTokens: accumulatedUsage?.completionTokens,
-      hasUsage: !!accumulatedUsage,
+      status: response.status,
+      inputTokens: response.usage?.inputTokens,
+      outputTokens: response.usage?.outputTokens,
       cachedTokens: cacheUsage?.cachedTokens,
     });
+
+    // Build raw response in a format compatible with our existing code
+    // Include tool calls if present in the response output
+    const toolCalls = response.output
+      ?.filter((item: any) => item.type === 'function_call')
+      .map((item: any) => ({
+        id: item.callId || item.id,
+        type: 'function',
+        function: {
+          name: item.name,
+          arguments: typeof item.arguments === 'string'
+            ? item.arguments
+            : JSON.stringify(item.arguments),
+        },
+      }));
+
+    const rawResponse = {
+      choices: [{
+        finishReason: response.status === 'completed' ? 'stop' : response.status,
+        delta: {
+          toolCalls: toolCalls?.length ? toolCalls : undefined,
+        },
+      }],
+      usage: response.usage,
+      // Include full response for debugging
+      _openResponsesResponse: response,
+    };
 
     yield {
       content: '',
       done: true,
-      usage: accumulatedUsage ? {
-        promptTokens: accumulatedUsage.promptTokens ?? 0,
-        completionTokens: accumulatedUsage.completionTokens ?? 0,
-        totalTokens: accumulatedUsage.totalTokens ?? 0,
-      } : undefined,
+      usage,
       attachmentResults,
-      rawResponse: fullMessage,
+      rawResponse,
       cacheUsage,
     };
   }

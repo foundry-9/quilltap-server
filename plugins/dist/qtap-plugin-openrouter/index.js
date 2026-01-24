@@ -763,6 +763,60 @@ function hasAsyncFunctions(input) {
   return Object.values(input).some((value) => typeof value === "function");
 }
 
+// node_modules/@openrouter/sdk/esm/lib/chat-compat.js
+function isToolResponseMessage(msg) {
+  return msg.role === "tool";
+}
+function isAssistantMessage(msg) {
+  return msg.role === "assistant";
+}
+function mapChatRole(role) {
+  switch (role) {
+    case "user":
+      return OpenResponsesEasyInputMessageRoleUser.User;
+    case "system":
+      return OpenResponsesEasyInputMessageRoleSystem.System;
+    case "assistant":
+      return OpenResponsesEasyInputMessageRoleAssistant.Assistant;
+    case "developer":
+      return OpenResponsesEasyInputMessageRoleDeveloper.Developer;
+    default: {
+      const exhaustiveCheck = role;
+      throw new Error(`Unhandled role type: ${exhaustiveCheck}`);
+    }
+  }
+}
+function contentToString(content) {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (content === null || content === void 0) {
+    return "";
+  }
+  return JSON.stringify(content);
+}
+function fromChatMessages(messages) {
+  return messages.map((msg) => {
+    if (isToolResponseMessage(msg)) {
+      return {
+        type: OpenResponsesFunctionCallOutputType.FunctionCallOutput,
+        callId: msg.toolCallId,
+        output: contentToString(msg.content)
+      };
+    }
+    if (isAssistantMessage(msg)) {
+      return {
+        role: mapChatRole("assistant"),
+        content: contentToString(msg.content)
+      };
+    }
+    return {
+      role: mapChatRole(msg.role),
+      content: contentToString(msg.content)
+    };
+  });
+}
+
 // node_modules/@openrouter/sdk/esm/lib/url.js
 var hasOwn = Object.prototype.hasOwnProperty;
 function pathToFunc(pathPattern, options) {
@@ -14107,7 +14161,7 @@ function validateInputTools(tools) {
 }
 
 // ../../../node_modules/openai/lib/chatCompletionUtils.mjs
-var isAssistantMessage = (message) => {
+var isAssistantMessage2 = (message) => {
   return message?.role === "assistant";
 };
 var isToolMessage = (message) => {
@@ -14341,7 +14395,7 @@ var AbstractChatCompletionRunner = class extends EventStream2 {
       this._emit("message", message);
       if (isToolMessage(message) && message.content) {
         this._emit("functionToolCallResult", message.content);
-      } else if (isAssistantMessage(message) && message.tool_calls) {
+      } else if (isAssistantMessage2(message) && message.tool_calls) {
         for (const tool_call of message.tool_calls) {
           if (tool_call.type === "function") {
             this._emit("functionToolCall", tool_call.function);
@@ -14530,7 +14584,7 @@ _AbstractChatCompletionRunner_instances = /* @__PURE__ */ new WeakSet(), _Abstra
   let i = this.messages.length;
   while (i-- > 0) {
     const message = this.messages[i];
-    if (isAssistantMessage(message)) {
+    if (isAssistantMessage2(message)) {
       const ret = {
         ...message,
         content: message.content ?? null,
@@ -14543,7 +14597,7 @@ _AbstractChatCompletionRunner_instances = /* @__PURE__ */ new WeakSet(), _Abstra
 }, _AbstractChatCompletionRunner_getFinalFunctionToolCall = function _AbstractChatCompletionRunner_getFinalFunctionToolCall2() {
   for (let i = this.messages.length - 1; i >= 0; i--) {
     const message = this.messages[i];
-    if (isAssistantMessage(message) && message?.tool_calls?.length) {
+    if (isAssistantMessage2(message) && message?.tool_calls?.length) {
       return message.tool_calls.filter((x) => x.type === "function").at(-1)?.function;
     }
   }
@@ -14591,7 +14645,7 @@ var ChatCompletionRunner = class _ChatCompletionRunner extends AbstractChatCompl
   }
   _addMessage(message, emit = true) {
     super._addMessage(message, emit);
-    if (isAssistantMessage(message) && message.content) {
+    if (isAssistantMessage2(message) && message.content) {
       this._emit("content", message.content);
     }
   }
@@ -19347,7 +19401,7 @@ var OpenRouterProvider = class {
     };
   }
   async *streamMessage(params, apiKey) {
-    logger.debug("OpenRouter streamMessage called", {
+    logger.debug("OpenRouter streamMessage called (SDK v0.4.0 callModel API)", {
       context: "OpenRouterProvider.streamMessage",
       model: params.model
     });
@@ -19361,28 +19415,33 @@ var OpenRouterProvider = class {
       role: m.role,
       content: m.content
     }));
+    const input = fromChatMessages(messages);
     const requestParams = {
       model: params.model,
-      messages,
+      input,
       temperature: params.temperature ?? 0.7,
-      maxTokens: params.maxTokens ?? 4096,
-      topP: params.topP ?? 1,
-      stream: true,
-      streamOptions: { includeUsage: true }
+      maxOutputTokens: params.maxTokens ?? 4096,
+      topP: params.topP ?? 1
     };
     if (params.tools && params.tools.length > 0) {
       logger.debug("Adding tools to stream request", {
         context: "OpenRouterProvider.streamMessage",
         toolCount: params.tools.length
       });
-      requestParams.tools = params.tools;
+      requestParams.tools = params.tools.map((tool) => ({
+        type: "function",
+        name: tool.function?.name || tool.name,
+        description: tool.function?.description || tool.description,
+        parameters: tool.function?.parameters || tool.parameters
+      }));
       requestParams.toolChoice = "auto";
     }
     if (params.webSearchEnabled) {
-      logger.debug("Enabling web search plugin for streaming", {
+      logger.debug("Enabling web search tool for streaming", {
         context: "OpenRouterProvider.streamMessage"
       });
-      requestParams.plugins = [{ id: "web", maxResults: 5 }];
+      requestParams.tools = requestParams.tools || [];
+      requestParams.tools.push({ type: "web_search_preview" });
     }
     if (params.responseFormat) {
       if (params.responseFormat.type === "json_schema" && params.responseFormat.jsonSchema) {
@@ -19390,16 +19449,18 @@ var OpenRouterProvider = class {
           context: "OpenRouterProvider.streamMessage",
           schemaName: params.responseFormat.jsonSchema.name
         });
-        requestParams.responseFormat = {
-          type: "json_schema",
-          jsonSchema: {
-            name: params.responseFormat.jsonSchema.name,
-            strict: params.responseFormat.jsonSchema.strict ?? true,
-            schema: params.responseFormat.jsonSchema.schema
+        requestParams.text = {
+          format: {
+            type: "json_schema",
+            jsonSchema: {
+              name: params.responseFormat.jsonSchema.name,
+              strict: params.responseFormat.jsonSchema.strict ?? true,
+              schema: params.responseFormat.jsonSchema.schema
+            }
           }
         };
-      } else if (params.responseFormat.type !== "text") {
-        requestParams.responseFormat = { type: params.responseFormat.type };
+      } else if (params.responseFormat.type === "json_object") {
+        requestParams.text = { format: { type: "json_object" } };
       }
     }
     const profileParams = params.profileParameters;
@@ -19409,7 +19470,6 @@ var OpenRouterProvider = class {
         fallbackCount: profileParams.fallbackModels.length
       });
       requestParams.models = [params.model, ...profileParams.fallbackModels];
-      requestParams.route = "fallback";
       delete requestParams.model;
     }
     const providerPrefs = profileParams?.providerPreferences;
@@ -19427,76 +19487,73 @@ var OpenRouterProvider = class {
       if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
       if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
     }
-    const stream = await client.chat.send(requestParams);
-    let fullMessage = null;
-    let accumulatedUsage = null;
-    let finalFinishReason = null;
-    for await (const chunk of stream) {
-      const content = chunk.choices?.[0]?.delta?.content;
-      const finishReason = chunk.choices?.[0]?.finishReason;
-      const hasUsage = chunk.usage;
-      if (!fullMessage) {
-        fullMessage = chunk;
-      } else {
-        const toolCalls = chunk.choices?.[0]?.delta?.toolCalls;
-        if (toolCalls) {
-          fullMessage.choices[0].delta.toolCalls ??= [];
-          fullMessage.choices[0].delta.toolCalls = toolCalls;
-        }
-        if (finishReason) {
-          fullMessage.choices[0].finishReason = finishReason;
-        }
-        if (hasUsage) {
-          fullMessage.usage = chunk.usage;
-        }
-      }
-      if (finishReason) {
-        finalFinishReason = finishReason;
-      }
-      if (hasUsage) {
-        accumulatedUsage = {
-          promptTokens: chunk.usage?.promptTokens,
-          completionTokens: chunk.usage?.completionTokens,
-          totalTokens: chunk.usage?.totalTokens
-        };
-        logger.debug("Received usage data in stream", {
-          context: "OpenRouterProvider.streamMessage",
-          promptTokens: chunk.usage?.promptTokens,
-          completionTokens: chunk.usage?.completionTokens
-        });
-      }
-      if (content) {
+    const result = client.callModel(requestParams);
+    for await (const textDelta of result.getTextStream()) {
+      if (textDelta) {
         yield {
-          content,
+          content: textDelta,
           done: false
         };
       }
     }
-    const usageAny = accumulatedUsage;
-    const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount ? {
-      cachedTokens: usageAny.cachedTokens,
-      cacheDiscount: usageAny.cacheDiscount,
-      cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
-      cacheReadInputTokens: usageAny.cacheReadInputTokens
+    let response;
+    try {
+      response = await result.getResponse();
+    } catch (error) {
+      logger.error("Failed to get response after stream", {
+        context: "OpenRouterProvider.streamMessage"
+      }, error instanceof Error ? error : void 0);
+      yield {
+        content: "",
+        done: true,
+        attachmentResults
+      };
+      return;
+    }
+    const usage = response.usage ? {
+      promptTokens: response.usage.inputTokens ?? 0,
+      completionTokens: response.usage.outputTokens ?? 0,
+      totalTokens: (response.usage.inputTokens ?? 0) + (response.usage.outputTokens ?? 0)
     } : void 0;
-    logger.debug("Stream completed", {
+    const responseUsage = response.usage;
+    const cacheUsage = responseUsage?.cachedTokens || responseUsage?.cacheDiscount ? {
+      cachedTokens: responseUsage.cachedTokens,
+      cacheDiscount: responseUsage.cacheDiscount,
+      cacheCreationInputTokens: responseUsage.cacheCreationInputTokens,
+      cacheReadInputTokens: responseUsage.cacheReadInputTokens
+    } : void 0;
+    logger.debug("Stream completed (callModel API)", {
       context: "OpenRouterProvider.streamMessage",
-      finishReason: finalFinishReason,
-      promptTokens: accumulatedUsage?.promptTokens,
-      completionTokens: accumulatedUsage?.completionTokens,
-      hasUsage: !!accumulatedUsage,
+      status: response.status,
+      inputTokens: response.usage?.inputTokens,
+      outputTokens: response.usage?.outputTokens,
       cachedTokens: cacheUsage?.cachedTokens
     });
+    const toolCalls = response.output?.filter((item) => item.type === "function_call").map((item) => ({
+      id: item.callId || item.id,
+      type: "function",
+      function: {
+        name: item.name,
+        arguments: typeof item.arguments === "string" ? item.arguments : JSON.stringify(item.arguments)
+      }
+    }));
+    const rawResponse = {
+      choices: [{
+        finishReason: response.status === "completed" ? "stop" : response.status,
+        delta: {
+          toolCalls: toolCalls?.length ? toolCalls : void 0
+        }
+      }],
+      usage: response.usage,
+      // Include full response for debugging
+      _openResponsesResponse: response
+    };
     yield {
       content: "",
       done: true,
-      usage: accumulatedUsage ? {
-        promptTokens: accumulatedUsage.promptTokens ?? 0,
-        completionTokens: accumulatedUsage.completionTokens ?? 0,
-        totalTokens: accumulatedUsage.totalTokens ?? 0
-      } : void 0,
+      usage,
       attachmentResults,
-      rawResponse: fullMessage,
+      rawResponse,
       cacheUsage
     };
   }

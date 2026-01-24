@@ -4,6 +4,12 @@
 
 ### 2.8-dev
 
+- feat: Upgrade OpenRouter plugin to SDK v0.4.0 with new streaming API (2026-01-24)
+  - Updated @openrouter/sdk from 0.3.15 to 0.4.0
+  - Refactored streaming to use `callModel()` with `getTextStream()` for cleaner text delta streaming
+  - Uses `fromChatMessages()` helper to convert chat format to OpenResponses input format
+  - Better handling of tool calls and usage data via `getResponse()`
+  - Maintains backward compatibility with existing streaming interface
 - feat: Database abstraction layer with SQLite support (2026-01-24)
   - Added database abstraction layer (`lib/database/`) supporting multiple backends
   - Implemented SQLite backend using better-sqlite3 with WAL mode
