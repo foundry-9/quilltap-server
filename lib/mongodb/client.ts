@@ -18,6 +18,11 @@ let mongoDatabase: Db | null = null;
 let mongoClientPromise: Promise<MongoClient> | null = null;
 
 /**
+ * Flag to prevent adding shutdown handlers multiple times (hot reloading)
+ */
+let shutdownHandlersRegistered = false;
+
+/**
  * Helper function to check if client is still connected
  * Uses the configured database instead of 'admin' to work with
  * hosted MongoDB services where the user may not have admin access.
@@ -184,6 +189,12 @@ export async function closeMongoConnection(): Promise<void> {
  * This function should be called once during application startup
  */
 export function setupMongoDBShutdownHandlers(): void {
+  // Prevent adding listeners multiple times (important for hot reloading)
+  if (shutdownHandlersRegistered) {
+    return;
+  }
+  shutdownHandlersRegistered = true;
+
   const handleShutdown = async () => {
     await closeMongoConnection();
   };

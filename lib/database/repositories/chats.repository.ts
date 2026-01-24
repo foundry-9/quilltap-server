@@ -28,6 +28,7 @@ import {
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { QueryFilter, DatabaseCollection } from '../interfaces';
+import { getDatabaseAsync } from '../manager';
 
 /**
  * Chats repository with database abstraction layer backend
@@ -44,12 +45,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   private async getMessagesCollection(): Promise<DatabaseCollection> {
     try {
-      const collection = await this.getCollection();
-      // Access the underlying database to get another collection
-      const db = (collection as any).db;
-      if (!db) {
-        throw new Error('Database instance not available');
-      }
+      const db = await getDatabaseAsync();
       return db.getCollection(this.messagesCollectionName);
     } catch (error) {
       logger.error('Failed to get chat messages collection', {

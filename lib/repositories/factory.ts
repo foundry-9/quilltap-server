@@ -15,6 +15,7 @@ import {
   getRepositories as getDatabaseRepos,
   RepositoryContainer as DatabaseRepositoryContainer,
 } from '@/lib/database/repositories';
+import { getDatabaseConfig } from '@/lib/database/config';
 import {
   getUserRepositories,
   clearUserRepositoryCache,
@@ -43,8 +44,6 @@ let migrationWaitComplete = false;
  * @returns The configured backend type ('mongodb' or 'sqlite')
  */
 export function getDataBackend(): 'mongodb' | 'sqlite' {
-  // Import here to avoid circular dependencies
-  const { getDatabaseConfig } = require('@/lib/database/config');
   const config = getDatabaseConfig();
   logger.debug('Retrieved data backend configuration', { backend: config.backend });
   return config.backend;

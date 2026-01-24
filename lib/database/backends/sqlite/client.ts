@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 
 let sqliteDatabase: DatabaseType | null = null;
 let isInitialized = false;
+let shutdownHandlersRegistered = false;
 
 // ============================================================================
 // Client Management
@@ -203,6 +204,12 @@ export function vacuumDatabase(): void {
  * Setup shutdown handlers for graceful cleanup
  */
 export function setupSQLiteShutdownHandlers(): void {
+  // Prevent adding listeners multiple times (important for hot reloading)
+  if (shutdownHandlersRegistered) {
+    return;
+  }
+  shutdownHandlersRegistered = true;
+
   const handleShutdown = () => {
     closeSQLiteClient();
   };
