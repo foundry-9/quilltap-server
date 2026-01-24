@@ -13,7 +13,7 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
 - **Language**: TypeScript
 - **Package Manager**: npm
 - **Testing**: Jest and coverage tools (Istanbul/nyc), Playwright
-- **Data Storage**: MongoDB or SQLite via database abstraction layer - supports MongoDB (default) or SQLite (for simpler deployments). Uses native drivers directly, NOT Prisma or Mongoose. Data models are defined as TypeScript interfaces with Zod schemas.
+- **Data Storage**: SQLite (default) or MongoDB via database abstraction layer. New installations use SQLite with zero external dependencies; MongoDB remains available for existing deployments. Uses native drivers directly (`better-sqlite3`, MongoDB driver), NOT Prisma or Mongoose. Data models are defined as TypeScript interfaces with Zod schemas.
 - **File Storage**: S3-compatible storage (embedded MinIO for development, external S3 for production)
 - **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
 - **Cloud Services**: AWS first
@@ -105,6 +105,7 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
   - [features/artifacts.md](features/artifacts.md) — Feature request outlining an “artifacts” side panel concept for rendering AI-generated content with copy/download actions — Grade: B (future concept) — Last updated: 2025-12-10
   - [features/comfy_ui_local_image.md](features/comfy_ui_local_image.md) — Proposal for a ComfyUI image generation plugin: architecture, workflow manager, UI, configuration, and future phases — Grade: B (proposal) — Last updated: 2025-12-06
   - [features/complete/CHEAP-LLM.md](features/complete/CHEAP-LLM.md) — Notes on cheap LLM selection, embedding profiles, and fallback heuristics when embeddings are unavailable — Grade: A (implemented behavior) — Last updated: 2025-11-29
+  - [features/complete/database-abstraction.md](features/complete/database-abstraction.md) — Completed database abstraction layer: SQLite and MongoDB backends, query translation, repository migration, configuration, and Docker deployment — Grade: A (completed implementation) — Last updated: 2026-01-24
   - [features/complete/FILE_ATTACHMENT_FALLBACK.md](features/complete/FILE_ATTACHMENT_FALLBACK.md) — Documentation describing the file attachment fallback system for providers lacking native support (text/image handling) — Grade: A (shipping behavior) — Last updated: 2025-11-29
   - [features/complete/FILE_ATTACHMENT_TROUBLESHOOTING.md](features/complete/FILE_ATTACHMENT_TROUBLESHOOTING.md) — Troubleshooting guide for attachment fallback issues, common errors, and solutions — Grade: A (operational fix guide) — Last updated: 2025-11-29
   - [features/complete/IMAGE-PROMPT-EXPANSION.md](features/complete/IMAGE-PROMPT-EXPANSION.md) — Details the prompt expansion pipeline that uses character descriptions, cheap LLM crafting, and examples — Grade: A (describes implemented pipeline) — Last updated: 2025-11-29
