@@ -1,7 +1,7 @@
 /**
  * Migration State Management
  *
- * Handles persistence of migration state to MongoDB (or file fallback).
+ * Handles persistence of migration state to the database (MongoDB or SQLite).
  * Tracks which migrations have been completed to prevent re-running.
  */
 
@@ -9,7 +9,15 @@ import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import path from 'node:path';
 import { logger } from './lib/logger';
-import { getMongoDatabase, isMongoDBBackend } from './lib/mongodb-utils';
+import {
+  getMongoDatabase,
+  isMongoDBBackend,
+  isSQLiteBackend,
+  getSQLiteDatabase,
+  sqliteTableExists,
+  executeSQLite,
+  querySQLite,
+} from './lib/database-utils';
 import type { MigrationState, MigrationRecord, MigrationResult } from './types';
 
 // Path to store migration state (file-based fallback)
@@ -103,8 +111,131 @@ async function saveMigrationStateToMongo(state: MigrationState): Promise<void> {
   }
 }
 
+// SQLite table name for migration state
+const SQLITE_MIGRATIONS_TABLE = 'migrations_state';
+
 /**
- * Load the current migration state from storage (MongoDB or file)
+ * Ensure SQLite migrations table exists
+ */
+function ensureSQLiteMigrationsTable(): void {
+  if (!sqliteTableExists(SQLITE_MIGRATIONS_TABLE)) {
+    logger.debug('Creating SQLite migrations table', {
+      context: 'migrations.state.ensureSQLiteMigrationsTable',
+    });
+    executeSQLite(`
+      CREATE TABLE IF NOT EXISTS "${SQLITE_MIGRATIONS_TABLE}" (
+        "id" TEXT PRIMARY KEY,
+        "completedAt" TEXT NOT NULL,
+        "quilltapVersion" TEXT NOT NULL,
+        "itemsAffected" INTEGER NOT NULL DEFAULT 0,
+        "message" TEXT
+      )
+    `);
+    // Also create a metadata table for lastChecked
+    executeSQLite(`
+      CREATE TABLE IF NOT EXISTS "migrations_metadata" (
+        "key" TEXT PRIMARY KEY,
+        "value" TEXT NOT NULL
+      )
+    `);
+  }
+}
+
+/**
+ * Load migration state from SQLite
+ */
+function loadMigrationStateFromSQLite(): MigrationState {
+  ensureSQLiteMigrationsTable();
+
+  try {
+    // Load completed migrations
+    const records = querySQLite<MigrationRecord>(`
+      SELECT id, completedAt, quilltapVersion, itemsAffected, message
+      FROM "${SQLITE_MIGRATIONS_TABLE}"
+      ORDER BY completedAt ASC
+    `);
+
+    // Load metadata
+    const metadataRows = querySQLite<{ key: string; value: string }>(`
+      SELECT key, value FROM migrations_metadata
+    `);
+    const metadata = Object.fromEntries(metadataRows.map(r => [r.key, r.value]));
+
+    logger.debug('Migration state loaded from SQLite', {
+      context: 'migrations.state.loadMigrationStateFromSQLite',
+      completedCount: records.length,
+    });
+
+    return {
+      completedMigrations: records,
+      lastChecked: metadata.lastChecked || new Date().toISOString(),
+      quilltapVersion: metadata.quilltapVersion || getQuilltapVersion(),
+    };
+  } catch (error) {
+    logger.error('Error loading migration state from SQLite', {
+      context: 'migrations.state.loadMigrationStateFromSQLite',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+/**
+ * Save migration state to SQLite
+ */
+function saveMigrationStateToSQLite(state: MigrationState): void {
+  ensureSQLiteMigrationsTable();
+
+  try {
+    const db = getSQLiteDatabase();
+
+    // Use a transaction to ensure atomicity
+    const saveState = db.transaction(() => {
+      // Clear existing records
+      db.prepare(`DELETE FROM "${SQLITE_MIGRATIONS_TABLE}"`).run();
+
+      // Insert all migration records
+      const insertStmt = db.prepare(`
+        INSERT INTO "${SQLITE_MIGRATIONS_TABLE}" (id, completedAt, quilltapVersion, itemsAffected, message)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+
+      for (const record of state.completedMigrations) {
+        insertStmt.run(
+          record.id,
+          record.completedAt,
+          record.quilltapVersion,
+          record.itemsAffected,
+          record.message || null
+        );
+      }
+
+      // Update metadata
+      const upsertMeta = db.prepare(`
+        INSERT INTO migrations_metadata (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `);
+      upsertMeta.run('lastChecked', state.lastChecked);
+      upsertMeta.run('quilltapVersion', state.quilltapVersion);
+    });
+
+    saveState();
+
+    logger.debug('Migration state saved to SQLite', {
+      context: 'migrations.state.saveMigrationStateToSQLite',
+      completedCount: state.completedMigrations.length,
+    });
+  } catch (error) {
+    logger.error('Error saving migration state to SQLite', {
+      context: 'migrations.state.saveMigrationStateToSQLite',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+/**
+ * Load the current migration state from storage (MongoDB, SQLite, or file)
  */
 export async function loadMigrationState(): Promise<MigrationState> {
   // Use MongoDB if configured
@@ -129,7 +260,20 @@ export async function loadMigrationState(): Promise<MigrationState> {
     }
   }
 
-  // File-based loading
+  // Use SQLite if configured
+  if (isSQLiteBackend()) {
+    try {
+      return loadMigrationStateFromSQLite();
+    } catch (error) {
+      logger.warn('Failed to load migration state from SQLite, falling back to file', {
+        context: 'migrations.state.loadMigrationState',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Fall through to file-based loading
+    }
+  }
+
+  // File-based loading (fallback)
   try {
     const content = await fs.readFile(MIGRATIONS_STATE_FILE, 'utf-8');
     return JSON.parse(content);
@@ -144,7 +288,7 @@ export async function loadMigrationState(): Promise<MigrationState> {
 }
 
 /**
- * Save migration state to storage (MongoDB or file)
+ * Save migration state to storage (MongoDB, SQLite, or file)
  */
 export async function saveMigrationState(state: MigrationState): Promise<void> {
   // Save to MongoDB if configured
@@ -161,7 +305,21 @@ export async function saveMigrationState(state: MigrationState): Promise<void> {
     }
   }
 
-  // File-based saving
+  // Save to SQLite if configured
+  if (isSQLiteBackend()) {
+    try {
+      saveMigrationStateToSQLite(state);
+      return;
+    } catch (error) {
+      logger.warn('Failed to save migration state to SQLite, falling back to file', {
+        context: 'migrations.state.saveMigrationState',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Fall through to file-based saving
+    }
+  }
+
+  // File-based saving (fallback)
   const dir = path.dirname(MIGRATIONS_STATE_FILE);
   await fs.mkdir(dir, { recursive: true });
 

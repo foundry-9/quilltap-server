@@ -50,6 +50,8 @@ import { fixMissingStorageKeysMigration } from './fix-missing-storage-keys';
 import { cleanupOrphanFileRecordsMigration } from './cleanup-orphan-file-records';
 // LLM logs collection
 import { addLLMLogsCollectionMigration } from './add-llm-logs-collection';
+// SQLite initial schema
+import { sqliteInitialSchemaMigration } from './sqlite-initial-schema';
 
 /**
  * All available migrations.
@@ -97,6 +99,8 @@ export const migrations: Migration[] = [
   cleanupOrphanFileRecordsMigration,
   // LLM logs collection
   addLLMLogsCollectionMigration,
+  // SQLite initial schema (only runs on SQLite backend)
+  sqliteInitialSchemaMigration,
 ];
 
 export {
@@ -141,4 +145,6 @@ export {
   cleanupOrphanFileRecordsMigration,
   // LLM logs collection
   addLLMLogsCollectionMigration,
+  // SQLite initial schema
+  sqliteInitialSchemaMigration,
 };

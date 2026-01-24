@@ -13,7 +13,7 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
 - **Language**: TypeScript
 - **Package Manager**: npm
 - **Testing**: Jest and coverage tools (Istanbul/nyc), Playwright
-- **Data Storage**: MongoDB (required) - uses the native MongoDB driver directly, NOT Prisma or Mongoose. Data models are defined as TypeScript interfaces.
+- **Data Storage**: MongoDB or SQLite via database abstraction layer - supports MongoDB (default) or SQLite (for simpler deployments). Uses native drivers directly, NOT Prisma or Mongoose. Data models are defined as TypeScript interfaces with Zod schemas.
 - **File Storage**: S3-compatible storage (embedded MinIO for development, external S3 for production)
 - **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
 - **Cloud Services**: AWS first
@@ -83,6 +83,7 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
   - [components/tools/tasks-queue/README.md](components/tools/tasks-queue/README.md) — Overview of the tasks queue card module: types, hooks, TaskItem/Filters/Details components, API integration, and structure — Grade: A (current tasks queue docs) — Last updated: 2025-12-17
   - [docs/API.md](docs/API.md) — Comprehensive Quilltap API reference for v1 REST routes (characters, chats, messages, memories, api-keys, connection-profiles, system/jobs, system/backup) with action dispatch patterns and response examples — Grade: A (canonical API reference) — Last updated: 2026-01-13
   - [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md) — Backup/restore guide covering in-app backups, manual MongoDB/S3 scripts, CRON automation, encryption, disaster recovery, verification, and monitoring tips — Grade: A (operational guidance) — Last updated: 2025-12-10
+  - [docs/DATABASE_ABSTRACTION.md](docs/DATABASE_ABSTRACTION.md) — Database abstraction layer documentation: MongoDB and SQLite backend support, configuration, Docker deployment, architecture, interfaces, capabilities comparison, and troubleshooting — Grade: A (architecture reference) — Last updated: 2026-01-24
   - [docs/CHANGELOG.md](docs/CHANGELOG.md) — Detailed changelog through versions 1.0–2.5, listing features, fixes, refactors, tests, themes, and status updates per release — Grade: A (release-of-record) — Last updated: 2025-12-17
   - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Production deployment guide with prerequisites, Docker/Nginx/SSL setup, env vars, data management, monitoring, backups, and troubleshooting — Grade: A (used for current deployments) — Last updated: 2025-12-06
   - [docs/FILE-SYSTEM-IMPLEMENTATION.md](docs/FILE-SYSTEM-IMPLEMENTATION.md) — Summary of the centralized file system implementation: manager module, repositories, API route, migration utility, docs, and benefits — Grade: A (architecture reference) — Last updated: 2025-11-29

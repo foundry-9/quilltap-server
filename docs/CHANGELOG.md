@@ -4,6 +4,20 @@
 
 ### 2.8-dev
 
+- feat: Database abstraction layer with SQLite support (2026-01-24)
+  - Added database abstraction layer (`lib/database/`) supporting multiple backends
+  - Implemented SQLite backend using better-sqlite3 with WAL mode
+  - MongoDB backend wrapper for interface compatibility
+  - Auto-detection: uses MongoDB if MONGODB_URI set, otherwise SQLite
+  - Query translation from MongoDB-style filters to SQL
+  - JSON column support for arrays/objects in SQLite
+  - Zod schema introspection for SQLite DDL generation
+  - Migration system support for both backends
+  - SQLite initial schema migration creates all required tables
+  - Docker configurations: `docker-compose.sqlite.yml` and `docker-compose.prod-sqlite.yml`
+  - Updated Dockerfile with build tools for better-sqlite3 native compilation
+  - SQLite data persists at `/app/data/quilltap.db` (Docker) or `~/.quilltap/data/quilltap.db` (local)
+  - See `docs/DATABASE_ABSTRACTION.md` for full documentation
 - feat: LLM request/response logging system (2026-01-23)
   - Store all LLM API calls in MongoDB for debugging and monitoring
   - View logs per message via button in chat message action bar

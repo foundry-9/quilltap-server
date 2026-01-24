@@ -1,5 +1,8 @@
 FROM node:22-alpine AS base
 
+# Install build dependencies for native modules (better-sqlite3)
+RUN apk add --no-cache python3 make g++
+
 # Install dependencies only when needed
 FROM base AS deps
 WORKDIR /app
@@ -47,10 +50,14 @@ FROM base AS production
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV DOCKER_CONTAINER=true
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+
+# Create data directory for SQLite (if used)
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
 # Copy built assets
 COPY --from=builder /app/public ./public
@@ -59,6 +66,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Copy plugins (required for LLM providers, auth, themes, etc.)
 COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
+
+# Copy native modules (better-sqlite3 needs to be rebuilt in production container)
+COPY --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
 
 USER nextjs
 
