@@ -1,17 +1,478 @@
 {
-  "$ref": "#/definitions/PluginManifest",
-  "definitions": {
-    "PluginManifest": {
-      "type": "object",
-      "properties": {
-        "$schema": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^(@[a-z0-9-]+\\/)?qtap-plugin-[a-z0-9-]+$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?(\\+[a-zA-Z0-9.-]+)?$"
+    },
+    "author": {
+      "anyOf": [
+        {
           "type": "string"
         },
-        "name": {
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "license": {
+      "type": "string"
+    },
+    "main": {
+      "type": "string"
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri"
+    },
+    "repository": {
+      "anyOf": [
+        {
           "type": "string",
-          "pattern": "^qtap-plugin-[a-z0-9-]+$"
+          "format": "uri"
         },
-        "title": {
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "bugs": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "compatibility": {
+      "type": "object",
+      "properties": {
+        "quilltapVersion": {
+          "type": "string",
+          "pattern": "^>=?\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?$"
+        },
+        "quilltapMaxVersion": {
+          "type": "string",
+          "pattern": "^<=?\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?$"
+        },
+        "nodeVersion": {
+          "type": "string",
+          "pattern": "^>=?\\d+\\.\\d+\\.\\d+$"
+        }
+      },
+      "required": [
+        "quilltapVersion"
+      ],
+      "additionalProperties": false
+    },
+    "requires": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "peerDependencies": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "CHAT_COMMANDS",
+          "MESSAGE_PROCESSORS",
+          "UI_COMPONENTS",
+          "DATA_STORAGE",
+          "API_ROUTES",
+          "AUTH_METHODS",
+          "WEBHOOKS",
+          "BACKGROUND_TASKS",
+          "CUSTOM_MODELS",
+          "FILE_HANDLERS",
+          "NOTIFICATIONS",
+          "BACKEND_INTEGRATIONS",
+          "LLM_PROVIDER",
+          "IMAGE_PROVIDER",
+          "EMBEDDING_PROVIDER",
+          "THEME",
+          "DATABASE_BACKEND",
+          "FILE_BACKEND",
+          "UPGRADE_MIGRATION",
+          "ROLEPLAY_TEMPLATE",
+          "TOOL_PROVIDER"
+        ]
+      }
+    },
+    "functionality": {
+      "type": "object",
+      "properties": {
+        "providesChatCommands": {
+          "type": "boolean"
+        },
+        "providesMessageProcessors": {
+          "type": "boolean"
+        },
+        "providesUIComponents": {
+          "type": "boolean"
+        },
+        "providesDataStorage": {
+          "type": "boolean"
+        },
+        "providesAPIRoutes": {
+          "type": "boolean"
+        },
+        "providesAuthenticationMethods": {
+          "type": "boolean"
+        },
+        "providesWebhooks": {
+          "type": "boolean"
+        },
+        "providesBackgroundTasks": {
+          "type": "boolean"
+        },
+        "providesCustomModels": {
+          "type": "boolean"
+        },
+        "providesFileHandlers": {
+          "type": "boolean"
+        },
+        "providesNotifications": {
+          "type": "boolean"
+        },
+        "providesBackendIntegrations": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "frontend": {
+      "type": "string",
+      "enum": [
+        "REACT",
+        "PREACT",
+        "VUE",
+        "SVELTE",
+        "NONE"
+      ]
+    },
+    "styling": {
+      "type": "string",
+      "enum": [
+        "TAILWIND",
+        "BOOTSTRAP",
+        "MATERIAL_UI",
+        "CSS_MODULES",
+        "STYLED_COMPONENTS",
+        "NONE"
+      ]
+    },
+    "typescript": {
+      "type": "boolean"
+    },
+    "hooks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "handler": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "handler",
+          "priority",
+          "enabled"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "apiRoutes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^\\/api\\/"
+          },
+          "methods": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE"
+              ]
+            }
+          },
+          "handler": {
+            "type": "string"
+          },
+          "requiresAuth": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "methods",
+          "handler",
+          "requiresAuth"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "path": {
+            "type": "string"
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "propsSchema": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Z][a-zA-Z0-9]*$"
+          },
+          "schemaPath": {
+            "type": "string"
+          },
+          "collectionName": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-_]*$"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "schemaPath",
+          "collectionName"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "configSchema": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-zA-Z0-9]*$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "number",
+              "boolean",
+              "select",
+              "textarea",
+              "password",
+              "url",
+              "email"
+            ]
+          },
+          "default": {},
+          "required": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {}
+              },
+              "required": [
+                "label",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "min": {
+            "type": "number"
+          },
+          "max": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "type",
+          "required"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "defaultConfig": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "providerConfig": {
+      "type": "object",
+      "properties": {
+        "providerName": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "displayName": {
           "type": "string",
           "minLength": 1,
           "maxLength": 100
@@ -21,838 +482,603 @@
           "minLength": 1,
           "maxLength": 500
         },
-        "version": {
+        "abbreviation": {
           "type": "string",
-          "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?(\\+[a-zA-Z0-9.-]+)?$"
+          "minLength": 2,
+          "maxLength": 4,
+          "pattern": "^[A-Z0-9]+$"
         },
-        "author": {
+        "colors": {
+          "type": "object",
+          "properties": {
+            "bg": {
+              "type": "string",
+              "minLength": 1
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "icon": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "bg",
+            "text",
+            "icon"
+          ],
+          "additionalProperties": false
+        },
+        "requiresApiKey": {
+          "type": "boolean"
+        },
+        "requiresBaseUrl": {
+          "type": "boolean"
+        },
+        "apiKeyLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "baseUrlLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "baseUrlDefault": {
+          "type": "string",
+          "format": "uri"
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "chat": {
+              "type": "boolean"
+            },
+            "imageGeneration": {
+              "type": "boolean"
+            },
+            "embeddings": {
+              "type": "boolean"
+            },
+            "webSearch": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "attachmentSupport": {
+          "type": "object",
+          "properties": {
+            "supported": {
+              "type": "boolean"
+            },
+            "mimeTypes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "supported",
+            "mimeTypes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "providerName",
+        "displayName",
+        "description",
+        "abbreviation",
+        "colors",
+        "requiresApiKey",
+        "requiresBaseUrl"
+      ],
+      "additionalProperties": false
+    },
+    "authProviderConfig": {
+      "type": "object",
+      "properties": {
+        "providerId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "requiredEnvVars": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "optionalEnvVars": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "buttonColor": {
+          "type": "string"
+        },
+        "buttonTextColor": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "providerId",
+        "displayName",
+        "requiredEnvVars"
+      ],
+      "additionalProperties": false
+    },
+    "themeConfig": {
+      "type": "object",
+      "properties": {
+        "tokensPath": {
+          "description": "Path to theme tokens JSON file",
+          "type": "string"
+        },
+        "stylesPath": {
+          "description": "Path to component override CSS file",
+          "type": "string"
+        },
+        "supportsDarkMode": {
+          "description": "Whether theme provides dark mode colors",
+          "type": "boolean"
+        },
+        "previewImage": {
+          "description": "Theme preview image for theme picker",
+          "type": "string"
+        },
+        "extendsTheme": {
+          "description": "Plugin name of theme to extend",
           "anyOf": [
             {
               "type": "string"
             },
             {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 100
-                },
-                "email": {
-                  "type": "string",
-                  "format": "email"
-                },
-                "url": {
-                  "type": "string",
-                  "format": "uri"
-                }
-              },
-              "required": [
-                "name"
-              ],
-              "additionalProperties": false
+              "type": "null"
             }
           ]
         },
-        "license": {
-          "type": "string",
-          "default": "MIT"
-        },
-        "main": {
-          "type": "string",
-          "default": "index.js"
-        },
-        "homepage": {
-          "type": "string",
-          "format": "uri"
-        },
-        "repository": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "uri"
-            },
-            {
-              "type": "object",
-              "properties": {
-                "type": {
-                  "type": "string"
-                },
-                "url": {
-                  "type": "string",
-                  "format": "uri"
-                }
-              },
-              "required": [
-                "type",
-                "url"
-              ],
-              "additionalProperties": false
-            }
-          ]
-        },
-        "bugs": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "uri"
-            },
-            {
-              "type": "object",
-              "properties": {
-                "url": {
-                  "type": "string",
-                  "format": "uri"
-                },
-                "email": {
-                  "type": "string",
-                  "format": "email"
-                }
-              },
-              "required": [
-                "url"
-              ],
-              "additionalProperties": false
-            }
-          ]
-        },
-        "compatibility": {
-          "type": "object",
-          "properties": {
-            "quilltapVersion": {
-              "type": "string",
-              "pattern": "^>=?\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?$"
-            },
-            "quilltapMaxVersion": {
-              "type": "string",
-              "pattern": "^<=?\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?$"
-            },
-            "nodeVersion": {
-              "type": "string",
-              "pattern": "^>=?\\d+\\.\\d+\\.\\d+$"
-            }
-          },
-          "required": [
-            "quilltapVersion"
-          ],
-          "additionalProperties": false
-        },
-        "requires": {
-          "type": "object",
-          "additionalProperties": {
+        "tags": {
+          "description": "Tags for theme discovery",
+          "type": "array",
+          "items": {
             "type": "string"
           }
         },
-        "peerDependencies": {
-          "type": "object",
-          "additionalProperties": {
+        "fonts": {
+          "description": "Custom fonts to load",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "family": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Font family name"
+              },
+              "src": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Font file path relative to plugin"
+              },
+              "weight": {
+                "description": "Font weight",
+                "type": "string"
+              },
+              "style": {
+                "description": "Font style",
+                "type": "string"
+              },
+              "display": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "block",
+                  "swap",
+                  "fallback",
+                  "optional"
+                ]
+              }
+            },
+            "required": [
+              "family",
+              "src",
+              "weight",
+              "style",
+              "display"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "useModule": {
+          "description": "Use module-based self-contained loading",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tokensPath",
+        "supportsDarkMode"
+      ],
+      "additionalProperties": false
+    },
+    "roleplayTemplateConfig": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Template display name"
+        },
+        "description": {
+          "description": "Template description",
+          "type": "string",
+          "maxLength": 500
+        },
+        "systemPrompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "System prompt with formatting instructions"
+        },
+        "tags": {
+          "description": "Tags for categorization",
+          "type": "array",
+          "items": {
             "type": "string"
           }
         },
-        "capabilities": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "CHAT_COMMANDS",
-              "MESSAGE_PROCESSORS",
-              "UI_COMPONENTS",
-              "DATA_STORAGE",
-              "API_ROUTES",
-              "AUTH_METHODS",
-              "WEBHOOKS",
-              "BACKGROUND_TASKS",
-              "CUSTOM_MODELS",
-              "FILE_HANDLERS",
-              "NOTIFICATIONS",
-              "BACKEND_INTEGRATIONS",
-              "LLM_PROVIDER",
-              "IMAGE_PROVIDER",
-              "EMBEDDING_PROVIDER",
-              "THEME",
-              "DATABASE_BACKEND",
-              "FILE_BACKEND",
-              "UPGRADE_MIGRATION",
-              "ROLEPLAY_TEMPLATE"
-            ]
-          },
-          "default": []
-        },
-        "functionality": {
-          "type": "object",
-          "properties": {
-            "providesChatCommands": {
-              "type": "boolean",
-              "default": false
-            },
-            "providesMessageProcessors": {
-              "type": "boolean",
-              "default": false
-            },
-            "providesUIComponents": {
-              "type": "boolean",
-              "default": false
-            },
-            "providesDataStorage": {
-              "type": "boolean",
-              "default": false
-            },
-            "providesAPIRoutes": {
-              "type": "boolean",
-              "default": false
-            },
-            "providesAuthenticationMethods": {
-              "type": "boolean",
-              "default": false
-            },
-            "providesWebhooks": {
-              "type": "boolean",
-              "default": false
-            },
-            "providesBackgroundTasks": {
-              "type": "boolean",
-              "default": false
-            },
-            "providesCustomModels": {
-              "type": "boolean",
-              "default": false
-            },
-            "providesFileHandlers": {
-              "type": "boolean",
-              "default": false
-            },
-            "providesNotifications": {
-              "type": "boolean",
-              "default": false
-            },
-            "providesBackendIntegrations": {
-              "type": "boolean",
-              "default": false
-            }
-          },
-          "additionalProperties": false
-        },
-        "frontend": {
-          "type": "string",
-          "enum": [
-            "REACT",
-            "PREACT",
-            "VUE",
-            "SVELTE",
-            "NONE"
-          ],
-          "default": "REACT"
-        },
-        "styling": {
-          "type": "string",
-          "enum": [
-            "TAILWIND",
-            "BOOTSTRAP",
-            "MATERIAL_UI",
-            "CSS_MODULES",
-            "STYLED_COMPONENTS",
-            "NONE"
-          ],
-          "default": "TAILWIND"
-        },
-        "typescript": {
-          "type": "boolean",
-          "default": true
-        },
-        "hooks": {
+        "annotationButtons": {
+          "description": "Formatting toolbar buttons",
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "name": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 100
-              },
-              "handler": {
-                "type": "string"
-              },
-              "priority": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 100,
-                "default": 50
-              },
-              "enabled": {
-                "type": "boolean",
-                "default": true
-              }
-            },
-            "required": [
-              "name",
-              "handler"
-            ],
-            "additionalProperties": false
-          },
-          "default": []
-        },
-        "apiRoutes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "path": {
-                "type": "string",
-                "pattern": "^\\/api\\/"
-              },
-              "methods": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "GET",
-                    "POST",
-                    "PUT",
-                    "PATCH",
-                    "DELETE"
-                  ]
-                },
-                "minItems": 1
-              },
-              "handler": {
-                "type": "string"
-              },
-              "requiresAuth": {
-                "type": "boolean",
-                "default": true
-              },
-              "description": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "path",
-              "methods",
-              "handler"
-            ],
-            "additionalProperties": false
-          },
-          "default": []
-        },
-        "components": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "pattern": "^[a-z][a-z0-9-]*$"
-              },
-              "name": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 100
-              },
-              "path": {
-                "type": "string"
-              },
-              "slots": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "propsSchema": {
-                "type": "object",
-                "additionalProperties": {}
-              }
-            },
-            "required": [
-              "id",
-              "name",
-              "path"
-            ],
-            "additionalProperties": false
-          },
-          "default": []
-        },
-        "models": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string",
-                "pattern": "^[A-Z][a-zA-Z0-9]*$"
-              },
-              "schemaPath": {
-                "type": "string"
-              },
-              "collectionName": {
-                "type": "string",
-                "pattern": "^[a-z][a-z0-9-_]*$"
-              },
-              "description": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "name",
-              "schemaPath",
-              "collectionName"
-            ],
-            "additionalProperties": false
-          },
-          "default": []
-        },
-        "configSchema": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "key": {
-                "type": "string",
-                "pattern": "^[a-z][a-zA-Z0-9]*$"
-              },
               "label": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 100
+                "maxLength": 50,
+                "description": "Full name for tooltip"
               },
-              "type": {
+              "abbrev": {
                 "type": "string",
-                "enum": [
-                  "text",
-                  "number",
-                  "boolean",
-                  "select",
-                  "textarea",
-                  "password",
-                  "url",
-                  "email"
-                ]
+                "minLength": 1,
+                "maxLength": 10,
+                "description": "Short label for button"
               },
-              "default": {},
-              "required": {
-                "type": "boolean",
-                "default": false
+              "prefix": {
+                "type": "string",
+                "description": "Opening delimiter"
               },
-              "description": {
-                "type": "string"
-              },
-              "options": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "label": {
-                      "type": "string"
-                    },
-                    "value": {}
-                  },
-                  "required": [
-                    "label"
-                  ],
-                  "additionalProperties": false
-                }
-              },
-              "pattern": {
-                "type": "string"
-              },
-              "min": {
-                "type": "number"
-              },
-              "max": {
-                "type": "number"
+              "suffix": {
+                "type": "string",
+                "description": "Closing delimiter"
               }
             },
             "required": [
-              "key",
               "label",
-              "type"
+              "abbrev",
+              "prefix",
+              "suffix"
             ],
             "additionalProperties": false
-          },
-          "default": []
+          }
         },
-        "defaultConfig": {
-          "type": "object",
-          "additionalProperties": {},
-          "default": {}
+        "renderingPatterns": {
+          "description": "Message content rendering patterns",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Regex pattern string"
+              },
+              "className": {
+                "type": "string",
+                "minLength": 1,
+                "description": "CSS class name"
+              },
+              "flags": {
+                "description": "Regex flags",
+                "type": "string"
+              }
+            },
+            "required": [
+              "pattern",
+              "className"
+            ],
+            "additionalProperties": false
+          }
         },
-        "providerConfig": {
-          "type": "object",
-          "properties": {
-            "providerName": {
-              "type": "string",
-              "pattern": "^[A-Z][A-Z0-9_]*$"
-            },
-            "displayName": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100
-            },
-            "description": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 500
-            },
-            "abbreviation": {
-              "type": "string",
-              "minLength": 2,
-              "maxLength": 4,
-              "pattern": "^[A-Z0-9]+$"
-            },
-            "colors": {
+        "dialogueDetection": {
+          "description": "Dialogue paragraph detection",
+          "anyOf": [
+            {
               "type": "object",
               "properties": {
-                "bg": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "text": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "icon": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              },
-              "required": [
-                "bg",
-                "text",
-                "icon"
-              ],
-              "additionalProperties": false
-            },
-            "requiresApiKey": {
-              "type": "boolean",
-              "default": true
-            },
-            "requiresBaseUrl": {
-              "type": "boolean",
-              "default": false
-            },
-            "apiKeyLabel": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100
-            },
-            "baseUrlLabel": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100
-            },
-            "baseUrlDefault": {
-              "type": "string",
-              "format": "uri"
-            },
-            "capabilities": {
-              "type": "object",
-              "properties": {
-                "chat": {
-                  "type": "boolean",
-                  "default": true
-                },
-                "imageGeneration": {
-                  "type": "boolean",
-                  "default": false
-                },
-                "embeddings": {
-                  "type": "boolean",
-                  "default": false
-                },
-                "webSearch": {
-                  "type": "boolean",
-                  "default": false
-                }
-              },
-              "additionalProperties": false
-            },
-            "attachmentSupport": {
-              "type": "object",
-              "properties": {
-                "supported": {
-                  "type": "boolean",
-                  "default": false
-                },
-                "mimeTypes": {
+                "openingChars": {
                   "type": "array",
                   "items": {
                     "type": "string"
                   },
-                  "default": []
+                  "description": "Opening quote characters"
                 },
-                "description": {
-                  "type": "string"
+                "closingChars": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Closing quote characters"
+                },
+                "className": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "CSS class name"
                 }
               },
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "providerName",
-            "displayName",
-            "description",
-            "abbreviation",
-            "colors"
-          ],
-          "additionalProperties": false
-        },
-        "authProviderConfig": {
-          "type": "object",
-          "properties": {
-            "providerId": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9-]*$"
-            },
-            "displayName": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100
-            },
-            "requiredEnvVars": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "minItems": 1
-            },
-            "optionalEnvVars": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "buttonColor": {
-              "type": "string"
-            },
-            "buttonTextColor": {
-              "type": "string"
-            },
-            "icon": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "providerId",
-            "displayName",
-            "requiredEnvVars"
-          ],
-          "additionalProperties": false
-        },
-        "themeConfig": {
-          "type": "object",
-          "properties": {
-            "tokensPath": {
-              "type": "string",
-              "default": "tokens.json",
-              "description": "Path to theme tokens JSON file"
-            },
-            "stylesPath": {
-              "type": "string",
-              "description": "Path to component override CSS file"
-            },
-            "supportsDarkMode": {
-              "type": "boolean",
-              "default": true,
-              "description": "Whether theme provides dark mode colors"
-            },
-            "previewImage": {
-              "type": "string",
-              "description": "Theme preview image for theme picker"
-            },
-            "extendsTheme": {
-              "type": [
-                "string",
-                "null"
+              "required": [
+                "openingChars",
+                "closingChars",
+                "className"
               ],
-              "description": "Plugin name of theme to extend"
+              "additionalProperties": false
             },
-            "tags": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": [],
-              "description": "Tags for theme discovery"
-            },
-            "fonts": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "family": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Font family name"
-                  },
-                  "src": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Font file path relative to plugin"
-                  },
-                  "weight": {
-                    "type": "string",
-                    "default": "400",
-                    "description": "Font weight"
-                  },
-                  "style": {
-                    "type": "string",
-                    "default": "normal",
-                    "description": "Font style"
-                  },
-                  "display": {
-                    "type": "string",
-                    "enum": [
-                      "auto",
-                      "block",
-                      "swap",
-                      "fallback",
-                      "optional"
-                    ],
-                    "default": "swap"
-                  }
-                },
-                "required": [
-                  "family",
-                  "src"
-                ],
-                "additionalProperties": false
-              },
-              "default": [],
-              "description": "Custom fonts to load"
+            {
+              "type": "null"
             }
-          },
-          "additionalProperties": false
-        },
-        "roleplayTemplateConfig": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100,
-              "description": "Template display name"
-            },
-            "description": {
-              "type": "string",
-              "maxLength": 500,
-              "description": "Template description"
-            },
-            "systemPrompt": {
-              "type": "string",
-              "minLength": 1,
-              "description": "System prompt with formatting instructions"
-            },
-            "tags": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": [],
-              "description": "Tags for categorization"
-            }
-          },
-          "required": [
-            "name",
-            "systemPrompt"
-          ],
-          "additionalProperties": false
-        },
-        "permissions": {
-          "type": "object",
-          "properties": {
-            "fileSystem": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": []
-            },
-            "network": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": []
-            },
-            "environment": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": []
-            },
-            "database": {
-              "type": "boolean",
-              "default": false
-            },
-            "userData": {
-              "type": "boolean",
-              "default": false
-            }
-          },
-          "additionalProperties": false,
-          "default": {}
-        },
-        "sandboxed": {
-          "type": "boolean",
-          "default": true
-        },
-        "keywords": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": []
-        },
-        "icon": {
-          "type": "string"
-        },
-        "screenshots": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": []
-        },
-        "category": {
-          "type": "string",
-          "enum": [
-            "PROVIDER",
-            "THEME",
-            "INTEGRATION",
-            "UTILITY",
-            "ENHANCEMENT",
-            "DATABASE",
-            "STORAGE",
-            "AUTHENTICATION",
-            "OTHER"
-          ],
-          "default": "OTHER"
-        },
-        "enabledByDefault": {
-          "type": "boolean",
-          "default": false
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "STABLE",
-            "BETA",
-            "ALPHA",
-            "DEPRECATED"
-          ],
-          "default": "STABLE"
+          ]
         }
       },
       "required": [
         "name",
-        "title",
-        "description",
-        "version",
-        "author",
-        "compatibility"
+        "systemPrompt"
       ],
       "additionalProperties": false
+    },
+    "toolConfig": {
+      "type": "object",
+      "properties": {
+        "toolName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "Tool name for LLM function calls"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Display name for UI"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "Description for LLM"
+        },
+        "requiresConfiguration": {
+          "description": "Whether user must configure before use",
+          "type": "boolean"
+        },
+        "enabledByDefault": {
+          "description": "Whether tool is enabled by default",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "toolName",
+        "displayName",
+        "description",
+        "requiresConfiguration",
+        "enabledByDefault"
+      ],
+      "additionalProperties": false
+    },
+    "fileBackendConfig": {
+      "type": "object",
+      "properties": {
+        "backendId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "description": "Backend identifier"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Display name for UI"
+        },
+        "configFields": {
+          "description": "Configuration fields",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 50,
+                "description": "Field name"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "description": "Display label"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string",
+                  "secret",
+                  "boolean",
+                  "number"
+                ],
+                "description": "Field type"
+              },
+              "required": {
+                "description": "Whether field is required",
+                "type": "boolean"
+              },
+              "defaultValue": {
+                "description": "Default value",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "description": {
+                "description": "Field description",
+                "type": "string",
+                "maxLength": 500
+              },
+              "placeholder": {
+                "description": "Placeholder text",
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "name",
+              "label",
+              "type"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "backendId",
+        "displayName",
+        "configFields"
+      ],
+      "additionalProperties": false
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "fileSystem": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "network": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "environment": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "database": {
+          "type": "boolean"
+        },
+        "userData": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "fileSystem",
+        "network",
+        "environment",
+        "database",
+        "userData"
+      ],
+      "additionalProperties": false
+    },
+    "sandboxed": {
+      "type": "boolean"
+    },
+    "keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "icon": {
+      "type": "string"
+    },
+    "screenshots": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "PROVIDER",
+        "THEME",
+        "TEMPLATE",
+        "INTEGRATION",
+        "UTILITY",
+        "ENHANCEMENT",
+        "DATABASE",
+        "STORAGE",
+        "AUTHENTICATION",
+        "TOOLS",
+        "OTHER"
+      ]
+    },
+    "enabledByDefault": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "STABLE",
+        "BETA",
+        "ALPHA",
+        "DEPRECATED"
+      ]
+    },
+    "requiresRestart": {
+      "type": "boolean"
     }
   },
-  "$schema": "http://json-schema.org/draft-07/schema#"
+  "required": [
+    "name",
+    "title",
+    "description",
+    "version",
+    "author",
+    "license",
+    "main",
+    "compatibility",
+    "capabilities",
+    "keywords"
+  ],
+  "additionalProperties": false
 }

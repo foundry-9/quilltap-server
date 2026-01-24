@@ -21,11 +21,11 @@ export const revalidate = 0;
 
 // Validation schemas
 const addTagSchema = z.object({
-  tagId: z.string().uuid(),
+  tagId: z.uuid(),
 });
 
 const removeTagSchema = z.object({
-  tagId: z.string().uuid(),
+  tagId: z.uuid(),
 });
 
 /**

@@ -169,6 +169,7 @@ export const ChatSettingsSchema = z.object({
   themePreference: ThemePreferenceSchema.default({
     activeThemeId: null,
     colorMode: 'system',
+    showNavThemeSelector: false,
   }),
   /** Sidebar width in pixels (256-512, default: 256) */
   sidebarWidth: z.number().min(256).max(512).default(256).optional(),

@@ -352,7 +352,7 @@ export interface DatabaseBackend {
    * For SQLite, this creates the table if it doesn't exist
    * For MongoDB, this is largely a no-op but may create indexes
    */
-  ensureCollection(name: string, schema: z.ZodSchema): Promise<void>;
+  ensureCollection(name: string, schema: z.ZodType): Promise<void>;
 
   /**
    * Drop a collection/table

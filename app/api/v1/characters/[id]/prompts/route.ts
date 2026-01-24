@@ -14,7 +14,7 @@ import { notFound, serverError, validationError, created } from '@/lib/api/respo
 const createPromptSchema = z.object({
   name: z.string().min(1).max(100),
   content: z.string().min(1),
-  isDefault: z.boolean().optional().default(false),
+  isDefault: z.boolean().optional().prefault(false),
 });
 
 // GET /api/v1/characters/[id]/prompts
@@ -89,7 +89,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       return created({ prompt });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        logger.warn('[Characters v1] Invalid character prompt data', { errors: error.errors });
+        logger.warn('[Characters v1] Invalid character prompt data', { errors: error.issues });
         return validationError(error);
       }
       logger.error('[Characters v1] Error adding character prompt', {}, error instanceof Error ? error : undefined);

@@ -214,7 +214,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return badRequest('Validation error', error.errors);
+      return badRequest('Validation error', error.issues);
     }
 
     logger.error('[Models v1] Error fetching models', {}, error instanceof Error ? error : undefined);

@@ -30,7 +30,7 @@ export const SQLiteConfigSchema = z.object({
   /** Enable WAL (Write-Ahead Logging) mode for better concurrency */
   walMode: z.boolean().default(true),
   /** Busy timeout in milliseconds */
-  busyTimeout: z.number().int().positive().default(5000),
+  busyTimeout: z.int().positive().default(5000),
   /** Enable foreign key constraints */
   foreignKeys: z.boolean().default(true),
   /** Journal mode (only used if walMode is false) */
@@ -38,7 +38,7 @@ export const SQLiteConfigSchema = z.object({
   /** Synchronous mode */
   synchronous: z.enum(['off', 'normal', 'full', 'extra']).default('normal'),
   /** Cache size in KB (negative for KB, positive for pages) */
-  cacheSize: z.number().int().default(-64000), // 64MB
+  cacheSize: z.int().default(-64000), // 64MB
 });
 export type SQLiteConfig = z.infer<typeof SQLiteConfigSchema>;
 
@@ -51,7 +51,7 @@ export const MongoDBConfigSchema = z.object({
   /** Database name */
   database: z.string().min(1),
   /** Maximum connection pool size */
-  maxPoolSize: z.number().int().positive().default(10),
+  maxPoolSize: z.int().positive().default(10),
 });
 export type MongoDBConfig = z.infer<typeof MongoDBConfigSchema>;
 
@@ -76,8 +76,8 @@ export const DatabaseConfigSchema = z.object({
     return true;
   },
   {
-    message: 'Configuration for the selected backend must be provided',
-  }
+      error: 'Configuration for the selected backend must be provided'
+}
 );
 export type DatabaseConfig = z.infer<typeof DatabaseConfigSchema>;
 

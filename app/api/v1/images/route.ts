@@ -21,7 +21,7 @@ import { createHash } from 'crypto';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 
 const importFromUrlSchema = z.object({
-  url: z.string().url(),
+  url: z.url(),
   tags: z
     .array(
       z.object({
@@ -34,7 +34,7 @@ const importFromUrlSchema = z.object({
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1).max(4000),
-  profileId: z.string().uuid(),
+  profileId: z.uuid(),
   tags: z
     .array(
       z.object({
@@ -45,7 +45,7 @@ const generateImageSchema = z.object({
     .optional(),
   options: z
     .object({
-      n: z.number().int().min(1).max(10).optional(),
+      n: z.int().min(1).max(10).optional(),
       size: z.string().optional(),
       quality: z.enum(['standard', 'hd']).optional(),
       style: z.enum(['vivid', 'natural']).optional(),

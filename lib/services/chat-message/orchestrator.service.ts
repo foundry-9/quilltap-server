@@ -96,7 +96,7 @@ export const sendMessageSchema = z.object({
  */
 export const continueMessageSchema = z.object({
   continueMode: z.literal(true),
-  respondingParticipantId: z.string().uuid().optional(),
+  respondingParticipantId: z.uuid().optional(),
 })
 
 /**
@@ -1134,12 +1134,12 @@ function handleStreamError(
   let errorType = 'unknown'
 
   if (error instanceof z.ZodError) {
-    const firstError = error.errors[0]
+    const firstError = error.issues[0]
     errorMessage = firstError
       ? `Validation error: ${firstError.message} at ${firstError.path.join('.')}`
       : 'Response validation failed'
     errorType = 'validation'
-    logger.debug('Zod validation error details', { errors: error.errors })
+    logger.debug('Zod validation error details', { errors: error.issues })
   } else if (error instanceof Error) {
     errorMessage = error.message
     errorType = error.name

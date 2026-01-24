@@ -24,14 +24,14 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 const adoptOrphansSchema = z.object({
   storageKeys: z.array(z.string().min(1)).min(1, 'At least one storage key is required'),
   defaultProjectId: z.string().optional().nullable(),
-  source: z.enum(['IMPORTED', 'UPLOADED', 'GENERATED', 'SYSTEM']).default('IMPORTED'),
-  computeHashes: z.boolean().optional().default(false),
+  source: z.enum(['IMPORTED', 'UPLOADED', 'GENERATED', 'SYSTEM']).prefault('IMPORTED'),
+  computeHashes: z.boolean().optional().prefault(false),
 });
 
 const updateMountPointSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   path: z.string().min(1).optional(),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
 });
 
 type UpdateMountPointInput = z.infer<typeof updateMountPointSchema>;
@@ -494,7 +494,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     } catch (error) {
       if (error instanceof z.ZodError) {
         logger.debug('[Mount Points v1] Validation error on update', {
-          errors: error.errors,
+          errors: error.issues,
         });
         return validationError(error);
       }

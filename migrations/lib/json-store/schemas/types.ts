@@ -37,10 +37,10 @@ export type AvatarDisplayMode = z.infer<typeof AvatarDisplayModeEnum>;
 // ============================================================================
 
 // UUID identifier
-export const UUIDSchema = z.string().uuid();
+export const UUIDSchema = z.uuid();
 
 // ISO-8601 timestamp
-export const TimestampSchema = z.string().datetime().or(z.date()).transform(d => {
+export const TimestampSchema = z.iso.datetime().or(z.date()).transform(d => {
   if (d instanceof Date) return d.toISOString();
   return d;
 });
@@ -79,7 +79,7 @@ export type BackupCodes = z.infer<typeof BackupCodesSchema>;
 
 export const UserSchema = z.object({
   id: UUIDSchema,
-  email: z.string().email(),
+  email: z.email(),
   name: z.string().nullable().optional(),
   image: z.string().nullable().optional(),
   emailVerified: TimestampSchema.nullable().optional(),
@@ -394,7 +394,9 @@ export const ChatParticipantSchema = z.object({
     }
     return false;
   },
-  { message: 'CHARACTER participants must have characterId, PERSONA participants must have personaId' }
+  {
+      error: 'CHARACTER participants must have characterId, PERSONA participants must have personaId'
+}
 ).refine(
   (data) => {
     // CHARACTER participants must have a connectionProfileId
@@ -403,7 +405,9 @@ export const ChatParticipantSchema = z.object({
     }
     return true;
   },
-  { message: 'CHARACTER participants must have a connectionProfileId' }
+  {
+      error: 'CHARACTER participants must have a connectionProfileId'
+}
 );
 
 export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
@@ -443,7 +447,9 @@ export const ChatMetadataSchema = z.object({
   updatedAt: TimestampSchema,
 }).refine(
   (data) => data.participants.length > 0,
-  { message: 'Chat must have at least one participant' }
+  {
+      error: 'Chat must have at least one participant'
+}
 );
 
 export type ChatMetadata = z.infer<typeof ChatMetadataSchema>;

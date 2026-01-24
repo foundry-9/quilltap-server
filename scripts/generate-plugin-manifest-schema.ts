@@ -3,14 +3,13 @@
  * Generates JSON Schema from Zod schema for plugin manifest
  */
 
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { toJSONSchema } from 'zod';
 import { PluginManifestSchema } from '../lib/schemas/plugin-manifest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const jsonSchema = zodToJsonSchema(PluginManifestSchema, {
-  name: 'PluginManifest',
-  $refStrategy: 'none',
+const jsonSchema = toJSONSchema(PluginManifestSchema, {
+  reused: 'inline', // Equivalent to $refStrategy: 'none' - inline all schemas instead of using $ref
 });
 
 const outputPath = join(__dirname, '../plugins/dist/qtap-plugin-template/schemas/plugin-manifest.schema.json');

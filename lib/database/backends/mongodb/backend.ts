@@ -442,7 +442,7 @@ export class MongoDBBackend implements DatabaseBackend {
    * Ensure a collection exists with the specified schema
    * For MongoDB, this mainly creates indexes
    */
-  async ensureCollection(name: string, schema: z.ZodSchema): Promise<void> {
+  async ensureCollection(name: string, schema: z.ZodType): Promise<void> {
     if (!this.db) {
       throw new Error('MongoDB backend not connected');
     }

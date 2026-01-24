@@ -13,9 +13,9 @@ import { z } from 'zod';
  */
 export abstract class BaseRepository<T> {
   protected jsonStore: JsonStore;
-  protected schema: z.ZodSchema;
+  protected schema: z.ZodType;
 
-  constructor(jsonStore: JsonStore, schema: z.ZodSchema) {
+  constructor(jsonStore: JsonStore, schema: z.ZodType) {
     this.jsonStore = jsonStore;
     this.schema = schema;
   }

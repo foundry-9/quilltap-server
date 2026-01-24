@@ -4,11 +4,24 @@
  * Introspects Zod schemas to extract field metadata and generate
  * SQLite table definitions. Handles the translation from document-oriented
  * schemas to relational table structures.
+ *
+ * Updated for Zod v4 compatibility - uses internal _zod.def API.
  */
 
-import { z, ZodTypeAny, ZodObject, ZodArray, ZodOptional, ZodNullable, ZodDefault, ZodString, ZodNumber, ZodBoolean, ZodEnum, ZodLiteral, ZodUnion } from 'zod';
+import { z, ZodObject, ZodArray, ZodOptional, ZodNullable, ZodDefault, ZodString, ZodNumber, ZodBoolean, ZodEnum, ZodLiteral, ZodUnion, ZodType } from 'zod';
 import { FieldMetadata, SchemaMetadata, IndexDefinition } from './interfaces';
 import { logger } from '@/lib/logger';
+
+// ============================================================================
+// Zod v4 Internal API Access Helpers
+// ============================================================================
+
+/**
+ * Access the internal definition of a Zod schema (Zod v4 API)
+ */
+function getZodDef(schema: ZodType): any {
+  return (schema as any)._zod?.def;
+}
 
 // ============================================================================
 // Zod Schema Introspection
@@ -17,7 +30,7 @@ import { logger } from '@/lib/logger';
 /**
  * Get the inner type from optional/nullable/default wrappers
  */
-function unwrapType(schema: ZodTypeAny): { inner: ZodTypeAny; optional: boolean; nullable: boolean; defaultValue?: unknown } {
+function unwrapType(schema: ZodType): { inner: ZodType; optional: boolean; nullable: boolean; defaultValue?: unknown } {
   let inner = schema;
   let optional = false;
   let nullable = false;
@@ -27,13 +40,16 @@ function unwrapType(schema: ZodTypeAny): { inner: ZodTypeAny; optional: boolean;
   while (true) {
     if (inner instanceof ZodOptional) {
       optional = true;
-      inner = inner.unwrap();
+      inner = inner.unwrap() as unknown as ZodType;
     } else if (inner instanceof ZodNullable) {
       nullable = true;
-      inner = inner.unwrap();
+      inner = inner.unwrap() as unknown as ZodType;
     } else if (inner instanceof ZodDefault) {
-      defaultValue = inner._def.defaultValue();
-      inner = inner._def.innerType;
+      const def = getZodDef(inner);
+      defaultValue = def?.defaultValue;
+      const innerType = def?.innerType as ZodType | undefined;
+      if (!innerType) break;
+      inner = innerType;
     } else {
       break;
     }
@@ -45,7 +61,7 @@ function unwrapType(schema: ZodTypeAny): { inner: ZodTypeAny; optional: boolean;
 /**
  * Determine the base type from a Zod schema
  */
-function getBaseType(schema: ZodTypeAny): FieldMetadata['type'] {
+function getBaseType(schema: ZodType): FieldMetadata['type'] {
   const { inner } = unwrapType(schema);
 
   if (inner instanceof ZodString) return 'string';
@@ -55,23 +71,33 @@ function getBaseType(schema: ZodTypeAny): FieldMetadata['type'] {
   if (inner instanceof ZodObject) return 'object';
   if (inner instanceof ZodEnum) return 'string';
   if (inner instanceof ZodLiteral) {
-    const value = inner._def.value;
+    // Zod v4: values is an array
+    const def = getZodDef(inner);
+    const values = def?.values;
+    const value = Array.isArray(values) ? values[0] : values;
     if (typeof value === 'string') return 'string';
     if (typeof value === 'number') return 'number';
     if (typeof value === 'boolean') return 'boolean';
   }
   if (inner instanceof ZodUnion) {
     // For unions, try to determine the common type
-    const options = inner._def.options as ZodTypeAny[];
+    const def = getZodDef(inner);
+    const options = def?.options as ZodType[] || [];
     const types = options.map(opt => getBaseType(opt));
-    if (types.every(t => t === types[0])) return types[0];
+    if (types.length > 0 && types.every(t => t === types[0])) return types[0];
     return 'unknown';
   }
 
-  // Check for date-like strings (ISO format)
-  if (inner._def?.typeName === 'ZodString') {
-    const checks = (inner as ZodString)._def.checks || [];
-    if (checks.some((c: any) => c.kind === 'datetime' || c.kind === 'date')) {
+  // Check for date-like strings (ISO format) using instanceof instead of typeName
+  if (inner instanceof ZodString) {
+    const def = getZodDef(inner);
+    const checks = def?.checks || [];
+    // Zod v4: check objects have _zod.def with the check type
+    if (checks.some((c: any) => {
+      const checkDef = c?._zod?.def || c;
+      const checkType = checkDef.check || checkDef.kind;
+      return checkType === 'datetime' || checkType === 'date';
+    })) {
       return 'date';
     }
   }
@@ -80,19 +106,39 @@ function getBaseType(schema: ZodTypeAny): FieldMetadata['type'] {
 }
 
 /**
+ * Get the check definition from a Zod v4 check object
+ * In Zod v4, check objects are class instances with _zod.def containing the definition
+ */
+function getCheckDef(check: any): any {
+  return check?._zod?.def || check;
+}
+
+/**
  * Extract string constraints
  */
-function getStringConstraints(schema: ZodTypeAny): { maxLength?: number; minLength?: number } {
+function getStringConstraints(schema: ZodType): { maxLength?: number; minLength?: number } {
   const { inner } = unwrapType(schema);
 
   if (!(inner instanceof ZodString)) return {};
 
-  const checks = inner._def.checks || [];
+  const def = getZodDef(inner);
+  const checks = def?.checks || [];
   const constraints: { maxLength?: number; minLength?: number } = {};
 
   for (const check of checks) {
-    if (check.kind === 'max') constraints.maxLength = check.value;
-    if (check.kind === 'min') constraints.minLength = check.value;
+    // Zod v4: check objects are class instances with _zod.def containing the definition
+    const checkDef = getCheckDef(check);
+    const checkType = checkDef.check || checkDef.kind;
+
+    // Zod v4 uses "max_length"/"min_length" with "maximum"/"minimum" properties
+    if (checkType === 'max_length' || checkType === 'max' || checkType === 'length') {
+      if (checkDef.maximum !== undefined) constraints.maxLength = checkDef.maximum;
+      else if (checkDef.value !== undefined) constraints.maxLength = checkDef.value;
+    }
+    if (checkType === 'min_length' || checkType === 'min') {
+      if (checkDef.minimum !== undefined) constraints.minLength = checkDef.minimum;
+      else if (checkDef.value !== undefined) constraints.minLength = checkDef.value;
+    }
   }
 
   return constraints;
@@ -101,17 +147,28 @@ function getStringConstraints(schema: ZodTypeAny): { maxLength?: number; minLeng
 /**
  * Extract number constraints
  */
-function getNumberConstraints(schema: ZodTypeAny): { min?: number; max?: number } {
+function getNumberConstraints(schema: ZodType): { min?: number; max?: number } {
   const { inner } = unwrapType(schema);
 
   if (!(inner instanceof ZodNumber)) return {};
 
-  const checks = inner._def.checks || [];
+  const def = getZodDef(inner);
+  const checks = def?.checks || [];
   const constraints: { min?: number; max?: number } = {};
 
   for (const check of checks) {
-    if (check.kind === 'min') constraints.min = check.value;
-    if (check.kind === 'max') constraints.max = check.value;
+    // Zod v4: check objects are class instances with _zod.def containing the definition
+    const checkDef = getCheckDef(check);
+    const checkType = checkDef.check || checkDef.kind;
+
+    // Zod v4 uses "greater_than" for min and "less_than" for max
+    // The value is in checkDef.value
+    if (checkType === 'greater_than' || checkType === 'min') {
+      if (checkDef.value !== undefined) constraints.min = checkDef.value;
+    }
+    if (checkType === 'less_than' || checkType === 'max') {
+      if (checkDef.value !== undefined) constraints.max = checkDef.value;
+    }
   }
 
   return constraints;
@@ -120,7 +177,7 @@ function getNumberConstraints(schema: ZodTypeAny): { min?: number; max?: number 
 /**
  * Extract metadata from a single field
  */
-function extractFieldMetadata(name: string, schema: ZodTypeAny): FieldMetadata {
+function extractFieldMetadata(name: string, schema: ZodType): FieldMetadata {
   const { inner, optional, nullable, defaultValue } = unwrapType(schema);
   const type = getBaseType(schema);
 
@@ -144,10 +201,13 @@ function extractFieldMetadata(name: string, schema: ZodTypeAny): FieldMetadata {
     if (max !== undefined) metadata.max = max;
   }
 
-  // Handle arrays
+  // Handle arrays - Zod v4 uses 'element' instead of 'type'
   if (inner instanceof ZodArray) {
-    const elementSchema = inner._def.type;
-    metadata.elementType = extractFieldMetadata('element', elementSchema);
+    const def = getZodDef(inner);
+    const elementSchema = def?.element;
+    if (elementSchema) {
+      metadata.elementType = extractFieldMetadata('element', elementSchema);
+    }
   }
 
   // Handle nested objects
@@ -171,11 +231,13 @@ function extractFieldMetadata(name: string, schema: ZodTypeAny): FieldMetadata {
  * Extract all fields from a Zod object schema
  */
 function extractObjectFields(schema: ZodObject<any>): FieldMetadata[] {
-  const shape = schema._def.shape();
+  // Zod v4: shape is a property, not a function
+  const def = getZodDef(schema);
+  const shape = def?.shape || {};
   const fields: FieldMetadata[] = [];
 
   for (const [name, fieldSchema] of Object.entries(shape)) {
-    fields.push(extractFieldMetadata(name, fieldSchema as ZodTypeAny));
+    fields.push(extractFieldMetadata(name, fieldSchema as ZodType));
   }
 
   return fields;
@@ -184,7 +246,7 @@ function extractObjectFields(schema: ZodObject<any>): FieldMetadata[] {
 /**
  * Extract complete schema metadata from a Zod schema
  */
-export function extractSchemaMetadata(name: string, schema: z.ZodSchema): SchemaMetadata {
+export function extractSchemaMetadata(name: string, schema: z.ZodType): SchemaMetadata {
   // Ensure we have an object schema
   if (!(schema instanceof ZodObject)) {
     throw new Error(`Schema for ${name} must be a ZodObject`);
@@ -346,7 +408,7 @@ export function generateCreateIndexes(metadata: SchemaMetadata): string[] {
 /**
  * Generate all DDL statements for a schema
  */
-export function generateDDL(name: string, schema: z.ZodSchema): string[] {
+export function generateDDL(name: string, schema: z.ZodType): string[] {
   try {
     const metadata = extractSchemaMetadata(name, schema);
     const statements: string[] = [];

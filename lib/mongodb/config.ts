@@ -16,8 +16,8 @@ const mongoDBConfigSchema = z.object({
   database: z.string().min(1, 'Database name is required'),
   mode: z.enum(['external', 'embedded']).default('external'),
   dataDir: z.string().optional(),
-  connectionTimeoutMs: z.number().int().positive().default(10000),
-  maxPoolSize: z.number().int().positive().default(10),
+  connectionTimeoutMs: z.int().positive().default(10000),
+  maxPoolSize: z.int().positive().default(10),
 });
 
 /**
@@ -111,7 +111,7 @@ export function validateMongoDBConfig(): MongoDBConfig {
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const validationErrors = error.errors.map((err) => {
+      const validationErrors = error.issues.map((err) => {
         const path = err.path.join('.');
         return `${path}: ${err.message}`;
       });

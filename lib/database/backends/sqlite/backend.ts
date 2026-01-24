@@ -404,7 +404,7 @@ export class SQLiteBackend implements DatabaseBackend {
   private config: SQLiteConfig;
   private db: DatabaseType | null = null;
   private _state: ConnectionState = 'disconnected';
-  private collectionSchemas: Map<string, z.ZodSchema> = new Map();
+  private collectionSchemas: Map<string, z.ZodType> = new Map();
   private collectionJsonColumns: Map<string, string[]> = new Map();
 
   constructor(config?: SQLiteConfig) {
@@ -481,7 +481,7 @@ export class SQLiteBackend implements DatabaseBackend {
   /**
    * Ensure a collection (table) exists with the specified schema
    */
-  async ensureCollection(name: string, schema: z.ZodSchema): Promise<void> {
+  async ensureCollection(name: string, schema: z.ZodType): Promise<void> {
     if (!this.db) {
       throw new Error('SQLite backend not connected');
     }

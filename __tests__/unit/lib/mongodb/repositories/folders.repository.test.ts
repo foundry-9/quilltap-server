@@ -45,14 +45,15 @@ const { FoldersRepository } =
 // Test fixtures
 const now = new Date().toISOString()
 
-// Use proper UUIDs for test fixtures to pass schema validation
-const TEST_FOLDER_ID = '11111111-1111-1111-1111-111111111111'
-const TEST_FOLDER_ID_2 = '11111111-1111-1111-1111-111111111112'
-const TEST_USER_ID = '22222222-2222-2222-2222-222222222222'
-const TEST_PROJECT_ID = '33333333-3333-3333-3333-333333333333'
-const TEST_PARENT_FOLDER_ID = '44444444-4444-4444-4444-444444444444'
-const TEST_CHILD_ID_1 = '55555555-5555-5555-5555-555555555551'
-const TEST_CHILD_ID_2 = '55555555-5555-5555-5555-555555555552'
+// Use RFC 4122 compliant UUIDs for test fixtures (Zod v4 strictly validates UUIDs)
+// Format: xxxxxxxx-xxxx-Vxxx-Nxxx-xxxxxxxxxxxx where V=version(1-8), N=variant(8,9,a,b)
+const TEST_FOLDER_ID = '11111111-1111-4111-a111-111111111111'
+const TEST_FOLDER_ID_2 = '11111111-1111-4111-a111-111111111112'
+const TEST_USER_ID = '22222222-2222-4222-a222-222222222222'
+const TEST_PROJECT_ID = '33333333-3333-4333-a333-333333333333'
+const TEST_PARENT_FOLDER_ID = '44444444-4444-4444-a444-444444444444'
+const TEST_CHILD_ID_1 = '55555555-5555-4555-a555-555555555551'
+const TEST_CHILD_ID_2 = '55555555-5555-4555-a555-555555555552'
 
 const makeFolder = (overrides: Partial<Folder> = {}): Folder => ({
   id: TEST_FOLDER_ID,
@@ -113,8 +114,8 @@ describe('Folders Repository', () => {
   describe('findAll', () => {
     it('returns all folders', async () => {
       const folders = [
-        makeFolder({ id: '11111111-1111-1111-1111-111111111101' }), 
-        makeFolder({ id: '11111111-1111-1111-1111-111111111102' })
+        makeFolder({ id: '11111111-1111-4111-a111-111111111101' }),
+        makeFolder({ id: '11111111-1111-4111-a111-111111111102' })
       ]
       mockCollection.find.mockReturnValue({
         toArray: jest.fn().mockResolvedValue(folders),
@@ -172,7 +173,7 @@ describe('Folders Repository', () => {
     it('uses provided ID and createdAt from options', async () => {
       mockCollection.insertOne.mockResolvedValue({ acknowledged: true })
 
-      const customId = '55555555-5555-5555-5555-555555555555'
+      const customId = '55555555-5555-4555-a555-555555555555'
       const data = {
         userId: TEST_USER_ID,
         projectId: null,
@@ -228,7 +229,7 @@ describe('Folders Repository', () => {
     })
 
     it('preserves ID and createdAt', async () => {
-      const originalId = '66666666-6666-6666-6666-666666666666'
+      const originalId = '66666666-6666-4666-a666-666666666666'
       const existing = makeFolder({
         id: originalId,
         createdAt: '2024-01-01T00:00:00.000Z',

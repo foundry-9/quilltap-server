@@ -25,11 +25,11 @@ const editMessageSchema = z.object({
 });
 
 const swipeActionSchema = z.object({
-  swipeIndex: z.number().int().min(0).optional(), // For switching swipes
+  swipeIndex: z.int().min(0).optional(), // For switching swipes
 });
 
 const reattributeActionSchema = z.object({
-  newParticipantId: z.string().uuid('New participant ID is required'),
+  newParticipantId: z.uuid('New participant ID is required'),
 });
 
 // =============================================================================

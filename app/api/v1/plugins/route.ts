@@ -23,18 +23,18 @@ import { badRequest, serverError, validationError } from '@/lib/api/responses';
 
 const searchPluginsSchema = z.object({
   query: z.string().min(1, 'Search query is required'),
-  type: z.enum(['provider', 'theme', 'tool', 'all']).optional().default('all'),
+  type: z.enum(['provider', 'theme', 'tool', 'all']).optional().prefault('all'),
 });
 
 const installPluginSchema = z.object({
   packageName: z.string().min(1, 'Package name is required'),
   version: z.string().optional(),
-  scope: z.enum(['site', 'user']).optional().default('user'),
+  scope: z.enum(['site', 'user']).optional().prefault('user'),
 });
 
 const uninstallPluginSchema = z.object({
   packageName: z.string().min(1, 'Package name is required'),
-  scope: z.enum(['site', 'user']).optional().default('user'),
+  scope: z.enum(['site', 'user']).optional().prefault('user'),
 });
 
 type SearchPluginsInput = z.infer<typeof searchPluginsSchema>;
@@ -143,7 +143,7 @@ async function handleSearch(req: NextRequest, context: any) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Plugins v1] Validation error on search', { errors: error.errors });
+      logger.debug('[Plugins v1] Validation error on search', { errors: error.issues });
       return validationError(error);
     }
 
@@ -207,7 +207,7 @@ async function handleInstall(req: NextRequest, context: any) {
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Plugins v1] Validation error on install', { errors: error.errors });
+      logger.debug('[Plugins v1] Validation error on install', { errors: error.issues });
       return validationError(error);
     }
 
@@ -262,7 +262,7 @@ async function handleUninstall(req: NextRequest, context: any) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Plugins v1] Validation error on uninstall', { errors: error.errors });
+      logger.debug('[Plugins v1] Validation error on uninstall', { errors: error.issues });
       return validationError(error);
     }
 

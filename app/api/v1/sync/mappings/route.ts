@@ -26,10 +26,10 @@ import { SyncableEntityTypeEnum, SyncableEntityType } from '@/lib/sync/types';
 // ============================================================================
 
 const createMappingSchema = z.object({
-  instanceId: z.string().uuid(),
+  instanceId: z.uuid(),
   entityType: SyncableEntityTypeEnum,
-  localId: z.string().uuid(),
-  remoteId: z.string().uuid(),
+  localId: z.uuid(),
+  remoteId: z.uuid(),
 });
 
 const batchCreateSchema = z.array(createMappingSchema);

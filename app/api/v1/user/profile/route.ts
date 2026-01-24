@@ -30,8 +30,8 @@ import {
 
 const updateProfileSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  email: z.string().email().optional(),
-  image: z.string().url().optional().or(z.literal('')),
+  email: z.email().optional(),
+  image: z.url().optional().or(z.literal('')),
 });
 
 const avatarSchema = z.object({
@@ -41,7 +41,7 @@ const avatarSchema = z.object({
 const themePreferenceUpdateSchema = z.object({
   activeThemeId: z.string().nullable().optional(),
   colorMode: z.enum(['light', 'dark', 'system']).optional(),
-  customOverrides: z.record(z.string()).optional(),
+  customOverrides: z.record(z.string(), z.string()).optional(),
   showNavThemeSelector: z.boolean().optional(),
 });
 
@@ -191,7 +191,7 @@ export const PUT = createAuthenticatedHandler(async (req, context) => {
       if (!validationResult.success) {
         logger.warn('[User Profile v1] Theme preference validation failed', {
           userId: user.id,
-          errors: validationResult.error.errors,
+          errors: validationResult.error.issues,
         });
         return badRequest('Invalid theme preference data');
       }

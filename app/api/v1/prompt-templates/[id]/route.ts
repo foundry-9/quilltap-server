@@ -144,7 +144,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     } catch (error) {
       if (error instanceof z.ZodError) {
         logger.debug('[Prompt Templates v1] Validation error on update', {
-          errors: error.errors,
+          errors: error.issues,
         });
         return validationError(error);
       }

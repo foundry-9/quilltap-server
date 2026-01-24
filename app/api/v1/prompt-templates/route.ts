@@ -88,7 +88,7 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Prompt Templates v1] Validation error', { errors: error.errors });
+      logger.debug('[Prompt Templates v1] Validation error', { errors: error.issues });
       return validationError(error);
     }
 

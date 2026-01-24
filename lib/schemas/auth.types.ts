@@ -60,7 +60,7 @@ export type TrustedDevice = z.infer<typeof TrustedDeviceSchema>;
 export const UserSchema = z.object({
   id: UUIDSchema,
   username: z.string().min(3).max(50),
-  email: z.string().email().nullable().optional(),
+  email: z.email().nullable().optional(),
   name: z.string().nullable().optional(),
   image: z.string().nullable().optional(),
   emailVerified: TimestampSchema.nullable().optional(),

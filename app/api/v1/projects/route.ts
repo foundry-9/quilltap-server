@@ -19,8 +19,8 @@ const createProjectSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   description: z.string().max(2000).optional(),
   instructions: z.string().max(10000).optional(),
-  allowAnyCharacter: z.boolean().optional().default(false),
-  characterRoster: z.array(z.string().uuid()).optional().default([]),
+  allowAnyCharacter: z.boolean().optional().prefault(false),
+  characterRoster: z.array(z.uuid()).optional().prefault([]),
   color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/).optional(),
   icon: z.string().max(50).optional(),
 });

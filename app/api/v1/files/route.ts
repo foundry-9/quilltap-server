@@ -19,8 +19,8 @@ import { successResponse, badRequest, forbidden, serverError, validationError } 
 const writeFileSchema = z.object({
   filename: z.string().min(1).max(255),
   content: z.string().max(1024 * 1024), // Max 1MB content
-  mimeType: z.string().default('text/plain'),
-  projectId: z.string().uuid().nullable().optional(),
+  mimeType: z.string().prefault('text/plain'),
+  projectId: z.uuid().nullable().optional(),
   folderPath: z.string().optional(),
 });
 
@@ -112,8 +112,8 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
     const parsed = writeFileSchema.safeParse(body);
 
     if (!parsed.success) {
-      logger.debug('[Files v1] Invalid file write request', { errors: parsed.error.errors });
-      return badRequest('Invalid request: ' + parsed.error.errors.map((e: any) => e.message).join(', '));
+      logger.debug('[Files v1] Invalid file write request', { errors: parsed.error.issues });
+      return badRequest('Invalid request: ' + parsed.error.issues.map((e: any) => e.message).join(', '));
     }
 
     const { filename, content, mimeType, projectId, folderPath: rawFolderPath } = parsed.data;

@@ -26,9 +26,9 @@ export interface CreateOptions {
  */
 export abstract class MongoBaseRepository<T> {
   protected collectionName: string;
-  protected schema: z.ZodSchema;
+  protected schema: z.ZodType;
 
-  constructor(collectionName: string, schema: z.ZodSchema) {
+  constructor(collectionName: string, schema: z.ZodType) {
     this.collectionName = collectionName;
     this.schema = schema;
   }

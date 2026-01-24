@@ -36,33 +36,33 @@ const updateProjectSchema = z.object({
   description: z.string().max(2000).nullable().optional(),
   instructions: z.string().max(10000).nullable().optional(),
   allowAnyCharacter: z.boolean().optional(),
-  characterRoster: z.array(z.string().uuid()).optional(),
+  characterRoster: z.array(z.uuid()).optional(),
   color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/).nullable().optional(),
   icon: z.string().max(50).nullable().optional(),
 });
 
 const addCharacterSchema = z.object({
-  characterId: z.string().uuid(),
+  characterId: z.uuid(),
 });
 
 const removeCharacterSchema = z.object({
-  characterId: z.string().uuid(),
+  characterId: z.uuid(),
 });
 
 const addChatSchema = z.object({
-  chatId: z.string().uuid(),
+  chatId: z.uuid(),
 });
 
 const removeChatSchema = z.object({
-  chatId: z.string().uuid(),
+  chatId: z.uuid(),
 });
 
 const addFileSchema = z.object({
-  fileId: z.string().uuid(),
+  fileId: z.uuid(),
 });
 
 const removeFileSchema = z.object({
-  fileId: z.string().uuid(),
+  fileId: z.uuid(),
 });
 
 // ============================================================================

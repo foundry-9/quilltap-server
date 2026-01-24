@@ -23,24 +23,24 @@ import { createHash } from 'crypto';
 
 const grantPermissionSchema = z.object({
   scope: FileWritePermissionScopeEnum,
-  fileId: z.string().uuid().optional(),
-  projectId: z.string().uuid().optional(),
-  grantedInChatId: z.string().uuid().optional(),
+  fileId: z.uuid().optional(),
+  projectId: z.uuid().optional(),
+  grantedInChatId: z.uuid().optional(),
 });
 
 const revokePermissionSchema = z.object({
-  permissionId: z.string().uuid(),
+  permissionId: z.uuid(),
 });
 
 const completeWriteSchema = z.object({
-  chatId: z.string().uuid(),
+  chatId: z.uuid(),
   action: z.enum(['approve', 'deny']),
   pendingWrite: z.object({
     filename: z.string().min(1),
     content: z.string(),
-    mimeType: z.string().optional().default('text/plain'),
-    folderPath: z.string().optional().default('/'),
-    projectId: z.string().uuid().nullable(),
+    mimeType: z.string().optional().prefault('text/plain'),
+    folderPath: z.string().optional().prefault('/'),
+    projectId: z.uuid().nullable(),
   }),
 });
 
@@ -124,7 +124,7 @@ async function handleGrantPermission(request: NextRequest, user: any, repos: any
     const parsed = grantPermissionSchema.safeParse(body);
 
     if (!parsed.success) {
-      logger.debug('[Files v1] Invalid permission grant request', { errors: parsed.error.errors });
+      logger.debug('[Files v1] Invalid permission grant request', { errors: parsed.error.issues });
       return validationError(parsed.error);
     }
 
@@ -297,7 +297,7 @@ async function handleCompleteWrite(request: NextRequest, user: any, repos: any):
     const parsed = completeWriteSchema.safeParse(body);
 
     if (!parsed.success) {
-      logger.debug('[Files v1] Invalid completion request', { errors: parsed.error.errors });
+      logger.debug('[Files v1] Invalid completion request', { errors: parsed.error.issues });
       return validationError(parsed.error);
     }
 

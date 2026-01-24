@@ -172,7 +172,7 @@ export async function getCollection<T = unknown>(name: string): Promise<Database
 /**
  * Ensure a collection exists with the specified schema
  */
-export async function ensureCollection(name: string, schema: z.ZodSchema): Promise<void> {
+export async function ensureCollection(name: string, schema: z.ZodType): Promise<void> {
   const backend = await getDatabaseAsync();
   await backend.ensureCollection(name, schema);
 }

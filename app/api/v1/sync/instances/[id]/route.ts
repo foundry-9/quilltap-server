@@ -49,7 +49,7 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 
 const updateInstanceSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  url: z.string().url().optional(),
+  url: z.url().optional(),
   apiKey: z.string().min(1).optional(),
   isActive: z.boolean().optional(),
 });

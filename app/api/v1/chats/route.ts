@@ -42,9 +42,9 @@ type Repos = RepositoryContainer;
 // Participant schema for chat creation
 const createParticipantSchema = z.object({
   type: z.literal('CHARACTER'),
-  characterId: z.string().uuid(),
-  connectionProfileId: z.string().uuid().optional(),
-  imageProfileId: z.string().uuid().optional(),
+  characterId: z.uuid(),
+  connectionProfileId: z.uuid().optional(),
+  imageProfileId: z.uuid().optional(),
   systemPromptOverride: z.string().optional(),
   controlledBy: z.enum(['llm', 'user']).optional(),
 });
@@ -54,7 +54,7 @@ const createChatSchema = z.object({
   title: z.string().optional(),
   scenario: z.string().optional(),
   timestampConfig: TimestampConfigSchema.optional(),
-  projectId: z.string().uuid().optional(),
+  projectId: z.uuid().optional(),
 });
 
 // ============================================================================

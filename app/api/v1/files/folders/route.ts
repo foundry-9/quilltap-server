@@ -27,18 +27,18 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 
 const createFolderSchema = z.object({
   path: z.string().min(1),
-  projectId: z.string().uuid().nullable().optional(),
+  projectId: z.uuid().nullable().optional(),
 });
 
 const renameFolderSchema = z.object({
   path: z.string().min(1),
   newName: z.string().min(1).max(100),
-  projectId: z.string().uuid().nullable().optional(),
+  projectId: z.uuid().nullable().optional(),
 });
 
 const deleteFolderSchema = z.object({
   path: z.string().min(1),
-  projectId: z.string().uuid().nullable().optional(),
+  projectId: z.uuid().nullable().optional(),
 });
 
 // ============================================================================

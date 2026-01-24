@@ -49,7 +49,7 @@ const handshakeSchema = z.object({
     supportedEntityTypes: z.array(z.string()),
   }),
   // Optional authentication fields
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   password: z.string().optional(),
   apiKey: z.string().optional(),
 });
@@ -63,16 +63,16 @@ const pushDataSchema = z.object({
   // Legacy support for mappings if provided
   mappings: z.array(
     z.object({
-      localId: z.string().uuid(),
-      remoteId: z.string().uuid().optional(),
+      localId: z.uuid(),
+      remoteId: z.uuid().optional(),
       entityType: SyncableEntityTypeEnum,
     })
   ).optional(),
 });
 
 const mappingsExchangeSchema = z.object({
-  instanceId: z.string().uuid(),
-  localMappings: z.record(z.string().uuid(), z.string().uuid()),
+  instanceId: z.uuid(),
+  localMappings: z.record(z.uuid(), z.uuid()),
 });
 
 // ============================================================================
@@ -124,7 +124,7 @@ async function handleHandshake(
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Sync v1] Handshake validation error', { errors: error.errors });
+      logger.debug('[Sync v1] Handshake validation error', { errors: error.issues });
       return validationError(error);
     }
 
@@ -175,7 +175,7 @@ async function handleDelta(
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Sync v1] Delta validation error', { errors: error.errors });
+      logger.debug('[Sync v1] Delta validation error', { errors: error.issues });
       return validationError(error);
     }
 

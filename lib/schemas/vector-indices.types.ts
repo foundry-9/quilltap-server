@@ -17,11 +17,11 @@ import {
 // VECTOR METADATA
 // ============================================================================
 
-export const VectorMetadataSchema = z.object({
+export const VectorMetadataSchema = z.looseObject({
   memoryId: UUIDSchema,
   characterId: UUIDSchema,
   content: z.string().optional(),
-}).passthrough();
+});
 
 export type VectorMetadata = z.infer<typeof VectorMetadataSchema>;
 

@@ -19,7 +19,7 @@ import { notFound, badRequest, serverError, validationError } from '@/lib/api/re
 // ============================================================================
 
 const setConfigSchema = z.object({
-  config: z.record(z.unknown()),
+  config: z.record(z.string(), z.unknown()),
 });
 
 type SetConfigInput = z.infer<typeof setConfigSchema>;
@@ -116,7 +116,7 @@ async function handleSetConfig(req: NextRequest, context: any, name: string) {
     if (!parseResult.success) {
       logger.debug('[Plugins v1] Invalid config update request', {
         pluginName: name,
-        errors: parseResult.error.errors,
+        errors: parseResult.error.issues,
       });
       return validationError(parseResult.error);
     }
@@ -226,7 +226,7 @@ async function handleSetConfig(req: NextRequest, context: any, name: string) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Plugins v1] Validation error on set-config', { errors: error.errors });
+      logger.debug('[Plugins v1] Validation error on set-config', { errors: error.issues });
       return validationError(error);
     }
 

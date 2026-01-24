@@ -45,7 +45,7 @@ export const BackgroundJobSchema = z.object({
   userId: UUIDSchema,
   type: BackgroundJobTypeEnum,
   status: BackgroundJobStatusEnum.default('PENDING'),
-  payload: z.record(z.unknown()),               // Type-specific payload
+  payload: z.record(z.string(), z.unknown()),               // Type-specific payload
   priority: z.number().default(0),              // Higher = more urgent
   attempts: z.number().default(0),
   maxAttempts: z.number().default(3),

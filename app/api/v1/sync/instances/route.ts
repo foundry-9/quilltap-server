@@ -25,7 +25,7 @@ import type { CreateSyncInstance } from '@/lib/sync/types';
 
 const createInstanceSchema = z.object({
   name: z.string().min(1).max(200),
-  url: z.string().url(),
+  url: z.url(),
   apiKey: z.string().min(1),
 });
 

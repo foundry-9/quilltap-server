@@ -49,10 +49,10 @@ export type LocalBackendConfig = z.infer<typeof LocalBackendConfigSchema>;
 export const S3BackendConfigSchema = z.object({
   bucket: z.string().min(1, 'Bucket name is required'),
   region: z.string().default('us-east-1'),
-  endpoint: z.string().url('Endpoint must be a valid URL').optional(),
+  endpoint: z.url('Endpoint must be a valid URL').optional(),
   pathPrefix: z.string().optional(),
   forcePathStyle: z.boolean().default(false),
-  publicUrl: z.string().url('Public URL must be a valid URL').optional(),
+  publicUrl: z.url('Public URL must be a valid URL').optional(),
 });
 
 export type S3BackendConfig = z.infer<typeof S3BackendConfigSchema>;
@@ -76,7 +76,7 @@ export const MountPointSchema = z.object({
 
   // Backend configuration
   backendType: z.string().min(1, 'Backend type is required'),
-  backendConfig: z.record(z.unknown()),
+  backendConfig: z.record(z.string(), z.unknown()),
   encryptedSecrets: z.string().nullable(),
 
   // Scope and ownership
@@ -109,7 +109,7 @@ export type MountPoint = z.infer<typeof MountPointSchema>;
 export const BackendConfigUnionSchema = z.union([
   LocalBackendConfigSchema,
   S3BackendConfigSchema,
-  z.record(z.unknown()), // Fallback for plugin-provided backends
+  z.record(z.string(), z.unknown()), // Fallback for plugin-provided backends
 ]);
 
 export type BackendConfigUnion = z.infer<typeof BackendConfigUnionSchema>;

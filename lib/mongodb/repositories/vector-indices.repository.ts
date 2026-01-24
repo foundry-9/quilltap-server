@@ -16,11 +16,11 @@ import { logger } from '@/lib/logger';
 const VectorEntrySchema = z.object({
   id: z.string(),
   embedding: z.array(z.number()),
-  metadata: z.object({
-    memoryId: z.string(),
-    characterId: z.string(),
-    content: z.string().optional(),
-  }).passthrough(),
+  metadata: z.looseObject({
+      memoryId: z.string(),
+      characterId: z.string(),
+      content: z.string().optional(),
+    }),
   createdAt: z.string(),
 });
 

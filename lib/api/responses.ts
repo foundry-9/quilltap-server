@@ -119,7 +119,7 @@ export function validationError(
   return NextResponse.json(
     {
       error: 'Validation error',
-      details: zodError.errors,
+      details: zodError.issues,
     },
     { status: 400 }
   );

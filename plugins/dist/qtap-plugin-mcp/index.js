@@ -6951,9 +6951,9 @@ var envSchema = import_zod.z.object({
   // Node environment
   NODE_ENV: import_zod.z.enum(["development", "production", "test"]).default("development"),
   // Database (legacy - no longer used, MongoDB is required)
-  DATABASE_URL: import_zod.z.string().url().optional(),
+  DATABASE_URL: import_zod.z.url().optional(),
   // Base URL for the application (used for OAuth callbacks, etc.)
-  BASE_URL: import_zod.z.string().url().optional().default("http://localhost:3000"),
+  BASE_URL: import_zod.z.url().optional().default("http://localhost:3000"),
   // OAuth Providers (all optional - configured via auth plugins)
   GOOGLE_CLIENT_ID: import_zod.z.string().optional(),
   GOOGLE_CLIENT_SECRET: import_zod.z.string().optional(),
@@ -6980,7 +6980,7 @@ var envSchema = import_zod.z.object({
   LOG_FILE_MAX_FILES: import_zod.z.string().regex(/^\d+$/).optional(),
   // Production SSL (optional)
   DOMAIN: import_zod.z.string().optional(),
-  SSL_EMAIL: import_zod.z.string().email().optional(),
+  SSL_EMAIL: import_zod.z.email().optional(),
   // Data Backend Configuration
   // NOTE: 'json' option is deprecated and will be removed in a future version.
   // Use the migration plugin (qtap-plugin-upgrade) to migrate JSON data to MongoDB.
@@ -7000,13 +7000,13 @@ var envSchema = import_zod.z.object({
   // S3 Configuration (optional - S3 is now a plugin, local filesystem is the default)
   // These env vars are used to auto-create an S3 mount point during migration
   S3_MODE: import_zod.z.enum(["embedded", "external", "disabled"]).optional().default("disabled"),
-  S3_ENDPOINT: import_zod.z.string().url().optional(),
+  S3_ENDPOINT: import_zod.z.url().optional(),
   S3_REGION: import_zod.z.string().optional().default("us-east-1"),
   S3_ACCESS_KEY: import_zod.z.string().optional(),
   S3_SECRET_KEY: import_zod.z.string().optional(),
   S3_BUCKET: import_zod.z.string().optional().default("quilltap-files"),
   S3_PATH_PREFIX: import_zod.z.string().optional(),
-  S3_PUBLIC_URL: import_zod.z.string().url().optional(),
+  S3_PUBLIC_URL: import_zod.z.url().optional(),
   S3_FORCE_PATH_STYLE: import_zod.z.enum(["true", "false"]).optional()
 }).refine(
   (data) => {
@@ -7016,8 +7016,8 @@ var envSchema = import_zod.z.object({
     return true;
   },
   {
-    message: "MONGODB_URI is required when DATA_BACKEND is mongodb",
-    path: ["MONGODB_URI"]
+    path: ["MONGODB_URI"],
+    error: "MONGODB_URI is required when DATA_BACKEND is mongodb"
   }
 ).refine(
   (data) => {
@@ -7029,8 +7029,8 @@ var envSchema = import_zod.z.object({
     return true;
   },
   {
-    message: "S3_ACCESS_KEY and S3_SECRET_KEY must both be provided, or both omitted (for IAM role auth)",
-    path: ["S3_MODE"]
+    path: ["S3_MODE"],
+    error: "S3_ACCESS_KEY and S3_SECRET_KEY must both be provided, or both omitted (for IAM role auth)"
   }
 );
 var isBuildPhase = process.env.SKIP_ENV_VALIDATION === "true" || process.env.NEXT_PHASE === "phase-production-build" || process.env.NEXT_RUNTIME === void 0 && process.argv.some((arg) => arg.includes("next") && process.argv.includes("build"));
@@ -7059,7 +7059,7 @@ function validateEnv() {
     return env2;
   } catch (error) {
     if (error instanceof import_zod.z.ZodError) {
-      const missingVars = error.errors.map((err) => {
+      const missingVars = error.issues.map((err) => {
         return `  - ${err.path.join(".")}: ${err.message}`;
       });
       console.error("\u274C Environment validation failed:");

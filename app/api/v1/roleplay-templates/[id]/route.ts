@@ -21,7 +21,7 @@ const updateRoleplayTemplateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional().nullable(),
   systemPrompt: z.string().min(1).optional(),
-  tags: z.array(z.string().uuid()).optional(),
+  tags: z.array(z.uuid()).optional(),
   annotationButtons: z.array(z.any()).optional(),
   renderingPatterns: z.array(z.any()).optional(),
   dialogueDetection: z.any().optional().nullable(),
@@ -182,7 +182,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       if (error instanceof z.ZodError) {
         logger.warn('Validation error updating roleplay template', {
           templateId: id,
-          errors: error.errors,
+          errors: error.issues,
         });
         return errorResponse('Invalid request body', 400);
       }

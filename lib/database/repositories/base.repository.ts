@@ -44,10 +44,10 @@ export interface ValidationResult<T> {
  */
 export abstract class AbstractBaseRepository<T extends BaseEntity> {
   protected readonly collectionName: string;
-  protected readonly schema: z.ZodSchema;
+  protected readonly schema: z.ZodType;
   private collectionInitialized = false;
 
-  constructor(collectionName: string, schema: z.ZodSchema) {
+  constructor(collectionName: string, schema: z.ZodType) {
     this.collectionName = collectionName;
     this.schema = schema;
   }

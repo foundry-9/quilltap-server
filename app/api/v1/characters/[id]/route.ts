@@ -44,14 +44,10 @@ const updateCharacterSchema = z.object({
   scenario: z.string().optional(),
   firstMessage: z.string().optional(),
   exampleDialogues: z.string().optional(),
-  avatarUrl: z
-    .string()
-    .url()
+  avatarUrl: z.url()
     .optional()
     .or(z.literal('')),
-  defaultConnectionProfileId: z
-    .string()
-    .uuid()
+  defaultConnectionProfileId: z.uuid()
     .optional()
     .or(
       z.literal('').transform(() => undefined)
@@ -65,15 +61,15 @@ const avatarSchema = z.object({
 });
 
 const addTagSchema = z.object({
-  tagId: z.string().uuid(),
+  tagId: z.uuid(),
 });
 
 const removeTagSchema = z.object({
-  tagId: z.string().uuid(),
+  tagId: z.uuid(),
 });
 
 const setDefaultPartnerSchema = z.object({
-  partnerId: z.string().uuid().nullable(),
+  partnerId: z.uuid().nullable(),
 });
 
 // ============================================================================

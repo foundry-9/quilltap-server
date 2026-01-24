@@ -16,11 +16,11 @@ import { notFound, badRequest, serverError, validationError } from '@/lib/api/re
 
 // Extended schema that includes chatId
 const sendMessageWithChatIdSchema = sendMessageSchema.extend({
-  chatId: z.string().uuid('Chat ID is required'),
+  chatId: z.uuid('Chat ID is required'),
 });
 
 const continueMessageWithChatIdSchema = continueMessageSchema.extend({
-  chatId: z.string().uuid('Chat ID is required'),
+  chatId: z.uuid('Chat ID is required'),
 });
 
 /**

@@ -4,6 +4,13 @@
 
 ### 2.8-dev
 
+- feat: Upgrade Zod from v3 to v4 (2026-01-24)
+  - Updated zod from ^3.23.0 to ^4.0.0 (installed 4.3.6)
+  - Removed zod-to-json-schema dependency (now using native z.toJSONSchema())
+  - Updated ZodError.errors → ZodError.issues across ~20 files
+  - Rewrote schema-translator.ts for Zod v4 internal API changes
+  - Updated generate-plugin-manifest-schema.ts to use Zod v4's native JSON Schema generation
+  - MCP plugin remains bundled with its own Zod v3 for SDK compatibility
 - feat: Upgrade OpenRouter plugin to SDK v0.4.0 with new streaming API (2026-01-24)
   - Updated @openrouter/sdk from 0.3.15 to 0.4.0
   - Refactored streaming to use `callModel()` with `getTextStream()` for cleaner text delta streaming

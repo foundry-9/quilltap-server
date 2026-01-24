@@ -20,11 +20,11 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 const createMountPointSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   backendType: z.enum(['s3', 'local', 'azure'], {
-    errorMap: () => ({ message: 'Invalid backend type' }),
+    error: () => 'Invalid backend type',
   }),
   path: z.string().min(1, 'Path is required'),
-  isDefault: z.boolean().default(false),
-  config: z.record(z.unknown()).optional(),
+  isDefault: z.boolean().prefault(false),
+  config: z.record(z.string(), z.unknown()).optional(),
 });
 
 type CreateMountPointInput = z.infer<typeof createMountPointSchema>;
@@ -104,7 +104,7 @@ async function handleCreate(req: NextRequest, { user, repos }: any) {
     return NextResponse.json({ mountPoint }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Mount Points v1] Validation error', { errors: error.errors });
+      logger.debug('[Mount Points v1] Validation error', { errors: error.issues });
       return validationError(error);
     }
 

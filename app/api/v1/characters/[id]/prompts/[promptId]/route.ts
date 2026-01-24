@@ -114,7 +114,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; promptId: stri
       return NextResponse.json({ prompt });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        logger.warn('[Characters v1] Invalid character prompt update data', { errors: error.errors });
+        logger.warn('[Characters v1] Invalid character prompt update data', { errors: error.issues });
         return validationError(error);
       }
       logger.error('[Characters v1] Error updating character system prompt', { characterId, promptId }, error instanceof Error ? error : undefined);

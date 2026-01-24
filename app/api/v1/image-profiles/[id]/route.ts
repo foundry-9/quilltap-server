@@ -18,8 +18,8 @@ import { z } from 'zod';
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1).max(4000),
-  chatId: z.string().uuid().optional(),
-  count: z.number().int().min(1).max(10).optional().default(1),
+  chatId: z.uuid().optional(),
+  count: z.int().min(1).max(10).optional().prefault(1),
   size: z.string().optional(),
   quality: z.enum(['standard', 'hd']).optional(),
   style: z.enum(['vivid', 'natural']).optional(),

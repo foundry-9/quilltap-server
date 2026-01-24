@@ -83,7 +83,7 @@ export const SyncInstanceSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   name: z.string().min(1).max(100),
-  url: z.string().url(),
+  url: z.url(),
   // API key for authenticating to the remote instance (encrypted at rest)
   apiKey: EncryptedFieldSchema,
   // Remote user ID received after successful authentication
@@ -215,7 +215,7 @@ export const SyncOperationSchema = z.object({
   // Real-time progress tracking (updated during sync)
   progress: SyncProgressSchema.optional(),
   // Count of entities synced by type
-  entityCounts: z.record(z.number()).default({}),
+  entityCounts: z.record(z.string(), z.number()).default({}),
   // Record of conflicts that were resolved
   conflicts: z.array(SyncConflictSchema).default([]),
   // Any errors that occurred
@@ -259,7 +259,7 @@ export type SyncVersionInfo = z.infer<typeof SyncVersionInfoSchema>;
 export const SyncHandshakeRequestSchema = z.object({
   versionInfo: SyncVersionInfoSchema,
   // User credentials for initial authentication (not stored)
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   password: z.string().optional(),
   // Or use existing API key
   apiKey: z.string().optional(),
@@ -286,7 +286,7 @@ export const SyncDeltaRequestSchema = z.object({
   instanceId: UUIDSchema.optional(), // For tracking on server side
   entityTypes: z.array(SyncableEntityTypeEnum).optional(), // Filter by type
   sinceTimestamp: TimestampSchema.nullable().optional(), // Get changes since this time
-  limit: z.number().int().positive().max(1000).default(100),
+  limit: z.int().positive().max(1000).default(100),
   cursor: z.string().optional(), // For pagination
 });
 export type SyncDeltaRequest = z.infer<typeof SyncDeltaRequestSchema>;
@@ -301,7 +301,7 @@ export const SyncEntityDeltaSchema = z.object({
   updatedAt: TimestampSchema,
   isDeleted: z.boolean().default(false),
   // Full entity data (null if deleted)
-  data: z.record(z.unknown()).nullable().optional(),
+  data: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 export type SyncEntityDelta = z.infer<typeof SyncEntityDeltaSchema>;
 
@@ -397,7 +397,7 @@ export const SyncLogEntrySchema = z.object({
   timestamp: TimestampSchema,
   level: SyncLogLevelEnum,
   message: z.string(),
-  context: z.record(z.unknown()).optional(),
+  context: z.record(z.string(), z.unknown()).optional(),
 });
 export type SyncLogEntry = z.infer<typeof SyncLogEntrySchema>;
 

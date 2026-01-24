@@ -17,11 +17,11 @@ const updateMemorySchema = z.object({
   content: z.string().min(1).optional(),
   summary: z.string().min(1).optional(),
   keywords: z.array(z.string()).optional(),
-  tags: z.array(z.string().uuid()).optional(),
+  tags: z.array(z.uuid()).optional(),
   importance: z.number().min(0).max(1).optional(),
-  aboutCharacterId: z.string().uuid().nullable().optional(),
-  personaId: z.string().uuid().nullable().optional(), // Legacy support
-  chatId: z.string().uuid().nullable().optional(),
+  aboutCharacterId: z.uuid().nullable().optional(),
+  personaId: z.uuid().nullable().optional(), // Legacy support
+  chatId: z.uuid().nullable().optional(),
 });
 
 /**

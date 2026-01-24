@@ -25,11 +25,11 @@ import { successResponse, notFound, badRequest, serverError, forbidden, validati
 const moveFileSchema = z.object({
   folderPath: z.string().optional(),
   filename: z.string().optional(),
-  projectId: z.string().uuid().nullable().optional(),
+  projectId: z.uuid().nullable().optional(),
 });
 
 const promoteFileSchema = z.object({
-  targetProjectId: z.string().uuid().nullable().optional(),
+  targetProjectId: z.uuid().nullable().optional(),
   folderPath: z.string().optional(),
 });
 
@@ -460,8 +460,8 @@ async function handleMoveFile(
     const parsed = moveFileSchema.safeParse(body);
 
     if (!parsed.success) {
-      logger.debug('[Files v1] Invalid move request', { errors: parsed.error.errors });
-      return badRequest('Invalid request: ' + parsed.error.errors.map((e: any) => e.message).join(', '));
+      logger.debug('[Files v1] Invalid move request', { errors: parsed.error.issues });
+      return badRequest('Invalid request: ' + parsed.error.issues.map((e: any) => e.message).join(', '));
     }
 
     const { folderPath: rawFolderPath, filename, projectId } = parsed.data;
@@ -569,8 +569,8 @@ async function handlePromoteFile(
     const parsed = promoteFileSchema.safeParse(body);
 
     if (!parsed.success) {
-      logger.debug('[Files v1] Invalid promotion request', { errors: parsed.error.errors });
-      return badRequest('Invalid request: ' + parsed.error.errors.map((e: any) => e.message).join(', '));
+      logger.debug('[Files v1] Invalid promotion request', { errors: parsed.error.issues });
+      return badRequest('Invalid request: ' + parsed.error.issues.map((e: any) => e.message).join(', '));
     }
 
     const { targetProjectId, folderPath: rawFolderPath } = parsed.data;

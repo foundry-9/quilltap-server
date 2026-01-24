@@ -262,7 +262,7 @@ class ThemeRegistry {
     const validationResult = safeValidateThemeTokens(themePlugin.tokens);
     if (!validationResult.success) {
       throw new Error(
-        `Invalid theme tokens in module: ${validationResult.errors.errors
+        `Invalid theme tokens in module: ${validationResult.errors.issues
           .map((e) => `${e.path.join('.')}: ${e.message}`)
           .join(', ')}`
       );
@@ -398,7 +398,7 @@ class ThemeRegistry {
     // Validate tokens
     const validationResult = safeValidateThemeTokens(rawTokens);
     if (!validationResult.success) {
-      throw new Error(`Invalid theme tokens: ${validationResult.errors.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+      throw new Error(`Invalid theme tokens: ${validationResult.errors.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
     }
 
     let tokens = validationResult.data;

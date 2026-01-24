@@ -56,7 +56,7 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         logger.warn('[Sync API Keys v1] Validation failed', {
           keyId: id,
           userId: user.id,
-          errors: parseResult.error.errors,
+          errors: parseResult.error.issues,
         });
         return validationError(parseResult.error);
       }

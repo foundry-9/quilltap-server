@@ -149,7 +149,9 @@ export const ChatParticipantSchema = z.object({
   updatedAt: TimestampSchema,
 }).refine(
   (data) => data.characterId != null,
-  { message: 'Participants must have characterId' }
+  {
+      error: 'Participants must have characterId'
+}
 );
 
 export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
@@ -240,7 +242,9 @@ export const ChatMetadataSchema = z.object({
   updatedAt: TimestampSchema,
 }).refine(
   (data) => data.participants.length > 0,
-  { message: 'Chat must have at least one participant' }
+  {
+      error: 'Chat must have at least one participant'
+}
 );
 
 export type ChatMetadata = z.infer<typeof ChatMetadataSchema>;
