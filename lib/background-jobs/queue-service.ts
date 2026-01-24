@@ -8,7 +8,7 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { BackgroundJobType } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import type { QueueStats } from '@/lib/mongodb/repositories/background-jobs.repository';
+import type { QueueStats } from '@/lib/database/repositories';
 import { ensureProcessorRunning } from './processor';
 
 /**

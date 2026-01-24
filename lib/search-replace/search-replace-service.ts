@@ -5,7 +5,7 @@
  * chat messages and memories.
  */
 
-import { getRepositories } from '@/lib/mongodb/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { updateMemoryWithEmbedding } from '@/lib/memory/memory-service';
 import { logger } from '@/lib/logger';
 import type { ChatMetadata } from '@/lib/schemas/types';

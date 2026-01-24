@@ -6,7 +6,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import { getRepositories } from '@/lib/mongodb/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { SyncableEntityType, SyncEntityDelta, FILE_CONTENT_SIZE_THRESHOLD } from './types';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 

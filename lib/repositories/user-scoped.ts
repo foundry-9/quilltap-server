@@ -14,17 +14,17 @@ import { logger } from '@/lib/logger';
 import {
   RepositoryContainer,
   CharactersRepository,
-  MongoChatsRepository,
-  MongoTagsRepository,
+  ChatsRepository,
+  TagsRepository,
   ConnectionProfilesRepository,
-  MongoImageProfilesRepository,
+  ImageProfilesRepository,
   EmbeddingProfilesRepository,
   MemoriesRepository,
   FilesRepository,
   ProjectsRepository,
   LLMLogsRepository,
   type CreateOptions,
-} from '@/lib/mongodb/repositories';
+} from '@/lib/database/repositories';
 import { getRepositories, getRepositoriesSafe } from './factory';
 import type {
   Character,
@@ -193,7 +193,7 @@ class UserScopedCharactersRepository extends UserScopedTaggableRepository<Charac
 /**
  * User-scoped Chats Repository
  */
-class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadata, MongoChatsRepository> {
+class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadata, ChatsRepository> {
   async findByCharacterId(characterId: string): Promise<ChatMetadata[]> {
     const chats = await this.baseRepo.findByCharacterId(characterId);
     return this.filterByUser(chats);
@@ -221,7 +221,7 @@ class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadat
 /**
  * User-scoped Tags Repository
  */
-class UserScopedTagsRepository extends UserScopedRepository<Tag, MongoTagsRepository> {
+class UserScopedTagsRepository extends UserScopedRepository<Tag, TagsRepository> {
   async findByName(name: string): Promise<Tag | null> {
     return this.baseRepo.findByName(this.userId, name);
   }
@@ -271,7 +271,7 @@ class UserScopedConnectionsRepository extends UserScopedTaggableRepository<Conne
 /**
  * User-scoped Image Profiles Repository
  */
-class UserScopedImageProfilesRepository extends UserScopedRepository<ImageProfile, MongoImageProfilesRepository> {
+class UserScopedImageProfilesRepository extends UserScopedRepository<ImageProfile, ImageProfilesRepository> {
   async findDefault(): Promise<ImageProfile | null> {
     return this.baseRepo.findDefault(this.userId);
   }

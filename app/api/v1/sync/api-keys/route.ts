@@ -14,7 +14,7 @@ import {
   successResponse,
   created,
 } from '@/lib/api/responses';
-import { getRepositories } from '@/lib/mongodb/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 
 // ============================================================================
 // Schemas

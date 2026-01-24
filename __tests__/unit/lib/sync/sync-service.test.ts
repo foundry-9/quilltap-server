@@ -22,13 +22,13 @@ import {
   FileNeedingContent,
 } from '@/lib/sync/sync-service';
 import { SyncEntityDelta, SyncConflict, SyncableEntityType, SyncOperation } from '@/lib/sync/types';
-import { getRepositories } from '@/lib/mongodb/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { resolveConflictWithRecord } from '@/lib/sync/conflict-resolver';
 import { detectDeltas } from '@/lib/sync/delta-detector';
 
 // Mock dependencies
-jest.mock('@/lib/mongodb/repositories');
+jest.mock('@/lib/repositories/factory');
 jest.mock('@/lib/file-storage/manager');
 jest.mock('@/lib/sync/conflict-resolver');
 jest.mock('@/lib/sync/delta-detector');

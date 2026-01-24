@@ -7,7 +7,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import { getRepositories } from '@/lib/mongodb/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import {
   SyncOperation,
   SyncEntityDelta,

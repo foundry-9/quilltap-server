@@ -91,8 +91,8 @@ const mockRepositories: MockRepositories = {
 // Mock the file storage manager download function
 const mockDownloadFile = jest.fn();
 
-// Mock the mongodb repositories - must be called before importing the module under test
-jest.mock('@/lib/mongodb/repositories', () => ({
+// Mock the repository factory - must be called before importing the module under test
+jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(() => mockRepositories),
 }));
 

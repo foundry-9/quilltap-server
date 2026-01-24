@@ -9,7 +9,7 @@ import archiver from 'archiver';
 import { createHash, randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
-import { getRepositories } from '@/lib/mongodb/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import type { BackupManifest, BackupData, BackupInfo, ChatWithMessages } from './types';
 import type { ChatEvent, ProviderModel } from '@/lib/schemas/types';

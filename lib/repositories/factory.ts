@@ -1,11 +1,9 @@
 /**
  * Repository Factory
  *
- * Provides access to MongoDB data repositories.
- *
- * Note: JSON file storage has been deprecated. For migration from JSON to MongoDB,
- * the migrations module (migrations/) has its own copy of the JSON-store code
- * for reading legacy data.
+ * Provides access to backend-agnostic data repositories.
+ * Automatically selects the appropriate backend (MongoDB or SQLite)
+ * based on the DATABASE_BACKEND configuration.
  *
  * With the new migration system, migrations run in instrumentation.ts BEFORE
  * the server starts accepting requests, so data is always guaranteed to be
@@ -14,9 +12,9 @@
 
 import { logger } from '@/lib/logger';
 import {
-  getRepositories as getMongoRepos,
-  RepositoryContainer as MongoRepositoryContainer,
-} from '@/lib/mongodb/repositories';
+  getRepositories as getDatabaseRepos,
+  RepositoryContainer as DatabaseRepositoryContainer,
+} from '@/lib/database/repositories';
 import {
   getUserRepositories,
   clearUserRepositoryCache,
@@ -26,9 +24,9 @@ import { startupState } from '@/lib/startup/startup-state';
 
 /**
  * Type alias for repository container
- * Uses the MongoDB container as the canonical interface
+ * Uses the database abstraction container as the canonical interface
  */
-export type RepositoryContainer = MongoRepositoryContainer;
+export type RepositoryContainer = DatabaseRepositoryContainer;
 
 /**
  * Lazy-loaded repository cache
@@ -42,22 +40,24 @@ let migrationWaitComplete = false;
 
 /**
  * Get the configured data backend
- * @returns Always returns 'mongodb' - JSON backend is deprecated
- * @deprecated This function always returns 'mongodb'. Use getRepositories() directly.
+ * @returns The configured backend type ('mongodb' or 'sqlite')
  */
-export function getDataBackend(): 'mongodb' {
-  logger.debug('Retrieved data backend configuration', { backend: 'mongodb' });
-  return 'mongodb';
+export function getDataBackend(): 'mongodb' | 'sqlite' {
+  // Import here to avoid circular dependencies
+  const { getDatabaseConfig } = require('@/lib/database/config');
+  const config = getDatabaseConfig();
+  logger.debug('Retrieved data backend configuration', { backend: config.backend });
+  return config.backend;
 }
 
 /**
  * Check if MongoDB is the active backend
- * @returns Always returns true - MongoDB is the only supported backend
- * @deprecated This function always returns true. MongoDB is now required.
+ * @returns True if using MongoDB backend
  */
 export function isMongoDBEnabled(): boolean {
-  logger.debug('Checked MongoDB enabled status', { enabled: true, backend: 'mongodb' });
-  return true;
+  const backend = getDataBackend();
+  logger.debug('Checked MongoDB enabled status', { enabled: backend === 'mongodb', backend });
+  return backend === 'mongodb';
 }
 
 /**
@@ -134,9 +134,12 @@ async function ensureMigrationsComplete(): Promise<void> {
 }
 
 /**
- * Get the repository container (MongoDB)
+ * Get the repository container
  *
- * @returns RepositoryContainer for MongoDB backend
+ * Uses the database abstraction layer which automatically selects
+ * the appropriate backend based on configuration.
+ *
+ * @returns RepositoryContainer for the configured backend
  */
 export function getRepositories(): RepositoryContainer {
   // Return cached repositories if already initialized
@@ -144,8 +147,9 @@ export function getRepositories(): RepositoryContainer {
     return cachedRepositories;
   }
 
-  logger.info('Initializing MongoDB backend repositories');
-  cachedRepositories = getMongoRepos();
+  const backend = getDataBackend();
+  logger.info('Initializing backend repositories', { backend });
+  cachedRepositories = getDatabaseRepos();
   return cachedRepositories;
 }
 
