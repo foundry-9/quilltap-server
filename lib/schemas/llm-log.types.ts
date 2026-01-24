@@ -120,6 +120,7 @@ export const LLMLogSchema = z.object({
   durationMs: z.number().nullable().optional(),
 
   createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
 });
 
 export type LLMLog = z.infer<typeof LLMLogSchema>;

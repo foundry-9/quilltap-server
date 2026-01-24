@@ -1,76 +1,41 @@
 /**
- * MongoDB LLM Logs Repository
+ * LLM Logs Repository
  *
- * Handles CRUD operations and advanced queries for LLMLog entities.
- * Each LLM log is stored as a document in the 'llm_logs' MongoDB collection.
+ * Backend-agnostic repository for LLMLog entities.
+ * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Handles CRUD operations and advanced queries for LLM request/response logging.
  */
 
-import { LLMLog, LLMLogSchema, LLMLogType } from '@/lib/schemas/types';
-import { MongoBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
+import { LLMLog, LLMLogSchema, LLMLogType } from '@/lib/schemas/types';
+import { AbstractBaseRepository, CreateOptions } from './base.repository';
+import { QueryFilter, QueryOptions } from '../interfaces';
 
-export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
+/**
+ * LLM Logs Repository
+ * Implements CRUD operations and advanced queries for LLM logs.
+ * Uses AbstractBaseRepository since LLMLog schema uses Date type for timestamps.
+ */
+export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   constructor() {
     super('llm_logs', LLMLogSchema);
     logger.debug('LLMLogsRepository initialized');
   }
 
   /**
-   * Find all logs (without pagination)
-   * @returns Promise<LLMLog[]> Array of all logs
-   */
-  async findAll(): Promise<LLMLog[]> {
-    logger.debug('Finding all LLM logs');
-    try {
-      const collection = await this.getCollection();
-      const results = await collection.find({}).toArray();
-
-      const logs = results
-        .map((doc) => {
-          const validation = this.validateSafe(doc);
-          if (validation.success && validation.data) {
-            return validation.data;
-          }
-          return null;
-        })
-        .filter((log): log is LLMLog => log !== null);
-
-      logger.debug('Retrieved all LLM logs', { count: logs.length });
-      return logs;
-    } catch (error) {
-      logger.error('Error finding all LLM logs', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
-  }
-
-  /**
    * Find a log by ID
-   * @param id The log ID
-   * @returns Promise<LLMLog | null> The log if found, null otherwise
    */
   async findById(id: string): Promise<LLMLog | null> {
     logger.debug('Finding LLM log by ID', { logId: id });
-    try {
-      const collection = await this.getCollection();
-      const result = await collection.findOne({ id });
+    return this._findById(id);
+  }
 
-      if (!result) {
-        logger.debug('LLM log not found', { logId: id });
-        return null;
-      }
-
-      const validated = this.validate(result);
-      logger.debug('LLM log found and validated', { logId: id });
-      return validated;
-    } catch (error) {
-      logger.error('Error finding LLM log by ID', {
-        logId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+  /**
+   * Find all logs (without pagination)
+   */
+  async findAll(): Promise<LLMLog[]> {
+    logger.debug('Finding all LLM logs');
+    return this._findAll();
   }
 
   /**
@@ -80,27 +45,20 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
    * @param offset Number of logs to skip (default: 0)
    * @returns Promise<LLMLog[]> Array of logs for the user
    */
-  async findByUserId(userId: string, limit: number = 50, offset: number = 0): Promise<LLMLog[]> {
+  async findByUserId(
+    userId: string,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<LLMLog[]> {
     logger.debug('Finding LLM logs by user ID', { userId, limit, offset });
     try {
-      const collection = await this.getCollection();
-      const results = await collection
-        .find({ userId })
-        .sort({ createdAt: -1 })
-        .skip(offset)
-        .limit(limit)
-        .toArray();
+      const options: QueryOptions = {
+        sort: { createdAt: -1 },
+        skip: offset,
+        limit,
+      };
 
-      const logs = results
-        .map((doc) => {
-          const validation = this.validateSafe(doc);
-          if (validation.success && validation.data) {
-            return validation.data;
-          }
-          return null;
-        })
-        .filter((log): log is LLMLog => log !== null);
-
+      const logs = await this.findByFilter({ userId } as QueryFilter, options);
       logger.debug('Found LLM logs for user', { userId, count: logs.length });
       return logs;
     } catch (error) {
@@ -122,22 +80,11 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async findByMessageId(messageId: string): Promise<LLMLog[]> {
     logger.debug('Finding LLM logs by message ID', { messageId });
     try {
-      const collection = await this.getCollection();
-      const results = await collection
-        .find({ messageId })
-        .sort({ createdAt: -1 })
-        .toArray();
+      const options: QueryOptions = {
+        sort: { createdAt: -1 },
+      };
 
-      const logs = results
-        .map((doc) => {
-          const validation = this.validateSafe(doc);
-          if (validation.success && validation.data) {
-            return validation.data;
-          }
-          return null;
-        })
-        .filter((log): log is LLMLog => log !== null);
-
+      const logs = await this.findByFilter({ messageId } as QueryFilter, options);
       logger.debug('Found LLM logs for message', { messageId, count: logs.length });
       return logs;
     } catch (error) {
@@ -157,22 +104,11 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async findByChatId(chatId: string): Promise<LLMLog[]> {
     logger.debug('Finding LLM logs by chat ID', { chatId });
     try {
-      const collection = await this.getCollection();
-      const results = await collection
-        .find({ chatId })
-        .sort({ createdAt: -1 })
-        .toArray();
+      const options: QueryOptions = {
+        sort: { createdAt: -1 },
+      };
 
-      const logs = results
-        .map((doc) => {
-          const validation = this.validateSafe(doc);
-          if (validation.success && validation.data) {
-            return validation.data;
-          }
-          return null;
-        })
-        .filter((log): log is LLMLog => log !== null);
-
+      const logs = await this.findByFilter({ chatId } as QueryFilter, options);
       logger.debug('Found LLM logs for chat', { chatId, count: logs.length });
       return logs;
     } catch (error) {
@@ -192,22 +128,11 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async findByCharacterId(characterId: string): Promise<LLMLog[]> {
     logger.debug('Finding LLM logs by character ID', { characterId });
     try {
-      const collection = await this.getCollection();
-      const results = await collection
-        .find({ characterId })
-        .sort({ createdAt: -1 })
-        .toArray();
+      const options: QueryOptions = {
+        sort: { createdAt: -1 },
+      };
 
-      const logs = results
-        .map((doc) => {
-          const validation = this.validateSafe(doc);
-          if (validation.success && validation.data) {
-            return validation.data;
-          }
-          return null;
-        })
-        .filter((log): log is LLMLog => log !== null);
-
+      const logs = await this.findByFilter({ characterId } as QueryFilter, options);
       logger.debug('Found LLM logs for character', { characterId, count: logs.length });
       return logs;
     } catch (error) {
@@ -228,28 +153,19 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async findStandalone(userId: string, limit: number = 50): Promise<LLMLog[]> {
     logger.debug('Finding standalone LLM logs', { userId, limit });
     try {
-      const collection = await this.getCollection();
-      const results = await collection
-        .find({
-          userId,
-          messageId: { $eq: null },
-          chatId: { $eq: null },
-          characterId: { $eq: null },
-        })
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .toArray();
+      const filter: QueryFilter = {
+        userId,
+        messageId: { $eq: null },
+        chatId: { $eq: null },
+        characterId: { $eq: null },
+      };
 
-      const logs = results
-        .map((doc) => {
-          const validation = this.validateSafe(doc);
-          if (validation.success && validation.data) {
-            return validation.data;
-          }
-          return null;
-        })
-        .filter((log): log is LLMLog => log !== null);
+      const options: QueryOptions = {
+        sort: { createdAt: -1 },
+        limit,
+      };
 
+      const logs = await this.findByFilter(filter, options);
       logger.debug('Found standalone LLM logs', { userId, count: logs.length });
       return logs;
     } catch (error) {
@@ -272,23 +188,13 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async findByType(userId: string, type: LLMLogType, limit: number = 50): Promise<LLMLog[]> {
     logger.debug('Finding LLM logs by type', { userId, type, limit });
     try {
-      const collection = await this.getCollection();
-      const results = await collection
-        .find({ userId, type })
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .toArray();
+      const filter: QueryFilter = { userId, type };
+      const options: QueryOptions = {
+        sort: { createdAt: -1 },
+        limit,
+      };
 
-      const logs = results
-        .map((doc) => {
-          const validation = this.validateSafe(doc);
-          if (validation.success && validation.data) {
-            return validation.data;
-          }
-          return null;
-        })
-        .filter((log): log is LLMLog => log !== null);
-
+      const logs = await this.findByFilter(filter, options);
       logger.debug('Found LLM logs by type', { userId, type, count: logs.length });
       return logs;
     } catch (error) {
@@ -311,23 +217,12 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async findRecent(userId: string, limit: number = 20): Promise<LLMLog[]> {
     logger.debug('Finding recent LLM logs', { userId, limit });
     try {
-      const collection = await this.getCollection();
-      const results = await collection
-        .find({ userId })
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .toArray();
+      const options: QueryOptions = {
+        sort: { createdAt: -1 },
+        limit,
+      };
 
-      const logs = results
-        .map((doc) => {
-          const validation = this.validateSafe(doc);
-          if (validation.success && validation.data) {
-            return validation.data;
-          }
-          return null;
-        })
-        .filter((log): log is LLMLog => log !== null);
-
+      const logs = await this.findByFilter({ userId } as QueryFilter, options);
       logger.debug('Found recent LLM logs', { userId, count: logs.length, limit });
       return logs;
     } catch (error) {
@@ -352,23 +247,13 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   ): Promise<LLMLog> {
     logger.debug('Creating new LLM log', { userId: data.userId, type: data.type });
     try {
-      const id = options?.id || this.generateId();
-      const now = this.getCurrentTimestamp();
-      const createdAt = options?.createdAt || now;
-
-      const log: LLMLog = {
-        ...data,
-        id,
-        createdAt,
-        updatedAt: now,
-      };
-
-      const validated = this.validate(log);
-      const collection = await this.getCollection();
-      await collection.insertOne(validated as any);
-
-      logger.debug('LLM log created successfully', { logId: id, userId: data.userId, type: data.type });
-      return validated;
+      const log = await this._create(data, options);
+      logger.debug('LLM log created successfully', {
+        logId: log.id,
+        userId: data.userId,
+        type: data.type,
+      });
+      return log;
     } catch (error) {
       logger.error('Error creating LLM log', {
         userId: data.userId,
@@ -382,7 +267,6 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   /**
    * Update a log
    * Note: LLM logs are typically immutable, but this method is provided for completeness
-   * and to satisfy the abstract base class contract
    * @param id The log ID
    * @param data Partial log data to update
    * @returns Promise<LLMLog | null> The updated log if found, null otherwise
@@ -390,26 +274,15 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async update(id: string, data: Partial<LLMLog>): Promise<LLMLog | null> {
     logger.debug('Updating LLM log', { logId: id });
     try {
-      const existing = await this.findById(id);
-      if (!existing) {
+      const log = await this._update(id, data);
+
+      if (log) {
+        logger.debug('LLM log updated successfully', { logId: id });
+      } else {
         logger.warn('LLM log not found for update', { logId: id });
-        return null;
       }
 
-      const updated: LLMLog = {
-        ...existing,
-        ...data,
-        id: existing.id, // Preserve ID
-        createdAt: existing.createdAt, // Preserve creation timestamp
-      };
-
-      const validated = this.validate(updated);
-      const collection = await this.getCollection();
-
-      await collection.updateOne({ id }, { $set: validated as any });
-
-      logger.debug('LLM log updated successfully', { logId: id });
-      return validated;
+      return log;
     } catch (error) {
       logger.error('Error updating LLM log', {
         logId: id,
@@ -427,16 +300,15 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async delete(id: string): Promise<boolean> {
     logger.debug('Deleting LLM log', { logId: id });
     try {
-      const collection = await this.getCollection();
-      const result = await collection.deleteOne({ id });
+      const result = await this._delete(id);
 
-      if (result.deletedCount === 0) {
+      if (result) {
+        logger.debug('LLM log deleted successfully', { logId: id });
+      } else {
         logger.warn('LLM log not found for deletion', { logId: id });
-        return false;
       }
 
-      logger.debug('LLM log deleted successfully', { logId: id });
-      return true;
+      return result;
     } catch (error) {
       logger.error('Error deleting LLM log', {
         logId: id,
@@ -454,11 +326,9 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async deleteByUserId(userId: string): Promise<number> {
     logger.debug('Deleting LLM logs by user ID', { userId });
     try {
-      const collection = await this.getCollection();
-      const result = await collection.deleteMany({ userId });
-
-      logger.debug('Deleted LLM logs for user', { userId, deletedCount: result.deletedCount });
-      return result.deletedCount || 0;
+      const count = await this.deleteMany({ userId } as QueryFilter);
+      logger.debug('Deleted LLM logs for user', { userId, deletedCount: count });
+      return count;
     } catch (error) {
       logger.error('Error deleting LLM logs by user ID', {
         userId,
@@ -485,19 +355,20 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-      const collection = await this.getCollection();
-      const result = await collection.deleteMany({
+      const filter: QueryFilter = {
         userId,
         createdAt: { $lt: cutoffDate.toISOString() },
-      });
+      };
+
+      const count = await this.deleteMany(filter);
 
       logger.info('Cleaned up old LLM logs', {
         userId,
         retentionDays,
-        deletedCount: result.deletedCount,
+        deletedCount: count,
         cutoffDate: cutoffDate.toISOString(),
       });
-      return result.deletedCount || 0;
+      return count;
     } catch (error) {
       logger.error('Error cleaning up old LLM logs', {
         userId,
@@ -516,9 +387,7 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async countByUserId(userId: string): Promise<number> {
     logger.debug('Counting LLM logs for user', { userId });
     try {
-      const collection = await this.getCollection();
-      const count = await collection.countDocuments({ userId });
-
+      const count = await this.count({ userId } as QueryFilter);
       logger.debug('LLM log count retrieved', { userId, count });
       return count;
     } catch (error) {
@@ -539,9 +408,7 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async countByType(userId: string, type: LLMLogType): Promise<number> {
     logger.debug('Counting LLM logs by type', { userId, type });
     try {
-      const collection = await this.getCollection();
-      const count = await collection.countDocuments({ userId, type });
-
+      const count = await this.count({ userId, type } as QueryFilter);
       logger.debug('LLM log count by type retrieved', { userId, type, count });
       return count;
     } catch (error) {
@@ -556,6 +423,7 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
 
   /**
    * Get total token usage for a user
+   * Aggregates usage data across all logs for a user.
    * @param userId The user ID
    * @returns Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> Total token usage
    */
@@ -564,25 +432,31 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
     logger.debug('Getting total token usage for user', { userId });
     try {
-      const collection = await this.getCollection();
-      const results = await collection
-        .find({ userId, usage: { $exists: true, $ne: null } })
-        .toArray();
+      const filter: QueryFilter = {
+        userId,
+        usage: { $exists: true, $ne: null },
+      };
+
+      const logs = await this.findByFilter(filter);
 
       let totalPromptTokens = 0;
       let totalCompletionTokens = 0;
       let totalTokens = 0;
 
-      for (const result of results) {
-        const validation = this.validateSafe(result);
-        if (validation.success && validation.data?.usage) {
-          totalPromptTokens += validation.data.usage.promptTokens || 0;
-          totalCompletionTokens += validation.data.usage.completionTokens || 0;
-          totalTokens += validation.data.usage.totalTokens || 0;
+      for (const log of logs) {
+        if (log.usage) {
+          totalPromptTokens += log.usage.promptTokens || 0;
+          totalCompletionTokens += log.usage.completionTokens || 0;
+          totalTokens += log.usage.totalTokens || 0;
         }
       }
 
-      logger.debug('Retrieved total token usage', { userId, totalPromptTokens, totalCompletionTokens, totalTokens });
+      logger.debug('Retrieved total token usage', {
+        userId,
+        totalPromptTokens,
+        totalCompletionTokens,
+        totalTokens,
+      });
       return { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens, totalTokens };
     } catch (error) {
       logger.error('Error getting total token usage', {
@@ -601,9 +475,7 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async countByMessageId(messageId: string): Promise<number> {
     logger.debug('Counting LLM logs for message', { messageId });
     try {
-      const collection = await this.getCollection();
-      const count = await collection.countDocuments({ messageId });
-
+      const count = await this.count({ messageId } as QueryFilter);
       logger.debug('LLM log count for message', { messageId, count });
       return count;
     } catch (error) {
@@ -623,11 +495,9 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async deleteByMessageId(messageId: string): Promise<number> {
     logger.debug('Deleting LLM logs by message ID', { messageId });
     try {
-      const collection = await this.getCollection();
-      const result = await collection.deleteMany({ messageId });
-
-      logger.debug('Deleted LLM logs for message', { messageId, deletedCount: result.deletedCount });
-      return result.deletedCount || 0;
+      const count = await this.deleteMany({ messageId } as QueryFilter);
+      logger.debug('Deleted LLM logs for message', { messageId, deletedCount: count });
+      return count;
     } catch (error) {
       logger.error('Error deleting LLM logs by message ID', {
         messageId,
@@ -645,11 +515,9 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async deleteByChatId(chatId: string): Promise<number> {
     logger.debug('Deleting LLM logs by chat ID', { chatId });
     try {
-      const collection = await this.getCollection();
-      const result = await collection.deleteMany({ chatId });
-
-      logger.debug('Deleted LLM logs for chat', { chatId, deletedCount: result.deletedCount });
-      return result.deletedCount || 0;
+      const count = await this.deleteMany({ chatId } as QueryFilter);
+      logger.debug('Deleted LLM logs for chat', { chatId, deletedCount: count });
+      return count;
     } catch (error) {
       logger.error('Error deleting LLM logs by chat ID', {
         chatId,
@@ -667,11 +535,9 @@ export class LLMLogsRepository extends MongoBaseRepository<LLMLog> {
   async deleteByCharacterId(characterId: string): Promise<number> {
     logger.debug('Deleting LLM logs by character ID', { characterId });
     try {
-      const collection = await this.getCollection();
-      const result = await collection.deleteMany({ characterId });
-
-      logger.debug('Deleted LLM logs for character', { characterId, deletedCount: result.deletedCount });
-      return result.deletedCount || 0;
+      const count = await this.deleteMany({ characterId } as QueryFilter);
+      logger.debug('Deleted LLM logs for character', { characterId, deletedCount: count });
+      return count;
     } catch (error) {
       logger.error('Error deleting LLM logs by character ID', {
         characterId,

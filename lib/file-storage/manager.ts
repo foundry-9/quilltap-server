@@ -29,7 +29,7 @@ import { decryptSecrets } from './secrets';
 import type { FileEntry } from '@/lib/schemas/file.types';
 import { createLogger } from '@/lib/logging/create-logger';
 import { env } from '@/lib/env';
-import { mountPointsRepository } from '@/lib/mongodb/repositories/mount-points.repository';
+import { mountPointsRepository } from '@/lib/database/repositories/mount-points.repository';
 import { getRepositories } from '@/lib/repositories/factory';
 
 const logger = createLogger('file-storage:manager');

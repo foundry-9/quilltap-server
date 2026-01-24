@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.8.0-dev.2",
+  "version": "2.8.0-dev.3",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -44,7 +44,7 @@
     "theme:convert:dry-run": "tsx scripts/convert-theme-to-module.ts --all --dry-run"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.972.0",
+    "@aws-sdk/client-s3": "^3.975.0",
     "@quilltap/plugin-types": "^1.9.0",
     "@quilltap/plugin-utils": "^1.2.3",
     "@tanstack/react-virtual": "^3.13.18",
@@ -74,7 +74,7 @@
   "devDependencies": {
     "@jest/globals": "^30.2.0",
     "@openrouter/sdk": "^0.3.14",
-    "@playwright/test": "^1.57.0",
+    "@playwright/test": "^1.58.0",
     "@storybook/nextjs": "^10.1.11",
     "@storybook/react": "^10.1.11",
     "@tailwindcss/postcss": "^4.1.18",
@@ -91,7 +91,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/speakeasy": "^2.0.10",
-    "@vitest/mocker": "^4.0.17",
+    "@vitest/mocker": "^4.0.18",
     "autoprefixer": "^10.4.23",
     "dotenv": "^17.2.3",
     "eslint": "^9.39.2",

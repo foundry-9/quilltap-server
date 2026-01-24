@@ -17,6 +17,7 @@
   - Docker configurations: `docker-compose.sqlite.yml` and `docker-compose.prod-sqlite.yml`
   - Updated Dockerfile with build tools for better-sqlite3 native compilation
   - SQLite data persists at `/app/data/quilltap.db` (Docker) or `~/.quilltap/data/quilltap.db` (local)
+  - Migrated all 25 repositories to database abstraction layer (`lib/database/repositories/`)
   - See `docs/DATABASE_ABSTRACTION.md` for full documentation
 - feat: LLM request/response logging system (2026-01-23)
   - Store all LLM API calls in MongoDB for debugging and monitoring

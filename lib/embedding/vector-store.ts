@@ -13,7 +13,7 @@
  */
 
 import { cosineSimilarity } from './embedding-service'
-import { getMongoVectorIndicesRepository } from '@/lib/mongodb/repositories/vector-indices.repository'
+import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-indices.repository'
 import { logger } from '@/lib/logger'
 
 /**
@@ -95,7 +95,7 @@ export class CharacterVectorStore implements ICharacterVectorStore {
         characterId: this.characterId,
       })
 
-      const repo = getMongoVectorIndicesRepository()
+      const repo = getVectorIndicesRepository()
       const index = await repo.findByCharacterId(this.characterId)
 
       this.entries.clear()
@@ -143,7 +143,7 @@ export class CharacterVectorStore implements ICharacterVectorStore {
         entryCount: this.entries.size,
       })
 
-      const repo = getMongoVectorIndicesRepository()
+      const repo = getVectorIndicesRepository()
       const now = new Date().toISOString()
 
       await repo.save(this.characterId, {
@@ -377,8 +377,8 @@ export class VectorStoreManager {
   async deleteStore(characterId: string): Promise<boolean> {
     this.stores.delete(characterId)
 
-    const repo = getMongoVectorIndicesRepository()
-    return repo.delete(characterId)
+    const repo = getVectorIndicesRepository()
+    return repo.deleteByCharacterId(characterId)
   }
 
   /**

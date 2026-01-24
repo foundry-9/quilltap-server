@@ -328,3 +328,18 @@ export type {
   LLMLogCacheUsage,
   LLMLog,
 } from './llm-log.types';
+
+// ============================================================================
+// VECTOR INDICES TYPES
+// ============================================================================
+export {
+  VectorMetadataSchema,
+  VectorEntrySchema,
+  VectorIndexSchema,
+} from './vector-indices.types';
+
+export type {
+  VectorMetadata,
+  VectorEntry,
+  VectorIndex,
+} from './vector-indices.types';

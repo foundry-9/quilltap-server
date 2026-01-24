@@ -33,7 +33,7 @@ export { ChatSettingsRepository } from './chat-settings.repository';
 export { ProjectsRepository } from './projects.repository';
 export { FilePermissionsRepository } from './file-permissions.repository';
 export { PluginConfigRepository } from './plugin-config.repository';
-export { MountPointsRepository } from './mount-points.repository';
+export { MountPointsRepository } from '@/lib/database/repositories/mount-points.repository';
 export { FoldersRepository } from './folders.repository';
 export { LLMLogsRepository } from './llm-logs.repository';
 
@@ -60,7 +60,7 @@ import { ChatSettingsRepository } from './chat-settings.repository';
 import { ProjectsRepository } from './projects.repository';
 import { FilePermissionsRepository } from './file-permissions.repository';
 import { PluginConfigRepository } from './plugin-config.repository';
-import { MountPointsRepository } from './mount-points.repository';
+import { MountPointsRepository } from '@/lib/database/repositories/mount-points.repository';
 import { FoldersRepository } from './folders.repository';
 import { LLMLogsRepository } from './llm-logs.repository';
 
