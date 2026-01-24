@@ -27,6 +27,8 @@
   - Wired up repository factory to use abstract repositories (`lib/repositories/factory.ts`)
   - Updated all direct MongoDB imports to use factory (backup, sync, search-replace services)
   - No application code now directly imports MongoDB repositories
+  - Added 239 unit tests for database abstraction layer (config, query-translator, schema-translator)
+  - Fixed duplicate event listener warnings in MongoDB/SQLite shutdown handlers
   - See `docs/DATABASE_ABSTRACTION.md` for full documentation
 - feat: LLM request/response logging system (2026-01-23)
   - Store all LLM API calls in MongoDB for debugging and monitoring
