@@ -272,20 +272,13 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
       let chunkCount = 0;
 
-      // Track usage and finish reason separately - they may come in different chunks
+      // Track usage - it may come in a separate final chunk
       let accumulatedUsage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null = null;
-      let finalFinishReason: string | null = null;
 
       for await (const chunk of stream) {
         chunkCount++;
         const content = chunk.choices[0]?.delta?.content;
-        const finishReason = chunk.choices[0]?.finish_reason;
         const hasUsage = chunk.usage;
-
-        // Track finish reason when we get it
-        if (finishReason) {
-          finalFinishReason = finishReason;
-        }
 
         // Track usage when we get it (may come in a separate final chunk)
         if (hasUsage) {

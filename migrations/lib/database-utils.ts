@@ -64,37 +64,34 @@ export { getMongoDatabase, closeMongoDB, testMongoDBConnection, validateMongoDBC
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import { getSQLiteDatabasePath, getDataDir, ensureDataDirectoriesExist } from '../../lib/paths';
 
 let sqliteDb: DatabaseType | null = null;
 
 /**
  * Get the SQLite database path
+ *
+ * Uses centralized path resolution from lib/paths.ts
  */
 export function getSQLitePath(): string {
   if (process.env.SQLITE_PATH) {
     return process.env.SQLITE_PATH;
   }
 
-  // Docker environment
-  if (process.env.DOCKER_CONTAINER === 'true' || fs.existsSync('/app/data')) {
-    return '/app/data/quilltap.db';
-  }
-
-  // Local development
-  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-  return path.join(homeDir, '.quilltap', 'data', 'quilltap.db');
+  return getSQLiteDatabasePath();
 }
 
 /**
  * Ensure the SQLite data directory exists
+ *
+ * Uses centralized path resolution from lib/paths.ts
  */
 export function ensureSQLiteDataDir(): void {
-  const dbPath = getSQLitePath();
-  const dir = path.dirname(dbPath);
+  const dataDir = getDataDir();
 
-  if (!fs.existsSync(dir)) {
-    logger.info('Creating SQLite data directory', { path: dir });
-    fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(dataDir)) {
+    logger.info('Creating SQLite data directory', { path: dataDir });
+    fs.mkdirSync(dataDir, { recursive: true });
   }
 }
 

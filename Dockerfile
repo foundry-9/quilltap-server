@@ -56,8 +56,9 @@ ENV DOCKER_CONTAINER=true
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Create data directory for SQLite (if used)
-RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
+# Create data directories (data, files, logs)
+RUN mkdir -p /app/quilltap/data /app/quilltap/files /app/quilltap/logs && \
+    chown -R nextjs:nodejs /app/quilltap
 
 # Copy built assets
 COPY --from=builder /app/public ./public

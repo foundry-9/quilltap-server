@@ -117,7 +117,8 @@ describe('Database Configuration Module', () => {
       const { loadSQLiteConfig } = await import('@/lib/database/config');
       const config = loadSQLiteConfig();
 
-      expect(config.path).toContain('.quilltap');
+      // Platform-specific paths: Linux uses .quilltap, macOS uses Library/Application Support/Quilltap
+      expect(config.path.toLowerCase()).toContain('quilltap');
       expect(config.path).toContain('quilltap.db');
     });
 
@@ -500,21 +501,22 @@ describe('Database Configuration Module', () => {
   });
 
   describe('getDefaultDataDirectory', () => {
-    it('should return /app/data in Docker environment', async () => {
+    it('should return /app/quilltap/data in Docker environment', async () => {
       process.env.DOCKER_CONTAINER = 'true';
 
       const { getDefaultDataDirectory } = await import('@/lib/database/config');
 
-      expect(getDefaultDataDirectory()).toBe('/app/data');
+      expect(getDefaultDataDirectory()).toBe('/app/quilltap/data');
     });
 
-    it('should return ~/.quilltap/data in non-Docker environment', async () => {
+    it('should return platform-specific data directory in non-Docker environment', async () => {
       delete process.env.DOCKER_CONTAINER;
 
       const { getDefaultDataDirectory } = await import('@/lib/database/config');
 
       const result = getDefaultDataDirectory();
-      expect(result).toContain('.quilltap');
+      // Platform-specific paths: Linux uses .quilltap, macOS uses Library/Application Support/Quilltap
+      expect(result.toLowerCase()).toContain('quilltap');
       expect(result).toContain('data');
     });
   });
@@ -525,7 +527,8 @@ describe('Database Configuration Module', () => {
 
       const result = getDefaultSQLitePath();
       expect(result).toContain('quilltap.db');
-      expect(result).toContain('.quilltap');
+      // Platform-specific paths: Linux uses .quilltap, macOS uses Library/Application Support/Quilltap
+      expect(result.toLowerCase()).toContain('quilltap');
     });
   });
 

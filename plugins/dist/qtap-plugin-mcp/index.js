@@ -3223,8 +3223,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path) {
-      let input = path;
+    function removeDotSegments(path2) {
+      let input = path2;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3423,8 +3423,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path && path !== "/" ? path : void 0;
+        const [path2, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path2 && path2 !== "/" ? path2 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -6777,12 +6777,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs2, exportName) {
+    function addFormats(ajv, list, fs3, exportName) {
       var _a;
       var _b;
       (_a = (_b = ajv.opts.code).formats) !== null && _a !== void 0 ? _a : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs2[f]);
+        ajv.addFormat(f, fs3[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -6844,7 +6844,7 @@ var FileTransport = class {
     this.logDir = logDir;
     this.maxFileSize = maxFileSize;
     this.maxFiles = maxFiles;
-    this.initializeDirectory();
+    this.initPromise = this.initializeDirectory();
   }
   /**
    * Initialize the log directory and track existing file sizes
@@ -6878,6 +6878,7 @@ var FileTransport = class {
    * @param logData The structured log data to write
    */
   async write(logData) {
+    await this.initPromise;
     const logString = JSON.stringify(logData);
     const lineWithNewline = logString + "\n";
     await this.writeToFile("combined.log", lineWithNewline);
@@ -6993,6 +6994,9 @@ var envSchema = import_zod.z.object({
   MONGODB_CONNECTION_TIMEOUT_MS: import_zod.z.string().regex(/^\d+$/).optional(),
   MONGODB_MAX_POOL_SIZE: import_zod.z.string().regex(/^\d+$/).optional(),
   // File Storage Configuration
+  // Base directory for all Quilltap data (database, files, logs)
+  // Platform defaults: Linux: ~/.quilltap, macOS: ~/Library/Application Support/Quilltap, Windows: %APPDATA%\Quilltap
+  QUILLTAP_DATA_DIR: import_zod.z.string().optional(),
   // Path for local filesystem storage (built-in backend)
   QUILLTAP_FILE_STORAGE_PATH: import_zod.z.string().optional().default("./data/files"),
   // Encryption key for mount point secrets (auto-generated if not set, falls back to ENCRYPTION_MASTER_PEPPER)
@@ -7113,6 +7117,66 @@ function checkIsUserManaged() {
 }
 var isUserManaged = checkIsUserManaged();
 
+// ../../../lib/paths.ts
+var import_path2 = __toESM(require("path"));
+var import_os = __toESM(require("os"));
+var import_fs2 = __toESM(require("fs"));
+function isDockerEnvironment() {
+  if (process.env.DOCKER_CONTAINER === "true") {
+    return true;
+  }
+  try {
+    if (import_fs2.default.existsSync("/.dockerenv")) {
+      return true;
+    }
+    const appStat = import_fs2.default.statSync("/app");
+    if (appStat.isDirectory()) {
+      return true;
+    }
+  } catch {
+  }
+  return false;
+}
+function getPlatform() {
+  if (isDockerEnvironment()) {
+    return "docker";
+  }
+  const platform = process.platform;
+  if (platform === "darwin" || platform === "win32" || platform === "linux") {
+    return platform;
+  }
+  return "linux";
+}
+function getPlatformDefaultBaseDir() {
+  const platform = getPlatform();
+  const homeDir = import_os.default.homedir();
+  switch (platform) {
+    case "docker":
+      return "/app/quilltap";
+    case "darwin":
+      return import_path2.default.join(homeDir, "Library", "Application Support", "Quilltap");
+    case "win32":
+      const appData = process.env.APPDATA || import_path2.default.join(homeDir, "AppData", "Roaming");
+      return import_path2.default.join(appData, "Quilltap");
+    case "linux":
+    default:
+      return import_path2.default.join(homeDir, ".quilltap");
+  }
+}
+function getBaseDataDir() {
+  const envOverride = process.env.QUILLTAP_DATA_DIR;
+  if (envOverride) {
+    if (envOverride.startsWith("~")) {
+      return import_path2.default.join(import_os.default.homedir(), envOverride.slice(1));
+    }
+    return envOverride;
+  }
+  return getPlatformDefaultBaseDir();
+}
+function getLogsDir() {
+  return import_path2.default.join(getBaseDataDir(), "logs");
+}
+
 // ../../../lib/logger.ts
 var LOG_LEVELS = {
   ["error" /* ERROR */]: 0,
@@ -7130,8 +7194,9 @@ function initializeTransports() {
   if (output === "file" || output === "both") {
     const maxFileSize = env.LOG_FILE_MAX_SIZE ? Number.parseInt(env.LOG_FILE_MAX_SIZE) : void 0;
     const maxFiles = env.LOG_FILE_MAX_FILES ? Number.parseInt(env.LOG_FILE_MAX_FILES) : void 0;
+    const logPath = env.LOG_FILE_PATH && env.LOG_FILE_PATH !== "./logs" ? env.LOG_FILE_PATH : getLogsDir();
     transports.push(new FileTransport(
-      env.LOG_FILE_PATH || "./logs",
+      logPath,
       maxFileSize,
       maxFiles
     ));
@@ -7213,10 +7278,10 @@ var Logger = class _Logger {
   /**
    * Log an HTTP request
    */
-  logRequest(method, path, statusCode, duration, context) {
+  logRequest(method, path2, statusCode, duration, context) {
     this.info("HTTP request", {
       method,
-      path,
+      path: path2,
       statusCode,
       duration,
       ...context

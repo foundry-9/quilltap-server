@@ -2,6 +2,15 @@
 # Use this for simpler deployments or single-user scenarios
 #
 # Usage: docker-compose -f docker-compose.prod-sqlite.yml up -d
+#
+# Data is stored in ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap} on the host
+# To use a different location, set the QUILLTAP_HOST_DATA_DIR environment variable:
+#   QUILLTAP_HOST_DATA_DIR=/path/to/data docker-compose -f docker-compose.prod-sqlite.yml up -d
+#
+# Platform-specific recommended paths:
+#   Linux:   ~/.quilltap (default)
+#   macOS:   ~/Library/Application Support/Quilltap
+#   Windows: %APPDATA%\Quilltap
 
 services:
   nginx:
@@ -72,8 +81,8 @@ services:
     expose:
       - "3000"
     volumes:
-      # SQLite data directory
-      - sqlite-data:/app/data
+      # All Quilltap data (database, files, logs) in one directory
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
       # Plugin directories for npm-installed plugins
       - plugin-site-data:/app/plugins/site
       - plugin-user-data:/app/plugins/users
@@ -87,7 +96,7 @@ services:
       - ENCRYPTION_MASTER_PEPPER=${ENCRYPTION_MASTER_PEPPER}
       # SQLite configuration (no MongoDB)
       - DATABASE_BACKEND=sqlite
-      - SQLITE_PATH=/app/data/quilltap.db
+      - SQLITE_PATH=/app/quilltap/data/quilltap.db
       - SQLITE_WAL_MODE=true
       # S3 configuration (embedded MinIO)
       - S3_MODE=external
@@ -110,7 +119,6 @@ services:
       start_period: 40s
 
 volumes:
-  sqlite-data:
   minio-data:
   plugin-site-data:
   plugin-user-data:

@@ -200,14 +200,14 @@ export function createPluginLogger(
 /**
  * Get the minimum log level from environment
  *
- * Checks for LOG_LEVEL or QUILTTAP_LOG_LEVEL environment variables.
+ * Checks for LOG_LEVEL or QUILLTAP_LOG_LEVEL environment variables.
  * Useful for configuring standalone plugin logging.
  *
  * @returns The configured log level, or 'info' as default
  */
 export function getLogLevelFromEnv(): LogLevel {
   if (typeof process !== 'undefined' && process.env) {
-    const envLevel = process.env.LOG_LEVEL || process.env.QUILTTAP_LOG_LEVEL;
+    const envLevel = process.env.LOG_LEVEL || process.env.QUILLTAP_LOG_LEVEL;
     if (envLevel && ['debug', 'info', 'warn', 'error'].includes(envLevel)) {
       return envLevel as LogLevel;
     }

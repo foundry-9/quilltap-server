@@ -184,8 +184,8 @@ db.pragma('foreign_keys = ON');       // Enforce referential integrity
 # Backend selection (default: sqlite)
 DATABASE_BACKEND=sqlite
 
-# SQLite configuration
-SQLITE_PATH=/app/data/quilltap.db
+# SQLite configuration (Docker path shown, local paths vary by platform)
+SQLITE_PATH=/app/quilltap/data/quilltap.db
 SQLITE_WAL_MODE=true
 SQLITE_BUSY_TIMEOUT=5000
 

@@ -4,6 +4,22 @@
 
 ### 2.8-dev
 
+- feat: Centralized data directory with platform-specific defaults (2026-01-25)
+  - New `lib/paths.ts` module providing single source of truth for all data paths
+  - Platform-specific default directories:
+    - Linux: `~/.quilltap` (unchanged)
+    - macOS: `~/Library/Application Support/Quilltap`
+    - Windows: `%APPDATA%\Quilltap`
+    - Docker: `/app/quilltap` (mounted from host's platform-specific location)
+  - Directory structure: `<base>/data`, `<base>/files`, `<base>/logs`
+  - `QUILLTAP_DATA_DIR` environment variable to override the base directory
+  - `QUILLTAP_HOST_DATA_DIR` environment variable for Docker to specify host mount location
+  - Migration script to move legacy data from `./data/`, `./logs/`, `~/.quilltap/` to new locations
+  - Marker files (`.MIGRATED`) prevent re-migration on subsequent startups
+  - Updated `lib/database/config.ts`, `lib/logger.ts`, `lib/file-storage/manager.ts` to use centralized paths
+  - Updated `migrations/scripts/create-mount-points.ts` to support both SQLite and MongoDB backends
+  - Data directories are created at server startup before migrations run
+  - Docker data persists on host filesystem by default (no more data loss when containers are recreated)
 - fix: Character favorite toggle returning 405 error (2026-01-25)
   - Frontend was using PATCH method but API only supports POST for favorite action
   - Fixed in characters page and character view hook

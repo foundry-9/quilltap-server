@@ -1,3 +1,13 @@
+# Production setup with MongoDB and MinIO
+#
+# Data is stored in ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap} on the host
+# To use a different location, set the QUILLTAP_HOST_DATA_DIR environment variable
+#
+# Platform-specific recommended paths:
+#   Linux:   ~/.quilltap (default)
+#   macOS:   ~/Library/Application Support/Quilltap
+#   Windows: %APPDATA%\Quilltap
+
 services:
   nginx:
     image: nginx:alpine
@@ -81,11 +91,14 @@ services:
     expose:
       - "3000"
     volumes:
+      # All Quilltap data (files, logs) in one directory
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
       # Plugin directories for npm-installed plugins
       - plugin-site-data:/app/plugins/site
       - plugin-user-data:/app/plugins/users
     environment:
       - NODE_ENV=production
+      - DOCKER_CONTAINER=true
       - BASE_URL=${BASE_URL:-https://yourdomain.com}
       - JWT_SECRET=${JWT_SECRET}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}

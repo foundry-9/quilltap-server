@@ -1,6 +1,9 @@
 # Production Docker Compose configuration for Quilltap with external services
 # Uses MongoDB Atlas for database and AWS S3 for file storage
 # All configuration is provided via environment variables
+#
+# Data (logs) is stored in ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap} on the host
+# To use a different location, set the QUILLTAP_HOST_DATA_DIR environment variable
 
 services:
   app:
@@ -17,13 +20,16 @@ services:
     ports:
       - "3000:3000"
 
-    # Persistent volumes for plugins
+    # Persistent volumes for plugins and data
     volumes:
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
       - plugin-site-data:/app/plugins/site
       - plugin-user-data:/app/plugins/users
 
     # Environment variables for external services integration
     environment:
+      # Docker container marker
+      DOCKER_CONTAINER: "true"
       # Database backend configuration
       DATABASE_BACKEND: mongodb
       MONGODB_URI: ${MONGODB_URI}

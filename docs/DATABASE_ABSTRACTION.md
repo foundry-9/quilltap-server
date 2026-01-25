@@ -19,7 +19,7 @@ The abstraction layer provides a unified interface for database operations, allo
 | `DATABASE_BACKEND` | Backend to use: `mongodb` or `sqlite` | Auto-detected |
 | `MONGODB_URI` | MongoDB connection string | Required for MongoDB |
 | `MONGODB_DATABASE` | MongoDB database name | `quilltap` |
-| `SQLITE_PATH` | Path to SQLite database file | `~/.quilltap/data/quilltap.db` or `/app/data/quilltap.db` |
+| `SQLITE_PATH` | Path to SQLite database file | `~/.quilltap/data/quilltap.db` or `/app/quilltap/data/quilltap.db` (Docker) |
 | `SQLITE_WAL_MODE` | Enable WAL mode for SQLite | `true` |
 
 > **Note:** The legacy `DATA_BACKEND` environment variable is deprecated but still supported for backward compatibility. If `DATA_BACKEND=mongodb` is set, it will be treated as `DATABASE_BACKEND=mongodb` with a deprecation warning logged. The `json` and `dual` values are no longer supported.
@@ -296,10 +296,13 @@ SQLite runs in WAL (Write-Ahead Logging) mode by default, which provides:
 
 ### Data Directory
 
-- Docker: `/app/data/quilltap.db`
-- Local: `~/.quilltap/data/quilltap.db`
+Platform-specific locations:
+- Docker: `/app/quilltap/data/quilltap.db` (mounted from host)
+- Linux: `~/.quilltap/data/quilltap.db`
+- macOS: `~/Library/Application Support/Quilltap/data/quilltap.db`
+- Windows: `%APPDATA%\Quilltap\data\quilltap.db`
 
-The data directory is automatically created if it doesn't exist.
+The data directory is automatically created if it doesn't exist. For Docker, the `/app/quilltap` directory is mounted from the host's platform-specific location by default (`QUILLTAP_HOST_DATA_DIR`).
 
 ## Troubleshooting
 

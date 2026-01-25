@@ -28,6 +28,134 @@ export async function register() {
 
     try {
       // ================================================================
+      // PHASE 0: Migrate Legacy Data Files (before any database access)
+      // ================================================================
+      // This MUST happen before database initialization to copy the actual database
+      const {
+        ensureDataDirectoriesExist,
+        getPlatform,
+        getBaseDataDir,
+        getDataDir,
+        getFilesDir,
+        getLegacyPaths,
+        hasMigrationMarker,
+        createMigrationMarker,
+      } = await import('./lib/paths');
+      const fs = await import('fs');
+      const path = await import('path');
+
+      const platform = getPlatform();
+      const baseDir = getBaseDataDir();
+
+      logger.info('Phase 0: Ensuring data directories exist', {
+        context: 'instrumentation.register',
+        platform,
+        baseDir,
+      });
+
+      // Create directories first
+      ensureDataDirectoriesExist();
+
+      // On macOS/Windows, check if we need to copy legacy data BEFORE database init
+      if (platform === 'darwin' || platform === 'win32') {
+        const legacy = getLegacyPaths();
+        const newDataDir = getDataDir();
+        const newFilesDir = getFilesDir();
+        const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+        const legacyBase = path.default.join(homeDir, '.quilltap');
+
+        // Only migrate if paths are different
+        if (path.default.resolve(baseDir) !== path.default.resolve(legacyBase)) {
+          // Check for legacy database at ~/.quilltap/data/quilltap.db
+          const legacyDbPath = path.default.join(legacy.homeDataDir, 'quilltap.db');
+          const newDbPath = path.default.join(newDataDir, 'quilltap.db');
+
+          if (fs.default.existsSync(legacyDbPath) && !hasMigrationMarker(legacy.homeDataDir)) {
+            // Check if new database doesn't exist OR is much smaller (empty)
+            let shouldCopy = !fs.default.existsSync(newDbPath);
+            if (!shouldCopy) {
+              const legacySize = fs.default.statSync(legacyDbPath).size;
+              const newSize = fs.default.statSync(newDbPath).size;
+              // If new file is less than 10% the size of old, it's probably empty
+              shouldCopy = newSize < legacySize * 0.1;
+            }
+
+            if (shouldCopy) {
+              logger.info('Copying legacy database to new location', {
+                context: 'instrumentation.register',
+                from: legacyDbPath,
+                to: newDbPath,
+              });
+
+              try {
+                fs.default.copyFileSync(legacyDbPath, newDbPath);
+                // Also copy WAL files if they exist
+                const walPath = legacyDbPath + '-wal';
+                const shmPath = legacyDbPath + '-shm';
+                if (fs.default.existsSync(walPath)) {
+                  fs.default.copyFileSync(walPath, newDbPath + '-wal');
+                }
+                if (fs.default.existsSync(shmPath)) {
+                  fs.default.copyFileSync(shmPath, newDbPath + '-shm');
+                }
+                createMigrationMarker(legacy.homeDataDir, newDataDir);
+                logger.info('Legacy database copied successfully', {
+                  context: 'instrumentation.register',
+                });
+              } catch (err) {
+                logger.error('Failed to copy legacy database', {
+                  context: 'instrumentation.register',
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              }
+            }
+          }
+
+          // Check for legacy files at ~/.quilltap/files
+          if (fs.default.existsSync(legacy.filesDir) && !hasMigrationMarker(legacy.filesDir)) {
+            const files = fs.default.readdirSync(legacy.filesDir);
+            if (files.length > 0 && files.some(f => f !== '.MIGRATED')) {
+              logger.info('Copying legacy files to new location', {
+                context: 'instrumentation.register',
+                from: legacy.filesDir,
+                to: newFilesDir,
+              });
+
+              try {
+                // Copy files recursively
+                const copyRecursive = (src: string, dest: string) => {
+                  const entries = fs.default.readdirSync(src, { withFileTypes: true });
+                  for (const entry of entries) {
+                    if (entry.name === '.MIGRATED') continue;
+                    const srcPath = path.default.join(src, entry.name);
+                    const destPath = path.default.join(dest, entry.name);
+                    if (entry.isDirectory()) {
+                      if (!fs.default.existsSync(destPath)) {
+                        fs.default.mkdirSync(destPath, { recursive: true });
+                      }
+                      copyRecursive(srcPath, destPath);
+                    } else if (!fs.default.existsSync(destPath)) {
+                      fs.default.copyFileSync(srcPath, destPath);
+                    }
+                  }
+                };
+                copyRecursive(legacy.filesDir, newFilesDir);
+                createMigrationMarker(legacy.filesDir, newFilesDir);
+                logger.info('Legacy files copied successfully', {
+                  context: 'instrumentation.register',
+                });
+              } catch (err) {
+                logger.error('Failed to copy legacy files', {
+                  context: 'instrumentation.register',
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // ================================================================
       // PHASE 1: Run Migrations FIRST - before anything else
       // ================================================================
       // This ensures data compatibility before any API requests

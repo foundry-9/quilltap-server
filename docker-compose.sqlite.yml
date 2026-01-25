@@ -2,6 +2,15 @@
 # Use this for simpler deployments or when MongoDB is not available
 #
 # Usage: docker-compose -f docker-compose.sqlite.yml up
+#
+# Data is stored in ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap} on the host
+# To use a different location, set the QUILLTAP_HOST_DATA_DIR environment variable:
+#   QUILLTAP_HOST_DATA_DIR=/path/to/data docker-compose -f docker-compose.sqlite.yml up
+#
+# Platform-specific recommended paths:
+#   Linux:   ~/.quilltap (default)
+#   macOS:   ~/Library/Application Support/Quilltap
+#   Windows: %APPDATA%\Quilltap
 
 services:
   minio:
@@ -46,7 +55,7 @@ services:
       - BASE_URL=https://localhost:3000
       # SQLite configuration (no MongoDB)
       - DATABASE_BACKEND=sqlite
-      - SQLITE_PATH=/app/data/quilltap.db
+      - SQLITE_PATH=/app/quilltap/data/quilltap.db
       - SQLITE_WAL_MODE=true
       # S3 configuration (embedded MinIO)
       - S3_MODE=external
@@ -63,11 +72,10 @@ services:
     volumes:
       - .:/app
       - app-node-modules:/app/node_modules
-      - sqlite-data:/app/data
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
       - /app/.next
     command: npm run devssl
 
 volumes:
   minio-data:
   app-node-modules:
-  sqlite-data:

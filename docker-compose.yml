@@ -1,5 +1,8 @@
 # Basic development setup with MongoDB and MinIO
 # For a more complete setup, use docker-compose.dev-mongo.yml
+#
+# Data is stored in ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap} on the host
+# To use a different location, set the QUILLTAP_HOST_DATA_DIR environment variable
 
 services:
   mongo:
@@ -74,6 +77,7 @@ services:
     volumes:
       - .:/app
       - app-node-modules:/app/node_modules
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
       - /app/.next
     command: npm run devssl
 

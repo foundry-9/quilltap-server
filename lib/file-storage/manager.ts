@@ -31,6 +31,7 @@ import { createLogger } from '@/lib/logging/create-logger';
 import { env } from '@/lib/env';
 import { mountPointsRepository } from '@/lib/database/repositories/mount-points.repository';
 import { getRepositories } from '@/lib/repositories/factory';
+import { getFilesDir } from '@/lib/paths';
 
 const logger = createLogger('file-storage:manager');
 
@@ -455,11 +456,16 @@ class FileStorageManager {
   getAvailableBackends(): AvailableBackendInfo[] {
     const backends: AvailableBackendInfo[] = [];
 
+    // Use centralized files directory as default, with env override if explicitly set
+    const defaultFilesPath = env.QUILLTAP_FILE_STORAGE_PATH && env.QUILLTAP_FILE_STORAGE_PATH !== './data/files'
+      ? env.QUILLTAP_FILE_STORAGE_PATH
+      : getFilesDir();
+
     // Add built-in local backend
     backends.push({
       providerId: 'local',
       displayName: 'Local Filesystem',
-      description: 'Store files on the local filesystem. Default path is configured via QUILLTAP_FILE_STORAGE_PATH environment variable.',
+      description: 'Store files on the local filesystem. Default path uses platform-specific data directory.',
       configFields: [
         {
           name: 'basePath',
@@ -467,8 +473,8 @@ class FileStorageManager {
           type: 'string',
           required: true,
           description: 'Directory path where files will be stored',
-          placeholder: env.QUILLTAP_FILE_STORAGE_PATH || './data/files',
-          defaultValue: env.QUILLTAP_FILE_STORAGE_PATH || './data/files',
+          placeholder: defaultFilesPath,
+          defaultValue: defaultFilesPath,
         },
       ],
     });

@@ -11,7 +11,6 @@ import type {
   RoleplayTemplateMetadata,
   RoleplayTemplatePlugin,
 } from '@quilltap/plugin-types';
-import { createPluginLogger } from '../logging';
 
 // ============================================================================
 // BUILDER OPTIONS
@@ -125,7 +124,7 @@ export interface CreateSingleTemplatePluginOptions {
 export function createRoleplayTemplatePlugin(
   options: CreateRoleplayTemplatePluginOptions
 ): RoleplayTemplatePlugin {
-  const { metadata, templates, initialize, enableLogging = false } = options;
+  const { metadata, templates, initialize, enableLogging: _enableLogging = false } = options;
 
   // Normalize templates to array
   const templateArray = Array.isArray(templates) ? templates : [templates];
@@ -156,16 +155,10 @@ export function createRoleplayTemplatePlugin(
     templates: templateArray,
   };
 
-  // Add initialize function with optional logging
-  if (initialize || enableLogging) {
+  // Add initialize function if provided
+  if (initialize) {
     plugin.initialize = async () => {
-      if (enableLogging) {
-        const logger = createPluginLogger(metadata.templateId);
-      }
-
-      if (initialize) {
-        await initialize();
-      }
+      await initialize();
     };
   }
 

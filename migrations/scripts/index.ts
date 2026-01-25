@@ -52,6 +52,8 @@ import { cleanupOrphanFileRecordsMigration } from './cleanup-orphan-file-records
 import { addLLMLogsCollectionMigration } from './add-llm-logs-collection';
 // SQLite initial schema
 import { sqliteInitialSchemaMigration } from './sqlite-initial-schema';
+// Centralized data directory migration
+import { migrateToCentralizedDataDirMigration } from './migrate-to-centralized-data-dir';
 
 /**
  * All available migrations.
@@ -101,6 +103,8 @@ export const migrations: Migration[] = [
   addLLMLogsCollectionMigration,
   // SQLite initial schema (only runs on SQLite backend)
   sqliteInitialSchemaMigration,
+  // Centralized data directory migration
+  migrateToCentralizedDataDirMigration,
 ];
 
 export {
@@ -147,4 +151,6 @@ export {
   addLLMLogsCollectionMigration,
   // SQLite initial schema
   sqliteInitialSchemaMigration,
+  // Centralized data directory migration
+  migrateToCentralizedDataDirMigration,
 };

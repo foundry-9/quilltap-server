@@ -64,6 +64,9 @@ const envSchema = z
     MONGODB_MAX_POOL_SIZE: z.string().regex(/^\d+$/).optional(),
 
     // File Storage Configuration
+    // Base directory for all Quilltap data (database, files, logs)
+    // Platform defaults: Linux: ~/.quilltap, macOS: ~/Library/Application Support/Quilltap, Windows: %APPDATA%\Quilltap
+    QUILLTAP_DATA_DIR: z.string().optional(),
     // Path for local filesystem storage (built-in backend)
     QUILLTAP_FILE_STORAGE_PATH: z.string().optional().default('./data/files'),
     // Encryption key for mount point secrets (auto-generated if not set, falls back to ENCRYPTION_MASTER_PEPPER)

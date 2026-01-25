@@ -1,0 +1,377 @@
+/**
+ * Centralized Path Resolution Module
+ *
+ * Single source of truth for all data directory paths in Quilltap.
+ * Provides platform-specific defaults with environment variable override support.
+ *
+ * Platform-specific defaults:
+ * - Linux: ~/.quilltap
+ * - macOS: ~/Library/Application Support/Quilltap
+ * - Windows: %APPDATA%\Quilltap
+ * - Docker: /app/quilltap (mounted from host's platform-specific location)
+ *
+ * Directory structure under base:
+ * <base>/
+ * ├── data/     - Database files (SQLite)
+ * ├── files/    - User file storage (default mount point)
+ * └── logs/     - Application logs
+ *
+ * Environment variable QUILLTAP_DATA_DIR overrides the base directory.
+ * For Docker, set QUILLTAP_HOST_DATA_DIR to change the host mount location.
+ *
+ * @module lib/paths
+ */
+
+import path from 'path';
+import os from 'os';
+import fs from 'fs';
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export type Platform = 'docker' | 'linux' | 'darwin' | 'win32';
+
+export interface LegacyDataStatus {
+  /** Whether legacy data directory exists */
+  data: boolean;
+  /** Whether legacy logs directory exists */
+  logs: boolean;
+  /** Whether legacy files directory exists */
+  files: boolean;
+}
+
+export interface LegacyPaths {
+  /** Path to legacy project-relative data directory (./data) */
+  projectDataDir: string;
+  /** Path to legacy home-relative data directory (~/.quilltap/data) */
+  homeDataDir: string;
+  /** Path to legacy logs directory (./logs) */
+  logsDir: string;
+  /** Path to legacy files directory (~/.quilltap/files) */
+  filesDir: string;
+}
+
+// ============================================================================
+// Platform Detection
+// ============================================================================
+
+/**
+ * Check if running in a Docker container
+ *
+ * Detects Docker by checking:
+ * 1. DOCKER_CONTAINER environment variable
+ * 2. Existence of /.dockerenv file
+ * 3. Existence of /app directory (Quilltap Docker convention)
+ */
+export function isDockerEnvironment(): boolean {
+  if (process.env.DOCKER_CONTAINER === 'true') {
+    return true;
+  }
+
+  // Check for Docker-specific markers
+  try {
+    if (fs.existsSync('/.dockerenv')) {
+      return true;
+    }
+    // Check for /app as a directory (Quilltap Docker convention)
+    const appStat = fs.statSync('/app');
+    if (appStat.isDirectory()) {
+      return true;
+    }
+  } catch {
+    // Not in Docker
+  }
+
+  return false;
+}
+
+/**
+ * Get the current platform
+ *
+ * @returns Platform identifier
+ */
+export function getPlatform(): Platform {
+  if (isDockerEnvironment()) {
+    return 'docker';
+  }
+
+  const platform = process.platform;
+  if (platform === 'darwin' || platform === 'win32' || platform === 'linux') {
+    return platform;
+  }
+
+  // Default to linux for other Unix-like systems
+  return 'linux';
+}
+
+// ============================================================================
+// Path Resolution
+// ============================================================================
+
+/**
+ * Get the platform-specific default base directory
+ *
+ * Does NOT check QUILLTAP_DATA_DIR - use getBaseDataDir() for that.
+ *
+ * @returns Platform-specific default base directory path
+ */
+export function getPlatformDefaultBaseDir(): string {
+  const platform = getPlatform();
+  const homeDir = os.homedir();
+
+  switch (platform) {
+    case 'docker':
+      return '/app/quilltap';
+
+    case 'darwin':
+      return path.join(homeDir, 'Library', 'Application Support', 'Quilltap');
+
+    case 'win32':
+      // Use APPDATA if available, otherwise fall back to home directory
+      const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
+      return path.join(appData, 'Quilltap');
+
+    case 'linux':
+    default:
+      return path.join(homeDir, '.quilltap');
+  }
+}
+
+/**
+ * Get the base data directory
+ *
+ * Respects QUILLTAP_DATA_DIR environment variable if set,
+ * otherwise returns platform-specific default.
+ *
+ * @returns Base data directory path
+ */
+export function getBaseDataDir(): string {
+  const envOverride = process.env.QUILLTAP_DATA_DIR;
+
+  if (envOverride) {
+    // Expand ~ to home directory
+    if (envOverride.startsWith('~')) {
+      return path.join(os.homedir(), envOverride.slice(1));
+    }
+    return envOverride;
+  }
+
+  return getPlatformDefaultBaseDir();
+}
+
+/**
+ * Get the data directory path (for database files)
+ *
+ * @returns Data directory path (<base>/data)
+ */
+export function getDataDir(): string {
+  return path.join(getBaseDataDir(), 'data');
+}
+
+/**
+ * Get the files directory path (for user file storage)
+ *
+ * @returns Files directory path (<base>/files)
+ */
+export function getFilesDir(): string {
+  return path.join(getBaseDataDir(), 'files');
+}
+
+/**
+ * Get the logs directory path
+ *
+ * @returns Logs directory path (<base>/logs)
+ */
+export function getLogsDir(): string {
+  return path.join(getBaseDataDir(), 'logs');
+}
+
+/**
+ * Get the SQLite database file path
+ *
+ * @returns SQLite database path (<base>/data/quilltap.db)
+ */
+export function getSQLiteDatabasePath(): string {
+  return path.join(getDataDir(), 'quilltap.db');
+}
+
+// ============================================================================
+// Directory Management
+// ============================================================================
+
+/**
+ * Ensure all data directories exist
+ *
+ * Creates the base directory and subdirectories if they don't exist:
+ * - <base>/data
+ * - <base>/files
+ * - <base>/logs
+ *
+ * @throws {Error} If directory creation fails
+ */
+export function ensureDataDirectoriesExist(): void {
+  const dirs = [
+    getDataDir(),
+    getFilesDir(),
+    getLogsDir(),
+  ];
+
+  for (const dir of dirs) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  }
+}
+
+// ============================================================================
+// Legacy Data Detection
+// ============================================================================
+
+/**
+ * Get paths to legacy data locations
+ *
+ * Returns paths that may contain legacy data from older Quilltap versions:
+ * - ./data - Project-relative data directory
+ * - ~/.quilltap/data - Home-relative data directory (Linux-style, used on all platforms before)
+ * - ./logs - Project-relative logs directory
+ * - ~/.quilltap/files - Old Linux-style files directory (on macOS/Windows)
+ *
+ * @returns Object containing legacy paths
+ */
+export function getLegacyPaths(): LegacyPaths {
+  const cwd = process.cwd();
+  const homeDir = os.homedir();
+
+  return {
+    projectDataDir: path.join(cwd, 'data'),
+    homeDataDir: path.join(homeDir, '.quilltap', 'data'),
+    logsDir: path.join(cwd, 'logs'),
+    filesDir: path.join(homeDir, '.quilltap', 'files'),
+  };
+}
+
+/**
+ * Check if legacy data exists that may need migration
+ *
+ * Checks for:
+ * - ./data directory with quilltap.db (project-relative)
+ * - ~/.quilltap/data directory with quilttap.db (home-relative, on macOS/Windows)
+ * - ./logs directory with log files
+ * - ~/.quilltap/files on macOS/Windows (where it differs from the new default)
+ *
+ * Does NOT flag as legacy if paths are the same as new paths.
+ *
+ * @returns Object indicating which legacy data types exist
+ */
+export function hasLegacyData(): LegacyDataStatus {
+  const legacy = getLegacyPaths();
+  const currentBase = getBaseDataDir();
+  const currentDataDir = getDataDir();
+  const currentLogsDir = getLogsDir();
+  const platform = getPlatform();
+
+  // For Docker, there's no legacy data to migrate
+  if (platform === 'docker') {
+    return { data: false, logs: false, files: false };
+  }
+
+  // Check if legacy and current paths are different before flagging as legacy
+  const legacyBase = path.join(os.homedir(), '.quilltap');
+  const pathsAreSame = path.resolve(currentBase) === path.resolve(legacyBase);
+
+  let hasLegacyData = false;
+
+  // Check for legacy ./data directory (project-relative)
+  try {
+    const legacyDbPath = path.join(legacy.projectDataDir, 'quilltap.db');
+    if (fs.existsSync(legacyDbPath)) {
+      // Only flag as legacy if it's different from the current data dir
+      if (path.resolve(legacy.projectDataDir) !== path.resolve(currentDataDir)) {
+        hasLegacyData = true;
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+
+  // Check for legacy ~/.quilltap/data directory (home-relative)
+  // This is important for macOS/Windows where default path changed
+  if (!hasLegacyData && (platform === 'darwin' || platform === 'win32') && !pathsAreSame) {
+    try {
+      const legacyDbPath = path.join(legacy.homeDataDir, 'quilltap.db');
+      if (fs.existsSync(legacyDbPath)) {
+        // Only flag as legacy if it's different from the current data dir
+        if (path.resolve(legacy.homeDataDir) !== path.resolve(currentDataDir)) {
+          hasLegacyData = true;
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  // Check for legacy ./logs directory (project-relative)
+  let hasLegacyLogs = false;
+  try {
+    if (fs.existsSync(legacy.logsDir)) {
+      const files = fs.readdirSync(legacy.logsDir);
+      const hasLogFiles = files.some(f => f.endsWith('.log'));
+      if (hasLogFiles) {
+        // Only flag as legacy if it's different from the current logs dir
+        if (path.resolve(legacy.logsDir) !== path.resolve(currentLogsDir)) {
+          hasLegacyLogs = true;
+        }
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+
+  // Check for legacy ~/.quilltap/files on macOS/Windows where default path changed
+  let hasLegacyFiles = false;
+  if ((platform === 'darwin' || platform === 'win32') && !pathsAreSame) {
+    try {
+      if (fs.existsSync(legacy.filesDir)) {
+        const files = fs.readdirSync(legacy.filesDir);
+        if (files.length > 0) {
+          hasLegacyFiles = true;
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  return {
+    data: hasLegacyData,
+    logs: hasLegacyLogs,
+    files: hasLegacyFiles,
+  };
+}
+
+/**
+ * Check if a migration marker file exists
+ *
+ * Marker files are placed in legacy directories after migration to prevent
+ * re-migration on subsequent startups.
+ *
+ * @param legacyDir - The legacy directory to check
+ * @returns True if marker file exists
+ */
+export function hasMigrationMarker(legacyDir: string): boolean {
+  const markerPath = path.join(legacyDir, '.MIGRATED');
+  return fs.existsSync(markerPath);
+}
+
+/**
+ * Create a migration marker file
+ *
+ * @param legacyDir - The legacy directory to mark
+ * @param newPath - The new path where data was migrated to
+ */
+export function createMigrationMarker(legacyDir: string, newPath: string): void {
+  const markerPath = path.join(legacyDir, '.MIGRATED');
+  const content = `Data migrated to: ${newPath}\nMigrated at: ${new Date().toISOString()}\n`;
+  fs.writeFileSync(markerPath, content, 'utf8');
+}

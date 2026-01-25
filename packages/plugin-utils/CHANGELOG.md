@@ -2,6 +2,16 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [1.2.5] - 2026-01-25
+
+### Fixed
+
+- **Environment Variable Typo**
+  - Fixed spelling of environment variable from QUIL-T-T-AP to QUIL-L-T-AP (correct: `QUILLTAP_LOG_LEVEL`)
+- **Unused Variable Cleanup**
+  - Removed unused `finalFinishReason` variable in OpenAI-compatible provider streaming
+  - Removed unused `enableLogging` functionality in roleplay template builder (option retained in API for future use)
+
 ## [1.2.4] - 2026-01-21
 
 ### Fixed

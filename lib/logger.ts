@@ -5,6 +5,7 @@
 
 import { LogTransport, ConsoleTransport, FileTransport } from '@/lib/logging/transports';
 import { env } from '@/lib/env';
+import { getLogsDir, isDockerEnvironment } from '@/lib/paths';
 
 export enum LogLevel {
   ERROR = 'error',
@@ -31,6 +32,9 @@ interface LogContext {
 
 /**
  * Initialize transports based on environment configuration
+ *
+ * Uses centralized path resolution from lib/paths.ts for log directory,
+ * with fallback to LOG_FILE_PATH env var if explicitly set to a custom value.
  */
 function initializeTransports(): LogTransport[] {
   const transports: LogTransport[] = [];
@@ -44,8 +48,14 @@ function initializeTransports(): LogTransport[] {
     const maxFileSize = env.LOG_FILE_MAX_SIZE ? Number.parseInt(env.LOG_FILE_MAX_SIZE) : undefined;
     const maxFiles = env.LOG_FILE_MAX_FILES ? Number.parseInt(env.LOG_FILE_MAX_FILES) : undefined;
 
+    // Use explicit LOG_FILE_PATH if set to a non-default value, otherwise use centralized path
+    // Default value from env schema is './logs', so check if it's been explicitly changed
+    const logPath = env.LOG_FILE_PATH && env.LOG_FILE_PATH !== './logs'
+      ? env.LOG_FILE_PATH
+      : getLogsDir();
+
     transports.push(new FileTransport(
-      env.LOG_FILE_PATH || './logs',
+      logPath,
       maxFileSize,
       maxFiles
     ));

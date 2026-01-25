@@ -1,3 +1,8 @@
+# Development setup with MongoDB, MinIO, and mongo-express
+#
+# Data is stored in ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap} on the host
+# To use a different location, set the QUILLTAP_HOST_DATA_DIR environment variable
+
 services:
   app:
     build:
@@ -7,6 +12,7 @@ services:
     ports:
       - "3000:3000"
     environment:
+      - DOCKER_CONTAINER=true
       - DATABASE_BACKEND=mongodb
       - MONGODB_URI=mongodb://mongo:27017/quilltap
       - MONGODB_DATABASE=quilltap
@@ -25,7 +31,7 @@ services:
     volumes:
       - ./:/app
       - /app/node_modules
-      - ./data:/app/data
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
     command: npm run devssl
 
   mongo:

@@ -8,8 +8,12 @@
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import path from 'path';
-import os from 'os';
 import fs from 'fs';
+import {
+  getDataDir,
+  getSQLiteDatabasePath,
+  isDockerEnvironment,
+} from '@/lib/paths';
 
 // ============================================================================
 // Configuration Schema
@@ -87,24 +91,23 @@ export type DatabaseConfig = z.infer<typeof DatabaseConfigSchema>;
 
 /**
  * Get the default data directory based on environment
+ *
+ * Uses centralized path resolution from lib/paths.ts which provides:
+ * - Platform-specific defaults (Linux: ~/.quilltap, macOS: ~/Library/Application Support/Quilltap, etc.)
+ * - QUILLTAP_DATA_DIR environment variable override
+ * - Docker detection (/app/quilltap/data)
  */
 export function getDefaultDataDirectory(): string {
-  // Docker environment: use /app/data
-  if (process.env.DOCKER_CONTAINER === 'true' || fs.existsSync('/app/data')) {
-    return '/app/data';
-  }
-
-  // Development/production: use ~/.quilltap/data
-  const homeDir = os.homedir();
-  return path.join(homeDir, '.quilltap', 'data');
+  return getDataDir();
 }
 
 /**
  * Get the default SQLite database path
+ *
+ * Uses centralized path resolution from lib/paths.ts
  */
 export function getDefaultSQLitePath(): string {
-  const dataDir = getDefaultDataDirectory();
-  return path.join(dataDir, 'quilltap.db');
+  return getSQLiteDatabasePath();
 }
 
 /**
