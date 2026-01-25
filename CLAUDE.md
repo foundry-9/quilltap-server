@@ -13,8 +13,8 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
 - **Language**: TypeScript
 - **Package Manager**: npm
 - **Testing**: Jest and coverage tools (Istanbul/nyc), Playwright
-- **Data Storage**: SQLite with zero external dependencies. Uses `better-sqlite3` driver directly, NOT Prisma or Mongoose. Data models are defined as TypeScript interfaces with Zod schemas.
-- **File Storage**: S3-compatible storage (embedded MinIO for development, external S3 for production)
+- **Data Storage**: SQLite with zero external dependencies. Uses `better-sqlite3` driver directly. Data models are defined as TypeScript interfaces with Zod schemas.
+- **File Storage**: local or optional S3-compatible storage (embedded MinIO for development, external S3 for production)
 - **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
 - **Cloud Services**: AWS first
 - **Design Documentation**: Storybook
@@ -83,12 +83,11 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
   - [components/tools/tasks-queue/README.md](components/tools/tasks-queue/README.md) — Overview of the tasks queue card module: types, hooks, TaskItem/Filters/Details components, API integration, and structure — Grade: A (current tasks queue docs) — Last updated: 2025-12-17
   - [docs/API.md](docs/API.md) — Comprehensive Quilltap API reference for v1 REST routes (characters, chats, messages, memories, api-keys, connection-profiles, system/jobs, system/backup) with action dispatch patterns and response examples — Grade: A (canonical API reference) — Last updated: 2026-01-13
   - [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md) — Backup/restore guide covering in-app backups, manual MongoDB/S3 scripts, CRON automation, encryption, disaster recovery, verification, and monitoring tips — Grade: A (operational guidance) — Last updated: 2025-12-10
-  - [docs/DATABASE_ABSTRACTION.md](docs/DATABASE_ABSTRACTION.md) — Database abstraction layer documentation: MongoDB and SQLite backend support, configuration, Docker deployment, architecture, interfaces, capabilities comparison, and troubleshooting — Grade: A (architecture reference) — Last updated: 2026-01-24
+  - [docs/DATABASE_ABSTRACTION.md](docs/DATABASE_ABSTRACTION.md) — Database abstraction layer documentation: SQLite backend support, configuration, Docker deployment, architecture, interfaces, capabilities comparison, and troubleshooting — Grade: A (architecture reference) — Last updated: 2026-01-24
   - [docs/CHANGELOG.md](docs/CHANGELOG.md) — Detailed changelog through versions 1.0–2.5, listing features, fixes, refactors, tests, themes, and status updates per release — Grade: A (release-of-record) — Last updated: 2025-12-17
   - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Production deployment guide with prerequisites, Docker/Nginx/SSL setup, env vars, data management, monitoring, backups, and troubleshooting — Grade: A (used for current deployments) — Last updated: 2025-12-06
   - [docs/FILE-SYSTEM-IMPLEMENTATION.md](docs/FILE-SYSTEM-IMPLEMENTATION.md) — Summary of the centralized file system implementation: manager module, repositories, API route, migration utility, docs, and benefits — Grade: A (architecture reference) — Last updated: 2025-11-29
   - [docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md) — Exhaustive documentation for image generation: user workflows, provider profiles, prompt strategy, API reference, architecture, and troubleshooting — Grade: A (reflects shipped pipeline) — Last updated: 2025-11-24
-  - [docs/JSON-STORE-API.md](docs/JSON-STORE-API.md) — Reference for the JSON store API: JsonStore core methods, repositories, schemas, types, error handling, and configuration — Grade: A (API documentation) — Last updated: 2025-11-24
   - [docs/PLUGIN_INITIALIZATION.md](docs/PLUGIN_INITIALIZATION.md) — Describes the plugin initialization architecture: startup flow, API endpoint, provider registry, error handling, and testing — Grade: A (architecture current) — Last updated: 2025-12-02
   - [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md) — Complete schema reference for plugin manifests: required fields, capabilities, provider configs, hooks, API routes, UI components, permissions, and examples — Grade: A (schema of record) — Last updated: 2025-12-02
   - [docs/PROMPT_ARCHITECTURE.md](docs/PROMPT_ARCHITECTURE.md) — Outlines the Quilltap prompt architecture with identity/relationship/emotion/voice/boundary blocks — Grade: A (core concept) — Last updated: 2025-12-16
@@ -105,7 +104,7 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
   - [features/artifacts.md](features/artifacts.md) — Feature request outlining an “artifacts” side panel concept for rendering AI-generated content with copy/download actions — Grade: B (future concept) — Last updated: 2025-12-10
   - [features/comfy_ui_local_image.md](features/comfy_ui_local_image.md) — Proposal for a ComfyUI image generation plugin: architecture, workflow manager, UI, configuration, and future phases — Grade: B (proposal) — Last updated: 2025-12-06
   - [features/complete/CHEAP-LLM.md](features/complete/CHEAP-LLM.md) — Notes on cheap LLM selection, embedding profiles, and fallback heuristics when embeddings are unavailable — Grade: A (implemented behavior) — Last updated: 2025-11-29
-  - [features/complete/database-abstraction.md](features/complete/database-abstraction.md) — Completed database abstraction layer: SQLite and MongoDB backends, query translation, repository migration, configuration, and Docker deployment — Grade: A (completed implementation) — Last updated: 2026-01-24
+  - [features/complete/database-abstraction.md](features/complete/database-abstraction.md) — Completed database abstraction layer: SQLite backend, query translation, repository migration, configuration, and Docker deployment — Grade: A (completed implementation) — Last updated: 2026-01-24
   - [features/complete/FILE_ATTACHMENT_FALLBACK.md](features/complete/FILE_ATTACHMENT_FALLBACK.md) — Documentation describing the file attachment fallback system for providers lacking native support (text/image handling) — Grade: A (shipping behavior) — Last updated: 2025-11-29
   - [features/complete/FILE_ATTACHMENT_TROUBLESHOOTING.md](features/complete/FILE_ATTACHMENT_TROUBLESHOOTING.md) — Troubleshooting guide for attachment fallback issues, common errors, and solutions — Grade: A (operational fix guide) — Last updated: 2025-11-29
   - [features/complete/IMAGE-PROMPT-EXPANSION.md](features/complete/IMAGE-PROMPT-EXPANSION.md) — Details the prompt expansion pipeline that uses character descriptions, cheap LLM crafting, and examples — Grade: A (describes implemented pipeline) — Last updated: 2025-11-29
@@ -140,8 +139,18 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
 - If you are asked to work on a large change (adding a significant feature, a refactor that does a lot of things, or something else that touches a lot of files), then plan it in Opus and delegate the work to Haiku agents.
 - For every new feature and all existing functionality that is updated or touched in the backend, make sure that there are debug logs being fired for everything, and appropriate levels of logging for everything else, using the built-in logging system in this app
 - I am developing this in macOS, so take BSD versions of tools into account, and the fact that I have installed homebrew's coreutils and gnu-sed so that you can use GNU versions of things with "g"-prefixed utilities if you need them.
-- I am using "npm run devssl" to work on this while we're working, so the base URL is probably `https://localhost:3000/` if you want to try something.
-- You should track what's going on with the running "npm run devssl" process, which is nearly always running while we're working on this, by tailing or searching the `logs/combined.log` file. You can figure out what time it is (I think it's using universal time, not local time), and then look for things that we just tried by working through that log.
+- Default location for files depends on OS and category:
+  - OS
+    - Linux: ~/.quilltap/
+    - macOS: ~/Library/Application Support/Quilltap/
+    - Windows: %APPDATA%\Quilltap\
+    - Docker: /app/quilltap/
+  - Category
+    - `data/`
+    - `files/`
+    - `logs/`
+- I am using "npm run dev" to work on this while we're working, so the base URL is probably `http://localhost:3000/` if you want to try something.
+- You should track what's going on with the running "npm run dev" process, which is nearly always running while we're working on this, by tailing or searching the `logs/combined.log` file. You can figure out what time it is (I think it's using universal time, not local time), and then look for things that we just tried by working through that log.
 - To access SQLite directly, use: `sqlite3 /path/to/quilltap.db`. Examples:
   - List tables: `sqlite3 /path/to/quilltap.db ".tables"`
   - Check record count: `sqlite3 /path/to/quilltap.db "SELECT COUNT(*) FROM TABLENAME;"`
@@ -149,10 +158,10 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
 - This is built in Next.js 15+, so don't look in middleware.ts, but consider proxy.ts, for things you would expect there.
 - When creating or modifying API routes, always use the `/api/v1/` structure with action dispatch patterns. Don't create new routes outside `/api/v1/`. Use the middleware from `@/lib/api/middleware` and response helpers from `@/lib/api/responses`.
 - If asked to fix linting errors, do not change out HTML `<img>` tags for Next.js `<Image>` tags; there is a reason that we don't use them sometimes, usually related to their being pulled in via APIs so Next.js can't know what it's going to display.
-- Every time we change a plugin, let's go ahead and bump the release number (the last of the three numbers in semver) on its package.json, and re-run `npm run build:plugins` before we add things to the commit.
+- Every time we change a plugin, let's go ahead and bump the release number (the last of the three numbers in semver) on its package.json, and manifest.json if required, and re-run `npm run build:plugins` before we add things to the commit.
 - Check for Typescript errors by running "npx tsc" rather than "npm run build"
 - When committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
-- Themes and styling should depend primarily on the qt-* utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes.
+- Themes and styling should depend primarily on the qt-* utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes. **IMPORTANT:** If you add new Tailwind classes, then almost certainly you should be adding them to the qt-* utility classes instead, and then apply those classes to the components you want to change.
 - Keep the documentation above up to date, and update this file if you add more documentation, in the same format.
 - Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports, backups, and/or the migrations/ directory.
 - Any files that exist in the app source code only because they are necessary for migrations should move to the `migrations/` directory.
