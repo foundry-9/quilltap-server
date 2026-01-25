@@ -323,7 +323,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     if (!character) return
     setTogglingFavorite(true)
     try {
-      const res = await fetch(`/api/v1/characters/${characterId}?action=favorite`, { method: 'PATCH' })
+      const res = await fetch(`/api/v1/characters/${characterId}?action=favorite`, { method: 'POST' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to toggle favorite')
