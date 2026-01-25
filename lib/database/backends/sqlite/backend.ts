@@ -38,12 +38,14 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   readonly name: string;
   private db: DatabaseType;
   private jsonColumns: Set<string>;
+  private booleanColumns: Set<string>;
   private preparedStatements: Map<string, Statement> = new Map();
 
-  constructor(db: DatabaseType, name: string, jsonColumns: string[] = []) {
+  constructor(db: DatabaseType, name: string, jsonColumns: string[] = [], booleanColumns: string[] = []) {
     this.db = db;
     this.name = name;
     this.jsonColumns = new Set(jsonColumns);
+    this.booleanColumns = new Set(booleanColumns);
   }
 
   /**
@@ -357,6 +359,11 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
 
   /**
    * Hydrate a row from SQLite to a document
+   * Converts:
+   * - JSON columns (stored as strings) back to objects/arrays
+   * - Integer booleans (0/1) back to true/false
+   * - null JSON objects to undefined (Zod .optional() expects undefined, not null)
+   * - null booleans to undefined (for .optional() boolean fields)
    */
   private hydrateRow(row: Record<string, unknown>): T {
     const result: Record<string, unknown> = {};
@@ -365,16 +372,35 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       // Skip MongoDB _id field if somehow present
       if (key === '_id') continue;
 
-      if (this.jsonColumns.has(key) && typeof value === 'string') {
-        result[key] = fromJson(value);
-      } else if (typeof value === 'number') {
-        // Check for boolean fields
-        if (key.startsWith('is') || key === 'enabled' || key === 'active') {
+      // Check if this is a boolean column (from schema metadata or naming convention)
+      const isBoolean = this.booleanColumns.has(key) ||
+        key.startsWith('is') ||
+        key === 'enabled' ||
+        key === 'active' ||
+        key === 'npc';  // Known boolean field
+
+      // Parse JSON columns - null JSON values become undefined for Zod .optional() compatibility
+      if (this.jsonColumns.has(key)) {
+        if (value === null) {
+          result[key] = undefined;  // null JSON object → undefined for .optional() schemas
+        } else if (typeof value === 'string') {
+          result[key] = fromJson(value);
+        } else {
+          result[key] = value;  // Already parsed (shouldn't happen, but handle gracefully)
+        }
+      } else if (isBoolean) {
+        // Handle boolean columns - SQLite stores as INTEGER (0/1) or NULL
+        if (value === null) {
+          result[key] = undefined;  // null boolean → undefined for .optional() schemas
+        } else if (typeof value === 'number') {
           result[key] = value === 1;
         } else {
-          result[key] = value;
+          result[key] = Boolean(value);  // Fallback conversion
         }
+      } else if (typeof value === 'number') {
+        result[key] = value;
       } else {
+        // Keep null as null for .nullable() fields, pass through other values
         result[key] = value;
       }
     }
@@ -406,6 +432,7 @@ export class SQLiteBackend implements DatabaseBackend {
   private _state: ConnectionState = 'disconnected';
   private collectionSchemas: Map<string, z.ZodType> = new Map();
   private collectionJsonColumns: Map<string, string[]> = new Map();
+  private collectionBooleanColumns: Map<string, string[]> = new Map();
 
   constructor(config?: SQLiteConfig) {
     this.config = config || loadSQLiteConfig();
@@ -475,7 +502,8 @@ export class SQLiteBackend implements DatabaseBackend {
     }
 
     const jsonColumns = this.collectionJsonColumns.get(name) || [];
-    return new SQLiteCollection<T>(this.db, name, jsonColumns);
+    const booleanColumns = this.collectionBooleanColumns.get(name) || [];
+    return new SQLiteCollection<T>(this.db, name, jsonColumns, booleanColumns);
   }
 
   /**
@@ -499,17 +527,22 @@ export class SQLiteBackend implements DatabaseBackend {
         this.db.exec(sql);
       }
 
-      // Detect JSON columns from schema
+      // Detect JSON and boolean columns from schema
       const metadata = extractSchemaMetadata(name, schema);
       const jsonColumns = metadata.fields
         .filter(f => f.type === 'array' || f.type === 'object')
         .map(f => f.name);
+      const booleanColumns = metadata.fields
+        .filter(f => f.type === 'boolean')
+        .map(f => f.name);
 
       this.collectionJsonColumns.set(name, jsonColumns);
+      this.collectionBooleanColumns.set(name, booleanColumns);
 
       logger.info('Ensured collection exists', {
         table: name,
         jsonColumns,
+        booleanColumns,
       });
     } catch (error) {
       logger.error('Failed to ensure collection', {
@@ -532,6 +565,7 @@ export class SQLiteBackend implements DatabaseBackend {
       this.db.exec(`DROP TABLE IF EXISTS "${name}"`);
       this.collectionSchemas.delete(name);
       this.collectionJsonColumns.delete(name);
+      this.collectionBooleanColumns.delete(name);
 
       logger.info('Dropped collection', { table: name });
     } catch (error) {
@@ -605,7 +639,7 @@ export class SQLiteBackend implements DatabaseBackend {
 
     // SQLite transactions in better-sqlite3 are handled via the transaction() method
     // For the interface compliance, we provide a wrapper
-    return new SQLiteTransaction(this.db, this.collectionJsonColumns);
+    return new SQLiteTransaction(this.db, this.collectionJsonColumns, this.collectionBooleanColumns);
   }
 
   /**
@@ -652,10 +686,12 @@ class SQLiteTransaction implements DatabaseTransaction {
   private committed = false;
   private rolledBack = false;
   private jsonColumns: Map<string, string[]>;
+  private booleanColumns: Map<string, string[]>;
 
-  constructor(db: DatabaseType, jsonColumns: Map<string, string[]>) {
+  constructor(db: DatabaseType, jsonColumns: Map<string, string[]>, booleanColumns: Map<string, string[]>) {
     this.db = db;
     this.jsonColumns = jsonColumns;
+    this.booleanColumns = booleanColumns;
     // Start the transaction
     this.db.exec('BEGIN IMMEDIATE');
   }
@@ -677,8 +713,9 @@ class SQLiteTransaction implements DatabaseTransaction {
   }
 
   getCollection<T = unknown>(name: string): DatabaseCollection<T> {
-    const cols = this.jsonColumns.get(name) || [];
-    return new SQLiteCollection<T>(this.db, name, cols);
+    const jsonCols = this.jsonColumns.get(name) || [];
+    const boolCols = this.booleanColumns.get(name) || [];
+    return new SQLiteCollection<T>(this.db, name, jsonCols, boolCols);
   }
 }
 

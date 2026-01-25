@@ -4,6 +4,13 @@
 
 ### 2.8-dev
 
+- fix: SQLite data hydration issues after MongoDB migration (2026-01-25)
+  - Added boolean column tracking to SQLite backend alongside JSON columns
+  - Fixed hydrateRow() to properly convert null→undefined for optional JSON/boolean fields
+  - Added ZodRecord support to schema translator for z.record() JSON column detection
+  - Changed UserSchema TOTP fields from .optional() to .nullish() for SQLite compatibility
+  - Added ChatMessageRowSchema to chats repository for proper JSON column detection
+  - Fixed FileBrowser project files URL to use action dispatch pattern
 - refactor: Consolidate DATA_BACKEND to DATABASE_BACKEND (2026-01-25)
   - Unified `DATA_BACKEND` and `DATABASE_BACKEND` env vars into single `DATABASE_BACKEND`
   - Valid values: `sqlite` (default for new installations) or `mongodb`

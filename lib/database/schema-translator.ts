@@ -8,7 +8,7 @@
  * Updated for Zod v4 compatibility - uses internal _zod.def API.
  */
 
-import { z, ZodObject, ZodArray, ZodOptional, ZodNullable, ZodDefault, ZodString, ZodNumber, ZodBoolean, ZodEnum, ZodLiteral, ZodUnion, ZodType } from 'zod';
+import { z, ZodObject, ZodArray, ZodOptional, ZodNullable, ZodDefault, ZodString, ZodNumber, ZodBoolean, ZodEnum, ZodLiteral, ZodUnion, ZodRecord, ZodType } from 'zod';
 import { FieldMetadata, SchemaMetadata, IndexDefinition } from './interfaces';
 import { logger } from '@/lib/logger';
 
@@ -69,6 +69,7 @@ function getBaseType(schema: ZodType): FieldMetadata['type'] {
   if (inner instanceof ZodBoolean) return 'boolean';
   if (inner instanceof ZodArray) return 'array';
   if (inner instanceof ZodObject) return 'object';
+  if (inner instanceof ZodRecord) return 'object';  // z.record() is also stored as JSON
   if (inner instanceof ZodEnum) return 'string';
   if (inner instanceof ZodLiteral) {
     // Zod v4: values is an array

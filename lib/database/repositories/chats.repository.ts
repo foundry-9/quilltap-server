@@ -26,15 +26,51 @@ import {
   ChatParticipantBaseInput,
   ChatParticipantBaseSchema,
 } from '@/lib/schemas/types';
+import { UUIDSchema, TimestampSchema, JsonSchema, RoleEnum } from '@/lib/schemas/common.types';
 import { logger } from '@/lib/logger';
 import { QueryFilter, DatabaseCollection, SortSpec } from '../interfaces';
-import { getDatabaseAsync, getBackendType } from '../manager';
+import { getDatabaseAsync, getBackendType, ensureCollection } from '../manager';
+
+/**
+ * Schema for individual chat message rows in SQLite
+ * This schema represents the flattened message format with chatId added
+ * for the normalized SQLite storage pattern
+ */
+const ChatMessageRowSchema = z.object({
+  id: UUIDSchema,
+  chatId: UUIDSchema,
+  type: z.string(),  // 'message', 'context-summary', or 'system'
+  role: RoleEnum.optional(),  // Only for type='message'
+  content: z.string().optional(),  // For type='message'
+  rawResponse: JsonSchema.nullable().optional(),  // JSON object
+  tokenCount: z.number().nullable().optional(),
+  promptTokens: z.number().nullable().optional(),
+  completionTokens: z.number().nullable().optional(),
+  swipeGroupId: z.string().nullable().optional(),
+  swipeIndex: z.number().nullable().optional(),
+  attachments: z.array(UUIDSchema).default([]),  // JSON array
+  debugMemoryLogs: z.array(z.string()).optional(),  // JSON array
+  thoughtSignature: z.string().nullable().optional(),
+  participantId: UUIDSchema.nullable().optional(),
+  recoveryType: z.enum(['token_limit', 'token_limit_static', 'content_limit', 'content_limit_static']).nullable().optional(),
+  // For type='context-summary'
+  context: z.string().optional(),
+  // For type='system'
+  systemEventType: z.string().optional(),
+  description: z.string().optional(),
+  totalTokens: z.number().nullable().optional(),
+  provider: z.string().nullable().optional(),
+  modelName: z.string().nullable().optional(),
+  estimatedCostUSD: z.number().nullable().optional(),
+  createdAt: TimestampSchema,
+});
 
 /**
  * Chats repository with database abstraction layer backend
  */
 export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   private messagesCollectionName = 'chat_messages';
+  private messagesCollectionInitialized = false;
 
   constructor() {
     super('chats', ChatMetadataBaseSchema);
@@ -48,10 +84,36 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 
   /**
+   * Ensure the messages collection is initialized with proper schema (for SQLite JSON column detection)
+   */
+  private async ensureMessagesCollectionInitialized(): Promise<void> {
+    if (this.messagesCollectionInitialized) {
+      return;
+    }
+
+    try {
+      // Only need to ensure collection for SQLite - MongoDB doesn't need schema registration
+      if (this.isSQLiteBackend()) {
+        await ensureCollection(this.messagesCollectionName, ChatMessageRowSchema);
+        logger.debug('Ensured chat_messages collection initialized with schema');
+      }
+      this.messagesCollectionInitialized = true;
+    } catch (error) {
+      logger.error('Failed to ensure chat_messages collection', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Don't throw - allow continued operation even if schema setup fails
+    }
+  }
+
+  /**
    * Get the messages collection
    */
   private async getMessagesCollection(): Promise<DatabaseCollection> {
     try {
+      // Ensure collection is initialized with proper schema for JSON column detection
+      await this.ensureMessagesCollectionInitialized();
+
       const db = await getDatabaseAsync();
       return db.getCollection(this.messagesCollectionName);
     } catch (error) {

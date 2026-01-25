@@ -68,11 +68,11 @@ export const UserSchema = z.object({
   // Password authentication
   passwordHash: z.string().nullable().optional(),
 
-  // TOTP 2FA
-  totp: TOTPSecretSchema.optional(),
-  backupCodes: BackupCodesSchema.optional(),
-  totpAttempts: TOTPAttemptsSchema.optional(),
-  trustedDevices: z.array(TrustedDeviceSchema).optional(),
+  // TOTP 2FA - using .nullish() to accept both null (from SQLite) and undefined
+  totp: TOTPSecretSchema.nullish(),
+  backupCodes: BackupCodesSchema.nullish(),
+  totpAttempts: TOTPAttemptsSchema.nullish(),
+  trustedDevices: z.array(TrustedDeviceSchema).nullish(),
 
   // Timestamps
   createdAt: TimestampSchema,
