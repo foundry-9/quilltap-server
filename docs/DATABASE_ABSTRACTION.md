@@ -197,65 +197,84 @@ On first run with SQLite, the `sqlite-initial-schema-v1` migration creates all r
 
 ### MongoDB to SQLite Migration
 
-Quilltap includes a built-in migration tool to move data from MongoDB to SQLite. This is useful for:
+Quilltap provides a standalone CLI tool to migrate data from MongoDB to SQLite. This is useful for:
 - Simplifying deployments by removing MongoDB dependency
 - Reducing infrastructure costs
 - Moving to a single-file database
 
-#### Using the Migration Tool
+#### Using the CLI Migration Tool
 
-1. Go to **Tools** page in the Quilltap UI
-2. Find the **Database** card
-3. Click **Migrate to SQLite**
-4. Follow the wizard steps:
-   - Pre-flight checks verify both databases are accessible
-   - Review the data counts to be migrated
-   - Confirm and start the migration
-   - Wait for completion (progress is displayed)
-5. **Restart the application** to use SQLite
+The migration tool is a standalone Node.js script located at `scripts/mongo-to-sqlite-cli.js`.
+
+**Basic usage:**
+```bash
+node scripts/mongo-to-sqlite-cli.js --mongo-uri "mongodb://localhost:27017" --output ./quilttap.db
+```
+
+**Options:**
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--mongo-uri` | `-m` | MongoDB connection URI (required) |
+| `--output` | `-o` | Output SQLite database path (required) |
+| `--db-name` | `-d` | MongoDB database name (default: quilttap) |
+| `--dry-run` | | Preview record counts without migrating |
+| `--verbose` | `-v` | Enable verbose logging |
+| `--help` | `-h` | Show help |
+
+**Examples:**
+```bash
+# Dry run - check connectivity and count records
+node scripts/mongo-to-sqlite-cli.js -m "mongodb://localhost:27017" --dry-run
+
+# Full migration with verbose output
+node scripts/mongo-to-sqlite-cli.js -m "mongodb://user:pass@host:27017" -d quilttap -o ./quilttap.db -v
+
+# Migrate to the platform-specific data directory
+node scripts/mongo-to-sqlite-cli.js -m "mongodb://localhost:27017" -o ~/Library/Application\ Support/Quilttap/data/quilttap.db
+```
 
 #### What Gets Migrated
 
-All collections are migrated in dependency order:
-- Users, tags, provider models (no dependencies)
-- Account/session data, connection profiles, chat settings
-- Files, folders, mount points
-- Characters, prompt templates, roleplay templates
-- Chats, memories, messages
-- Background jobs, LLM logs, sync data
-
-#### Backend Preference
-
-The preferred backend is stored in SQLite's `quilltap_meta` table. This is checked **before** environment variables, allowing you to switch backends via the UI without changing your configuration.
-
-To clear the preference and revert to auto-detection, use the **Switch Back to MongoDB** option (with confirmation).
+All 29 collections are migrated in dependency order:
+1. Users, tags, provider models (no dependencies)
+2. Account/session data, connection profiles, chat settings, projects, folders
+3. Files, mount points, file permissions
+4. Characters, prompt templates, roleplay templates, plugin configs
+5. Chats, memories
+6. Chat messages (normalized from embedded arrays to individual rows)
+7. Vector indices, background jobs, LLM logs
+8. Sync tables
+9. Migrations state (normalized from single document to individual rows)
 
 #### Important Notes
 
-- Migration copies data; MongoDB is not modified
-- After migration, new data is only written to SQLite
-- Switching back to MongoDB will **lose** any data created in SQLite after migration
-- Large databases may take several minutes to migrate
+- **Standalone script**: Only requires `mongodb` and `better-sqlite3` npm packages
+- **Idempotent**: Uses `INSERT OR IGNORE`, can be re-run safely
+- **Non-destructive**: MongoDB data is not modified
+- **Data transformation**: Chat messages and migrations state are normalized from MongoDB's embedded arrays to SQLite's row-based structure
+- **JSON serialization**: Object and array fields are automatically serialized to JSON for SQLite storage
+
+#### After Migration
+
+1. Stop any running Quilltap instances
+2. Copy the generated SQLite database to the appropriate data directory
+3. Set `DATABASE_BACKEND=sqlite` in your environment (or remove MongoDB configuration)
+4. Restart Quilltap
+
+#### Backend Preference
+
+The preferred backend is stored in SQLite's `quilltap_meta` table. This is checked **before** environment variables.
 
 ### API Endpoints
 
 | Action | Method | Description |
 |--------|--------|-------------|
 | `database-status` | GET | Current backend, availability, health |
-| `migration-readiness` | GET | Pre-flight checks and record counts |
-| `migration-progress` | GET | Current migration progress (if running) |
-| `start-migration` | POST | Begin MongoDB→SQLite migration |
-| `switch-backend` | POST | Change preferred backend (with confirmation) |
 
 Example:
 ```bash
 # Check database status
 curl -X GET 'https://localhost:3000/api/v1/system/tools?action=database-status'
-
-# Start migration
-curl -X POST 'https://localhost:3000/api/v1/system/tools?action=start-migration' \
-  -H 'Content-Type: application/json' \
-  -d '{"direction": "mongo-to-sqlite"}'
 ```
 
 ## Current Status
@@ -271,11 +290,11 @@ curl -X POST 'https://localhost:3000/api/v1/system/tools?action=start-migration'
 - ✅ Migration system multi-backend support
 - ✅ Docker configuration for both backends
 - ✅ All 25 repositories migrated to abstraction layer
-- ✅ MongoDB to SQLite migration tool
+- ✅ MongoDB to SQLite migration CLI tool (`scripts/mongo-to-sqlite-cli.js`)
 
 ### Future Work
 
-- ⏳ SQLite to MongoDB migration (reverse migration)
+- ⏳ SQLite to MongoDB migration CLI tool (reverse migration)
 - ⏳ Vector search for SQLite (via external plugin)
 
 ## SQLite Considerations

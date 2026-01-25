@@ -4,6 +4,18 @@
 
 ### 2.8-dev
 
+- refactor: Replace in-app migration UI with standalone CLI tool (2026-01-25)
+  - Removed `DatabaseMigrationDialog` component and migration-related API endpoints
+  - Removed `migration-readiness`, `migration-progress`, `start-migration`, `switch-backend` API actions
+  - Simplified `DatabaseCard` component to show status only, with CLI migration instructions
+  - New `scripts/mongo-to-sqlite-cli.js` for migrating MongoDB databases to SQLite
+  - Completely standalone - requires only `mongodb` and `better-sqlite3` npm packages
+  - Usage: `node scripts/mongo-to-sqlite-cli.js -m "mongodb://localhost:27017" -o ./output.db`
+  - Supports `--dry-run` mode to preview record counts without migrating
+  - Handles special transformations: chat_messages (embedded array to rows), migrations_state
+  - Auto-serializes object/array fields to JSON for SQLite compatibility
+  - All 31 tables and 57 indexes hardcoded from Quilttap schema
+  - Updated `docs/DATABASE_ABSTRACTION.md` with CLI tool documentation
 - feat: Centralized data directory with platform-specific defaults (2026-01-25)
   - New `lib/paths.ts` module providing single source of truth for all data paths
   - Platform-specific default directories:
