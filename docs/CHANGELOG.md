@@ -4,6 +4,11 @@
 
 ### 2.8-dev
 
+- fix: Sidebar chats list showing too few non-project chats (2026-01-25)
+  - API was truncating to top 15 chats before filtering out project chats
+  - Now separates non-project and project chats before truncating
+  - Returns up to 15 non-project chats (for Recent Chats section) and 25 project chats (for Projects section)
+  - Ensures sidebar always shows available non-project chats
 - feat: Enhanced conversation display and navigation in character pages and chat header (2026-01-25)
   - Character conversations tab now shows project badge (teal) for chats that belong to a project
   - Conversations are now sorted by last message timestamp instead of chat metadata updatedAt

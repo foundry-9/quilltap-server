@@ -146,9 +146,32 @@ async function handleChats(repos: any, userId: string) {
     return bDate - aDate;
   });
 
+  // Separate non-project and project chats BEFORE truncating
+  // This ensures the chats section gets enough non-project chats
+  // and the projects section gets enough project chats
+  const nonProjectChats = chats.filter((c: any) => !c.projectId);
+  const projectChats = chats.filter((c: any) => c.projectId);
+
+  // Take top 15 non-project chats (chats section shows up to 10)
+  // Take top 25 project chats (projects section shows ~5 projects × 5 chats)
+  const selectedNonProjectChats = nonProjectChats.slice(0, 15);
+  const selectedProjectChats = projectChats.slice(0, 25);
+
+  // Combine for processing - non-project chats first to maintain sort order expectation
+  const selectedChats = [...selectedNonProjectChats, ...selectedProjectChats];
+
+  logger.debug('[UI Sidebar v1] Chat selection', {
+    userId,
+    totalChats: chats.length,
+    nonProjectChats: nonProjectChats.length,
+    projectChats: projectChats.length,
+    selectedNonProject: selectedNonProjectChats.length,
+    selectedProject: selectedProjectChats.length,
+  });
+
   // Get character info for participants
   const characterIds = new Set<string>();
-  for (const chat of chats) {
+  for (const chat of selectedChats) {
     for (const participant of (chat.participants || [])) {
       if (participant.characterId) {
         characterIds.add(participant.characterId);
@@ -187,7 +210,7 @@ async function handleChats(repos: any, userId: string) {
 
   // Collect project IDs and fetch project info
   const projectIds = new Set<string>();
-  for (const chat of chats) {
+  for (const chat of selectedChats) {
     if (chat.projectId) {
       projectIds.add(chat.projectId);
     }
@@ -210,7 +233,7 @@ async function handleChats(repos: any, userId: string) {
   }
 
   // Enrich chats with participant info
-  const enrichedChats = chats.slice(0, 15).map((chat: any) => {
+  const enrichedChats = selectedChats.map((chat: any) => {
     const participants = (chat.participants || [])
       .filter((p: any) => p.characterId && characterMap.has(p.characterId))
       .map((p: any) => {
@@ -251,6 +274,8 @@ async function handleChats(repos: any, userId: string) {
     userId,
     totalChats: chats.length,
     sidebarChats: enrichedChats.length,
+    nonProjectCount: selectedNonProjectChats.length,
+    projectCount: selectedProjectChats.length,
   });
 
   return successResponse({ chats: enrichedChats });
