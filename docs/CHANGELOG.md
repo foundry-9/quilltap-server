@@ -4,6 +4,10 @@
 
 ### 2.8-dev
 
+- fix: Implement missing v1 mount-point actions for project settings (2026-01-25)
+  - Added `get-mount-point`, `set-mount-point`, `clear-mount-point` actions to `/api/v1/projects/[id]`
+  - Updated SettingsCard.tsx to use v1 endpoints instead of deprecated `/api/projects/[id]/mount-point`
+  - Fixes 410 errors when accessing project storage settings
 - fix: Multiple UI data display issues and hot reload state persistence (2026-01-25)
   - Projects page: Fixed chat/file counts not showing on project cards (mapped API's `_count` to `chatCount`/`fileCount`)
   - Homepage: Fixed Active Projects card showing 0 chats, now displays actual counts and sorts by most recent chat activity

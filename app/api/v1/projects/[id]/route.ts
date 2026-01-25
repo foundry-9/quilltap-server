@@ -17,15 +17,21 @@
  * GET /api/v1/projects/[id]?action=list-files - List project files
  * POST /api/v1/projects/[id]?action=add-file - Associate file with project
  * DELETE /api/v1/projects/[id]?action=remove-file - Remove file from project
+ *
+ * GET /api/v1/projects/[id]?action=get-mount-point - Get project mount point config
+ * PUT /api/v1/projects/[id]?action=set-mount-point - Set project mount point
+ * DELETE /api/v1/projects/[id]?action=clear-mount-point - Clear project mount point (use system default)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext, withActionDispatch } from '@/lib/api/middleware';
+import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext } from '@/lib/api/middleware';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, validationError, serverError, successResponse } from '@/lib/api/responses';
+import { mountPointsRepository } from '@/lib/database/repositories/mount-points.repository';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
 // ============================================================================
 // Schemas
@@ -65,18 +71,10 @@ const removeFileSchema = z.object({
   fileId: z.uuid(),
 });
 
-// ============================================================================
-// Helper: Check Project Ownership
-// ============================================================================
-
-async function checkProjectOwnership(
-  repos: any,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await repos.projects.findById(projectId);
-  return checkOwnership(project, userId);
-}
+const setMountPointSchema = z.object({
+  mountPointId: z.uuid(),
+  migrateFiles: z.boolean().optional().default(false),
+});
 
 // ============================================================================
 // GET Handlers
@@ -332,6 +330,64 @@ async function handleListFiles(req: NextRequest, context: AuthenticatedContext, 
   }
 }
 
+async function handleGetMountPoint(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+    logger.debug('[Projects v1] GET mount point for project', { projectId: id });
+
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+    // Get current mount point if set
+    let currentMountPoint = null;
+    if (project.mountPointId) {
+      const mp = await mountPointsRepository.findById(project.mountPointId);
+      if (mp) {
+        currentMountPoint = {
+          id: mp.id,
+          name: mp.name,
+          backendType: mp.backendType,
+          healthStatus: mp.healthStatus,
+        };
+      }
+    }
+
+    // Get system default mount point
+    let defaultMountPoint = null;
+    const defaultMp = await mountPointsRepository.findDefault();
+    if (defaultMp) {
+      defaultMountPoint = {
+        id: defaultMp.id,
+        name: defaultMp.name,
+        backendType: defaultMp.backendType,
+        healthStatus: defaultMp.healthStatus,
+      };
+    }
+
+    // Effective mount point is current if set, otherwise default
+    const effectiveMountPoint = currentMountPoint || defaultMountPoint;
+
+    // Count files in this project
+    const allFiles = await repos.files.findAll();
+    const fileCount = allFiles.filter(f => f.projectId === id).length;
+
+    return successResponse({
+      projectId: id,
+      mountPointId: project.mountPointId || null,
+      currentMountPoint,
+      defaultMountPoint,
+      effectiveMountPoint,
+      fileCount,
+    });
+  } catch (error) {
+    logger.error('[Projects v1] Error getting project mount point', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to get mount point');
+  }
+}
+
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, context, { id }) => {
   const action = getActionParam(req);
 
@@ -342,16 +398,20 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
       return handleListChats(req, context, { id });
     case 'list-files':
       return handleListFiles(req, context, { id });
+    case 'get-mount-point':
+      return handleGetMountPoint(req, context, { id });
     default:
       return handleGetDefault(req, context, { id });
   }
 });
 
 // ============================================================================
-// PUT Handler
+// PUT Handlers
 // ============================================================================
 
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
+async function handlePutDefault(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
   try {
     logger.debug('[Projects v1] PUT project', { projectId: id });
 
@@ -376,6 +436,117 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 
     logger.error('[Projects v1] Error updating project', { projectId: id }, error instanceof Error ? error : undefined);
     return serverError('Failed to update project');
+  }
+}
+
+async function handleSetMountPoint(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+    const body = await req.json();
+    const { mountPointId, migrateFiles } = setMountPointSchema.parse(body);
+
+    logger.debug('[Projects v1] SET mount point for project', { projectId: id, mountPointId, migrateFiles });
+
+    // Verify mount point exists
+    const mountPoint = await mountPointsRepository.findById(mountPointId);
+    if (!mountPoint) {
+      return notFound('Mount point');
+    }
+
+    // If migrateFiles is requested, migrate all project files to the new mount point
+    let migrationResult = { migrated: 0, failed: 0, errors: [] as Array<{ fileId: string; error: string }> };
+
+    if (migrateFiles) {
+      const allFiles = await repos.files.findAll();
+      const projectFiles = allFiles.filter(f => f.projectId === id);
+
+      for (const file of projectFiles) {
+        try {
+          // Skip if file is already on the target mount point
+          if (file.mountPointId === mountPointId) {
+            continue;
+          }
+
+          // Download file from current location
+          const buffer = await fileStorageManager.downloadFile(file);
+
+          // Upload to new mount point
+          const uploadResult = await fileStorageManager.uploadFile({
+            userId: user.id,
+            fileId: file.id,
+            filename: file.originalFilename,
+            content: buffer,
+            contentType: file.mimeType,
+            projectId: id,
+            mountPointId: mountPointId,
+          });
+
+          // Update file record with new storage info
+          await repos.files.update(file.id, {
+            mountPointId: uploadResult.mountPointId,
+            storageKey: uploadResult.storageKey,
+          });
+
+          // Delete from old mount point
+          await fileStorageManager.deleteFile(file);
+
+          migrationResult.migrated++;
+        } catch (error) {
+          migrationResult.failed++;
+          migrationResult.errors.push({
+            fileId: file.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          logger.error('[Projects v1] Failed to migrate file', {
+            fileId: file.id,
+            projectId: id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      logger.info('[Projects v1] File migration completed', {
+        projectId: id,
+        mountPointId,
+        migrated: migrationResult.migrated,
+        failed: migrationResult.failed,
+      });
+    }
+
+    // Update project with new mount point
+    await repos.projects.setMountPoint(id, mountPointId);
+
+    logger.info('[Projects v1] Mount point set for project', { projectId: id, mountPointId });
+
+    return successResponse({
+      success: true,
+      mountPointId,
+      migration: migrateFiles ? migrationResult : undefined,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+
+    logger.error('[Projects v1] Error setting mount point', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to set mount point');
+  }
+}
+
+export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, context, { id }) => {
+  const action = getActionParam(req);
+
+  switch (action) {
+    case 'set-mount-point':
+      return handleSetMountPoint(req, context, { id });
+    default:
+      return handlePutDefault(req, context, { id });
   }
 });
 
@@ -512,6 +683,29 @@ async function handleDeleteProject(req: NextRequest, context: AuthenticatedConte
   }
 }
 
+async function handleClearMountPoint(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+    logger.debug('[Projects v1] CLEAR mount point for project', { projectId: id });
+
+    // Clear mount point (will use system default)
+    await repos.projects.setMountPoint(id, null);
+
+    logger.info('[Projects v1] Mount point cleared for project', { projectId: id });
+
+    return successResponse({ success: true });
+  } catch (error) {
+    logger.error('[Projects v1] Error clearing mount point', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to clear mount point');
+  }
+}
+
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (req, context, { id }) => {
   const action = getActionParam(req);
 
@@ -522,6 +716,8 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       return handleRemoveChat(req, context, { id });
     case 'remove-file':
       return handleRemoveFile(req, context, { id });
+    case 'clear-mount-point':
+      return handleClearMountPoint(req, context, { id });
     default:
       return handleDeleteProject(req, context, { id });
   }

@@ -83,7 +83,7 @@ export function SettingsCard({
   const loadMountPointData = useCallback(async () => {
     try {
       const [mpDataRes, mpOptionsRes] = await Promise.all([
-        fetchJson<MountPointData>(`/api/projects/${project.id}/mount-point`),
+        fetchJson<MountPointData>(`/api/v1/projects/${project.id}?action=get-mount-point`),
         fetchJson<{ mountPoints: MountPointOption[] }>('/api/v1/system/mount-points'),
       ])
 
@@ -126,7 +126,7 @@ export function SettingsCard({
     try {
       if (newMountPointId === '') {
         // Clear mount point (use system default)
-        const result = await fetchJson<{ success: boolean }>(`/api/projects/${project.id}/mount-point`, {
+        const result = await fetchJson<{ success: boolean }>(`/api/v1/projects/${project.id}?action=clear-mount-point`, {
           method: 'DELETE',
         })
 
@@ -136,7 +136,7 @@ export function SettingsCard({
       } else {
         // Set mount point
         const result = await fetchJson<{ success: boolean; migration?: { failed: number; errors: Array<{ error: string }> } }>(
-          `/api/projects/${project.id}/mount-point`,
+          `/api/v1/projects/${project.id}?action=set-mount-point`,
           {
             method: 'PUT',
             body: JSON.stringify({ mountPointId: newMountPointId, migrateFiles: true }),
