@@ -11,7 +11,7 @@ const envSchema = z
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
     // Base URL for the application (used for OAuth callbacks, etc.)
-    BASE_URL: z.url().optional().default('http://localhost:3000'),
+    BASE_URL: z.string().url().optional().default('http://localhost:3000'),
 
     // OAuth Providers (all optional - configured via auth plugins)
     GOOGLE_CLIENT_ID: z.string().optional(),
@@ -45,7 +45,7 @@ const envSchema = z
 
     // Production SSL (optional)
     DOMAIN: z.string().optional(),
-    SSL_EMAIL: z.email().optional(),
+    SSL_EMAIL: z.string().email().optional(),
 
     // File Storage Configuration
     // Base directory for all Quilltap data (database, files, logs)
@@ -59,13 +59,13 @@ const envSchema = z
     // S3 Configuration (optional - S3 is now a plugin, local filesystem is the default)
     // These env vars are used to auto-create an S3 mount point during migration
     S3_MODE: z.enum(['embedded', 'external', 'disabled']).optional().default('disabled'),
-    S3_ENDPOINT: z.url().optional(),
+    S3_ENDPOINT: z.string().url().optional(),
     S3_REGION: z.string().optional().default('us-east-1'),
     S3_ACCESS_KEY: z.string().optional(),
     S3_SECRET_KEY: z.string().optional(),
     S3_BUCKET: z.string().optional().default('quilltap-files'),
     S3_PATH_PREFIX: z.string().optional(),
-    S3_PUBLIC_URL: z.url().optional(),
+    S3_PUBLIC_URL: z.string().url().optional(),
     S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).optional(),
   })
   .refine(

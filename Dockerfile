@@ -14,8 +14,17 @@ RUN npm ci
 FROM base AS development
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
+# Copy package files
+COPY package.json package-lock.json ./
+
+# Install all dependencies (including dev dependencies for development)
+RUN npm ci
+
+# Copy source code
 COPY . .
+
+# Rebuild native modules for the current Alpine Linux platform
+RUN npm rebuild
 
 # Generate self-signed localhost certificate for dev SSL usage
 RUN apk add --no-cache openssl && \
@@ -68,8 +77,23 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Copy plugins (required for LLM providers, auth, themes, etc.)
 COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
 
-# Copy native modules (better-sqlite3 needs to be rebuilt in production container)
-COPY --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+# Copy package files for native module dependencies
+COPY package.json package-lock.json ./
+
+# Install only production dependencies (including better-sqlite3)
+RUN npm ci --only=production
+
+# Rebuild native modules for the current Alpine Linux platform
+RUN npm rebuild
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["node", "server.js"]
 
 USER nextjs
 

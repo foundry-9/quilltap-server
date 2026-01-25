@@ -15,6 +15,7 @@ const nextConfig = {
   serverExternalPackages: [
     '@openrouter/sdk',  // Used by lib/llm/pricing-fetcher.ts (dynamically imported, optional)
     'zod',              // Used throughout the app
+    'better-sqlite3',   // Native module for SQLite database
   ],
 
   // Include dependencies in standalone output for Docker deployments
@@ -25,6 +26,7 @@ const nextConfig = {
       './node_modules/@openrouter/**/*',
       './node_modules/zod/**/*',
       './node_modules/next-auth/**/*',
+      './node_modules/better-sqlite3/**/*',
     ],
   },
 
@@ -98,16 +100,19 @@ const nextConfig = {
         fs: false,
         net: false,
         tls: false,
+        'better-sqlite3': false,
       };
-    }
-
-    // Exclude plugins directory from webpack bundling - plugins are loaded dynamically at runtime
-    if (isServer) {
+    } else {
+      // Mark native modules as external on server to prevent bundling
       config.externals = config.externals || [];
       if (Array.isArray(config.externals)) {
         config.externals.push(({ context, request }, callback) => {
           // Exclude any requests that point to the plugins/dist directory
           if (request && request.includes('plugins/dist/')) {
+            return callback(null, `commonjs ${request}`);
+          }
+          // Exclude native modules from bundling
+          if (request === 'better-sqlite3' || request === 'bcrypt') {
             return callback(null, `commonjs ${request}`);
           }
           callback();
@@ -124,6 +129,10 @@ const nextConfig = {
     });
     config.ignoreWarnings.push({
       module: /lib\/themes\/theme-registry\.ts/,
+      message: /Can't resolve/,
+    });
+    config.ignoreWarnings.push({
+      module: /migrations\/lib\/mongodb-utils\.ts/,
       message: /Can't resolve/,
     });
 

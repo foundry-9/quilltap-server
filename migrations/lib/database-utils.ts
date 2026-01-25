@@ -12,7 +12,6 @@
  */
 
 import { logger } from './logger';
-import { getMongoDatabase as getMongoDatabaseDirect, isMongoDBBackend as isMongoDBBackendDirect, closeMongoDB } from './mongodb-utils';
 
 // ============================================================================
 // Backend Detection
@@ -22,23 +21,7 @@ import { getMongoDatabase as getMongoDatabaseDirect, isMongoDBBackend as isMongo
  * Detect the current database backend from environment
  */
 export function detectDatabaseBackend(): 'mongodb' | 'sqlite' {
-  const explicit = process.env.DATABASE_BACKEND?.toLowerCase();
-
-  if (explicit === 'sqlite') {
-    return 'sqlite';
-  }
-
-  if (explicit === 'mongodb') {
-    return 'mongodb';
-  }
-
-  // Auto-detect based on environment variables
-  // If MONGODB_URI is set, use MongoDB; otherwise SQLite
-  if (process.env.MONGODB_URI) {
-    return 'mongodb';
-  }
-
-  // Default to SQLite for simpler deployments
+  // MongoDB support has been removed; force SQLite backend
   return 'sqlite';
 }
 
@@ -46,7 +29,7 @@ export function detectDatabaseBackend(): 'mongodb' | 'sqlite' {
  * Check if the current backend is MongoDB
  */
 export function isMongoDBBackend(): boolean {
-  return detectDatabaseBackend() === 'mongodb';
+  return false;
 }
 
 /**
@@ -60,8 +43,22 @@ export function isSQLiteBackend(): boolean {
 // MongoDB Access (for existing migrations)
 // ============================================================================
 
-// Re-export MongoDB utilities for backwards compatibility
-export { getMongoDatabase, closeMongoDB, testMongoDBConnection, validateMongoDBConfig } from './mongodb-utils';
+// Backwards-compatibility stubs (MongoDB removed)
+export function getMongoDatabase(): any {
+  throw new Error('MongoDB backend has been removed from migrations.');
+}
+
+export function closeMongoDB(): void {
+  // no-op
+}
+
+export function testMongoDBConnection(): { success: boolean; message: string } {
+  return { success: true, message: 'MongoDB backend removed; using SQLite.' };
+}
+
+export function validateMongoDBConfig(): { isConfigured: boolean; errors: string[] } {
+  return { isConfigured: false, errors: ['MongoDB backend removed'] };
+}
 
 // ============================================================================
 // SQLite Access (for migrations)
@@ -180,11 +177,8 @@ export function testSQLiteConnection(): {
  * Close all database connections
  */
 export async function closeDatabase(): Promise<void> {
-  if (isMongoDBBackend()) {
-    await closeMongoDB();
-  } else {
-    closeSQLite();
-  }
+  // Only SQLite is supported
+  closeSQLite();
 }
 
 /**
@@ -194,17 +188,10 @@ export async function waitForDatabaseReady(
   maxRetries: number = 10,
   retryDelayMs: number = 1000
 ): Promise<boolean> {
-  const backend = detectDatabaseBackend();
-
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      if (backend === 'mongodb') {
-        const db = await getMongoDatabaseDirect();
-        await db.command({ ping: 1 });
-      } else {
-        const db = getSQLiteDatabase();
-        db.prepare('SELECT 1').get();
-      }
+      const db = getSQLiteDatabase();
+      db.prepare('SELECT 1').get();
       return true;
     } catch (error) {
       if (attempt < maxRetries) {
@@ -213,7 +200,7 @@ export async function waitForDatabaseReady(
     }
   }
 
-  logger.error(`${backend} not accessible after retries`, {
+  logger.error('sqlite not accessible after retries', {
     context: 'migrations.database-utils',
     maxRetries,
   });
