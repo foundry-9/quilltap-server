@@ -27,8 +27,8 @@ import {
   ChatParticipantBaseSchema,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { QueryFilter, DatabaseCollection } from '../interfaces';
-import { getDatabaseAsync } from '../manager';
+import { QueryFilter, DatabaseCollection, SortSpec } from '../interfaces';
+import { getDatabaseAsync, getBackendType } from '../manager';
 
 /**
  * Chats repository with database abstraction layer backend
@@ -38,6 +38,13 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
 
   constructor() {
     super('chats', ChatMetadataBaseSchema);
+  }
+
+  /**
+   * Check if using SQLite backend (normalized messages) vs MongoDB (embedded array)
+   */
+  private isSQLiteBackend(): boolean {
+    return getBackendType() === 'sqlite';
   }
 
   /**
@@ -121,27 +128,29 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
 
       const chat = await this._create(chatData, options);
 
-      // Create empty messages document
-      try {
-        const messagesCollection = await this.getMessagesCollection();
-        const now = this.getCurrentTimestamp();
+      // MongoDB: Create empty messages document (not needed for SQLite - messages are individual rows)
+      if (!this.isSQLiteBackend()) {
+        try {
+          const messagesCollection = await this.getMessagesCollection();
+          const now = this.getCurrentTimestamp();
 
-        const messagesDoc = {
-          chatId: chat.id,
-          messages: [],
-          createdAt: now,
-          updatedAt: now,
-        };
+          const messagesDoc = {
+            chatId: chat.id,
+            messages: [],
+            createdAt: now,
+            updatedAt: now,
+          };
 
-        await messagesCollection.insertOne(messagesDoc as any);
+          await messagesCollection.insertOne(messagesDoc as any);
 
-        logger.debug('Chat messages collection created', { chatId: chat.id });
-      } catch (error) {
-        logger.warn('Failed to create chat messages collection', {
-          chatId: chat.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        // Don't fail the chat creation if messages collection creation fails
+          logger.debug('Chat messages collection created', { chatId: chat.id });
+        } catch (error) {
+          logger.warn('Failed to create chat messages collection', {
+            chatId: chat.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          // Don't fail the chat creation if messages collection creation fails
+        }
       }
 
       logger.info('Chat created successfully', {
@@ -180,10 +189,16 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         return false;
       }
 
-      // Delete messages document
+      // Delete messages
       try {
         const messagesCollection = await this.getMessagesCollection();
-        await messagesCollection.deleteOne({ chatId: id } as QueryFilter);
+        if (this.isSQLiteBackend()) {
+          // SQLite: Delete all message rows for this chat
+          await messagesCollection.deleteMany({ chatId: id } as QueryFilter);
+        } else {
+          // MongoDB: Delete the single messages document
+          await messagesCollection.deleteOne({ chatId: id } as QueryFilter);
+        }
         logger.debug('Chat messages deleted', { chatId: id });
       } catch (error) {
         logger.warn('Failed to delete chat messages', {
@@ -687,15 +702,26 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   async getMessages(chatId: string): Promise<ChatEvent[]> {
     try {
       const messagesCollection = await this.getMessagesCollection();
-      const messagesDoc = await messagesCollection.findOne({ chatId } as QueryFilter);
 
-      if (!messagesDoc) {
-        logger.debug('No messages document found for chat', { chatId });
-        return [];
+      if (this.isSQLiteBackend()) {
+        // SQLite: Query individual message rows, sorted by createdAt
+        const messages = await messagesCollection.find(
+          { chatId } as QueryFilter,
+          { sort: { createdAt: 1 } as SortSpec }
+        );
+        return messages.map((msg: any) => ChatEventSchema.parse(msg));
+      } else {
+        // MongoDB: Extract from embedded array
+        const messagesDoc = await messagesCollection.findOne({ chatId } as QueryFilter);
+
+        if (!messagesDoc) {
+          logger.debug('No messages document found for chat', { chatId });
+          return [];
+        }
+
+        const messages = (messagesDoc as any).messages || [];
+        return messages.map((msg: any) => ChatEventSchema.parse(msg));
       }
-
-      const messages = (messagesDoc as any).messages || [];
-      return messages.map((msg: any) => ChatEventSchema.parse(msg));
     } catch (error) {
       logger.error('Failed to get messages for chat', {
         chatId,
@@ -720,14 +746,19 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       const messagesCollection = await this.getMessagesCollection();
       const now = this.getCurrentTimestamp();
 
-      // Use updateOne with upsert to handle both creating and updating messages document
-      await messagesCollection.updateOne(
-        { chatId } as QueryFilter,
-        {
-          $push: { messages: validated },
-          $set: { updatedAt: now },
-        } as any,
-      );
+      if (this.isSQLiteBackend()) {
+        // SQLite: Insert as individual row with chatId
+        await messagesCollection.insertOne({ ...validated, chatId } as any);
+      } else {
+        // MongoDB: Push to embedded array
+        await messagesCollection.updateOne(
+          { chatId } as QueryFilter,
+          {
+            $push: { messages: validated },
+            $set: { updatedAt: now },
+          } as any,
+        );
+      }
 
       // Update chat metadata with message count, last message timestamp, and updatedAt
       const chat = await this.findById(chatId);
@@ -765,14 +796,21 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       const messagesCollection = await this.getMessagesCollection();
       const now = this.getCurrentTimestamp();
 
-      // Use updateOne with upsert to handle both creating and updating messages document
-      await messagesCollection.updateOne(
-        { chatId } as QueryFilter,
-        {
-          $push: { messages: { $each: validated } },
-          $set: { updatedAt: now },
-        } as any
-      );
+      if (this.isSQLiteBackend()) {
+        // SQLite: Insert each message as individual row with chatId
+        for (const msg of validated) {
+          await messagesCollection.insertOne({ ...msg, chatId } as any);
+        }
+      } else {
+        // MongoDB: Push all to embedded array
+        await messagesCollection.updateOne(
+          { chatId } as QueryFilter,
+          {
+            $push: { messages: { $each: validated } },
+            $set: { updatedAt: now },
+          } as any
+        );
+      }
 
       // Update chat metadata with message count, last message timestamp, and updatedAt
       const chat = await this.findById(chatId);
@@ -803,37 +841,58 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     try {
       logger.debug('Updating message in chat', { chatId, messageId });
 
-      const messages = await this.getMessages(chatId);
-      const messageIndex = messages.findIndex(m => m.id === messageId);
-
-      if (messageIndex === -1) {
-        logger.debug('Message not found', { chatId, messageId });
-        return null;
-      }
-
-      // Merge updates with existing message
-      const updatedMessage = { ...messages[messageIndex], ...updates };
-      const validated = ChatEventSchema.parse(updatedMessage);
-
-      // Replace message in array
-      messages[messageIndex] = validated;
-
       const messagesCollection = await this.getMessagesCollection();
       const now = this.getCurrentTimestamp();
 
-      // Update entire messages array
-      await messagesCollection.updateOne(
-        { chatId } as QueryFilter,
-        {
-          $set: {
-            messages: messages,
-            updatedAt: now,
-          },
-        } as any
-      );
+      if (this.isSQLiteBackend()) {
+        // SQLite: Find and update the specific message row
+        const existingMessage = await messagesCollection.findOne({ id: messageId, chatId } as QueryFilter);
+        if (!existingMessage) {
+          logger.debug('Message not found', { chatId, messageId });
+          return null;
+        }
 
-      logger.debug('Message updated in chat', { chatId, messageId });
-      return validated;
+        const updatedMessage = { ...existingMessage, ...updates };
+        const validated = ChatEventSchema.parse(updatedMessage);
+
+        await messagesCollection.updateOne(
+          { id: messageId } as QueryFilter,
+          { $set: validated } as any
+        );
+
+        logger.debug('Message updated in chat', { chatId, messageId });
+        return validated;
+      } else {
+        // MongoDB: Update in embedded array
+        const messages = await this.getMessages(chatId);
+        const messageIndex = messages.findIndex(m => m.id === messageId);
+
+        if (messageIndex === -1) {
+          logger.debug('Message not found', { chatId, messageId });
+          return null;
+        }
+
+        // Merge updates with existing message
+        const updatedMessage = { ...messages[messageIndex], ...updates };
+        const validated = ChatEventSchema.parse(updatedMessage);
+
+        // Replace message in array
+        messages[messageIndex] = validated;
+
+        // Update entire messages array
+        await messagesCollection.updateOne(
+          { chatId } as QueryFilter,
+          {
+            $set: {
+              messages: messages,
+              updatedAt: now,
+            },
+          } as any
+        );
+
+        logger.debug('Message updated in chat', { chatId, messageId });
+        return validated;
+      }
     } catch (error) {
       logger.error('Failed to update message in chat', {
         chatId,
@@ -952,41 +1011,58 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
 
       const messages = await this.getMessages(chatId);
       let updatedCount = 0;
-      let hasChanges = false;
+      const messagesCollection = await this.getMessagesCollection();
 
-      // Process each message
-      const updatedMessages = messages.map(msg => {
-        if (msg.type === 'message' && msg.content.includes(searchText)) {
-          const newContent = msg.content.split(searchText).join(replaceText);
-          if (newContent !== msg.content) {
-            updatedCount++;
-            hasChanges = true;
-            return { ...msg, content: newContent };
+      if (this.isSQLiteBackend()) {
+        // SQLite: Update each matching message row individually
+        for (const msg of messages) {
+          if (msg.type === 'message' && msg.content.includes(searchText)) {
+            const newContent = msg.content.split(searchText).join(replaceText);
+            if (newContent !== msg.content) {
+              const validated = ChatEventSchema.parse({ ...msg, content: newContent });
+              await messagesCollection.updateOne(
+                { id: msg.id } as QueryFilter,
+                { $set: { content: newContent } } as any
+              );
+              updatedCount++;
+            }
           }
         }
-        return msg;
-      });
+      } else {
+        // MongoDB: Update entire embedded array
+        let hasChanges = false;
+        const updatedMessages = messages.map(msg => {
+          if (msg.type === 'message' && msg.content.includes(searchText)) {
+            const newContent = msg.content.split(searchText).join(replaceText);
+            if (newContent !== msg.content) {
+              updatedCount++;
+              hasChanges = true;
+              return { ...msg, content: newContent };
+            }
+          }
+          return msg;
+        });
 
-      if (!hasChanges) {
+        if (hasChanges) {
+          const validated = updatedMessages.map(msg => ChatEventSchema.parse(msg));
+          const now = this.getCurrentTimestamp();
+
+          await messagesCollection.updateOne(
+            { chatId } as QueryFilter,
+            {
+              $set: {
+                messages: validated,
+                updatedAt: now,
+              },
+            } as any
+          );
+        }
+      }
+
+      if (updatedCount === 0) {
         logger.debug('No messages needed updating', { chatId });
         return 0;
       }
-
-      // Validate and update messages
-      const validated = updatedMessages.map(msg => ChatEventSchema.parse(msg));
-
-      const messagesCollection = await this.getMessagesCollection();
-      const now = this.getCurrentTimestamp();
-
-      await messagesCollection.updateOne(
-        { chatId } as QueryFilter,
-        {
-          $set: {
-            messages: validated,
-            updatedAt: now,
-          },
-        } as any
-      );
 
       // Note: We intentionally don't update chat.updatedAt here since message edits
       // are not considered "new messages" for sorting purposes
@@ -1012,16 +1088,21 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       const messagesCollection = await this.getMessagesCollection();
       const now = this.getCurrentTimestamp();
 
-      // Clear messages array
-      await messagesCollection.updateOne(
-        { chatId } as QueryFilter,
-        {
-          $set: {
-            messages: [],
-            updatedAt: now,
-          },
-        } as any,
-      );
+      if (this.isSQLiteBackend()) {
+        // SQLite: Delete all message rows for this chat
+        await messagesCollection.deleteMany({ chatId } as QueryFilter);
+      } else {
+        // MongoDB: Clear embedded messages array
+        await messagesCollection.updateOne(
+          { chatId } as QueryFilter,
+          {
+            $set: {
+              messages: [],
+              updatedAt: now,
+            },
+          } as any,
+        );
+      }
 
       // Reset metadata
       const chat = await this.findById(chatId);

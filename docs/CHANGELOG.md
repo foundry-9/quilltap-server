@@ -4,6 +4,37 @@
 
 ### 2.8-dev
 
+- fix: Comprehensive SQLite schema update to match Zod schemas (2026-01-25)
+  - Updated all SQLite table definitions to match actual Zod schemas for proper migration
+  - **characters**: Added title, firstMessage, exampleDialogues, avatarUrl, defaultConnectionProfileId,
+    defaultPartnerId, defaultRoleplayTemplateId, sillyTavernData, npc fields
+  - **chats**: Complete rewrite with participants, contextSummary, timestampConfig, impersonation state,
+    token tracking (totalPromptTokens, totalCompletionTokens, estimatedCostUSD), projectId
+  - **chat_messages**: Normalized to one row per message (MongoDB stores as embedded array).
+    Migration service transforms `{ chatId, messages: [...] }` to individual rows with chatId FK.
+    ChatsRepository updated with backend detection to use proper queries for each backend.
+    Includes all MessageEvent fields: promptTokens, completionTokens, swipeGroupId, swipeIndex,
+    thoughtSignature, participantId, recoveryType, systemEventType.
+    Content column is nullable since ChatEventSchema is a union (MessageEvent has content,
+    ContextSummaryEvent has context, SystemEvent has description)
+  - **memories**: Added chatId, projectId, aboutCharacterId, summary, keywords, embedding, sourceMessageId
+  - **connection_profiles**: Added apiKeyId, modelName, parameters, isCheap, allowWebSearch, token tracking
+  - **image_profiles**: Added apiKeyId, modelName, parameters (removed old width/height/steps)
+  - **embedding_profiles**: Added apiKeyId, modelName
+  - **files**: Rewritten for FileEntry schema with originalFilename, linkedTo, storage abstraction fields
+  - **roleplay_templates**: Added pluginName, annotationButtons, renderingPatterns, dialogueDetection
+  - **prompt_templates**: Added description, isBuiltIn, modelHint
+  - **background_jobs**: Added payload, priority, attempts, maxAttempts, scheduledAt
+  - **llm_logs**: Rewritten for LLMLog schema with request/response summaries, usage, cacheUsage
+  - **tags**: Added visualStyle
+  - **users**: Added username, name, image, totp, backupCodes, totpAttempts, trustedDevices
+  - Added new tables: api_keys, migrations_state, migrations_metadata
+  - Migration service now creates tables before migrating data
+  - migrations_state is now migrated to preserve which migrations have already run
+  - Migration service transforms documents for schema compatibility (ensures updatedAt is set)
+  - Fixed progress tracking to count individual messages in chat_messages (not documents)
+  - Added special handling for migrations_state migration (MongoDB stores single document with
+    completedMigrations array, SQLite stores one row per migration)
 - feat: MongoDB to SQLite migration tool (2026-01-25)
   - Added Database card to Tools page for managing database backend
   - Migration wizard with pre-flight checks, progress tracking, and verification

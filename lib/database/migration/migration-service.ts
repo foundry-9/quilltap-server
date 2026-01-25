@@ -23,6 +23,7 @@ import {
 } from '../meta';
 import { createMongoDBBackend, MongoDBBackend } from '../backends/mongodb';
 import { createSQLiteBackend, SQLiteBackend } from '../backends/sqlite';
+import { ensureSQLiteTablesExist } from '../../../migrations/scripts/sqlite-initial-schema';
 import path from 'path';
 
 // ============================================================================
@@ -99,6 +100,7 @@ const MIGRATION_COLLECTIONS: CollectionInfo[] = [
   // Priority 2: Depend on users
   { name: 'accounts', tableName: 'accounts', priority: 2 },
   { name: 'sessions', tableName: 'sessions', priority: 2 },
+  { name: 'api_keys', tableName: 'api_keys', priority: 2 },
   { name: 'connection_profiles', tableName: 'connection_profiles', priority: 2 },
   { name: 'image_profiles', tableName: 'image_profiles', priority: 2 },
   { name: 'embedding_profiles', tableName: 'embedding_profiles', priority: 2 },
@@ -135,7 +137,7 @@ const MIGRATION_COLLECTIONS: CollectionInfo[] = [
   { name: 'sync_operations', tableName: 'sync_operations', priority: 8 },
   { name: 'user_sync_api_keys', tableName: 'user_sync_api_keys', priority: 8 },
 
-  // Priority 9: Migrations state (always last)
+  // Priority 9: Migrations state (last - preserves which migrations have already run)
   { name: 'migrations_state', tableName: 'migrations_state', priority: 9 },
 ];
 
@@ -232,9 +234,29 @@ export class DatabaseMigrationService {
           for (const collectionInfo of MIGRATION_COLLECTIONS) {
             if (existingCollections.includes(collectionInfo.name)) {
               const collection = this.mongoBackend.getCollection(collectionInfo.name);
-              const count = await collection.countDocuments({});
-              result.collectionCounts[collectionInfo.name] = count;
-              result.totalRecords += count;
+
+              // Special handling for chat_messages - count individual messages, not documents
+              if (collectionInfo.name === 'chat_messages') {
+                const chatDocs = await collection.find({});
+                let messageCount = 0;
+                for (const chatDoc of chatDocs) {
+                  const messages = (chatDoc as any).messages || [];
+                  messageCount += messages.length;
+                }
+                result.collectionCounts[collectionInfo.name] = messageCount;
+                result.totalRecords += messageCount;
+              } else if (collectionInfo.name === 'migrations_state') {
+                // Special handling for migrations_state - count completedMigrations array items
+                const docs = await collection.find({});
+                const stateDoc = docs.find((d: any) => d._id === 'migration_state') as any;
+                const migrationCount = stateDoc?.completedMigrations?.length || 0;
+                result.collectionCounts[collectionInfo.name] = migrationCount;
+                result.totalRecords += migrationCount;
+              } else {
+                const count = await collection.countDocuments({});
+                result.collectionCounts[collectionInfo.name] = count;
+                result.totalRecords += count;
+              }
             } else {
               result.collectionCounts[collectionInfo.name] = 0;
             }
@@ -323,6 +345,48 @@ export class DatabaseMigrationService {
 
       // Create SQLite backend
       this.sqliteBackend = await createSQLiteBackend();
+
+      // Ensure all SQLite tables exist before migrating data
+      // This is necessary because the normal schema migration only runs when SQLite is the active backend,
+      // but during migration from MongoDB, the backend is still MongoDB
+      try {
+        const sqliteConfig = loadSQLiteConfig();
+        const sqliteDb = new Database(sqliteConfig.path);
+        sqliteDb.pragma('foreign_keys = ON');
+
+        logger.info('Creating SQLite tables for migration', {
+          context: 'database.migration',
+          dbPath: sqliteConfig.path,
+        });
+
+        const { tablesCreated, indexesCreated } = ensureSQLiteTablesExist(sqliteDb);
+
+        logger.info('SQLite tables created for migration', {
+          context: 'database.migration',
+          tablesCreated,
+          indexesCreated,
+        });
+
+        sqliteDb.close();
+      } catch (tableError) {
+        const errorMessage = `Failed to create SQLite tables: ${tableError instanceof Error ? tableError.message : String(tableError)}`;
+        currentProgress.phase = 'failed';
+        currentProgress.errors.push(errorMessage);
+        migrationInProgress = false;
+
+        logger.error('Failed to create SQLite tables for migration', {
+          context: 'database.migration',
+          error: tableError instanceof Error ? tableError.message : String(tableError),
+        });
+
+        return {
+          success: false,
+          recordsMigrated: 0,
+          collectionsMigrated: 0,
+          duration: Date.now() - startTime,
+          errors: [errorMessage],
+        };
+      }
 
       // Get list of existing MongoDB collections
       const existingCollections = await this.mongoBackend!.listCollections();
@@ -455,6 +519,18 @@ export class DatabaseMigrationService {
       collection: collectionInfo.name,
     });
 
+    // Special handling for chat_messages - MongoDB stores as embedded array,
+    // SQLite normalizes to individual rows
+    if (collectionInfo.name === 'chat_messages') {
+      return this.migrateChatMessages();
+    }
+
+    // Special handling for migrations_state - MongoDB stores as single document with array,
+    // SQLite stores as individual rows
+    if (collectionInfo.name === 'migrations_state') {
+      return this.migrateMigrationsState();
+    }
+
     const mongoCollection = this.mongoBackend!.getCollection(collectionInfo.name);
     const documents = await mongoCollection.find({});
 
@@ -490,7 +566,10 @@ export class DatabaseMigrationService {
             }
           }
 
-          await sqliteCollection.insertOne(doc);
+          // Apply data transforms for schema compatibility
+          const transformedDoc = this.transformDocument(collectionInfo.name, doc);
+
+          await sqliteCollection.insertOne(transformedDoc);
           migratedCount++;
         } catch (error) {
           logger.error('Failed to insert document', {
@@ -503,6 +582,218 @@ export class DatabaseMigrationService {
         }
       }
     }
+
+    return migratedCount;
+  }
+
+  /**
+   * Transform a document for schema compatibility during migration
+   * Handles missing fields that are required in SQLite but optional in older MongoDB data
+   */
+  private transformDocument(collectionName: string, doc: any): any {
+    const transformed = { ...doc };
+
+    // Ensure updatedAt is set (default to createdAt if missing)
+    if (!transformed.updatedAt && transformed.createdAt) {
+      transformed.updatedAt = transformed.createdAt;
+    }
+
+    // Collection-specific transforms
+    switch (collectionName) {
+      case 'llm_logs':
+        // Ensure required fields have defaults
+        if (!transformed.updatedAt) {
+          transformed.updatedAt = new Date().toISOString();
+        }
+        break;
+
+      case 'characters':
+      case 'chats':
+      case 'memories':
+      case 'connection_profiles':
+      case 'image_profiles':
+      case 'embedding_profiles':
+      case 'folders':
+      case 'files':
+      case 'tags':
+      case 'roleplay_templates':
+      case 'prompt_templates':
+      case 'background_jobs':
+      case 'plugin_configs':
+      case 'chat_settings':
+        // Ensure updatedAt is set for all entities with timestamps
+        if (!transformed.updatedAt) {
+          transformed.updatedAt = transformed.createdAt || new Date().toISOString();
+        }
+        break;
+    }
+
+    return transformed;
+  }
+
+  /**
+   * Special migration for chat_messages - transforms MongoDB's embedded array
+   * structure to SQLite's normalized row-per-message structure.
+   *
+   * MongoDB: { chatId, messages: ChatEvent[], createdAt, updatedAt }
+   * SQLite: One row per message with chatId foreign key
+   */
+  private async migrateChatMessages(): Promise<number> {
+    logger.info('Migrating chat_messages with normalization', {
+      context: 'database.migration',
+    });
+
+    const mongoCollection = this.mongoBackend!.getCollection('chat_messages');
+    const chatDocs = await mongoCollection.find({});
+
+    if (chatDocs.length === 0) {
+      return 0;
+    }
+
+    const sqliteCollection = this.sqliteBackend!.getCollection('chat_messages');
+    let migratedCount = 0;
+
+    for (const chatDoc of chatDocs) {
+      const doc = chatDoc as any;
+      const chatId = doc.chatId;
+      const messages = doc.messages || [];
+
+      for (const message of messages) {
+        try {
+          // Check if message already exists (for idempotency)
+          if (message.id) {
+            const existing = await sqliteCollection.findOne({ id: message.id });
+            if (existing) {
+              migratedCount++;
+              continue;
+            }
+          }
+
+          // Create normalized message row with chatId
+          const normalizedMessage = {
+            ...message,
+            chatId,
+          };
+
+          await sqliteCollection.insertOne(normalizedMessage);
+          migratedCount++;
+        } catch (error) {
+          logger.error('Failed to insert message', {
+            context: 'database.migration',
+            chatId,
+            messageId: message.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
+        }
+      }
+    }
+
+    logger.info('Chat messages migration completed', {
+      context: 'database.migration',
+      messagesCount: migratedCount,
+      chatsCount: chatDocs.length,
+    });
+
+    return migratedCount;
+  }
+
+  /**
+   * Special migration for migrations_state - transforms MongoDB's single document
+   * with completedMigrations array to SQLite's row-per-migration structure.
+   *
+   * MongoDB: { _id: 'migration_state', completedMigrations: MigrationRecord[], lastChecked, quilltapVersion }
+   * SQLite: One row per migration with id, completedAt, quilltapVersion, itemsAffected, message
+   *         Plus migrations_metadata table for lastChecked, quilltapVersion
+   */
+  private async migrateMigrationsState(): Promise<number> {
+    logger.info('Migrating migrations_state with normalization', {
+      context: 'database.migration',
+    });
+
+    const mongoCollection = this.mongoBackend!.getCollection('migrations_state');
+    const docs = await mongoCollection.find({});
+
+    if (docs.length === 0) {
+      return 0;
+    }
+
+    // Find the state document (there should be one with _id: 'migration_state')
+    const stateDoc = docs.find((d: any) => d._id === 'migration_state') as any;
+    if (!stateDoc || !stateDoc.completedMigrations) {
+      logger.info('No migrations_state document found or no completedMigrations', {
+        context: 'database.migration',
+      });
+      return 0;
+    }
+
+    const sqliteCollection = this.sqliteBackend!.getCollection('migrations_state');
+    let migratedCount = 0;
+
+    // Migrate each completed migration as a row
+    for (const migration of stateDoc.completedMigrations) {
+      try {
+        // Check if migration already exists (for idempotency)
+        if (migration.id) {
+          const existing = await sqliteCollection.findOne({ id: migration.id });
+          if (existing) {
+            migratedCount++;
+            continue;
+          }
+        }
+
+        // Create row for this migration
+        const row = {
+          id: migration.id,
+          completedAt: migration.completedAt,
+          quilltapVersion: migration.quilltapVersion || stateDoc.quilltapVersion || 'unknown',
+          itemsAffected: migration.itemsAffected || 0,
+          message: migration.message || null,
+        };
+
+        await sqliteCollection.insertOne(row);
+        migratedCount++;
+      } catch (error) {
+        logger.error('Failed to insert migration record', {
+          context: 'database.migration',
+          migrationId: migration.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    }
+
+    // Also save metadata (lastChecked, quilltapVersion) to migrations_metadata table
+    try {
+      const metadataCollection = this.sqliteBackend!.getCollection('migrations_metadata');
+
+      // Insert or update lastChecked
+      if (stateDoc.lastChecked) {
+        const existingLastChecked = await metadataCollection.findOne({ key: 'lastChecked' });
+        if (!existingLastChecked) {
+          await metadataCollection.insertOne({ key: 'lastChecked', value: stateDoc.lastChecked });
+        }
+      }
+
+      // Insert or update quilltapVersion
+      if (stateDoc.quilltapVersion) {
+        const existingVersion = await metadataCollection.findOne({ key: 'quilltapVersion' });
+        if (!existingVersion) {
+          await metadataCollection.insertOne({ key: 'quilltapVersion', value: stateDoc.quilltapVersion });
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to save migrations metadata', {
+        context: 'database.migration',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Don't fail the migration for metadata issues
+    }
+
+    logger.info('Migrations state migration completed', {
+      context: 'database.migration',
+      migrationsCount: migratedCount,
+    });
 
     return migratedCount;
   }
