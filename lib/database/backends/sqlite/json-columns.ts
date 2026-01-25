@@ -191,6 +191,54 @@ export function jsonArrayContainsAny(column: string, values: unknown[]): { sql: 
 }
 
 /**
+ * Generate SQL for checking if a JSON array of objects contains an object
+ * with a nested field matching a value.
+ * Used for queries like: participants.characterId = 'some-id'
+ * where participants is an array of objects each having a characterId field.
+ *
+ * @param column The column name containing a JSON array of objects
+ * @param nestedPath The JSON path within each array element (e.g., 'characterId' or 'address.city')
+ * @param value The value to match
+ */
+export function jsonArrayObjectMatch(
+  column: string,
+  nestedPath: string,
+  value: unknown
+): { sql: string; params: unknown[] } {
+  // Use json_each to iterate array elements, then json_extract to get the nested field
+  const jsonPath = '$.' + nestedPath;
+  return {
+    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE json_extract(value, '${jsonPath}') = ?)`,
+    params: [value],
+  };
+}
+
+/**
+ * Generate SQL for checking if a JSON array of objects contains an object
+ * with a nested field matching any of the values (IN query).
+ *
+ * @param column The column name containing a JSON array of objects
+ * @param nestedPath The JSON path within each array element
+ * @param values The values to match
+ */
+export function jsonArrayObjectMatchAny(
+  column: string,
+  nestedPath: string,
+  values: unknown[]
+): { sql: string; params: unknown[] } {
+  if (values.length === 0) {
+    return { sql: '0', params: [] };
+  }
+
+  const jsonPath = '$.' + nestedPath;
+  const placeholders = values.map(() => '?').join(', ');
+  return {
+    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE json_extract(value, '${jsonPath}') IN (${placeholders}))`,
+    params: values,
+  };
+}
+
+/**
  * Generate SQL for inserting a value into a JSON array
  * @param column The column name containing a JSON array
  * @param value The value to insert

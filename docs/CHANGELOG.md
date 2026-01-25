@@ -4,6 +4,12 @@
 
 ### 2.8-dev
 
+- fix: SQLite query for nested fields within JSON arrays (2026-01-25)
+  - Fixed queries like `participants.characterId` where participants is an array of objects
+  - Added `jsonArrayObjectMatch()` and `jsonArrayObjectMatchAny()` helpers for array-of-objects queries
+  - SQLite backend now tracks array columns separately from object columns
+  - Query translator generates proper `EXISTS (SELECT 1 FROM json_each(...))` SQL for array queries
+  - Fixes character conversations tab showing empty when conversations exist
 - fix: SQLite data hydration issues after MongoDB migration (2026-01-25)
   - Added boolean column tracking to SQLite backend alongside JSON columns
   - Fixed hydrateRow() to properly convert null→undefined for optional JSON/boolean fields

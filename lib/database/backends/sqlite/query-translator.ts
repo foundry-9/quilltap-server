@@ -6,7 +6,7 @@
  */
 
 import { QueryFilter, QueryOptions, SortSpec, UpdateSpec, UpdateOperators } from '../../interfaces';
-import { jsonExtract, jsonArrayContains, jsonArrayContainsAny, toJson } from './json-columns';
+import { jsonExtract, jsonArrayContains, jsonArrayContainsAny, jsonArrayObjectMatch, jsonArrayObjectMatchAny, toJson } from './json-columns';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -45,7 +45,8 @@ function isComparisonCondition(value: unknown): boolean {
 function translateFieldFilter(
   field: string,
   value: unknown,
-  jsonColumns: Set<string>
+  jsonColumns: Set<string>,
+  arrayColumns: Set<string> = new Set()
 ): TranslatedQuery {
   const clauses: string[] = [];
   const params: unknown[] = [];
@@ -53,8 +54,67 @@ function translateFieldFilter(
   // Handle dot notation for nested fields
   const parts = field.split('.');
   const isNestedInJson = parts.length > 1 && jsonColumns.has(parts[0]);
+  const isNestedInArray = parts.length > 1 && arrayColumns.has(parts[0]);
 
-  // Determine the column name and JSON path
+  // Special handling for querying nested fields within array columns
+  // e.g., participants.characterId where participants is an array of objects
+  if (isNestedInArray) {
+    const column = parts[0];
+    const nestedPath = parts.slice(1).join('.');
+
+    // Handle array object queries
+    if (value === null || value === undefined) {
+      // Check if any element has null/undefined for this field
+      // This is complex - for now, treat as "no match" for null queries on array elements
+      return { sql: '0', params: [] };
+    } else if (isComparisonCondition(value)) {
+      // Handle comparison operators for array object queries
+      const conditions = value as Record<string, unknown>;
+
+      for (const [op, opValue] of Object.entries(conditions)) {
+        switch (op) {
+          case '$eq': {
+            const { sql, params: p } = jsonArrayObjectMatch(column, nestedPath, opValue);
+            clauses.push(sql);
+            params.push(...p);
+            break;
+          }
+          case '$in': {
+            if (Array.isArray(opValue) && opValue.length > 0) {
+              const { sql, params: p } = jsonArrayObjectMatchAny(column, nestedPath, opValue);
+              clauses.push(sql);
+              params.push(...p);
+            } else {
+              clauses.push('0');
+            }
+            break;
+          }
+          case '$ne': {
+            // NOT EXISTS for not equal
+            const { sql } = jsonArrayObjectMatch(column, nestedPath, opValue);
+            clauses.push(`NOT ${sql}`);
+            params.push(opValue);
+            break;
+          }
+          default:
+            logger.warn('Unsupported operator for array object query', { operator: op, field });
+            clauses.push('0');
+        }
+      }
+    } else {
+      // Simple equality - e.g., participants.characterId = 'some-id'
+      const { sql, params: p } = jsonArrayObjectMatch(column, nestedPath, value);
+      clauses.push(sql);
+      params.push(...p);
+    }
+
+    return {
+      sql: clauses.length > 0 ? clauses.join(' AND ') : '1',
+      params,
+    };
+  }
+
+  // Determine the column name and JSON path for non-array JSON columns
   let columnExpr: string;
   if (isNestedInJson) {
     const column = parts[0];
@@ -179,7 +239,8 @@ function translateFieldFilter(
  */
 export function translateFilter(
   filter: QueryFilter,
-  jsonColumns: Set<string> = new Set()
+  jsonColumns: Set<string> = new Set(),
+  arrayColumns: Set<string> = new Set()
 ): TranslatedQuery {
   if (!filter || Object.keys(filter).length === 0) {
     return { sql: '1', params: [] };
@@ -193,7 +254,7 @@ export function translateFilter(
       // Logical AND
       const subClauses: string[] = [];
       for (const subFilter of value) {
-        const translated = translateFilter(subFilter as QueryFilter, jsonColumns);
+        const translated = translateFilter(subFilter as QueryFilter, jsonColumns, arrayColumns);
         subClauses.push(`(${translated.sql})`);
         params.push(...translated.params);
       }
@@ -204,7 +265,7 @@ export function translateFilter(
       // Logical OR
       const subClauses: string[] = [];
       for (const subFilter of value) {
-        const translated = translateFilter(subFilter as QueryFilter, jsonColumns);
+        const translated = translateFilter(subFilter as QueryFilter, jsonColumns, arrayColumns);
         subClauses.push(`(${translated.sql})`);
         params.push(...translated.params);
       }
@@ -213,12 +274,12 @@ export function translateFilter(
       }
     } else if (key === '$not' && typeof value === 'object' && !Array.isArray(value)) {
       // Logical NOT
-      const translated = translateFilter(value as QueryFilter, jsonColumns);
+      const translated = translateFilter(value as QueryFilter, jsonColumns, arrayColumns);
       clauses.push(`NOT (${translated.sql})`);
       params.push(...translated.params);
     } else {
       // Regular field filter
-      const translated = translateFieldFilter(key, value, jsonColumns);
+      const translated = translateFieldFilter(key, value, jsonColumns, arrayColumns);
       clauses.push(translated.sql);
       params.push(...translated.params);
     }
@@ -400,9 +461,10 @@ export function buildSelectQuery(
   table: string,
   filter: QueryFilter,
   options?: QueryOptions,
-  jsonColumns?: Set<string>
+  jsonColumns?: Set<string>,
+  arrayColumns?: Set<string>
 ): TranslatedQuery {
-  const whereClause = translateFilter(filter, jsonColumns);
+  const whereClause = translateFilter(filter, jsonColumns, arrayColumns);
   const orderBy = translateSort(options?.sort);
   const pagination = translatePagination(options);
 
@@ -425,9 +487,10 @@ export function buildSelectQuery(
 export function buildCountQuery(
   table: string,
   filter: QueryFilter,
-  jsonColumns?: Set<string>
+  jsonColumns?: Set<string>,
+  arrayColumns?: Set<string>
 ): TranslatedQuery {
-  const whereClause = translateFilter(filter, jsonColumns);
+  const whereClause = translateFilter(filter, jsonColumns, arrayColumns);
   return {
     sql: `SELECT COUNT(*) as count FROM "${table}" WHERE ${whereClause.sql}`,
     params: whereClause.params,
@@ -441,9 +504,10 @@ export function buildUpdateQuery(
   table: string,
   filter: QueryFilter,
   update: UpdateSpec<unknown>,
-  jsonColumns?: Set<string>
+  jsonColumns?: Set<string>,
+  arrayColumns?: Set<string>
 ): TranslatedQuery {
-  const whereClause = translateFilter(filter, jsonColumns);
+  const whereClause = translateFilter(filter, jsonColumns, arrayColumns);
   const updateClause = translateUpdate(update, jsonColumns);
 
   if (updateClause.setClauses.length === 0) {
@@ -464,9 +528,10 @@ export function buildUpdateQuery(
 export function buildDeleteQuery(
   table: string,
   filter: QueryFilter,
-  jsonColumns?: Set<string>
+  jsonColumns?: Set<string>,
+  arrayColumns?: Set<string>
 ): TranslatedQuery {
-  const whereClause = translateFilter(filter, jsonColumns);
+  const whereClause = translateFilter(filter, jsonColumns, arrayColumns);
 
   return {
     sql: `DELETE FROM "${table}" WHERE ${whereClause.sql}`,

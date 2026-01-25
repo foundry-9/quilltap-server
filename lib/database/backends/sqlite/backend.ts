@@ -38,13 +38,15 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   readonly name: string;
   private db: DatabaseType;
   private jsonColumns: Set<string>;
+  private arrayColumns: Set<string>;
   private booleanColumns: Set<string>;
   private preparedStatements: Map<string, Statement> = new Map();
 
-  constructor(db: DatabaseType, name: string, jsonColumns: string[] = [], booleanColumns: string[] = []) {
+  constructor(db: DatabaseType, name: string, jsonColumns: string[] = [], arrayColumns: string[] = [], booleanColumns: string[] = []) {
     this.db = db;
     this.name = name;
     this.jsonColumns = new Set(jsonColumns);
+    this.arrayColumns = new Set(arrayColumns);
     this.booleanColumns = new Set(booleanColumns);
   }
 
@@ -63,7 +65,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
    */
   async findOne(filter: QueryFilter, options?: QueryOptions): Promise<T | null> {
     try {
-      const query = buildSelectQuery(this.name, filter, { ...options, limit: 1 }, this.jsonColumns);
+      const query = buildSelectQuery(this.name, filter, { ...options, limit: 1 }, this.jsonColumns, this.arrayColumns);
 
       logger.debug('SQLite findOne', { table: this.name, sql: query.sql });
 
@@ -88,7 +90,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
    */
   async find(filter: QueryFilter, options?: QueryOptions): Promise<T[]> {
     try {
-      const query = buildSelectQuery(this.name, filter, options, this.jsonColumns);
+      const query = buildSelectQuery(this.name, filter, options, this.jsonColumns, this.arrayColumns);
 
       logger.debug('SQLite find', { table: this.name, sql: query.sql });
 
@@ -186,7 +188,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
         return { matchedCount: 0, modifiedCount: 0, acknowledged: true };
       }
 
-      const query = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns);
+      const query = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
 
       logger.debug('SQLite updateOne', { table: this.name, sql: query.sql });
 
@@ -211,7 +213,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
    */
   async updateMany(filter: QueryFilter, update: UpdateSpec<T>): Promise<UpdateResult> {
     try {
-      const query = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns);
+      const query = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
 
       logger.debug('SQLite updateMany', { table: this.name, sql: query.sql });
 
@@ -246,7 +248,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       const before = returnAfter ? null : await this.findOne(filter);
 
       // Perform the update
-      const updateQuery = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns);
+      const updateQuery = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
       const result = this.db.prepare(updateQuery.sql).run(...updateQuery.params);
 
       if (result.changes === 0 && options?.upsert) {
@@ -311,7 +313,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
    */
   async deleteMany(filter: QueryFilter): Promise<DeleteResult> {
     try {
-      const query = buildDeleteQuery(this.name, filter, this.jsonColumns);
+      const query = buildDeleteQuery(this.name, filter, this.jsonColumns, this.arrayColumns);
 
       logger.debug('SQLite deleteMany', { table: this.name, sql: query.sql });
 
@@ -335,7 +337,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
    */
   async countDocuments(filter?: QueryFilter): Promise<number> {
     try {
-      const query = buildCountQuery(this.name, filter || {}, this.jsonColumns);
+      const query = buildCountQuery(this.name, filter || {}, this.jsonColumns, this.arrayColumns);
 
       const result = this.db.prepare(query.sql).get(...query.params) as { count: number };
 
@@ -432,6 +434,7 @@ export class SQLiteBackend implements DatabaseBackend {
   private _state: ConnectionState = 'disconnected';
   private collectionSchemas: Map<string, z.ZodType> = new Map();
   private collectionJsonColumns: Map<string, string[]> = new Map();
+  private collectionArrayColumns: Map<string, string[]> = new Map();
   private collectionBooleanColumns: Map<string, string[]> = new Map();
 
   constructor(config?: SQLiteConfig) {
@@ -502,8 +505,9 @@ export class SQLiteBackend implements DatabaseBackend {
     }
 
     const jsonColumns = this.collectionJsonColumns.get(name) || [];
+    const arrayColumns = this.collectionArrayColumns.get(name) || [];
     const booleanColumns = this.collectionBooleanColumns.get(name) || [];
-    return new SQLiteCollection<T>(this.db, name, jsonColumns, booleanColumns);
+    return new SQLiteCollection<T>(this.db, name, jsonColumns, arrayColumns, booleanColumns);
   }
 
   /**
@@ -527,21 +531,26 @@ export class SQLiteBackend implements DatabaseBackend {
         this.db.exec(sql);
       }
 
-      // Detect JSON and boolean columns from schema
+      // Detect JSON, array, and boolean columns from schema
       const metadata = extractSchemaMetadata(name, schema);
       const jsonColumns = metadata.fields
         .filter(f => f.type === 'array' || f.type === 'object')
+        .map(f => f.name);
+      const arrayColumns = metadata.fields
+        .filter(f => f.type === 'array')
         .map(f => f.name);
       const booleanColumns = metadata.fields
         .filter(f => f.type === 'boolean')
         .map(f => f.name);
 
       this.collectionJsonColumns.set(name, jsonColumns);
+      this.collectionArrayColumns.set(name, arrayColumns);
       this.collectionBooleanColumns.set(name, booleanColumns);
 
       logger.info('Ensured collection exists', {
         table: name,
         jsonColumns,
+        arrayColumns,
         booleanColumns,
       });
     } catch (error) {
@@ -565,6 +574,7 @@ export class SQLiteBackend implements DatabaseBackend {
       this.db.exec(`DROP TABLE IF EXISTS "${name}"`);
       this.collectionSchemas.delete(name);
       this.collectionJsonColumns.delete(name);
+      this.collectionArrayColumns.delete(name);
       this.collectionBooleanColumns.delete(name);
 
       logger.info('Dropped collection', { table: name });
