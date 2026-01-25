@@ -40,7 +40,6 @@ import {
   ensureDataDirectoriesExist,
 } from '../../lib/paths';
 import {
-  isMongoDBBackend,
   isSQLiteBackend,
   getSQLiteDatabase,
   querySQLite,
@@ -150,49 +149,7 @@ async function updateMountPointPaths(): Promise<{ updated: number; errors: strin
     return { updated, errors };
   }
 
-  if (isMongoDBBackend()) {
-    try {
-      const { getMongoDatabase } = await import('../lib/mongodb-utils');
-      const db = await getMongoDatabase();
-      const collection = db.collection('mount_points');
-
-      // Find mount points with old basePath
-      const cursor = collection.find({
-        'backendConfig.basePath': oldFilesPath,
-      });
-
-      while (await cursor.hasNext()) {
-        const mp = await cursor.next();
-        if (!mp) continue;
-
-        try {
-          await collection.updateOne(
-            { _id: mp._id },
-            {
-              $set: {
-                'backendConfig.basePath': newFilesPath,
-                updatedAt: new Date().toISOString(),
-              },
-            }
-          );
-          updated++;
-
-          logger.info('Updated mount point basePath', {
-            context: 'migration.centralized-data-dir',
-            mountPointId: mp.id,
-            oldPath: oldFilesPath,
-            newPath: newFilesPath,
-          });
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : String(err);
-          errors.push(`Mount point ${mp.id}: ${errorMsg}`);
-        }
-      }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      errors.push(`MongoDB mount point update failed: ${errorMsg}`);
-    }
-  } else if (isSQLiteBackend()) {
+  if (isSQLiteBackend()) {
     try {
       if (!sqliteTableExists('mount_points')) {
         return { updated, errors };

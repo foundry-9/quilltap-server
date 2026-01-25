@@ -32,10 +32,7 @@ instrumentation.ts
 - No configuration required
 - Migrations run automatically on startup
 
-**Legacy**: MongoDB (for existing deployments)
-- Set `DATABASE_BACKEND=mongodb` environment variable to use MongoDB
-- MongoDB-specific migrations (validate-mongodb-config, migrate-json-to-mongodb) only run when MongoDB is explicitly enabled
-- For migrations from MongoDB to SQLite, use the standalone CLI tool: `scripts/mongo-to-sqlite-cli.js`
+**Upgrading from legacy versions**: Deployments running v2.6.0 or earlier must be upgraded to v2.7.0 first before upgrading to newer versions. Legacy migrations (v2.0.0–v2.6.x) are no longer included in the codebase; only v2.7.0+ migrations are available.
 
 ## Directory Structure
 
@@ -43,21 +40,26 @@ instrumentation.ts
 migrations/
 ├── index.ts              # MigrationRunner class
 ├── types.ts              # Migration interfaces
-├── state.ts              # Migration state persistence (MongoDB)
+├── state.ts              # Migration state persistence
 ├── lib/
 │   ├── logger.ts         # Migration logging
-│   ├── mongodb-utils.ts  # MongoDB connection for migrations
 │   ├── s3-utils.ts       # S3 utilities for migrations
-│   ├── file-manager.ts   # Legacy file operations
+│   ├── file-manager.ts   # File operations
 │   ├── secrets.ts        # Encryption utilities
-│   └── json-store/       # Legacy JSON store for data migration
+│   ├── database-utils.ts # Database utilities
+│   └── json-store/       # JSON store utilities for migrations
 └── scripts/
     ├── index.ts                              # Migration registry
-    ├── 001-convert-openrouter-profiles.ts
-    ├── 002-enable-provider-plugins.ts
-    ├── 003-validate-mongodb-config.ts
-    ├── ... (21 migrations total)
-    └── 021-create-folder-entities.ts
+    ├── add-use-native-web-search-field.ts    # v2.7.0
+    ├── cleanup-orphan-file-records.ts        # v2.7.0
+    ├── create-mount-points.ts                # v2.7.0
+    ├── fix-missing-storage-keys.ts           # v2.7.0
+    ├── fix-orphan-persona-participants.ts    # v2.7.0
+    ├── add-llm-logs-collection.ts            # v2.8.0
+    ├── migrate-to-centralized-data-dir.ts    # v2.8.0
+    ├── per-project-mount-points.ts           # v2.8.0
+    ├── sqlite-initial-schema.ts              # v2.8.0
+    └── create-folder-entities.ts             # v2.9.0
 ```
 
 ## Adding a New Migration
@@ -210,20 +212,23 @@ logger.error('Migration failed', {
 
 ## Current Migrations
 
-| ID | Description | For | Dependencies |
-|----|-------------|-----|--------------|
-| convert-openrouter-profiles-v1 | Convert old OpenRouter profile format | All | None |
-| enable-provider-plugins-v1 | Enable required provider plugins | All | convert-openrouter-profiles-v1 |
-| validate-mongodb-config-v1 | Validate MongoDB configuration | Legacy MongoDB | None |
-| validate-s3-config-v1 | Validate S3 configuration | All | None |
-| migrate-json-to-mongodb-v1 | Migrate JSON data to MongoDB | Legacy MongoDB | validate-mongodb-config-v1 |
-| migrate-files-to-s3-v1 | Migrate files to S3 storage | All | validate-s3-config-v1, migrate-json-to-mongodb-v1 |
-| sqlite-initial-schema-v1 | Create SQLite database schema | SQLite (Default) | None |
-| ... | ... | ... | ... |
+Only v2.7.0+ migrations are included in the codebase. Legacy migrations (v2.0.0–v2.6.x) have been removed.
+
+| ID | Version | Description | Dependencies |
+|----|---------|-----------|----|
+| add-use-native-web-search-field-v1 | 2.7.0 | Add native web search field to connection profiles | None |
+| cleanup-orphan-file-records-v1 | 2.7.0 | Clean up orphaned file records | fix-missing-storage-keys-v1 |
+| create-mount-points-v1 | 2.7.0 | Create mount points for file storage | sqlite-initial-schema-v1 |
+| fix-missing-storage-keys-v1 | 2.7.0 | Fix missing storage keys in files | create-mount-points-v1 |
+| fix-orphan-persona-participants-v1 | 2.7.0 | Fix orphaned PERSONA participants | migrate-personas-to-characters-v1 |
+| add-llm-logs-collection-v1 | 2.8.0 | Add LLM logs collection | None |
+| migrate-to-centralized-data-dir-v1 | 2.8.0 | Migrate data to centralized data directory | None |
+| per-project-mount-points-v1 | 2.8.0 | Add per-project mount points | create-mount-points-v1 |
+| sqlite-initial-schema-v1 | 2.8.0 | Create SQLite database schema | None |
+| create-folder-entities-v1 | 2.9.0 | Create folder entities | per-project-mount-points-v1 |
 
 **Notes**:
-- **Legacy MongoDB migrations** only run if `DATABASE_BACKEND=mongodb` is set
-- **SQLite** migrations run on all default installations
+- Minimum supported version for upgrades is v2.7.0
 - See `migrations/scripts/index.ts` for the complete list
 
 ## Previous System

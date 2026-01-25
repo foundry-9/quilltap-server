@@ -4,6 +4,18 @@
 
 ### 2.8-dev
 
+- refactor: Remove legacy migrations (pre-v2.7.0) and MongoDB support from migrations (2026-01-25)
+  - Deleted 17 pre-2.7.0 migration files: convert-openrouter-profiles, enable-provider-plugins, validate-mongodb-config, validate-s3-config, migrate-json-to-mongodb, migrate-files-to-s3, ensure-user-usernames, inherit-file-tags, migrate-character-system-prompts, migrate-tag-styles-to-tags, remove-quilltap-rp-builtin, add-multi-character-fields, add-inter-character-memory-fields, add-token-tracking-fields, migrate-personas-to-characters, populate-memory-about-character-ids, restructure-s3-keys
+  - Removed MongoDB support from v2.7.0+ migrations (add-use-native-web-search-field, cleanup-orphan-file-records, fix-missing-storage-keys, fix-orphan-persona-participants, add-llm-logs-collection, per-project-mount-points, create-folder-entities)
+  - Converted MongoDB-only v2.7.0+ migrations to no-ops (schema is handled by sqlite-initial-schema migration)
+  - Updated create-mount-points migration to SQLite-only
+  - Updated migrate-to-centralized-data-dir to SQLite-only
+  - Minimum supported upgrade path is now v2.7.0 → v2.8+ (previously v2.0.0 → v2.8+)
+  - Deployments running v2.6.x or earlier must upgrade to v2.7.0 first before upgrading to newer versions
+  - Updated migrations/scripts/index.ts to only include v2.7.0+ migrations
+  - Updated migrations/README.md to document v2.7.0+ migrations only
+  - Removed mongodb package from dependencies
+
 - refactor: Remove MongoDB support, SQLite is now the only database backend (2026-01-25)
   - Deleted `/lib/database/backends/mongodb/` directory (MongoDB backend implementation)
   - Deleted `/lib/mongodb/` directory (MongoDB client, config, indexes, and 27 repository files)
@@ -15,16 +27,15 @@
   - Removed MongoDB-specific docker-compose files (dev-mongo, prod, prod-cloud)
   - Updated all documentation to reflect SQLite-only support
   - Moved `mongodb` package to optionalDependencies (only needed for migration tool)
-  - Preserved standalone migration tool (`scripts/mongo-to-sqlite-cli.js`) for migrating existing MongoDB data
-  - Preserved `migrations/lib/mongodb-utils.ts` for the migration tool
+  - Preserved migration tool (available as `npx @quilltap/mongodb-to-sqlite` npm package) for migrating existing MongoDB data
   - All tests updated and passing (3719 tests)
 - refactor: Replace in-app migration UI with standalone CLI tool (2026-01-25)
   - Removed `DatabaseMigrationDialog` component and migration-related API endpoints
   - Removed `migration-readiness`, `migration-progress`, `start-migration`, `switch-backend` API actions
   - Simplified `DatabaseCard` component to show status only, with CLI migration instructions
-  - New `scripts/mongo-to-sqlite-cli.js` for migrating MongoDB databases to SQLite
+  - New migration tool available as `npx @quilltap/mongodb-to-sqlite` npm package for migrating MongoDB databases to SQLite
   - Completely standalone - requires only `mongodb` and `better-sqlite3` npm packages
-  - Usage: `node scripts/mongo-to-sqlite-cli.js -m "mongodb://localhost:27017" -o ./output.db`
+  - Usage: `npx @quilltap/mongodb-to-sqlite -m "mongodb://localhost:27017" -o ./output.db`
   - Supports `--dry-run` mode to preview record counts without migrating
   - Handles special transformations: chat_messages (embedded array to rows), migrations_state
   - Auto-serializes object/array fields to JSON for SQLite compatibility

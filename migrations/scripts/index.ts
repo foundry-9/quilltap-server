@@ -6,46 +6,21 @@
  *
  * This file was migrated from the qtap-plugin-upgrade plugin to run
  * during server startup before any requests are served.
+ *
+ * Only migrations introduced in version 2.7.0+ are included.
+ * Legacy migrations from earlier versions have been removed since they
+ * are only needed for upgrading from pre-2.7.0 installations.
  */
 
 import type { Migration } from '../types';
-import { convertOpenRouterProfilesMigration } from './convert-openrouter-profiles';
-import { enableProviderPluginsMigration } from './enable-provider-plugins';
-// Phase 3: MongoDB + S3 Migration System
-import { validateMongoDBConfigMigration } from './validate-mongodb-config';
-import { validateS3ConfigMigration } from './validate-s3-config';
-import { migrateJsonToMongoDBMigration } from './migrate-json-to-mongodb';
-import { migrateFilesToS3Migration } from './migrate-files-to-s3';
-// Data integrity migrations
-import { ensureUserUsernamesMigration } from './ensure-user-usernames';
-import { inheritFileTagsMigration } from './inherit-file-tags';
-import { migrateCharacterSystemPromptsMigration } from './migrate-character-system-prompts';
-import { migrateTagStylesToTagsMigration } from './migrate-tag-styles-to-tags';
-// Plugin system migrations
-import { removeQuilltapRPBuiltinMigration } from './remove-quilltap-rp-builtin';
-// Personas-to-characters migration
-import { migratePersonasToCharactersMigration } from './migrate-personas-to-characters';
-// Multi-character chat migrations
-import { addMultiCharacterFieldsMigration } from './add-multi-character-fields';
-import { addInterCharacterMemoryFieldsMigration } from './add-inter-character-memory-fields';
-// Token usage tracking
-import { addTokenTrackingFieldsMigration } from './add-token-tracking-fields';
 // Web search decoupling
 import { addUseNativeWebSearchFieldMigration } from './add-use-native-web-search-field';
-// S3 key restructuring
-import { restructureS3KeysMigration } from './restructure-s3-keys';
-// Memory aboutCharacterId population
-import { populateMemoryAboutCharacterIdsMigration } from './populate-memory-about-character-ids';
 // Mount points migration
 import { createMountPointsMigration } from './create-mount-points';
-// Per-project mount points
-import { perProjectMountPointsMigration } from './per-project-mount-points';
-// Folder entities migration
-import { createFolderEntitiesMigration } from './create-folder-entities';
-// Fix orphan PERSONA participants
-import { fixOrphanPersonaParticipantsMigration } from './fix-orphan-persona-participants';
 // Fix missing storage keys
 import { fixMissingStorageKeysMigration } from './fix-missing-storage-keys';
+// Fix orphan PERSONA participants
+import { fixOrphanPersonaParticipantsMigration } from './fix-orphan-persona-participants';
 // Cleanup orphan file records
 import { cleanupOrphanFileRecordsMigration } from './cleanup-orphan-file-records';
 // LLM logs collection
@@ -54,54 +29,26 @@ import { addLLMLogsCollectionMigration } from './add-llm-logs-collection';
 import { sqliteInitialSchemaMigration } from './sqlite-initial-schema';
 // Centralized data directory migration
 import { migrateToCentralizedDataDirMigration } from './migrate-to-centralized-data-dir';
+// Per-project mount points
+import { perProjectMountPointsMigration } from './per-project-mount-points';
+// Folder entities migration
+import { createFolderEntitiesMigration } from './create-folder-entities';
 
 /**
  * All available migrations.
  * Order here doesn't matter - migrations will be sorted by dependencies.
  *
- * MongoDB migrations (validateMongoDBConfigMigration, migrateJsonToMongoDBMigration) are
- * included for backward compatibility with existing MongoDB deployments. They will only
- * run if the MongoDB backend is explicitly enabled via DATABASE_BACKEND env variable.
- * New installations use SQLite by default.
+ * Only includes migrations from v2.7.0 and later.
  */
 export const migrations: Migration[] = [
-  convertOpenRouterProfilesMigration,
-  enableProviderPluginsMigration,
-  // Phase 3: MongoDB + S3 Migration System (MongoDB migrations for legacy support)
-  validateMongoDBConfigMigration,
-  validateS3ConfigMigration,
-  migrateJsonToMongoDBMigration,
-  migrateFilesToS3Migration,
-  // Data integrity migrations
-  ensureUserUsernamesMigration,
-  inheritFileTagsMigration,
-  migrateCharacterSystemPromptsMigration,
-  migrateTagStylesToTagsMigration,
-  // Plugin system migrations
-  removeQuilltapRPBuiltinMigration,
-  // Character unification
-  migratePersonasToCharactersMigration,
-  // Multi-character chat migrations
-  addMultiCharacterFieldsMigration,
-  addInterCharacterMemoryFieldsMigration,
-  // Token usage tracking
-  addTokenTrackingFieldsMigration,
   // Web search decoupling
   addUseNativeWebSearchFieldMigration,
-  // S3 key restructuring
-  restructureS3KeysMigration,
-  // Memory aboutCharacterId population
-  populateMemoryAboutCharacterIdsMigration,
   // Mount points migration
   createMountPointsMigration,
-  // Per-project mount points
-  perProjectMountPointsMigration,
-  // Folder entities migration
-  createFolderEntitiesMigration,
-  // Fix orphan PERSONA participants
-  fixOrphanPersonaParticipantsMigration,
   // Fix missing storage keys
   fixMissingStorageKeysMigration,
+  // Fix orphan PERSONA participants
+  fixOrphanPersonaParticipantsMigration,
   // Cleanup orphan file records
   cleanupOrphanFileRecordsMigration,
   // LLM logs collection
@@ -110,46 +57,21 @@ export const migrations: Migration[] = [
   sqliteInitialSchemaMigration,
   // Centralized data directory migration
   migrateToCentralizedDataDirMigration,
-];
-
-export {
-  convertOpenRouterProfilesMigration,
-  enableProviderPluginsMigration,
-  // Phase 3: MongoDB + S3 Migration System
-  validateMongoDBConfigMigration,
-  validateS3ConfigMigration,
-  migrateJsonToMongoDBMigration,
-  migrateFilesToS3Migration,
-  // Data integrity migrations
-  ensureUserUsernamesMigration,
-  inheritFileTagsMigration,
-  migrateCharacterSystemPromptsMigration,
-  migrateTagStylesToTagsMigration,
-  // Plugin system migrations
-  removeQuilltapRPBuiltinMigration,
-  // Character unification
-  migratePersonasToCharactersMigration,
-  // Multi-character chat migrations
-  addMultiCharacterFieldsMigration,
-  addInterCharacterMemoryFieldsMigration,
-  // Token usage tracking
-  addTokenTrackingFieldsMigration,
-  // Web search decoupling
-  addUseNativeWebSearchFieldMigration,
-  // S3 key restructuring
-  restructureS3KeysMigration,
-  // Memory aboutCharacterId population
-  populateMemoryAboutCharacterIdsMigration,
-  // Mount points migration
-  createMountPointsMigration,
   // Per-project mount points
   perProjectMountPointsMigration,
   // Folder entities migration
   createFolderEntitiesMigration,
-  // Fix orphan PERSONA participants
-  fixOrphanPersonaParticipantsMigration,
+];
+
+export {
+  // Web search decoupling
+  addUseNativeWebSearchFieldMigration,
+  // Mount points migration
+  createMountPointsMigration,
   // Fix missing storage keys
   fixMissingStorageKeysMigration,
+  // Fix orphan PERSONA participants
+  fixOrphanPersonaParticipantsMigration,
   // Cleanup orphan file records
   cleanupOrphanFileRecordsMigration,
   // LLM logs collection
@@ -158,4 +80,8 @@ export {
   sqliteInitialSchemaMigration,
   // Centralized data directory migration
   migrateToCentralizedDataDirMigration,
+  // Per-project mount points
+  perProjectMountPointsMigration,
+  // Folder entities migration
+  createFolderEntitiesMigration,
 };
