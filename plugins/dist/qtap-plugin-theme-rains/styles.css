@@ -639,6 +639,12 @@
   border: 1px solid hsl(330 60% 50% / 0.4);
 }
 
+[data-theme="rains"] .qt-badge-project {
+  background: hsl(185 35% 14%);
+  color: hsl(185 80% 70%);
+  border: 1px solid hsl(185 60% 45% / 0.4);
+}
+
 /* Dashboard count badges */
 [data-theme="rains"] .qt-badge-characters {
   background: hsl(210 35% 15%);

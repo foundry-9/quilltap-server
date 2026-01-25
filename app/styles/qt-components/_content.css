@@ -42,6 +42,7 @@
   .qt-badge-chat,
   .qt-badge-tag,
   .qt-badge-memory,
+  .qt-badge-project,
   .qt-badge-characters,
   .qt-badge-chats,
   .qt-badge-personas,
@@ -997,6 +998,14 @@
   .qt-badge-memory {
     background-color: var(--qt-badge-memory-bg);
     color: var(--qt-badge-memory-fg);
+  }
+
+  /**
+   * Project badge (teal)
+   */
+  .qt-badge-project {
+    background-color: var(--qt-badge-project-bg);
+    color: var(--qt-badge-project-fg);
   }
 
   /* ==========================================================================

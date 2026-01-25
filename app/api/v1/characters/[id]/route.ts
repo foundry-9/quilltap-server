@@ -131,17 +131,27 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         // Get chats with this character
         const allChats = await repos.chats.findByCharacterId(id);
 
-        // Filter by user and sort by updatedAt descending
-        let userChats = allChats
-          .filter((chat) => chat.userId === user.id)
-          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        // Filter by user
+        const userChats = allChats.filter((chat) => chat.userId === user.id);
 
-        // Pre-fetch messages for search if needed, and for enrichment
+        // Pre-fetch messages for search, enrichment, and sorting by last message
         const chatsWithMessages = await Promise.all(
           userChats.map(async (chat) => {
             const allMessages = await repos.chats.getMessages(chat.id);
-            return { chat, messages: allMessages };
+            // Calculate the timestamp of the last message
+            const messageTimestamps = allMessages
+              .filter((msg) => msg.type === 'message')
+              .map((msg) => new Date(msg.createdAt).getTime());
+            const lastMessageAt = messageTimestamps.length > 0
+              ? new Date(Math.max(...messageTimestamps)).toISOString()
+              : chat.updatedAt; // Fallback to chat updatedAt if no messages
+            return { chat, messages: allMessages, lastMessageAt };
           })
+        );
+
+        // Sort by last message timestamp descending
+        chatsWithMessages.sort((a, b) =>
+          new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
         );
 
         // Apply search filter if provided
@@ -162,9 +172,27 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         // Apply pagination
         const paginatedChats = filteredChats.slice(offset, offset + limit);
 
+        // Collect unique project IDs from chats
+        const projectIds = new Set<string>();
+        for (const { chat } of paginatedChats) {
+          if (chat.projectId) {
+            projectIds.add(chat.projectId);
+          }
+        }
+
+        // Fetch all projects at once
+        const projectMap = new Map<string, { id: string; name: string }>();
+        for (const projectId of projectIds) {
+          const project = await repos.projects.findById(projectId);
+          if (project) {
+            projectMap.set(projectId, { id: project.id, name: project.name });
+          }
+        }
+        logger.debug('[Characters v1] Fetched projects for chats', { projectCount: projectMap.size });
+
         // Enrich chats with related data
         const enrichedChats = await Promise.all(
-          paginatedChats.map(async ({ chat, messages }) => {
+          paginatedChats.map(async ({ chat, messages, lastMessageAt }) => {
             // Get tags
             const tagData = await Promise.all(
               (chat.tags || []).map(async (tagId) => {
@@ -189,15 +217,20 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
                 createdAt: msg.createdAt,
               }));
 
+            // Get project info if chat belongs to a project
+            const project = chat.projectId ? projectMap.get(chat.projectId) || null : null;
+
             return {
               id: chat.id,
               title: chat.title,
               createdAt: chat.createdAt,
               updatedAt: chat.updatedAt,
+              lastMessageAt,
               character: {
                 id: character.id,
                 name: character.name,
               },
+              project,
               messages: recentMessages,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
               _count: {

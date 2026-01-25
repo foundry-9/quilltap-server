@@ -429,10 +429,26 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Update browser tab title with chat name
   useDocumentTitle(chat?.title ?? null)
 
-  // Set project link and cost summary in toolbar
+  // Get non-user-controlled characters for header display
+  const llmCharacters = useMemo(() => {
+    if (!chat?.participants) return []
+    return chat.participants
+      .filter(p => p.type === 'CHARACTER' && p.controlledBy === 'llm' && p.character)
+      .map(p => p.character!)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [chat?.participants])
+
+  // Set project link, character links, and title in toolbar
   const { setLeftContent, setRightContent } = usePageToolbar()
   useEffect(() => {
     if (chat?.title) {
+      const getCharacterAvatarUrl = (character: CharacterData): string | null => {
+        if (character.defaultImage?.url) return character.defaultImage.url
+        if (character.defaultImage?.filepath) return character.defaultImage.filepath.startsWith('/') ? character.defaultImage.filepath : `/${character.defaultImage.filepath}`
+        if (character.avatarUrl) return character.avatarUrl.startsWith('/') ? character.avatarUrl : `/${character.avatarUrl}`
+        return null
+      }
+
       setLeftContent(
         <div className="hidden md:flex items-center gap-2 text-sm min-w-0">
           {chat.projectId && chat.projectName && (
@@ -449,6 +465,33 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               <span className="qt-text-muted">/</span>
             </>
           )}
+          {llmCharacters.map((character) => {
+            const avatarUrl = getCharacterAvatarUrl(character)
+            return (
+              <span key={character.id} className="contents">
+                <a
+                  href={`/characters/${character.id}/view?tab=conversations`}
+                  className="inline-flex items-center gap-1.5 qt-text-secondary hover:text-foreground transition-colors flex-shrink-0"
+                >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt={character.name}
+                      className="w-5 h-5 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {character.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                  <span>{character.name}</span>
+                </a>
+                <span className="qt-text-muted">/</span>
+              </span>
+            )
+          })}
           <span className="qt-text-primary truncate" title={chat.title}>
             {chat.title}
           </span>
@@ -459,7 +502,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
     // Clear on unmount
     return () => setLeftContent(null)
-  }, [chat?.projectId, chat?.projectName, chat?.title, setLeftContent])
+  }, [chat?.projectId, chat?.projectName, chat?.title, llmCharacters, setLeftContent])
 
   // Set cost summary in toolbar right section
   useEffect(() => {

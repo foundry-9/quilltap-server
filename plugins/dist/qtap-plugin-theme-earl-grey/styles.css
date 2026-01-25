@@ -648,6 +648,11 @@
   color: hsl(330 70% 70%);
 }
 
+[data-theme="earl-grey"] .qt-badge-project {
+  background: hsl(185 40% 12%);
+  color: hsl(185 70% 65%);
+}
+
 /* Dashboard count badges */
 [data-theme="earl-grey"] .qt-badge-characters {
   background: hsl(211 40% 15%);

@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-theme-rains",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "description": "Rains theme plugin for Quilltap - Claude-inspired dark mode with warm greys and clay accent",
   "main": "index.js",
   "types": "index.d.ts",

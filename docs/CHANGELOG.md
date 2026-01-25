@@ -4,6 +4,15 @@
 
 ### 2.8-dev
 
+- feat: Enhanced conversation display and navigation in character pages and chat header (2026-01-25)
+  - Character conversations tab now shows project badge (teal) for chats that belong to a project
+  - Conversations are now sorted by last message timestamp instead of chat metadata updatedAt
+  - Timestamp display shows when the last message was sent, not when chat was last modified
+  - Chat header breadcrumb now shows LLM-controlled characters with small avatar and name links
+  - Character links in chat header navigate to that character's conversations tab
+  - Added `qt-badge-project` styling to qt-components (teal color scheme)
+  - Updated theme plugins (earl-grey, ocean, rains) with theme-appropriate project badge colors
+  - Bumped @quilltap/theme-storybook to 1.0.14 with project badge variables
 - fix: Implement missing v1 mount-point actions for project settings (2026-01-25)
   - Added `get-mount-point`, `set-mount-point`, `clear-mount-point` actions to `/api/v1/projects/[id]`
   - Updated SettingsCard.tsx to use v1 endpoints instead of deprecated `/api/projects/[id]/mount-point`

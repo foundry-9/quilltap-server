@@ -2,6 +2,12 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.14] - 2026-01-25
+
+### Added
+- Project badge CSS variables: `--qt-badge-project-bg`, `--qt-badge-project-fg` (teal color)
+- Dark mode overrides for project badge with improved contrast
+
 ## [1.0.13] - 2026-01-23
 
 ### Added
