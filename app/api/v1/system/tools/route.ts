@@ -15,6 +15,11 @@
  * GET /api/v1/system/tools?action=capabilities-report-list - List saved reports
  * GET /api/v1/system/tools?action=capabilities-report-get - Get a specific report
  * POST /api/v1/system/tools?action=capabilities-report-delete - Delete a specific report
+ * GET /api/v1/system/tools?action=database-status - Get current database backend status
+ * GET /api/v1/system/tools?action=migration-readiness - Check if migration is possible
+ * GET /api/v1/system/tools?action=migration-progress - Get current migration progress
+ * POST /api/v1/system/tools?action=start-migration - Start MongoDB to SQLite migration
+ * POST /api/v1/system/tools?action=switch-backend - Switch preferred database backend
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -31,6 +36,7 @@ import { generateAndSaveReport } from '@/lib/tools/capabilities-report';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import type { ExportEntityType } from '@/lib/export/types';
+import { getMigrationService } from '@/lib/database/migration';
 
 // ============================================================================
 // Helper Functions
@@ -897,6 +903,192 @@ async function handleCapabilitiesReportDelete(req: NextRequest, context: any) {
 }
 
 // ============================================================================
+// Database Migration Handlers
+// ============================================================================
+
+async function handleDatabaseStatus(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    logger.debug('[System Tools v1] GET database status', { userId: user.id });
+
+    const migrationService = getMigrationService();
+    const status = await migrationService.getDatabaseStatus();
+
+    return NextResponse.json({
+      currentBackend: status.currentBackend,
+      preferredBackend: status.preferredBackend,
+      mongoAvailable: status.mongoAvailable,
+      sqliteAvailable: status.sqliteAvailable,
+      health: status.health,
+    });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Error getting database status',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to get database status');
+  }
+}
+
+async function handleMigrationReadiness(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    logger.debug('[System Tools v1] GET migration readiness', { userId: user.id });
+
+    const migrationService = getMigrationService();
+    const readiness = await migrationService.checkReadiness('mongo-to-sqlite');
+
+    return NextResponse.json(readiness);
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Error checking migration readiness',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to check migration readiness');
+  }
+}
+
+async function handleMigrationProgress(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    logger.debug('[System Tools v1] GET migration progress', { userId: user.id });
+
+    const migrationService = getMigrationService();
+    const progress = migrationService.getProgress();
+
+    return NextResponse.json({
+      inProgress: migrationService.isMigrationInProgress(),
+      progress,
+    });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Error getting migration progress',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to get migration progress');
+  }
+}
+
+async function handleStartMigration(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    const body = await req.json();
+    const { direction } = body;
+
+    if (direction !== 'mongo-to-sqlite') {
+      return badRequest('Invalid direction. Currently only "mongo-to-sqlite" is supported.');
+    }
+
+    logger.info('[System Tools v1] Starting database migration', {
+      userId: user.id,
+      direction,
+    });
+
+    const migrationService = getMigrationService();
+
+    // Check if already in progress
+    if (migrationService.isMigrationInProgress()) {
+      return badRequest('A migration is already in progress');
+    }
+
+    // Start migration (this runs asynchronously)
+    const result = await migrationService.migrateToSQLite();
+
+    if (result.success) {
+      logger.info('[System Tools v1] Database migration completed', {
+        userId: user.id,
+        recordsMigrated: result.recordsMigrated,
+        collectionsMigrated: result.collectionsMigrated,
+        duration: result.duration,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Migration completed. Please restart the application to use the new database.',
+        result,
+      });
+    } else {
+      logger.error('[System Tools v1] Database migration failed', {
+        userId: user.id,
+        errors: result.errors,
+      });
+
+      return NextResponse.json({
+        success: false,
+        message: 'Migration failed',
+        result,
+      }, { status: 500 });
+    }
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Error starting migration',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to start migration');
+  }
+}
+
+async function handleSwitchBackend(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    const body = await req.json();
+    const { backend, confirm } = body;
+
+    if (backend !== 'mongodb') {
+      return badRequest('Invalid backend. Currently only "mongodb" switch-back is supported.');
+    }
+
+    // Require explicit confirmation
+    if (confirm !== 'I_UNDERSTAND_DATA_WILL_BE_LOST') {
+      return badRequest(
+        'Confirmation required. Send { "confirm": "I_UNDERSTAND_DATA_WILL_BE_LOST" } to confirm.'
+      );
+    }
+
+    logger.info('[System Tools v1] Switching database backend', {
+      userId: user.id,
+      backend,
+    });
+
+    const migrationService = getMigrationService();
+    const result = await migrationService.switchToMongoDB();
+
+    if (result.success) {
+      logger.info('[System Tools v1] Backend switched successfully', {
+        userId: user.id,
+        backend,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Backend preference updated. Please restart the application to apply changes.',
+      });
+    } else {
+      return NextResponse.json({
+        success: false,
+        error: result.error,
+      }, { status: 400 });
+    }
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Error switching backend',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to switch backend');
+  }
+}
+
+// ============================================================================
 // Request Handlers
 // ============================================================================
 
@@ -921,9 +1113,15 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, context) 
       return handleCapabilitiesReportList(req, context);
     case 'capabilities-report-get':
       return handleCapabilitiesReportGet(req, context);
+    case 'database-status':
+      return handleDatabaseStatus(req, context);
+    case 'migration-readiness':
+      return handleMigrationReadiness(req, context);
+    case 'migration-progress':
+      return handleMigrationProgress(req, context);
     default:
       return badRequest(
-        `Unknown action: ${action}. Available GET actions: tasks-queue, delete-data-preview, export-entities, export-preview, capabilities-report, capabilities-report-list, capabilities-report-get`
+        `Unknown action: ${action}. Available GET actions: tasks-queue, delete-data-preview, export-entities, export-preview, capabilities-report, capabilities-report-list, capabilities-report-get, database-status, migration-readiness, migration-progress`
       );
   }
 });
@@ -949,9 +1147,13 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, context)
       return handleCapabilitiesReportGenerate(req, context);
     case 'capabilities-report-delete':
       return handleCapabilitiesReportDelete(req, context);
+    case 'start-migration':
+      return handleStartMigration(req, context);
+    case 'switch-backend':
+      return handleSwitchBackend(req, context);
     default:
       return badRequest(
-        `Unknown action: ${action}. Available POST actions: delete-data, tasks-queue, export, import-preview, import-execute, capabilities-report-generate, capabilities-report-delete`
+        `Unknown action: ${action}. Available POST actions: delete-data, tasks-queue, export, import-preview, import-execute, capabilities-report-generate, capabilities-report-delete, start-migration, switch-backend`
       );
   }
 });

@@ -125,11 +125,36 @@ export function ensureDataDirectoryExists(dataDir?: string): void {
 /**
  * Detect the appropriate backend based on environment variables
  * Priority:
- * 1. Explicit DATABASE_BACKEND setting
- * 2. If MONGODB_URI is set, use MongoDB
- * 3. Default to SQLite
+ * 1. SQLite meta table preferred_backend (if SQLite file exists)
+ * 2. Explicit DATABASE_BACKEND setting
+ * 3. If MONGODB_URI is set, use MongoDB
+ * 4. Default to SQLite
  */
 export function detectBackend(): DatabaseBackendType {
+  // Check SQLite meta table first (if SQLite file exists)
+  // This allows users to switch backends via the UI without changing env vars
+  // Import is deferred to avoid circular dependency
+  try {
+    const { getPreferredBackend, sqliteDatabaseExists } = require('./meta');
+
+    if (sqliteDatabaseExists()) {
+      const preferredBackend = getPreferredBackend();
+      if (preferredBackend) {
+        logger.info('Using preferred backend from meta table', {
+          context: 'database.config',
+          backend: preferredBackend,
+        });
+        return preferredBackend;
+      }
+    }
+  } catch (error) {
+    // Meta module might not be available during testing or if SQLite isn't installed
+    logger.debug('Could not check meta table for preferred backend', {
+      context: 'database.config',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   const explicit = process.env.DATABASE_BACKEND?.toLowerCase();
 
   if (explicit === 'mongodb' || explicit === 'sqlite') {

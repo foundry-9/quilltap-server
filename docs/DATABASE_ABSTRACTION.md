@@ -189,6 +189,71 @@ The migration system supports both backends:
 
 On first run with SQLite, the `sqlite-initial-schema-v1` migration creates all required tables.
 
+## Data Migration
+
+### MongoDB to SQLite Migration
+
+Quilltap includes a built-in migration tool to move data from MongoDB to SQLite. This is useful for:
+- Simplifying deployments by removing MongoDB dependency
+- Reducing infrastructure costs
+- Moving to a single-file database
+
+#### Using the Migration Tool
+
+1. Go to **Tools** page in the Quilltap UI
+2. Find the **Database** card
+3. Click **Migrate to SQLite**
+4. Follow the wizard steps:
+   - Pre-flight checks verify both databases are accessible
+   - Review the data counts to be migrated
+   - Confirm and start the migration
+   - Wait for completion (progress is displayed)
+5. **Restart the application** to use SQLite
+
+#### What Gets Migrated
+
+All collections are migrated in dependency order:
+- Users, tags, provider models (no dependencies)
+- Account/session data, connection profiles, chat settings
+- Files, folders, mount points
+- Characters, prompt templates, roleplay templates
+- Chats, memories, messages
+- Background jobs, LLM logs, sync data
+
+#### Backend Preference
+
+The preferred backend is stored in SQLite's `quilltap_meta` table. This is checked **before** environment variables, allowing you to switch backends via the UI without changing your configuration.
+
+To clear the preference and revert to auto-detection, use the **Switch Back to MongoDB** option (with confirmation).
+
+#### Important Notes
+
+- Migration copies data; MongoDB is not modified
+- After migration, new data is only written to SQLite
+- Switching back to MongoDB will **lose** any data created in SQLite after migration
+- Large databases may take several minutes to migrate
+
+### API Endpoints
+
+| Action | Method | Description |
+|--------|--------|-------------|
+| `database-status` | GET | Current backend, availability, health |
+| `migration-readiness` | GET | Pre-flight checks and record counts |
+| `migration-progress` | GET | Current migration progress (if running) |
+| `start-migration` | POST | Begin MongoDB→SQLite migration |
+| `switch-backend` | POST | Change preferred backend (with confirmation) |
+
+Example:
+```bash
+# Check database status
+curl -X GET 'https://localhost:3000/api/v1/system/tools?action=database-status'
+
+# Start migration
+curl -X POST 'https://localhost:3000/api/v1/system/tools?action=start-migration' \
+  -H 'Content-Type: application/json' \
+  -d '{"direction": "mongo-to-sqlite"}'
+```
+
 ## Current Status
 
 ### Implemented
@@ -201,17 +266,12 @@ On first run with SQLite, the `sqlite-initial-schema-v1` migration creates all r
 - ✅ JSON column support for SQLite
 - ✅ Migration system multi-backend support
 - ✅ Docker configuration for both backends
-
-### In Progress
-
-- 🔄 Repository migration to abstraction layer
-  - Existing MongoDB repositories work unchanged
-  - New repositories can use AbstractBaseRepository
+- ✅ All 25 repositories migrated to abstraction layer
+- ✅ MongoDB to SQLite migration tool
 
 ### Future Work
 
-- ⏳ Migrate all 28 repositories to abstraction layer
-- ⏳ Data migration tool (MongoDB ↔ SQLite)
+- ⏳ SQLite to MongoDB migration (reverse migration)
 - ⏳ Vector search for SQLite (via external plugin)
 
 ## SQLite Considerations

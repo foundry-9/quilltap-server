@@ -4,6 +4,16 @@
 
 ### 2.8-dev
 
+- feat: MongoDB to SQLite migration tool (2026-01-25)
+  - Added Database card to Tools page for managing database backend
+  - Migration wizard with pre-flight checks, progress tracking, and verification
+  - Support for switching preferred backend via UI (stored in SQLite meta table)
+  - Backend preference checked at startup before env vars
+  - Migration service copies all collections with dependency ordering
+  - Switch-back to MongoDB with data loss warning and confirmation
+  - API endpoints: `database-status`, `migration-readiness`, `migration-progress`, `start-migration`, `switch-backend`
+  - Unit tests for meta table and migration service modules
+  - See `docs/DATABASE_ABSTRACTION.md` for usage instructions
 - feat: Upgrade Zod from v3 to v4 (2026-01-24)
   - Updated zod from ^3.23.0 to ^4.0.0 (installed 4.3.6)
   - Removed zod-to-json-schema dependency (now using native z.toJSONSchema())
