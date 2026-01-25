@@ -1,7 +1,7 @@
 /**
  * Backup Service
  *
- * Creates complete user data backups by collecting all user data from MongoDB
+ * Creates complete user data backups by collecting all user data from the database
  * and S3, then packaging it into a ZIP archive.
  */
 
@@ -20,7 +20,7 @@ const APP_VERSION = process.env.npm_package_version || '2.0.0';
 const moduleLogger = logger.child({ module: 'backup:backup-service' });
 
 /**
- * Collects all user data from MongoDB repositories
+ * Collects all user data from database repositories
  */
 async function collectUserData(userId: string): Promise<Omit<BackupData, 'manifest'>> {
   const repos = getUserRepositories(userId);
@@ -290,7 +290,7 @@ export async function saveBackupToS3(
   // Calculate SHA256 hash
   const sha256 = createHash('sha256').update(new Uint8Array(zipBuffer)).digest('hex');
 
-  // Create file metadata entry in MongoDB so backups appear in listings
+  // Create file metadata entry in the database so backups appear in listings
   // Note: userId is automatically added by the user-scoped repository
   const repos = getUserRepositories(userId);
   await repos.files.create(

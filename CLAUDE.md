@@ -13,7 +13,7 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
 - **Language**: TypeScript
 - **Package Manager**: npm
 - **Testing**: Jest and coverage tools (Istanbul/nyc), Playwright
-- **Data Storage**: SQLite (default) or MongoDB via database abstraction layer. New installations use SQLite with zero external dependencies; MongoDB remains available for existing deployments. Uses native drivers directly (`better-sqlite3`, MongoDB driver), NOT Prisma or Mongoose. Data models are defined as TypeScript interfaces with Zod schemas.
+- **Data Storage**: SQLite with zero external dependencies. Uses `better-sqlite3` driver directly, NOT Prisma or Mongoose. Data models are defined as TypeScript interfaces with Zod schemas.
 - **File Storage**: S3-compatible storage (embedded MinIO for development, external S3 for production)
 - **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
 - **Cloud Services**: AWS first
@@ -142,10 +142,10 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
 - I am developing this in macOS, so take BSD versions of tools into account, and the fact that I have installed homebrew's coreutils and gnu-sed so that you can use GNU versions of things with "g"-prefixed utilities if you need them.
 - I am using "npm run devssl" to work on this while we're working, so the base URL is probably `https://localhost:3000/` if you want to try something.
 - You should track what's going on with the running "npm run devssl" process, which is nearly always running while we're working on this, by tailing or searching the `logs/combined.log` file. You can figure out what time it is (I think it's using universal time, not local time), and then look for things that we just tried by working through that log.
-- To access MongoDB directly via Docker, use: `docker exec f9-quilltap-mongo-1 mongosh quilltap --quiet --eval "YOUR_QUERY_HERE"`. Examples:
-  - List documents: `docker exec f9-quilltap-mongo-1 mongosh quilltap --quiet --eval "db.COLLECTION.find().toArray()"`
-  - Delete documents: `docker exec f9-quilltap-mongo-1 mongosh quilltap --quiet --eval "db.COLLECTION.deleteMany({})"`
-  - Query with filter: `docker exec f9-quilltap-mongo-1 mongosh quilltap --quiet --eval "db.COLLECTION.find({field: 'value'}).toArray()"`
+- To access SQLite directly, use: `sqlite3 /path/to/quilltap.db`. Examples:
+  - List tables: `sqlite3 /path/to/quilltap.db ".tables"`
+  - Check record count: `sqlite3 /path/to/quilltap.db "SELECT COUNT(*) FROM TABLENAME;"`
+  - Query with filter: `sqlite3 /path/to/quilltap.db "SELECT * FROM TABLENAME WHERE field = 'value';"`
 - This is built in Next.js 15+, so don't look in middleware.ts, but consider proxy.ts, for things you would expect there.
 - When creating or modifying API routes, always use the `/api/v1/` structure with action dispatch patterns. Don't create new routes outside `/api/v1/`. Use the middleware from `@/lib/api/middleware` and response helpers from `@/lib/api/responses`.
 - If asked to fix linting errors, do not change out HTML `<img>` tags for Next.js `<Image>` tags; there is a reason that we don't use them sometimes, usually related to their being pulled in via APIs so Next.js can't know what it's going to display.

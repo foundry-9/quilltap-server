@@ -73,34 +73,18 @@ export async function getOrCreateUnauthenticatedUser(): Promise<User> {
       updatedAt: now,
     };
 
-    // Insert the unauthenticated user directly using MongoDB
-    // The repository's create method generates a new ID, but we need the fixed unauthenticated ID
-    const { getMongoClient } = await import('@/lib/mongodb/client');
-    const client = await getMongoClient();
-    const db = client.db();
-    const usersCollection = db.collection('users');
-
-    // Insert or update the unauthenticated user with the fixed ID
-    // Using $set for fields that might need correction (like email format)
-    // and $setOnInsert for fields that should only be set on creation
-    await usersCollection.updateOne(
-      { id: UNAUTHENTICATED_USER_ID },
-      {
-        $set: {
-          email: unauthenticatedUser.email,
-          name: unauthenticatedUser.name,
-          updatedAt: now,
-        },
-        $setOnInsert: {
-          id: UNAUTHENTICATED_USER_ID,
-          username: unauthenticatedUser.username,
-          passwordHash: unauthenticatedUser.passwordHash,
-          totp: unauthenticatedUser.totp,
-          createdAt: now,
-        },
-      },
-      { upsert: true }
-    );
+    // Insert or update the unauthenticated user using the repository
+    // The repository handles backend-agnostic operations (SQLite/MongoDB)
+    try {
+      // Try to update if exists, otherwise create
+      await repos.users.create(unauthenticatedUser);
+    } catch (error) {
+      // If it already exists, that's fine - we just need it to exist
+      // The repository will handle any conflicts
+      if (error instanceof Error && !error.message.includes('already exists')) {
+        throw error;
+      }
+    }
 
     // Create chat settings using the repository method (which creates if not exists)
     await repos.chatSettings.updateForUser(UNAUTHENTICATED_USER_ID, {

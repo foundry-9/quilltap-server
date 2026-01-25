@@ -10,9 +10,6 @@ const envSchema = z
     // Node environment
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-    // Database (legacy - no longer used, MongoDB is required)
-    DATABASE_URL: z.url().optional(),
-
     // Base URL for the application (used for OAuth callbacks, etc.)
     BASE_URL: z.url().optional().default('http://localhost:3000'),
 
@@ -50,19 +47,6 @@ const envSchema = z
     DOMAIN: z.string().optional(),
     SSL_EMAIL: z.email().optional(),
 
-    // Data Backend Configuration
-    // Valid values: 'sqlite' (default for new installations) or 'mongodb'
-    // NOTE: Legacy DATA_BACKEND env var is deprecated - use DATABASE_BACKEND instead
-    DATABASE_BACKEND: z.enum(['sqlite', 'mongodb']).optional().default('sqlite'),
-
-    // MongoDB Configuration (required when DATABASE_BACKEND is 'mongodb')
-    MONGODB_URI: z.string().optional(),
-    MONGODB_DATABASE: z.string().optional().default('quilltap'),
-    MONGODB_MODE: z.enum(['external', 'embedded']).optional().default('external'),
-    MONGODB_DATA_DIR: z.string().optional().default('/data/mongodb'),
-    MONGODB_CONNECTION_TIMEOUT_MS: z.string().regex(/^\d+$/).optional(),
-    MONGODB_MAX_POOL_SIZE: z.string().regex(/^\d+$/).optional(),
-
     // File Storage Configuration
     // Base directory for all Quilltap data (database, files, logs)
     // Platform defaults: Linux: ~/.quilltap, macOS: ~/Library/Application Support/Quilltap, Windows: %APPDATA%\Quilltap
@@ -84,19 +68,6 @@ const envSchema = z
     S3_PUBLIC_URL: z.url().optional(),
     S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).optional(),
   })
-  .refine(
-    (data) => {
-      // MongoDB URI is required when DATABASE_BACKEND is 'mongodb'
-      if (data.DATABASE_BACKEND === 'mongodb' && !data.MONGODB_URI) {
-        return false;
-      }
-      return true;
-    },
-    {
-      path: ['MONGODB_URI'],
-        error: 'MONGODB_URI is required when DATABASE_BACKEND is mongodb'
-    }
-  )
   .refine(
     (data) => {
       // S3 configuration validation for external mode
@@ -142,11 +113,6 @@ export function validateEnv(): Env {
       NODE_ENV: process.env.NODE_ENV || 'production',
       BASE_URL: process.env.BASE_URL || 'http://localhost:3000',
       ENCRYPTION_MASTER_PEPPER: process.env.ENCRYPTION_MASTER_PEPPER || 'build-time-placeholder-pepper-value',
-      MONGODB_URI: process.env.MONGODB_URI,
-      MONGODB_DATABASE: 'quilltap',
-      MONGODB_MODE: 'external',
-      MONGODB_DATA_DIR: '/data/mongodb',
-      DATABASE_BACKEND: 'sqlite',
       QUILLTAP_FILE_STORAGE_PATH: './data/files',
       S3_MODE: 'disabled',
       S3_REGION: 'us-east-1',
@@ -223,18 +189,14 @@ function extractHostname(urlString: string | undefined): string | null {
     const url = new URL(urlString);
     return url.hostname;
   } catch {
-    // For MongoDB URIs, try a simple extraction
-    // mongodb://hostname:port or mongodb+srv://hostname
-    const match = urlString.match(/mongodb(?:\+srv)?:\/\/(?:[^:@]+(?::[^@]+)?@)?([^:/?]+)/);
-    return match ? match[1] : null;
+    return null;
   }
 }
 
 /**
  * Check if the deployment is user-managed (locally hosted)
  *
- * A deployment is considered "user-managed" if either:
- * - The MongoDB URI points to localhost/127.0.0.1 or is in embedded mode
+ * A deployment is considered "user-managed" if:
  * - The S3 endpoint points to localhost/127.0.0.1 or is in embedded mode
  *
  * This is useful for determining whether to show development/admin features,
@@ -243,17 +205,6 @@ function extractHostname(urlString: string | undefined): string | null {
  * @returns true if the deployment appears to be locally/self-managed
  */
 export function checkIsUserManaged(): boolean {
-  // Check MongoDB - embedded mode or localhost URI means user-managed
-  const mongodbMode = env.MONGODB_MODE;
-  if (mongodbMode === 'embedded') {
-    return true;
-  }
-
-  const mongoHostname = extractHostname(env.MONGODB_URI);
-  if (mongoHostname && isLocalHostname(mongoHostname)) {
-    return true;
-  }
-
   // Check S3 - embedded mode or localhost endpoint means user-managed
   const s3Mode = env.S3_MODE;
   if (s3Mode === 'embedded') {
@@ -270,6 +221,6 @@ export function checkIsUserManaged(): boolean {
 
 /**
  * Whether the deployment is user-managed (locally hosted)
- * True if either database or file storage is running locally
+ * True if file storage is running locally
  */
 export const isUserManaged = checkIsUserManaged();

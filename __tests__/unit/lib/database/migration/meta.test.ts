@@ -163,19 +163,14 @@ describe('Database Meta Table Module', () => {
   });
 
   describe('getPreferredBackend', () => {
-    it('should return null, mongodb, or sqlite', async () => {
+    it('should return null or sqlite', async () => {
       const { getPreferredBackend } = await import('@/lib/database/meta');
       const result = getPreferredBackend();
-      expect(result === null || result === 'mongodb' || result === 'sqlite').toBe(true);
+      expect(result === null || result === 'sqlite').toBe(true);
     });
   });
 
   describe('setPreferredBackend', () => {
-    it('should accept mongodb as backend', async () => {
-      const { setPreferredBackend } = await import('@/lib/database/meta');
-      expect(() => setPreferredBackend('mongodb')).not.toThrow();
-    });
-
     it('should accept sqlite as backend', async () => {
       const { setPreferredBackend } = await import('@/lib/database/meta');
       expect(() => setPreferredBackend('sqlite')).not.toThrow();
@@ -197,19 +192,9 @@ describe('Database Meta Table Module', () => {
   });
 
   describe('recordMigration', () => {
-    it('should accept mongo-to-sqlite direction', async () => {
-      const { recordMigration } = await import('@/lib/database/meta');
-      expect(() => recordMigration('mongo-to-sqlite')).not.toThrow();
-    });
-
-    it('should accept sqlite-to-mongo direction', async () => {
-      const { recordMigration } = await import('@/lib/database/meta');
-      expect(() => recordMigration('sqlite-to-mongo')).not.toThrow();
-    });
-
     it('should return a boolean', async () => {
       const { recordMigration } = await import('@/lib/database/meta');
-      const result = recordMigration('mongo-to-sqlite');
+      const result = recordMigration('sqlite-to-sqlite');
       expect(typeof result).toBe('boolean');
     });
   });

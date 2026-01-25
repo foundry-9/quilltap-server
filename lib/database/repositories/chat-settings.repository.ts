@@ -2,7 +2,7 @@
  * Chat Settings Repository
  *
  * Backend-agnostic repository for ChatSettings entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  */
 
 import { logger } from '@/lib/logger';

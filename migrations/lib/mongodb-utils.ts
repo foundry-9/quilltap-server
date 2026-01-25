@@ -4,6 +4,16 @@
  * Self-contained MongoDB configuration validation and connection testing.
  * This module is separate from the main app's MongoDB client to ensure
  * migrations can run before the full app is initialized.
+ *
+ * PURPOSE: This module supports the standalone migration CLI tool
+ * (scripts/mongo-to-sqlite-cli.js) which allows existing MongoDB deployments
+ * to migrate their data to SQLite. It is also used by the legacy MongoDB
+ * migrations during app startup (though these only run if explicitly enabled
+ * via DATABASE_BACKEND=mongodb).
+ *
+ * The mongodb package is an optional dependency, so if MongoDB is not needed,
+ * this module can be safely required without the dependency being installed.
+ * It gracefully handles the case where MongoDB is not enabled.
  */
 
 import { MongoClient, Db } from 'mongodb';

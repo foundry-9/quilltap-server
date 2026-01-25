@@ -2,7 +2,7 @@
  * Abstract Base Repository
  *
  * Backend-agnostic base class for repositories that works with
- * both MongoDB and SQLite through the database abstraction layer.
+ * SQLite through the database abstraction layer.
  */
 
 import { z } from 'zod';

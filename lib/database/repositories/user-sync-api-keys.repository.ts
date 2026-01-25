@@ -2,7 +2,7 @@
  * User Sync API Keys Repository
  *
  * Backend-agnostic repository for UserSyncApiKey entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  * Manages API keys for authenticating sync requests from remote instances.
  */
 

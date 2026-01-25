@@ -41,20 +41,18 @@ let migrationWaitComplete = false;
 
 /**
  * Get the configured data backend
- * @returns The configured backend type ('mongodb' or 'sqlite')
+ * @returns The configured backend type ('sqlite')
  */
-export function getDataBackend(): 'mongodb' | 'sqlite' {
-  const config = getDatabaseConfig();
-  return config.backend;
+export function getDataBackend(): 'sqlite' {
+  return 'sqlite';
 }
 
 /**
  * Check if MongoDB is the active backend
- * @returns True if using MongoDB backend
+ * @returns False - MongoDB is no longer supported
  */
 export function isMongoDBEnabled(): boolean {
-  const backend = getDataBackend();
-  return backend === 'mongodb';
+  return false;
 }
 
 /**
@@ -63,9 +61,6 @@ export function isMongoDBEnabled(): boolean {
  * With the new migration system, migrations run in instrumentation.ts
  * BEFORE the server starts accepting any requests. If migrations fail,
  * the process exits immediately.
- *
- * This function checks the MongoDB migration state directly because the
- * in-memory startupState isn't shared across worker processes.
  */
 async function ensureMigrationsComplete(): Promise<void> {
   // Only check once per process
@@ -79,24 +74,9 @@ async function ensureMigrationsComplete(): Promise<void> {
     return;
   }
 
-  // In multi-worker setups, the instrumentation.ts runs in a different process
-  // than the request handlers. Check MongoDB migration state directly.
-  try {
-    const { loadMigrationState } = await import('../../migrations/state');
-    const mongoState = await loadMigrationState();
-
-    // If we have completed migrations recorded in MongoDB, we're good
-    if (mongoState.completedMigrations && mongoState.completedMigrations.length > 0) {
-      migrationWaitComplete = true;
-      return;
-    }
-  } catch (error) {
-    // If we can't check MongoDB state, fall back to in-memory check
-  }
-
   // Fall back to the in-memory wait for edge cases
   const phase = startupState.getPhase();
-  if (phase === 'pending' || phase === 'migrations' || phase === 'mongodb' || phase === 'plugins') {
+  if (phase === 'pending' || phase === 'migrations' || phase === 'plugins') {
     logger.info('Waiting for migrations to complete before serving data', {
       context: 'repository-factory.ensureMigrationsComplete',
       currentPhase: phase,
@@ -150,7 +130,7 @@ export function getRepositories(): RepositoryContainer {
  *
  * Use this for API routes and other request handlers.
  *
- * @returns Promise<RepositoryContainer> for MongoDB backend
+ * @returns Promise<RepositoryContainer> for SQLite backend
  */
 export async function getRepositoriesSafe(): Promise<RepositoryContainer> {
   // Safety check - migrations should already be complete

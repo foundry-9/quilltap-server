@@ -58,11 +58,16 @@ import { migrateToCentralizedDataDirMigration } from './migrate-to-centralized-d
 /**
  * All available migrations.
  * Order here doesn't matter - migrations will be sorted by dependencies.
+ *
+ * MongoDB migrations (validateMongoDBConfigMigration, migrateJsonToMongoDBMigration) are
+ * included for backward compatibility with existing MongoDB deployments. They will only
+ * run if the MongoDB backend is explicitly enabled via DATABASE_BACKEND env variable.
+ * New installations use SQLite by default.
  */
 export const migrations: Migration[] = [
   convertOpenRouterProfilesMigration,
   enableProviderPluginsMigration,
-  // Phase 3: MongoDB + S3 Migration System
+  // Phase 3: MongoDB + S3 Migration System (MongoDB migrations for legacy support)
   validateMongoDBConfigMigration,
   validateS3ConfigMigration,
   migrateJsonToMongoDBMigration,

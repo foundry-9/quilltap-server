@@ -18,12 +18,24 @@ instrumentation.ts
     │   ├── Execute pending migrations
     │   └── If failure: process.exit(1)
     │
-    ├── Initialize MongoDB
+    ├── Initialize Database (SQLite or legacy MongoDB)
     ├── Initialize Plugins
     └── Initialize File Storage
 ```
 
 **Critical**: If migrations fail, the server exits immediately. This prevents serving requests with incompatible data formats.
+
+## Database Backend
+
+**Default**: SQLite (zero external dependencies)
+- New installations use SQLite by default
+- No configuration required
+- Migrations run automatically on startup
+
+**Legacy**: MongoDB (for existing deployments)
+- Set `DATABASE_BACKEND=mongodb` environment variable to use MongoDB
+- MongoDB-specific migrations (validate-mongodb-config, migrate-json-to-mongodb) only run when MongoDB is explicitly enabled
+- For migrations from MongoDB to SQLite, use the standalone CLI tool: `scripts/mongo-to-sqlite-cli.js`
 
 ## Directory Structure
 
@@ -198,17 +210,21 @@ logger.error('Migration failed', {
 
 ## Current Migrations
 
-| ID | Description | Dependencies |
-|----|-------------|--------------|
-| convert-openrouter-profiles-v1 | Convert old OpenRouter profile format | None |
-| enable-provider-plugins-v1 | Enable required provider plugins | convert-openrouter-profiles-v1 |
-| validate-mongodb-config-v1 | Validate MongoDB configuration | None |
-| validate-s3-config-v1 | Validate S3 configuration | None |
-| migrate-json-to-mongodb-v1 | Migrate JSON data to MongoDB | validate-mongodb-config-v1 |
-| migrate-files-to-s3-v1 | Migrate files to S3 storage | validate-s3-config-v1, migrate-json-to-mongodb-v1 |
-| ... | ... | ... |
+| ID | Description | For | Dependencies |
+|----|-------------|-----|--------------|
+| convert-openrouter-profiles-v1 | Convert old OpenRouter profile format | All | None |
+| enable-provider-plugins-v1 | Enable required provider plugins | All | convert-openrouter-profiles-v1 |
+| validate-mongodb-config-v1 | Validate MongoDB configuration | Legacy MongoDB | None |
+| validate-s3-config-v1 | Validate S3 configuration | All | None |
+| migrate-json-to-mongodb-v1 | Migrate JSON data to MongoDB | Legacy MongoDB | validate-mongodb-config-v1 |
+| migrate-files-to-s3-v1 | Migrate files to S3 storage | All | validate-s3-config-v1, migrate-json-to-mongodb-v1 |
+| sqlite-initial-schema-v1 | Create SQLite database schema | SQLite (Default) | None |
+| ... | ... | ... | ... |
 
-See `migrations/scripts/index.ts` for the complete list.
+**Notes**:
+- **Legacy MongoDB migrations** only run if `DATABASE_BACKEND=mongodb` is set
+- **SQLite** migrations run on all default installations
+- See `migrations/scripts/index.ts` for the complete list
 
 ## Previous System
 

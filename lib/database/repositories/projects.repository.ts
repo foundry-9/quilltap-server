@@ -2,7 +2,7 @@
  * Projects Repository
  *
  * Backend-agnostic repository for Project entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  *
  * Handles CRUD operations and queries for Project entities with support for
  * character roster management and mount point operations.

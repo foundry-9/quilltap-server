@@ -73,7 +73,7 @@ quilltap/
 ### Prerequisites
 
 - **Node.js 22+**
-- **MongoDB** (local or via Docker)
+- **SQLite** (automatic with better-sqlite3)
 - **MinIO or S3-compatible storage** (embedded MinIO for development)
 
 ### Running Locally
@@ -85,8 +85,8 @@ npm install
 # Build plugins (required before first run)
 npm run build:plugins
 
-# Start MongoDB and MinIO via Docker (recommended)
-docker-compose -f docker-compose.dev-mongo.yml up -d mongo minio createbuckets
+# Start MinIO via Docker (recommended for file storage)
+docker-compose -f docker-compose.sqlite.yml up -d minio createbuckets
 
 # Start the development server with HTTPS
 npm run devssl
@@ -100,11 +100,11 @@ The application will be available at [https://localhost:3000](https://localhost:
 ### Running with Docker
 
 ```bash
-# Start everything (app + MongoDB + MinIO)
-docker-compose -f docker-compose.dev-mongo.yml up
+# Start everything (app + MinIO + SQLite)
+docker-compose -f docker-compose.sqlite.yml up
 
 # View logs
-docker-compose -f docker-compose.dev-mongo.yml logs -f app
+docker-compose -f docker-compose.sqlite.yml logs -f app
 ```
 
 ### Testing
@@ -162,12 +162,11 @@ When making changes to a plugin, bump the patch version in its `package.json` an
 
 ## Data Storage
 
-### MongoDB (Required)
+### SQLite Database
 
-All application data is stored in MongoDB:
+All application data is stored in SQLite:
 
 - **users** - User accounts and authentication
-- **api_keys** - Encrypted provider API keys
 - **characters** - Character definitions and metadata (includes `controlledBy: 'llm' | 'user'` for control mode)
 - **chats** - Chat metadata, message history, and impersonation state
 - **files** - File metadata (actual files in S3)
@@ -179,6 +178,8 @@ All application data is stored in MongoDB:
 - **promptTemplates** - User-created system prompt templates
 - **roleplayTemplates** - Roleplay format templates
 - **providerModels** - Cached provider model lists
+
+The SQLite database file is stored at `~/.quilltap/data/quilltap.db` on local systems or `/app/quilltap/data/quilltap.db` in Docker.
 
 ### S3 Storage (Required)
 

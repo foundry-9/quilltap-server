@@ -196,26 +196,7 @@ export async function register() {
       await migrationRunner.cleanup();
 
       // ================================================================
-      // PHASE 2: Initialize MongoDB (for app use)
-      // ================================================================
-      const { initializeMongoDBIfNeeded } = await import('./lib/startup');
-      startupState.setPhase('mongodb');
-
-      const mongoResult = await initializeMongoDBIfNeeded();
-      if (mongoResult.initialized) {
-        logger.info('MongoDB initialized successfully', {
-          context: 'instrumentation.register',
-          latencyMs: mongoResult.latencyMs,
-        });
-      } else {
-        logger.info('MongoDB not enabled or not configured', {
-          context: 'instrumentation.register',
-          message: mongoResult.message,
-        });
-      }
-
-      // ================================================================
-      // PHASE 3: Initialize Plugins
+      // PHASE 2: Initialize Plugins (MongoDB support removed)
       // ================================================================
       const { initializePlugins } = await import('./lib/startup/plugin-initialization');
       startupState.setPhase('plugins');
@@ -238,7 +219,7 @@ export async function register() {
       }
 
       // ================================================================
-      // PHASE 4: Initialize File Storage
+      // PHASE 3: Initialize File Storage
       // ================================================================
       const { fileStorageManager } = await import('./lib/file-storage/manager');
       startupState.setPhase('file-storage');
@@ -253,7 +234,7 @@ export async function register() {
       }
 
       // ================================================================
-      // PHASE 5: Mark startup complete
+      // PHASE 4: Mark startup complete
       // ================================================================
       startupState.setPhase('complete');
       startupState.markReady();

@@ -3,7 +3,7 @@
  *
  * Tests cover:
  * - Backend detection logic
- * - SQLite and MongoDB configuration loading
+ * - SQLite configuration loading
  * - Environment variable parsing
  * - Configuration caching
  * - Validation helpers
@@ -47,13 +47,6 @@ describe('Database Configuration Module', () => {
   });
 
   describe('detectBackend', () => {
-    it('should return "mongodb" when DATABASE_BACKEND=mongodb', async () => {
-      process.env.DATABASE_BACKEND = 'mongodb';
-
-      const { detectBackend } = await import('@/lib/database/config');
-      expect(detectBackend()).toBe('mongodb');
-    });
-
     it('should return "sqlite" when DATABASE_BACKEND=sqlite', async () => {
       process.env.DATABASE_BACKEND = 'sqlite';
 
@@ -62,31 +55,14 @@ describe('Database Configuration Module', () => {
     });
 
     it('should be case-insensitive for DATABASE_BACKEND', async () => {
-      process.env.DATABASE_BACKEND = 'MONGODB';
-
-      const { detectBackend } = await import('@/lib/database/config');
-      expect(detectBackend()).toBe('mongodb');
-    });
-
-    it('should return "mongodb" when MONGODB_URI is set (and no explicit DATABASE_BACKEND)', async () => {
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-      delete process.env.DATABASE_BACKEND;
-
-      const { detectBackend } = await import('@/lib/database/config');
-      expect(detectBackend()).toBe('mongodb');
-    });
-
-    it('should return "sqlite" as default when no env vars set', async () => {
-      delete process.env.DATABASE_BACKEND;
-      delete process.env.MONGODB_URI;
+      process.env.DATABASE_BACKEND = 'SQLITE';
 
       const { detectBackend } = await import('@/lib/database/config');
       expect(detectBackend()).toBe('sqlite');
     });
 
-    it('should prioritize explicit DATABASE_BACKEND over MONGODB_URI', async () => {
-      process.env.DATABASE_BACKEND = 'sqlite';
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
+    it('should return "sqlite" as default when no env vars set', async () => {
+      delete process.env.DATABASE_BACKEND;
 
       const { detectBackend } = await import('@/lib/database/config');
       expect(detectBackend()).toBe('sqlite');
@@ -94,7 +70,6 @@ describe('Database Configuration Module', () => {
 
     it('should handle invalid DATABASE_BACKEND values as default to sqlite', async () => {
       process.env.DATABASE_BACKEND = 'invalid';
-      delete process.env.MONGODB_URI;
 
       const { detectBackend } = await import('@/lib/database/config');
       expect(detectBackend()).toBe('sqlite');
@@ -223,75 +198,6 @@ describe('Database Configuration Module', () => {
     });
   });
 
-  describe('loadMongoDBConfig', () => {
-    it('should use MONGODB_URI', async () => {
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-
-      const { loadMongoDBConfig } = await import('@/lib/database/config');
-      const config = loadMongoDBConfig();
-
-      expect(config.uri).toBe('mongodb://localhost:27017/quilltap');
-    });
-
-    it('should use MONGODB_DATABASE with default "quilltap"', async () => {
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-      delete process.env.MONGODB_DATABASE;
-
-      const { loadMongoDBConfig } = await import('@/lib/database/config');
-      const config = loadMongoDBConfig();
-
-      expect(config.database).toBe('quilltap');
-    });
-
-    it('should use custom MONGODB_DATABASE if provided', async () => {
-      process.env.MONGODB_URI = 'mongodb://localhost:27017';
-      process.env.MONGODB_DATABASE = 'custom-db';
-
-      const { loadMongoDBConfig } = await import('@/lib/database/config');
-      const config = loadMongoDBConfig();
-
-      expect(config.database).toBe('custom-db');
-    });
-
-    it('should throw error if MONGODB_URI is missing', async () => {
-      delete process.env.MONGODB_URI;
-
-      const { loadMongoDBConfig } = await import('@/lib/database/config');
-
-      expect(() => loadMongoDBConfig()).toThrow(
-        'MONGODB_URI environment variable is required for MongoDB backend'
-      );
-    });
-
-    it('should parse MONGODB_MAX_POOL_SIZE as integer', async () => {
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-      process.env.MONGODB_MAX_POOL_SIZE = '50';
-
-      const { loadMongoDBConfig } = await import('@/lib/database/config');
-      const config = loadMongoDBConfig();
-
-      expect(config.maxPoolSize).toBe(50);
-    });
-
-    it('should use default MONGODB_MAX_POOL_SIZE if not provided', async () => {
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-      delete process.env.MONGODB_MAX_POOL_SIZE;
-
-      const { loadMongoDBConfig } = await import('@/lib/database/config');
-      const config = loadMongoDBConfig();
-
-      expect(config.maxPoolSize).toBe(10);
-    });
-
-    it('should handle mongodb+srv URIs', async () => {
-      process.env.MONGODB_URI = 'mongodb+srv://user:password@cluster.mongodb.net/quilltap';
-
-      const { loadMongoDBConfig } = await import('@/lib/database/config');
-      const config = loadMongoDBConfig();
-
-      expect(config.uri).toBe('mongodb+srv://user:password@cluster.mongodb.net/quilltap');
-    });
-  });
 
   describe('getDatabaseConfig / resetDatabaseConfig / setDatabaseConfig', () => {
     it('should cache config on first call', async () => {
@@ -338,6 +244,7 @@ describe('Database Configuration Module', () => {
 
     it('should setDatabaseConfig overrides cache', async () => {
       process.env.DATABASE_BACKEND = 'sqlite';
+      process.env.SQLITE_PATH = '/tmp/default.db';
 
       const { getDatabaseConfig, setDatabaseConfig, resetDatabaseConfig } = await import(
         '@/lib/database/config'
@@ -346,19 +253,23 @@ describe('Database Configuration Module', () => {
       getDatabaseConfig();
 
       const customConfig = {
-        backend: 'mongodb' as const,
-        mongodb: {
-          uri: 'mongodb://localhost:27017/custom-db',
-          database: 'custom-db',
-          maxPoolSize: 5,
+        backend: 'sqlite' as const,
+        sqlite: {
+          path: '/tmp/custom.db',
+          walMode: false,
+          busyTimeout: 3000,
+          foreignKeys: false,
+          journalMode: 'truncate' as const,
+          synchronous: 'off' as const,
+          cacheSize: -32000,
         },
       };
 
       setDatabaseConfig(customConfig);
       const retrievedConfig = getDatabaseConfig();
 
-      expect(retrievedConfig.backend).toBe('mongodb');
-      expect(retrievedConfig.mongodb?.uri).toBe('mongodb://localhost:27017/custom-db');
+      expect(retrievedConfig.backend).toBe('sqlite');
+      expect(retrievedConfig.sqlite?.path).toBe('/tmp/custom.db');
 
       resetDatabaseConfig();
     });
@@ -391,84 +302,9 @@ describe('Database Configuration Module', () => {
 
       resetDatabaseConfig();
     });
-
-    it('should return ready:true for valid MongoDB config', async () => {
-      process.env.DATABASE_BACKEND = 'mongodb';
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-
-      const { validateDatabaseReady, resetDatabaseConfig } = await import('@/lib/database/config');
-
-      const result = validateDatabaseReady();
-
-      expect(result.ready).toBe(true);
-      expect(result.error).toBeUndefined();
-
-      resetDatabaseConfig();
-    });
-
-    it('should return ready:false with error for invalid MongoDB URI format', async () => {
-      process.env.DATABASE_BACKEND = 'mongodb';
-      process.env.MONGODB_URI = 'invalid-uri';
-
-      const { validateDatabaseReady, resetDatabaseConfig } = await import('@/lib/database/config');
-
-      const result = validateDatabaseReady();
-
-      expect(result.ready).toBe(false);
-      expect(result.error).toContain('Invalid MongoDB URI format');
-
-      resetDatabaseConfig();
-    });
-
-    it('should handle mongodb+srv URIs as valid', async () => {
-      process.env.DATABASE_BACKEND = 'mongodb';
-      process.env.MONGODB_URI = 'mongodb+srv://user:password@cluster.mongodb.net/quilltap';
-
-      const { validateDatabaseReady, resetDatabaseConfig } = await import('@/lib/database/config');
-
-      const result = validateDatabaseReady();
-
-      expect(result.ready).toBe(true);
-      expect(result.error).toBeUndefined();
-
-      resetDatabaseConfig();
-    });
   });
 
   describe('backendSupports', () => {
-    it('should return true for vectorSearch on MongoDB', async () => {
-      process.env.DATABASE_BACKEND = 'mongodb';
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-
-      const { backendSupports, resetDatabaseConfig } = await import('@/lib/database/config');
-
-      expect(backendSupports('vectorSearch')).toBe(true);
-
-      resetDatabaseConfig();
-    });
-
-    it('should return true for changeStreams on MongoDB', async () => {
-      process.env.DATABASE_BACKEND = 'mongodb';
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-
-      const { backendSupports, resetDatabaseConfig } = await import('@/lib/database/config');
-
-      expect(backendSupports('changeStreams')).toBe(true);
-
-      resetDatabaseConfig();
-    });
-
-    it('should return true for aggregation on MongoDB', async () => {
-      process.env.DATABASE_BACKEND = 'mongodb';
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-
-      const { backendSupports, resetDatabaseConfig } = await import('@/lib/database/config');
-
-      expect(backendSupports('aggregation')).toBe(true);
-
-      resetDatabaseConfig();
-    });
-
     it('should return false for vectorSearch on SQLite', async () => {
       process.env.DATABASE_BACKEND = 'sqlite';
 
@@ -550,22 +386,6 @@ describe('Database Configuration Module', () => {
       expect(typeof config.cacheSize).toBe('number');
     });
 
-    it('should validate MongoDBConfig schema properties', async () => {
-      process.env.DATABASE_BACKEND = 'mongodb';
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-
-      const { loadMongoDBConfig } = await import('@/lib/database/config');
-
-      const config = loadMongoDBConfig();
-
-      expect(config.uri).toBeDefined();
-      expect(config.uri.length).toBeGreaterThan(0);
-      expect(config.database).toBeDefined();
-      expect(config.database.length).toBeGreaterThan(0);
-      expect(typeof config.maxPoolSize).toBe('number');
-      expect(config.maxPoolSize).toBeGreaterThan(0);
-    });
-
     it('should validate DatabaseConfig requires backend-specific config', async () => {
       process.env.DATABASE_BACKEND = 'sqlite';
 
@@ -576,9 +396,6 @@ describe('Database Configuration Module', () => {
       if (config.backend === 'sqlite') {
         expect(config.sqlite).toBeDefined();
         expect(config.mongodb).toBeUndefined();
-      } else if (config.backend === 'mongodb') {
-        expect(config.mongodb).toBeDefined();
-        expect(config.sqlite).toBeUndefined();
       }
 
       resetDatabaseConfig();
@@ -599,35 +416,8 @@ describe('Database Configuration Module', () => {
       expect(config.mongodb).toBeUndefined();
     });
 
-    it('should load complete config for MongoDB backend', async () => {
-      process.env.DATABASE_BACKEND = 'mongodb';
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-
-      const { loadDatabaseConfig } = await import('@/lib/database/config');
-
-      const config = loadDatabaseConfig();
-
-      expect(config.backend).toBe('mongodb');
-      expect(config.mongodb).toBeDefined();
-      expect(config.mongodb?.uri).toBe('mongodb://localhost:27017/quilltap');
-      expect(config.sqlite).toBeUndefined();
-    });
-
-    it('should auto-detect backend based on MONGODB_URI', async () => {
-      delete process.env.DATABASE_BACKEND;
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-
-      const { loadDatabaseConfig } = await import('@/lib/database/config');
-
-      const config = loadDatabaseConfig();
-
-      expect(config.backend).toBe('mongodb');
-      expect(config.mongodb).toBeDefined();
-    });
-
     it('should default to SQLite when no backend specified', async () => {
       delete process.env.DATABASE_BACKEND;
-      delete process.env.MONGODB_URI;
 
       const { loadDatabaseConfig } = await import('@/lib/database/config');
 
@@ -653,15 +443,6 @@ describe('Database Configuration Module', () => {
       const { loadSQLiteConfig } = await import('@/lib/database/config');
 
       expect(() => loadSQLiteConfig()).toThrow();
-    });
-
-    it('should handle invalid MONGODB_MAX_POOL_SIZE gracefully', async () => {
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap';
-      process.env.MONGODB_MAX_POOL_SIZE = 'not-a-number';
-
-      const { loadMongoDBConfig } = await import('@/lib/database/config');
-
-      expect(() => loadMongoDBConfig()).toThrow();
     });
   });
 });

@@ -197,15 +197,10 @@ export function deleteMetaValue(key: string): boolean {
 
 /**
  * Get the preferred database backend from the meta table.
- * Returns null if no preference is set or if the meta table doesn't exist.
+ * Since MongoDB support has been removed, this always returns null or 'sqlite'.
  */
 export function getPreferredBackend(): DatabaseBackendType | null {
-  const value = getMetaValue(META_KEYS.PREFERRED_BACKEND);
-
-  if (value === 'mongodb' || value === 'sqlite') {
-    return value;
-  }
-
+  // Always return sqlite as MongoDB support has been removed
   return null;
 }
 
@@ -239,7 +234,7 @@ export function clearPreferredBackend(): boolean {
 /**
  * Record that a migration was completed
  */
-export function recordMigration(direction: 'mongo-to-sqlite' | 'sqlite-to-mongo'): boolean {
+export function recordMigration(direction: 'mongo-to-sqlite'): boolean {
   const timestamp = new Date().toISOString();
 
   const success1 = setMetaValue(META_KEYS.LAST_MIGRATION, direction);

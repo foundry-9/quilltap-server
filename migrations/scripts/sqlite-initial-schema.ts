@@ -2,7 +2,10 @@
  * SQLite Initial Schema Migration
  *
  * Creates all the necessary tables for SQLite database.
- * This migration runs only when using SQLite backend.
+ * This migration runs only when using SQLite backend (the default for new installations).
+ *
+ * Existing MongoDB deployments can use the standalone migration CLI tool
+ * (scripts/mongo-to-sqlite-cli.js) to migrate their data to SQLite when ready.
  */
 
 import { logger } from '../lib/logger';

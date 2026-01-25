@@ -2,7 +2,7 @@
  * Provider Models Repository
  *
  * Backend-agnostic repository for Provider Model entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  * Manages the global cache of available models per provider.
  * This is a system-wide collection, not user-scoped.
  */

@@ -2,7 +2,7 @@
  * Prompt Templates Repository
  *
  * Backend-agnostic repository for PromptTemplate entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  * Manages PromptTemplate entities including built-in sample prompts and user-created templates.
  */
 

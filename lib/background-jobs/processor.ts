@@ -2,7 +2,7 @@
  * Background Job Processor
  *
  * Processes queued background jobs one at a time using setInterval polling.
- * Jobs are claimed atomically from MongoDB and executed by type-specific handlers.
+ * Jobs are claimed atomically from the database and executed by type-specific handlers.
  */
 
 import { getRepositories } from '@/lib/repositories/factory';

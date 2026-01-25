@@ -2,7 +2,7 @@
  * Vector Indices Repository
  *
  * Backend-agnostic repository for Vector Index entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  *
  * Stores character vector indices (embeddings for semantic search) in a database.
  * Each document represents a complete vector index for a single character.

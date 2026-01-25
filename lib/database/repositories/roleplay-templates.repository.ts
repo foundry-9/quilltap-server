@@ -2,7 +2,7 @@
  * Roleplay Templates Repository
  *
  * Backend-agnostic repository for RoleplayTemplate entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  * Manages roleplay templates including built-in and plugin-provided templates.
  */
 

@@ -2,7 +2,7 @@
  * Plugin Configuration Repository
  *
  * Backend-agnostic repository for plugin configuration entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  * Configuration is stored per-user, per-plugin.
  */
 

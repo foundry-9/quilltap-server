@@ -2,7 +2,7 @@
  * Background Job Queue Service
  *
  * Provides functions to enqueue background jobs for processing.
- * Jobs are stored in MongoDB and processed by the job processor.
+ * Jobs are stored in the database and processed by the job processor.
  */
 
 import { getRepositories } from '@/lib/repositories/factory';

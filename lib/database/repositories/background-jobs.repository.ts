@@ -2,7 +2,7 @@
  * Background Jobs Repository
  *
  * Backend-agnostic repository for BackgroundJob entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  * Handles CRUD operations and queue-specific queries for BackgroundJob entities.
  * Provides atomic job claiming for concurrent-safe queue processing.
  */

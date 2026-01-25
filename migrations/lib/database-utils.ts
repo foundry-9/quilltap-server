@@ -2,7 +2,13 @@
  * Database Utilities for Migrations
  *
  * Backend-agnostic database utilities for running migrations.
- * Supports both MongoDB and SQLite through the database abstraction layer.
+ *
+ * This module supports both MongoDB and SQLite. MongoDB is maintained for backward
+ * compatibility with existing deployments using the standalone migration tool
+ * (scripts/mongo-to-sqlite-cli.js), but new installations default to SQLite.
+ *
+ * MongoDB functionality is only loaded when explicitly enabled via DATABASE_BACKEND
+ * environment variable or when the migration tool explicitly requires it.
  */
 
 import { logger } from './logger';

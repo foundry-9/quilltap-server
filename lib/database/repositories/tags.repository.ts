@@ -2,7 +2,7 @@
  * Tags Repository
  *
  * Backend-agnostic repository for Tag entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  */
 
 import { logger } from '@/lib/logger';

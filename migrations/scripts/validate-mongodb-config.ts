@@ -4,6 +4,10 @@
  * Validates MongoDB configuration and connectivity before data migration.
  * This migration ensures that all MongoDB settings are correctly configured
  * and that a connection can be established before attempting any data migration.
+ *
+ * NOTE: This migration is for backward compatibility with existing MongoDB deployments.
+ * New installations use SQLite by default. This migration only runs if explicitly
+ * configured via DATABASE_BACKEND=mongodb environment variable.
  */
 
 import { logger } from '../lib/logger';

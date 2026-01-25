@@ -4,6 +4,20 @@
 
 ### 2.8-dev
 
+- refactor: Remove MongoDB support, SQLite is now the only database backend (2026-01-25)
+  - Deleted `/lib/database/backends/mongodb/` directory (MongoDB backend implementation)
+  - Deleted `/lib/mongodb/` directory (MongoDB client, config, indexes, and 27 repository files)
+  - Updated database abstraction layer to only support SQLite
+  - Simplified environment configuration (removed MONGODB_* variables)
+  - Updated startup sequence to remove MongoDB initialization phase
+  - Simplified health check and system tools endpoints
+  - Updated Docker configuration for SQLite-only deployments
+  - Removed MongoDB-specific docker-compose files (dev-mongo, prod, prod-cloud)
+  - Updated all documentation to reflect SQLite-only support
+  - Moved `mongodb` package to optionalDependencies (only needed for migration tool)
+  - Preserved standalone migration tool (`scripts/mongo-to-sqlite-cli.js`) for migrating existing MongoDB data
+  - Preserved `migrations/lib/mongodb-utils.ts` for the migration tool
+  - All tests updated and passing (3719 tests)
 - refactor: Replace in-app migration UI with standalone CLI tool (2026-01-25)
   - Removed `DatabaseMigrationDialog` component and migration-related API endpoints
   - Removed `migration-readiness`, `migration-progress`, `start-migration`, `switch-backend` API actions

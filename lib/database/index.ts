@@ -61,7 +61,6 @@ export type {
 export {
   // Capability constants
   DEFAULT_CAPABILITIES,
-  MONGODB_CAPABILITIES,
   SQLITE_CAPABILITIES,
 } from './interfaces';
 
@@ -70,7 +69,6 @@ export type {
   DatabaseBackendType,
   DatabaseConfig,
   SQLiteConfig,
-  MongoDBConfig,
 } from './config';
 
 // Configuration - functions
@@ -134,4 +132,3 @@ export {
 
 // Backend-specific exports (for advanced use cases)
 export { SQLiteBackend, createSQLiteBackend } from './backends/sqlite';
-export { MongoDBBackend, createMongoDBBackend } from './backends/mongodb';

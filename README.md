@@ -7,11 +7,12 @@ A self-hosted AI chat platform that puts you in control. Connect to any LLM prov
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.8.0--dev.23-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.8.0--dev.24-yellow.svg)](package.json)
 
 ## Why Quilltap?
 
 - **Self-hosted & private**: Your conversations, characters, and files stay on your infrastructure
+- **Simple deployment**: Uses SQLite with zero external database dependencies
 - **Provider-agnostic**: Use OpenAI, Anthropic, Google, xAI, Ollama, OpenRouter, or any OpenAI-compatible API
 - **Extensible**: Plugin system for themes, LLM providers, templates, and tools
 - **Organized**: Projects with files, folders, and custom instructions for focused AI conversations
@@ -118,7 +119,6 @@ Create images directly within conversations:
 
 - **Docker and Docker Compose** (recommended)
 - **Node.js 22+** (for local development)
-- **MongoDB** (required)
 - **S3-compatible storage** (embedded MinIO for development)
 
 ### Quick Start with Docker
@@ -137,7 +137,7 @@ openssl rand -base64 32  # For JWT_SECRET
 openssl rand -base64 32  # For ENCRYPTION_MASTER_PEPPER
 
 # Start with Docker
-docker-compose -f docker-compose.dev-mongo.yml up
+docker-compose -f docker-compose.sqlite.yml up
 ```
 
 The application will be available at `https://localhost:3000`.
@@ -145,9 +145,7 @@ The application will be available at `https://localhost:3000`.
 This starts:
 
 - **Quilltap** on `https://localhost:3000`
-- **MongoDB** on `localhost:27017`
 - **MinIO** (S3 storage) on `localhost:9000` (API) and `localhost:9001` (console)
-- **Mongo Express** (DB admin) on `localhost:8081`
 
 ### Configuration
 
@@ -158,8 +156,6 @@ Create `.env.local` with these essential settings:
 BASE_URL="https://localhost:3000"
 JWT_SECRET="your-jwt-secret"
 ENCRYPTION_MASTER_PEPPER="your-encryption-pepper"
-MONGODB_URI="mongodb://localhost:27017"
-MONGODB_DATABASE="quilltap"
 
 # S3 Storage (embedded MinIO is default)
 S3_MODE="embedded"
@@ -184,8 +180,8 @@ LOG_LEVEL="info"   # error, warn, info, debug
 ```bash
 npm install
 
-# Start MongoDB and MinIO (using Docker)
-docker-compose -f docker-compose.dev-mongo.yml up -d mongo minio createbuckets
+# Start MinIO (using Docker) for file storage
+docker-compose -f docker-compose.sqlite.yml up -d minio createbuckets
 
 # Start dev server
 npm run devssl

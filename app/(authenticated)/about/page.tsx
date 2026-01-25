@@ -102,7 +102,7 @@ export default function AboutPage() {
             <span className="font-medium">Language:</span> TypeScript 5.6+
           </div>
           <div>
-            <span className="font-medium">Database:</span> MongoDB 7+
+            <span className="font-medium">Database:</span> SQLite
           </div>
           <div>
             <span className="font-medium">File Storage:</span> S3-compatible

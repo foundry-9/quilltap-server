@@ -10,7 +10,6 @@ import { z } from 'zod';
 import { DatabaseBackend, DatabaseCollection, DatabaseCapabilities } from './interfaces';
 import { getDatabaseConfig, DatabaseBackendType } from './config';
 import { createSQLiteBackend, SQLiteBackend } from './backends/sqlite';
-import { createMongoDBBackend, MongoDBBackend } from './backends/mongodb';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -72,21 +71,16 @@ function setDbInitialized(initialized: boolean): void {
 // ============================================================================
 
 /**
- * Create the appropriate backend based on configuration
+ * Create the SQLite backend
  */
 async function createBackend(backendType: DatabaseBackendType): Promise<DatabaseBackend> {
   logger.info('Creating database backend', { type: backendType });
 
-  switch (backendType) {
-    case 'sqlite':
-      return createSQLiteBackend();
-
-    case 'mongodb':
-      return createMongoDBBackend();
-
-    default:
-      throw new Error(`Unknown database backend: ${backendType}`);
+  if (backendType === 'sqlite') {
+    return createSQLiteBackend();
   }
+
+  throw new Error(`Unknown database backend: ${backendType}`);
 }
 
 // ============================================================================

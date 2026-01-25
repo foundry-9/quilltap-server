@@ -2,7 +2,7 @@
  * Sync Operations Repository
  *
  * Backend-agnostic repository for SyncOperation entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  * Provides audit logging of sync operations for debugging and user visibility.
  */
 

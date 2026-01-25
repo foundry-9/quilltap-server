@@ -2,7 +2,7 @@
  * Database Repositories Index
  *
  * Central export point for all backend-agnostic repository classes.
- * These repositories work with both MongoDB and SQLite through the
+ * These repositories work with SQLite through the
  * database abstraction layer.
  */
 

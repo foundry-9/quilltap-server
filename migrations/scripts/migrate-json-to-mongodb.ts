@@ -22,6 +22,10 @@
  *
  * It also maps the JSON userId to the NextAuth userId from accounts.json to
  * ensure data is accessible after OAuth login.
+ *
+ * NOTE: This migration is for backward compatibility with existing MongoDB deployments.
+ * This migration only runs if explicitly configured via DATABASE_BACKEND=mongodb
+ * environment variable. New installations use SQLite by default.
  */
 
 import type { Migration, MigrationResult } from '../types';

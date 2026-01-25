@@ -2,7 +2,7 @@
  * Sync Mappings Repository
  *
  * Backend-agnostic repository for SyncMapping entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  * Handles CRUD operations for permanent UUID mappings that maintain consistency
  * between local and remote entities across sync operations.
  */

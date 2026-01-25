@@ -2,7 +2,7 @@
  * Shared Type Definitions - Barrel File
  *
  * Central re-export file for all schema types used across the application.
- * These correspond to entity schemas stored in MongoDB.
+ * These correspond to entity schemas stored in the database.
  *
  * This file re-exports all types from domain-specific files for backwards
  * compatibility with existing imports from '@/lib/schemas/types'.

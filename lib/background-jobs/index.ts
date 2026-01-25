@@ -1,7 +1,7 @@
 /**
  * Background Jobs Module
  *
- * Provides a MongoDB-backed queue system for processing cheap LLM tasks
+ * Provides a database-backed queue system for processing cheap LLM tasks
  * in the background, one at a time to avoid rate limiting.
  *
  * Usage:

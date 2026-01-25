@@ -6951,8 +6951,6 @@ var import_zod = require("zod");
 var envSchema = import_zod.z.object({
   // Node environment
   NODE_ENV: import_zod.z.enum(["development", "production", "test"]).default("development"),
-  // Database (legacy - no longer used, MongoDB is required)
-  DATABASE_URL: import_zod.z.url().optional(),
   // Base URL for the application (used for OAuth callbacks, etc.)
   BASE_URL: import_zod.z.url().optional().default("http://localhost:3000"),
   // OAuth Providers (all optional - configured via auth plugins)
@@ -6982,17 +6980,6 @@ var envSchema = import_zod.z.object({
   // Production SSL (optional)
   DOMAIN: import_zod.z.string().optional(),
   SSL_EMAIL: import_zod.z.email().optional(),
-  // Data Backend Configuration
-  // Valid values: 'sqlite' (default for new installations) or 'mongodb'
-  // NOTE: Legacy DATA_BACKEND env var is deprecated - use DATABASE_BACKEND instead
-  DATABASE_BACKEND: import_zod.z.enum(["sqlite", "mongodb"]).optional().default("sqlite"),
-  // MongoDB Configuration (required when DATABASE_BACKEND is 'mongodb')
-  MONGODB_URI: import_zod.z.string().optional(),
-  MONGODB_DATABASE: import_zod.z.string().optional().default("quilltap"),
-  MONGODB_MODE: import_zod.z.enum(["external", "embedded"]).optional().default("external"),
-  MONGODB_DATA_DIR: import_zod.z.string().optional().default("/data/mongodb"),
-  MONGODB_CONNECTION_TIMEOUT_MS: import_zod.z.string().regex(/^\d+$/).optional(),
-  MONGODB_MAX_POOL_SIZE: import_zod.z.string().regex(/^\d+$/).optional(),
   // File Storage Configuration
   // Base directory for all Quilltap data (database, files, logs)
   // Platform defaults: Linux: ~/.quilltap, macOS: ~/Library/Application Support/Quilltap, Windows: %APPDATA%\Quilltap
@@ -7014,17 +7001,6 @@ var envSchema = import_zod.z.object({
   S3_FORCE_PATH_STYLE: import_zod.z.enum(["true", "false"]).optional()
 }).refine(
   (data) => {
-    if (data.DATABASE_BACKEND === "mongodb" && !data.MONGODB_URI) {
-      return false;
-    }
-    return true;
-  },
-  {
-    path: ["MONGODB_URI"],
-    error: "MONGODB_URI is required when DATABASE_BACKEND is mongodb"
-  }
-).refine(
-  (data) => {
     if (data.S3_MODE === "external") {
       if (data.S3_ACCESS_KEY && !data.S3_SECRET_KEY || !data.S3_ACCESS_KEY && data.S3_SECRET_KEY) {
         return false;
@@ -7044,11 +7020,6 @@ function validateEnv() {
       NODE_ENV: process.env.NODE_ENV || "production",
       BASE_URL: process.env.BASE_URL || "http://localhost:3000",
       ENCRYPTION_MASTER_PEPPER: process.env.ENCRYPTION_MASTER_PEPPER || "build-time-placeholder-pepper-value",
-      MONGODB_URI: process.env.MONGODB_URI,
-      MONGODB_DATABASE: "quilltap",
-      MONGODB_MODE: "external",
-      MONGODB_DATA_DIR: "/data/mongodb",
-      DATABASE_BACKEND: "sqlite",
       QUILLTAP_FILE_STORAGE_PATH: "./data/files",
       S3_MODE: "disabled",
       S3_REGION: "us-east-1",
@@ -7092,19 +7063,10 @@ function extractHostname(urlString) {
     const url2 = new URL(urlString);
     return url2.hostname;
   } catch {
-    const match = urlString.match(/mongodb(?:\+srv)?:\/\/(?:[^:@]+(?::[^@]+)?@)?([^:/?]+)/);
-    return match ? match[1] : null;
+    return null;
   }
 }
 function checkIsUserManaged() {
-  const mongodbMode = env.MONGODB_MODE;
-  if (mongodbMode === "embedded") {
-    return true;
-  }
-  const mongoHostname = extractHostname(env.MONGODB_URI);
-  if (mongoHostname && isLocalHostname(mongoHostname)) {
-    return true;
-  }
   const s3Mode = env.S3_MODE;
   if (s3Mode === "embedded") {
     return true;

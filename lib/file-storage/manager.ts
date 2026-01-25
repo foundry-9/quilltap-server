@@ -501,7 +501,7 @@ class FileStorageManager {
    */
   async refreshMountPoints(): Promise<void> {
     try {
-      // Load mount points from MongoDB
+      // Load mount points from the database
       const mountPoints = await mountPointsRepository.findAll();
 
       // Clear existing state

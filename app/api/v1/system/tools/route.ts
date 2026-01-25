@@ -32,8 +32,6 @@ import { generateAndSaveReport } from '@/lib/tools/capabilities-report';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import type { ExportEntityType } from '@/lib/export/types';
-import { getDatabaseConfig, DatabaseBackendType } from '@/lib/database/config';
-import { getPreferredBackend, sqliteDatabaseExists } from '@/lib/database/meta';
 
 // ============================================================================
 // Helper Functions
@@ -854,30 +852,14 @@ async function handleDatabaseStatus(req: NextRequest, context: any) {
   const { user } = context;
 
   try {
-    const preferredBackend = getPreferredBackend();
+    logger.debug('[System Tools v1] Getting database status', { userId: user.id });
 
-    // Determine current backend
-    let currentBackend: DatabaseBackendType = 'sqlite';
-    const envBackend = process.env.DATABASE_BACKEND?.toLowerCase();
-    if (envBackend === 'mongodb' || envBackend === 'sqlite') {
-      currentBackend = envBackend;
-    } else if (process.env.MONGODB_URI) {
-      currentBackend = 'mongodb';
-    }
-
-    // Override with preference if set
-    if (preferredBackend) {
-      currentBackend = preferredBackend;
-    }
-
-    // Check backend availability
-    const mongoAvailable = !!process.env.MONGODB_URI;
-    const sqliteAvailable = sqliteDatabaseExists() || true; // SQLite is always available (can be created)
+    // SQLite is the only supported backend
+    const currentBackend = 'sqlite';
+    const sqliteAvailable = true; // SQLite is always available (can be created)
 
     return NextResponse.json({
       currentBackend,
-      preferredBackend,
-      mongoAvailable,
       sqliteAvailable,
       health: {
         healthy: true,

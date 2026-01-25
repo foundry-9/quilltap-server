@@ -2,7 +2,7 @@
  * LLM Logs Repository
  *
  * Backend-agnostic repository for LLMLog entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  * Handles CRUD operations and advanced queries for LLM request/response logging.
  */
 

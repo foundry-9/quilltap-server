@@ -1,7 +1,7 @@
 /**
  * Restore Service
  *
- * Restores user data from a backup ZIP archive to MongoDB and S3.
+ * Restores user data from a backup ZIP archive to the database and S3.
  * Supports two modes:
  * - 'replace': Deletes existing data and restores from backup
  * - 'new-account': Regenerates all UUIDs and imports to a new account

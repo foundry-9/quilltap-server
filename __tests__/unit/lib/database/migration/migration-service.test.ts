@@ -21,11 +21,6 @@ jest.mock('@/lib/logger', () => ({
 }));
 
 // Mock the database backends
-jest.mock('@/lib/database/backends/mongodb', () => ({
-  createMongoDBBackend: jest.fn(),
-  MongoDBBackend: jest.fn(),
-}));
-
 jest.mock('@/lib/database/backends/sqlite', () => ({
   createSQLiteBackend: jest.fn(),
   SQLiteBackend: jest.fn(),
@@ -49,11 +44,6 @@ jest.mock('@/lib/database/config', () => ({
     journalMode: 'delete',
     synchronous: 'normal',
     cacheSize: -64000,
-  })),
-  loadMongoDBConfig: jest.fn(() => ({
-    uri: 'mongodb://localhost:27017/test',
-    database: 'test',
-    maxPoolSize: 10,
   })),
   ensureDataDirectoryExists: jest.fn(),
   getDefaultSQLitePath: jest.fn(() => '/tmp/test.db'),
@@ -118,33 +108,6 @@ describe('Database Migration Service', () => {
       });
     });
 
-    describe('getDatabaseStatus', () => {
-      it('should return database status', async () => {
-        const { getMigrationService } = await import('@/lib/database/migration');
-
-        const service = getMigrationService();
-        const status = await service.getDatabaseStatus();
-
-        expect(status).toHaveProperty('currentBackend');
-        expect(status).toHaveProperty('preferredBackend');
-        expect(status).toHaveProperty('mongoAvailable');
-        expect(status).toHaveProperty('sqliteAvailable');
-        expect(status).toHaveProperty('health');
-      });
-
-      it('should detect SQLite as default backend when no env vars set', async () => {
-        delete process.env.DATABASE_BACKEND;
-        delete process.env.MONGODB_URI;
-
-        jest.resetModules();
-        const { getMigrationService } = await import('@/lib/database/migration');
-
-        const service = getMigrationService();
-        const status = await service.getDatabaseStatus();
-
-        expect(status.currentBackend).toBe('sqlite');
-      });
-    });
   });
 
   describe('MigrationProgress type', () => {
@@ -204,50 +167,6 @@ describe('Database Migration Service', () => {
     });
   });
 
-  describe('checkReadiness', () => {
-    it('should return error when MongoDB is not available', async () => {
-      const { createMongoDBBackend } = await import('@/lib/database/backends/mongodb');
-      (createMongoDBBackend as jest.Mock).mockRejectedValue(new Error('MongoDB not configured'));
-
-      jest.resetModules();
-      const { getMigrationService } = await import('@/lib/database/migration');
-
-      const service = getMigrationService();
-      const readiness = await service.checkReadiness('mongo-to-sqlite');
-
-      expect(readiness.ready).toBe(false);
-      expect(readiness.sourceConnected).toBe(false);
-      expect(readiness.errors.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('migrateToSQLite error handling', () => {
-    it('should return error when already migrating', async () => {
-      const { getMigrationService } = await import('@/lib/database/migration');
-
-      const service = getMigrationService();
-
-      // The service should handle concurrent migration attempts gracefully
-      // We can't easily test this without actually starting a migration,
-      // but we verify the error handling logic exists
-      expect(typeof service.migrateToSQLite).toBe('function');
-    });
-  });
-
-  describe('switchToMongoDB', () => {
-    it('should return error when MONGODB_URI is not set', async () => {
-      delete process.env.MONGODB_URI;
-
-      jest.resetModules();
-      const { getMigrationService } = await import('@/lib/database/migration');
-
-      const service = getMigrationService();
-      const result = await service.switchToMongoDB();
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('MongoDB URI');
-    });
-  });
 });
 
 describe('Migration Module Exports', () => {

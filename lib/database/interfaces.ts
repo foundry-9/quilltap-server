@@ -199,22 +199,6 @@ export const DEFAULT_CAPABILITIES: DatabaseCapabilities = {
   upsert: false,
 };
 
-/**
- * MongoDB capabilities
- */
-export const MONGODB_CAPABILITIES: DatabaseCapabilities = {
-  transactions: true,
-  jsonFields: true,
-  arrayOperations: true,
-  textSearch: true,
-  vectorSearch: true,
-  nestedFieldQueries: true,
-  regexQueries: true,
-  aggregation: true,
-  changeStreams: true,
-  maxDocumentSize: 16 * 1024 * 1024, // 16MB
-  upsert: true,
-};
 
 /**
  * SQLite capabilities
@@ -315,11 +299,11 @@ export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'err
 
 /**
  * Main database backend interface
- * Each database implementation (MongoDB, SQLite) must implement this
+ * Implemented by SQLite
  */
 export interface DatabaseBackend {
   /** Backend identifier */
-  readonly type: 'mongodb' | 'sqlite';
+  readonly type: 'sqlite';
 
   /** Backend capabilities */
   readonly capabilities: DatabaseCapabilities;
@@ -504,6 +488,5 @@ export type DatabaseBackendFactory = () => Promise<DatabaseBackend>;
  * Registry of available backend factories
  */
 export interface BackendRegistry {
-  mongodb?: DatabaseBackendFactory;
   sqlite?: DatabaseBackendFactory;
 }

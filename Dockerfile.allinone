@@ -1,13 +1,11 @@
-# All-in-one Dockerfile for Quilltap with embedded MongoDB and MinIO
-# This image contains the complete Quilltap application with MongoDB and MinIO
+# All-in-one Dockerfile for Quilltap with embedded MinIO
+# This image contains the complete Quilltap application with MinIO
 # running in a single container, suitable for development and testing.
 
 FROM node:22-alpine
 
-# Install system dependencies including MongoDB, curl, and other utilities
+# Install system dependencies including curl and other utilities
 RUN apk add --no-cache \
-    mongodb \
-    mongodb-tools \
     curl \
     bash \
     tini
@@ -23,18 +21,18 @@ RUN curl -L https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin
     chmod +x /usr/local/bin/mc
 
 # Create required data directories
-RUN mkdir -p /data/mongodb /data/minio /data/quilltap && \
+RUN mkdir -p /data/minio /data/quilltap && \
     chown -R 0:0 /data
 
-# Set environment variables for MongoDB and MinIO configuration
-ENV DATABASE_BACKEND=mongodb \
-    MONGODB_MODE=embedded \
-    MONGODB_URI=mongodb://127.0.0.1:27017/quilltap \
-    S3_MODE=embedded \
+# Set environment variables for MinIO configuration
+ENV S3_MODE=embedded \
     S3_ENDPOINT=http://127.0.0.1:9000 \
     S3_ACCESS_KEY=quilltap \
     S3_SECRET_KEY=quilltap-secret-key \
     S3_BUCKET=quilltap-files \
+    DATABASE_BACKEND=sqlite \
+    SQLITE_PATH=/data/quilltap/quilltap.db \
+    SQLITE_WAL_MODE=true \
     NODE_ENV=production
 
 # Set working directory for application
@@ -50,7 +48,7 @@ COPY . .
 # Build the application (Next.js compilation)
 RUN npm run build
 
-# Copy the startup script that will manage MongoDB, MinIO, and the application
+# Copy the startup script that will manage MinIO and the application
 COPY docker/start-allinone.sh /start.sh
 RUN chmod +x /start.sh
 

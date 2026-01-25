@@ -2,7 +2,7 @@
  * Folders Repository
  *
  * Backend-agnostic repository for Folder entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  * Handles CRUD operations and specialized queries for folder hierarchy management.
  */
 

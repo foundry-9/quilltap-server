@@ -4,7 +4,7 @@
  * Handles user creation and account linking for OAuth authentication.
  */
 
-import { getMongoDatabase } from '@/lib/mongodb/client';
+import { getCollection } from '@/lib/database';
 import { logger } from '@/lib/logger';
 import crypto from 'crypto';
 import type { ArcticUserInfo, ArcticTokenResult } from './types';
@@ -131,8 +131,7 @@ async function cleanupOldProfileImage(imagePath: string | null | undefined): Pro
  */
 async function findUserById(userId: string): Promise<OAuthUser | null> {
   try {
-    const db = await getMongoDatabase();
-    const usersCollection = db.collection<OAuthUser>('users');
+    const usersCollection = await getCollection<OAuthUser>('users');
     return await usersCollection.findOne({ id: userId }) || null;
   } catch (error) {
     logger.error(
@@ -156,8 +155,7 @@ async function findOAuthAccount(
   providerAccountId: string
 ): Promise<OAuthAccount | null> {
   try {
-    const db = await getMongoDatabase();
-    const accountsCollection = db.collection<OAuthAccount>('accounts');
+    const accountsCollection = await getCollection<OAuthAccount>('accounts');
     return await accountsCollection.findOne({ provider, providerAccountId }) || null;
   } catch (error) {
     logger.error(
@@ -181,9 +179,8 @@ export async function findUserByOAuthAccount(
   providerAccountId: string
 ): Promise<OAuthUser | null> {
   try {
-    const db = await getMongoDatabase();
-    const accountsCollection = db.collection<OAuthAccount>('accounts');
-    const usersCollection = db.collection<OAuthUser>('users');
+    const accountsCollection = await getCollection<OAuthAccount>('accounts');
+    const usersCollection = await getCollection<OAuthUser>('users');
 
     const account = await accountsCollection.findOne({
       provider,
@@ -223,8 +220,7 @@ export async function findUserByOAuthAccount(
  */
 export async function findUserByEmail(email: string): Promise<OAuthUser | null> {
   try {
-    const db = await getMongoDatabase();
-    const usersCollection = db.collection<OAuthUser>('users');
+    const usersCollection = await getCollection<OAuthUser>('users');
 
     const user = await usersCollection.findOne({ email });
 
@@ -255,8 +251,7 @@ interface CreateOAuthUserResult {
  * @returns Created user and image metadata
  */
 export async function createOAuthUser(userInfo: ArcticUserInfo): Promise<CreateOAuthUserResult> {
-  const db = await getMongoDatabase();
-  const usersCollection = db.collection<OAuthUser>('users');
+  const usersCollection = await getCollection<OAuthUser>('users');
 
   const id = generateId();
   const timestamp = now();
@@ -327,8 +322,7 @@ export async function linkOAuthAccount(
   tokens: ArcticTokenResult,
   imageMetadata?: { url: string; hash: string }
 ): Promise<void> {
-  const db = await getMongoDatabase();
-  const accountsCollection = db.collection<OAuthAccount>('accounts');
+  const accountsCollection = await getCollection<OAuthAccount>('accounts');
 
   const timestamp = now();
 
@@ -371,8 +365,7 @@ export async function updateOAuthTokens(
   providerAccountId: string,
   tokens: ArcticTokenResult
 ): Promise<void> {
-  const db = await getMongoDatabase();
-  const accountsCollection = db.collection<OAuthAccount>('accounts');
+  const accountsCollection = await getCollection<OAuthAccount>('accounts');
 
   await accountsCollection.updateOne(
     { provider, providerAccountId },
@@ -406,9 +399,8 @@ export async function updateUserProfileFromOAuth(
   providerAccountId: string,
   userInfo: ArcticUserInfo
 ): Promise<OAuthUser | null> {
-  const db = await getMongoDatabase();
-  const usersCollection = db.collection<OAuthUser>('users');
-  const accountsCollection = db.collection<OAuthAccount>('accounts');
+  const usersCollection = await getCollection<OAuthUser>('users');
+  const accountsCollection = await getCollection<OAuthAccount>('accounts');
 
   // Get the existing user and account for comparison
   const existingUser = await findUserById(userId);
@@ -528,8 +520,7 @@ export async function createOrFindOAuthUser(
         if (cached) {
           imageMetadata = { url: userInfo.image, hash: cached.hash };
           // Update user image to use cached path
-          const db = await getMongoDatabase();
-          const usersCollection = db.collection<OAuthUser>('users');
+          const usersCollection = await getCollection<OAuthUser>('users');
           await usersCollection.updateOne(
             { id: userByEmail.id },
             { $set: { image: cached.filepath, updatedAt: now() } }
@@ -581,8 +572,7 @@ export async function unlinkOAuthAccount(
   userId: string,
   provider: string
 ): Promise<void> {
-  const db = await getMongoDatabase();
-  const accountsCollection = db.collection<OAuthAccount>('accounts');
+  const accountsCollection = await getCollection<OAuthAccount>('accounts');
 
   await accountsCollection.deleteOne({ userId, provider });
 
@@ -602,13 +592,10 @@ export async function unlinkOAuthAccount(
 export async function getLinkedOAuthAccounts(
   userId: string
 ): Promise<{ provider: string; providerAccountId: string }[]> {
-  const db = await getMongoDatabase();
-  const accountsCollection = db.collection<OAuthAccount>('accounts');
+  const accountsCollection = await getCollection<OAuthAccount>('accounts');
 
   const accounts = await accountsCollection
-    .find({ userId })
-    .project({ provider: 1, providerAccountId: 1 })
-    .toArray();
+    .find({ userId }, { projection: { provider: 1, providerAccountId: 1 } });
 
   return accounts.map((a) => ({
     provider: a.provider,

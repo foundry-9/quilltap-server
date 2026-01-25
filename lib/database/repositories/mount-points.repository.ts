@@ -2,7 +2,7 @@
  * Mount Points Repository
  *
  * Backend-agnostic repository for managing storage mount point configurations.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  * Handles CRUD operations and specialized queries for storage backends with
  * health tracking, scope management, and default mount point handling.
  */

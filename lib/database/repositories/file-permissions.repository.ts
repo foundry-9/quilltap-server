@@ -4,7 +4,7 @@
  * Repository for managing LLM file write permissions.
  * Handles CRUD operations for permission entries that control when
  * an LLM can write files without user approval.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  */
 
 import { logger } from '@/lib/logger';

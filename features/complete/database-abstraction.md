@@ -2,18 +2,17 @@
 
 **Status:** Completed (2026-01-24)
 
-This document describes the completed database abstraction layer that allows Quilltap to use either SQLite or MongoDB as its data store.
+This document describes the database abstraction layer that supports Quilltap's SQLite-only implementation.
 
 > **User Documentation:** See [docs/DATABASE_ABSTRACTION.md](../../docs/DATABASE_ABSTRACTION.md) for configuration, deployment, and usage instructions.
 
 ## Overview
 
-Quilltap now supports multiple database backends through a unified abstraction layer:
+Quilltap uses SQLite as its sole database backend through a unified abstraction layer:
 
 1. **Backend-agnostic interface** - All data access goes through `DatabaseBackend` and `DatabaseCollection<T>` interfaces
 2. **SQLite support** - Using `better-sqlite3` for synchronous, embedded database operations with zero external dependencies
-3. **SQLite is the default** - New installations use SQLite automatically
-4. **MongoDB remains available** - Existing installations continue working; MongoDB offers additional capabilities
+3. **Single database backend** - SQLite is the only supported database, eliminating complexity and external dependencies
 
 ## Implemented Architecture
 
@@ -29,26 +28,17 @@ lib/
 │   ├── index.ts                        # Central exports
 │   │
 │   ├── backends/
-│   │   ├── sqlite/
-│   │   │   ├── index.ts                # Exports
-│   │   │   ├── client.ts               # better-sqlite3 singleton with shutdown handlers
-│   │   │   ├── backend.ts              # SQLiteBackend implementation
-│   │   │   ├── query-translator.ts     # MongoDB-style queries to SQL
-│   │   │   └── json-columns.ts         # JSON column utilities
-│   │   │
-│   │   └── mongodb/
+│   │   └── sqlite/
 │   │       ├── index.ts                # Exports
-│   │       └── backend.ts              # MongoDBBackend implementation (wraps existing client)
+│   │       ├── client.ts               # better-sqlite3 singleton with shutdown handlers
+│   │       ├── backend.ts              # SQLiteBackend implementation
+│   │       ├── query-translator.ts     # MongoDB-style queries to SQL
+│   │       └── json-columns.ts         # JSON column utilities
 │   │
 │   └── repositories/
 │       ├── base.repository.ts          # AbstractBaseRepository, UserOwnedBaseRepository, TaggableBaseRepository
 │       ├── index.ts                    # RepositoryContainer and factory
 │       └── [25 concrete repositories]  # All domain-specific repositories
-│
-├── mongodb/                            # Legacy MongoDB-specific code (preserved)
-│   ├── client.ts                       # Still used by MongoDB backend
-│   ├── config.ts                       # MongoDB configuration
-│   └── indexes.ts                      # Index definitions
 │
 └── repositories/
     └── factory.ts                      # Entry point: getRepositories(), getDataBackend()
@@ -119,22 +109,23 @@ interface QueryOperator {
 }
 ```
 
-### Backend Capabilities
+### SQLite Capabilities
 
-| Capability | SQLite | MongoDB |
-|------------|--------|---------|
-| Transactions | Yes | Yes |
-| JSON columns | Yes (via `json_extract`) | Native |
-| Array operations | Yes (via `json_each`) | Native |
-| Full-text search | FTS5 (not yet exposed) | Yes |
-| Vector search | No | Atlas only |
-| Change streams | No | Yes |
-| Aggregation pipelines | No (use application layer) | Yes |
-| TTL indexes | Application-level | Native |
+| Capability | Support |
+|------------|---------|
+| Transactions | Yes |
+| JSON columns | Yes (via `json_extract`) |
+| Array operations | Yes (via `json_each`) |
+| Full-text search | FTS5 |
+| TTL indexes | Application-level |
+| ACID Compliance | Yes |
+| Concurrent Reads | Yes (WAL mode) |
 
 ---
 
-## SQLite Implementation
+## Implementation Details
+
+### SQLite Implementation
 
 ### Query Translation
 
@@ -181,24 +172,15 @@ db.pragma('foreign_keys = ON');       // Enforce referential integrity
 ### Environment Variables
 
 ```bash
-# Backend selection (default: sqlite)
-DATABASE_BACKEND=sqlite
-
 # SQLite configuration (Docker path shown, local paths vary by platform)
 SQLITE_PATH=/app/quilltap/data/quilltap.db
 SQLITE_WAL_MODE=true
 SQLITE_BUSY_TIMEOUT=5000
-
-# MongoDB configuration (used if DATABASE_BACKEND=mongodb)
-MONGODB_URI=mongodb://localhost:27017/quilltap
-MONGODB_DATABASE=quilltap
 ```
 
-### Auto-Detection Logic
+### Configuration
 
-1. If `DATABASE_BACKEND` is set, use that value
-2. Else if `MONGODB_URI` is set (legacy), default to `mongodb`
-3. Otherwise, default to `sqlite` (new installations)
+SQLite is automatically used as the database backend. Configuration is minimal and only requires setting `SQLITE_PATH` if a custom location is desired.
 
 ---
 
@@ -219,14 +201,7 @@ MONGODB_DATABASE=quilltap
 - `lib/database/backends/sqlite/query-translator.ts` - MongoDB-style to SQL translation
 - `lib/database/backends/sqlite/backend.ts` - SQLiteBackend and SQLiteCollection implementations
 
-### Phase 3: MongoDB Backend Wrapper ✅
-
-**Files created:**
-- `lib/database/backends/mongodb/backend.ts` - MongoDBBackend wrapping existing client
-
-**Result:** Both backends implement the same `DatabaseBackend` interface.
-
-### Phase 4: Abstract Repository Layer ✅
+### Phase 3: Abstract Repository Layer ✅
 
 **Files created:**
 - `lib/database/repositories/base.repository.ts` - Three base classes:

@@ -2,14 +2,13 @@
  * Vector Store
  * Sprint 4: Vector Database Integration
  *
- * In-memory vector store with MongoDB persistence for semantic search.
+ * In-memory vector store with database persistence for semantic search.
  * Uses cosine similarity for nearest neighbor search.
  *
  * Design decisions:
  * - Per-character vector indices for isolation and efficient loading
  * - In-memory search with persistence (suitable for <1000 memories per character)
  * - Cosine similarity for text embedding comparison
- * - MongoDB is the required backend
  */
 
 import { cosineSimilarity } from './embedding-service'
@@ -74,8 +73,8 @@ export interface ICharacterVectorStore {
 }
 
 /**
- * MongoDB-backed vector store for a single character
- * Uses in-memory storage with MongoDB persistence
+ * Database-backed vector store for a single character
+ * Uses in-memory storage with database persistence
  */
 export class CharacterVectorStore implements ICharacterVectorStore {
   private entries: Map<string, VectorEntry> = new Map()
@@ -86,7 +85,7 @@ export class CharacterVectorStore implements ICharacterVectorStore {
   constructor(private readonly characterId: string) {}
 
   /**
-   * Load the vector index from MongoDB
+   * Load the vector index from the database
    */
   async load(): Promise<void> {
     try {
@@ -107,7 +106,7 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       this.dirty = false
 
     } catch (error) {
-      logger.error('Error loading vector index from MongoDB', {
+      logger.error('Error loading vector index from database', {
         context: 'CharacterVectorStore.load',
         characterId: this.characterId,
         error: error instanceof Error ? error.message : String(error),
@@ -120,7 +119,7 @@ export class CharacterVectorStore implements ICharacterVectorStore {
   }
 
   /**
-   * Save the vector index to MongoDB
+   * Save the vector index to the database
    */
   async save(): Promise<void> {
     if (!this.dirty && this.entries.size === 0) {
@@ -144,7 +143,7 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       this.dirty = false
 
     } catch (error) {
-      logger.error('Error saving vector index to MongoDB', {
+      logger.error('Error saving vector index to database', {
         context: 'CharacterVectorStore.save',
         characterId: this.characterId,
         error: error instanceof Error ? error.message : String(error),
@@ -296,7 +295,6 @@ export class CharacterVectorStore implements ICharacterVectorStore {
 /**
  * Global vector store manager
  * Handles loading and caching of per-character vector stores
- * Uses MongoDB backend exclusively
  */
 export class VectorStoreManager {
   private stores: Map<string, ICharacterVectorStore> = new Map()

@@ -2,7 +2,7 @@
  * Users Repository
  *
  * Backend-agnostic repository for User entities.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  *
  * Handles CRUD operations for User entities.
  * Manages the 'users' collection.

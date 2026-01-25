@@ -1,22 +1,18 @@
-# Basic development setup with MongoDB and MinIO
-# For a more complete setup, use docker-compose.dev-mongo.yml
+# SQLite-only development setup (no MongoDB required)
+# Use this for simpler deployments or when MongoDB is not available
+#
+# Usage: docker-compose up
 #
 # Data is stored in ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap} on the host
-# To use a different location, set the QUILLTAP_HOST_DATA_DIR environment variable
+# To use a different location, set the QUILLTAP_HOST_DATA_DIR environment variable:
+#   QUILLTAP_HOST_DATA_DIR=/path/to/data docker-compose up
+#
+# Platform-specific recommended paths:
+#   Linux:   ~/.quilltap (default)
+#   macOS:   ~/Library/Application Support/Quilltap
+#   Windows: %APPDATA%\Quilltap
 
 services:
-  mongo:
-    image: mongo:7
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-    healthcheck:
-      test: mongosh --eval 'db.runCommand("ping").ok' --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   minio:
     image: minio/minio
     command: server /data --console-address ":9001"
@@ -57,10 +53,11 @@ services:
       - NODE_ENV=development
       - DOCKER_CONTAINER=true
       - BASE_URL=https://localhost:3000
-      # Database configuration (MongoDB by default, set DATABASE_BACKEND=sqlite for SQLite)
-      - DATABASE_BACKEND=mongodb
-      - MONGODB_URI=mongodb://mongo:27017/quilltap
-      - MONGODB_DATABASE=quilltap
+      # SQLite configuration (no MongoDB)
+      - DATABASE_BACKEND=sqlite
+      - SQLITE_PATH=/app/quilltap/data/quilltap.db
+      - SQLITE_WAL_MODE=true
+      # S3 configuration (embedded MinIO)
       - S3_MODE=external
       - S3_ENDPOINT=http://minio:9000
       - S3_ACCESS_KEY=minioadmin
@@ -70,8 +67,6 @@ services:
     env_file:
       - .env.local
     depends_on:
-      mongo:
-        condition: service_healthy
       minio:
         condition: service_healthy
     volumes:
@@ -82,6 +77,5 @@ services:
     command: npm run devssl
 
 volumes:
-  mongo-data:
   minio-data:
   app-node-modules:

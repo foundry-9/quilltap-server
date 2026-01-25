@@ -2,11 +2,11 @@
  * Chats Repository
  *
  * Backend-agnostic repository for Chat metadata and messages.
- * Works with both MongoDB and SQLite through the database abstraction layer.
+ * Works with SQLite through the database abstraction layer.
  *
  * Handles CRUD operations for Chat metadata and messages using two collections:
  * - 'chats': stores ChatMetadata documents
- * - 'chat_messages': stores messages as { chatId, messages: ChatEvent[] }
+ * - 'chat_messages': stores messages as individual rows (SQLite) or embedded arrays (legacy data)
  *
  * Chats use a participant-based model where each chat has an array of
  * ChatParticipant objects. All participants are CHARACTER type (user-controlled
@@ -77,7 +77,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 
   /**
-   * Check if using SQLite backend (normalized messages) vs MongoDB (embedded array)
+   * Check if using SQLite backend (normalized messages) vs legacy embedded array format
    */
   private isSQLiteBackend(): boolean {
     return getBackendType() === 'sqlite';
@@ -92,7 +92,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     }
 
     try {
-      // Only need to ensure collection for SQLite - MongoDB doesn't need schema registration
+      // Ensure collection is initialized with proper schema for JSON column detection
       if (this.isSQLiteBackend()) {
         await ensureCollection(this.messagesCollectionName, ChatMessageRowSchema);
       }
@@ -183,7 +183,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
 
       const chat = await this._create(chatData, options);
 
-      // MongoDB: Create empty messages document (not needed for SQLite - messages are individual rows)
+      // Legacy data compatibility: Create empty messages document for backward compat (not needed for SQLite - messages are individual rows)
       if (!this.isSQLiteBackend()) {
         try {
           const messagesCollection = await this.getMessagesCollection();
@@ -248,7 +248,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           // SQLite: Delete all message rows for this chat
           await messagesCollection.deleteMany({ chatId: id } as QueryFilter);
         } else {
-          // MongoDB: Delete the single messages document
+          // Legacy data compatibility: Delete the single messages document
           await messagesCollection.deleteOne({ chatId: id } as QueryFilter);
         }
       } catch (error) {
@@ -693,7 +693,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         );
         return messages.map((msg: any) => ChatEventSchema.parse(msg));
       } else {
-        // MongoDB: Extract from embedded array
+        // Legacy data compatibility: Extract from embedded array
         const messagesDoc = await messagesCollection.findOne({ chatId } as QueryFilter);
 
         if (!messagesDoc) {
@@ -725,7 +725,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         // SQLite: Insert as individual row with chatId
         await messagesCollection.insertOne({ ...validated, chatId } as any);
       } else {
-        // MongoDB: Push to embedded array
+        // Legacy data compatibility: Push to embedded array
         await messagesCollection.updateOne(
           { chatId } as QueryFilter,
           {
@@ -770,7 +770,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           await messagesCollection.insertOne({ ...msg, chatId } as any);
         }
       } else {
-        // MongoDB: Push all to embedded array
+        // Legacy data compatibility: Push all to embedded array
         await messagesCollection.updateOne(
           { chatId } as QueryFilter,
           {
@@ -824,7 +824,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         );
         return validated;
       } else {
-        // MongoDB: Update in embedded array
+        // Legacy data compatibility: Update in embedded array
         const messages = await this.getMessages(chatId);
         const messageIndex = messages.findIndex(m => m.id === messageId);
 
@@ -973,7 +973,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           }
         }
       } else {
-        // MongoDB: Update entire embedded array
+        // Legacy data compatibility: Update entire embedded array
         let hasChanges = false;
         const updatedMessages = messages.map(msg => {
           if (msg.type === 'message' && msg.content.includes(searchText)) {
@@ -1033,7 +1033,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         // SQLite: Delete all message rows for this chat
         await messagesCollection.deleteMany({ chatId } as QueryFilter);
       } else {
-        // MongoDB: Clear embedded messages array
+        // Legacy data compatibility: Clear embedded messages array
         await messagesCollection.updateOne(
           { chatId } as QueryFilter,
           {
