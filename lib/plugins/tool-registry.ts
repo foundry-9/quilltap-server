@@ -33,16 +33,39 @@ export interface ToolRegistryState {
 }
 
 // ============================================================================
+// GLOBAL STATE PERSISTENCE
+// ============================================================================
+
+// Extend globalThis type for our tool registry state
+// This ensures state persists across Next.js hot module reloads in development
+declare global {
+  var __quilltapToolRegistryState: ToolRegistryState | undefined;
+}
+
+/**
+ * Get or create the global registry state
+ * Using global ensures state persists across Next.js module reloads
+ */
+function getGlobalState(): ToolRegistryState {
+  if (!global.__quilltapToolRegistryState) {
+    global.__quilltapToolRegistryState = {
+      initialized: false,
+      plugins: new Map(),
+      errors: new Map(),
+      lastInitTime: null,
+    };
+  }
+  return global.__quilltapToolRegistryState;
+}
+
+// ============================================================================
 // REGISTRY SINGLETON
 // ============================================================================
 
 class ToolRegistry {
-  private state: ToolRegistryState = {
-    initialized: false,
-    plugins: new Map(),
-    errors: new Map(),
-    lastInitTime: null,
-  };
+  private get state(): ToolRegistryState {
+    return getGlobalState();
+  }
 
   private logger = logger.child({
     module: 'tool-registry',
@@ -498,10 +521,13 @@ class ToolRegistry {
    * @internal
    */
   reset(): void {
-    this.state.initialized = false;
-    this.state.plugins.clear();
-    this.state.errors.clear();
-    this.state.lastInitTime = null;
+    // Reset the global state entirely
+    global.__quilltapToolRegistryState = {
+      initialized: false,
+      plugins: new Map(),
+      errors: new Map(),
+      lastInitTime: null,
+    };
     this.logger.debug('Tool registry reset');
   }
 

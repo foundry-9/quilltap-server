@@ -61,6 +61,11 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     repos.llmLogs.findAll(10000), // High limit to get all user logs
   ]);
 
+  // Exclude backup files from the file list - we don't want to back up old backups
+  const filteredFiles = files.filter(
+    (file) => file.category !== 'BACKUP' && file.folderPath !== '/backups'
+  );
+
   moduleLogger.debug('Collected base entities', {
     userId,
     characters: characters.length,
@@ -69,7 +74,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     connectionProfiles: connectionProfiles.length,
     imageProfiles: imageProfiles.length,
     embeddingProfiles: embeddingProfiles.length,
-    files: files.length,
+    files: filteredFiles.length,
+    filesExcluded: files.length - filteredFiles.length,
     promptTemplates: promptTemplates.length,
     roleplayTemplates: roleplayTemplates.length,
     providerModels: providerModels.length,
@@ -119,7 +125,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     imageProfiles,
     embeddingProfiles,
     memories,
-    files,
+    files: filteredFiles,
     promptTemplates,
     roleplayTemplates,
     providerModels,

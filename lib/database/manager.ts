@@ -14,12 +14,58 @@ import { createMongoDBBackend, MongoDBBackend } from './backends/mongodb';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
-// Singleton State
+// Global State Persistence
 // ============================================================================
 
-let databaseBackend: DatabaseBackend | null = null;
-let initializationPromise: Promise<DatabaseBackend> | null = null;
-let isInitialized = false;
+// Extend globalThis type for our database manager state
+// This ensures state persists across Next.js hot module reloads in development
+declare global {
+  var __quilltapDatabaseBackend: DatabaseBackend | undefined;
+  var __quilltapDatabaseInitPromise: Promise<DatabaseBackend> | undefined;
+  var __quilltapDatabaseInitialized: boolean | undefined;
+}
+
+/**
+ * Get database backend from global state
+ */
+function getDatabaseBackend(): DatabaseBackend | null {
+  return global.__quilltapDatabaseBackend ?? null;
+}
+
+/**
+ * Set database backend in global state
+ */
+function setDatabaseBackend(backend: DatabaseBackend | null): void {
+  global.__quilltapDatabaseBackend = backend ?? undefined;
+}
+
+/**
+ * Get initialization promise from global state
+ */
+function getInitPromise(): Promise<DatabaseBackend> | null {
+  return global.__quilltapDatabaseInitPromise ?? null;
+}
+
+/**
+ * Set initialization promise in global state
+ */
+function setInitPromise(promise: Promise<DatabaseBackend> | null): void {
+  global.__quilltapDatabaseInitPromise = promise ?? undefined;
+}
+
+/**
+ * Check if database is initialized (from global state)
+ */
+function isDbInitialized(): boolean {
+  return global.__quilltapDatabaseInitialized ?? false;
+}
+
+/**
+ * Set initialization status in global state
+ */
+function setDbInitialized(initialized: boolean): void {
+  global.__quilltapDatabaseInitialized = initialized;
+}
 
 // ============================================================================
 // Backend Factory
@@ -53,23 +99,25 @@ async function createBackend(backendType: DatabaseBackendType): Promise<Database
  */
 export async function initializeDatabase(): Promise<DatabaseBackend> {
   // Return existing backend if already initialized
-  if (isInitialized && databaseBackend) {
-    return databaseBackend;
+  const existingBackend = getDatabaseBackend();
+  if (isDbInitialized() && existingBackend) {
+    return existingBackend;
   }
 
   // Return existing promise if initialization is in progress
-  if (initializationPromise) {
-    return initializationPromise;
+  const existingPromise = getInitPromise();
+  if (existingPromise) {
+    return existingPromise;
   }
 
   // Start initialization
-  initializationPromise = (async () => {
+  const initPromise = (async () => {
     try {
       const config = getDatabaseConfig();
       const backend = await createBackend(config.backend);
 
-      databaseBackend = backend;
-      isInitialized = true;
+      setDatabaseBackend(backend);
+      setDbInitialized(true);
 
       logger.info('Database backend initialized', {
         type: backend.type,
@@ -83,11 +131,12 @@ export async function initializeDatabase(): Promise<DatabaseBackend> {
       });
       throw error;
     } finally {
-      initializationPromise = null;
+      setInitPromise(null);
     }
   })();
 
-  return initializationPromise;
+  setInitPromise(initPromise);
+  return initPromise;
 }
 
 /**
@@ -95,10 +144,11 @@ export async function initializeDatabase(): Promise<DatabaseBackend> {
  * Throws if not initialized - use initializeDatabase() first
  */
 export function getDatabase(): DatabaseBackend {
-  if (!isInitialized || !databaseBackend) {
+  const backend = getDatabaseBackend();
+  if (!isDbInitialized() || !backend) {
     throw new Error('Database not initialized. Call initializeDatabase() first.');
   }
-  return databaseBackend;
+  return backend;
 }
 
 /**
@@ -106,8 +156,9 @@ export function getDatabase(): DatabaseBackend {
  * This is the recommended way to get the database in most cases
  */
 export async function getDatabaseAsync(): Promise<DatabaseBackend> {
-  if (isInitialized && databaseBackend) {
-    return databaseBackend;
+  const backend = getDatabaseBackend();
+  if (isDbInitialized() && backend) {
+    return backend;
   }
   return initializeDatabase();
 }
@@ -116,17 +167,18 @@ export async function getDatabaseAsync(): Promise<DatabaseBackend> {
  * Check if the database is initialized
  */
 export function isDatabaseInitialized(): boolean {
-  return isInitialized && databaseBackend !== null;
+  return isDbInitialized() && getDatabaseBackend() !== null;
 }
 
 /**
  * Check if the database is connected
  */
 export async function isDatabaseConnected(): Promise<boolean> {
-  if (!databaseBackend) {
+  const backend = getDatabaseBackend();
+  if (!backend) {
     return false;
   }
-  return databaseBackend.isConnected();
+  return backend.isConnected();
 }
 
 // ============================================================================
@@ -137,15 +189,16 @@ export async function isDatabaseConnected(): Promise<boolean> {
  * Close the database connection and clean up
  */
 export async function closeDatabase(): Promise<void> {
-  if (!databaseBackend) {
+  const backend = getDatabaseBackend();
+  if (!backend) {
     return;
   }
 
   try {
-    await databaseBackend.disconnect();
-    databaseBackend = null;
-    isInitialized = false;
-    initializationPromise = null;
+    await backend.disconnect();
+    setDatabaseBackend(null);
+    setDbInitialized(false);
+    setInitPromise(null);
 
     logger.info('Database connection closed');
   } catch (error) {
@@ -193,24 +246,25 @@ export async function listCollections(): Promise<string[]> {
  * Get the current backend type
  */
 export function getBackendType(): DatabaseBackendType | null {
-  return databaseBackend?.type || null;
+  return getDatabaseBackend()?.type || null;
 }
 
 /**
  * Get the current backend capabilities
  */
 export function getBackendCapabilities(): DatabaseCapabilities | null {
-  return databaseBackend?.capabilities || null;
+  return getDatabaseBackend()?.capabilities || null;
 }
 
 /**
  * Check if the current backend supports a specific capability
  */
 export function supportsCapability(capability: keyof DatabaseCapabilities): boolean {
-  if (!databaseBackend) {
+  const backend = getDatabaseBackend();
+  if (!backend) {
     return false;
   }
-  return Boolean(databaseBackend.capabilities[capability]);
+  return Boolean(backend.capabilities[capability]);
 }
 
 // ============================================================================
@@ -226,7 +280,8 @@ export async function healthCheck(): Promise<{
   latencyMs: number;
   message?: string;
 }> {
-  if (!databaseBackend) {
+  const backend = getDatabaseBackend();
+  if (!backend) {
     return {
       healthy: false,
       backend: 'none',
@@ -235,11 +290,11 @@ export async function healthCheck(): Promise<{
     };
   }
 
-  const result = await databaseBackend.healthCheck();
+  const result = await backend.healthCheck();
 
   return {
     ...result,
-    backend: databaseBackend.type,
+    backend: backend.type,
   };
 }
 
@@ -294,15 +349,15 @@ export async function withTransaction<T>(
  * Reset the database manager (for testing only)
  */
 export function _resetForTesting(): void {
-  databaseBackend = null;
-  initializationPromise = null;
-  isInitialized = false;
+  setDatabaseBackend(null);
+  setInitPromise(null);
+  setDbInitialized(false);
 }
 
 /**
  * Set a mock backend (for testing only)
  */
 export function _setBackendForTesting(backend: DatabaseBackend): void {
-  databaseBackend = backend;
-  isInitialized = true;
+  setDatabaseBackend(backend);
+  setDbInitialized(true);
 }

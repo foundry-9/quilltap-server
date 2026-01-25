@@ -71,7 +71,8 @@ describe('SQLite Query Translator', () => {
       it('should handle boolean equality', () => {
         const result = translateFilter({ active: true });
         expect(result.sql).toBe('"active" = ?');
-        expect(result.params).toEqual([true]);
+        // Booleans are converted to 1/0 for SQLite
+        expect(result.params).toEqual([1]);
       });
 
       it('should handle multiple field equality', () => {
@@ -895,7 +896,8 @@ describe('SQLite Query Translator', () => {
       expect(result.sql).toContain('DELETE FROM "users"');
       expect(result.sql).toContain('OR');
       expect(result.params).toContain('deleted');
-      expect(result.params).toContain(true);
+      // Booleans are converted to 1/0 for SQLite
+      expect(result.params).toContain(1);
     });
   });
 
@@ -961,7 +963,8 @@ describe('SQLite Query Translator', () => {
     it('should handle false boolean values', () => {
       const result = translateFilter({ active: false });
       expect(result.sql).toBe('"active" = ?');
-      expect(result.params).toEqual([false]);
+      // Booleans are converted to 1/0 for SQLite
+      expect(result.params).toEqual([0]);
     });
   });
 

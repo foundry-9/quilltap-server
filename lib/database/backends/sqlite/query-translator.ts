@@ -28,6 +28,17 @@ export interface TranslatedUpdate {
 // ============================================================================
 
 /**
+ * Convert a value for use as a SQLite parameter
+ * Handles boolean conversion (true/false -> 1/0)
+ */
+function toSqliteParam(value: unknown): unknown {
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0;
+  }
+  return value;
+}
+
+/**
  * Check if a value is a comparison condition object
  */
 function isComparisonCondition(value: unknown): boolean {
@@ -135,32 +146,32 @@ function translateFieldFilter(
       switch (op) {
         case '$eq':
           clauses.push(`${columnExpr} = ?`);
-          params.push(opValue);
+          params.push(toSqliteParam(opValue));
           break;
 
         case '$ne':
           clauses.push(`${columnExpr} != ?`);
-          params.push(opValue);
+          params.push(toSqliteParam(opValue));
           break;
 
         case '$gt':
           clauses.push(`${columnExpr} > ?`);
-          params.push(opValue);
+          params.push(toSqliteParam(opValue));
           break;
 
         case '$gte':
           clauses.push(`${columnExpr} >= ?`);
-          params.push(opValue);
+          params.push(toSqliteParam(opValue));
           break;
 
         case '$lt':
           clauses.push(`${columnExpr} < ?`);
-          params.push(opValue);
+          params.push(toSqliteParam(opValue));
           break;
 
         case '$lte':
           clauses.push(`${columnExpr} <= ?`);
-          params.push(opValue);
+          params.push(toSqliteParam(opValue));
           break;
 
         case '$in':
@@ -172,10 +183,10 @@ function translateFieldFilter(
               clauses.push(sql);
               params.push(...p);
             } else {
-              // Standard IN query
+              // Standard IN query - convert booleans in array
               const placeholders = opValue.map(() => '?').join(', ');
               clauses.push(`${columnExpr} IN (${placeholders})`);
-              params.push(...opValue);
+              params.push(...opValue.map(toSqliteParam));
             }
           } else {
             // Empty $in always false
@@ -185,9 +196,10 @@ function translateFieldFilter(
 
         case '$nin':
           if (Array.isArray(opValue) && opValue.length > 0) {
+            // Convert booleans in array
             const placeholders = opValue.map(() => '?').join(', ');
             clauses.push(`${columnExpr} NOT IN (${placeholders})`);
-            params.push(...opValue);
+            params.push(...opValue.map(toSqliteParam));
           }
           // Empty $nin is always true, no clause needed
           break;
@@ -223,9 +235,9 @@ function translateFieldFilter(
       params.push(...p);
     }
   } else {
-    // Simple equality
+    // Simple equality - convert booleans to 0/1 for SQLite
     clauses.push(`${columnExpr} = ?`);
-    params.push(value);
+    params.push(toSqliteParam(value));
   }
 
   return {

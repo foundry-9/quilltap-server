@@ -77,16 +77,39 @@ export interface TemplateRegistryState {
 }
 
 // ============================================================================
+// GLOBAL STATE PERSISTENCE
+// ============================================================================
+
+// Extend globalThis type for our roleplay template registry state
+// This ensures state persists across Next.js hot module reloads in development
+declare global {
+  var __quilltapRoleplayTemplateRegistryState: TemplateRegistryState | undefined;
+}
+
+/**
+ * Get or create the global registry state
+ * Using global ensures state persists across Next.js module reloads
+ */
+function getGlobalState(): TemplateRegistryState {
+  if (!global.__quilltapRoleplayTemplateRegistryState) {
+    global.__quilltapRoleplayTemplateRegistryState = {
+      initialized: false,
+      templates: new Map(),
+      errors: [],
+      lastInitTime: null,
+    };
+  }
+  return global.__quilltapRoleplayTemplateRegistryState;
+}
+
+// ============================================================================
 // ROLEPLAY TEMPLATE REGISTRY CLASS
 // ============================================================================
 
 class RoleplayTemplateRegistry {
-  private state: TemplateRegistryState = {
-    initialized: false,
-    templates: new Map(),
-    errors: [],
-    lastInitTime: null,
-  };
+  private get state(): TemplateRegistryState {
+    return getGlobalState();
+  }
 
   private logger = logger.child({
     module: 'roleplay-template-registry',
@@ -286,10 +309,13 @@ class RoleplayTemplateRegistry {
    * Reset the registry (for testing)
    */
   reset(): void {
-    this.state.initialized = false;
-    this.state.templates.clear();
-    this.state.errors = [];
-    this.state.lastInitTime = null;
+    // Reset the global state entirely
+    global.__quilltapRoleplayTemplateRegistryState = {
+      initialized: false,
+      templates: new Map(),
+      errors: [],
+      lastInitTime: null,
+    };
     this.logger.debug('Roleplay template registry reset');
   }
 

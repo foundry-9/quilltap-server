@@ -283,6 +283,14 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
   try {
     logger.debug('[Plugins v1] GET list', { userId: user.id });
 
+    // Ensure plugin system is initialized before accessing registry
+    // This handles cases where the API is called before startup initialization completes
+    // or when hot-reloading resets module state in development
+    if (!pluginRegistry.isInitialized()) {
+      logger.debug('[Plugins v1] Plugin registry not initialized, initializing now');
+      await initializePlugins();
+    }
+
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get('filter');
 

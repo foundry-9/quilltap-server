@@ -4,6 +4,19 @@
 
 ### 2.8-dev
 
+- fix: Multiple UI data display issues and hot reload state persistence (2026-01-25)
+  - Projects page: Fixed chat/file counts not showing on project cards (mapped API's `_count` to `chatCount`/`fileCount`)
+  - Homepage: Fixed Active Projects card showing 0 chats, now displays actual counts and sorts by most recent chat activity
+  - Backups: Exclude old backup files from new backups (filter out category='BACKUP' and folderPath='/backups')
+  - SQLite: Fixed boolean values in WHERE clauses not being converted to 0/1 (caused "can only bind" errors)
+  - Hot reload: All registries now use global state to persist across Next.js module reloads:
+    - Plugin registry (`global.__quilltapPluginRegistryState`)
+    - Roleplay template registry (`global.__quilltapRoleplayTemplateRegistryState`)
+    - Tool registry (`global.__quilltapToolRegistryState`)
+    - Provider registry (`global.__quilltapProviderRegistryState`)
+    - Theme registry (`global.__quilltapThemeRegistryState`)
+    - Database manager (`global.__quilltapDatabaseBackend`, etc.)
+  - This fixes plugins/templates/themes not appearing in settings after code changes in development
 - fix: Multiple bug fixes for SQLite, OpenRouter tools, chat UI, and API endpoints (2026-01-25)
   - SQLite: Handle undefined values in query-translator by converting to null (fixes "can only bind numbers, strings, bigints, buffers, and null" error)
   - OpenRouter plugin: Bypass SDK's callModel when tools are present since SDK expects Zod schemas for inputSchema but Quilltap provides JSON Schema in parameters

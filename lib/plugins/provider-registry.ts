@@ -36,16 +36,39 @@ export interface ProviderRegistryState {
 }
 
 // ============================================================================
+// GLOBAL STATE PERSISTENCE
+// ============================================================================
+
+// Extend globalThis type for our provider registry state
+// This ensures state persists across Next.js hot module reloads in development
+declare global {
+  var __quilltapProviderRegistryState: ProviderRegistryState | undefined;
+}
+
+/**
+ * Get or create the global registry state
+ * Using global ensures state persists across Next.js module reloads
+ */
+function getGlobalState(): ProviderRegistryState {
+  if (!global.__quilltapProviderRegistryState) {
+    global.__quilltapProviderRegistryState = {
+      initialized: false,
+      providers: new Map(),
+      errors: new Map(),
+      lastInitTime: null,
+    };
+  }
+  return global.__quilltapProviderRegistryState;
+}
+
+// ============================================================================
 // REGISTRY SINGLETON
 // ============================================================================
 
 class ProviderRegistry {
-  private state: ProviderRegistryState = {
-    initialized: false,
-    providers: new Map(),
-    errors: new Map(),
-    lastInitTime: null,
-  };
+  private get state(): ProviderRegistryState {
+    return getGlobalState();
+  }
 
   private logger = logger.child({
     module: 'provider-registry',
@@ -461,10 +484,13 @@ class ProviderRegistry {
    * @internal
    */
   reset(): void {
-    this.state.initialized = false;
-    this.state.providers.clear();
-    this.state.errors.clear();
-    this.state.lastInitTime = null;
+    // Reset the global state entirely
+    global.__quilltapProviderRegistryState = {
+      initialized: false,
+      providers: new Map(),
+      errors: new Map(),
+      lastInitTime: null,
+    };
     this.logger.debug('Provider registry reset');
   }
 

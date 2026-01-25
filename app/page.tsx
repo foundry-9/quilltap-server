@@ -122,9 +122,34 @@ export default async function Home() {
     },
   }));
 
-  // Transform projects to the homepage format, sorted by updatedAt
+  // Compute chat counts and most recent chat activity per project
+  const projectChatStats = new Map<string, { count: number; lastActivity: Date }>();
+  for (const chat of allChatsRaw) {
+    if (chat.projectId) {
+      const existing = projectChatStats.get(chat.projectId);
+      const chatUpdated = new Date(chat.updatedAt);
+      if (existing) {
+        existing.count++;
+        if (chatUpdated > existing.lastActivity) {
+          existing.lastActivity = chatUpdated;
+        }
+      } else {
+        projectChatStats.set(chat.projectId, { count: 1, lastActivity: chatUpdated });
+      }
+    }
+  }
+
+  // Transform projects to the homepage format, sorted by most recent chat activity
   const sortedProjects = [...allProjects]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .sort((a, b) => {
+      const aStats = projectChatStats.get(a.id);
+      const bStats = projectChatStats.get(b.id);
+      // Projects with chat activity come first, sorted by last activity
+      // Projects without chats fall back to their updatedAt
+      const aTime = aStats?.lastActivity?.getTime() ?? new Date(a.updatedAt).getTime();
+      const bTime = bStats?.lastActivity?.getTime() ?? new Date(b.updatedAt).getTime();
+      return bTime - aTime;
+    })
     .slice(0, 4);
 
   const projects: HomepageProject[] = sortedProjects.map(project => ({
@@ -133,7 +158,7 @@ export default async function Home() {
     description: project.description,
     color: project.color,
     icon: project.icon,
-    chatCount: 0, // Projects don't store this in the schema, would need aggregation
+    chatCount: projectChatStats.get(project.id)?.count ?? 0,
     updatedAt: project.updatedAt,
   }));
 

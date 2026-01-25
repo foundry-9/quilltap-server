@@ -116,16 +116,39 @@ export interface ThemeRegistryState {
 }
 
 // ============================================================================
+// GLOBAL STATE PERSISTENCE
+// ============================================================================
+
+// Extend globalThis type for our theme registry state
+// This ensures state persists across Next.js hot module reloads in development
+declare global {
+  var __quilltapThemeRegistryState: ThemeRegistryState | undefined;
+}
+
+/**
+ * Get or create the global registry state
+ * Using global ensures state persists across Next.js module reloads
+ */
+function getGlobalState(): ThemeRegistryState {
+  if (!global.__quilltapThemeRegistryState) {
+    global.__quilltapThemeRegistryState = {
+      initialized: false,
+      themes: new Map(),
+      errors: [],
+      lastInitTime: null,
+    };
+  }
+  return global.__quilltapThemeRegistryState;
+}
+
+// ============================================================================
 // THEME REGISTRY CLASS
 // ============================================================================
 
 class ThemeRegistry {
-  private state: ThemeRegistryState = {
-    initialized: false,
-    themes: new Map(),
-    errors: [],
-    lastInitTime: null,
-  };
+  private get state(): ThemeRegistryState {
+    return getGlobalState();
+  }
 
   /**
    * Initialize the theme registry by loading themes from enabled THEME plugins
@@ -651,10 +674,13 @@ class ThemeRegistry {
    * Reset the registry (for testing)
    */
   reset(): void {
-    this.state.initialized = false;
-    this.state.themes.clear();
-    this.state.errors = [];
-    this.state.lastInitTime = null;
+    // Reset the global state entirely
+    global.__quilltapThemeRegistryState = {
+      initialized: false,
+      themes: new Map(),
+      errors: [],
+      lastInitTime: null,
+    };
     logger.debug('Theme registry reset');
   }
 

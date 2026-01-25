@@ -28,7 +28,14 @@ export function useProjects(): UseProjectsReturn {
       if (!res.ok) throw new Error('Failed to fetch projects')
 
       const data = await res.json()
-      setProjects(data.projects)
+      // Map API response to expected format (API returns _count, UI expects chatCount/fileCount)
+      const mappedProjects = data.projects.map((p: Project & { _count?: { chats: number; files: number; characters: number } }) => ({
+        ...p,
+        chatCount: p._count?.chats ?? 0,
+        fileCount: p._count?.files ?? 0,
+        characterCount: p._count?.characters ?? 0,
+      }))
+      setProjects(mappedProjects)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'An error occurred'
       console.error('useProjects: fetch error', { error: errorMsg })
@@ -49,11 +56,18 @@ export function useProjects(): UseProjectsReturn {
       if (!res.ok) throw new Error('Failed to create project')
 
       const data = await res.json()
-      setProjects(prev => [data.project, ...prev])
+      // New projects have 0 chats/files/characters
+      const newProject: Project = {
+        ...data.project,
+        chatCount: 0,
+        fileCount: 0,
+        characterCount: data.project.characterRoster?.length ?? 0,
+      }
+      setProjects(prev => [newProject, ...prev])
       refreshSidebar()
       showSuccessToast('Project created successfully!')
 
-      return data.project
+      return newProject
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to create project'
       console.error('useProjects: create error', { error: errorMsg })

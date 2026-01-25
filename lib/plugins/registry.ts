@@ -23,17 +23,40 @@ export interface PluginRegistryState {
 }
 
 // ============================================================================
+// GLOBAL STATE PERSISTENCE
+// ============================================================================
+
+// Extend globalThis type for our plugin registry state
+// This ensures state persists across Next.js hot module reloads in development
+declare global {
+  var __quilltapPluginRegistryState: PluginRegistryState | undefined;
+}
+
+/**
+ * Get or create the global registry state
+ * Using global ensures state persists across Next.js module reloads
+ */
+function getGlobalState(): PluginRegistryState {
+  if (!global.__quilltapPluginRegistryState) {
+    global.__quilltapPluginRegistryState = {
+      initialized: false,
+      plugins: new Map(),
+      errors: new Map(),
+      capabilities: new Map(),
+      lastScanTime: null,
+    };
+  }
+  return global.__quilltapPluginRegistryState;
+}
+
+// ============================================================================
 // REGISTRY SINGLETON
 // ============================================================================
 
 class PluginRegistry {
-  private state: PluginRegistryState = {
-    initialized: false,
-    plugins: new Map(),
-    errors: new Map(),
-    capabilities: new Map(),
-    lastScanTime: null,
-  };
+  private get state(): PluginRegistryState {
+    return getGlobalState();
+  }
 
   /**
    * Initialize the registry with scanned plugins
@@ -213,11 +236,14 @@ class PluginRegistry {
    * Reset the registry (for testing)
    */
   reset(): void {
-    this.state.initialized = false;
-    this.state.plugins.clear();
-    this.state.errors.clear();
-    this.state.capabilities.clear();
-    this.state.lastScanTime = null;
+    // Reset the global state entirely
+    global.__quilltapPluginRegistryState = {
+      initialized: false,
+      plugins: new Map(),
+      errors: new Map(),
+      capabilities: new Map(),
+      lastScanTime: null,
+    };
     logger.debug('Plugin registry reset');
   }
 
